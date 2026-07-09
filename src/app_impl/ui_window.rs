@@ -269,7 +269,14 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if let AppView::AgentChatView { entity } = &self.current_view {
+                if matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
+                    self.dispatch_permissions_wizard_action(
+                        crate::permissions_wizard::PermissionsWizardAction::GrantSelected,
+                        window,
+                        cx,
+                    );
+                    return;
+                } else if let AppView::AgentChatView { entity } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |chat, cx| {
                         chat.submit_with_expanded_tokens(cx);
@@ -437,7 +444,14 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::Close => {
-                if self.dispatch_kit_store_browse_back_footer_action(window, cx) {
+                if matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
+                    self.dispatch_permissions_wizard_action(
+                        crate::permissions_wizard::PermissionsWizardAction::Done,
+                        window,
+                        cx,
+                    );
+                    return;
+                } else if self.dispatch_kit_store_browse_back_footer_action(window, cx) {
                     return;
                 } else if self.dispatch_day_page_preview_footer_action(action, window, cx) {
                     return;
@@ -826,6 +840,26 @@ impl ScriptListApp {
         &self,
         cx: Option<&gpui::App>,
     ) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        if matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let enabled = !self.main_window_footer_buttons_blocked();
+            return crate::permissions_wizard::PermissionsWizardActions::ALL
+                .iter()
+                .map(|spec| {
+                    let footer_action = match spec.action {
+                        crate::permissions_wizard::PermissionsWizardAction::GrantSelected => {
+                            FooterAction::Run
+                        }
+                        crate::permissions_wizard::PermissionsWizardAction::Done => {
+                            FooterAction::Close
+                        }
+                    };
+                    FooterButtonConfig::new(footer_action, spec.key, spec.label).enabled(enabled)
+                })
+                .collect();
+        }
+
         // ConfirmPrompt: Apply (Confirm) + Close (Cancel) labeled per options.
         if let AppView::ConfirmPrompt {
             options,

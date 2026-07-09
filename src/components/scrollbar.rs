@@ -16,6 +16,38 @@
 
 use gpui::{prelude::*, *};
 
+/// Render a bounded vertical list whose programmatic reveal calls, wheel
+/// scrolling, and visible scrollbar all share the same `ScrollHandle`.
+///
+/// `gpui_component::ScrollableElement::overflow_y_scrollbar()` owns a private
+/// handle internally, so pairing it with `track_scroll(external_handle)` makes
+/// selection reveal target a different viewport. This helper keeps one owner
+/// for all three behaviors and preserves row indices as direct scroll children.
+pub(crate) fn render_tracked_scroll_column<I, E>(
+    id: impl Into<ElementId>,
+    scroll_handle: &ScrollHandle,
+    rows: I,
+) -> AnyElement
+where
+    I: IntoIterator<Item = E>,
+    E: IntoElement,
+{
+    let column = div()
+        .id(id)
+        .relative()
+        .flex_1()
+        .min_h(px(0.0))
+        .w_full()
+        .flex()
+        .flex_col()
+        .track_scroll(scroll_handle)
+        .overflow_y_scroll()
+        .children(rows);
+
+    gpui_component::scroll::ScrollableElement::vertical_scrollbar(column, scroll_handle)
+        .into_any_element()
+}
+
 /// Choose the authoritative scroll offset for a uniform list scrollbar.
 ///
 /// A pending deferred "scroll-to-item" request is preferred over the live

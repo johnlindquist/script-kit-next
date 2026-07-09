@@ -83,7 +83,7 @@ fn saved_main_window_style_values_are_project_defaults() {
     assert_eq!(base.list.item_height, 44.0);
     assert_eq!(base.list.section_header_height, 28.0);
     assert_eq!(base.list.first_section_header_height, 28.0);
-    assert_eq!(base.list.footer_reveal_clearance_height, 8.0);
+    assert_eq!(base.list.footer_reveal_clearance_height, 0.0);
     assert_eq!(base.footer.metrics.height_px, 32.0);
     assert_eq!(base.footer.metrics.item_gap_px, 2.0);
     assert_eq!(base.footer.metrics.content_gap, 4.0);

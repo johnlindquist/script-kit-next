@@ -517,6 +517,16 @@ impl AgentChatTranscript {
         }
     }
 
+    pub(crate) fn viewport_bounds_px(&self) -> (f32, f32, f32, f32) {
+        let bounds = self.list_state.viewport_bounds();
+        (
+            bounds.origin.x.as_f32(),
+            bounds.origin.y.as_f32(),
+            bounds.size.width.as_f32(),
+            bounds.size.height.as_f32(),
+        )
+    }
+
     /// Build (or reuse) the markdown `TextViewStyle` for transcript rows.
     ///
     /// This runs once per visible row per frame during scrolling, and building

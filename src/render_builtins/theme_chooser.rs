@@ -4713,16 +4713,12 @@ impl ScriptListApp {
 
         // ── Footer: canonical three-key hint strip per .impeccable.md ──
         let uses_native_footer = self.main_window_uses_native_footer();
-        let footer = if uses_native_footer {
-            None
-        } else {
-            self.main_window_footer_slot(
-                crate::components::prompt_layout_shell::render_simple_hint_strip(
-                    Self::theme_chooser_hint_items(),
-                    None,
-                ),
-            )
-        };
+        let footer = self.main_window_footer_slot(
+            crate::components::prompt_layout_shell::render_simple_hint_strip(
+                Self::theme_chooser_hint_items(),
+                None,
+            ),
+        );
         let native_footer_hover_blocker = uses_native_footer.then(|| {
             crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker()
                 .into_any_element()
@@ -4732,7 +4728,7 @@ impl ScriptListApp {
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {
-            return crate::components::main_view_chrome::render_main_view_chrome(
+            return crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
                 crate::components::main_view_chrome::render_main_view_shell()
                     .text_color(rgb(text_primary))
                     .font_family(self.theme_font_family())
@@ -4779,7 +4775,7 @@ impl ScriptListApp {
             .child(preview_panel)
             .into_any_element();
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(text_primary))
                 .font_family(self.theme_font_family())

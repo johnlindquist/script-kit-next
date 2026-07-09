@@ -236,15 +236,10 @@ impl ScriptListApp {
                     })
                     .collect();
 
-            div()
-                .id("browser-history-list")
-                .w_full()
-                .min_h(px(0.))
-                .flex()
-                .flex_col()
-                .track_scroll(&self.browser_history_scroll_handle)
-                .overflow_y_scrollbar()
-                .children(filtered_entries.iter().enumerate().map(move |(display_ix, entry)| {
+            crate::components::scrollbar::render_tracked_scroll_column(
+                "browser-history-list",
+                &self.browser_history_scroll_handle,
+                filtered_entries.iter().enumerate().map(move |(display_ix, entry)| {
                     let icon = browser_history_icon_for_render(entry, &app_icons);
                     let item = ListItem::new(entry.display_title().to_string(), list_colors)
                         .icon_kind(icon)
@@ -295,8 +290,8 @@ impl ScriptListApp {
                             }
                         })
                         .child(item)
-                }))
-                .into_any_element()
+                }),
+            )
         };
 
         let preview_panel: AnyElement = match selected_entry {
@@ -438,7 +433,7 @@ impl ScriptListApp {
             preview_panel,
         );
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(text_primary))
                 .font_family(self.theme_font_family())
@@ -496,8 +491,9 @@ mod browser_history_scroll_contract {
     #[test]
     fn browser_history_intercepts_wheel_scrolling_with_builtin_helpers() {
         assert!(
-            SOURCE.contains(".track_scroll(&self.browser_history_scroll_handle)"),
-            "browser history should track its dedicated scroll handle"
+            SOURCE.contains("render_tracked_scroll_column(")
+                && SOURCE.contains("&self.browser_history_scroll_handle"),
+            "browser history should use its dedicated handle through the shared tracked-scroll viewport"
         );
         assert!(
             SOURCE.contains(".on_scroll_wheel(cx.listener("),

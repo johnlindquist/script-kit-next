@@ -436,6 +436,7 @@ impl ScriptListApp {
         } else {
             self.current_view = plan.next_view;
         }
+        self.builtin_row_stack_scroll_handle.scroll_to_item(0);
         let surface_kind = self.current_view.surface_kind();
         if plan.resize {
             self.update_window_size_deferred(window, cx);

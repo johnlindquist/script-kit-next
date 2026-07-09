@@ -311,7 +311,7 @@ fn theme_chooser_outer_input_uses_shared_main_view_chrome() {
 
     assert!(
         chooser.contains("render_builtin_main_input_header(")
-            && chooser.contains("render_main_view_chrome("),
+            && chooser.contains("render_main_view_chrome_footer_flush("),
         "Theme Designer should use the shared main input/header chrome for its outer search"
     );
     assert!(

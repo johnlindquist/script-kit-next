@@ -3416,7 +3416,7 @@ mod footer_layout_tests {
             footer_hint_legacy_extra_padding(&FooterButtonConfig::new(
                 FooterAction::AgentModel,
                 "⇧⇥",
-                "Codex · GPT-5.5"
+                "Codex · GPT-5.6 SOL"
             )),
             0.0
         );

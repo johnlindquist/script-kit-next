@@ -3370,6 +3370,7 @@ impl ScriptListApp {
         self.filter_text.clear();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some(placeholder.to_string());
+        self.builtin_row_stack_scroll_handle.scroll_to_item(0);
         self.current_view = view;
         self.hovered_index = None;
         self.opened_from_main_menu = true;

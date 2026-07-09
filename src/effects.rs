@@ -32,6 +32,21 @@ pub enum BackgroundEffect {
     Matrix,
     Breath,
     Confetti,
+    Silk,
+    Dunes,
+    Moonwater,
+    Petals,
+    ZenGarden,
+    InkWash,
+    Marble,
+    TreeRings,
+    SeaGlass,
+    KoiPond,
+    Bamboo,
+    Candlelight,
+    Jellyfish,
+    Lotus,
+    SoftPrism,
 }
 
 impl BackgroundEffect {
@@ -54,6 +69,21 @@ impl BackgroundEffect {
             BackgroundEffect::Matrix,
             BackgroundEffect::Breath,
             BackgroundEffect::Confetti,
+            BackgroundEffect::Silk,
+            BackgroundEffect::Dunes,
+            BackgroundEffect::Moonwater,
+            BackgroundEffect::Petals,
+            BackgroundEffect::ZenGarden,
+            BackgroundEffect::InkWash,
+            BackgroundEffect::Marble,
+            BackgroundEffect::TreeRings,
+            BackgroundEffect::SeaGlass,
+            BackgroundEffect::KoiPond,
+            BackgroundEffect::Bamboo,
+            BackgroundEffect::Candlelight,
+            BackgroundEffect::Jellyfish,
+            BackgroundEffect::Lotus,
+            BackgroundEffect::SoftPrism,
         ]
     }
 
@@ -76,6 +106,21 @@ impl BackgroundEffect {
             BackgroundEffect::Matrix => 14,
             BackgroundEffect::Breath => 15,
             BackgroundEffect::Confetti => 16,
+            BackgroundEffect::Silk => 17,
+            BackgroundEffect::Dunes => 18,
+            BackgroundEffect::Moonwater => 19,
+            BackgroundEffect::Petals => 20,
+            BackgroundEffect::ZenGarden => 21,
+            BackgroundEffect::InkWash => 22,
+            BackgroundEffect::Marble => 23,
+            BackgroundEffect::TreeRings => 24,
+            BackgroundEffect::SeaGlass => 25,
+            BackgroundEffect::KoiPond => 26,
+            BackgroundEffect::Bamboo => 27,
+            BackgroundEffect::Candlelight => 28,
+            BackgroundEffect::Jellyfish => 29,
+            BackgroundEffect::Lotus => 30,
+            BackgroundEffect::SoftPrism => 31,
         }
     }
 
@@ -98,6 +143,21 @@ impl BackgroundEffect {
             BackgroundEffect::Matrix => "Matrix",
             BackgroundEffect::Breath => "Breath",
             BackgroundEffect::Confetti => "Confetti",
+            BackgroundEffect::Silk => "Silk",
+            BackgroundEffect::Dunes => "Sand Dunes",
+            BackgroundEffect::Moonwater => "Moonlit Water",
+            BackgroundEffect::Petals => "Drifting Petals",
+            BackgroundEffect::ZenGarden => "Zen Garden",
+            BackgroundEffect::InkWash => "Ink Wash",
+            BackgroundEffect::Marble => "Marble",
+            BackgroundEffect::TreeRings => "Tree Rings",
+            BackgroundEffect::SeaGlass => "Sea Glass",
+            BackgroundEffect::KoiPond => "Koi Pond",
+            BackgroundEffect::Bamboo => "Bamboo",
+            BackgroundEffect::Candlelight => "Candlelight",
+            BackgroundEffect::Jellyfish => "Jellyfish",
+            BackgroundEffect::Lotus => "Lotus",
+            BackgroundEffect::SoftPrism => "Soft Prism",
         }
     }
 
@@ -120,6 +180,21 @@ impl BackgroundEffect {
             BackgroundEffect::Matrix => "matrix",
             BackgroundEffect::Breath => "breath",
             BackgroundEffect::Confetti => "confetti",
+            BackgroundEffect::Silk => "silk",
+            BackgroundEffect::Dunes => "dunes",
+            BackgroundEffect::Moonwater => "moonwater",
+            BackgroundEffect::Petals => "petals",
+            BackgroundEffect::ZenGarden => "zen-garden",
+            BackgroundEffect::InkWash => "ink-wash",
+            BackgroundEffect::Marble => "marble",
+            BackgroundEffect::TreeRings => "tree-rings",
+            BackgroundEffect::SeaGlass => "sea-glass",
+            BackgroundEffect::KoiPond => "koi-pond",
+            BackgroundEffect::Bamboo => "bamboo",
+            BackgroundEffect::Candlelight => "candlelight",
+            BackgroundEffect::Jellyfish => "jellyfish",
+            BackgroundEffect::Lotus => "lotus",
+            BackgroundEffect::SoftPrism => "soft-prism",
         }
     }
 
@@ -167,6 +242,21 @@ impl BackgroundEffect {
             BackgroundEffect::Matrix => 0.05,
             BackgroundEffect::Breath => 0.05,
             BackgroundEffect::Confetti => 0.06,
+            BackgroundEffect::Silk => 0.04,
+            BackgroundEffect::Dunes => 0.03,
+            BackgroundEffect::Moonwater => 0.03,
+            BackgroundEffect::Petals => 0.05,
+            BackgroundEffect::ZenGarden => 0.02,
+            BackgroundEffect::InkWash => 0.02,
+            BackgroundEffect::Marble => 0.03,
+            BackgroundEffect::TreeRings => 0.03,
+            BackgroundEffect::SeaGlass => 0.05,
+            BackgroundEffect::KoiPond => 0.05,
+            BackgroundEffect::Bamboo => 0.04,
+            BackgroundEffect::Candlelight => 0.04,
+            BackgroundEffect::Jellyfish => 0.05,
+            BackgroundEffect::Lotus => 0.05,
+            BackgroundEffect::SoftPrism => 0.06,
         }
     }
 }
@@ -528,14 +618,11 @@ mod tests {
 
     #[test]
     fn shader_ids_are_unique_and_match_the_metal_dispatch_range() {
-        let mut ids: Vec<_> = BackgroundEffect::all()
+        let ids: Vec<_> = BackgroundEffect::all()
             .iter()
             .map(|e| e.shader_id())
             .collect();
-        ids.sort();
-        ids.dedup();
-        assert_eq!(ids.len(), BackgroundEffect::all().len());
-        assert!(ids.iter().all(|&id| (1..=16).contains(&id)));
+        assert_eq!(ids, (1..=31).collect::<Vec<_>>());
     }
 
     /// A fresh install (no persisted preference) ships with Starfield, the

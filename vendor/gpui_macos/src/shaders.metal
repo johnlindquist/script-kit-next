@@ -1262,12 +1262,16 @@ float4 fx_starfield(float2 uv, float2 p, float t, float aspect, float2 fp,
     float2 q = p * scale + float2(t * (0.5 + fi * 0.4), 0.0);
     float2 cell = floor(q);
     float2 rnd = fx_hash22(cell);
-    float d = length(fract(q) - 0.3 - rnd * 0.4);
-    float twinkle = 0.5 + 0.5 * sin(t * (1.0 + rnd.y * 4.0) + rnd.x * 6.28);
-    float star = smoothstep(0.08, 0.0, d) * step(0.82, rnd.x) * twinkle;
-    // Stars around the focus always glimmer brighter, and a change makes
-    // them flare a touch more — the sky itself stays untouched.
-    star *= 1.0 + fx_focus_glow(p, fp, 4.0) * (0.6 + 0.8 * pe);
+    float star = 0.0;
+    if (rnd.x >= 0.82) {
+      float d = length(fract(q) - 0.3 - rnd * 0.4);
+      float twinkle =
+          0.5 + 0.5 * sin(t * (1.0 + rnd.y * 4.0) + rnd.x * 6.28);
+      star = smoothstep(0.08, 0.0, d) * twinkle;
+      // Stars around the focus always glimmer brighter, and a change makes
+      // them flare a touch more — the sky itself stays untouched.
+      star *= 1.0 + fx_focus_glow(p, fp, 4.0) * (0.6 + 0.8 * pe);
+    }
     acc += star * (1.0 - fi * 0.25);
   }
   float4 col = mix(ca, cb, fx_hash21(floor(p * 40.0)));
@@ -1357,11 +1361,13 @@ float4 fx_fireflies(float2 uv, float2 p, float t, float aspect, float2 fp,
         fract(seed.y + t * 0.008 * (0.5 + seed.x)
               + 0.04 * cos(t * 0.20 + fi * 2.0)));
     c = mix(c, fp, attract * (0.4 + 0.6 * seed.y));
-    float d = length(p - c);
-    float pulse =
-        0.35 + 0.65 * pow(0.5 + 0.5 * sin(t * (0.5 + seed.x) + fi * 2.4), 3.0);
+    float2 delta = p - c;
+    float distance_squared = dot(delta, delta);
+    float pulse_base = 0.5 + 0.5 * sin(t * (0.5 + seed.x) + fi * 2.4);
+    float pulse = 0.35 + 0.65 * pulse_base * pulse_base * pulse_base;
     acc += pulse * (0.7 + 0.6 * pe)
-         * (exp(-d * d * 900.0) + 0.25 * exp(-d * d * 90.0));
+         * (exp(-distance_squared * 900.0)
+            + 0.25 * exp(-distance_squared * 90.0));
   }
   float4 col = mix(ca, cb, 0.3);
   return float4(col.rgb, col.a * acc * 0.7);
@@ -1488,6 +1494,436 @@ float4 fx_confetti(float2 uv, float2 p, float t, float aspect, float2 fp,
   return float4(col.rgb, col.a * clamp(acc, 0.0, 1.0) * 0.45);
 }
 
+// 17. Silk — two broad satin fields crossing in a calm woven sheen.
+float4 fx_silk(float2 uv, float2 p, float t, float aspect, float2 fp,
+               float pe, float pt, float4 ca, float4 cb) {
+  float near = fx_focus_glow(p, fp, 2.4);
+  float bend = near * (0.025 + 0.020 * pe);
+  float ribbon_a = 0.5 + 0.5 * sin(dot(p, float2(0.82, 0.57)) * 5.2
+                                  + 0.18 * sin(uv.y * 3.0 - t * 0.035)
+                                  + t * 0.055 + bend);
+  float ribbon_b = 0.5 + 0.5 * sin(dot(p, float2(-0.54, 0.84)) * 4.4
+                                  + 0.15 * sin(p.x * 2.4 + t * 0.028)
+                                  - t * 0.042 - bend);
+  float fold_a = smoothstep(0.18, 0.92, ribbon_a);
+  float fold_b = smoothstep(0.22, 0.90, ribbon_b);
+  float sheen = fold_a * 0.58 + fold_b * 0.34 + fold_a * fold_b * 0.18;
+  float4 col = mix(ca, cb, clamp(ribbon_a * 0.62 + ribbon_b * 0.28, 0.0, 1.0));
+  return float4(col.rgb,
+                col.a * (0.055 + sheen * 0.15 + near * pe * 0.035));
+}
+
+// 18. Sand dunes — four fixed ridges moving in slow horizontal parallax.
+float4 fx_dunes(float2 uv, float2 p, float t, float aspect, float2 fp,
+                float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  float tint = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float focus_dx = (p.x - fp.x) * 1.8;
+    float lift = exp(-focus_dx * focus_dx) * pe * 0.012;
+    float crest_noise = fx_noise(float2(p.x * 0.72 + fi * 4.7
+                                        + t * (0.006 + fi * 0.001),
+                                        fi * 2.1));
+    float y = 0.38 + fi * 0.135 - lift
+      + 0.040 * sin(p.x * (1.6 + fi * 0.34) + fi * 1.8
+                    + t * (0.030 + fi * 0.006))
+      + (crest_noise - 0.5) * 0.026;
+    float dy = (uv.y - y) * (17.0 + fi * 2.0);
+    float ridge = exp(-dy * dy);
+    acc += ridge * (0.17 - fi * 0.020);
+    tint += ridge * (0.15 + fi * 0.24);
+  }
+  float4 col = mix(ca, cb, clamp(tint, 0.0, 1.0));
+  return float4(col.rgb, col.a * acc);
+}
+
+// 19. Moonlit water — a steady moon above a gently broken reflection.
+float4 fx_moonwater(float2 uv, float2 p, float t, float aspect, float2 fp,
+                    float pe, float pt, float4 ca, float4 cb) {
+  float2 moon_center = float2(aspect * 0.72, 0.26);
+  float2 moon_delta = p - moon_center;
+  float moon_d2 = dot(moon_delta, moon_delta);
+  float moon = smoothstep(0.0068, 0.0036, moon_d2);
+  float moon_halo = exp(-moon_d2 * 24.0) * 0.22;
+
+  float horizon = 0.51;
+  float reflection_center = mix(moon_center.x, fp.x, 0.08 + pe * 0.04);
+  float reflection_dx = p.x - reflection_center;
+  float width = 0.022 + pe * 0.004;
+  float reflection = exp(-(reflection_dx * reflection_dx) / width);
+  float below = step(horizon, uv.y);
+  float depth = max(uv.y - horizon, 0.0);
+  float shimmer = 0.58 + 0.42 * sin(uv.y * 86.0
+                                  + sin(p.x * 4.0) * 0.7 + t * 0.075);
+  shimmer = 0.42 + 0.58 * shimmer * shimmer;
+  reflection *= below * exp(-depth * 3.6) * shimmer * (0.90 + pe * 0.10);
+
+  float glow = moon * 0.26 + moon_halo * 0.14 + reflection * 0.18;
+  float4 col = mix(ca, cb, clamp(moon * 0.65 + reflection * 0.45, 0.0, 1.0));
+  return float4(col.rgb, col.a * glow);
+}
+
+// 20. Drifting petals — six fixed almond shapes on slow looping paths.
+float4 fx_petals(float2 uv, float2 p, float t, float aspect, float2 fp,
+                 float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  float tint = 0.0;
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    float2 seed = fx_hash22(float2(fi * 5.7 + 2.0, fi * 3.3 + 9.0));
+    float2 c = float2(fract(seed.x + t * (0.003 + seed.y * 0.002)) * aspect,
+                      fract(seed.y + t * (0.002 + seed.x * 0.0015)));
+    c += float2(sin(t * 0.045 + fi * 1.7),
+                cos(t * 0.037 + fi * 2.1)) * 0.024;
+    c = mix(c, fp, pe * (0.018 + seed.y * 0.012));
+
+    float angle = seed.x * 6.2831853 + t * (0.018 + seed.y * 0.012);
+    float cs = cos(angle);
+    float sn = sin(angle);
+    float2 delta = p - c;
+    float2 d = float2(delta.x * cs + delta.y * sn,
+                      -delta.x * sn + delta.y * cs);
+    float almond = abs(d.x) * 19.0 + d.y * d.y * 2350.0;
+    float petal = smoothstep(1.16, 0.76, almond);
+    float near = fx_focus_glow(c, fp, 3.8);
+    float strength = petal * (0.10 + near * (0.035 + pe * 0.045));
+    acc += strength;
+    tint += strength * seed.x * 2.2;
+  }
+  float4 col = mix(ca, cb, clamp(tint, 0.0, 1.0));
+  return float4(col.rgb, col.a * clamp(acc, 0.0, 0.48));
+}
+
+// 21. Zen garden — static rake contours around two softly shaded stones.
+float4 fx_zen_garden(float2 uv, float2 p, float t, float aspect, float2 fp,
+                     float pe, float pt, float4 ca, float4 cb) {
+  float wobble = (fx_noise(p * 2.3 + float2(8.0, 3.0)) - 0.5) * 0.32;
+  float grooves = 0.0;
+  float stones = 0.0;
+  float stone_tint = 0.0;
+  for (int i = 0; i < 2; i++) {
+    float fi = float(i);
+    float2 c = float2(aspect * (0.30 + fi * 0.38), 0.40 + fi * 0.20);
+    float2 d = p - c;
+    float radius = length(d);
+    float angle = atan2(d.y, d.x);
+    float contour_coordinate = radius * (15.0 + fi * 2.0)
+      + wobble + sin(angle * (4.0 + fi)) * 0.10;
+    float contour = smoothstep(0.095, 0.025,
+                               abs(fract(contour_coordinate) - 0.5));
+    float stone_d2 = d.x * d.x * (42.0 - fi * 8.0)
+                    + d.y * d.y * (72.0 + fi * 10.0);
+    float stone = smoothstep(1.10, 0.78, stone_d2);
+    grooves = max(grooves, contour * (1.0 - stone));
+    stones = max(stones, stone);
+    stone_tint += stone * (0.32 + fi * 0.34);
+  }
+  float near = fx_focus_glow(p, fp, 3.0);
+  float fine_grain = 0.5 + 0.5 * sin((p.x + uv.y) * 110.0);
+  float detail = fine_grain * near * pe * 0.022;
+  float4 col = mix(ca, cb, clamp(stone_tint + grooves * 0.34, 0.0, 1.0));
+  float alpha = grooves * (0.075 + near * (0.030 + pe * 0.035))
+              + stones * 0.13 + detail;
+  return float4(col.rgb, col.a * alpha);
+}
+
+// 22. Ink wash — three fixed brush strokes with quiet, fibrous edges.
+float4 fx_ink_wash(float2 uv, float2 p, float t, float aspect, float2 fp,
+                   float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  float tint = 0.0;
+  float near = fx_focus_glow(p, fp, 2.6);
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float2 c = float2(aspect * (0.28 + fi * 0.22), 0.30 + fi * 0.20);
+    float angle = -0.46 + fi * 0.42;
+    float cs = cos(angle);
+    float sn = sin(angle);
+    float2 delta = p - c;
+    float2 d = float2(delta.x * cs + delta.y * sn,
+                      -delta.x * sn + delta.y * cs);
+    float centerline = 0.032 * sin(d.x * (5.0 + fi) + fi * 1.7
+                                  + t * 0.032);
+    float edge_noise = fx_noise(p * (4.2 + fi * 0.35) + fi * 7.0);
+    float taper = smoothstep(0.48, 0.13, abs(d.x));
+    float thickness = (0.038 + edge_noise * 0.014)
+                    * (0.82 + taper * 0.18)
+                    + near * pe * 0.006;
+    float stroke = smoothstep(thickness + 0.018, thickness - 0.010,
+                              abs(d.y - centerline)) * taper;
+    acc += stroke * (0.12 + fi * 0.018);
+    tint += stroke * (0.14 + fi * 0.32);
+  }
+  float4 col = mix(ca, cb, clamp(tint, 0.0, 1.0));
+  return float4(col.rgb, col.a * acc * (0.92 + near * pe * 0.08));
+}
+
+// 23. Marble — stable, domain-warped stone strata with sparse soft veins.
+float4 fx_marble(float2 uv, float2 p, float t, float aspect, float2 fp,
+                 float pe, float pt, float4 ca, float4 cb) {
+  float n1 = fx_noise(p * 1.55 + float2(3.0, 11.0));
+  float n2 = fx_noise(p * 3.10 + float2(n1 * 2.1, n1 * 1.4) + 19.0);
+  float strata = (p.x * 0.74 + uv.y * 1.22 + n1 * 0.42 + n2 * 0.20)
+               * 13.0;
+  float vein_distance = abs(sin(strata));
+  float near = fx_focus_glow(p, fp, 2.7);
+  float vein_width = 0.085 + near * pe * 0.018;
+  float vein = smoothstep(vein_width + 0.075, vein_width, vein_distance);
+  float polish = 0.5 + 0.5 * sin(dot(p, float2(0.65, 0.76)) * 2.2);
+  float4 col = mix(ca, cb, clamp(n1 * 0.55 + n2 * 0.27 + vein * 0.22,
+                                 0.0, 1.0));
+  float alpha = 0.045 + vein * 0.14 + polish * near * pe * 0.022;
+  return float4(col.rgb, col.a * alpha);
+}
+
+// 24. Tree rings — nested grain whose radial phase never travels.
+float4 fx_tree_rings(float2 uv, float2 p, float t, float aspect, float2 fp,
+                     float pe, float pt, float4 ca, float4 cb) {
+  float2 center = float2(aspect * 0.43, 0.54);
+  float2 d = p - center;
+  float radius = length(d);
+  float angle = atan2(d.y, d.x);
+  float wobble = (fx_noise(p * 2.5 + float2(5.0, 17.0)) - 0.5) * 0.38;
+  float grain_coordinate = radius * 18.0 + wobble
+                         + sin(angle * 5.0) * 0.12;
+  float ring_distance = abs(fract(grain_coordinate) - 0.5);
+  float rings = smoothstep(0.105, 0.028, ring_distance);
+  float near = fx_focus_glow(p, fp, 3.2);
+  float fine = 0.5 + 0.5 * sin(grain_coordinate * 18.8495559);
+  float tint = clamp(radius * 0.72 + rings * 0.24, 0.0, 1.0);
+  float4 col = mix(ca, cb, tint);
+  float alpha = rings * (0.105 + near * pe * 0.042)
+              + fine * near * pe * 0.020;
+  return float4(col.rgb, col.a * alpha);
+}
+
+// 25. Sea glass — fixed rounded Voronoi cells with a broad inner luster.
+float4 fx_sea_glass(float2 uv, float2 p, float t, float aspect, float2 fp,
+                    float pe, float pt, float4 ca, float4 cb) {
+  float2 q = p * 4.2;
+  float2 base = floor(q);
+  float2 f = fract(q);
+  float nearest = 10.0;
+  float second = 10.0;
+  float tint = 0.5;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      float2 offset = float2(float(x), float(y));
+      float2 seed = fx_hash22(base + offset);
+      float2 point = offset + 0.18 + seed * 0.64;
+      float2 delta = f - point;
+      float distance_squared = dot(delta, delta);
+      if (distance_squared < nearest) {
+        second = nearest;
+        nearest = distance_squared;
+        tint = seed.x;
+      } else if (distance_squared < second) {
+        second = distance_squared;
+      }
+    }
+  }
+  float boundary = smoothstep(0.16, 0.018, second - nearest);
+  float inner = smoothstep(0.52, 0.045, nearest);
+  float near = fx_focus_glow(p, fp, 2.5);
+  float luster = inner * near * (0.025 + pe * 0.038);
+  float4 col = mix(ca, cb, tint);
+  return float4(col.rgb,
+                col.a * (0.045 + boundary * 0.095 + luster));
+}
+
+// 26. Koi pond — three fixed fish on unhurried elliptical paths.
+float4 fx_koi_pond(float2 uv, float2 p, float t, float aspect, float2 fp,
+                   float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  float tint = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float2 seed = fx_hash22(float2(fi * 7.1 + 4.0, fi * 2.9 + 12.0));
+    float phase = t * (0.040 + seed.x * 0.012) + seed.y * 6.2831853;
+    float rx = 0.085 + seed.x * 0.035;
+    float ry = 0.042 + seed.y * 0.022;
+    float2 orbit = float2(cos(phase) * rx, sin(phase) * ry);
+    float2 c = float2(aspect * (0.22 + fi * 0.28),
+                      0.30 + fract(seed.y + fi * 0.31) * 0.38) + orbit;
+    c = mix(c, fp, pe * (0.018 + seed.x * 0.010));
+
+    float2 tangent = normalize(float2(-sin(phase) * rx,
+                                      cos(phase) * ry));
+    float2 normal = float2(-tangent.y, tangent.x);
+    float2 delta = p - c;
+    float2 local = float2(dot(delta, tangent), dot(delta, normal));
+    float body_field = local.x * local.x * 330.0
+                     + local.y * local.y * 1900.0;
+    float body = smoothstep(1.10, 0.78, body_field);
+
+    float tail_span = clamp((-local.x - 0.040) / 0.075, 0.0, 1.0);
+    float tail_window = step(-0.120, local.x) * step(local.x, -0.040);
+    float tail = smoothstep(tail_span * 0.035 + 0.010,
+                            tail_span * 0.035,
+                            abs(local.y)) * tail_window;
+    float wake_start = -0.23 - pe * 0.025;
+    float wake_window = smoothstep(wake_start, -0.085, local.x)
+                      * smoothstep(-0.035, -0.075, local.x);
+    float wake = exp(-local.y * local.y * 720.0) * wake_window;
+    float near = fx_focus_glow(c, fp, 3.2);
+    float strength = body * 0.17 + tail * 0.095
+                   + wake * (0.028 + pe * 0.018);
+    strength *= 0.90 + near * pe * 0.10;
+    acc += strength;
+    tint += strength * (0.8 + seed.x * 1.8);
+  }
+  float4 col = mix(ca, cb, clamp(tint, 0.0, 1.0));
+  return float4(col.rgb, col.a * clamp(acc, 0.0, 0.55));
+}
+
+// 27. Bamboo — five fixed stalks with sparse leaves and a slow shared sway.
+float4 fx_bamboo(float2 uv, float2 p, float t, float aspect, float2 fp,
+                 float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  float tint = 0.0;
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    float seed = fx_hash21(float2(fi * 5.3 + 1.0, 27.0));
+    float base_x = aspect * (0.10 + fi * 0.20);
+    float stalk_near = exp(-(base_x - fp.x) * (base_x - fp.x) * 8.0);
+    float sway = sin(t * (0.095 + seed * 0.025) + fi * 1.3
+                     + uv.y * 1.4) * (0.010 + seed * 0.005);
+    sway += clamp(fp.x - base_x, -0.4, 0.4)
+          * stalk_near * (0.010 + pe * 0.012) * (1.0 - uv.y);
+    float stalk_x = base_x + sway * (0.35 + (1.0 - uv.y) * 0.65);
+    float dx = abs(p.x - stalk_x);
+    float stalk = smoothstep(0.010, 0.004, dx);
+    float joint_distance = abs(fract(uv.y * (4.0 + seed) + seed) - 0.5);
+    float joint = smoothstep(0.10, 0.025, joint_distance)
+                * smoothstep(0.020, 0.008, dx);
+
+    float leaf_cell = floor(uv.y * 4.0 + seed * 2.0);
+    float leaf_seed = fx_hash21(float2(fi * 9.0 + 3.0, leaf_cell));
+    float leaf_y = (leaf_cell + 0.5 - seed * 2.0
+                    + (leaf_seed - 0.5) * 0.32) / 4.0;
+    float side = leaf_seed > 0.5 ? 1.0 : -1.0;
+    float2 leaf_center = float2(stalk_x + side * 0.038, leaf_y);
+    float2 ld = p - leaf_center;
+    float leaf_angle = side * (0.60 + seed * 0.24);
+    float cs = cos(leaf_angle);
+    float sn = sin(leaf_angle);
+    float2 lr = float2(ld.x * cs + ld.y * sn,
+                       -ld.x * sn + ld.y * cs);
+    float leaf_field = lr.x * lr.x * 780.0 + lr.y * lr.y * 3200.0;
+    float leaf = smoothstep(1.08, 0.72, leaf_field) * step(0.60, leaf_seed);
+    float strength = stalk * 0.065 + joint * 0.055 + leaf * 0.095;
+    strength *= 0.92 + stalk_near * pe * 0.08;
+    acc += strength;
+    tint += strength * (0.6 + seed * 1.8);
+  }
+  float4 col = mix(ca, cb, clamp(tint, 0.0, 1.0));
+  return float4(col.rgb, col.a * clamp(acc, 0.0, 0.48));
+}
+
+// 28. Candlelight — one slow-swaying flame with a steady outer glow.
+float4 fx_candlelight(float2 uv, float2 p, float t, float aspect, float2 fp,
+                      float pe, float pt, float4 ca, float4 cb) {
+  float2 fixed_base = float2(aspect * 0.50, 0.72);
+  float2 base = mix(fixed_base, fp, 0.035 + pe * 0.018);
+  float height = 0.18 * (1.0 + pe * 0.08);
+  float yn = (base.y - p.y) / height;
+  float sway = sin(t * 0.20) * 0.010 + sin(t * 0.11 + 1.4) * 0.006;
+  float curved_x = base.x + sway * clamp(yn, 0.0, 1.0);
+  float flame_profile = sin(clamp(yn, 0.0, 1.0) * 3.1415927);
+  float width = 0.010 + flame_profile * (0.045 - yn * 0.010);
+  float flame = smoothstep(width + 0.010, width * 0.62,
+                           abs(p.x - curved_x));
+  flame *= smoothstep(-0.04, 0.06, yn) * smoothstep(1.06, 0.92, yn);
+
+  float2 glow_center = base - float2(0.0, height * 0.38);
+  float2 glow_delta = p - glow_center;
+  float glow = exp(-dot(glow_delta, glow_delta) * (17.0 - pe * 1.4));
+  float4 col = mix(ca, cb, clamp(flame * 0.72 + glow * 0.18, 0.0, 1.0));
+  return float4(col.rgb,
+                col.a * (flame * 0.25 + glow * (0.075 + pe * 0.018)));
+}
+
+// 29. Jellyfish — three fixed bells trailing constant, sine-curved tendrils.
+float4 fx_jellyfish(float2 uv, float2 p, float t, float aspect, float2 fp,
+                    float pe, float pt, float4 ca, float4 cb) {
+  float acc = 0.0;
+  float tint = 0.0;
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float2 seed = fx_hash22(float2(fi * 6.1 + 7.0, fi * 4.3 + 1.0));
+    float2 c = float2(aspect * (0.22 + fi * 0.29)
+                      + sin(t * 0.025 + fi * 1.8) * 0.035,
+                      fract(seed.y + t * (0.005 + seed.x * 0.002)));
+    c = mix(c, fp, pe * (0.015 + seed.y * 0.012));
+    float2 d = p - c;
+    float bell_field = d.x * d.x * 360.0 + d.y * d.y * 920.0;
+    float bell = smoothstep(1.12, 0.78, bell_field)
+               * step(-0.066, d.y) * step(d.y, 0.012);
+    float tendrils = 0.0;
+    for (int j = 0; j < 3; j++) {
+      float fj = float(j);
+      float offset = (fj - 1.0) * 0.023;
+      float tendril_x = offset + 0.007 * sin(d.y * 34.0
+                                            + t * 0.075 + fi + fj * 1.4);
+      float line = smoothstep(0.0060, 0.0022, abs(d.x - tendril_x));
+      line *= step(0.0, d.y) * smoothstep(0.18, 0.045, d.y);
+      tendrils += line;
+    }
+    float near = fx_focus_glow(c, fp, 3.0);
+    float strength = bell * 0.16 + tendrils * 0.050;
+    strength *= 0.90 + near * pe * 0.10;
+    acc += strength;
+    tint += strength * (0.7 + seed.x * 1.6);
+  }
+  float4 col = mix(ca, cb, clamp(tint, 0.0, 1.0));
+  return float4(col.rgb, col.a * clamp(acc, 0.0, 0.48));
+}
+
+// 30. Lotus — a quiet two-layer radial flower with a softly lit center.
+float4 fx_lotus(float2 uv, float2 p, float t, float aspect, float2 fp,
+                float pe, float pt, float4 ca, float4 cb) {
+  float2 fixed_center = float2(aspect * 0.50, 0.53);
+  float2 center = mix(fixed_center, fp, 0.10 + pe * 0.035);
+  float2 d = p - center;
+  float radius = length(d);
+  float angle = atan2(d.y, d.x) + t * 0.007;
+  float open = 1.0 + pe * 0.055;
+  float outer_edge = 0.125 + cos(angle * 8.0) * 0.033 * open;
+  float inner_edge = 0.075 + cos(angle * 6.0 + 0.48) * 0.021 * open;
+  float outer = smoothstep(outer_edge + 0.016, outer_edge - 0.012, radius)
+              * smoothstep(0.052, 0.075, radius);
+  float inner = smoothstep(inner_edge + 0.013, inner_edge - 0.010, radius)
+              * smoothstep(0.025, 0.044, radius);
+  float center_glow = exp(-radius * radius * 250.0);
+  float flower = max(outer * 0.15, inner * 0.18);
+  float4 col = mix(ca, cb, clamp(inner * 0.56 + center_glow * 0.62,
+                                 0.0, 1.0));
+  return float4(col.rgb,
+                col.a * (flower + center_glow * (0.10 + pe * 0.025)));
+}
+
+// 31. Soft prism — fixed triangular facets under a slow directional sheen.
+float4 fx_soft_prism(float2 uv, float2 p, float t, float aspect, float2 fp,
+                     float pe, float pt, float4 ca, float4 cb) {
+  float2 q = p * 4.2;
+  float2 cell = floor(q);
+  float2 f = fract(q);
+  float triangle = step(f.x, f.y);
+  float value = fx_hash21(cell + float2(triangle * 7.0,
+                                        triangle * 13.0));
+  float outer_edge = min(min(f.x, f.y), min(1.0 - f.x, 1.0 - f.y));
+  float diagonal_edge = abs(f.x - f.y);
+  float edge_fade = smoothstep(0.025, 0.12, min(outer_edge, diagonal_edge));
+  float directional = 0.5 + 0.5 * sin(dot(p, float2(0.72, 0.69)) * 2.5
+                                      - t * 0.028);
+  float near = fx_focus_glow(p, fp, 2.8);
+  float local_sheen = directional * near * (0.018 + pe * 0.032);
+  float4 col = mix(ca, cb, value);
+  float alpha = edge_fade * (0.055 + value * 0.065 + local_sheen);
+  return float4(col.rgb, col.a * alpha);
+}
+
 float4 shader_effect_color(int effect, float2 uv, float2 p, float aspect,
                            float t, float2 fp, float pt, float4 ca,
                            float4 cb) {
@@ -1513,6 +1949,21 @@ float4 shader_effect_color(int effect, float2 uv, float2 p, float aspect,
     case 14: col = fx_matrix(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
     case 15: col = fx_breath(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
     case 16: col = fx_confetti(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 17: col = fx_silk(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 18: col = fx_dunes(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 19: col = fx_moonwater(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 20: col = fx_petals(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 21: col = fx_zen_garden(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 22: col = fx_ink_wash(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 23: col = fx_marble(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 24: col = fx_tree_rings(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 25: col = fx_sea_glass(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 26: col = fx_koi_pond(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 27: col = fx_bamboo(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 28: col = fx_candlelight(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 29: col = fx_jellyfish(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 30: col = fx_lotus(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
+    case 31: col = fx_soft_prism(uv, p, t, aspect, fp, pe, pt, ca, cb); break;
     default: return float4(0.0);
   }
 

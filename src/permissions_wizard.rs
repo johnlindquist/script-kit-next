@@ -105,6 +105,51 @@ pub enum PermissionRequirement {
     Optional,
 }
 
+/// Canonical actions exposed by the Permissions wizard across keyboard,
+/// fallback hint-strip, and native-footer entry points.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionsWizardAction {
+    GrantSelected,
+    Done,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PermissionsWizardActionSpec {
+    pub action: PermissionsWizardAction,
+    pub key: &'static str,
+    pub label: &'static str,
+}
+
+pub struct PermissionsWizardActions;
+
+impl PermissionsWizardActions {
+    pub const GRANT: PermissionsWizardActionSpec = PermissionsWizardActionSpec {
+        action: PermissionsWizardAction::GrantSelected,
+        key: "↵",
+        label: "Grant",
+    };
+
+    pub const DONE: PermissionsWizardActionSpec = PermissionsWizardActionSpec {
+        action: PermissionsWizardAction::Done,
+        key: "Esc",
+        label: "Done",
+    };
+
+    pub const ALL: [PermissionsWizardActionSpec; 2] = [Self::GRANT, Self::DONE];
+
+    pub fn for_key(key: &str, has_platform_modifier: bool) -> Option<PermissionsWizardAction> {
+        if crate::ui_foundation::is_key_escape(key)
+            || (has_platform_modifier && key.eq_ignore_ascii_case("w"))
+        {
+            Some(PermissionsWizardAction::Done)
+        } else if crate::ui_foundation::is_key_enter(key) {
+            Some(PermissionsWizardAction::GrantSelected)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionGuideActionKind {
@@ -477,6 +522,28 @@ mod tests {
             PermissionKind::Microphone.requirement(),
             PermissionRequirement::Optional
         );
+    }
+
+    #[test]
+    fn wizard_actions_keep_keyboard_and_surface_labels_in_one_contract() {
+        assert_eq!(PermissionsWizardActions::GRANT.key, "↵");
+        assert_eq!(PermissionsWizardActions::GRANT.label, "Grant");
+        assert_eq!(PermissionsWizardActions::DONE.key, "Esc");
+        assert_eq!(PermissionsWizardActions::DONE.label, "Done");
+        assert_eq!(PermissionsWizardActions::ALL.len(), 2);
+        assert_eq!(
+            PermissionsWizardActions::for_key("enter", false),
+            Some(PermissionsWizardAction::GrantSelected)
+        );
+        assert_eq!(
+            PermissionsWizardActions::for_key("escape", false),
+            Some(PermissionsWizardAction::Done)
+        );
+        assert_eq!(
+            PermissionsWizardActions::for_key("w", true),
+            Some(PermissionsWizardAction::Done)
+        );
+        assert_eq!(PermissionsWizardActions::for_key("down", false), None);
     }
 
     #[test]

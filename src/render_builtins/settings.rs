@@ -539,6 +539,8 @@ impl ScriptListApp {
                         {
                             *selected_index = current_selected - 1;
                         }
+                        this.builtin_row_stack_scroll_handle
+                            .scroll_to_item(current_selected - 1);
                         cx.notify();
                     }
                     cx.stop_propagation();
@@ -548,6 +550,8 @@ impl ScriptListApp {
                         {
                             *selected_index = current_selected + 1;
                         }
+                        this.builtin_row_stack_scroll_handle
+                            .scroll_to_item(current_selected + 1);
                         cx.notify();
                     }
                     cx.stop_propagation();
@@ -643,16 +647,16 @@ impl ScriptListApp {
                 .icon(crate::designs::icon_variations::IconName::Settings)
                 .into_element()
         } else {
-            div()
-                .w_full()
-                .flex()
-                .flex_col()
-                .min_h(px(0.))
-                .children(list_items)
-                .into_any_element()
+            crate::components::scrollbar::render_tracked_scroll_column(
+                "settings-row-stack",
+                &self.builtin_row_stack_scroll_handle,
+                list_items,
+            )
         };
 
         let content = div()
+            .flex()
+            .flex_col()
             .flex_1()
             .min_h(px(0.))
             .w_full()
@@ -671,7 +675,7 @@ impl ScriptListApp {
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(chrome.text_primary_hex))
                 .font_family(self.theme_font_family())

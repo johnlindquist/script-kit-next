@@ -337,7 +337,7 @@ Receipt summary:
 - `messageCount: 0`
 - `contextReady: true`
 - composer semantic id: `input:agent_chat-composer`
-- footer model text: `Codex · GPT-5.5`
+- footer model text: `Codex · GPT-5.6 SOL`
 
 Allowed prompt:
 

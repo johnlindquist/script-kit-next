@@ -1,107 +1,150 @@
 #!/usr/bin/env bun
 /**
- * Runtime proof for the background shader-effects feature.
+ * Runtime proof for the complete procedural background-effect catalog.
  *
- * Drives the real app: enables an effect via the "Background Effect: Next"
- * builtin, proves the effect layer renders (screenshot deltas + animation
- * frames), cycles again, verifies persistence into the sandbox config.ts,
- * then turns it off. Prints one JSON receipt.
+ * Drives the real launcher entries (these commands are not in the direct
+ * triggerBuiltin registry), verifies every persisted slug in cycle order,
+ * then sends real GPUI mouse moves and confirms the active effect receives
+ * the shared focus signal. Screenshot hashes are intentionally not a gate:
+ * another same-title Script Kit process can win OS-level window capture.
  */
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
 import { Driver } from "../devtools/driver.ts";
 
-const OUT_DIR = process.env.BG_FX_OUT ?? "/tmp/bg-effects-proof";
-await Bun.$`mkdir -p ${OUT_DIR}`.quiet();
+const EFFECT_SLUGS = [
+  "aurora",
+  "plasma",
+  "starfield",
+  "lava-lamp",
+  "nebula",
+  "rain",
+  "waves",
+  "fireflies",
+  "hue-drift",
+  "grain",
+  "scanlines",
+  "dot-grid",
+  "caustics",
+  "matrix",
+  "breath",
+  "confetti",
+  "silk",
+  "dunes",
+  "moonwater",
+  "petals",
+  "zen-garden",
+  "ink-wash",
+  "marble",
+  "tree-rings",
+  "sea-glass",
+  "koi-pond",
+  "bamboo",
+  "candlelight",
+  "jellyfish",
+  "lotus",
+  "soft-prism",
+] as const;
 
-const receipt: Record<string, unknown> = { steps: [] as unknown[] };
-const steps = receipt.steps as unknown[];
-
-function sha(buf: Buffer): string {
-  return new Bun.CryptoHasher("sha256").update(buf).digest("hex").slice(0, 16);
-}
-
+const binary =
+  process.env.SCRIPT_KIT_GPUI_BINARY ??
+  "target-agent/artifacts/bg-effects/script-kit-gpui";
 const driver = await Driver.launch({
-  binary: "target-agent/artifacts/bg-effects/script-kit-gpui",
-  sessionName: "bg-effects-proof",
+  binary,
+  sessionName: `bg-effects-proof-${process.pid}`,
   sandboxHome: true,
 });
+
+const receipt: Record<string, unknown> = {
+  binary,
+  expectedCount: EFFECT_SLUGS.length,
+  cycle: [] as unknown[],
+};
+const cycle = receipt.cycle as unknown[];
 
 try {
   driver.send({ type: "show" });
   await driver.waitForSettle();
 
-  const shot = async (name: string) => {
-    const path = join(OUT_DIR, `${name}.png`);
-    const res = await driver.captureScreenshot({ savePath: path });
-    if (res.error) throw new Error(`screenshot ${name}: ${res.error}`);
-    return { path, hash: sha(readFileSync(path)), width: res.width, height: res.height };
+  const configPath = join(driver.sessionDir, "home", ".scriptkit", "config.ts");
+  const readPersistedSlug = (): string | null => {
+    if (!existsSync(configPath)) return null;
+    const text = readFileSync(configPath, "utf8");
+    // The generated template contains commented examples before the live
+    // `effects` assignment, so the effective value is the final match.
+    const matches = [...text.matchAll(/background["']?\s*:\s*["']([^"']+)["']/g)];
+    return matches.at(-1)?.[1] ?? null;
   };
 
-  const baseline = await shot("0-baseline");
-  steps.push({ step: "baseline", ...baseline });
+  const waitForSlug = async (expected: string): Promise<string | null> => {
+    const deadline = Date.now() + 4_000;
+    let actual = readPersistedSlug();
+    while (actual !== expected && Date.now() < deadline) {
+      await Bun.sleep(50);
+      actual = readPersistedSlug();
+    }
+    return actual;
+  };
 
-  // Enable: filter to the builtin and hit Enter.
-  await driver.setFilterAndWait("Background Effect: Next");
-  const state1 = await driver.getState();
-  driver.simulateKey("enter");
-  await Bun.sleep(700);
-  const effect1a = await shot("1-effect-aurora");
-  await Bun.sleep(150);
-  const effect1b = await shot("2-effect-aurora-later-frame");
-  steps.push({
-    step: "enable-first-effect",
-    filterMatchedInput: state1.inputValue,
-    effectVsBaselineDiffers: effect1a.hash !== baseline.hash,
-    animationFramesDiffer: effect1a.hash !== effect1b.hash,
-    shots: [effect1a, effect1b],
-  });
+  const executeLauncherEntry = async (name: string) => {
+    await driver.setFilterAndWait(name);
+    driver.simulateKey("enter");
+  };
 
-  // Cycle: Enter again on the same entry.
-  driver.simulateKey("enter");
-  await Bun.sleep(700);
-  const effect2 = await shot("3-effect-plasma");
-  steps.push({
-    step: "cycle-second-effect",
-    differsFromFirstEffect: effect2.hash !== effect1b.hash,
-    shot: effect2,
-  });
+  await executeLauncherEntry("Background Effect: Off");
+  const offSlug = await waitForSlug("off");
+  receipt.off = { expected: "off", actual: offSlug, ok: offSlug === "off" };
 
-  // Persistence: the sandbox config.ts should now carry the effects group.
-  const configPath = join(driver.sessionDir, "home", ".scriptkit", "config.ts");
-  const configText = existsSync(configPath) ? readFileSync(configPath, "utf8") : "";
-  const effectsLine = configText
-    .split("\n")
-    .find((line) => line.includes("effects"));
-  steps.push({
-    step: "persistence",
-    configPath,
-    configHasEffects: /effects/.test(configText),
-    configHasSlug: /plasma/.test(configText),
-    effectsLine: effectsLine?.trim() ?? null,
-  });
+  for (const [index, expected] of EFFECT_SLUGS.entries()) {
+    // Builtin execution can clear or replace launcher state, so resolve the
+    // real entry again before every Enter instead of assuming selection sticks.
+    await executeLauncherEntry("Background Effect: Next");
+    const actual = await waitForSlug(expected);
+    cycle.push({ id: index + 1, expected, actual, ok: actual === expected });
+    if (actual !== expected) break;
+  }
 
-  // Off.
-  await driver.setFilterAndWait("Background Effect: Off");
-  driver.simulateKey("enter");
-  await Bun.sleep(700);
-  const off = await shot("4-effect-off");
-  steps.push({ step: "off", shot: off });
+  const focusDispatches = [];
+  for (const [x, y] of [
+    [90, 90],
+    [520, 180],
+    [260, 390],
+  ]) {
+    focusDispatches.push(
+      await driver.simulateGpuiEvent(
+        { type: "mouseMove", x, y },
+        { target: { type: "kind", kind: "main" }, timeoutMs: 5_000 },
+      ),
+    );
+    await Bun.sleep(550);
+  }
 
-  // No persist errors in the app log ring.
-  const logs = await driver.getLogs({ contains: "background effect", limit: 20 });
-  steps.push({
-    step: "logs",
-    persistFailures: (logs.entries ?? []).filter((e: any) =>
-      /Failed to persist/.test(e.message ?? ""),
-    ).length,
-  });
+  const focusLogs = await driver.getLogs({ contains: "source=mouse", limit: 20 });
+  const persistLogs = await driver.getLogs({ contains: "persist background effect", limit: 20 });
+  const finalState = await driver.getState();
+  const focusEntries = (focusLogs.entries ?? []) as unknown[];
+  const persistEntries = (persistLogs.entries ?? []) as unknown[];
+  receipt.focus = {
+    dispatches: focusDispatches,
+    logCount: focusEntries.length,
+    entries: focusEntries,
+  };
+  receipt.final = {
+    persistedSlug: readPersistedSlug(),
+    appAlive: driver.alive,
+    stateType: finalState.type,
+    persistFailures: persistEntries.length,
+  };
 
+  const completeCycle =
+    cycle.length === EFFECT_SLUGS.length &&
+    cycle.every((entry: any) => entry.ok === true);
   receipt.ok =
-    effect1a.hash !== baseline.hash &&
-    effect1a.hash !== effect1b.hash &&
-    effect2.hash !== effect1b.hash &&
-    /plasma/.test(configText);
+    offSlug === "off" &&
+    completeCycle &&
+    focusEntries.length > 0 &&
+    driver.alive &&
+    persistEntries.length === 0;
 } finally {
   await driver.close();
 }

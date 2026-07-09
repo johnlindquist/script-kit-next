@@ -37,6 +37,7 @@ impl ScriptListApp {
             | AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
+            | AppView::PermissionsWizardView { .. }
             | AppView::ProfileSearchView { .. }
             | AppView::DayPage { .. }
             | AppView::AgentChatView { .. } => crate::window_resize::ViewType::MainWindow,
@@ -190,6 +191,174 @@ impl ScriptListApp {
                     "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
                 ),
         );
+
+        if matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
+            let design_spacing = crate::designs::get_tokens(self.current_design).spacing();
+            let frame = crate::components::main_view_chrome::main_view_content_frame(
+                menu_def,
+                design_spacing,
+            );
+            let info = crate::components::info_state::info_metrics(
+                crate::components::info_state::InfoStateDensity::Compact,
+            );
+            let frame_width = (window_width - frame.container_edge_x * 2.0).max(0.0);
+            let footer_height = footer_metrics.height_px;
+            let content_height = (window_height - footer_height).max(0.0);
+            let title_height = crate::components::info_state::INFO_TYPE_SCALE.title.line;
+            let title_y = frame.inset_y;
+            let intro_y = title_y + title_height + frame.section_gap;
+            // The intro anatomy is stable: progress, body, two actions, and a
+            // status note. Its surface is full-width; only prose keeps the
+            // compact readable measure.
+            let intro_height = info.pad_y * 2.0
+                + crate::components::info_state::INFO_TYPE_SCALE.micro.line
+                + crate::components::info_state::INFO_TYPE_SCALE.body.line * 2.0
+                + info.row_min_h * 2.0
+                + crate::components::info_state::INFO_TYPE_SCALE.body.line
+                + info.block_gap * 4.0;
+            let list_y = intro_y + intro_height + frame.section_gap;
+            let list_height = (crate::permissions_wizard::PermissionKind::all().len() as f32
+                * list.item_height)
+                .min((content_height - list_y).max(0.0));
+            let text_width = info
+                .max_width
+                .min((frame_width - frame.text_inset_x() - info.pad_x).max(0.0));
+
+            components.push(
+                LayoutComponentInfo::new("PermissionsContentFrame", LayoutComponentType::Container)
+                    .with_bounds(
+                        frame.container_edge_x,
+                        0.0,
+                        frame_width,
+                        content_height,
+                    )
+                    .with_padding(
+                        frame.inset_y,
+                        frame.container_edge_x,
+                        frame.inset_y,
+                        frame.container_edge_x,
+                    )
+                    .with_gap(frame.section_gap)
+                    .with_flex_column()
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation(
+                        "Permissions owns one horizontal frame for title, intro, actions, and rows.",
+                    ),
+            );
+            components.push(
+                LayoutComponentInfo::new("PermissionsTitle", LayoutComponentType::Header)
+                    .with_bounds(
+                        frame.text_plane_x,
+                        title_y,
+                        (window_width - frame.text_plane_x - frame.container_edge_x).max(0.0),
+                        title_height,
+                    )
+                    .with_depth(2)
+                    .with_parent("PermissionsContentFrame")
+                    .with_explanation(
+                        "Wizard title starts on the shared permission-row text plane.",
+                    ),
+            );
+            components.push(
+                LayoutComponentInfo::new("PermissionsIntroPanel", LayoutComponentType::Panel)
+                    .with_bounds(
+                        frame.container_edge_x,
+                        intro_y,
+                        frame_width,
+                        intro_height,
+                    )
+                    .with_padding(
+                        info.pad_y,
+                        info.pad_x,
+                        info.pad_y,
+                        frame.text_inset_x(),
+                    )
+                    .with_depth(2)
+                    .with_parent("PermissionsContentFrame")
+                    .with_explanation(format!(
+                        "Full-width Permissions intro panel; the {}px compact cap applies only to prose, not the panel surface.",
+                        info.max_width
+                    )),
+            );
+            components.push(
+                LayoutComponentInfo::new("PermissionsIntroText", LayoutComponentType::Other)
+                    .with_bounds(
+                        frame.text_plane_x,
+                        intro_y + info.pad_y,
+                        text_width,
+                        crate::components::info_state::INFO_TYPE_SCALE.micro.line
+                            + info.block_gap
+                            + crate::components::info_state::INFO_TYPE_SCALE.body.line * 2.0,
+                    )
+                    .with_depth(3)
+                    .with_parent("PermissionsIntroPanel")
+                    .with_explanation("Progress and intro copy share the title/row text plane."),
+            );
+            components.push(
+                LayoutComponentInfo::new("PermissionsIntroActions", LayoutComponentType::Container)
+                    .with_bounds(
+                        frame.text_plane_x,
+                        intro_y
+                            + info.pad_y
+                            + crate::components::info_state::INFO_TYPE_SCALE.micro.line
+                            + info.block_gap
+                            + crate::components::info_state::INFO_TYPE_SCALE.body.line * 2.0
+                            + info.block_gap,
+                        text_width,
+                        info.row_min_h * 2.0,
+                    )
+                    .with_flex_column()
+                    .with_depth(3)
+                    .with_parent("PermissionsIntroPanel")
+                    .with_explanation("Grant and Done guidance starts on the shared text plane."),
+            );
+            components.push(
+                LayoutComponentInfo::new("PermissionsList", LayoutComponentType::List)
+                    .with_bounds(frame.container_edge_x, list_y, frame_width, list_height)
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("PermissionsContentFrame")
+                    .with_explanation("Permission rows share the intro panel's left/right frame."),
+            );
+            if list_height > 0.0 {
+                components.push(
+                    LayoutComponentInfo::new("PermissionsFirstRowText", LayoutComponentType::Other)
+                        .with_bounds(
+                            frame.text_plane_x,
+                            list_y,
+                            (window_width - frame.text_plane_x - frame.container_edge_x).max(0.0),
+                            list.item_height.min(list_height),
+                        )
+                        .with_depth(3)
+                        .with_parent("PermissionsList")
+                        .with_explanation(
+                            "First permission label starts on the shared text plane.",
+                        ),
+                );
+            }
+            components.push(
+                LayoutComponentInfo::new("PermissionsFooter", LayoutComponentType::Panel)
+                    .with_bounds(
+                        0.0,
+                        window_height - footer_height,
+                        window_width,
+                        footer_height,
+                    )
+                    .with_depth(1)
+                    .with_parent("Window")
+                    .with_explanation("Surface-owned native footer with Grant and Done actions."),
+            );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                handler_form: None,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
 
         if matches!(self.current_view, AppView::About { .. }) {
             const ABOUT_HEADER_HEIGHT: f32 = 52.0;
@@ -2124,10 +2293,175 @@ impl ScriptListApp {
             };
         }
 
-        if let AppView::AgentChatView { entity } = &self.current_view {
-            let agent_chat_state = entity.read(cx).collect_agent_chat_state_snapshot(cx);
-            let agent_chat_is_empty =
-                agent_chat_state.message_count == 0 && !agent_chat_state.awaiting_first_assistant_text;
+        if let AppView::DayPage { entity } = &self.current_view {
+            let day_page = entity.read(cx);
+            let editor_layout = day_page.notes_editor.read(cx).layout();
+            let shelf_count = if day_page.kit_resource_preview.is_none() {
+                day_page.clipboard_shelf.len()
+            } else {
+                0
+            };
+            let day_page_tokens = crate::designs::get_tokens(self.current_design);
+            let day_page_header_padding_y = if self.current_design.is_default() {
+                shell.header_padding_y
+            } else {
+                day_page_tokens.spacing().padding_sm
+            };
+            let day_page_header_gap = if self.current_design.is_default() {
+                shell.header_gap
+            } else {
+                day_page_tokens.spacing().gap_md
+            };
+            // Day Page's shared header owns only the context row; its input
+            // slot is empty, so the generic search height is not rendered.
+            let day_page_content_top = day_page_header_padding_y * 2.0
+                + menu_def.header_info_bar.height_px
+                + day_page_header_gap;
+            let footer_height = footer_metrics.height_px;
+            let budget = day_page_layout_budget(
+                window_height,
+                day_page_content_top,
+                footer_height,
+                shelf_count,
+                day_page.clipboard_shelf_expanded,
+                editor_layout.padding_y,
+            );
+            let columns = crate::components::main_view_chrome::main_view_content_columns(menu_def);
+            let editor_x = columns.content_right_inset_x;
+            let editor_width = (window_width - editor_x * 2.0).max(0.0);
+            let text_plane_x = editor_x + editor_layout.padding_x;
+            let text_plane_width = (editor_width - editor_layout.padding_x * 2.0).max(0.0);
+            let text_plane_y = day_page_content_top + editor_layout.padding_y;
+            let text_plane_height = (budget.editor_height - editor_layout.padding_y * 2.0).max(0.0);
+
+            components.push(
+                LayoutComponentInfo::new("DayPageSurface", LayoutComponentType::Container)
+                    .with_bounds(
+                        0.0,
+                        day_page_content_top,
+                        window_width,
+                        budget.body_height,
+                    )
+                    .with_flex_column()
+                    .with_depth(2)
+                    .with_parent("MainViewMain")
+                    .with_explanation(
+                        "Day Page owns one vertical budget for editor, clipboard accessory, and native footer.",
+                    ),
+            );
+            components.push(
+                LayoutComponentInfo::new("DayPageEditor", LayoutComponentType::Input)
+                    .with_bounds(
+                        editor_x,
+                        day_page_content_top,
+                        editor_width,
+                        budget.editor_height,
+                    )
+                    .with_padding(
+                        editor_layout.padding_y,
+                        editor_layout.padding_x,
+                        editor_layout.padding_y,
+                        editor_layout.padding_x,
+                    )
+                    .with_flex_grow(1.0)
+                    .with_depth(3)
+                    .with_parent("DayPageSurface")
+                    .with_explanation(format!(
+                        "Editor receives the remaining Day Page body height and preserves a {}px minimum before the expanded shelf can grow.",
+                        DAY_PAGE_MIN_EDITOR_HEIGHT_PX
+                    )),
+            );
+            components.push(
+                LayoutComponentInfo::new(
+                    "DayPageEditorTextPlane",
+                    LayoutComponentType::Container,
+                )
+                .with_bounds(
+                    text_plane_x,
+                    text_plane_y,
+                    text_plane_width,
+                    text_plane_height,
+                )
+                .with_depth(4)
+                .with_parent("DayPageEditor")
+                .with_explanation(
+                    "Shared NotesEditor text plane after its horizontal and vertical content insets.",
+                ),
+            );
+
+            if shelf_count > 0 {
+                let shelf_y = day_page_content_top + budget.editor_height;
+                components.push(
+                    LayoutComponentInfo::new(
+                        "DayPageClipboardShelf",
+                        LayoutComponentType::Container,
+                    )
+                    .with_bounds(
+                        text_plane_x,
+                        shelf_y,
+                        text_plane_width,
+                        budget.shelf_height,
+                    )
+                    .with_padding(
+                        DAY_PAGE_CLIPBOARD_SHELF_TOP_PADDING_PX,
+                        0.0,
+                        editor_layout.padding_y,
+                        0.0,
+                    )
+                    .with_flex_column()
+                    .with_depth(3)
+                    .with_parent("DayPageSurface")
+                    .with_explanation(format!(
+                        "NotesEditor bottom accessory on the same x={} text plane; expanded list height is responsive ({}px), not a fixed nested-scroll cap.",
+                        text_plane_x, budget.shelf_list_height
+                    )),
+                );
+                components.push(
+                    LayoutComponentInfo::new(
+                        "DayPageClipboardShelfToggle",
+                        LayoutComponentType::Button,
+                    )
+                    .with_bounds(
+                        text_plane_x,
+                        shelf_y + DAY_PAGE_CLIPBOARD_SHELF_TOP_PADDING_PX,
+                        text_plane_width,
+                        DAY_PAGE_CLIPBOARD_SHELF_TOGGLE_HEIGHT_PX,
+                    )
+                    .with_depth(4)
+                    .with_parent("DayPageClipboardShelf")
+                    .with_explanation("Disclosure label starts on the editor text plane."),
+                );
+                if budget.shelf_list_height > 0.0 {
+                    components.push(
+                        LayoutComponentInfo::new(
+                            "DayPageClipboardShelfList",
+                            LayoutComponentType::List,
+                        )
+                        .with_bounds(
+                            text_plane_x,
+                            shelf_y
+                                + DAY_PAGE_CLIPBOARD_SHELF_TOP_PADDING_PX
+                                + DAY_PAGE_CLIPBOARD_SHELF_TOGGLE_HEIGHT_PX
+                                + DAY_PAGE_CLIPBOARD_SHELF_GAP_PX,
+                            text_plane_width,
+                            budget.shelf_list_height,
+                        )
+                        .with_flex_column()
+                        .with_depth(4)
+                        .with_parent("DayPageClipboardShelf")
+                        .with_explanation(format!(
+                            "{} clipboard rows share the editor text plane and scroll only within the responsive accessory budget.",
+                            shelf_count
+                        )),
+                    );
+                }
+            }
+        } else if let AppView::AgentChatView { entity } = &self.current_view {
+            let agent_chat_view = entity.read(cx);
+            let agent_chat_state = agent_chat_view.collect_agent_chat_state_snapshot(cx);
+            let transcript_viewport_bounds = agent_chat_view.transcript_viewport_bounds_px(cx);
+            let agent_chat_is_empty = agent_chat_state.message_count == 0
+                && !agent_chat_state.awaiting_first_assistant_text;
             let info_metrics = crate::components::info_state::info_metrics(
                 crate::components::info_state::InfoStateDensity::Comfortable,
             );
@@ -2292,13 +2626,20 @@ impl ScriptListApp {
                     ),
                 );
             } else {
+                let (transcript_x, transcript_y, transcript_width, transcript_height) =
+                    transcript_viewport_bounds.unwrap_or((
+                        0.0,
+                        content_top,
+                        window_width,
+                        (content_height - shell.content_inset_bottom).max(0.0),
+                    ));
                 components.push(
                     LayoutComponentInfo::new("AgentChatTranscript", LayoutComponentType::List)
                         .with_bounds(
-                            0.0,
-                            content_top,
-                            window_width,
-                            (content_height - shell.content_inset_bottom).max(0.0),
+                            transcript_x,
+                            transcript_y,
+                            transcript_width,
+                            transcript_height,
                         )
                         .with_visual_style(
                             chrome_tokens::CHROME_LAYER_CONTENT,
@@ -2311,8 +2652,8 @@ impl ScriptListApp {
                         .with_depth(3)
                         .with_parent("AgentChatConversation")
                         .with_explanation(format!(
-                            "Agent Chat transcript viewport for {} live thread messages.",
-                            agent_chat_state.message_count
+                            "Agent Chat transcript viewport for {} live thread messages; bounds come from the transcript ListState viewport.",
+                            agent_chat_state.message_count,
                         )),
                 );
             }

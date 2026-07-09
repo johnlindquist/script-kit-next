@@ -527,7 +527,7 @@ impl ScriptListApp {
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(text_primary))
                 .font_family(self.theme_font_family())
@@ -560,7 +560,7 @@ mod app_launcher_chrome_audit {
         let render_code = &source[..render_fn_end];
 
         assert!(
-            render_code.contains("render_main_view_chrome(")
+            render_code.contains("render_main_view_chrome_footer_flush(")
                 && render_code.contains("render_builtin_main_input_header("),
             "app_launcher should return the shared main-view chrome with built-in input header"
         );

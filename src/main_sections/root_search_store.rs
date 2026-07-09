@@ -3,21 +3,21 @@ pub(crate) struct RootSearchStore {
     /// Frozen cache-refreshable passive rows for the current root-search query frame.
     root_passive_frame: Option<crate::RootPassiveFrame>,
     /// App-layer enriched rows for root/unified `windows:` search.
-    pub(crate) cached_root_windows: Vec<crate::scripts::RootWindowEntry>,
+    cached_root_windows: Vec<crate::scripts::RootWindowEntry>,
     /// Last provider state for root unified `windows:` search.
-    pub(crate) root_windows_provider_status: crate::window_control::RootWindowsProviderStatus,
+    root_windows_provider_status: crate::window_control::RootWindowsProviderStatus,
     /// Generation bumped when root unified search refreshes cached windows.
-    pub(crate) root_windows_refresh_generation: u64,
+    root_windows_refresh_generation: u64,
     /// Token used to drop stale async root window refresh results.
-    pub(crate) root_windows_refresh_token: u64,
+    root_windows_refresh_token: u64,
     /// True while an async root window refresh is in flight.
-    pub(crate) root_windows_refreshing: bool,
+    root_windows_refreshing: bool,
     /// Last successful root window refresh completion.
-    pub(crate) root_windows_last_completed_at: Option<std::time::Instant>,
+    root_windows_last_completed_at: Option<std::time::Instant>,
     /// In-memory local recency for windows focused through Script Kit.
-    pub(crate) root_window_focus_recency: std::collections::HashMap<String, u64>,
+    root_window_focus_recency: std::collections::HashMap<String, u64>,
     /// Sequence number for in-memory root window recency.
-    pub(crate) root_window_focus_seq: u64,
+    root_window_focus_seq: u64,
     /// Async hybrid brain hits keyed by the trimmed root-launcher search text.
     pub(crate) root_brain_semantic_results: Option<(String, Vec<crate::brain::RootBrainSearchHit>)>,
     /// Generation counter used to ignore stale semantic brain batches.
@@ -66,8 +66,7 @@ impl Default for RootSearchStore {
         Self {
             root_passive_frame: None,
             cached_root_windows: Vec::new(),
-            root_windows_provider_status:
-                crate::window_control::RootWindowsProviderStatus::Unknown,
+            root_windows_provider_status: crate::window_control::RootWindowsProviderStatus::Unknown,
             root_windows_refresh_generation: 0,
             root_windows_refresh_token: 0,
             root_windows_refreshing: false,
@@ -101,14 +100,121 @@ impl Default for RootSearchStore {
 
 impl RootSearchStore {
     pub(crate) fn with_root_windows(
-        cached_root_windows: Vec<crate::scripts::RootWindowEntry>,
+        windows: &[crate::window_control::WindowInfo],
+        apps: &[crate::app_launcher::AppInfo],
         root_windows_provider_status: crate::window_control::RootWindowsProviderStatus,
     ) -> Self {
         Self {
-            cached_root_windows,
+            cached_root_windows: Self::build_root_window_entries(
+                windows,
+                apps,
+                &std::collections::HashMap::new(),
+            ),
             root_windows_provider_status,
             ..Self::default()
         }
+    }
+
+    fn root_window_duplicate_key(window: &crate::window_control::WindowInfo) -> (String, String) {
+        (
+            window
+                .bundle_id
+                .clone()
+                .unwrap_or_else(|| window.app.to_lowercase()),
+            window.title.to_lowercase(),
+        )
+    }
+
+    fn root_window_duplicate_counts(
+        windows: &[crate::window_control::WindowInfo],
+    ) -> std::collections::HashMap<(String, String), usize> {
+        let mut counts = std::collections::HashMap::new();
+        for window in windows {
+            *counts
+                .entry(Self::root_window_duplicate_key(window))
+                .or_insert(0) += 1;
+        }
+        counts
+    }
+
+    fn build_root_window_entries(
+        windows: &[crate::window_control::WindowInfo],
+        apps: &[crate::app_launcher::AppInfo],
+        recency: &std::collections::HashMap<String, u64>,
+    ) -> Vec<crate::scripts::RootWindowEntry> {
+        let lookup = crate::app_launcher::AppIconLookup::from_apps(apps);
+        let duplicate_counts = Self::root_window_duplicate_counts(windows);
+        let mut duplicate_seen = std::collections::HashMap::<(String, String), usize>::new();
+
+        let mut entries = windows
+            .iter()
+            .cloned()
+            .map(|window| {
+                let duplicate_key = Self::root_window_duplicate_key(&window);
+                let duplicate_count = duplicate_counts.get(&duplicate_key).copied().unwrap_or(1);
+                let duplicate_rank = if duplicate_count > 1 {
+                    let rank = duplicate_seen.entry(duplicate_key).or_insert(0);
+                    *rank += 1;
+                    Some(*rank)
+                } else {
+                    None
+                };
+                let duplicate_label =
+                    duplicate_rank.map(|rank| format!("Window {rank} of {duplicate_count}"));
+                let subtitle = crate::window_control::build_window_descriptor(
+                    &window.app,
+                    window.pid,
+                    window.bounds,
+                    window.is_frontmost_app,
+                    window.is_focused,
+                    window.is_main,
+                    window.is_minimized,
+                    window.is_on_current_space,
+                    duplicate_label.as_deref(),
+                );
+                let local_recency_seq = recency.get(&window.selection_key()).copied();
+                crate::scripts::RootWindowEntry {
+                    app_icon: lookup.icon_for_window(&window),
+                    subtitle,
+                    duplicate_rank,
+                    duplicate_count,
+                    local_recency_seq,
+                    window,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        entries.sort_by(|a, b| {
+            b.window
+                .is_frontmost_app
+                .cmp(&a.window.is_frontmost_app)
+                .then_with(|| b.window.is_focused.cmp(&a.window.is_focused))
+                .then_with(|| b.window.is_main.cmp(&a.window.is_main))
+                .then_with(|| b.local_recency_seq.cmp(&a.local_recency_seq))
+                .then_with(|| a.window.is_minimized.cmp(&b.window.is_minimized))
+                .then_with(|| a.window.app_order.cmp(&b.window.app_order))
+                .then_with(|| a.window.window_index.cmp(&b.window.window_index))
+                .then_with(|| a.window.title.cmp(&b.window.title))
+                .then_with(|| a.window.id.cmp(&b.window.id))
+        });
+
+        entries
+    }
+
+    pub(crate) fn root_windows(
+        &self,
+    ) -> (
+        &[crate::scripts::RootWindowEntry],
+        crate::window_control::RootWindowsProviderStatus,
+    ) {
+        (
+            &self.cached_root_windows,
+            self.root_windows_provider_status.clone(),
+        )
+    }
+
+    pub(crate) fn root_windows_refresh_generation(&self) -> u64 {
+        self.root_windows_refresh_generation
     }
 
     pub(crate) fn clear_root_passive_frame(&mut self) {
@@ -139,22 +245,27 @@ impl RootSearchStore {
 
     pub(crate) fn install_root_windows(
         &mut self,
-        cached_root_windows: Vec<crate::scripts::RootWindowEntry>,
+        windows: &[crate::window_control::WindowInfo],
+        apps: &[crate::app_launcher::AppInfo],
     ) {
-        let count = cached_root_windows.len();
-        self.cached_root_windows = cached_root_windows;
+        self.cached_root_windows =
+            Self::build_root_window_entries(windows, apps, &self.root_window_focus_recency);
         self.root_windows_refreshing = false;
         self.bump_root_windows_refresh_generation();
         self.root_windows_provider_status =
-            crate::window_control::RootWindowsProviderStatus::Ready { count };
+            crate::window_control::RootWindowsProviderStatus::Ready {
+                count: windows.len(),
+            };
         self.root_windows_last_completed_at = Some(std::time::Instant::now());
     }
 
     pub(crate) fn rebuild_root_windows(
         &mut self,
-        cached_root_windows: Vec<crate::scripts::RootWindowEntry>,
+        windows: &[crate::window_control::WindowInfo],
+        apps: &[crate::app_launcher::AppInfo],
     ) {
-        self.cached_root_windows = cached_root_windows;
+        self.cached_root_windows =
+            Self::build_root_window_entries(windows, apps, &self.root_window_focus_recency);
         self.bump_root_windows_refresh_generation();
     }
 
@@ -284,7 +395,8 @@ mod root_search_store_tests {
     #[test]
     fn root_windows_refresh_and_focus_lifecycle_stays_cohesive() {
         let mut store = RootSearchStore::with_root_windows(
-            Vec::new(),
+            &[],
+            &[],
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
         );
 
@@ -307,7 +419,7 @@ mod root_search_store_tests {
         let token = store.begin_root_windows_refresh();
         assert!(!store.root_windows_refresh_token_matches(previous_token));
         assert!(store.root_windows_refresh_token_matches(token));
-        store.install_root_windows(Vec::new());
+        store.install_root_windows(&[], &[]);
         assert!(!store.root_windows_refreshing);
         assert_eq!(store.root_windows_refresh_generation, 4);
         assert!(matches!(
@@ -316,12 +428,52 @@ mod root_search_store_tests {
         ));
         assert!(store.root_windows_last_completed_at.is_some());
 
-        store.rebuild_root_windows(Vec::new());
+        store.rebuild_root_windows(&[], &[]);
         assert_eq!(store.root_windows_refresh_generation, 5);
 
         store.record_root_window_focus("window-key".to_string());
         assert_eq!(store.root_window_focus_seq, 1);
         assert_eq!(store.root_window_focus_recency.get("window-key"), Some(&1));
+    }
+
+    #[test]
+    fn root_windows_enrichment_orders_frontmost_then_local_recency_and_labels_duplicates() {
+        fn window(id: u32, title: &str) -> crate::window_control::WindowInfo {
+            crate::window_control::WindowInfo::for_test(
+                id,
+                "Example".to_string(),
+                title.to_string(),
+                crate::window_control::Bounds::new(0, 0, 800, 600),
+                42,
+            )
+        }
+
+        let duplicate_first = window(1, "Shared");
+        let duplicate_recent = window(2, "shared");
+        let mut frontmost = window(3, "Frontmost");
+        frontmost.is_frontmost_app = true;
+
+        let mut store = RootSearchStore::default();
+        store.record_root_window_focus(duplicate_recent.selection_key());
+        store.install_root_windows(&[duplicate_first, duplicate_recent, frontmost], &[]);
+
+        let (entries, status) = store.root_windows();
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.window.id)
+                .collect::<Vec<_>>(),
+            vec![3, 2, 1]
+        );
+        assert_eq!(entries[1].duplicate_rank, Some(2));
+        assert_eq!(entries[1].duplicate_count, 2);
+        assert_eq!(entries[1].local_recency_seq, Some(1));
+        assert!(entries[1].subtitle.contains("Window 2 of 2"));
+        assert_eq!(entries[2].duplicate_rank, Some(1));
+        assert!(matches!(
+            status,
+            crate::window_control::RootWindowsProviderStatus::Ready { count: 3 }
+        ));
     }
 
     #[test]

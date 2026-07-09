@@ -495,7 +495,7 @@ impl ScriptListApp {
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(text_primary))
                 .font_family(self.theme_font_family())
@@ -530,7 +530,7 @@ mod window_switcher_chrome_audit {
     fn window_switcher_uses_minimal_chrome_footer() {
         let source = include_str!("window_switcher.rs");
         assert!(
-            source.contains("render_main_view_chrome(")
+            source.contains("render_main_view_chrome_footer_flush(")
                 && source.contains("render_builtin_main_input_header("),
             "window_switcher should use shared main-view chrome and built-in input header"
         );

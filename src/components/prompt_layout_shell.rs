@@ -1868,7 +1868,7 @@ mod prompt_layout_shell_tests {
     ///
     /// Since 9ff5f45e9 ("Share built-in search chrome broadly") minimal
     /// builtins route through the shared main-view chrome
-    /// (`render_main_view_chrome` + `render_builtin_main_input_header`),
+    /// (`render_main_view_chrome_footer_flush` + `render_builtin_main_input_header`),
     /// which owns header padding and the divider — so local
     /// `HEADER_PADDING_*` tokens and `SectionDivider` must NOT reappear.
     /// The shared hint strip footer remains, and `PromptFooter` stays gone.
@@ -1877,7 +1877,7 @@ mod prompt_layout_shell_tests {
         let render_code = &source[..render_fn_end];
 
         assert!(
-            render_code.contains("render_main_view_chrome("),
+            render_code.contains("render_main_view_chrome_footer_flush("),
             "{surface} should route through the shared main-view chrome"
         );
         assert!(
@@ -1964,7 +1964,7 @@ mod prompt_layout_shell_tests {
         // MainViewChrome; see tests/minimal_chrome_audit.rs and clipboard.rs's
         // own clipboard_history_uses_shared_main_view_chrome audit).
         assert!(
-            source.contains("render_main_view_chrome(")
+            source.contains("render_main_view_chrome_footer_flush(")
                 && source.contains("main_window_footer_slot("),
             "clipboard.rs should route through the shared main-view chrome with the native footer slot"
         );
@@ -1989,7 +1989,7 @@ mod prompt_layout_shell_tests {
     fn file_search_source_matches_main_view_chrome_contract() {
         let source = include_str!("../render_builtins/file_search.rs");
         assert!(
-            source.contains("render_main_view_chrome("),
+            source.contains("render_main_view_chrome_footer_flush("),
             "file search must use shared main-view chrome"
         );
         assert!(
@@ -2184,7 +2184,7 @@ mod prompt_layout_shell_tests {
         // shared main-view chrome (9ff5f45e9 "Share built-in search chrome
         // broadly"); the keyboard hooks below must stay on the shell root.
         assert!(
-            render_code.contains("render_main_view_chrome(")
+            render_code.contains("render_main_view_chrome_footer_flush(")
                 && render_code.contains("render_builtin_main_input_header("),
             "app_launcher should return the shared main-view chrome wrapper"
         );

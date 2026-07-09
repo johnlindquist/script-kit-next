@@ -30,7 +30,7 @@ fn footer_gallery_uses_shared_search_input_shell_and_preserves_preview_rows() {
 
     for required in [
         "render_builtin_main_input_header(",
-        "render_main_view_chrome(",
+        "render_main_view_chrome_footer_flush(",
         ".key_context(\"footer_gallery\")",
         ".track_focus(&self.focus_handle)",
         ".on_key_down(handle_key)",

@@ -2280,7 +2280,7 @@ impl ScriptListApp {
                 self.main_menu_render_diagnostics.last_render_log_item_count = item_count_for_log;
             }
 
-            return crate::components::main_view_chrome::render_main_view_chrome(
+            return crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
                 root,
                 &self.theme,
                 menu_def,
@@ -2420,7 +2420,7 @@ impl ScriptListApp {
             self.main_menu_render_diagnostics.last_render_log_item_count = item_count_for_log;
         }
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             root,
             &self.theme,
             menu_def,

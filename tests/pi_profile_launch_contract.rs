@@ -225,6 +225,57 @@ fn built_in_non_speed_profiles_launch_gpt_5_6_sol_with_medium_thinking() {
 }
 
 #[test]
+fn gpt_5_6_catalog_models_default_missing_thinking_to_medium() {
+    let ctx = context();
+
+    for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] {
+        let ai = AiPreferences {
+            pi_binary: Some("/tmp/test-pi".to_string()),
+            selected_profile_id: Some("custom".to_string()),
+            selected_model_id: Some(format!("openai-codex/{model}")),
+            profiles: vec![AgentChatProfile {
+                id: Some("custom".to_string()),
+                name: "Custom".to_string(),
+                backend: Some(AgentChatBackend::Pi),
+                provider: Some("openai-codex".to_string()),
+                model: Some("gpt-5.4".to_string()),
+                ..AgentChatProfile::default()
+            }],
+            ..AiPreferences::default()
+        };
+        let profile = resolve_effective_profile(&ai, &ctx);
+        let spec = PiLaunchSpec::from_profile(&profile).expect("custom profile should use Pi");
+        let argv = spec.argv();
+
+        assert_eq!(argv_value(&argv, "--model"), Some(model));
+        assert_eq!(argv_value(&argv, "--thinking"), Some("medium"));
+    }
+}
+
+#[test]
+fn gpt_5_6_catalog_models_preserve_explicit_thinking() {
+    let ctx = context();
+    let ai = AiPreferences {
+        pi_binary: Some("/tmp/test-pi".to_string()),
+        selected_profile_id: Some("custom".to_string()),
+        profiles: vec![AgentChatProfile {
+            id: Some("custom".to_string()),
+            name: "Custom".to_string(),
+            backend: Some(AgentChatBackend::Pi),
+            provider: Some("openai-codex".to_string()),
+            model: Some("gpt-5.6-luna".to_string()),
+            thinking: Some("high".to_string()),
+            ..AgentChatProfile::default()
+        }],
+        ..AiPreferences::default()
+    };
+    let profile = resolve_effective_profile(&ai, &ctx);
+    let spec = PiLaunchSpec::from_profile(&profile).expect("custom profile should use Pi");
+
+    assert_eq!(argv_value(&spec.argv(), "--thinking"), Some("high"));
+}
+
+#[test]
 fn provider_catalog_lists_gpt_5_6_sol_first() {
     let catalog = pi_provider_model_catalog();
     let codex = catalog.first().expect("Codex provider must be present");
@@ -233,6 +284,14 @@ fn provider_catalog_lists_gpt_5_6_sol_first() {
     assert_eq!(
         codex.models.first().copied(),
         Some(("gpt-5.6-sol", "GPT-5.6 SOL"))
+    );
+    assert_eq!(
+        codex.models.get(1).copied(),
+        Some(("gpt-5.6-terra", "GPT-5.6 TERRA"))
+    );
+    assert_eq!(
+        codex.models.get(2).copied(),
+        Some(("gpt-5.6-luna", "GPT-5.6 LUNA"))
     );
 }
 
@@ -310,13 +369,17 @@ fn selected_model_id_overrides_builtin_profile_default_model() {
     let ai = AiPreferences {
         pi_binary: Some("/tmp/test-pi".to_string()),
         selected_profile_id: Some(BUILTIN_GENERAL_PROFILE_ID.to_string()),
-        selected_model_id: Some("gpt-5.5-pro".to_string()),
+        selected_model_id: Some("openai-codex/gpt-5.6-terra".to_string()),
         ..AiPreferences::default()
     };
 
     let profile = resolve_effective_profile(&ai, &ctx);
     assert_eq!(profile.id, BUILTIN_GENERAL_PROFILE_ID);
-    assert_eq!(profile.model.as_deref(), Some("gpt-5.5-pro"));
+    assert_eq!(profile.model.as_deref(), Some("gpt-5.6-terra"));
+    let spec = PiLaunchSpec::from_profile(&profile).expect("general profile should use Pi");
+    let argv = spec.argv();
+    assert_eq!(argv_value(&argv, "--model"), Some("gpt-5.6-terra"));
+    assert_eq!(argv_value(&argv, "--thinking"), Some("medium"));
 }
 
 #[test]

@@ -819,7 +819,7 @@ impl ScriptListApp {
             )
             .into_any_element();
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(text_primary))
                 .font_family(self.theme_font_family())
@@ -854,7 +854,7 @@ mod clipboard_chrome_audit {
 
         // Must route through the shared main-view chrome and native footer.
         assert!(
-            source.contains("render_main_view_chrome("),
+            source.contains("render_main_view_chrome_footer_flush("),
             "clipboard must use the shared main-view chrome"
         );
         assert!(

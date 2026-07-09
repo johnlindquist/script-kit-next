@@ -431,7 +431,7 @@ mod tests {
         // allowed tool so live-info questions get real answers.
         let ai = AiPreferences {
             pi_binary: Some("/tmp/test-pi".to_string()),
-            selected_model_id: Some("openai-codex/gpt-5.5".to_string()),
+            selected_model_id: Some("openai-codex/gpt-5.6-terra".to_string()),
             selected_profile_id: Some(
                 crate::ai::agent_chat::profiles::BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string(),
             ),

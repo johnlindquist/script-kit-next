@@ -1,5 +1,6 @@
 //! Pi-backed Agent Chat launch contracts.
 
+pub(crate) mod auth_recovery;
 pub mod binary;
 mod events;
 pub mod launch_spec;

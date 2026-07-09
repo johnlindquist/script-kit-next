@@ -10,6 +10,21 @@ use crate::notes::markdown;
 use super::NotesEditor;
 
 impl NotesEditor {
+    /// Render a host-owned accessory on the same horizontal plane as editor
+    /// text. The host owns the accessory's contents and vertical budget; the
+    /// shared editor remains the sole owner of its horizontal inset.
+    pub fn render_content_accessory(&self, accessory: AnyElement) -> AnyElement {
+        let layout = self.layout;
+
+        div()
+            .w_full()
+            .flex_none()
+            .px(px(layout.padding_x))
+            .pb(px(layout.padding_y))
+            .child(accessory)
+            .into_any_element()
+    }
+
     /// Render the markdown preview surface.
     pub fn render_preview(
         &self,

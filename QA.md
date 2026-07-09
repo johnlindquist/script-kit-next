@@ -11,7 +11,7 @@ Actions menu, the main-input sigils, and Agent Chat.
   the main search window).
 - "Main input" = the search box at the top of the launcher.
 - The **footer** at the bottom shows the active shortcuts. Left chips:
-  `~/.scriptkit` (cwd, opens with **Tab**) and `Codex · GPT-5.5` (agent · model,
+  `~/.scriptkit` (cwd, opens with **Tab**) and `Codex · GPT-5.6 SOL` (agent · model,
   opens with **Shift+Tab**). Right: the primary action (**↵**) and **Actions
   (⌘K)**.
 - **Agent Chat** = the AI chat surface. Open it from the main input with

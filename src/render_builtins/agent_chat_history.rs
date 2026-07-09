@@ -345,15 +345,10 @@ impl ScriptListApp {
                 filtered_entries.clone();
             let selected = selected_index;
 
-            div()
-                .id("agent_chat-history-list")
-                .w_full()
-                .min_h(px(0.))
-                .flex()
-                .flex_col()
-                .track_scroll(&self.agent_chat_history_scroll_handle)
-                .overflow_y_scrollbar()
-                .children(entries_for_closure.into_iter().enumerate().map(
+            crate::components::scrollbar::render_tracked_scroll_column(
+                "agent_chat-history-list",
+                &self.agent_chat_history_scroll_handle,
+                entries_for_closure.into_iter().enumerate().map(
                     move |(display_ix, entry)| {
                         let is_selected = display_ix == selected;
 
@@ -374,8 +369,8 @@ impl ScriptListApp {
                             .id(gpui::ElementId::Integer(display_ix as u64))
                             .child(item)
                     },
-                ))
-                .into_any_element()
+                ),
+            )
         };
 
         // Build preview panel
@@ -471,7 +466,7 @@ impl ScriptListApp {
             preview_panel,
         );
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(text_primary))
                 .font_family(self.theme_font_family())
@@ -609,8 +604,9 @@ mod agent_chat_history_scroll_contract {
     #[test]
     fn agent_chat_history_tracks_scroll_and_keeps_selection_visible() {
         assert!(
-            SOURCE.contains(".track_scroll(&self.agent_chat_history_scroll_handle)"),
-            "Agent Chat history list should track scroll so selection changes can reposition the viewport"
+            SOURCE.contains("render_tracked_scroll_column(")
+                && SOURCE.contains("&self.agent_chat_history_scroll_handle"),
+            "Agent Chat history list should use the shared tracked-scroll viewport"
         );
         assert!(
             SOURCE.contains("this.agent_chat_history_scroll_handle"),

@@ -44,7 +44,8 @@ fn notes_browse_portal_escape_cancels_before_clearing_filter() {
 #[test]
 fn notes_browse_uses_selection_owned_scroll_and_clicks() {
     for needle in [
-        ".track_scroll(&self.notes_browse_scroll_handle)",
+        "render_tracked_scroll_column(",
+        "&self.notes_browse_scroll_handle",
         "builtin_reanchor_selection_from_scroll_handle",
         ".on_scroll_wheel(cx.listener(",
         "builtin_scroll_target_from_wheel",

@@ -35,7 +35,35 @@ impl DayPageView {
             font_family_source: Some("theme.mono_font_family".to_string()),
             text_size_source: Some("theme.mono_font_size".to_string()),
         });
-        let mut elements = vec![protocol::ElementInfo::panel("day-page"), editor];
+        let mut text_plane = protocol::ElementInfo::panel("day-page-editor-text-plane");
+        text_plane.role = Some("day_page_editor_text_plane".to_string());
+        text_plane.kind = Some("layout_receipt".to_string());
+        text_plane.source = Some("DayPageEditorTextPlane".to_string());
+        text_plane.source_name = Some("getLayoutInfo".to_string());
+        text_plane.selectable = Some(false);
+
+        let mut elements = vec![protocol::ElementInfo::panel("day-page"), editor, text_plane];
+
+        if !self.clipboard_shelf.is_empty() && self.kit_resource_preview.is_none() {
+            let count = self.clipboard_shelf.len();
+            let mut shelf = protocol::ElementInfo::panel("day-page-clipboard-shelf");
+            shelf.text = Some(format!(
+                "Clipboard · {count} kept {}",
+                if count == 1 { "entry" } else { "entries" }
+            ));
+            shelf.value = Some(if self.clipboard_shelf_expanded {
+                "expanded".to_string()
+            } else {
+                "collapsed".to_string()
+            });
+            shelf.selected = Some(self.clipboard_shelf_expanded);
+            shelf.role = Some("day_page_clipboard_shelf".to_string());
+            shelf.kind = Some("layout_receipt".to_string());
+            shelf.source = Some("DayPageClipboardShelf".to_string());
+            shelf.source_name = Some("getLayoutInfo".to_string());
+            shelf.selectable = Some(true);
+            elements.push(shelf);
+        }
 
         if self.read_mode && self.kit_resource_preview.is_none() {
             elements.push(protocol::ElementInfo {

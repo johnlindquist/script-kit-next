@@ -675,6 +675,34 @@ pub(crate) fn render_info_state_with_main_view_def(
     }
 }
 
+/// Render an InlinePanel whose outer surface fills its owning flow while its
+/// compact prose measure remains bounded. This separates panel measure from
+/// text measure without changing compact InlinePanel call sites elsewhere.
+pub(crate) fn render_info_state_full_width_panel(
+    spec: InfoStateSpec,
+    theme: &theme::Theme,
+    text_inset_x: f32,
+    cx: &gpui::App,
+) -> AnyElement {
+    debug_assert_eq!(spec.layout, InfoStateLayout::InlinePanel);
+    let palette = info_palette(theme);
+    let metrics = info_metrics(spec.density);
+    let content = render_info_content(&spec, theme, palette, metrics, true, cx);
+
+    div()
+        .id(spec.id)
+        .w_full()
+        .rounded(px(metrics.radius))
+        .border_1()
+        .border_color(palette.border)
+        .bg(palette.whisper)
+        .pl(px(text_inset_x.max(metrics.pad_x)))
+        .pr(px(metrics.pad_x))
+        .py(px(metrics.pad_y))
+        .child(content)
+        .into_any_element()
+}
+
 fn render_info_content(
     spec: &InfoStateSpec,
     theme: &theme::Theme,

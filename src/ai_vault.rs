@@ -1647,7 +1647,7 @@ mod tests {
             source_kind: Some("cli".to_string()),
             safe_title: "Investigate launcher filtering".to_string(),
             workspace_path: Some("/Users/me/dev/script-kit-gpui".to_string()),
-            model: Some("gpt-5.5".to_string()),
+            model: Some("gpt-5.6-terra".to_string()),
             modified_at: Some("2026-05-16T00:00:00Z".to_string()),
             matched_field: AiVaultMatchedField::Recent,
             stable_key: "ai-vault/codex/cli/session-123".to_string(),
@@ -1665,7 +1665,11 @@ mod tests {
         assert_eq!(hit.matched_field, AiVaultMatchedField::Title);
 
         let mut hit = test_hit();
-        assert!(apply_local_vault_query_match(&mut hit, "gpt-5.5", false));
+        assert!(apply_local_vault_query_match(
+            &mut hit,
+            "gpt-5.6-terra",
+            false
+        ));
         assert_eq!(hit.matched_field, AiVaultMatchedField::Model);
 
         let mut hit = test_hit();

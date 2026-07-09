@@ -134,22 +134,38 @@ pub(crate) enum AgentChatCalloutSeverity {
     Error,
 }
 
+/// Provider authentication recovery offered by a failed-turn callout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentChatAuthRecovery {
+    /// The current account cannot continue because its usage allowance is exhausted.
+    UsageLimitReached,
+    /// The provider rejected or no longer recognizes the current credentials.
+    AuthenticationRequired,
+}
+
 /// Dismissable, actionable callout rendered above the composer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AgentChatCallout {
     pub(crate) severity: AgentChatCalloutSeverity,
     pub(crate) title: SharedString,
     pub(crate) detail: Option<SharedString>,
+    /// Original provider payload retained for diagnostics and Copy Error.
+    pub(crate) raw_detail: Option<SharedString>,
     pub(crate) can_retry: bool,
+    pub(crate) auth_recovery: Option<AgentChatAuthRecovery>,
 }
 
 impl AgentChatCallout {
     fn failed(error: impl Into<SharedString>, can_retry: bool) -> Self {
+        let raw_error = error.into();
+        let presentation = agent_chat_failure_presentation(raw_error.as_ref());
         Self {
             severity: AgentChatCalloutSeverity::Error,
-            title: "Turn failed".into(),
-            detail: Some(error.into()),
+            title: presentation.title.into(),
+            detail: Some(presentation.message.into()),
+            raw_detail: Some(raw_error),
             can_retry,
+            auth_recovery: presentation.auth_recovery,
         }
     }
 
@@ -158,8 +174,51 @@ impl AgentChatCallout {
             severity: AgentChatCalloutSeverity::Error,
             title: title.into(),
             detail: Some(detail.into()),
+            raw_detail: None,
             can_retry: false,
+            auth_recovery: None,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentChatFailurePresentation {
+    title: String,
+    message: String,
+    auth_recovery: Option<AgentChatAuthRecovery>,
+}
+
+fn agent_chat_failure_presentation(error: &str) -> AgentChatFailurePresentation {
+    let normalized = error.to_ascii_lowercase();
+    if normalized.contains("usage_limit_reached")
+        || normalized.contains("usage limit reached")
+        || normalized.contains("usage limit has been reached")
+    {
+        return AgentChatFailurePresentation {
+            title: "Account usage limit reached".to_string(),
+            message: "This provider account cannot continue right now. Switch accounts, or sign in again after changing the account in your browser, then retry.".to_string(),
+            auth_recovery: Some(AgentChatAuthRecovery::UsageLimitReached),
+        };
+    }
+
+    if normalized.contains("authentication_required")
+        || normalized.contains("authentication required")
+        || normalized.contains("invalid_api_key")
+        || normalized.contains("invalid api key")
+        || normalized.contains("unauthorized")
+        || normalized.contains("http 401")
+    {
+        return AgentChatFailurePresentation {
+            title: "Provider sign-in required".to_string(),
+            message: "Your provider sign-in is missing or expired. Sign in again, or switch accounts, then retry.".to_string(),
+            auth_recovery: Some(AgentChatAuthRecovery::AuthenticationRequired),
+        };
+    }
+
+    AgentChatFailurePresentation {
+        title: "Turn failed".to_string(),
+        message: error.to_string(),
+        auth_recovery: None,
     }
 }
 
@@ -2418,9 +2477,15 @@ impl AgentChatThread {
                 );
                 let _ = self.pending_permission.take();
                 let can_retry = self.last_user_turn_text().is_some();
-                self.active_callout = Some(AgentChatCallout::failed(error.clone(), can_retry));
+                let callout = AgentChatCallout::failed(error, can_retry);
+                let transcript_message = callout
+                    .detail
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "The provider could not complete this turn.".to_string());
+                self.active_callout = Some(callout);
                 changed = true;
-                changed |= self.push_message(AgentChatThreadMessageRole::Error, error);
+                changed |= self.push_message(AgentChatThreadMessageRole::Error, transcript_message);
                 changed |= self.set_status(AgentChatThreadStatus::Error);
             }
         }
@@ -3330,6 +3395,7 @@ impl AgentChatThread {
 
         self.stream_task = None;
         self.pending_permission = None;
+        self.active_callout = None;
         self.messages.clear();
         self.active_plan_entries.clear();
         self.active_tool_calls.clear();
@@ -3388,9 +3454,24 @@ impl AgentChatThread {
                     }
                     self.set_status(AgentChatThreadStatus::Idle);
                 }
+                "error" | "provider-error" => {
+                    let error =
+                        assistant_text.unwrap_or_else(|| "Fixture provider error".to_string());
+                    let callout = AgentChatCallout::failed(error, true);
+                    let transcript_message = callout
+                        .detail
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| {
+                            "The provider could not complete this turn.".to_string()
+                        });
+                    self.active_callout = Some(callout);
+                    self.push_message(AgentChatThreadMessageRole::Error, transcript_message);
+                    self.set_status(AgentChatThreadStatus::Error);
+                }
                 other => {
                     return Err(format!(
-                        "unknown setAgentChatTestFixture phase {other:?}; expected awaitingFirstAssistantText, assistantText, or idle"
+                        "unknown setAgentChatTestFixture phase {other:?}; expected awaitingFirstAssistantText, assistantText, idle, or error"
                     ));
                 }
             }
@@ -4166,8 +4247,14 @@ impl AgentChatThread {
             }
             super::AgentChatEvent::Failed { error } => {
                 let can_retry = self.last_user_turn_text().is_some();
-                self.active_callout = Some(AgentChatCallout::failed(error.clone(), can_retry));
-                self.push_message(AgentChatThreadMessageRole::Error, error);
+                let callout = AgentChatCallout::failed(error, can_retry);
+                let transcript_message = callout
+                    .detail
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "The provider could not complete this turn.".to_string());
+                self.active_callout = Some(callout);
+                self.push_message(AgentChatThreadMessageRole::Error, transcript_message);
                 self.set_status(AgentChatThreadStatus::Error);
             }
         }
@@ -5165,6 +5252,31 @@ mod tests {
         assert_eq!(callout.title.as_ref(), "Turn failed");
         assert_eq!(callout.detail.as_ref().unwrap().as_ref(), "connection lost");
         assert!(callout.can_retry);
+    }
+
+    #[test]
+    fn usage_limit_failure_surfaces_account_recovery_without_raw_json_as_message() {
+        let mut thread = test_thread(Vec::new(), true);
+        thread.push_message(AgentChatThreadMessageRole::User, "please try");
+        let raw_error = r#"{"error":{"type":"usage_limit_reached","status":429}}"#;
+
+        apply_event_test(
+            &mut thread,
+            AgentChatEvent::Failed {
+                error: raw_error.into(),
+            },
+        );
+
+        let callout = thread.active_callout().expect("failure arms callout");
+        assert_eq!(callout.title.as_ref(), "Account usage limit reached");
+        assert_eq!(
+            callout.auth_recovery,
+            Some(AgentChatAuthRecovery::UsageLimitReached)
+        );
+        assert!(callout.detail.as_ref().unwrap().contains("Switch accounts"));
+        assert_eq!(callout.raw_detail.as_ref().unwrap().as_ref(), raw_error);
+        assert!(!thread.messages[1].body.contains("{\"error\""));
+        assert!(thread.messages[1].body.contains("Switch accounts"));
     }
 
     #[test]

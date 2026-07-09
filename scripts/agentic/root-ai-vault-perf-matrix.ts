@@ -63,7 +63,7 @@ function seed() {
         join(workDir, "rollouts", `${id}.jsonl`),
         `/tmp/ai-vault-perf/project-${i % 100}`,
         i === 42 ? "Codex SQL title match" : `Codex perf title ${i}`,
-        i % 2 === 0 ? "gpt-5.1-codex" : "gpt-5.5",
+        i % 2 === 0 ? "gpt-5.1-codex" : "gpt-5.6-terra",
         "main",
         "on-request",
         '{"type":"workspace-write"}',

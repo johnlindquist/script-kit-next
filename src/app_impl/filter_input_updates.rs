@@ -674,21 +674,27 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                Self::sync_builtin_query_state(filter, selected_index, text);
+                if Self::sync_builtin_query_state(filter, selected_index, text) {
+                    self.builtin_row_stack_scroll_handle.scroll_to_item(0);
+                }
                 true
             }
             AppView::SearchAiPresetsView {
                 filter,
                 selected_index,
             } => {
-                Self::sync_builtin_query_state(filter, selected_index, text);
+                if Self::sync_builtin_query_state(filter, selected_index, text) {
+                    self.builtin_row_stack_scroll_handle.scroll_to_item(0);
+                }
                 true
             }
             AppView::FavoritesBrowseView {
                 filter,
                 selected_index,
             } => {
-                Self::sync_builtin_query_state(filter, selected_index, text);
+                if Self::sync_builtin_query_state(filter, selected_index, text) {
+                    self.builtin_row_stack_scroll_handle.scroll_to_item(0);
+                }
                 true
             }
             AppView::CurrentAppCommandsView {

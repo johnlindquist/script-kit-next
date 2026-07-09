@@ -57,7 +57,7 @@ fn clipboard_history_uses_shared_main_view_chrome_contract() {
     );
 
     assert!(
-        layout_source.contains("render_main_view_chrome("),
+        layout_source.contains("render_main_view_chrome_footer_flush("),
         "clipboard history layout should route through shared main-view chrome"
     );
     assert!(
@@ -176,7 +176,7 @@ fn builtin_main_input_surfaces_use_shared_input_chrome() {
     ] {
         assert!(
             source.contains("render_builtin_main_input_header(")
-                && source.contains("render_main_view_chrome("),
+                && source.contains("render_main_view_chrome_footer_flush("),
             "{surface} should route its main input header through shared main-view chrome"
         );
         assert!(
@@ -203,7 +203,7 @@ fn file_search_uses_shared_main_view_chrome_contract() {
     );
 
     assert!(
-        entry_source.contains("render_main_view_chrome("),
+        entry_source.contains("render_main_view_chrome_footer_flush("),
         "file search should use shared main-view chrome"
     );
     assert!(

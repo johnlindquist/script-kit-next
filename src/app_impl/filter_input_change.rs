@@ -452,6 +452,7 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    self.builtin_row_stack_scroll_handle.scroll_to_item(0);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -462,6 +463,7 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    self.builtin_row_stack_scroll_handle.scroll_to_item(0);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -472,6 +474,7 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    self.builtin_row_stack_scroll_handle.scroll_to_item(0);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic

@@ -583,7 +583,7 @@ pub enum ExternalCommand {
     },
     /// Install a no-token Agent Chat transcript fixture for devtools proof.
     ///
-    /// phase accepts "awaitingFirstAssistantText", "assistantText", or "idle".
+    /// phase accepts "awaitingFirstAssistantText", "assistantText", "idle", or "error".
     /// This mutates the active Agent Chat thread only; it never submits to an agent.
     SetAgentChatTestFixture {
         phase: String,

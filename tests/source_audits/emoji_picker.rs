@@ -95,7 +95,7 @@ fn test_render_emoji_picker_uses_shared_input_focus_and_scroll_handles() {
     assert!(
         source.contains("render_builtin_main_input_header(")
             && source.contains("render_builtin_main_input_count_label(")
-            && source.contains("render_main_view_chrome("),
+            && source.contains("render_main_view_chrome_footer_flush("),
         "emoji picker should route the app search input through the shared builtin main input chrome"
     );
     assert!(

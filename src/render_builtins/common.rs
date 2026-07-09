@@ -121,7 +121,7 @@ impl ScriptListApp {
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(gpui::rgb(chrome.text_primary_hex))
                 .font_family(self.theme_font_family())
@@ -152,6 +152,8 @@ impl ScriptListApp {
         cx: &mut gpui::Context<Self>,
     ) -> gpui::AnyElement {
         let content = gpui::div()
+            .flex()
+            .flex_col()
             .flex_1()
             .min_h(gpui::px(0.))
             .w_full()

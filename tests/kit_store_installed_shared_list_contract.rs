@@ -15,7 +15,7 @@ fn installed_kits_uses_shared_search_input_and_list_item_rows() {
     for required in [
         "render_builtin_main_input_header(",
         "render_builtin_main_input_count_label(",
-        "render_main_view_chrome(",
+        "render_main_view_chrome_footer_flush(",
         "ListItem::new(",
         "ListItemColors::from_theme(&self.theme)",
         ".selected(is_selected)",

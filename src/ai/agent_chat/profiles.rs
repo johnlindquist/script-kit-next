@@ -15,6 +15,7 @@ pub const BUILTIN_QUICK_AI_PROFILE_ID: &str = "quick-ai";
 pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
 pub const DEFAULT_PI_MODEL: &str = "gpt-5.6-sol";
 pub const DEFAULT_PI_THINKING: &str = "medium";
+const DEFAULT_MEDIUM_THINKING_MODELS: [&str; 3] = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
 /// Quick AI (launcher Tab-with-text) is pinned to the fastest Codex model so
 /// answers stream back with minimal latency. It intentionally ignores the
 /// user's selected Agent Chat model.
@@ -50,8 +51,8 @@ pub fn pi_provider_model_catalog() -> Vec<PiProviderCatalogEntry> {
         display_name: "Codex",
         models: vec![
             ("gpt-5.6-sol", "GPT-5.6 SOL"),
-            ("gpt-5.5", "GPT-5.5"),
-            ("gpt-5.4", "GPT-5.4"),
+            ("gpt-5.6-terra", "GPT-5.6 TERRA"),
+            ("gpt-5.6-luna", "GPT-5.6 LUNA"),
             // The fastest model a ChatGPT-account Codex subscription offers.
             // (gpt-5-mini / *-codex-mini are rejected for ChatGPT accounts:
             // "not supported when using Codex with a ChatGPT account".)
@@ -711,6 +712,15 @@ pub fn apply_ai_fallbacks(
         } else if profile.source == AgentChatProfileSource::BuiltIn || profile.model.is_none() {
             profile.model = Some(selected_model.to_string());
         }
+    }
+
+    if profile.thinking.is_none()
+        && profile
+            .model
+            .as_deref()
+            .is_some_and(|model| DEFAULT_MEDIUM_THINKING_MODELS.contains(&model.trim()))
+    {
+        profile.thinking = Some(DEFAULT_PI_THINKING.to_string());
     }
 
     profile

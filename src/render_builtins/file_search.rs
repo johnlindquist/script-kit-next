@@ -1586,7 +1586,7 @@ impl ScriptListApp {
                 .into_any_element()
         };
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             root,
             &self.theme,
             menu_def,
@@ -1703,7 +1703,7 @@ mod file_search_chrome_audit {
         let source = production_source();
 
         assert!(
-            source.contains("render_main_view_chrome("),
+            source.contains("render_main_view_chrome_footer_flush("),
             "file_search should use the shared main-view chrome"
         );
         assert!(

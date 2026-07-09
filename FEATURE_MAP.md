@@ -5,7 +5,7 @@ This file is a compatibility index and first-pass source. The maintained feature
 
 
 
-8m25s · gpt-5.5-pro[browser] · ↑62.17k ↓8.28k ↻0 Δ70.45k
+8m25s · gpt-5.6-sol[browser] · ↑62.17k ↓8.28k ↻0 Δ70.45k
 files=1
 
 
@@ -13,7 +13,7 @@ files=1
 
 
 
-8m00s · gpt-5.5-pro[browser] · ↑46k ↓8.98k ↻0 Δ54.98k
+8m00s · gpt-5.6-sol[browser] · ↑46k ↓8.98k ↻0 Δ54.98k
 files=1
 
 
@@ -21,7 +21,7 @@ files=1
 
 
 
-6m58s · gpt-5.5-pro[browser] · ↑52.9k ↓9.47k ↻0 Δ62.37k
+6m58s · gpt-5.6-sol[browser] · ↑52.9k ↓9.47k ↻0 Δ62.37k
 files=1
 
 
@@ -29,7 +29,7 @@ files=1
 
 
 
-7m36s · gpt-5.5-pro[browser] · ↑69.88k ↓9.53k ↻0 Δ79.41k
+7m36s · gpt-5.6-sol[browser] · ↑69.88k ↓9.53k ↻0 Δ79.41k
 files=1
 
 
@@ -37,7 +37,7 @@ files=1
 
 
 
-8m31s · gpt-5.5-pro[browser] · ↑58.64k ↓9.69k ↻0 Δ68.33k
+8m31s · gpt-5.6-sol[browser] · ↑58.64k ↓9.69k ↻0 Δ68.33k
 files=1
 
 
@@ -45,7 +45,7 @@ files=1
 
 
 
-8m43s · gpt-5.5-pro[browser] · ↑180.48k ↓8.53k ↻0 Δ189k
+8m43s · gpt-5.6-sol[browser] · ↑180.48k ↓8.53k ↻0 Δ189k
 files=1
 
 
@@ -53,7 +53,7 @@ files=1
 
 
 
-5m58s · gpt-5.5-pro[browser] · ↑48.05k ↓6.03k ↻0 Δ54.08k
+5m58s · gpt-5.6-sol[browser] · ↑48.05k ↓6.03k ↻0 Δ54.08k
 files=1
 
 
@@ -61,7 +61,7 @@ files=1
 
 
 
-6m50s · gpt-5.5-pro[browser] · ↑55.63k ↓6.72k ↻0 Δ62.35k
+6m50s · gpt-5.6-sol[browser] · ↑55.63k ↓6.72k ↻0 Δ62.35k
 files=1
 
 
@@ -69,7 +69,7 @@ files=1
 
 
 
-6m54s · gpt-5.5-pro[browser] · ↑56.34k ↓6.25k ↻0 Δ62.59k
+6m54s · gpt-5.6-sol[browser] · ↑56.34k ↓6.25k ↻0 Δ62.59k
 files=1
 
 
@@ -77,5 +77,5 @@ files=1
 
 
 
-7m59s · gpt-5.5-pro[browser] · ↑62.8k ↓5.84k ↻0 Δ68.64k
+7m59s · gpt-5.6-sol[browser] · ↑62.8k ↓5.84k ↻0 Δ68.64k
 files=1

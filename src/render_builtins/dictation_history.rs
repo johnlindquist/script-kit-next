@@ -287,15 +287,9 @@ impl ScriptListApp {
                 .into_element()
         } else {
             let selected = selected_index;
-            div()
-                .id("dictation-history-list")
-                .w_full()
-                .min_h(px(0.))
-                .flex()
-                .flex_col()
-                .track_scroll(&self.dictation_history_scroll_handle)
-                .overflow_y_scrollbar()
-                .children(
+            crate::components::scrollbar::render_tracked_scroll_column(
+                "dictation-history-list",
+                &self.dictation_history_scroll_handle,
                     filtered_entries
                         .iter()
                         .enumerate()
@@ -309,8 +303,7 @@ impl ScriptListApp {
                                 .id(gpui::ElementId::Integer(display_ix as u64))
                                 .child(item)
                         }),
-                )
-                .into_any_element()
+            )
         };
 
         let preview_panel: AnyElement = match selected_entry {
@@ -449,7 +442,7 @@ impl ScriptListApp {
             preview_panel,
         );
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(text_primary))
                 .font_family(self.theme_font_family())
@@ -489,8 +482,9 @@ mod dictation_history_scroll_contract {
         let source = production_source();
 
         assert!(
-            source.contains(".track_scroll(&self.dictation_history_scroll_handle)"),
-            "dictation history should track its dedicated scroll handle"
+            source.contains("render_tracked_scroll_column(")
+                && source.contains("&self.dictation_history_scroll_handle"),
+            "dictation history should use its dedicated handle through the shared tracked-scroll viewport"
         );
         assert!(
             source.contains(".on_scroll_wheel(cx.listener("),
@@ -509,7 +503,7 @@ mod dictation_history_scroll_contract {
             "dictation history should delegate GPUI input construction to render_search_input"
         );
         assert!(
-            source.contains("render_main_view_chrome("),
+            source.contains("render_main_view_chrome_footer_flush("),
             "dictation history should use the shared main-view chrome"
         );
         assert!(

@@ -140,6 +140,25 @@ pub(crate) struct MainViewFlowSpacing {
     pub(crate) section_gap: f32,
 }
 
+/// One horizontal owner for full-width main-window flows. `container_edge_x`
+/// positions panels/lists; `text_plane_x` positions headings and prose so
+/// they align with the shared list-row text column.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(dead_code)] // Binary-only Permissions renderer consumes this shared frame.
+pub(crate) struct MainViewContentFrame {
+    pub(crate) container_edge_x: f32,
+    pub(crate) text_plane_x: f32,
+    pub(crate) inset_y: f32,
+    pub(crate) section_gap: f32,
+}
+
+#[allow(dead_code)] // Binary-only Permissions renderer consumes this shared frame.
+impl MainViewContentFrame {
+    pub(crate) fn text_inset_x(self) -> f32 {
+        (self.text_plane_x - self.container_edge_x).max(0.0)
+    }
+}
+
 #[allow(dead_code)] // Used by the binary target through include!-merged built-in render code.
 pub(crate) fn main_view_flow_spacing(
     def: MainMenuThemeDef,
@@ -147,6 +166,20 @@ pub(crate) fn main_view_flow_spacing(
 ) -> MainViewFlowSpacing {
     MainViewFlowSpacing {
         inset_x: def.shell.content_inset_x,
+        inset_y: spacing.padding_sm,
+        section_gap: spacing.gap_lg,
+    }
+}
+
+#[allow(dead_code)] // Binary-only Permissions renderer consumes this shared frame.
+pub(crate) fn main_view_content_frame(
+    def: MainMenuThemeDef,
+    spacing: crate::designs::DesignSpacing,
+) -> MainViewContentFrame {
+    let container_edge_x = def.shell.content_inset_x;
+    MainViewContentFrame {
+        container_edge_x,
+        text_plane_x: container_edge_x + main_view_text_column_x(def),
         inset_y: spacing.padding_sm,
         section_gap: spacing.gap_lg,
     }
@@ -173,15 +206,53 @@ pub(crate) fn render_main_view_shell() -> gpui::Stateful<gpui::Div> {
 }
 
 pub(crate) fn render_main_view_chrome(
-    mut root: gpui::Stateful<gpui::Div>,
+    root: gpui::Stateful<gpui::Div>,
     theme: &crate::theme::Theme,
     def: MainMenuThemeDef,
     chrome: MainViewChrome,
 ) -> AnyElement {
-    root = root.child(render_main_view_header_with_context_outset(
-        chrome.header,
-        def.header_info_bar.context_edge_outset_x,
-    ));
+    render_main_view_chrome_with_options(root, theme, def, chrome, true, true)
+}
+
+/// List surfaces that already reserve the footer through list padding, an
+/// in-flow GPUI footer, or a native-footer spacer must not receive a second
+/// bottom inset from the main slot.
+#[allow(dead_code)] // Used by binary-target list renderers.
+pub(crate) fn render_main_view_chrome_footer_flush(
+    root: gpui::Stateful<gpui::Div>,
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    chrome: MainViewChrome,
+) -> AnyElement {
+    render_main_view_chrome_with_options(root, theme, def, chrome, true, false)
+}
+
+/// Full-width utility surfaces can put their title inside the same scrollable
+/// content frame as their body instead of reserving a separate header plane.
+#[allow(dead_code)] // Binary-only full-width built-ins opt into body-owned titles.
+pub(crate) fn render_main_view_chrome_without_header(
+    root: gpui::Stateful<gpui::Div>,
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    chrome: MainViewChrome,
+) -> AnyElement {
+    render_main_view_chrome_with_options(root, theme, def, chrome, false, true)
+}
+
+fn render_main_view_chrome_with_options(
+    mut root: gpui::Stateful<gpui::Div>,
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    chrome: MainViewChrome,
+    include_header: bool,
+    include_main_bottom_inset: bool,
+) -> AnyElement {
+    if include_header {
+        root = root.child(render_main_view_header_with_context_outset(
+            chrome.header,
+            def.header_info_bar.context_edge_outset_x,
+        ));
+    }
 
     if chrome.divider.visible {
         root = root.child(render_main_view_header_divider(
@@ -192,7 +263,11 @@ pub(crate) fn render_main_view_chrome(
         ));
     }
 
-    root = root.child(render_main_view_main_slot(def, chrome.main));
+    root = root.child(render_main_view_main_slot_with_bottom_inset(
+        def,
+        chrome.main,
+        include_main_bottom_inset,
+    ));
 
     if let Some(footer) = chrome.footer {
         root = root.child(footer);
@@ -582,17 +657,36 @@ pub(crate) fn render_main_view_header_divider(
 
 #[allow(dead_code)]
 pub(crate) fn render_main_view_main_slot(def: MainMenuThemeDef, main: AnyElement) -> AnyElement {
+    render_main_view_main_slot_with_bottom_inset(def, main, true)
+}
+
+fn render_main_view_main_slot_with_bottom_inset(
+    def: MainMenuThemeDef,
+    main: AnyElement,
+    include_bottom_inset: bool,
+) -> AnyElement {
     div()
         .id(MAIN_VIEW_MAIN_ID)
         .flex_1()
         .min_h(px(0.))
         .w_full()
-        .pb(px(def.shell.content_inset_bottom))
+        .pb(px(resolved_main_view_main_bottom_inset(
+            def,
+            include_bottom_inset,
+        )))
         .overflow_hidden()
         .flex()
         .flex_col()
         .child(main)
         .into_any_element()
+}
+
+fn resolved_main_view_main_bottom_inset(def: MainMenuThemeDef, include_bottom_inset: bool) -> f32 {
+    if include_bottom_inset {
+        def.shell.content_inset_bottom
+    } else {
+        0.0
+    }
 }
 
 /// Scrollable, token-spaced content for main-view flows that stack distinct
@@ -614,6 +708,40 @@ pub(crate) fn render_main_view_scroll_flow(
         .flex_col()
         .gap(px(spacing.section_gap))
         .children(sections)
+        .into_any_element()
+}
+
+/// Scrollable flow whose panel/list edge and text plane are both declared by
+/// one frame contract instead of being re-inset by each child.
+#[allow(dead_code)] // Binary-only Permissions renderer consumes this shared frame.
+pub(crate) fn render_main_view_content_frame(
+    frame: MainViewContentFrame,
+    sections: impl IntoIterator<Item = AnyElement>,
+) -> AnyElement {
+    div()
+        .id(MAIN_VIEW_SCROLL_FLOW_ID)
+        .flex_1()
+        .min_h(px(0.0))
+        .w_full()
+        .overflow_y_scroll()
+        .px(px(frame.container_edge_x))
+        .py(px(frame.inset_y))
+        .flex()
+        .flex_col()
+        .gap(px(frame.section_gap))
+        .children(sections)
+        .into_any_element()
+}
+
+#[allow(dead_code)] // Binary-only Permissions renderer consumes this shared frame.
+pub(crate) fn render_main_view_text_plane(
+    frame: MainViewContentFrame,
+    content: AnyElement,
+) -> AnyElement {
+    div()
+        .w_full()
+        .pl(px(frame.text_inset_x()))
+        .child(content)
         .into_any_element()
 }
 
@@ -642,19 +770,39 @@ pub(crate) fn main_view_content_columns(def: MainMenuThemeDef) -> MainViewColumn
     }
 }
 
+#[allow(dead_code)] // Binary-only built-in renderers consume the default-height wrapper.
 pub(crate) fn render_main_view_input_shell(
     theme: &crate::theme::Theme,
     def: MainMenuThemeDef,
     chrome: MainViewInputChrome,
 ) -> AnyElement {
+    render_main_view_input_shell_with_height(theme, def, chrome, None)
+}
+
+fn resolved_main_view_input_height(default_height: f32, requested_height: Option<f32>) -> f32 {
+    requested_height
+        .unwrap_or(default_height)
+        .max(default_height)
+}
+
+/// Render the shared main-view input chrome with an optional surface-owned
+/// height. Most search inputs use the theme height; multi-line composers can
+/// request a taller shell without rebuilding the shared border and insets.
+pub(crate) fn render_main_view_input_shell_with_height(
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    chrome: MainViewInputChrome,
+    height: Option<f32>,
+) -> AnyElement {
     let search = def.search;
     let text_inset_left = main_view_input_text_inset_left(def);
+    let height = resolved_main_view_input_height(search.height, height);
 
     let mut input = div()
         .id(MAIN_VIEW_INPUT_SHELL_ID)
         .w_full()
         .flex_1()
-        .h(px(search.height))
+        .h(px(height))
         .rounded(px(search.radius))
         .border_1()
         .border_color(rgba((theme.colors.ui.border << 8) | search.border_alpha))
@@ -685,7 +833,41 @@ pub(crate) fn render_main_view_input_shell(
 
 #[cfg(test)]
 mod tests {
-    use super::{main_view_flow_spacing, selection_hint_snippet};
+    use super::{
+        main_view_content_frame, main_view_flow_spacing, resolved_main_view_input_height,
+        resolved_main_view_main_bottom_inset, selection_hint_snippet,
+    };
+
+    #[test]
+    fn footer_flush_list_chrome_has_exactly_one_footer_reservation() {
+        let def = crate::designs::MainMenuThemeVariant::default().def();
+        assert!(def.shell.content_inset_bottom > 0.0);
+        assert_eq!(resolved_main_view_main_bottom_inset(def, false), 0.0);
+        assert_eq!(
+            resolved_main_view_main_bottom_inset(def, true),
+            def.shell.content_inset_bottom
+        );
+    }
+
+    #[test]
+    fn input_shell_accepts_taller_surface_height_without_shrinking_theme_default() {
+        assert_eq!(resolved_main_view_input_height(26.0, None), 26.0);
+        assert_eq!(resolved_main_view_input_height(26.0, Some(152.0)), 152.0);
+        assert_eq!(resolved_main_view_input_height(26.0, Some(18.0)), 26.0);
+    }
+
+    #[test]
+    fn content_frame_declares_one_container_edge_and_row_aligned_text_plane() {
+        let def = crate::designs::MainMenuThemeVariant::default().def();
+        let spacing = crate::designs::get_tokens(crate::designs::DesignVariant::Default).spacing();
+        let frame = main_view_content_frame(def, spacing);
+        assert_eq!(frame.container_edge_x, def.shell.content_inset_x);
+        assert_eq!(
+            frame.text_plane_x,
+            frame.container_edge_x + super::main_view_text_column_x(def)
+        );
+        assert_eq!(frame.text_inset_x(), super::main_view_text_column_x(def));
+    }
 
     #[test]
     fn snippet_collapses_whitespace_and_truncates_at_char_boundary() {

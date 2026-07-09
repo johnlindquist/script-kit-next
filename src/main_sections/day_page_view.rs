@@ -14,6 +14,117 @@ use script_kit_gpui::day_page::{
     DayPageBinding, DayPageSegment, parse_day_page_segments, resolve_fragment_path,
 };
 
+pub(crate) const DAY_PAGE_MIN_EDITOR_HEIGHT_PX: f32 = 180.0;
+pub(crate) const DAY_PAGE_CLIPBOARD_SHELF_TOP_PADDING_PX: f32 = 6.0;
+pub(crate) const DAY_PAGE_CLIPBOARD_SHELF_TOGGLE_HEIGHT_PX: f32 = 20.0;
+pub(crate) const DAY_PAGE_CLIPBOARD_SHELF_GAP_PX: f32 = 4.0;
+pub(crate) const DAY_PAGE_CLIPBOARD_SHELF_ROW_HEIGHT_PX: f32 = 24.0;
+const DAY_PAGE_CLIPBOARD_SHELF_MAX_BODY_FRACTION: f32 = 0.4;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct DayPageLayoutBudget {
+    pub(crate) body_height: f32,
+    pub(crate) editor_height: f32,
+    pub(crate) shelf_height: f32,
+    pub(crate) shelf_list_height: f32,
+}
+
+/// One vertical owner for the Day Page editor and its clipboard accessory.
+/// Rendering and DevTools receipts both consume this calculation.
+pub(crate) fn day_page_layout_budget(
+    viewport_height: f32,
+    header_height: f32,
+    footer_height: f32,
+    shelf_count: usize,
+    shelf_expanded: bool,
+    accessory_bottom_padding: f32,
+) -> DayPageLayoutBudget {
+    let body_height = (viewport_height - header_height - footer_height).max(0.0);
+    if shelf_count == 0 {
+        return DayPageLayoutBudget {
+            body_height,
+            editor_height: body_height,
+            shelf_height: 0.0,
+            shelf_list_height: 0.0,
+        };
+    }
+
+    let shelf_chrome_height = DAY_PAGE_CLIPBOARD_SHELF_TOP_PADDING_PX
+        + DAY_PAGE_CLIPBOARD_SHELF_TOGGLE_HEIGHT_PX
+        + accessory_bottom_padding;
+    let expanded_list_gap = if shelf_expanded {
+        DAY_PAGE_CLIPBOARD_SHELF_GAP_PX
+    } else {
+        0.0
+    };
+    let available_after_min_editor = (body_height
+        - DAY_PAGE_MIN_EDITOR_HEIGHT_PX
+        - shelf_chrome_height
+        - expanded_list_gap)
+        .max(0.0);
+    let responsive_list_cap =
+        available_after_min_editor.min(body_height * DAY_PAGE_CLIPBOARD_SHELF_MAX_BODY_FRACTION);
+    let desired_list_height = shelf_count as f32 * DAY_PAGE_CLIPBOARD_SHELF_ROW_HEIGHT_PX;
+    let shelf_list_height = if shelf_expanded {
+        desired_list_height.min(responsive_list_cap)
+    } else {
+        0.0
+    };
+    let shelf_height = shelf_chrome_height
+        + shelf_list_height
+        + if shelf_list_height > 0.0 {
+            expanded_list_gap
+        } else {
+            0.0
+        };
+
+    DayPageLayoutBudget {
+        body_height,
+        editor_height: (body_height - shelf_height).max(0.0),
+        shelf_height,
+        shelf_list_height,
+    }
+}
+
+#[cfg(test)]
+mod day_page_layout_budget_tests {
+    use super::*;
+
+    #[test]
+    fn expanded_shelf_preserves_editor_minimum_at_compact_height() {
+        let budget = day_page_layout_budget(360.0, 68.0, 36.0, 20, true, 12.0);
+
+        assert_eq!(budget.body_height, 256.0);
+        assert_eq!(budget.editor_height, DAY_PAGE_MIN_EDITOR_HEIGHT_PX);
+        assert_eq!(budget.shelf_list_height, 34.0);
+        assert_eq!(
+            budget.editor_height + budget.shelf_height,
+            budget.body_height
+        );
+    }
+
+    #[test]
+    fn shelf_list_budget_responds_to_available_height() {
+        let compact = day_page_layout_budget(360.0, 68.0, 36.0, 20, true, 12.0);
+        let tall = day_page_layout_budget(640.0, 68.0, 36.0, 20, true, 12.0);
+
+        assert!(compact.shelf_list_height < tall.shelf_list_height);
+        assert_ne!(compact.shelf_list_height, 180.0);
+        assert!(tall.editor_height >= DAY_PAGE_MIN_EDITOR_HEIGHT_PX);
+    }
+
+    #[test]
+    fn collapsed_or_absent_shelf_consumes_no_list_budget() {
+        let collapsed = day_page_layout_budget(480.0, 68.0, 36.0, 4, false, 12.0);
+        let absent = day_page_layout_budget(480.0, 68.0, 36.0, 0, true, 12.0);
+
+        assert_eq!(collapsed.shelf_list_height, 0.0);
+        assert_eq!(collapsed.shelf_height, 38.0);
+        assert_eq!(absent.shelf_height, 0.0);
+        assert_eq!(absent.editor_height, absent.body_height);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DayPageKitResourceSourceTarget {
     Note(crate::notes::NoteId),
@@ -178,7 +289,7 @@ impl DayPageView {
     /// refresh the shelf. Only the plain Day binding carries a shelf; notes
     /// and fragments show their content verbatim.
     fn adopt_clipboard_shelf_from(&mut self, full: &str) -> String {
-        use script_kit_gpui::day_page::{split_day_page_clipboard_shelf, DayPageBinding};
+        use script_kit_gpui::day_page::{DayPageBinding, split_day_page_clipboard_shelf};
         if !matches!(self.session.binding(), DayPageBinding::Day) {
             self.clipboard_shelf.clear();
             return full.to_string();
@@ -214,7 +325,7 @@ impl DayPageView {
     /// out on the Day binding, verbatim otherwise). Read-only counterpart of
     /// `adopt_clipboard_shelf_from` for diffing against editor text.
     fn visible_content_of(&self, full: &str) -> String {
-        use script_kit_gpui::day_page::{split_day_page_clipboard_shelf, DayPageBinding};
+        use script_kit_gpui::day_page::{DayPageBinding, split_day_page_clipboard_shelf};
         if !matches!(self.session.binding(), DayPageBinding::Day) {
             return full.to_string();
         }
@@ -809,6 +920,26 @@ impl Render for DayPageView {
         };
 
         let columns = crate::components::main_view_chrome::main_view_content_columns(menu_def);
+        let editor_layout = self.notes_editor.read(cx).layout();
+        let viewport_height = window.viewport_size().height.as_f32();
+        // Day Page renders the shared context row with an intentionally empty
+        // input slot. Do not reserve a phantom search-input height here.
+        let header_height =
+            header_padding_y * 2.0 + menu_def.header_info_bar.height_px + header_gap;
+        let footer_height = crate::components::footer_chrome::current_main_menu_footer_height();
+        let shelf_count = if self.kit_resource_preview.is_none() {
+            self.clipboard_shelf.len()
+        } else {
+            0
+        };
+        let layout_budget = day_page_layout_budget(
+            viewport_height,
+            header_height,
+            footer_height,
+            shelf_count,
+            self.clipboard_shelf_expanded,
+            editor_layout.padding_y,
+        );
         let editor_input = self.notes_editor.read(cx).render_input(cx);
         // Hover discoverability: names the click action while the mouse is
         // over a deeplink (the vendored input paints underline + pointer
@@ -823,9 +954,9 @@ impl Render for DayPageView {
                 crate::notes::deeplink_activation::ActivationSurface::DayPage,
             )
         };
-        self.last_deeplink_hover_hint = hover_hint_model.as_ref().map(|(verb, href)| {
-            serde_json::json!({ "verb": verb, "href": href })
-        });
+        self.last_deeplink_hover_hint = hover_hint_model
+            .as_ref()
+            .map(|(verb, href)| serde_json::json!({ "verb": verb, "href": href }));
         let deeplink_hover_hint = hover_hint_model.map(|(verb, href)| {
             crate::components::resource_preview::render_deeplink_hover_hint(
                 "day-page-deeplink-hover-hint",
@@ -868,50 +999,44 @@ impl Render for DayPageView {
                 DayPageBinding::Day => "Today".to_string(),
                 DayPageBinding::Note { title, .. } => title.clone(),
             };
-            Some(
-                crate::components::render_back_affordance(
-                    script_kit_gpui::day_page::FRAGMENT_BACK_ID.into(),
-                    label.into(),
-                    &theme,
-                    cx.listener(|this, _, window, cx| {
-                        this.return_to_day_page(window, cx);
-                    }),
-                ),
-            )
+            Some(crate::components::render_back_affordance(
+                script_kit_gpui::day_page::FRAGMENT_BACK_ID.into(),
+                label.into(),
+                &theme,
+                cx.listener(|this, _, window, cx| {
+                    this.return_to_day_page(window, cx);
+                }),
+            ))
         } else if viewing_past_day {
             let label = self
                 .session
                 .bound_date()
                 .map(|date| format!("Back to Today · viewing {date}"))
                 .unwrap_or_else(|| "Back to Today".to_string());
-            Some(
-                crate::components::render_back_affordance(
-                    "day-page-past-day-back".into(),
-                    label.into(),
-                    &theme,
-                    cx.listener(|this, _, window, cx| {
-                        this.bind_today(window, cx);
-                        this.focus_editor(window, cx);
-                    }),
-                ),
-            )
+            Some(crate::components::render_back_affordance(
+                "day-page-past-day-back".into(),
+                label.into(),
+                &theme,
+                cx.listener(|this, _, window, cx| {
+                    this.bind_today(window, cx);
+                    this.focus_editor(window, cx);
+                }),
+            ))
         } else if self.session.is_viewing_note() {
             let label = self
                 .session
                 .viewing_note_title()
                 .map(|title| format!("Back to Today · viewing {title}"))
                 .unwrap_or_else(|| "Back to Today".to_string());
-            Some(
-                crate::components::render_back_affordance(
-                    "day-page-note-back".into(),
-                    label.into(),
-                    &theme,
-                    cx.listener(|this, _, window, cx| {
-                        this.return_to_day_page(window, cx);
-                        this.focus_editor(window, cx);
-                    }),
-                ),
-            )
+            Some(crate::components::render_back_affordance(
+                "day-page-note-back".into(),
+                label.into(),
+                &theme,
+                cx.listener(|this, _, window, cx| {
+                    this.return_to_day_page(window, cx);
+                    this.focus_editor(window, cx);
+                }),
+            ))
         } else {
             None
         };
@@ -930,7 +1055,9 @@ impl Render for DayPageView {
                 .into_any_element()
         };
 
-        let clipboard_shelf = self.render_clipboard_shelf(cx);
+        let clipboard_shelf = self
+            .render_clipboard_shelf(layout_budget.shelf_list_height, cx)
+            .map(|shelf| self.notes_editor.read(cx).render_content_accessory(shelf));
 
         let editor_body = div()
             .id(DAY_PAGE_EDITOR_ID)
@@ -946,7 +1073,12 @@ impl Render for DayPageView {
             .flex()
             .flex_col()
             .when_some(back_bar, |parent, bar| parent.child(bar))
-            .child(editor_content)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h(px(DAY_PAGE_MIN_EDITOR_HEIGHT_PX))
+                    .child(editor_content),
+            )
             .when_some(clipboard_shelf, |parent, shelf| parent.child(shelf));
 
         let context_zone = app.update(cx, |app, _cx| {
@@ -1036,7 +1168,7 @@ impl DayPageView {
 
     fn render_kit_resource_preview(&self, cx: &mut Context<Self>) -> AnyElement {
         use crate::components::resource_preview::{
-            render_resource_preview, ResourcePreviewSurface,
+            ResourcePreviewSurface, render_resource_preview,
         };
 
         let Some(preview) = self.kit_resource_preview.as_ref() else {
@@ -1068,7 +1200,11 @@ impl DayPageView {
     /// part of the day note (rejoined into the file on save) but read as a
     /// quiet, collapsible strip instead of raw `[Clipboard entry](kit://…)`
     /// lines inside the prose. Rows open the shared kit:// resource preview.
-    fn render_clipboard_shelf(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn render_clipboard_shelf(
+        &self,
+        list_height: f32,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         use gpui_component::theme::ActiveTheme as _;
 
         if self.clipboard_shelf.is_empty() || self.kit_resource_preview.is_some() {
@@ -1083,6 +1219,8 @@ impl DayPageView {
             .id("day-page-clipboard-shelf-toggle")
             .flex()
             .items_center()
+            .h(px(DAY_PAGE_CLIPBOARD_SHELF_TOGGLE_HEIGHT_PX))
+            .flex_none()
             .gap_1()
             .text_xs()
             .text_color(muted)
@@ -1102,33 +1240,39 @@ impl DayPageView {
             .id("day-page-clipboard-shelf")
             .flex()
             .flex_col()
-            .gap_1()
-            .pt(px(6.))
+            .gap(px(DAY_PAGE_CLIPBOARD_SHELF_GAP_PX))
+            .pt(px(DAY_PAGE_CLIPBOARD_SHELF_TOP_PADDING_PX))
             .child(header);
 
-        if expanded {
+        if expanded && list_height > 0.0 {
             let mut list = div()
                 .id("day-page-clipboard-shelf-list")
                 .flex()
                 .flex_col()
-                .max_h(px(180.))
+                .h(px(list_height))
+                .max_h(px(list_height))
                 .overflow_y_scroll();
             for (index, entry) in self.clipboard_shelf.iter().enumerate() {
                 let uri = crate::clipboard_history::entry_resource_uri(&entry.item.entry_id);
                 list = list.child(
-                    crate::components::resource_preview::render_compact_resource_row(
-                        crate::components::resource_preview::CompactResourceRow {
-                            id: gpui::SharedString::from(format!(
-                                "day-page-clipboard-shelf-item-{index}"
-                            )),
-                            meta: entry.item.timestamp.clone().into(),
-                            preview: entry.preview.clone().into(),
-                        },
-                        cx,
-                        cx.listener(move |this, _, window, cx| {
-                            this.open_kit_resource_preview(uri.clone(), true, window, cx);
-                        }),
-                    ),
+                    div()
+                        .h(px(DAY_PAGE_CLIPBOARD_SHELF_ROW_HEIGHT_PX))
+                        .flex_none()
+                        .child(
+                            crate::components::resource_preview::render_compact_resource_row(
+                                crate::components::resource_preview::CompactResourceRow {
+                                    id: gpui::SharedString::from(format!(
+                                        "day-page-clipboard-shelf-item-{index}"
+                                    )),
+                                    meta: entry.item.timestamp.clone().into(),
+                                    preview: entry.preview.clone().into(),
+                                },
+                                cx,
+                                cx.listener(move |this, _, window, cx| {
+                                    this.open_kit_resource_preview(uri.clone(), true, window, cx);
+                                }),
+                            ),
+                        ),
                 );
             }
             shelf = shelf.child(list);

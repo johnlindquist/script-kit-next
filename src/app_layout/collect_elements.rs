@@ -132,6 +132,51 @@ impl ScriptListApp {
                 ElementCollectionOutcome::new(elements, total_count)
             }
 
+            AppView::PermissionsWizardView { selected_index } => {
+                let mut elements = Vec::new();
+                let mut root = protocol::ElementInfo::panel("permissions-wizard");
+                root.text = Some("Set Up Permissions".to_string());
+                root.role = Some("wizard".to_string());
+                root.source = Some("PermissionsWizard".to_string());
+                elements.push(root);
+
+                let mut intro = protocol::ElementInfo::panel("permissions-intro");
+                intro.text = Some(
+                    "Script Kit uses macOS permissions to read selected text, paste into other apps, run shortcuts, and capture context."
+                        .to_string(),
+                );
+                intro.role = Some("intro".to_string());
+                intro.source = Some("PermissionsWizard".to_string());
+                elements.push(intro);
+
+                let kinds = crate::permissions_wizard::PermissionKind::all();
+                let mut list = protocol::ElementInfo::list("permissions", kinds.len());
+                list.source = Some("PermissionsWizard".to_string());
+                elements.push(list);
+
+                for (index, kind) in kinds.iter().enumerate() {
+                    let status = crate::permissions_wizard::detect_permission(*kind);
+                    let mut row = protocol::ElementInfo::choice(
+                        index,
+                        kind.name(),
+                        kind.name(),
+                        index == *selected_index,
+                    );
+                    row.semantic_id = format!("permission-row:{:?}", kind);
+                    row.role = Some("permission".to_string());
+                    row.kind = Some(format!("{:?}", kind));
+                    row.source = Some("PermissionsWizard".to_string());
+                    row.status_kind = Some(format!("{:?}", status));
+                    elements.push(row);
+                }
+
+                let total_count = elements.len();
+                ElementCollectionOutcome::new(
+                    elements.into_iter().take(limit).collect(),
+                    total_count,
+                )
+            }
+
             AppView::ArgPrompt { choices, .. } => self
                 .collect_choice_view_elements(
                     "filter",

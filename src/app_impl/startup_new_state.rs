@@ -34,10 +34,10 @@
         } else {
             crate::window_control::RootWindowsProviderStatus::Unknown
         };
-        let initial_cached_root_windows = Self::build_root_window_entries(
+        let root_search = RootSearchStore::with_root_windows(
             &initial_cached_windows,
             &apps,
-            &std::collections::HashMap::new(),
+            initial_root_windows_provider_status,
         );
 
         let mut app = ScriptListApp {
@@ -54,10 +54,7 @@
             cached_browser_tabs: Vec::new(),
             cached_browser_history: Vec::new(),
             cached_file_results: Vec::new(),
-            root_search: RootSearchStore::with_root_windows(
-                initial_cached_root_windows,
-                initial_root_windows_provider_status,
-            ),
+            root_search,
             pending_root_file_actions_file: None,
             pending_root_unified_actions_subject: None,
             cached_processes: Vec::new(),
@@ -107,6 +104,7 @@
             ),
             main_list_row_generation: 0,
             menu_syntax_main_hint_scroll_handle: ScrollHandle::new(),
+            builtin_row_stack_scroll_handle: ScrollHandle::new(),
             menu_syntax_form_field_bounds: Default::default(),
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),

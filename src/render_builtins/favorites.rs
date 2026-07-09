@@ -278,13 +278,11 @@ impl ScriptListApp {
                 .icon(crate::designs::icon_variations::IconName::Star)
                 .into_element()
         } else {
-            div()
-                .w_full()
-                .flex()
-                .flex_col()
-                .min_h(px(0.))
-                .children(list_items)
-                .into_any_element()
+            crate::components::scrollbar::render_tracked_scroll_column(
+                "favorites-row-stack",
+                &self.builtin_row_stack_scroll_handle,
+                list_items,
+            )
         };
 
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(

@@ -5127,7 +5127,8 @@ impl ScriptListApp {
                             if let Some(entity) =
                                 crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
                             {
-                                let layout_info = entity.read(cx).automation_layout_info(&resolved);
+                                let layout_info =
+                                    entity.read(cx).automation_layout_info(&resolved, cx);
                                 let response =
                                     Message::layout_info_result(request_id.clone(), layout_info);
                                 if let Some(ref sender) = self.response_sender {

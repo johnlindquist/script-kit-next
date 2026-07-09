@@ -25,7 +25,7 @@ fn app_launcher_uses_shared_search_input_and_rows() {
 
     for required in [
         "render_builtin_main_input_header(",
-        "render_main_view_chrome(",
+        "render_main_view_chrome_footer_flush(",
         "ListItem::new(",
         "ListItemColors::from_theme(&self.theme)",
         ".selected(is_selected)",

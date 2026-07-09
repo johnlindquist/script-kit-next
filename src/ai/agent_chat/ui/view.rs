@@ -148,6 +148,14 @@ const AGENT_CHAT_TRANSIENT_BOOTSTRAP_LANE_HEIGHT_PX: f32 = 34.0;
 const AGENT_CHAT_TRANSIENT_PLAN_LANE_HEIGHT_PX: f32 = 84.0;
 const AGENT_CHAT_TRANSIENT_PERMISSION_LANE_HEIGHT_PX: f32 = 156.0;
 
+fn agent_chat_transient_lane_height(height_px: f32, active: bool) -> f32 {
+    if active {
+        height_px
+    } else {
+        0.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FocusedTextVariationStatus {
     Idle,
@@ -1080,6 +1088,7 @@ impl AgentChatView {
     pub(crate) fn automation_layout_info(
         &self,
         target: &crate::protocol::AutomationWindowInfo,
+        cx: &App,
     ) -> crate::protocol::LayoutInfo {
         use crate::protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
         use crate::ui::chrome as chrome_tokens;
@@ -1092,6 +1101,12 @@ impl AgentChatView {
         let composer_height = self.composer_height();
         let footer_height = self.inline_footer_height();
         let message_height = (window_height - composer_height - footer_height).max(0.0);
+        let message_bounds = self.transcript_viewport_bounds_px(cx).unwrap_or((
+            0.0,
+            0.0,
+            window_width,
+            message_height,
+        ));
         let composer_y = message_height;
         let footer_y = (window_height - footer_height).max(composer_y + composer_height);
         let mut components = Vec::new();
@@ -1114,7 +1129,12 @@ impl AgentChatView {
 
         components.push(
             LayoutComponentInfo::new("AgentChatMessageViewport", LayoutComponentType::List)
-                .with_bounds(0.0, 0.0, window_width, message_height)
+                .with_bounds(
+                    message_bounds.0,
+                    message_bounds.1,
+                    message_bounds.2,
+                    message_bounds.3,
+                )
                 .with_visual_style(
                     chrome_tokens::CHROME_LAYER_CONTENT,
                     chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -1125,7 +1145,7 @@ impl AgentChatView {
                 .with_depth(1)
                 .with_parent("AgentChatDetachedWindow")
                 .with_explanation(
-                    "Scrollable Agent Chat transcript region above the composer and optional hint footer.",
+                    "Scrollable Agent Chat transcript bounds measured from its ListState viewport.",
                 ),
         );
 
@@ -5118,6 +5138,13 @@ impl AgentChatView {
         self.build_agent_chat_live_state_snapshot(thread, setup_snapshot, cx)
     }
 
+    pub(crate) fn transcript_viewport_bounds_px(&self, cx: &App) -> Option<(f32, f32, f32, f32)> {
+        self.transcript
+            .as_ref()
+            .map(|transcript| transcript.read(cx).viewport_bounds_px())
+            .filter(|(_, _, width, height)| *width > 0.0 && *height > 0.0)
+    }
+
     fn agent_chat_thread_status_label(status: AgentChatThreadStatus) -> &'static str {
         match status {
             AgentChatThreadStatus::Idle => "idle",
@@ -8815,7 +8842,7 @@ impl AgentChatView {
         let _ = (profile_icon_name, profile_active_pending);
         let can_send = !input_text.trim().is_empty();
 
-        crate::components::main_view_chrome::render_main_view_input_shell(
+        crate::components::main_view_chrome::render_main_view_input_shell_with_height(
             theme,
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
@@ -8824,6 +8851,7 @@ impl AgentChatView {
                     can_send, status, weak_view, theme,
                 )],
             },
+            expanded_composer.then_some(Self::composer_height_for_expanded(true)),
         )
     }
 
@@ -10028,21 +10056,119 @@ impl AgentChatView {
     }
 
     fn render_active_callout(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let callout = self.live_thread().read(cx).active_callout().cloned();
+        let (callout, selected_model_id) = {
+            let thread = self.live_thread().read(cx);
+            (
+                thread.active_callout().cloned(),
+                thread.selected_model_id().map(str::to_string),
+            )
+        };
         let Some(callout) = callout else {
             return div().id("agent_chat-callout-empty").into_any_element();
         };
 
         let theme = theme::get_cached_theme();
         let colors = PromptColors::from_theme(&theme);
+        let button_colors = crate::components::ButtonColors::from_theme(&theme);
         let accent = match callout.severity {
             AgentChatCalloutSeverity::Error => theme.colors.ui.error,
         };
         let detail = callout
             .detail
             .as_ref()
-            .map(|detail| detail.to_string())
-            .unwrap_or_default();
+            .cloned()
+            .unwrap_or_else(|| "The provider could not complete this turn.".into());
+        let raw_detail = callout.raw_detail.clone();
+        let show_auth_recovery = callout.auth_recovery.is_some();
+        let auth_provider = show_auth_recovery
+            .then(|| {
+                crate::ai::agent_chat::pi::auth_recovery::resolve_auth_recovery_provider(
+                    selected_model_id.as_deref(),
+                    raw_detail.as_ref().map(|detail| detail.as_ref()),
+                )
+            })
+            .flatten();
+        let pi_binary = crate::ai::agent_chat::pi::binary::default_pi_binary();
+        let weak_view = cx.entity().downgrade();
+
+        let mut actions = div().flex().flex_wrap().items_center().gap(px(6.0));
+        if let (Some(provider), Some(binary)) = (auth_provider.clone(), pi_binary.clone()) {
+            actions = actions.child(
+                crate::components::Button::new("Sign in again", button_colors)
+                    .id("agent_chat-callout-sign-in")
+                    .variant(crate::components::ButtonVariant::Primary)
+                    .on_click(Box::new(move |_event, _window, _cx| {
+                        if let Err(error) = crate::ai::agent_chat::pi::auth_recovery::launch_pi_auth_recovery(
+                            binary.clone(),
+                            provider.clone(),
+                            crate::ai::agent_chat::pi::auth_recovery::PiAuthRecoveryAction::SignInAgain,
+                        ) {
+                            tracing::warn!(
+                                target: "script_kit::agent_chat",
+                                event = "agent_chat_auth_recovery_launch_failed",
+                                action = "sign_in_again",
+                                error = %error,
+                            );
+                        }
+                    })),
+            );
+        }
+        if let (Some(provider), Some(binary)) = (auth_provider, pi_binary) {
+            actions = actions.child(
+                crate::components::Button::new("Switch account", button_colors)
+                    .id("agent_chat-callout-switch-account")
+                    .variant(crate::components::ButtonVariant::Ghost)
+                    .on_click(Box::new(move |_event, _window, _cx| {
+                        if let Err(error) = crate::ai::agent_chat::pi::auth_recovery::launch_pi_auth_recovery(
+                            binary.clone(),
+                            provider.clone(),
+                            crate::ai::agent_chat::pi::auth_recovery::PiAuthRecoveryAction::SwitchAccount,
+                        ) {
+                            tracing::warn!(
+                                target: "script_kit::agent_chat",
+                                event = "agent_chat_auth_recovery_launch_failed",
+                                action = "switch_account",
+                                error = %error,
+                            );
+                        }
+                    })),
+            );
+        }
+        if callout.can_retry {
+            let retry_view = weak_view.clone();
+            actions = actions.child(
+                crate::components::Button::new("Retry", button_colors)
+                    .id("agent_chat-callout-retry")
+                    .variant(crate::components::ButtonVariant::Ghost)
+                    .on_click(Box::new(move |_event, _window, cx| {
+                        if let Some(view) = retry_view.upgrade() {
+                            view.update(cx, |this, cx| this.retry_last_user_turn(cx));
+                        }
+                    })),
+            );
+        }
+        if raw_detail.is_some() {
+            let copy_view = weak_view.clone();
+            actions = actions.child(
+                crate::components::Button::new("Copy Error", button_colors)
+                    .id("agent_chat-callout-copy-error")
+                    .variant(crate::components::ButtonVariant::Ghost)
+                    .on_click(Box::new(move |_event, _window, cx| {
+                        if let Some(view) = copy_view.upgrade() {
+                            if let Some(text) = view
+                                .read(cx)
+                                .live_thread()
+                                .read(cx)
+                                .active_callout()
+                                .and_then(|active| active.raw_detail.as_ref())
+                                .map(ToString::to_string)
+                            {
+                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                            }
+                        }
+                    })),
+            );
+        }
 
         div()
             .id("agent_chat-callout-stack")
@@ -10053,7 +10179,7 @@ impl AgentChatView {
                 div()
                     .id("agent_chat-active-callout")
                     .flex()
-                    .items_center()
+                    .flex_col()
                     .gap(px(8.0))
                     .px(px(8.0))
                     .py(px(6.0))
@@ -10061,92 +10187,46 @@ impl AgentChatView {
                     .bg(rgba((theme.colors.ui.border << 8) | 0x10))
                     .border_1()
                     .border_color(rgba((theme.colors.ui.border << 8) | 0x28))
-                    .child(div().text_xs().text_color(rgb(accent)).child("⚠"))
                     .child(
                         div()
-                            .flex_grow()
-                            .min_w(px(0.0))
                             .flex()
                             .items_center()
                             .gap(px(6.0))
+                            .child(div().text_xs().text_color(rgb(accent)).child("⚠"))
                             .child(
                                 div()
+                                    .flex_grow()
                                     .text_xs()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(rgb(colors.text_primary))
-                                    .whitespace_nowrap()
                                     .child(callout.title.clone()),
                             )
-                            .when(!detail.is_empty(), |d| {
-                                d.child(
-                                    div()
-                                        .min_w(px(0.0))
-                                        .overflow_hidden()
-                                        .text_ellipsis()
-                                        .text_xs()
-                                        .text_color(rgb(colors.text_secondary))
-                                        .child(detail.clone()),
-                                )
-                            }),
-                    )
-                    .when(callout.can_retry, |d| {
-                        d.child(
-                            div()
-                                .id("agent_chat-callout-retry")
-                                .cursor_pointer()
-                                .text_xs()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .px(px(7.0))
-                                .py(px(3.0))
-                                .rounded(px(5.0))
-                                .text_color(rgb(theme.colors.text.on_accent))
-                                .bg(rgb(theme.colors.accent.selected))
-                                .hover(|el| el.opacity(0.9))
-                                .on_click(cx.listener(|this, _event, _window, cx| {
-                                    this.retry_last_user_turn(cx);
-                                }))
-                                .child("Retry"),
-                        )
-                    })
-                    .child(
-                        div()
-                            .id("agent_chat-callout-copy-error")
-                            .cursor_pointer()
-                            .text_xs()
-                            .px(px(7.0))
-                            .py(px(3.0))
-                            .rounded(px(5.0))
-                            .text_color(rgb(theme.colors.text.muted))
-                            .hover(|el| el.bg(rgba((theme.colors.ui.border << 8) | 0x18)))
-                            .on_click(cx.listener(move |this, _event, _window, cx| {
-                                if let Some(text) = this
-                                    .live_thread()
-                                    .read(cx)
-                                    .active_callout()
-                                    .and_then(|callout| callout.detail.as_ref())
-                                    .map(|detail| detail.to_string())
-                                {
-                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
-                                }
-                            }))
-                            .child("Copy Error"),
+                            .child(
+                                div()
+                                    .id("agent_chat-callout-dismiss")
+                                    .cursor_pointer()
+                                    .text_xs()
+                                    .px(px(5.0))
+                                    .py(px(1.0))
+                                    .rounded(px(999.0))
+                                    .text_color(rgba((theme.colors.text.muted << 8) | 0x70))
+                                    .hover(|el| el.bg(rgba((theme.colors.ui.border << 8) | 0x18)))
+                                    .on_click(cx.listener(|this, _event, _window, cx| {
+                                        this.live_thread().update(cx, |thread, cx| {
+                                            thread.dismiss_active_callout(cx)
+                                        });
+                                    }))
+                                    .child("×"),
+                            ),
                     )
                     .child(
                         div()
-                            .id("agent_chat-callout-dismiss")
-                            .cursor_pointer()
+                            .w_full()
                             .text_xs()
-                            .px(px(5.0))
-                            .py(px(1.0))
-                            .rounded(px(999.0))
-                            .text_color(rgba((theme.colors.text.muted << 8) | 0x70))
-                            .hover(|el| el.bg(rgba((theme.colors.ui.border << 8) | 0x18)))
-                            .on_click(cx.listener(|this, _event, _window, cx| {
-                                this.live_thread()
-                                    .update(cx, |thread, cx| thread.dismiss_active_callout(cx));
-                            }))
-                            .child("×"),
-                    ),
+                            .text_color(rgb(colors.text_secondary))
+                            .child(detail),
+                    )
+                    .child(actions),
             )
             .into_any_element()
     }
@@ -10156,6 +10236,7 @@ impl AgentChatView {
         height_px: f32,
         content: Option<gpui::AnyElement>,
     ) -> gpui::AnyElement {
+        let height_px = agent_chat_transient_lane_height(height_px, content.is_some());
         div()
             .id(id)
             .w_full()
@@ -14979,6 +15060,12 @@ mod tests {
     use crate::ai::context_selector::types::{ContextSelectorRow, ContextSelectorRowKind};
     use gpui::{Modifiers, SharedString};
     use std::collections::HashMap;
+
+    #[test]
+    fn inactive_transient_lanes_consume_zero_height() {
+        assert_eq!(super::agent_chat_transient_lane_height(156.0, false), 0.0);
+        assert_eq!(super::agent_chat_transient_lane_height(84.0, true), 84.0);
+    }
 
     fn cmd_modifiers() -> Modifiers {
         Modifiers {

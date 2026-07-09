@@ -586,9 +586,13 @@
 
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
+                                        this.builtin_row_stack_scroll_handle
+                                            .scroll_to_item(*selected_index);
                                         cx.notify();
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
+                                        this.builtin_row_stack_scroll_handle
+                                            .scroll_to_item(*selected_index);
                                         cx.notify();
                                     }
                                     cx.stop_propagation();
@@ -656,9 +660,13 @@
 
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
+                                        this.builtin_row_stack_scroll_handle
+                                            .scroll_to_item(*selected_index);
                                         cx.notify();
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
+                                        this.builtin_row_stack_scroll_handle
+                                            .scroll_to_item(*selected_index);
                                         cx.notify();
                                     }
                                     cx.stop_propagation();

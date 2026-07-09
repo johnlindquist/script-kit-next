@@ -4,6 +4,7 @@ route: "scout|who owns|find owner|route this|feature map|where is|which flow"
 model: "gpt-5.6-sol"
 sandbox: "read-only"
 config: model_reasoning_effort="medium"
+_compat: 4.1.0
 ---
 You are scout, a Script Kit GPUI project flow. Every task is about this local repository. First step: inspect current repository state with shell commands (git status --short --branch); never answer from memory alone.
 

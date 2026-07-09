@@ -187,6 +187,35 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    pub(crate) fn dispatch_permissions_wizard_action(
+        &mut self,
+        action: crate::permissions_wizard::PermissionsWizardAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
+            return false;
+        }
+
+        match action {
+            crate::permissions_wizard::PermissionsWizardAction::GrantSelected => {
+                let AppView::PermissionsWizardView { selected_index } = &self.current_view else {
+                    return false;
+                };
+                if let Some(&kind) =
+                    crate::permissions_wizard::PermissionKind::all().get(*selected_index)
+                {
+                    self.execute_permissions_wizard_grant(kind, cx);
+                }
+            }
+            crate::permissions_wizard::PermissionsWizardAction::Done => {
+                crate::permissions_wizard::mark_onboarding_completed();
+                self.go_back_or_close(window, cx);
+            }
+        }
+        true
+    }
+
     /// Render the permissions wizard using the same contracted shell as other
     /// built-in views, with a static title in place of the filter input.
     fn render_permissions_wizard(
@@ -226,16 +255,10 @@ impl ScriptListApp {
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                if is_key_escape(key) {
-                    crate::permissions_wizard::mark_onboarding_completed();
-                    this.go_back_or_close(window, cx);
-                    cx.stop_propagation();
-                    return;
-                }
-
-                if has_cmd && key.eq_ignore_ascii_case("w") {
-                    crate::permissions_wizard::mark_onboarding_completed();
-                    this.close_and_reset_window(cx);
+                if let Some(action) =
+                    crate::permissions_wizard::PermissionsWizardActions::for_key(key, has_cmd)
+                {
+                    this.dispatch_permissions_wizard_action(action, window, cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -268,13 +291,6 @@ impl ScriptListApp {
                             *selected_index = current_selected + 1;
                         }
                         cx.notify();
-                    }
-                    cx.stop_propagation();
-                } else if is_key_enter(key) {
-                    if let Some(&kind) =
-                        crate::permissions_wizard::PermissionKind::all().get(current_selected)
-                    {
-                        this.execute_permissions_wizard_grant(kind, cx);
                     }
                     cx.stop_propagation();
                 } else {
@@ -335,11 +351,14 @@ impl ScriptListApp {
                                     was_selected,
                                     click_count,
                                 ) {
-                                    this.execute_permissions_wizard_grant(kind, cx);
+                                    this.dispatch_permissions_wizard_action(
+                                        crate::permissions_wizard::PermissionsWizardAction::GrantSelected,
+                                        window,
+                                        cx,
+                                    );
                                 } else {
                                     cx.notify();
                                 }
-                                let _ = window;
                             });
                         }
                         cx.stop_propagation();
@@ -376,22 +395,35 @@ impl ScriptListApp {
             })
             .collect();
 
-        let intro = div().w_full().child(crate::components::render_info_state(
+        let menu_def = self.current_main_menu_theme.def();
+        let frame = crate::components::main_view_chrome::main_view_content_frame(
+            menu_def,
+            design_spacing,
+        );
+        let intro = div().w_full().child(crate::components::render_info_state_full_width_panel(
             crate::components::permission_onboarding_intro_spec(
                 granted_count,
                 row_count,
                 all_required_granted,
             ),
             &self.theme,
+            frame.text_inset_x(),
             cx,
         ));
 
-        let menu_def = self.current_main_menu_theme.def();
-        let flow_spacing =
-            crate::components::main_view_chrome::main_view_flow_spacing(menu_def, design_spacing);
-        let content = crate::components::main_view_chrome::render_main_view_scroll_flow(
-            flow_spacing,
+        let title = crate::components::main_view_chrome::render_main_view_text_plane(
+            frame,
+            div()
+                .text_lg()
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(rgb(chrome.text_primary_hex))
+                .child("Set Up Permissions")
+                .into_any_element(),
+        );
+        let content = crate::components::main_view_chrome::render_main_view_content_frame(
+            frame,
             [
+                title,
                 intro.into_any_element(),
                 div()
                     .w_full()
@@ -403,31 +435,21 @@ impl ScriptListApp {
             ],
         );
 
+        let footer_hints: Vec<gpui::SharedString> =
+            crate::permissions_wizard::PermissionsWizardActions::ALL
+            .iter()
+            .map(|action| gpui::SharedString::from(format!("{} {}", action.key, action.label)))
+            .collect();
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-            vec![
-                gpui::SharedString::from("↵ Grant"),
-                gpui::SharedString::from("Esc Done"),
-            ],
+            footer_hints,
             None,
         ));
 
         let shell = menu_def.shell;
 
-        let header_title = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .child(
-                div()
-                    .text_lg()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(chrome.text_primary_hex))
-                    .child("Set Up Permissions"),
-            )
-            .into_any_element();
+        let header_spacer = div().into_any_element();
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_without_header(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(chrome.text_primary_hex))
                 .font_family(self.theme_font_family())
@@ -439,15 +461,15 @@ impl ScriptListApp {
             crate::components::main_view_chrome::MainViewChrome {
                 header: crate::components::main_view_chrome::MainViewHeaderChrome {
                     context: None,
-                    input: header_title,
-                    padding_x: shell.content_inset_x,
-                    padding_y: shell.header_padding_y,
-                    gap: shell.header_gap,
+                    input: header_spacer,
+                    padding_x: 0.0,
+                    padding_y: 0.0,
+                    gap: 0.0,
                 },
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,
-                    visible: shell.divider_height > 0.0,
+                    visible: false,
                 },
                 main: content,
                 footer,

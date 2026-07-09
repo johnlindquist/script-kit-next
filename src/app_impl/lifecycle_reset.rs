@@ -534,17 +534,26 @@ impl ScriptListApp {
                 self.current_app_commands_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
+            AppView::SettingsView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.builtin_row_stack_scroll_handle.scroll_to_item(0);
+            }
             AppView::SearchAiPresetsView {
                 filter,
                 selected_index,
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
+                self.builtin_row_stack_scroll_handle.scroll_to_item(0);
             }
             AppView::FavoritesBrowseView {
                 filter,
                 selected_index,
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
+                self.builtin_row_stack_scroll_handle.scroll_to_item(0);
             }
             AppView::AgentChatHistoryView {
                 filter,

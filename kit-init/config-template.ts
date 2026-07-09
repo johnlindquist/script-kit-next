@@ -187,7 +187,7 @@ export default {
   //     { id: "writing", name: "Long-form writing",
   //       model: "gpt-5.4", systemPrompt: "You are a long-form writing partner." },
   //     { id: "code", name: "Code review",
-  //       provider: "openai-codex", model: "gpt-5.5" },
+  //       provider: "openai-codex", model: "gpt-5.6-terra", thinking: "medium" },
   //   ],
   // },
   // windowManagement: { snapMode: "expanded" },

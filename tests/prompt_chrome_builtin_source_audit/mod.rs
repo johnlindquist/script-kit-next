@@ -131,7 +131,7 @@ fn clipboard_history_enforces_expanded_view_contract() {
 #[test]
 fn file_search_enforces_expanded_view_contract() {
     assert!(
-        FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_chrome("),
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_chrome_footer_flush("),
         "file_search should use shared main-view chrome"
     );
     assert!(

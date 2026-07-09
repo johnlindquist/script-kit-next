@@ -173,7 +173,7 @@ fn main_list_footer_reveal_clearance_comes_from_theme_tokens() {
     );
     assert!(
         theme.contains("pub footer_reveal_clearance_height: f32")
-            && theme.contains("footer_reveal_clearance_height: 8.0"),
+            && theme.contains("footer_reveal_clearance_height: 0.0"),
         "MainMenuListTokens should own the default footer reveal clearance value"
     );
 }

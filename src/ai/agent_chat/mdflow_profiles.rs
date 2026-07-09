@@ -306,7 +306,7 @@ mod tests {
     fn parses_full_frontmatter_and_body() {
         let profile = parse_mdflow_profile(
             "docs-researcher",
-            "---\nname: Docs Researcher\nmodel: openai-codex/gpt-5.5\ntools: web_search, read\nthinking: low\nno-session: true\ncwd: ~/notes\n---\n\nResearch docs and cite sources.\n",
+            "---\nname: Docs Researcher\nmodel: openai-codex/gpt-5.6-terra\ntools: web_search, read\nthinking: medium\nno-session: true\ncwd: ~/notes\n---\n\nResearch docs and cite sources.\n",
         )
         .expect("profile parses");
 
@@ -314,12 +314,12 @@ mod tests {
         assert_eq!(profile.name, "Docs Researcher");
         assert_eq!(profile.source, AgentChatProfileSource::Mdflow);
         assert_eq!(profile.provider.as_deref(), Some("openai-codex"));
-        assert_eq!(profile.model.as_deref(), Some("gpt-5.5"));
+        assert_eq!(profile.model.as_deref(), Some("gpt-5.6-terra"));
         assert_eq!(
             profile.tools,
             Some(vec!["web_search".to_string(), "read".to_string()])
         );
-        assert_eq!(profile.thinking.as_deref(), Some("low"));
+        assert_eq!(profile.thinking.as_deref(), Some("medium"));
         assert_eq!(profile.no_session, Some(true));
         assert!(profile
             .cwd

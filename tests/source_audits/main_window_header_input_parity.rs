@@ -242,7 +242,8 @@ fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
     for (surface, path, required) in surfaces {
         let source = read_source(path);
         assert!(
-            source.contains("render_main_view_chrome(")
+            source.contains("render_main_view_chrome_footer_flush(")
+                || source.contains("render_main_view_chrome(")
                 || source.contains("render_builtin_main_input_surface(")
                 || source.contains("render_generic_filterable_search_surface("),
             "{surface} must route its outer shell through shared main-view chrome"

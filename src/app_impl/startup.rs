@@ -872,10 +872,10 @@ impl ScriptListApp {
         } else {
             crate::window_control::RootWindowsProviderStatus::Unknown
         };
-        let initial_cached_root_windows = Self::build_root_window_entries(
+        let root_search = RootSearchStore::with_root_windows(
             &initial_cached_windows,
             &apps,
-            &std::collections::HashMap::new(),
+            initial_root_windows_provider_status,
         );
 
         // Restore the persisted global working directory (footer cwd chip) so it
@@ -925,10 +925,7 @@ impl ScriptListApp {
             cached_browser_history: Vec::new(),
             browser_history_loading: false,
             cached_file_results: Vec::new(),
-            root_search: RootSearchStore::with_root_windows(
-                initial_cached_root_windows,
-                initial_root_windows_provider_status,
-            ),
+            root_search,
             spine_file_search_query: String::new(),
             spine_file_search_generation: 0,
             spine_file_search_loading: false,
@@ -995,6 +992,7 @@ impl ScriptListApp {
             ),
             main_list_row_generation: 0,
             menu_syntax_main_hint_scroll_handle: ScrollHandle::new(),
+            builtin_row_stack_scroll_handle: ScrollHandle::new(),
             menu_syntax_form_field_bounds: Default::default(),
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),
@@ -2462,13 +2460,169 @@ impl ScriptListApp {
                                 }
                                 AppView::SearchAiPresetsView {
                                     selected_index,
-                                    filter: _,
+                                    filter,
                                 } => {
+                                    // Replicate render-time filtering from ai_presets.rs
+                                    let default_presets: Vec<(&str, &str, &str)> = vec![
+                                        (
+                                            "general",
+                                            "General Assistant",
+                                            "Helpful AI assistant for any task",
+                                        ),
+                                        (
+                                            "coder",
+                                            "Code Assistant",
+                                            "Expert programmer and debugger",
+                                        ),
+                                        (
+                                            "writer",
+                                            "Writing Assistant",
+                                            "Help with writing and editing",
+                                        ),
+                                        (
+                                            "researcher",
+                                            "Research Assistant",
+                                            "Deep analysis and research",
+                                        ),
+                                        (
+                                            "creative",
+                                            "Creative Partner",
+                                            "Brainstorming and creative ideas",
+                                        ),
+                                    ];
+                                    let all_presets =
+                                        crate::ai::presets::load_presets().unwrap_or_default();
+                                    let mut items: Vec<(String, String, String)> = Vec::new();
+                                    for (id, name, desc) in &default_presets {
+                                        items.push((
+                                            id.to_string(),
+                                            name.to_string(),
+                                            desc.to_string(),
+                                        ));
+                                    }
+                                    for preset in &all_presets {
+                                        if !default_presets
+                                            .iter()
+                                            .any(|(did, _, _)| *did == preset.id)
+                                        {
+                                            items.push((
+                                                preset.id.clone(),
+                                                preset.name.clone(),
+                                                preset.description.clone(),
+                                            ));
+                                        }
+                                    }
+                                    let filtered_len = if filter.is_empty() {
+                                        items.len()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        items
+                                            .iter()
+                                            .filter(|(id, name, desc)| {
+                                                name.to_lowercase().contains(&filter_lower)
+                                                    || desc
+                                                        .to_lowercase()
+                                                        .contains(&filter_lower)
+                                                    || id.to_lowercase().contains(&filter_lower)
+                                            })
+                                            .count()
+                                    };
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
+                                        this.builtin_row_stack_scroll_handle
+                                            .scroll_to_item(*selected_index);
                                         cx.notify();
-                                    } else if is_down {
+                                    } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
+                                        this.builtin_row_stack_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::FavoritesBrowseView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    // Replicate render-time filtering from favorites.rs
+                                    let favorites = script_kit_gpui::favorites::load_favorites()
+                                        .unwrap_or_default();
+                                    let resolved: Vec<(String, String)> = favorites
+                                        .script_ids
+                                        .iter()
+                                        .map(|id| {
+                                            let display_name = this
+                                                .scripts
+                                                .iter()
+                                                .find(|s| s.name == *id)
+                                                .map(|s| s.name.clone())
+                                                .or_else(|| {
+                                                    this.scriptlets
+                                                        .iter()
+                                                        .find(|sl| sl.name == *id)
+                                                        .map(|sl| sl.name.clone())
+                                                })
+                                                .unwrap_or_else(|| id.clone());
+                                            let description = this
+                                                .scripts
+                                                .iter()
+                                                .find(|s| s.name == *id)
+                                                .and_then(|s| s.description.clone())
+                                                .or_else(|| {
+                                                    this.scriptlets
+                                                        .iter()
+                                                        .find(|sl| sl.name == *id)
+                                                        .and_then(|sl| sl.description.clone())
+                                                })
+                                                .unwrap_or_default();
+                                            (display_name, description)
+                                        })
+                                        .collect();
+                                    let filtered_len = if filter.is_empty() {
+                                        resolved.len()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        resolved
+                                            .iter()
+                                            .filter(|(name, desc)| {
+                                                name.to_lowercase().contains(&filter_lower)
+                                                    || desc
+                                                        .to_lowercase()
+                                                        .contains(&filter_lower)
+                                            })
+                                            .count()
+                                    };
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.builtin_row_stack_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.builtin_row_stack_scroll_handle
+                                            .scroll_to_item(*selected_index);
                                         cx.notify();
                                     }
                                     cx.stop_propagation();

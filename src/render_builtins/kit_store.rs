@@ -1214,7 +1214,7 @@ impl ScriptListApp {
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .font_family(design_typography.font_family)
                 .text_color(text_name)
@@ -1562,7 +1562,7 @@ impl ScriptListApp {
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .font_family(design_typography.font_family)
                 .text_color(text_name)

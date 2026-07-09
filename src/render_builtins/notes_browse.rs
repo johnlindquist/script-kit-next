@@ -240,15 +240,10 @@ impl ScriptListApp {
             let selected = selected_index;
             let entity = cx.entity().downgrade();
 
-            div()
-                .id("notes-browse-list")
-                .w_full()
-                .min_h(px(0.))
-                .flex()
-                .flex_col()
-                .track_scroll(&self.notes_browse_scroll_handle)
-                .overflow_y_scrollbar()
-                .children(notes_for_closure.into_iter().enumerate().map(
+            crate::components::scrollbar::render_tracked_scroll_column(
+                "notes-browse-list",
+                &self.notes_browse_scroll_handle,
+                notes_for_closure.into_iter().enumerate().map(
                     move |(display_ix, note)| {
                         let is_selected = display_ix == selected;
                         let title = Self::notes_browse_display_title(&note);
@@ -306,8 +301,8 @@ impl ScriptListApp {
                             })
                             .child(item)
                     },
-                ))
-                .into_any_element()
+                ),
+            )
         };
 
         let preview_panel: AnyElement = match preview_note {
@@ -455,7 +450,7 @@ impl ScriptListApp {
             preview_panel,
         );
 
-        crate::components::main_view_chrome::render_main_view_chrome(
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(chrome.text_primary_hex))
                 .font_family(self.theme_font_family())

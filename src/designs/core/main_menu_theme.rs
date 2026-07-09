@@ -747,7 +747,7 @@ fn base_main_menu_theme_def(
             first_section_header_height: 28.0,
             source_status_row_height: 32.0,
             average_scroll_height: ((44.0 * 3.0) + 28.0) / 4.0,
-            footer_reveal_clearance_height: 8.0,
+            footer_reveal_clearance_height: 0.0,
             scrollbar_width: 16.0,
             section_padding_x: MAIN_MENU_SECTION_PADDING_X,
             section_padding_top: MAIN_MENU_SECTION_PADDING_TOP,
