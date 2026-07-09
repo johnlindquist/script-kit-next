@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
+  copyFileSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -16,15 +17,24 @@ type Json = Record<string, any>;
 
 const repoRoot = resolve(import.meta.dir, "../..");
 const sessionScript = join(repoRoot, "scripts/agentic/session.sh");
-const outputDir = join(repoRoot, ".test-output", "root-typing-lag-benchmark");
+const agentBinary = join(repoRoot, "target-agent", "pools", "agent-debug", "debug", "script-kit-gpui");
+
+const session = argValue(
+  "--session",
+  `root-typing-lag-benchmark-${process.pid}-${Date.now()}`,
+);
+const outputDir = resolve(
+  repoRoot,
+  argValue(
+    "--output-dir",
+    join(repoRoot, ".test-output", "root-typing-lag-benchmark", session),
+  ),
+);
 const homeDir = join(outputDir, "home");
 const kitDir = join(homeDir, ".scriptkit");
 const dbDir = join(kitDir, "db");
 const sessionRoot = join(outputDir, "sessions");
 const chromeDir = join(homeDir, "Library/Application Support/Google/Chrome/Default");
-const agentBinary = join(repoRoot, "target-agent", "pools", "agent-debug", "debug", "script-kit-gpui");
-
-const session = argValue("--session", "root-typing-lag-benchmark");
 const samples = Number(argValue("--samples", "6"));
 const cadenceMs = Number(argValue("--cadence", "18"));
 const timeoutMs = Number(argValue("--timeout", "12000"));
@@ -35,7 +45,33 @@ const traceEnabled = !process.argv.includes("--no-trace");
 const passiveRefreshOverlap = process.argv.includes("--passive-refresh-overlap");
 const forceBrowserTabFailure = process.argv.includes("--force-browser-tabs-failure");
 const inputMode = argValue("--input-mode", "setFilter");
-const transportAckMode = "stateEcho";
+const metricKind =
+  inputMode === "printable-key"
+    ? "protocol_simulated_gpui_key_to_state_echo"
+    : "protocol_set_filter_to_state_echo";
+const observationPoint = "stateResult.inputValue";
+const measuresPaint = false;
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`Usage: bun scripts/agentic/root-typing-lag-benchmark.ts [options]
+
+Options:
+  --input-mode <setFilter|printable-key>  Input path to measure (default: setFilter)
+  --session <name>                       Session name
+  --output-dir <path>                    Per-run receipt, sandbox, and artifact directory
+  --samples <count>                      Samples per scenario (default: 6)
+  --cadence <ms>                         Target typing cadence (default: 18)
+  --timeout <ms>                         Protocol timeout (default: 12000)
+  --poll <ms>                            State polling interval (default: 4)
+  --state-probe-every <count>            Probe detailed state every N keys (default: 1)
+  --scenarios <csv>                      Comma-separated queries
+  --enforce                              Exit non-zero when diagnostic thresholds fail
+  --no-trace                             Disable internal performance logs
+  --passive-refresh-overlap              Delay the browser-tab fixture refresh
+  --force-browser-tabs-failure           Force the browser-tab fixture to fail
+
+This benchmark observes stateResult.inputValue. It does not measure paint.`);
+  process.exit(0);
+}
 if (!["setFilter", "printable-key"].includes(inputMode)) {
   throw new Error(`unknown --input-mode '${inputMode}'`);
 }
@@ -44,7 +80,35 @@ const scenarios = argValue("--scenarios", "amz,dictat,this is the f,Hae")
   .map((scenario) => scenario.trim())
   .filter(Boolean);
 
+if (!Number.isInteger(samples) || samples <= 0) {
+  throw new Error(`--samples must be a positive integer, got ${JSON.stringify(samples)}`);
+}
+if (!Number.isFinite(cadenceMs) || cadenceMs < 0) {
+  throw new Error(`--cadence must be a non-negative number, got ${JSON.stringify(cadenceMs)}`);
+}
+if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+  throw new Error(`--timeout must be a positive number, got ${JSON.stringify(timeoutMs)}`);
+}
+if (!Number.isInteger(pollMs) || pollMs <= 0) {
+  throw new Error(`--poll must be a positive integer, got ${JSON.stringify(pollMs)}`);
+}
+if (!Number.isInteger(stateProbeEvery) || stateProbeEvery < 0) {
+  throw new Error(
+    `--state-probe-every must be a non-negative integer, got ${JSON.stringify(stateProbeEvery)}`,
+  );
+}
+if (scenarios.length === 0) {
+  throw new Error("--scenarios must contain at least one non-empty query");
+}
+if (enforce && !traceEnabled) {
+  throw new Error("--enforce requires performance tracing; remove --no-trace");
+}
+if (enforce && stateProbeEvery === 0) {
+  throw new Error("--enforce requires --state-probe-every to be greater than zero");
+}
+
 let sessionStatus: Json | null = null;
+let mainFocusPoint: { x: number; y: number } | null = null;
 
 process.env.HOME = homeDir;
 process.env.SK_PATH = kitDir;
@@ -155,6 +219,58 @@ function fileExists(path: string): boolean {
   }
 }
 
+function selectedBinaryPath(): string | null {
+  const selected = sessionStatus?.binary ?? process.env.SCRIPT_KIT_GPUI_BINARY;
+  return typeof selected === "string" && selected.length > 0
+    ? resolve(repoRoot, selected)
+    : null;
+}
+
+function buildProvenance(): Json {
+  const binary = selectedBinaryPath();
+  const gitSha = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  const gitStatus = spawnSync("git", ["status", "--porcelain"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  return {
+    binary,
+    binarySha256:
+      binary && fileExists(binary)
+        ? createHash("sha256").update(readFileSync(binary)).digest("hex")
+        : null,
+    gitSha: gitSha.status === 0 ? gitSha.stdout.trim() : null,
+    sourceDirty: gitStatus.status === 0 ? gitStatus.stdout.trim().length > 0 : null,
+  };
+}
+
+function preserveSessionArtifacts(): Json {
+  const artifactsDir = join(outputDir, "session-artifacts");
+  mkdirSync(artifactsDir, { recursive: true });
+  const preserved: Json = {};
+  for (const [key, source, filename] of [
+    ["logPath", sessionStatus?.log, "app.log"],
+    ["responsesPath", sessionStatus?.responses, "responses.ndjson"],
+    [
+      "protocolResponsesPath",
+      sessionStatus?.protocolResponses,
+      "protocol-responses.ndjson",
+    ],
+  ] as const) {
+    if (typeof source !== "string" || !fileExists(source)) {
+      preserved[key] = null;
+      continue;
+    }
+    const destination = join(artifactsDir, filename);
+    copyFileSync(source, destination);
+    preserved[key] = destination;
+  }
+  return preserved;
+}
+
 function readFrom(path: string, offset: number): string {
   try {
     return readFileSync(path).subarray(offset).toString("utf8");
@@ -226,23 +342,119 @@ function directSend(command: Json): number {
   return performance.now() - start;
 }
 
-function waitForInput(input: string): number {
-  const start = performance.now();
+function showMainWindow() {
   directRpc(
+    { type: "show", requestId: `root-typing-show-${Date.now()}` },
+    "windowVisibilityAck",
+  );
+  const result = directRpc(
     {
       type: "waitFor",
-      requestId: `root-typing-wait-${Date.now()}`,
-      condition: { type: "stateMatch", state: { promptType: "none", inputValue: input } },
+      requestId: `root-typing-wait-visible-${Date.now()}`,
+      condition: {
+        type: "stateMatch",
+        state: { promptType: "none", windowVisible: true },
+      },
       timeout: timeoutMs,
       pollInterval: pollMs,
     },
     "waitForResult",
+    timeoutMs + 1_000,
   );
-  return performance.now() - start;
+  if (result.success !== true) {
+    throw new Error(`main window did not become visible: ${JSON.stringify(result)}`);
+  }
+
+  const windows = directRpc(
+    { type: "listAutomationWindows", requestId: `root-typing-windows-${Date.now()}` },
+    "automationWindowListResult",
+  );
+  const main = Array.isArray(windows.windows)
+    ? windows.windows.find((window: Json) => window.id === "main")
+    : null;
+  if (!main?.bounds || !Number.isFinite(main.bounds.width) || !Number.isFinite(main.bounds.height)) {
+    throw new Error(`main window bounds unavailable: ${JSON.stringify(windows)}`);
+  }
+  mainFocusPoint = {
+    x: main.bounds.width / 2,
+    y: Math.max(1, main.bounds.height - 90),
+  };
+  if (inputMode === "printable-key") ensureFilterInputFocus("show");
 }
 
 function getState(tag: string): Json {
   return directRpc({ type: "getState", requestId: `root-typing-state-${tag}-${Date.now()}` }, "stateResult");
+}
+
+function waitForInputLocally(input: string, tag: string): number {
+  const start = performance.now();
+  const deadline = start + timeoutMs;
+  let lastState: Json | null = null;
+  while (performance.now() < deadline) {
+    lastState = getState(`${tag}-poll`);
+    if (
+      lastState.promptType === "none"
+      && lastState.windowVisible === true
+      && lastState.inputValue === input
+    ) {
+      return performance.now() - start;
+    }
+    sleepSync(Math.max(1, pollMs));
+  }
+  throw new Error(
+    `timed out polling ${observationPoint} for ${JSON.stringify(input)}: ${JSON.stringify({
+      promptType: lastState?.promptType ?? null,
+      inputValue: lastState?.inputValue ?? null,
+      windowVisible: lastState?.windowVisible ?? null,
+    })}`,
+  );
+}
+
+function ensureFilterInputFocus(tag: string) {
+  if (!mainFocusPoint) throw new Error("main focus point is unavailable");
+  for (const type of ["mouseDown", "mouseUp"]) {
+    const dispatch = directRpc(
+      {
+        type: "simulateGpuiEvent",
+        requestId: `root-typing-focus-${tag}-${type}-${Date.now()}`,
+        target: { type: "main" },
+        event: { type, ...mainFocusPoint },
+      },
+      "simulateGpuiEventResult",
+    );
+    const acknowledged =
+      dispatch.dispatchCompleted === true || dispatch.dispatchScheduled === true;
+    if (dispatch.success !== true || !acknowledged) {
+      throw new Error(`main filter focus dispatch failed: ${JSON.stringify(dispatch)}`);
+    }
+  }
+
+  const deadline = performance.now() + timeoutMs;
+  let focusedSamples = 0;
+  let lastElements: Json | null = null;
+  while (performance.now() < deadline) {
+    lastElements = directRpc(
+      {
+        type: "getElements",
+        requestId: `root-typing-focus-elements-${tag}-${Date.now()}`,
+        target: { type: "main" },
+      },
+      "elementsResult",
+    );
+    const filterInput = Array.isArray(lastElements.elements)
+      ? lastElements.elements.find((element: Json) => element.semanticId === "input:filter")
+      : null;
+    const focused =
+      lastElements.focusedSemanticId === "input:filter" || filterInput?.focused === true;
+    focusedSamples = focused ? focusedSamples + 1 : 0;
+    if (focusedSamples >= 2) return;
+    sleepSync(Math.max(1, pollMs));
+  }
+  throw new Error(
+    `main filter input did not retain focus: ${JSON.stringify({
+      focusedSemanticId: lastElements?.focusedSemanticId ?? null,
+    })}`,
+  );
 }
 
 function sleepSync(ms: number) {
@@ -256,7 +468,10 @@ function sql(path: string, input: string) {
 }
 
 function seedFixtures() {
-  rmSync(outputDir, { recursive: true, force: true });
+  rmSync(homeDir, { recursive: true, force: true });
+  rmSync(sessionRoot, { recursive: true, force: true });
+  rmSync(join(outputDir, "session-artifacts"), { recursive: true, force: true });
+  rmSync(join(outputDir, "receipt.json"), { force: true });
   mkdirSync(dbDir, { recursive: true });
   mkdirSync(chromeDir, { recursive: true });
   mkdirSync(join(kitDir, "plugins", "main", "scripts"), { recursive: true });
@@ -395,25 +610,50 @@ function hash(value: unknown): string {
 
 function setFilter(text: string, tag: string) {
   const sendMs = directSend({ type: "setFilter", text, requestId: `root-typing-set-${tag}-${Date.now()}` });
-  const echoWaitMs = waitForInput(text);
+  const echoWaitMs = waitForInputLocally(text, tag);
   return {
     text,
+    metricKind: "protocol_set_filter_to_state_echo",
+    observationPoint,
+    measuresPaint,
     sendMs: Number(sendMs.toFixed(3)),
     inputEchoMs: Number((sendMs + echoWaitMs).toFixed(3)),
   };
 }
 
 function printableKey(next: string, tag: string) {
-  const sendMs = directSend({
-    type: "setFilter",
-    text: next,
-    requestId: `root-typing-printable-key-${tag}-${Date.now()}`,
-  });
-  const echoWaitMs = waitForInput(next);
+  const key = next.at(-1);
+  if (!key) throw new Error("printable-key requires one appended character");
+  const started = performance.now();
+  const dispatch = directRpc(
+    {
+      type: "simulateGpuiEvent",
+      requestId: `root-typing-printable-key-${tag}-${Date.now()}`,
+      target: { type: "main" },
+      event: { type: "keyDown", key, text: key, modifiers: [] },
+    },
+    "simulateGpuiEventResult",
+  );
+  const protocolRoundTripMs = performance.now() - started;
+  const dispatchAcknowledged =
+    dispatch.dispatchCompleted === true || dispatch.dispatchScheduled === true;
+  if (dispatch.success !== true || !dispatchAcknowledged) {
+    throw new Error(`printable key dispatch failed: ${JSON.stringify(dispatch)}`);
+  }
+  const echoWaitMs = waitForInputLocally(next, tag);
   return {
     text: next,
-    sendMs: Number(sendMs.toFixed(3)),
-    inputEchoMs: Number((sendMs + echoWaitMs).toFixed(3)),
+    metricKind: "protocol_simulated_gpui_key_to_state_echo",
+    observationPoint,
+    measuresPaint,
+    sendMs: Number(protocolRoundTripMs.toFixed(3)),
+    protocolRoundTripMs: Number(protocolRoundTripMs.toFixed(3)),
+    dispatchPath: dispatch.dispatchPath ?? null,
+    resolvedWindowId: dispatch.resolvedWindowId ?? null,
+    dispatchCompleted: dispatch.dispatchCompleted,
+    dispatchScheduled: dispatch.dispatchScheduled,
+    activationProof: dispatch.activationProof ?? null,
+    inputEchoMs: Number((protocolRoundTripMs + echoWaitMs).toFixed(3)),
   };
 }
 
@@ -422,13 +662,48 @@ function applyTypedInput(next: string, tag: string) {
   return setFilter(next, tag);
 }
 
+function clearInput(tag: string) {
+  let state = getState(`${tag}-before-clear`);
+  if (state.promptType !== "none" || state.windowVisible !== true) {
+    showMainWindow();
+    state = getState(`${tag}-after-show`);
+  }
+  if (state.inputValue === "") return;
+
+  if (inputMode === "setFilter") {
+    setFilter("", `${tag}-clear`);
+    return;
+  }
+
+  ensureFilterInputFocus(`${tag}-before-clear`);
+
+  const dispatch = directRpc(
+    {
+      type: "simulateGpuiEvent",
+      requestId: `root-typing-clear-${tag}-${Date.now()}`,
+      target: { type: "main" },
+      event: { type: "keyDown", key: "escape", modifiers: [] },
+    },
+    "simulateGpuiEventResult",
+  );
+  const dispatchAcknowledged =
+    dispatch.dispatchCompleted === true || dispatch.dispatchScheduled === true;
+  if (dispatch.success !== true || !dispatchAcknowledged) {
+    throw new Error(`printable input clear dispatch failed: ${JSON.stringify(dispatch)}`);
+  }
+  waitForInputLocally("", tag);
+}
+
 function typeScenario(query: string, sampleIndex: number) {
-  setFilter("", `${slug(query)}-${sampleIndex}-clear`);
+  clearInput(`${slug(query)}-${sampleIndex}-clear`);
   const events = [];
   let current = "";
   let cadenceOverrunMaxMs = 0;
   for (let index = 0; index < query.length; index += 1) {
     current += query[index];
+    if (inputMode === "printable-key") {
+      ensureFilterInputFocus(`${slug(query)}-${sampleIndex}-${index}`);
+    }
     const tickStarted = performance.now();
     const event = applyTypedInput(current, `${slug(query)}-${sampleIndex}-${index}`);
     const echoElapsed = performance.now() - tickStarted;
@@ -457,16 +732,36 @@ function typeScenario(query: string, sampleIndex: number) {
 }
 
 function duplicateEmptyInput(sampleIndex: number) {
-  const first = setFilter("", `empty-${sampleIndex}-first`);
-  const second = setFilter("", `empty-${sampleIndex}-second`);
-  const state = getState(`empty-${sampleIndex}`);
+  clearInput(`empty-${sampleIndex}-clear`);
+  const observeEmptySet = (tag: string) => {
+    const started = performance.now();
+    const sendMs = directSend({
+      type: "setFilter",
+      text: "",
+      requestId: `root-typing-set-${tag}-${Date.now()}`,
+    });
+    const state = getState(tag);
+    return {
+      state,
+      receipt: {
+        text: "",
+        metricKind: "protocol_set_filter_to_state_echo",
+        observationPoint,
+        measuresPaint,
+        sendMs: Number(sendMs.toFixed(3)),
+        inputEchoMs: Number((performance.now() - started).toFixed(3)),
+      },
+    };
+  };
+  const first = observeEmptySet(`empty-${sampleIndex}-first`);
+  const second = observeEmptySet(`empty-${sampleIndex}-second`);
   return {
     kind: "duplicate-empty",
     sampleIndex,
-    first,
-    second,
-    inputValue: state.inputValue,
-    computedSearchText: state.mainWindowPreflight?.computedSearchText ?? null,
+    first: first.receipt,
+    second: second.receipt,
+    inputValue: second.state.inputValue,
+    computedSearchText: second.state.mainWindowPreflight?.computedSearchText ?? null,
   };
 }
 
@@ -528,13 +823,14 @@ function parsePerfLogs(logPath: string) {
   };
 }
 
-async function main() {
-  seedFixtures();
+async function runBenchmark() {
   runSession(["stop", session]);
+  seedFixtures();
   const startStatus = runSession(["start", session]);
   const liveStatus = runSession(["status", session]);
   sessionStatus = { ...startStatus, ...liveStatus };
 
+  showMainWindow();
   setFilter(scenarios[0] ?? "warm", "warm");
 
   const typingReceipts = [];
@@ -545,11 +841,18 @@ async function main() {
   }
 
   const emptyReceipts = [];
-  for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
-    emptyReceipts.push(duplicateEmptyInput(sampleIndex));
+  if (inputMode === "setFilter") {
+    for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
+      emptyReceipts.push(duplicateEmptyInput(sampleIndex));
+    }
   }
 
   const events = typingReceipts.flatMap((receipt) => receipt.events);
+  const expectedEventCount =
+    samples * scenarios.reduce((total, scenario) => total + scenario.length, 0);
+  const stateObservationCount = events.filter(
+    (event) => event.computedMatchesInput !== null,
+  ).length;
   const computedMismatchCount = events.filter((event) => event.computedMatchesInput === false).length;
   const emptyMismatchCount = emptyReceipts.filter(
     (receipt) => receipt.inputValue !== "" || receipt.computedSearchText !== "",
@@ -561,9 +864,12 @@ async function main() {
       send: stats(events.map((event) => event.sendMs)),
       cadenceMs,
       cadenceOverrunMaxMs: Number(Math.max(0, ...typingReceipts.map((receipt) => receipt.cadenceOverrunMaxMs)).toFixed(3)),
+      expectedEventCount,
+      stateObservationCount,
       computedMismatchCount,
     },
     duplicateEmpty: {
+      applicable: inputMode === "setFilter",
       inputEcho: stats(emptyReceipts.flatMap((receipt) => [receipt.first.inputEchoMs, receipt.second.inputEchoMs])),
       mismatchCount: emptyMismatchCount,
     },
@@ -571,6 +877,9 @@ async function main() {
   };
 
   const failures = [];
+  if (events.length !== expectedEventCount) {
+    failures.push(`typing event count ${events.length} != expected ${expectedEventCount}`);
+  }
   if (summary.typing.inputEcho.p50Ms > 20) failures.push("typing inputEcho p50 > 20ms");
   if (summary.typing.inputEcho.p95Ms > 50) failures.push("typing inputEcho p95 > 50ms");
   if (summary.typing.inputEcho.maxMs > 150) failures.push("typing inputEcho max > 150ms");
@@ -584,19 +893,32 @@ async function main() {
   if (summary.perfLogs.passiveSources.implicit.maxMs > 12) failures.push("implicit passive source max > 12ms");
   if (summary.perfLogs.maxLogLineBytes > 2048) failures.push("max log line bytes > 2048");
   if (summary.perfLogs.preflightDeepLineCount !== 0) failures.push("deep preflight lines present");
+  if (enforce && stateObservationCount === 0) failures.push("no semantic state observations");
+  if (enforce && summary.perfLogs.groupDone.count === 0) failures.push("no GROUP_DONE observations");
+  if (enforce && summary.perfLogs.searchTotal.count === 0) failures.push("no SEARCH_TOTAL observations");
+  if (enforce && summary.perfLogs.passiveSources.count === 0) {
+    failures.push("no passive-source observations");
+  }
 
   const receipt = {
-    schemaVersion: 1,
-    status: failures.length === 0 ? "pass" : "fail",
+    schemaVersion: 3,
+    status:
+      failures.length === 0 ? "pass" : enforce ? "fail" : "diagnostic-warning",
+    executionMode: enforce ? "gate" : "diagnostic",
+    thresholdStatus: failures.length === 0 ? "pass" : "fail",
     scenarios,
     samples,
     cadenceMs,
     inputMode,
-    transportAckMode,
+    metricKind,
+    observationPoint,
+    measuresPaint,
     traceEnabled,
     passiveRefreshOverlap,
     forceBrowserTabFailure,
     enforce,
+    outputDir,
+    provenance: buildProvenance(),
     thresholds: {
       inputEchoP50Ms: 20,
       inputEchoP95Ms: 50,
@@ -611,22 +933,95 @@ async function main() {
     },
     session: {
       name: session,
-      logPath: sessionStatus.log,
-      responsesPath: sessionStatus.responses,
-      protocolResponsesPath: sessionStatus.protocolResponses ?? null,
+      logPath: null,
+      responsesPath: null,
+      protocolResponsesPath: null,
     },
     summary,
     typingReceipts,
     emptyReceipts,
   };
+  return receipt;
+}
 
-  mkdirSync(outputDir, { recursive: true });
-  writeFileSync(join(outputDir, "receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
-  console.log(JSON.stringify(receipt, null, 2));
-  if (enforce && failures.length > 0) process.exit(1);
+async function main() {
+  let receipt: Json = {
+    schemaVersion: 3,
+    status: "error",
+    executionMode: enforce ? "gate" : "diagnostic",
+    thresholdStatus: "not-evaluated",
+    scenarios,
+    samples,
+    cadenceMs,
+    inputMode,
+    metricKind,
+    observationPoint,
+    measuresPaint,
+    traceEnabled,
+    passiveRefreshOverlap,
+    forceBrowserTabFailure,
+    enforce,
+    outputDir,
+    provenance: buildProvenance(),
+    session: { name: session },
+  };
+  let sessionMayBeRunning = false;
+  let runError: string | null = null;
+  let artifactError: string | null = null;
+  let cleanupError: string | null = null;
+  let cleanupResult: Json | null = null;
+  try {
+    sessionMayBeRunning = true;
+    receipt = await runBenchmark();
+  } catch (error) {
+    runError = error instanceof Error ? error.message : String(error);
+    receipt.status = "error";
+    receipt.failure = runError;
+    process.exitCode = 1;
+  } finally {
+    let artifacts: Json = {
+      logPath: null,
+      responsesPath: null,
+      protocolResponsesPath: null,
+    };
+    try {
+      artifacts = preserveSessionArtifacts();
+    } catch (error) {
+      artifactError = error instanceof Error ? error.message : String(error);
+      receipt.status = "error";
+      process.exitCode = 1;
+    }
+    if (sessionMayBeRunning) {
+      try {
+        cleanupResult = runSession(["stop", session]);
+      } catch (error) {
+        cleanupError = error instanceof Error ? error.message : String(error);
+        receipt.status = "error";
+        process.exitCode = 1;
+      }
+    }
+    const lifecycleErrors = [
+      runError ? `run: ${runError}` : null,
+      artifactError ? `artifacts: ${artifactError}` : null,
+      cleanupError ? `cleanup: ${cleanupError}` : null,
+    ].filter(Boolean);
+    if (lifecycleErrors.length > 0) receipt.failure = lifecycleErrors.join("; ");
+    receipt.provenance = buildProvenance();
+    receipt.session = { name: session, ...artifacts };
+    receipt.cleanup = {
+      attempted: sessionMayBeRunning,
+      stopped: sessionMayBeRunning && cleanupError === null,
+      result: cleanupResult,
+      error: cleanupError,
+    };
+    mkdirSync(outputDir, { recursive: true });
+    writeFileSync(join(outputDir, "receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
+    console.log(JSON.stringify(receipt, null, 2));
+    if (enforce && receipt.thresholdStatus === "fail") process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 });

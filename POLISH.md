@@ -19,7 +19,7 @@ The single most repeated word in three years of sessions. The window is a reflex
 
 **The bar:**
 
-- Every keystroke in any filter input paints its result inside the **16ms frame budget**. Evidenced and enforced: worst-case typing latency driven 187ms → 14ms, "All inputs now under 18ms (within 16ms frame budget)" (`13a417737`). Applies to held keys too: "definite 'hiccups' when holding down delete… feel laggy" (2026-05-20).
+- Every keystroke in any filter input should paint its result inside the **16ms product bar**. Historical evidence drove worst-case typing latency from 187ms → 14ms: "All inputs now under 18ms (within 16ms frame budget)" (`13a417737`). The current root typing probes do **not** measure input-to-paint, so this bar is not yet a current automated paint gate. It applies to held keys too: "definite 'hiccups' when holding down delete… feel laggy" (2026-05-20).
 - **Nothing synchronous and expensive on the keystroke path.** SQLite, history search, osascript probes, browser URL sniffs run off-thread and merge next frame. Evidenced: `@` was blocking the UI thread ~943ms → 4ms (`bf0b87ffc`); ai_vault (avg 99ms) and browser_history (avg 30ms) gated behind explicit filters (`13a417737`). Budget: **≤1ms synchronous work per keystroke (proposed)**.
 - **Hotkey → window visible with input focused: ≤50ms (proposed)**, and no keystroke typed immediately after the hotkey is ever dropped. Keyboard-focus readiness is a measured property (`3918ad57d`); state resets *before* the shortcut, "so that it's ready and there's no timers/guards/sense of delay" (2026-06-17).
 - **Surface transitions are instant.** Main↔Agent Chat, escape-back, Tab-to-chat: "there should be no reason for any lag" (2026-04-03), "Please make it instant" (2026-05-25). Budget: **one perceived frame, ≤50ms (proposed)**.
@@ -27,7 +27,7 @@ The single most repeated word in three years of sessions. The window is a reflex
 - **No artificial delays** on interaction paths (`eb288220a`), and no full-screen loading gate when the input could be live immediately: "input is immediately available — users can start typing while context loads in background" (`f275c1eb3`).
 - Arrow-key navigation updates the list in the same frame as the footer — never let chrome update before content ("the footer text changes in time, but the items list doesn't", 2026-05-08).
 
-**Proof:** devtools latency probe measuring hotkey→visible, keystroke→paint (incl. key-repeat storm), and transition times; red/green numbers per run. Off-thread rule locked by clippy `disallowed-methods` where expressible, else behavior test.
+**Proof:** add a devtools latency probe that measures hotkey→visible, keystroke→paint (including a key-repeat storm), and transition times, with red/green numbers per run. Until input-to-paint instrumentation exists, `stateResult.inputValue` state-echo timings and internal-log durations are **surrogate diagnostics**, not proof that the 16ms paint bar passed. Off-thread rule locked by clippy `disallowed-methods` where expressible, else behavior test.
 
 ## 2. Layout stability — nothing moves that the user didn't move
 

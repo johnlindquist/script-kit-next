@@ -1,0 +1,84 @@
+name: Deterministic Performance Gates
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/perf-gates.yml"
+      - "scripts/agentic/agent-cargo.sh"
+      - "scripts/agentic/root-search-frame-stability.ts"
+      - "scripts/agentic/root-typing-lag-benchmark.ts"
+      - "scripts/devtools/**"
+      - "src/app_impl/filter_*.rs"
+      - "src/app_impl/filtering_cache.rs"
+      - "src/app_impl/root_*.rs"
+      - "src/file_search/**"
+      - "src/main_sections/**"
+      - "src/menu_syntax/**"
+      - "src/platform/gpui_event_simulator.rs"
+      - "src/prompt_handler/mod.rs"
+      - "src/protocol/**"
+      - "src/render_script_list/**"
+      - "src/scripts/grouping.rs"
+      - "src/stdin_commands/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "rust-toolchain.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  root-frame-identity:
+    name: Root Frame Identity
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "root-frame-gate-macos-debug"
+          workspaces: ". -> target-agent/pools/agent-debug"
+
+      - name: Syntax-check performance probes
+        run: |
+          bun build \
+            scripts/agentic/root-typing-lag-benchmark.ts \
+            scripts/agentic/root-search-frame-stability.ts \
+            --target=bun \
+            --outdir="$RUNNER_TEMP/root-frame-gate-syntax"
+
+      - name: Build stable root frame gate artifact
+        env:
+          SCRIPT_KIT_AGENT_ARTIFACT_NAME: root-frame-gate
+        run: ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui
+
+      - name: Run semantic frame-identity gate
+        run: |
+          bun scripts/agentic/root-search-frame-stability.ts \
+            --binary target-agent/artifacts/root-frame-gate/script-kit-gpui \
+            --receipt .test-output/perf-gates/root-search-frame-stability.json
+
+      - name: Upload semantic frame-identity receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-search-frame-stability-receipt
+          path: .test-output/perf-gates/root-search-frame-stability.json
+          if-no-files-found: warn

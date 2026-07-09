@@ -7,127 +7,40 @@ fn assert_contains(content: &str, needle: &str, context: &str) {
     );
 }
 
-fn assert_not_contains(content: &str, needle: &str, context: &str) {
-    assert!(
-        !content.contains(needle),
-        "{context} should not contain {needle:?}"
-    );
+fn workflow_step<'a>(workflow: &'a str, name: &str) -> &'a str {
+    let marker = format!("      - name: {name}");
+    let (_, after_marker) = workflow
+        .split_once(&marker)
+        .unwrap_or_else(|| panic!("workflow should contain step {name:?}"));
+    after_marker
+        .split("\n      - name:")
+        .next()
+        .expect("workflow step should have a body")
 }
 
+/// GitHub Actions wiring cannot be enforced by the compiler or by the probes themselves.
+/// Keep this contract limited to proving that CI syntax-checks both probes and executes the
+/// deterministic frame-identity runtime gate; probe behavior belongs in the runtime proof.
 #[test]
-fn root_typing_lag_benchmark_is_enforced_launcher_filter_gate() {
-    let benchmark = read("scripts/agentic/root-typing-lag-benchmark.ts");
+fn deterministic_perf_workflow_runs_the_root_frame_gate() {
+    let workflow = read(".github/workflows/perf-gates.yml");
+    let syntax_step = workflow_step(&workflow, "Syntax-check performance probes");
+    let runtime_step = workflow_step(&workflow, "Run semantic frame-identity gate");
 
-    for needle in [
-        "root-typing-lag-benchmark",
-        ".test-output\", \"root-typing-lag-benchmark",
-        "SCRIPT_KIT_FILTER_PERF_LOG",
-        "delete process.env.SCRIPT_KIT_PREFLIGHT_DEEP_LOG",
-        "inputMode = argValue(\"--input-mode\", \"setFilter\")",
-        "\"setFilter\"",
-        "\"printable-key\"",
-        "process.argv.includes(\"--enforce\")",
-        "writeFileSync(join(outputDir, \"receipt.json\")",
-        "transportAckMode = \"stateEcho\"",
-        "transportAckMode,",
-        "sendMs: Number(sendMs.toFixed(3))",
-        "send: stats(events.map((event) => event.sendMs))",
-        "protocolResponsesPath: sessionStatus.protocolResponses ?? null",
-        "envelope.kind === \"protocolResponse\"",
+    for probe in [
+        "scripts/agentic/root-typing-lag-benchmark.ts",
+        "scripts/agentic/root-search-frame-stability.ts",
     ] {
-        assert_contains(&benchmark, needle, "root typing-lag benchmark");
+        assert_contains(syntax_step, probe, "performance-probe syntax check");
     }
 
-    assert_not_contains(
-        &benchmark,
-        "tail.includes(\"event_type=stdin_command_parsed\")",
-        "root typing-lag benchmark transport ack",
-    );
-    assert_not_contains(
-        &benchmark,
-        "tail.includes(\"event_type=stdin_parse_failed\")",
-        "root typing-lag benchmark transport ack",
-    );
-
     for needle in [
-        "summary.typing.inputEcho.p50Ms > 20",
-        "summary.typing.inputEcho.p95Ms > 50",
-        "summary.typing.inputEcho.maxMs > 150",
-        "summary.typing.cadenceOverrunMaxMs > 75",
-        "summary.perfLogs.groupDone.p95Ms > 35",
-        "summary.perfLogs.searchTotal.p95Ms > 15",
-        "summary.perfLogs.passiveSources.all.maxMs > 20",
-        "summary.perfLogs.passiveSources.implicit.maxMs > 12",
-        "summary.perfLogs.maxLogLineBytes > 2048",
-        "summary.perfLogs.preflightDeepLineCount !== 0",
-        "inputEchoP50Ms: 20",
-        "inputEchoP95Ms: 50",
-        "inputEchoMaxMs: 150",
-        "cadenceOverrunMaxMs: 75",
-        "groupDoneP95Ms: 35",
-        "searchTotalP95Ms: 15",
-        "passiveSourceMaxMs: 20",
-        "implicitPassiveSourceMaxMs: 12",
-        "maxLogLineBytes: 2048",
-        "deep preflight lines present",
+        "bun scripts/agentic/root-search-frame-stability.ts",
+        "--binary target-agent/artifacts/root-frame-gate/script-kit-gpui",
+        "--receipt .test-output/perf-gates/root-search-frame-stability.json",
     ] {
-        assert_contains(&benchmark, needle, "launcher typing-lag threshold contract");
+        assert_contains(runtime_step, needle, "root frame-identity runtime gate");
     }
-}
-
-#[test]
-fn root_typing_lag_receipt_includes_semantic_preflight_and_perf_summaries() {
-    let benchmark = read("scripts/agentic/root-typing-lag-benchmark.ts");
-
-    for needle in [
-        "schemaVersion: 1",
-        "status: failures.length === 0 ? \"pass\" : \"fail\"",
-        "summary",
-        "typingReceipts",
-        "emptyReceipts",
-        "logPath: sessionStatus.log",
-        "responsesPath: sessionStatus.responses",
-        "computedMismatchCount",
-        "preflightFingerprint",
-        "visibleResultCount",
-    ] {
-        assert_contains(&benchmark, needle, "root typing-lag receipt");
-    }
-}
-
-#[test]
-fn root_search_frame_stability_is_the_async_provider_regression_gate() {
-    let benchmark = read("scripts/agentic/root-search-frame-stability.ts");
-
-    for needle in [
-        "root-search-frame-stability",
-        "delayMs: 250",
-        "function assertSameFrame",
-        "function classifyRootFileBaseline",
-        "function hasWarmRootFileCache",
-        "sampleUntilRootFileSettled",
-        "settled-provider-early-visible-loading",
-        "baselineProof",
-        "observedAsyncHandoff",
-        "visibleLoading !== true",
-        "status.visibleResultCount === 0",
-        "status.cacheEntryCount",
-        "status.cacheResultCount",
-        "requiredSettledStableSamples",
-        "mainWindowPreflight",
-        "schemaVersion: 2",
-        "baseline",
-        "settled",
-        "samples",
-    ] {
-        assert_contains(&benchmark, needle, "root search frame-stability gate");
-    }
-
-    assert_not_contains(
-        &benchmark,
-        "loading !== true for delayed provider baseline",
-        "root search frame-stability gate must not require catching the transient provider-loading tick",
-    );
 }
 
 #[test]

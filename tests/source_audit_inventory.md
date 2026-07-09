@@ -17,9 +17,9 @@ Comments and Rust source embedded inside fixture strings are lexically excluded.
 | `fixture-golden-reader` | 4 | 4 | Reads checked-in fixtures or golden cases |
 | `docs-policy-reader` | 19 | 100 | Reads Markdown, skills, or policy documentation |
 | `generated-runtime-artifact-reader` | 7 | 18 | Reads test/generated/runtime output |
-| `other-repo-artifact-reader` | 115 | 327 | Reads scripts, workflows, assets, or other non-app files |
+| `other-repo-artifact-reader` | 115 | 324 | Reads scripts, workflows, assets, or other non-app files |
 | `meta-ratchet` | 1 | 4 | Reads test source for the existing occurrence-count ratchet |
-| **All readers** | **454** | **3218** | Of 548 Rust files under `tests/` |
+| **All readers** | **454** | **3215** | Of 548 Rust files under `tests/` |
 
 On pull requests, the checker scans both the working tree and the exact base
 tree with the same scanner. It compares per-file multisets of normalized

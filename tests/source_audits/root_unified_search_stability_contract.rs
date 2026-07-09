@@ -341,48 +341,6 @@ fn script_list_typing_echoes_before_deferred_computed_query() {
 }
 
 #[test]
-fn agentic_root_search_frame_stability_proof_compares_preflight_receipts() {
-    let proof = fs::read_to_string("scripts/agentic/root-search-frame-stability.ts")
-        .expect("read root-search-frame-stability.ts");
-
-    for required in [
-        "setFilter",
-        "waitFor",
-        "stateMatch",
-        "getState",
-        "getElements",
-        "mainWindowPreflight",
-        "selectedResultKey",
-        "selectedResultRole",
-        "visibleResultKeyFingerprint",
-        "visibleRowFingerprint",
-        "visibleResults",
-        "visibleResultCount",
-        "enterAction",
-        "rootFileSearch",
-        "GlobalQuery",
-        "cacheResultCount",
-        "assertSameFrame",
-        "samples",
-        "provider settled without warming",
-        "SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER",
-        // The probe classifies frames by explicit loading-state checks.
-        "loading === true",
-        "loading === false",
-    ] {
-        assert!(
-            proof.contains(required),
-            "runtime proof script should contain `{required}`"
-        );
-    }
-
-    assert!(
-        !proof.contains("captureScreenshot") && !proof.contains("simulateClick"),
-        "root frame stability proof should stay state-first, not screenshot or mouse based"
-    );
-}
-
-#[test]
 fn agentic_root_search_visual_stability_proof_captures_native_window_and_logs() {
     let proof = fs::read_to_string("scripts/agentic/root-search-visual-stability.ts")
         .expect("read root-search-visual-stability.ts");
