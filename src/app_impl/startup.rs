@@ -71,8 +71,6 @@ fn main_window_actions_key_intent(
 }
 
 impl ScriptListApp {
-    include!("startup/navigation_routes.rs");
-
     fn handle_main_window_global_key_intent(
         &mut self,
         intent: MainWindowGlobalKeyIntent,
@@ -3290,6 +3288,8 @@ impl ScriptListApp {
         app
     }
 }
+
+include!("startup/navigation_routes.rs");
 
 #[cfg(test)]
 mod tests {

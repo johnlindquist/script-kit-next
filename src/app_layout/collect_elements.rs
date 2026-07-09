@@ -2805,8 +2805,6 @@ impl ScriptListApp {
         (elements, total_count)
     }
 
-    include!("prompt_and_script_list_collectors.rs");
-
     pub(crate) fn script_list_visible_row_labels_from_cache(&self) -> (Vec<String>, Option<usize>) {
         let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
         let selected_grouped_index =
@@ -3119,3 +3117,4 @@ impl ScriptListApp {
         (elements, total_count)
     }
 }
+include!("prompt_and_script_list_collectors.rs");
