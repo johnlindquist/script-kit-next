@@ -14,6 +14,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Cheap policy gate that runs on every PR, including the default fast path.
+  source-audit-guard:
+    name: No New App-Source Read Sites
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Fetch exact comparison base
+        run: git cat-file -e "$BASE_SHA^{commit}" || git fetch --no-tags --depth=1 origin "$BASE_SHA"
+      - name: Test source-audit scanner
+        run: python3 -B -m unittest tests/source_audit_inventory_test.py
+      - name: Check inventory and reject new app-source reads
+        run: python3 -B tests/source_audit_inventory.py --check --base "$BASE_SHA"
+
   # ═══════════════════════════════════════════════════════════════════
   # FAST CI (default for PRs) - Target: <1 minute
   # Uses rust-cache only (faster for simple cargo check)
