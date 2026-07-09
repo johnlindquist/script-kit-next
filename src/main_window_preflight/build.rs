@@ -480,6 +480,7 @@ pub(crate) fn build_main_window_preflight_receipt(
             | AppView::BrowserHistoryView { .. }
             | AppView::EmojiPickerView { .. }
             | AppView::ProcessManagerView { .. }
+            | AppView::FlowUxView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }

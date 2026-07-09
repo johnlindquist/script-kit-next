@@ -3098,6 +3098,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3130,6 +3131,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 Some(actions_state),
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3178,6 +3180,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -3200,6 +3203,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3999,6 +4003,27 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
+                    AppView::FlowUxView {
+                        filter,
+                        selected_index,
+                        ..
+                    } => {
+                        let cwd = self.flow_ux_cwd();
+                        let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
+                        let filtered = crate::flows::catalog::filter_flows(&roster.flows, filter);
+                        let selected_value =
+                            filtered.get(*selected_index).map(|flow| flow.id.clone());
+                        (
+                            "flowUx".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            roster.flows.len(),
+                            filtered.len(),
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::CurrentAppCommandsView {
                         filter,
                         selected_index,
@@ -4540,6 +4565,7 @@ impl ScriptListApp {
                             "acceptsTab": p.accepts_tab(),
                         })
                     }),
+                    Some(self.flow_ux_automation_snapshot()),
                 );
 
                 tracing::info!(

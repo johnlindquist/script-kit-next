@@ -57,6 +57,7 @@ fn kind_rank(kind: AutomationWindowKind) -> u8 {
         AutomationWindowKind::ActionsDialog => 7,
         AutomationWindowKind::PromptPopup => 8,
         AutomationWindowKind::Hud => 9,
+        AutomationWindowKind::FlowManager => 10,
     }
 }
 

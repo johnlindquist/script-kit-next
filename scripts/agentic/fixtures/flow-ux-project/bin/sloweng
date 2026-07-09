@@ -1,0 +1,14 @@
+#!/bin/sh
+# Slow fake engine: heartbeats every 500ms for 60s. Exists to be cancelled —
+# probes SIGTERM the run mid-flight and assert run.cancelled + dead process
+# group. Spawns a child sleeper so descendant cleanup is provable.
+sleep 120 &
+echo "SLOW_CHILD_PID=$!"
+i=1
+while [ "$i" -le 120 ]; do
+  echo "HEARTBEAT_$i"
+  sleep 0.5
+  i=$((i + 1))
+done
+echo "SLOW_DONE"
+exit 0

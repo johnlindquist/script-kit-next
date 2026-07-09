@@ -386,6 +386,45 @@
                                     }
                                     cx.stop_propagation();
                                 }
+                                AppView::FlowUxView {
+                                    selected_index,
+                                    filter,
+                                    ..
+                                } => {
+                                    let cwd = this.flow_ux_cwd();
+                                    let roster =
+                                        crate::flows::catalog::flow_catalog().roster_for(&cwd);
+                                    let filtered_len =
+                                        crate::flows::catalog::filter_flows(&roster.flows, filter)
+                                            .len();
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.flow_ux_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.flow_ux_scroll_handle.scroll_to_item(
+                                            *selected_index,
+                                            gpui::ScrollStrategy::Nearest,
+                                        );
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
                                 AppView::CurrentAppCommandsView {
                                     selected_index,
                                     filter,

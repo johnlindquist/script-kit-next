@@ -58,6 +58,7 @@ impl ScriptListApp {
             AppView::MigrateV1View { .. } => "MigrateV1",
             AppView::InstalledKitsView { .. } => "InstalledKits",
             AppView::ProcessManagerView { .. } => "ProcessManager",
+            AppView::FlowUxView { .. } => "FlowUx",
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands",
             AppView::SearchAiPresetsView { .. } => "SearchAiPresets",
             AppView::CreateAiPresetView { .. } => "CreateAiPreset",
@@ -93,6 +94,7 @@ impl ScriptListApp {
                 | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::FlowUxView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::SettingsView { .. }
@@ -482,6 +484,7 @@ impl ScriptListApp {
                 | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::FlowUxView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::SettingsView { .. }

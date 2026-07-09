@@ -810,6 +810,13 @@ pub(crate) struct ScriptListApp {
     browser_tabs_scroll_handle: UniformListScrollHandle,
     // Scroll handle for process manager list
     process_list_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for Flow UX roster list (Flash/Dispatch/Lens variants)
+    flow_ux_scroll_handle: UniformListScrollHandle,
+    // Registry generation last painted by a Flow UX surface; the tick task
+    // uses this to repaint only when run state actually changed.
+    flow_ux_seen_generation: u64,
+    // Guards the single Flow UX repaint tick task (spawned on first open).
+    flow_ux_tick_running: bool,
     // Scroll handle for current app commands list
     current_app_commands_scroll_handle: UniformListScrollHandle,
     // Scroll handle for Agent Chat history list

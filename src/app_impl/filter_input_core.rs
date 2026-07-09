@@ -51,6 +51,7 @@ impl ScriptListApp {
                 | AppView::FileSearchView { .. }
                 | AppView::ProfileSearchView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::FlowUxView { .. }
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }

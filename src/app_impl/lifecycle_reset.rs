@@ -426,6 +426,7 @@ impl ScriptListApp {
             AppView::ProcessManagerView { filter, .. } if !filter.is_empty() => {
                 Some("ProcessManager filter")
             }
+            AppView::FlowUxView { filter, .. } if !filter.is_empty() => Some("FlowUx filter"),
             AppView::SettingsView { filter, .. } if !filter.is_empty() => Some("Settings filter"),
             AppView::CurrentAppCommandsView { filter, .. } if !filter.is_empty() => {
                 Some("CurrentAppCommands filter")
@@ -524,6 +525,15 @@ impl ScriptListApp {
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.process_list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
+            AppView::FlowUxView {
+                filter,
+                selected_index,
+                ..
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.flow_ux_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
             AppView::CurrentAppCommandsView {

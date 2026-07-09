@@ -88,6 +88,7 @@ fn automation_window_kind_all_variants_round_trip() {
         (AutomationWindowKind::ActionsDialog, "actionsDialog"),
         (AutomationWindowKind::PromptPopup, "promptPopup"),
         (AutomationWindowKind::Hud, "hud"),
+        (AutomationWindowKind::FlowManager, "flowManager"),
     ];
     for (kind, expected_str) in kinds {
         let json = serde_json::to_string(&kind).expect("serialize kind");

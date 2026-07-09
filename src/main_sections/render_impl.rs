@@ -297,6 +297,7 @@ impl Render for ScriptListApp {
                 | AppView::ProfileSearchView { .. }
                 | AppView::ThemeChooserView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::FlowUxView { .. }
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
@@ -628,6 +629,14 @@ impl Render for ScriptListApp {
                 selected_index,
             } => self
                 .render_process_manager(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::FlowUxView {
+                variant,
+                filter,
+                selected_index,
+                inline_run,
+            } => self
+                .render_flow_ux(variant, filter, selected_index, inline_run, cx)
                 .into_any_element(),
             AppView::CurrentAppCommandsView {
                 filter,

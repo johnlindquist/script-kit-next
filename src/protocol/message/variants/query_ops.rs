@@ -261,6 +261,12 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         ghost_prediction: Option<serde_json::Value>,
+        /// Flow UX exploration state: active variant, roster status, runs
+        /// with phase/engagement/timings, and Flow Manager visibility.
+        /// Shape: docs/ai/flow-ux-protocol.md §6. Password input values are
+        /// never present. Omitted when the flow substrate has no state.
+        #[serde(rename = "flowUx", default, skip_serializing_if = "Option::is_none")]
+        flow_ux: Option<serde_json::Value>,
     },
 
     // ============================================================

@@ -23,6 +23,7 @@ impl ScriptListApp {
                 | AppView::WindowSwitcherView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::FlowUxView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::CreateAiPresetView { .. }
                 | AppView::SettingsView { .. }
@@ -64,6 +65,7 @@ impl ScriptListApp {
             | AppView::WindowSwitcherView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::ProcessManagerView { .. }
+            | AppView::FlowUxView { .. }
             | AppView::SearchAiPresetsView { .. }
             | AppView::CreateAiPresetView { .. }
             | AppView::SettingsView { .. }

@@ -321,6 +321,12 @@ pub enum BuiltInFeature {
     BackgroundEffectPrevious,
     /// Turn off the background shader effect.
     BackgroundEffectOff,
+    /// Flow UX exploration surfaces (hidden, query-only): main-window
+    /// variations for finding/launching mdflow flows. See
+    /// docs/ai/flow-ux-protocol.md.
+    FlowUxVariant(crate::flows::model::FlowUxVariant),
+    /// Detached Flow Manager window (runs supervision + Mission Control).
+    FlowManager,
 }
 /// A built-in feature entry that appears in the main search
 #[derive(Debug, Clone)]
@@ -340,6 +346,22 @@ pub struct BuiltInEntry {
     /// Group for categorization in the UI (will be used when menu bar integration is complete)
     #[allow(dead_code)]
     pub group: BuiltInGroup,
+}
+
+/// Query-only built-ins never appear in the empty-query launcher list; they
+/// surface only when the user types a matching query. Used for experimental
+/// surfaces (the Flow UX variations) that must be reachable by name without
+/// cluttering the default menu. Kept as a predicate (not a field) so the
+/// many existing `BuiltInEntry` literals stay untouched.
+pub fn is_query_only_builtin(id: &str) -> bool {
+    matches!(
+        id,
+        "builtin/flow-ux-flash"
+            | "builtin/flow-ux-dispatch"
+            | "builtin/flow-ux-lens"
+            | "builtin/flow-ux-mission-control"
+            | "builtin/flow-manager"
+    )
 }
 impl BuiltInEntry {
     /// Create a new built-in entry (Core group, no icon)
@@ -547,6 +569,8 @@ impl BuiltInEntry {
                 "Cycle Background Effect"
             }
             BuiltInFeature::BackgroundEffectOff => "Turn Off Background Effect",
+            BuiltInFeature::FlowUxVariant(_) => "Open Flow Launcher",
+            BuiltInFeature::FlowManager => "Open Flow Manager",
         }
     }
 
@@ -668,6 +692,8 @@ impl BuiltInEntry {
             BuiltInFeature::BackgroundEffectNext => "Next Effect",
             BuiltInFeature::BackgroundEffectPrevious => "Previous Effect",
             BuiltInFeature::BackgroundEffectOff => "Effect Off",
+            BuiltInFeature::FlowUxVariant(_) => "Flows",
+            BuiltInFeature::FlowManager => "Runs",
         }
     }
 }
@@ -1772,6 +1798,55 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ProcessManager),
             "activity",
+        ));
+
+        // Flow UX exploration surfaces — hidden (query-only, see
+        // `is_query_only_builtin`) variations for the flow-first launcher
+        // experiment. Each opens the same FlowUxView with a different
+        // interaction grammar so they can be compared by feel.
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/flow-ux-flash",
+            "Flow UX — Flash",
+            "Fastest list: Enter runs the flow inline, Esc backgrounds it",
+            vec!["flow", "flows", "mdflow", "flash", "launcher", "ux"],
+            BuiltInFeature::FlowUxVariant(crate::flows::model::FlowUxVariant::Flash),
+            "zap",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/flow-ux-dispatch",
+            "Flow UX — Dispatch",
+            "Fire-and-forget: Enter backgrounds the run and keeps you in the list",
+            vec!["flow", "flows", "mdflow", "dispatch", "launcher", "ux"],
+            BuiltInFeature::FlowUxVariant(crate::flows::model::FlowUxVariant::Dispatch),
+            "send",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/flow-ux-lens",
+            "Flow UX — Lens",
+            "Confidence first: split list with a free resolved-command preview",
+            vec![
+                "flow", "flows", "mdflow", "lens", "preview", "launcher", "ux",
+            ],
+            BuiltInFeature::FlowUxVariant(crate::flows::model::FlowUxVariant::Lens),
+            "eye",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/flow-ux-mission-control",
+            "Flow UX — Mission Control",
+            "Runs-first workspace: opens the Flow Manager with a compact picker",
+            vec![
+                "flow", "flows", "mdflow", "mission", "control", "runs", "ux",
+            ],
+            BuiltInFeature::FlowUxVariant(crate::flows::model::FlowUxVariant::MissionControl),
+            "layout-grid",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/flow-manager",
+            "Flow Manager",
+            "Supervise running flows: output, steps, cancel, rerun",
+            vec!["flow", "flows", "runs", "manager", "agents", "mdflow"],
+            BuiltInFeature::FlowManager,
+            "list-checks",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(

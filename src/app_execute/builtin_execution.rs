@@ -3904,6 +3904,59 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, "background_effect::off")
             }
 
+            // =========================================================================
+            // Flow UX exploration surfaces (docs/ai/flow-ux-protocol.md)
+            // =========================================================================
+            builtins::BuiltInFeature::FlowUxVariant(variant) => {
+                let variant = *variant;
+                if variant == crate::flows::model::FlowUxVariant::MissionControl {
+                    // Mission Control's home is the detached manager window;
+                    // it never occupies the main-window view stack.
+                    if let Err(err) = crate::flows::manager_window::open_flow_manager_window(cx) {
+                        self.show_error_toast(format!("Flow Manager failed: {err}"), cx);
+                        return Self::builtin_error(
+                            dctx,
+                            "flow_manager_open_failed",
+                            err.to_string(),
+                            "flow_ux::mission_control_open",
+                        );
+                    }
+                    return Self::builtin_success(dctx, "flow_ux::mission_control");
+                }
+                // Prewarm the roster for the effective cwd before the view
+                // paints, so the first frame already has flows.
+                let cwd = self.flow_ux_cwd();
+                crate::flows::catalog::flow_catalog().refresh(&cwd);
+                self.open_builtin_filterable_view(
+                    AppView::FlowUxView {
+                        variant,
+                        filter: String::new(),
+                        selected_index: 0,
+                        inline_run: None,
+                    },
+                    "Search flows...",
+                    false,
+                    cx,
+                );
+                self.start_flow_ux_tick(cx);
+                Self::builtin_success(
+                    dctx,
+                    format!("flow_ux::{}", variant.automation_id()),
+                )
+            }
+            builtins::BuiltInFeature::FlowManager => {
+                if let Err(err) = crate::flows::manager_window::open_flow_manager_window(cx) {
+                    self.show_error_toast(format!("Flow Manager failed: {err}"), cx);
+                    return Self::builtin_error(
+                        dctx,
+                        "flow_manager_open_failed",
+                        err.to_string(),
+                        "flow_manager::open",
+                    );
+                }
+                Self::builtin_success(dctx, "flow_manager::open")
+            }
+
             // NOTE: Window Actions removed - now handled by window-management extension
             // SDK tileWindow() still works via protocol messages in execute_script.rs
 

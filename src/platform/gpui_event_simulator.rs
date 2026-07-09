@@ -177,7 +177,8 @@ fn automation_kind_to_window_role(
         | AutomationWindowKind::ActionsDialog
         | AutomationWindowKind::Dictation
         | AutomationWindowKind::PromptPopup
-        | AutomationWindowKind::Hud => None,
+        | AutomationWindowKind::Hud
+        | AutomationWindowKind::FlowManager => None,
     }
 }
 

@@ -59,6 +59,8 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::Settings => "Script Kit Settings".to_string(),
         builtins::BuiltInFeature::SdkReference => "SDK Reference".to_string(),
         builtins::BuiltInFeature::MigrateV1Scripts => "Migration".to_string(),
+        builtins::BuiltInFeature::FlowUxVariant(_) => "Flow Launcher".to_string(),
+        builtins::BuiltInFeature::FlowManager => "Flow Manager".to_string(),
         builtins::BuiltInFeature::BackgroundEffectNext
         | builtins::BuiltInFeature::BackgroundEffectPrevious
         | builtins::BuiltInFeature::BackgroundEffectOff => "Background Effect".to_string(),

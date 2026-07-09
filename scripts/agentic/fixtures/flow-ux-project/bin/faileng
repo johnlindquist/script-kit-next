@@ -1,0 +1,6 @@
+#!/bin/sh
+# Failing fake engine: emits a diagnostic on stderr and exits 42 so probes
+# can assert run.error carries the nonzero exit code.
+echo "FAILENG_BEGAN"
+echo "FAILENG_DIAGNOSTIC: synthetic failure" >&2
+exit 42

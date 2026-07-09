@@ -21,6 +21,7 @@ impl ScriptListApp {
                 | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::FlowUxView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::CreateAiPresetView { .. }
                 | AppView::SettingsView { .. }

@@ -1674,6 +1674,7 @@ fn record_actions_popup_automation_snapshot(
             AutomationWindowKind::ActionsDialog => "actionsDialog.actions",
             AutomationWindowKind::PromptPopup => "promptPopup.actions",
             AutomationWindowKind::Hud => "hud.actions",
+            AutomationWindowKind::FlowManager => "flowManager.actions",
         },
         "parentAutomationId": parent_automation_id,
         "parentKind": format!("{parent_kind:?}"),

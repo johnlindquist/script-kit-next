@@ -3953,6 +3953,7 @@ impl ScriptListApp {
             | AppView::MigrateV1View { .. }
             | AppView::InstalledKitsView { .. }
             | AppView::ProcessManagerView { .. }
+            | AppView::FlowUxView { .. }
             | AppView::SearchAiPresetsView { .. }
             | AppView::CreateAiPresetView { .. }
             | AppView::SettingsView { .. }
@@ -5289,6 +5290,7 @@ impl ScriptListApp {
             AppView::MigrateV1View { .. } => "MigrateV1".to_string(),
             AppView::InstalledKitsView { .. } => "InstalledKits".to_string(),
             AppView::ProcessManagerView { .. } => "ProcessManager".to_string(),
+            AppView::FlowUxView { .. } => "FlowUx".to_string(),
             AppView::SearchAiPresetsView { .. } => "SearchAiPresets".to_string(),
             AppView::CreateAiPresetView { .. } => "CreateAiPreset".to_string(),
             AppView::SettingsView { .. } => "Settings".to_string(),
@@ -5332,6 +5334,7 @@ impl ScriptListApp {
             | AppView::ProfileSearchView { filter, .. }
             | AppView::EmojiPickerView { filter, .. }
             | AppView::ProcessManagerView { filter, .. }
+            | AppView::FlowUxView { filter, .. }
             | AppView::SettingsView { filter, .. }
             | AppView::SearchAiPresetsView { filter, .. }
             | AppView::FavoritesBrowseView { filter, .. }

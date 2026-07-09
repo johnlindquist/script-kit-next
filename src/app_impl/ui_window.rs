@@ -1891,6 +1891,12 @@ impl ScriptListApp {
                 };
                 Some((ViewType::MainWindow, filtered_count))
             }
+            AppView::FlowUxView { filter, .. } => {
+                let cwd = self.flow_ux_cwd();
+                let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
+                let count = crate::flows::catalog::filter_flows(&roster.flows, filter).len();
+                Some((ViewType::MainWindow, count))
+            }
             AppView::CurrentAppCommandsView { filter, .. } => {
                 let filtered_count = if filter.is_empty() {
                     self.cached_current_app_entries.len()

@@ -335,6 +335,11 @@ pub mod ai;
 // Located in ~/.scriptkit/plugins/*/agents/*.md
 pub mod agents;
 
+// Flows - flow-first launcher domain (mdflow front end)
+// Contract: docs/ai/flow-ux-protocol.md; the mdflow CLI owns discovery and
+// execution, this module is the app-side client (catalog/runner/registry).
+pub mod flows;
+
 // Secrets - age-encrypted secrets storage
 // Portable alternative to keyring, stores secrets at ~/.scriptkit/secrets.age
 // Uses scrypt passphrase-based encryption with machine-derived passphrase

@@ -41,6 +41,8 @@ pub enum AutomationWindowKind {
     PromptPopup,
     /// Transient HUD notification pill (floating, focusless, auto-dismissing).
     Hud,
+    /// Detached Flow Manager window (flow run supervision).
+    FlowManager,
 }
 
 impl AutomationWindowKind {
@@ -60,6 +62,7 @@ impl AutomationWindowKind {
             AutomationWindowKind::ActionsDialog => "actionsDialog",
             AutomationWindowKind::PromptPopup => "promptPopup",
             AutomationWindowKind::Hud => "hud",
+            AutomationWindowKind::FlowManager => "flowManager",
         }
     }
 }

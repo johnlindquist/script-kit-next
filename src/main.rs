@@ -55,6 +55,7 @@ mod confirm;
 mod context_snapshot;
 mod designs;
 mod dev_marker;
+mod flows;
 mod dev_style_tool {
     pub mod actions_popup_catalog;
     pub mod agent_chat_catalog;

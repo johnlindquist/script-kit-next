@@ -1,0 +1,5 @@
+#!/bin/sh
+# Deterministic instant-success fake engine for Flow UX probes.
+# Prints the prompt it received and exits 0 immediately.
+echo "FASTENG_OK: $1"
+exit 0

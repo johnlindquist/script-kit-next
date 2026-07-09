@@ -1,0 +1,548 @@
+//! Shared, thread-safe registry of flow runs.
+//!
+//! The registry is the single source of truth for run state across every
+//! Flow UX variation and the Flow Manager window — renderers are thin views
+//! over this state (the variations must stay swappable without touching run
+//! lifecycle). Runner threads apply protocol events here; UI layers read
+//! snapshots. Output retention is bounded per run (see
+//! `model::OUTPUT_TAIL_MAX_BYTES` / `OUTPUT_TAIL_MAX_LINES`).
+
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
+
+use parking_lot::Mutex;
+
+use super::model::{
+    EngagementMode, FlowUxVariant, OutputTail, RunEvent, RunEventEnvelope, RunPhase, RunTimings,
+    StepState,
+};
+
+static REGISTRY: Mutex<Option<Arc<FlowRunRegistry>>> = Mutex::new(None);
+
+/// Global registry accessor (created on first use).
+pub fn flow_run_registry() -> Arc<FlowRunRegistry> {
+    let mut guard = REGISTRY.lock();
+    guard
+        .get_or_insert_with(|| Arc::new(FlowRunRegistry::new()))
+        .clone()
+}
+
+/// Monotonic id for locally-created runs before the protocol `runId` arrives.
+static NEXT_LOCAL_ID: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone)]
+pub struct FlowRun {
+    /// App-local id, stable for the run's lifetime (protocol runId is
+    /// recorded separately once known — local ids exist so a card can render
+    /// in the same frame the launch is requested).
+    pub local_id: u64,
+    pub protocol_run_id: Option<String>,
+    pub flow_id: String,
+    pub flow_name: String,
+    pub flow_path: String,
+    pub cwd: String,
+    pub variant: FlowUxVariant,
+    pub phase: RunPhase,
+    pub engagement: EngagementMode,
+    pub exit_code: Option<i64>,
+    pub error_message: Option<String>,
+    pub pid: Option<u32>,
+    pub stdout_tail: OutputTail,
+    pub stderr_tail: OutputTail,
+    pub steps: Vec<(String, StepState)>,
+    pub timings: RunTimings,
+    pub launched_at: Instant,
+    pub duration_ms: Option<u64>,
+}
+
+impl FlowRun {
+    pub fn display_status(&self) -> String {
+        match self.phase {
+            RunPhase::Failed => match (self.exit_code, &self.error_message) {
+                (Some(code), _) => format!("Failed (exit {code})"),
+                (None, Some(message)) => format!("Failed: {message}"),
+                (None, None) => "Failed".to_string(),
+            },
+            phase => phase.label().to_string(),
+        }
+    }
+
+    pub fn elapsed_ms(&self) -> u64 {
+        match self.duration_ms {
+            Some(ms) => ms,
+            None => self.launched_at.elapsed().as_millis() as u64,
+        }
+    }
+
+    pub fn last_output_line(&self) -> Option<&str> {
+        self.stdout_tail
+            .last_line()
+            .or_else(|| self.stderr_tail.last_line())
+    }
+}
+
+#[derive(Default)]
+struct RegistryState {
+    runs: HashMap<u64, FlowRun>,
+    /// Insertion order for stable display (newest last).
+    order: Vec<u64>,
+    selected: Option<u64>,
+    generation: u64,
+}
+
+/// Called (from any thread) after every state mutation so the UI layer can
+/// schedule a repaint. Set once at startup by the app layer.
+type NotifyHook = Box<dyn Fn() + Send + Sync>;
+
+pub struct FlowRunRegistry {
+    state: Mutex<RegistryState>,
+    notify: Mutex<Option<NotifyHook>>,
+}
+
+impl FlowRunRegistry {
+    fn new() -> Self {
+        Self {
+            state: Mutex::new(RegistryState::default()),
+            notify: Mutex::new(None),
+        }
+    }
+
+    pub fn set_notify_hook(&self, hook: impl Fn() + Send + Sync + 'static) {
+        *self.notify.lock() = Some(Box::new(hook));
+    }
+
+    fn bump_and_notify(&self, state: &mut RegistryState) {
+        state.generation = state.generation.wrapping_add(1);
+        drop_notify(&self.notify);
+    }
+
+    /// Insert a `Starting` run BEFORE spawning the process, so the launch is
+    /// acknowledged in UI state immediately (the <100ms ack receipt).
+    pub fn insert_starting(
+        &self,
+        flow_id: &str,
+        flow_name: &str,
+        flow_path: &str,
+        cwd: &str,
+        variant: FlowUxVariant,
+        engagement: EngagementMode,
+    ) -> u64 {
+        let local_id = NEXT_LOCAL_ID.fetch_add(1, Ordering::Relaxed);
+        let run = FlowRun {
+            local_id,
+            protocol_run_id: None,
+            flow_id: flow_id.to_string(),
+            flow_name: flow_name.to_string(),
+            flow_path: flow_path.to_string(),
+            cwd: cwd.to_string(),
+            variant,
+            phase: RunPhase::Starting,
+            engagement,
+            exit_code: None,
+            error_message: None,
+            pid: None,
+            stdout_tail: OutputTail::default(),
+            stderr_tail: OutputTail::default(),
+            steps: Vec::new(),
+            timings: RunTimings::default(),
+            launched_at: Instant::now(),
+            duration_ms: None,
+        };
+        let mut state = self.state.lock();
+        state.order.push(local_id);
+        state.runs.insert(local_id, run);
+        state.selected = Some(local_id);
+        self.bump_and_notify(&mut state);
+        local_id
+    }
+
+    /// Apply one protocol event from the runner thread.
+    pub fn apply_event(&self, local_id: u64, envelope: &RunEventEnvelope) {
+        let mut state = self.state.lock();
+        let Some(run) = state.runs.get_mut(&local_id) else {
+            return;
+        };
+        if run.protocol_run_id.is_none() {
+            run.protocol_run_id = Some(envelope.run_id.clone());
+        }
+        match &envelope.event {
+            RunEvent::Protocol { .. } => {}
+            RunEvent::RunStarted { pid, .. } => {
+                run.phase = RunPhase::Running;
+                run.pid = *pid;
+                if run.timings.spawn_ms.is_none() {
+                    run.timings.spawn_ms = Some(run.launched_at.elapsed().as_millis() as u64);
+                }
+            }
+            RunEvent::OutputDelta { channel, text } => {
+                if run.timings.first_output_ms.is_none() {
+                    run.timings.first_output_ms =
+                        Some(run.launched_at.elapsed().as_millis() as u64);
+                }
+                match channel {
+                    super::model::OutputChannel::Stdout => run.stdout_tail.push_text(text),
+                    super::model::OutputChannel::Stderr => run.stderr_tail.push_text(text),
+                }
+            }
+            RunEvent::StepStarted { step_id, .. } => {
+                if !run.steps.iter().any(|(id, _)| id == step_id) {
+                    run.steps.push((
+                        step_id.clone(),
+                        StepState {
+                            completed: false,
+                            exit_code: None,
+                            cached: false,
+                        },
+                    ));
+                }
+            }
+            RunEvent::StepCompleted {
+                step_id,
+                exit_code,
+                cached,
+            } => {
+                if let Some((_, step)) = run.steps.iter_mut().find(|(id, _)| id == step_id) {
+                    step.completed = true;
+                    step.exit_code = *exit_code;
+                    step.cached = *cached;
+                }
+            }
+            RunEvent::RunCompleted {
+                exit_code,
+                duration_ms,
+            } => {
+                run.phase = if *exit_code == 0 {
+                    RunPhase::Succeeded
+                } else {
+                    RunPhase::Failed
+                };
+                run.exit_code = Some(*exit_code);
+                run.duration_ms = Some(*duration_ms);
+            }
+            RunEvent::RunError {
+                exit_code,
+                message,
+                duration_ms,
+            } => {
+                run.phase = RunPhase::Failed;
+                run.exit_code = *exit_code;
+                run.error_message = Some(message.clone());
+                run.duration_ms = *duration_ms;
+            }
+            RunEvent::RunCancelled { duration_ms, .. } => {
+                run.phase = RunPhase::Cancelled;
+                run.duration_ms = *duration_ms;
+            }
+            RunEvent::Unknown { .. } => {}
+        }
+        self.bump_and_notify(&mut state);
+    }
+
+    /// Runner-thread fallback when the process dies without a terminal event
+    /// (spawn failure, protocol violation, SIGKILL escalation).
+    pub fn mark_failed(&self, local_id: u64, message: &str) {
+        let mut state = self.state.lock();
+        if let Some(run) = state.runs.get_mut(&local_id) {
+            if !run.phase.is_terminal() {
+                run.phase = RunPhase::Failed;
+                run.error_message = Some(message.to_string());
+                run.duration_ms = Some(run.launched_at.elapsed().as_millis() as u64);
+            }
+        }
+        self.bump_and_notify(&mut state);
+    }
+
+    pub fn mark_cancelled(&self, local_id: u64) {
+        let mut state = self.state.lock();
+        if let Some(run) = state.runs.get_mut(&local_id) {
+            if !run.phase.is_terminal() {
+                run.phase = RunPhase::Cancelled;
+                run.duration_ms = Some(run.launched_at.elapsed().as_millis() as u64);
+            }
+        }
+        self.bump_and_notify(&mut state);
+    }
+
+    pub fn record_launch_ack(&self, local_id: u64, ack_ms: u64) {
+        let mut state = self.state.lock();
+        if let Some(run) = state.runs.get_mut(&local_id) {
+            if run.timings.launch_ack_ms.is_none() {
+                run.timings.launch_ack_ms = Some(ack_ms);
+            }
+        }
+        self.bump_and_notify(&mut state);
+    }
+
+    /// Engagement transitions never touch phase (Esc backgrounds, never
+    /// cancels — protocol §4).
+    pub fn set_engagement(&self, local_id: u64, engagement: EngagementMode) {
+        let mut state = self.state.lock();
+        if let Some(run) = state.runs.get_mut(&local_id) {
+            run.engagement = engagement;
+        }
+        self.bump_and_notify(&mut state);
+    }
+
+    pub fn set_pid(&self, local_id: u64, pid: u32) {
+        let mut state = self.state.lock();
+        if let Some(run) = state.runs.get_mut(&local_id) {
+            if run.pid.is_none() {
+                run.pid = Some(pid);
+            }
+            if run.timings.spawn_ms.is_none() {
+                run.timings.spawn_ms = Some(run.launched_at.elapsed().as_millis() as u64);
+            }
+            if run.phase == RunPhase::Starting {
+                run.phase = RunPhase::Running;
+            }
+        }
+        self.bump_and_notify(&mut state);
+    }
+
+    pub fn select(&self, local_id: u64) {
+        let mut state = self.state.lock();
+        if state.runs.contains_key(&local_id) {
+            state.selected = Some(local_id);
+            self.bump_and_notify(&mut state);
+        }
+    }
+
+    pub fn selected_id(&self) -> Option<u64> {
+        self.state.lock().selected
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.state.lock().generation
+    }
+
+    pub fn get(&self, local_id: u64) -> Option<FlowRun> {
+        self.state.lock().runs.get(&local_id).cloned()
+    }
+
+    /// Snapshot in insertion order (newest last).
+    pub fn snapshot(&self) -> Vec<FlowRun> {
+        let state = self.state.lock();
+        state
+            .order
+            .iter()
+            .filter_map(|id| state.runs.get(id).cloned())
+            .collect()
+    }
+
+    pub fn active_count(&self) -> usize {
+        let state = self.state.lock();
+        state
+            .runs
+            .values()
+            .filter(|r| !r.phase.is_terminal())
+            .count()
+    }
+
+    /// Remove terminal runs (manager "Clear finished" action).
+    pub fn clear_finished(&self) {
+        let mut state = self.state.lock();
+        let keep: Vec<u64> = state
+            .order
+            .iter()
+            .copied()
+            .filter(|id| {
+                state
+                    .runs
+                    .get(id)
+                    .map(|r| !r.phase.is_terminal())
+                    .unwrap_or(false)
+            })
+            .collect();
+        state.runs.retain(|id, _| keep.contains(id));
+        state.order = keep;
+        if let Some(selected) = state.selected {
+            if !state.runs.contains_key(&selected) {
+                state.selected = state.order.last().copied();
+            }
+        }
+        self.bump_and_notify(&mut state);
+    }
+
+    #[cfg(test)]
+    fn reset_for_test(&self) {
+        let mut state = self.state.lock();
+        *state = RegistryState::default();
+    }
+}
+
+fn drop_notify(notify: &Mutex<Option<NotifyHook>>) {
+    if let Some(hook) = notify.lock().as_ref() {
+        hook();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::flows::model::parse_event_line;
+
+    fn fresh() -> FlowRunRegistry {
+        FlowRunRegistry::new()
+    }
+
+    fn insert(registry: &FlowRunRegistry) -> u64 {
+        registry.insert_starting(
+            "project:demo",
+            "demo",
+            "/tmp/p/flows/demo.md",
+            "/tmp/p",
+            FlowUxVariant::Flash,
+            EngagementMode::Inline,
+        )
+    }
+
+    #[test]
+    fn starting_run_is_acknowledged_before_spawn() {
+        let registry = fresh();
+        let id = insert(&registry);
+        let run = registry.get(id).expect("run exists");
+        assert_eq!(run.phase, RunPhase::Starting);
+        assert_eq!(registry.selected_id(), Some(id));
+    }
+
+    #[test]
+    fn event_stream_drives_phase_transitions() {
+        let registry = fresh();
+        let id = insert(&registry);
+        for line in [
+            r#"{"protocolVersion":1,"seq":0,"runId":"r-9","ts":1,"event":"protocol","mdflowVersion":"4.1.0"}"#,
+            r#"{"protocolVersion":1,"seq":1,"runId":"r-9","ts":2,"event":"run.started","flowId":"project:demo","pid":42}"#,
+            r#"{"protocolVersion":1,"seq":2,"runId":"r-9","ts":3,"event":"output.delta","channel":"stdout","text":"hi\n"}"#,
+        ] {
+            registry.apply_event(id, &parse_event_line(line).unwrap());
+        }
+        let run = registry.get(id).unwrap();
+        assert_eq!(run.phase, RunPhase::Running);
+        assert_eq!(run.pid, Some(42));
+        assert_eq!(run.protocol_run_id.as_deref(), Some("r-9"));
+        assert_eq!(run.last_output_line(), Some("hi"));
+        assert!(run.timings.first_output_ms.is_some());
+
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":3,"runId":"r-9","ts":4,"event":"run.completed","exitCode":0,"durationMs":9}"#,
+            )
+            .unwrap(),
+        );
+        let run = registry.get(id).unwrap();
+        assert_eq!(run.phase, RunPhase::Succeeded);
+        assert_eq!(run.duration_ms, Some(9));
+    }
+
+    #[test]
+    fn nonzero_exit_is_failed_and_error_event_records_message() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-1","ts":1,"event":"run.completed","exitCode":42,"durationMs":5}"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(registry.get(id).unwrap().phase, RunPhase::Failed);
+        assert_eq!(registry.get(id).unwrap().exit_code, Some(42));
+
+        let id2 = insert(&registry);
+        registry.apply_event(
+            id2,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-2","ts":1,"event":"run.error","exitCode":null,"message":"boom","durationMs":3}"#,
+            )
+            .unwrap(),
+        );
+        let run2 = registry.get(id2).unwrap();
+        assert_eq!(run2.phase, RunPhase::Failed);
+        assert_eq!(run2.error_message.as_deref(), Some("boom"));
+    }
+
+    #[test]
+    fn engagement_changes_never_touch_phase() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-3","ts":1,"event":"run.started","flowId":"f","pid":7}"#,
+            )
+            .unwrap(),
+        );
+        registry.set_engagement(id, EngagementMode::Background);
+        let run = registry.get(id).unwrap();
+        assert_eq!(run.engagement, EngagementMode::Background);
+        assert_eq!(
+            run.phase,
+            RunPhase::Running,
+            "backgrounding must not cancel"
+        );
+    }
+
+    #[test]
+    fn terminal_phase_is_not_overwritten_by_late_failure() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-4","ts":1,"event":"run.completed","exitCode":0,"durationMs":2}"#,
+            )
+            .unwrap(),
+        );
+        registry.mark_failed(id, "reader thread exit");
+        assert_eq!(registry.get(id).unwrap().phase, RunPhase::Succeeded);
+    }
+
+    #[test]
+    fn multi_run_isolation_cancel_one_leaves_others() {
+        let registry = fresh();
+        let a = insert(&registry);
+        let b = insert(&registry);
+        let c = insert(&registry);
+        for id in [a, b, c] {
+            registry.set_pid(id, 100 + id as u32);
+        }
+        registry.mark_cancelled(b);
+        assert_eq!(registry.get(a).unwrap().phase, RunPhase::Running);
+        assert_eq!(registry.get(b).unwrap().phase, RunPhase::Cancelled);
+        assert_eq!(registry.get(c).unwrap().phase, RunPhase::Running);
+        assert_eq!(registry.active_count(), 2);
+    }
+
+    #[test]
+    fn clear_finished_retains_active_and_fixes_selection() {
+        let registry = fresh();
+        let a = insert(&registry);
+        let b = insert(&registry);
+        registry.mark_cancelled(b);
+        registry.select(b);
+        registry.clear_finished();
+        let snapshot = registry.snapshot();
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].local_id, a);
+        assert_eq!(registry.selected_id(), Some(a));
+        let _ = registry; // silence unused in some cfg combinations
+    }
+
+    #[test]
+    fn notify_hook_fires_on_mutation() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let registry = fresh();
+        let hits = std::sync::Arc::new(AtomicUsize::new(0));
+        let hits_clone = hits.clone();
+        registry.set_notify_hook(move || {
+            hits_clone.fetch_add(1, Ordering::SeqCst);
+        });
+        let id = insert(&registry);
+        registry.set_engagement(id, EngagementMode::Background);
+        assert!(hits.load(Ordering::SeqCst) >= 2);
+        registry.reset_for_test();
+    }
+}

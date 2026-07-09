@@ -58,9 +58,12 @@ fn restricted_builtin_alias_match(
 /// - Keyword fuzzy match: 20 + scaled nucleo score
 pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<BuiltInMatch> {
     if query.is_empty() {
-        // If no query, return all entries with equal score, sorted by name
+        // If no query, return all entries with equal score, sorted by name.
+        // Query-only entries (experimental Flow UX surfaces) are excluded
+        // here and ONLY here — any real typed query searches them normally.
         return entries
             .iter()
+            .filter(|e| !crate::builtins::is_query_only_builtin(&e.id))
             .map(|e| BuiltInMatch {
                 entry: e.clone(),
                 score: 0,

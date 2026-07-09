@@ -503,6 +503,29 @@ impl ScriptListApp {
                 .into()
             }
 
+            AppView::FlowUxView {
+                filter,
+                selected_index,
+                ..
+            } => {
+                let cwd = self.flow_ux_cwd();
+                let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
+                let rows: Vec<String> =
+                    crate::flows::catalog::filter_flows(&roster.flows, filter)
+                        .iter()
+                        .map(|flow| flow.name.clone())
+                        .collect();
+                self.collect_named_rows(
+                    "flow-ux-filter",
+                    filter.clone(),
+                    "flows",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+
             AppView::SettingsView {
                 filter,
                 selected_index,

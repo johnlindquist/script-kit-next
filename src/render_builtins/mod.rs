@@ -17,6 +17,7 @@ include!("profile_search.rs");
 include!("kit_store.rs");
 include!("migrate_v1.rs");
 include!("process_manager.rs");
+include!("flow_ux.rs");
 include!("current_app_commands.rs");
 include!("ai_presets.rs");
 include!("settings.rs");

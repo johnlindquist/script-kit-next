@@ -1,0 +1,140 @@
+//! `flowUx` automation-state payload (docs/ai/flow-ux-protocol.md §6).
+//!
+//! Devtools probes assert against this snapshot for every red/green receipt.
+//! Redaction rule: password input values never appear here — the registry
+//! never stores them, so this stays true by construction; the probe suite
+//! still asserts it end to end.
+
+use serde_json::{json, Value};
+
+use super::catalog::RosterEntry;
+use super::model::FlowUxVariant;
+use super::run_registry::flow_run_registry;
+
+pub struct FlowUxSnapshotInputs<'a> {
+    pub active_variant: Option<FlowUxVariant>,
+    pub selected_flow_id: Option<&'a str>,
+    pub roster: Option<(&'a RosterEntry, &'a str)>,
+    pub preview: Option<PreviewSnapshot<'a>>,
+    pub manager_visible: bool,
+    pub manager_focused_run_id: Option<u64>,
+}
+
+pub struct PreviewSnapshot<'a> {
+    pub flow_id: &'a str,
+    pub fingerprint: Option<&'a str>,
+    pub valid: bool,
+}
+
+/// Build the `flowUx` JSON value merged into the devtools getState snapshot.
+pub fn flow_ux_state(inputs: FlowUxSnapshotInputs<'_>) -> Value {
+    let registry = flow_run_registry();
+    let selected = registry.selected_id();
+    let runs: Vec<Value> = registry
+        .snapshot()
+        .iter()
+        .map(|run| {
+            json!({
+                "runId": run
+                    .protocol_run_id
+                    .clone()
+                    .unwrap_or_else(|| format!("local-{}", run.local_id)),
+                "localId": run.local_id,
+                "flowId": run.flow_id,
+                "flowName": run.flow_name,
+                "variant": run.variant.automation_id(),
+                "phase": run.phase.label(),
+                "engagement": run.engagement.label(),
+                "selected": Some(run.local_id) == selected,
+                "exitCode": run.exit_code,
+                "errorMessage": run.error_message,
+                "outputTail": run.last_output_line(),
+                "outputLineCount": run.stdout_tail.line_count() + run.stderr_tail.line_count(),
+                "steps": run
+                    .steps
+                    .iter()
+                    .map(|(id, step)| {
+                        json!({
+                            "stepId": id,
+                            "completed": step.completed,
+                            "exitCode": step.exit_code,
+                            "cached": step.cached,
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+                "elapsedMs": run.elapsed_ms(),
+                "launchAckMs": run.timings.launch_ack_ms,
+                "spawnMs": run.timings.spawn_ms,
+                "firstOutputMs": run.timings.first_output_ms,
+            })
+        })
+        .collect();
+
+    json!({
+        "activeVariant": inputs.active_variant.map(|v| v.automation_id()),
+        "selectedFlowId": inputs.selected_flow_id,
+        "roster": inputs.roster.map(|(entry, cwd)| {
+            json!({
+                "status": entry.status.automation_label(),
+                "count": entry.flows.len(),
+                "cwd": cwd,
+                "warnings": entry.warnings,
+            })
+        }),
+        "preview": inputs.preview.map(|p| {
+            json!({
+                "flowId": p.flow_id,
+                "fingerprint": p.fingerprint,
+                "valid": p.valid,
+            })
+        }),
+        "runs": runs,
+        "manager": {
+            "visible": inputs.manager_visible,
+            "focusedRunId": inputs.manager_focused_run_id,
+        },
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::flows::model::{EngagementMode, FlowUxVariant};
+
+    #[test]
+    fn snapshot_shape_matches_protocol_section_six() {
+        let registry = flow_run_registry();
+        let id = registry.insert_starting(
+            "project:snap",
+            "snap",
+            "/tmp/p/flows/snap.md",
+            "/tmp/p",
+            FlowUxVariant::Lens,
+            EngagementMode::Inline,
+        );
+        let value = flow_ux_state(FlowUxSnapshotInputs {
+            active_variant: Some(FlowUxVariant::Lens),
+            selected_flow_id: Some("project:snap"),
+            roster: None,
+            preview: Some(PreviewSnapshot {
+                flow_id: "project:snap",
+                fingerprint: Some("sha256:x"),
+                valid: true,
+            }),
+            manager_visible: false,
+            manager_focused_run_id: None,
+        });
+        assert_eq!(value["activeVariant"], "lens");
+        assert_eq!(value["preview"]["valid"], true);
+        assert_eq!(value["manager"]["visible"], false);
+        let run = value["runs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["localId"] == id)
+            .expect("run appears in snapshot");
+        assert_eq!(run["phase"], "Starting");
+        assert_eq!(run["engagement"], "Inline");
+        assert_eq!(run["variant"], "lens");
+    }
+}

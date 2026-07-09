@@ -313,6 +313,16 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Flow UX exploration surfaces (Flash / Dispatch / Lens) over the
+    /// mdflow roster. One view, parameterized by variant, so run lifecycle
+    /// stays in crate::flows and variants remain thin renderers.
+    /// `inline_run` is Flash's engaged run (Esc backgrounds it).
+    FlowUxView {
+        variant: crate::flows::model::FlowUxVariant,
+        filter: String,
+        selected_index: usize,
+        inline_run: Option<u64>,
+    },
     /// Showing searchable list of saved AI presets
     /// Selecting a preset opens AI chat with its system prompt and model
     SearchAiPresetsView {
@@ -445,6 +455,7 @@ pub(crate) enum SurfaceKind {
     MigrateV1,
     KitStoreInstalled,
     ProcessManager,
+    FlowUx,
     CurrentAppCommands,
     PermissionsWizard,
     DesignGallery,
@@ -830,6 +841,7 @@ impl AppView {
             AppView::SearchAiPresetsView { .. } => "SearchAiPresetsView",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
             AppView::ProcessManagerView { .. } => "ProcessManagerView",
+            AppView::FlowUxView { .. } => "FlowUxView",
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommandsView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
             AppView::FooterGalleryView { .. } => "FooterGalleryView",
@@ -899,6 +911,7 @@ impl AppView {
                 SurfaceKind::GenericFilterableList
             }
             AppView::ProcessManagerView { .. } => SurfaceKind::ProcessManager,
+            AppView::FlowUxView { .. } => SurfaceKind::FlowUx,
             AppView::CurrentAppCommandsView { .. } => SurfaceKind::CurrentAppCommands,
             AppView::DesignGalleryView { .. } => SurfaceKind::DesignGallery,
             AppView::FooterGalleryView { .. } => SurfaceKind::FooterGallery,
@@ -962,6 +975,7 @@ impl AppView {
                 | AppView::MigrateV1View { .. }
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::FlowUxView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::SettingsView { .. }
@@ -1028,6 +1042,7 @@ impl AppView {
             AppView::ScratchPadView { .. } => Some("scratch_pad"),
             AppView::ThemeChooserView { .. } => Some("theme_chooser"),
             AppView::ProcessManagerView { .. } => Some("process_manager"),
+            AppView::FlowUxView { .. } => Some("flow_ux"),
             AppView::CurrentAppCommandsView { .. } => Some("current_app_commands"),
             AppView::SearchAiPresetsView { .. } => Some("search_ai_presets"),
             AppView::SettingsView { .. } => Some("settings"),
@@ -1333,6 +1348,24 @@ impl SurfaceKind {
                 CompactLauncherVisual,
                 explicit,
                 "processManager",
+            ),
+            // Flow UX exploration surfaces (Flash/Dispatch/Lens). Escape is
+            // view-owned (`explicit`): it backgrounds Flash's inline run or
+            // clears the filter before ever closing the window, and launched
+            // flow runs must survive window blur untouched.
+            SurfaceKind::FlowUx => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    NoPersistentPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
+                explicit,
+                "flowUx",
             ),
             SurfaceKind::CurrentAppCommands => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
