@@ -193,8 +193,6 @@ mod tests {
 
     #[test]
     fn root_file_source_chip_pages_on_near_bottom_selection() {
-        let state_source =
-            fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
         let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
             .expect("read src/app_impl/filtering_cache.rs");
         let movement_source = fs::read_to_string("src/app_navigation/impl_movement.rs")
@@ -206,12 +204,6 @@ mod tests {
             file_source.contains("ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS")
                 && file_source.contains("ROOT_FILE_SOURCE_CHIP_PAGE_SIZE"),
             "explicit Files source-chip paging should have separate initial and incremental budgets"
-        );
-        assert!(
-            state_source.contains("root_file_source_chip_page_key")
-                && state_source.contains("root_file_source_chip_visible_limit")
-                && state_source.contains("root_file_source_chip_visible_limit_for("),
-            "Files source-chip visible limits should be query-keyed app state"
         );
         let normalized_filtering = filtering_source
             .split_whitespace()

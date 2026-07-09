@@ -354,6 +354,7 @@ include!("main_sections/day_page_types.rs");
 include!("main_sections/app_view_state.rs");
 include!("main_sections/prompt_messages.rs");
 include!("main_sections/app_state.rs");
+include!("main_sections/root_search_store.rs");
 include!("main_sections/day_page_markdown_refs.rs");
 include!("main_sections/day_page_spine.rs");
 include!("main_sections/day_page_view.rs");

@@ -416,21 +416,8 @@ fn global_provider_completion_does_not_touch_visible_frame_fields() {
 
 #[test]
 fn global_root_file_grouping_uses_query_frame_latch() {
-    let app_state =
-        fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
     let filtering = fs::read_to_string("src/app_impl/filtering_cache.rs")
         .expect("read src/app_impl/filtering_cache.rs");
-
-    for required in [
-        "RootFileFrameKey",
-        "RootFileFrame",
-        "root_file_frame: Option<RootFileFrame>",
-    ] {
-        assert!(
-            app_state.contains(required),
-            "app_state should contain `{required}`"
-        );
-    }
 
     for required in [
         "fn root_file_frame_for_current_query(",

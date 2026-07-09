@@ -676,32 +676,8 @@ pub(crate) struct ScriptListApp {
     browser_history_loading: bool,
     /// Cached file results for FileSearchView (avoids cloning per frame)
     cached_file_results: Vec<file_search::FileResult>,
-    /// Latest capped Spotlight results appended to eligible root launcher searches.
-    root_file_results: Vec<file_search::FileResult>,
-    /// Bounded completed global root file batches, keyed by root search request.
-    root_file_result_cache: std::collections::VecDeque<(String, Vec<file_search::FileResult>)>,
-    /// Source mode currently backing `root_file_results`.
-    root_file_search_mode: Option<file_search::RootFileSectionMode>,
-    /// Frecency-backed file rows shown on the empty root launcher.
-    root_recent_file_results: Vec<file_search::FileResult>,
-    /// Frecency revision currently backing `root_recent_file_results`.
-    root_recent_file_revision: u64,
-    /// Query currently backing `root_file_results`.
-    root_file_search_query: String,
-    /// Generation counter used to ignore stale root file search batches.
-    root_file_search_generation: u64,
-    /// Cancel token for in-flight root file search.
-    root_file_search_cancel: Option<file_search::CancelToken>,
-    /// True while a root file search task is collecting its one stable batch.
-    root_file_search_loading: bool,
-    /// True while the root file provider is still collecting/cache-warming.
-    root_file_provider_loading: bool,
-    /// Frozen global root file rows for the current root-search query frame.
-    root_file_frame: Option<RootFileFrame>,
-    /// Page key for the explicit Files source-chip visible-row budget.
-    root_file_source_chip_page_key: Option<String>,
-    /// Current visible-row budget for the explicit Files source-chip page.
-    root_file_source_chip_visible_limit: usize,
+    /// Cohesive async state for root-launcher file search and visible paging.
+    root_search: RootSearchStore,
     /// Frozen cache-refreshable passive rows for the current root-search query frame.
     root_passive_frame: Option<RootPassiveFrame>,
     // ── Root "From Your Brain" async semantic pass state ────────────
