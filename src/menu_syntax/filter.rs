@@ -21,7 +21,56 @@ pub fn apply_advanced_query(
 }
 
 fn matches_all(result: &SearchResult, predicates: &[Predicate]) -> bool {
-    predicates.iter().all(|p| matches_predicate(result, p))
+    // Exclusions are independent vetoes: a matching negative predicate wins
+    // even when a positive sibling in the same family matches.
+    if predicates.iter().any(|predicate| match predicate {
+        Predicate::Negate(inner) => matches_predicate(result, inner),
+        _ => false,
+    }) {
+        return false;
+    }
+
+    // Evaluate one representative per positive family. Siblings in that
+    // family are alternatives (OR); each distinct family must match (AND).
+    predicates
+        .iter()
+        .enumerate()
+        .filter(|(_, predicate)| !matches!(predicate, Predicate::Negate(_)))
+        .all(|(index, predicate)| {
+            let is_first_in_family = predicates[..index].iter().all(|earlier| {
+                matches!(earlier, Predicate::Negate(_)) || !same_positive_family(earlier, predicate)
+            });
+
+            !is_first_in_family
+                || predicates.iter().any(|candidate| {
+                    !matches!(candidate, Predicate::Negate(_))
+                        && same_positive_family(candidate, predicate)
+                        && matches_predicate(result, candidate)
+                })
+        })
+}
+
+fn same_positive_family(left: &Predicate, right: &Predicate) -> bool {
+    match (left, right) {
+        (Predicate::Type(_), Predicate::Type(_))
+        | (Predicate::Tag(_), Predicate::Tag(_))
+        | (Predicate::HasShortcut(_), Predicate::HasShortcut(_))
+        | (Predicate::Source(_), Predicate::Source(_))
+        | (Predicate::Plugin(_), Predicate::Plugin(_))
+        | (Predicate::Name(_), Predicate::Name(_))
+        | (Predicate::Desc(_), Predicate::Desc(_))
+        | (Predicate::Alias(_), Predicate::Alias(_))
+        | (Predicate::Has(_), Predicate::Has(_)) => true,
+        (
+            Predicate::MetaPath {
+                path: left_path, ..
+            },
+            Predicate::MetaPath {
+                path: right_path, ..
+            },
+        ) => left_path.eq_ignore_ascii_case(right_path),
+        _ => false,
+    }
 }
 
 pub fn matches_predicate(result: &SearchResult, predicate: &Predicate) -> bool {
@@ -524,6 +573,169 @@ mod tests {
 
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name(), "Buy milk");
+    }
+
+    #[test]
+    fn repeated_type_predicates_are_or() {
+        let results = vec![
+            script_match(make_script_with_extra("Script", HashMap::new())),
+            todo_match("Todo", &["work"]),
+        ];
+        let query = AdvancedQuery {
+            free_text: String::new(),
+            predicates: vec![
+                Predicate::Type(ArtifactKind::Script),
+                Predicate::Type(ArtifactKind::Todo),
+            ],
+            source_filters: Default::default(),
+            raw: "type:script type:todo".to_string(),
+        };
+
+        let filtered = apply_advanced_query(results, &query);
+
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn repeated_tag_predicates_are_or() {
+        let results = vec![
+            todo_match("Home", &["home"]),
+            todo_match("Work", &["work"]),
+            todo_match("Other", &["other"]),
+        ];
+        let query = AdvancedQuery {
+            free_text: String::new(),
+            predicates: vec![
+                Predicate::Tag("home".to_string()),
+                Predicate::Tag("work".to_string()),
+            ],
+            source_filters: Default::default(),
+            raw: "#home #work".to_string(),
+        };
+
+        let filtered = apply_advanced_query(results, &query);
+        let names: Vec<_> = filtered.iter().map(SearchResult::name).collect();
+
+        assert_eq!(names, vec!["Home", "Work"]);
+    }
+
+    #[test]
+    fn different_predicate_families_are_and() {
+        let tagged_script = {
+            let mut script = make_script_with_extra("Tagged script", HashMap::new());
+            Arc::make_mut(&mut script)
+                .typed_metadata
+                .as_mut()
+                .expect("test script has metadata")
+                .tags
+                .push("work".to_string());
+            script
+        };
+        let results = vec![
+            script_match(tagged_script),
+            script_match(make_script_with_extra("Untagged script", HashMap::new())),
+            todo_match("Tagged todo", &["work"]),
+        ];
+        let query = AdvancedQuery {
+            free_text: String::new(),
+            predicates: vec![
+                Predicate::Type(ArtifactKind::Script),
+                Predicate::Tag("work".to_string()),
+            ],
+            source_filters: Default::default(),
+            raw: "type:script #work".to_string(),
+        };
+
+        let filtered = apply_advanced_query(results, &query);
+        let names: Vec<_> = filtered.iter().map(SearchResult::name).collect();
+
+        assert_eq!(names, vec!["Tagged script"]);
+    }
+
+    #[test]
+    fn matching_exclusion_wins_over_positive_sibling() {
+        let results = vec![script_match(make_script_with_extra(
+            "Script",
+            HashMap::new(),
+        ))];
+        let query = AdvancedQuery {
+            free_text: String::new(),
+            predicates: vec![
+                Predicate::Type(ArtifactKind::Script),
+                Predicate::Negate(Box::new(Predicate::Type(ArtifactKind::Script))),
+            ],
+            source_filters: Default::default(),
+            raw: "type:script -type:script".to_string(),
+        };
+
+        assert!(apply_advanced_query(results, &query).is_empty());
+    }
+
+    #[test]
+    fn distinct_meta_paths_remain_and() {
+        let mut complete_extra = HashMap::new();
+        complete_extra.insert(
+            "domain".to_string(),
+            json!({ "kind": "calendar", "team": "platform" }),
+        );
+        let mut partial_extra = HashMap::new();
+        partial_extra.insert("domain".to_string(), json!({ "kind": "calendar" }));
+        let results = vec![
+            script_match(make_script_with_extra("Complete", complete_extra)),
+            script_match(make_script_with_extra("Partial", partial_extra)),
+        ];
+        let query = AdvancedQuery {
+            free_text: String::new(),
+            predicates: vec![
+                Predicate::MetaPath {
+                    path: "domain.kind".to_string(),
+                    value: "calendar".to_string(),
+                },
+                Predicate::MetaPath {
+                    path: "domain.team".to_string(),
+                    value: "platform".to_string(),
+                },
+            ],
+            source_filters: Default::default(),
+            raw: "meta.domain.kind:calendar meta.domain.team:platform".to_string(),
+        };
+
+        let filtered = apply_advanced_query(results, &query);
+        let names: Vec<_> = filtered.iter().map(SearchResult::name).collect();
+
+        assert_eq!(names, vec!["Complete"]);
+    }
+
+    #[test]
+    fn repeated_same_meta_path_predicates_are_or_case_insensitively() {
+        let mut calendar_extra = HashMap::new();
+        calendar_extra.insert("domain".to_string(), json!({ "kind": "calendar" }));
+        let mut analytics_extra = HashMap::new();
+        analytics_extra.insert("domain".to_string(), json!({ "kind": "analytics" }));
+        let results = vec![
+            script_match(make_script_with_extra("Calendar", calendar_extra)),
+            script_match(make_script_with_extra("Analytics", analytics_extra)),
+        ];
+        let query = AdvancedQuery {
+            free_text: String::new(),
+            predicates: vec![
+                Predicate::MetaPath {
+                    path: "domain.kind".to_string(),
+                    value: "calendar".to_string(),
+                },
+                Predicate::MetaPath {
+                    path: "DOMAIN.KIND".to_string(),
+                    value: "analytics".to_string(),
+                },
+            ],
+            source_filters: Default::default(),
+            raw: "meta.domain.kind:calendar meta.DOMAIN.KIND:analytics".to_string(),
+        };
+
+        let filtered = apply_advanced_query(results, &query);
+        let names: Vec<_> = filtered.iter().map(SearchResult::name).collect();
+
+        assert_eq!(names, vec!["Calendar", "Analytics"]);
     }
 
     #[test]
