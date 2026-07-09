@@ -162,6 +162,29 @@ impl ScriptListApp {
             || self.spine_mention_portal_segment.is_some()
     }
 
+    /// Consume Script List Escape while an attachment portal owns the main surface.
+    ///
+    /// Both physical GPUI dispatch and the automation mirror route through this
+    /// helper so the portal returns to its host before the normal launcher Escape
+    /// ladder can clear the query, navigate elsewhere, or hide the window.
+    pub(crate) fn try_cancel_script_list_attachment_portal_escape(
+        &mut self,
+        routing_path: &'static str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.is_in_attachment_portal() {
+            return false;
+        }
+
+        tracing::info!(
+            target: "script_kit::agent_chat",
+            event = "script_list_attachment_portal_escape_consumed",
+            routing_path,
+        );
+        self.close_attachment_portal_cancel(cx);
+        true
+    }
+
     /// Open the full built-in File Search surface as a ScriptList-hosted
     /// attachment portal for the main-menu `@file` spine flow. Enter resolves
     /// the originating segment into a compact `@file:basename` token; Escape

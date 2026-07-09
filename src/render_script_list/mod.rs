@@ -776,6 +776,7 @@ impl ScriptListApp {
         }
 
         if !self.can_preserve_hide_script_list_on_passive_focus_loss()
+            || self.is_in_attachment_portal()
             || self.opened_from_main_menu
             || self.show_actions_popup
             || crate::actions::is_actions_window_open()
@@ -1970,13 +1971,20 @@ impl ScriptListApp {
                     }
                     key if sk_is_key_escape(key) => {
                         // Escape order on ScriptList:
-                        //   1. menu-syntax trigger picker visible → close popup
+                        //   1. attachment portal active → cancel back to its host.
+                        //   2. menu-syntax trigger picker visible → close popup
                         //      only, leave filter text untouched. Second Escape
                         //      then falls through to the normal clear-filter
                         //      branch below.
-                        //   2. visible filter non-empty → clear filter.
-                        //   3. launcher-origin surface → go back to the main launcher.
-                        //   4. filter empty → hide main window.
+                        //   3. visible filter non-empty → clear filter.
+                        //   4. launcher-origin surface → go back to the main launcher.
+                        //   5. filter empty → hide main window.
+                        if this.try_cancel_script_list_attachment_portal_escape(
+                            "physical_bubble",
+                            cx,
+                        ) {
+                            return;
+                        }
                         if this.menu_syntax_object_selector_owns_main_keyboard() {
                             if this.apply_menu_syntax_object_selector_intent(
                                 crate::menu_syntax::InlinePickerKeyIntent::Close,

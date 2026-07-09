@@ -697,6 +697,12 @@ impl ScriptListApp {
                                     "STDIN",
                                     "SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide",
                                 );
+                                if view.try_cancel_script_list_attachment_portal_escape(
+                                    "simulate_key",
+                                    ctx,
+                                ) {
+                                    return;
+                                }
                                 if view.menu_syntax_object_selector_owns_main_keyboard() {
                                     if view.apply_menu_syntax_object_selector_intent(
                                         crate::menu_syntax::InlinePickerKeyIntent::Close,
