@@ -60,32 +60,32 @@ impl ScriptListApp {
             options.recent_files_enabled = true;
         }
         if !options.files_enabled || !options.recent_files_enabled {
-            if !self.root_recent_file_results.is_empty() {
-                self.root_recent_file_results.clear();
+            if !self.root_search.root_recent_file_results.is_empty() {
+                self.root_search.root_recent_file_results.clear();
                 self.invalidate_grouped_cache();
             }
-            self.root_recent_file_revision = u64::MAX;
+            self.root_search.root_recent_file_revision = u64::MAX;
             return;
         }
 
         let revision = self.frecency_store.revision();
-        if self.root_recent_file_revision == revision {
+        if self.root_search.root_recent_file_revision == revision {
             return;
         }
 
         let next_results =
             self.recent_file_results_from_frecency(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT);
-        let changed = root_file_result_fingerprint(&self.root_recent_file_results)
+        let changed = root_file_result_fingerprint(&self.root_search.root_recent_file_results)
             != root_file_result_fingerprint(&next_results);
-        self.root_recent_file_results = next_results;
-        self.root_recent_file_revision = revision;
+        self.root_search.root_recent_file_results = next_results;
+        self.root_search.root_recent_file_revision = revision;
         if changed {
             self.invalidate_grouped_cache();
         }
     }
 
     fn cancel_root_file_search(&mut self) {
-        if let Some(cancel) = self.root_file_search_cancel.take() {
+        if let Some(cancel) = self.root_search.root_file_search_cancel.take() {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         }
     }
@@ -95,17 +95,19 @@ impl ScriptListApp {
         directory: &str,
         show_hidden: bool,
     ) -> bool {
-        if self.root_file_search_mode
+        if self.root_search.root_file_search_mode
             != Some(crate::file_search::RootFileSectionMode::DirectoryBrowse)
         {
             return false;
         }
 
-        crate::file_search::root_directory_browse_source_key(&self.root_file_search_query)
-            .map(|(active_directory, active_show_hidden)| {
-                active_directory == directory && active_show_hidden == show_hidden
-            })
-            .unwrap_or(false)
+        crate::file_search::root_directory_browse_source_key(
+            &self.root_search.root_file_search_query,
+        )
+        .map(|(active_directory, active_show_hidden)| {
+            active_directory == directory && active_show_hidden == show_hidden
+        })
+        .unwrap_or(false)
     }
 
     fn refresh_root_file_grouping_after_query_only_change(&mut self, cx: &mut Context<Self>) {
@@ -126,23 +128,23 @@ impl ScriptListApp {
         clear_cancel: bool,
         cx: &mut Context<Self>,
     ) {
-        if self.root_file_search_generation != generation {
+        if self.root_search.root_file_search_generation != generation {
             tracing::debug!(
                 event = "root_file_provider_stale_drop",
                 generation,
-                active_generation = self.root_file_search_generation,
-                query = %self.root_file_search_query,
+                active_generation = self.root_search.root_file_search_generation,
+                query = %self.root_search.root_file_search_query,
             );
             return;
         }
 
-        let results_changed = root_file_result_fingerprint(&self.root_file_results)
+        let results_changed = root_file_result_fingerprint(&self.root_search.root_file_results)
             != root_file_result_fingerprint(&results);
-        let loading_changed =
-            self.root_file_search_loading != loading || self.root_file_provider_loading != loading;
+        let loading_changed = self.root_search.root_file_search_loading != loading
+            || self.root_search.root_file_provider_loading != loading;
         if !results_changed && !loading_changed {
             if clear_cancel {
-                self.root_file_search_cancel = None;
+                self.root_search.root_file_search_cancel = None;
             }
             return;
         }
@@ -153,12 +155,12 @@ impl ScriptListApp {
             None
         };
 
-        self.root_file_results = results;
-        self.root_file_search_loading = loading;
-        self.root_file_provider_loading = loading;
-        self.root_file_frame = None;
+        self.root_search.root_file_results = results;
+        self.root_search.root_file_search_loading = loading;
+        self.root_search.root_file_provider_loading = loading;
+        self.root_search.root_file_frame = None;
         if clear_cancel {
-            self.root_file_search_cancel = None;
+            self.root_search.root_file_search_cancel = None;
         }
         self.invalidate_grouped_cache();
         if matches!(self.current_view, AppView::ScriptList) {
@@ -182,7 +184,8 @@ impl ScriptListApp {
         request: &RootFileSearchRequest,
     ) -> Vec<crate::file_search::FileResult> {
         let cache_key = request.cache_key();
-        self.root_file_result_cache
+        self.root_search
+            .root_file_result_cache
             .iter()
             .find_map(|(key, results)| {
                 if key == &cache_key {
@@ -201,49 +204,52 @@ impl ScriptListApp {
         results: Vec<crate::file_search::FileResult>,
         clear_cancel: bool,
     ) {
-        if self.root_file_search_generation != generation {
+        if self.root_search.root_file_search_generation != generation {
             tracing::debug!(
                 event = "root_file_provider_stale_drop",
                 generation,
-                active_generation = self.root_file_search_generation,
-                query = %self.root_file_search_query,
+                active_generation = self.root_search.root_file_search_generation,
+                query = %self.root_search.root_file_search_query,
             );
             return;
         }
 
         if let Some(index) = self
+            .root_search
             .root_file_result_cache
             .iter()
             .position(|(key, _)| key == &cache_key)
         {
-            self.root_file_result_cache.remove(index);
+            self.root_search.root_file_result_cache.remove(index);
         }
-        self.root_file_result_cache
+        self.root_search
+            .root_file_result_cache
             .push_front((cache_key, dedupe_root_file_results(results)));
-        while self.root_file_result_cache.len() > ROOT_FILE_RESULT_CACHE_LIMIT {
-            self.root_file_result_cache.pop_back();
+        while self.root_search.root_file_result_cache.len() > ROOT_FILE_RESULT_CACHE_LIMIT {
+            self.root_search.root_file_result_cache.pop_back();
         }
 
         if clear_cancel {
-            self.root_file_search_cancel = None;
+            self.root_search.root_file_search_cancel = None;
         }
-        self.root_file_provider_loading = false;
+        self.root_search.root_file_provider_loading = false;
     }
 
     pub(crate) fn active_root_file_cache_result_count(&self) -> usize {
-        let Some(mode) = self.root_file_search_mode else {
+        let Some(mode) = self.root_search.root_file_search_mode else {
             return 0;
         };
         let request = match mode {
             crate::file_search::RootFileSectionMode::GlobalQuery => {
                 RootFileSearchRequest::GlobalQuery {
-                    query: self.root_file_search_query.clone(),
+                    query: self.root_search.root_file_search_query.clone(),
                 }
             }
             crate::file_search::RootFileSectionMode::DirectoryBrowse => return 0,
         };
         let cache_key = request.cache_key();
-        self.root_file_result_cache
+        self.root_search
+            .root_file_result_cache
             .iter()
             .find_map(|(key, results)| (key == &cache_key).then_some(results.len()))
             .unwrap_or(0)
@@ -274,28 +280,29 @@ impl ScriptListApp {
                     query,
                     trimmed,
                     advanced_predicate_active,
-                    self.root_file_search_mode,
+                    self.root_search.root_file_search_mode,
                 ));
         }
         if !root_file_options.files_enabled
             || !source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files)
         {
             self.cancel_root_file_search();
-            let had_results = !self.root_file_results.is_empty()
-                || !self.root_recent_file_results.is_empty()
-                || !self.root_file_search_query.is_empty()
-                || self.root_file_search_loading
-                || self.root_file_provider_loading
-                || self.root_file_search_mode.is_some();
-            self.root_file_results.clear();
-            self.root_recent_file_results.clear();
-            self.root_file_search_query.clear();
-            self.root_file_search_mode = None;
-            self.root_file_search_loading = false;
-            self.root_file_provider_loading = false;
-            self.root_file_frame = None;
+            let had_results = !self.root_search.root_file_results.is_empty()
+                || !self.root_search.root_recent_file_results.is_empty()
+                || !self.root_search.root_file_search_query.is_empty()
+                || self.root_search.root_file_search_loading
+                || self.root_search.root_file_provider_loading
+                || self.root_search.root_file_search_mode.is_some();
+            self.root_search.root_file_results.clear();
+            self.root_search.root_recent_file_results.clear();
+            self.root_search.root_file_search_query.clear();
+            self.root_search.root_file_search_mode = None;
+            self.root_search.root_file_search_loading = false;
+            self.root_search.root_file_provider_loading = false;
+            self.root_search.root_file_frame = None;
             if had_results {
-                self.root_file_search_generation = self.root_file_search_generation.wrapping_add(1);
+                self.root_search.root_file_search_generation =
+                    self.root_search.root_file_search_generation.wrapping_add(1);
                 self.invalidate_grouped_cache();
                 cx.notify();
             }
@@ -341,19 +348,20 @@ impl ScriptListApp {
 
         let Some(request) = request else {
             self.cancel_root_file_search();
-            let had_results = !self.root_file_results.is_empty()
-                || !self.root_file_search_query.is_empty()
-                || self.root_file_search_loading
-                || self.root_file_provider_loading
-                || self.root_file_search_mode.is_some();
-            self.root_file_results.clear();
-            self.root_file_search_query.clear();
-            self.root_file_search_mode = None;
-            self.root_file_search_loading = false;
-            self.root_file_provider_loading = false;
-            self.root_file_frame = None;
+            let had_results = !self.root_search.root_file_results.is_empty()
+                || !self.root_search.root_file_search_query.is_empty()
+                || self.root_search.root_file_search_loading
+                || self.root_search.root_file_provider_loading
+                || self.root_search.root_file_search_mode.is_some();
+            self.root_search.root_file_results.clear();
+            self.root_search.root_file_search_query.clear();
+            self.root_search.root_file_search_mode = None;
+            self.root_search.root_file_search_loading = false;
+            self.root_search.root_file_provider_loading = false;
+            self.root_search.root_file_frame = None;
             if had_results {
-                self.root_file_search_generation = self.root_file_search_generation.wrapping_add(1);
+                self.root_search.root_file_search_generation =
+                    self.root_search.root_file_search_generation.wrapping_add(1);
                 self.invalidate_grouped_cache();
                 cx.notify();
             }
@@ -363,16 +371,17 @@ impl ScriptListApp {
         let mode = request.mode();
         match &request {
             RootFileSearchRequest::GlobalQuery { .. }
-                if self.root_file_search_query == request.query()
-                    && self.root_file_search_mode == Some(mode) =>
+                if self.root_search.root_file_search_query == request.query()
+                    && self.root_search.root_file_search_mode == Some(mode) =>
             {
                 let cached_results = self.cached_root_file_results_for_request(&request);
-                if root_file_result_fingerprint(&self.root_file_results)
+                if root_file_result_fingerprint(&self.root_search.root_file_results)
                     != root_file_result_fingerprint(&cached_results)
                 {
-                    self.root_file_results = cached_results;
-                    self.root_file_search_loading = self.root_file_results.is_empty();
-                    self.root_file_frame = None;
+                    self.root_search.root_file_results = cached_results;
+                    self.root_search.root_file_search_loading =
+                        self.root_search.root_file_results.is_empty();
+                    self.root_search.root_file_frame = None;
                     self.invalidate_grouped_cache();
                 }
                 return;
@@ -382,8 +391,8 @@ impl ScriptListApp {
                 directory,
                 show_hidden,
             } if self.active_root_directory_browse_source_matches(directory, *show_hidden) => {
-                if self.root_file_search_query != *query {
-                    self.root_file_search_query = query.clone();
+                if self.root_search.root_file_search_query != *query {
+                    self.root_search.root_file_search_query = query.clone();
                     self.refresh_root_file_grouping_after_query_only_change(cx);
                 }
                 return;
@@ -392,18 +401,19 @@ impl ScriptListApp {
         }
 
         self.cancel_root_file_search();
-        self.root_file_search_generation = self.root_file_search_generation.wrapping_add(1);
-        let generation = self.root_file_search_generation;
-        self.root_file_search_query = request.query().to_string();
-        self.root_file_search_mode = Some(mode);
+        self.root_search.root_file_search_generation =
+            self.root_search.root_file_search_generation.wrapping_add(1);
+        let generation = self.root_search.root_file_search_generation;
+        self.root_search.root_file_search_query = request.query().to_string();
+        self.root_search.root_file_search_mode = Some(mode);
         let cached_results = self.cached_root_file_results_for_request(&request);
-        self.root_file_results = cached_results;
-        self.root_file_search_loading = self.root_file_results.is_empty();
-        self.root_file_provider_loading = true;
+        self.root_search.root_file_results = cached_results;
+        self.root_search.root_file_search_loading = self.root_search.root_file_results.is_empty();
+        self.root_search.root_file_provider_loading = true;
         self.invalidate_grouped_cache();
 
         let cancel = crate::file_search::new_cancel_token();
-        self.root_file_search_cancel = Some(cancel.clone());
+        self.root_search.root_file_search_cancel = Some(cancel.clone());
         let publish_active_results = source_filters
             .includes(crate::menu_syntax::RootUnifiedSourceFilter::Files)
             || matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. });
@@ -487,7 +497,7 @@ impl ScriptListApp {
                 this.update(cx, |app, cx| {
                     tracing::debug!(
                         event = "root_file_provider_done",
-                        query = %app.root_file_search_query,
+                        query = %app.root_search.root_file_search_query,
                         generation,
                         publish_active_results,
                         result_count = batch.len(),

@@ -945,14 +945,14 @@ impl ScriptListApp {
             query: search_text.to_string(),
             advanced_query: advanced_query_active,
             source_filters,
-            mode: self.root_file_search_mode,
+            mode: self.root_search.root_file_search_mode,
             options: root_file_options,
-            search_generation: self.root_file_search_generation,
-            recent_file_revision: self.root_recent_file_revision,
-            visible_loading: self.root_file_search_loading,
+            search_generation: self.root_search.root_file_search_generation,
+            recent_file_revision: self.root_search.root_recent_file_revision,
+            visible_loading: self.root_search.root_file_search_loading,
         };
 
-        if let Some(frame) = self.root_file_frame.as_ref() {
+        if let Some(frame) = self.root_search.root_file_frame.as_ref() {
             if frame.key == key {
                 return frame.clone();
             }
@@ -960,12 +960,12 @@ impl ScriptListApp {
 
         let frame = crate::RootFileFrame {
             key,
-            mode: self.root_file_search_mode,
-            visible_loading: self.root_file_search_loading,
-            file_results: self.root_file_results.clone(),
-            recent_file_results: self.root_recent_file_results.clone(),
+            mode: self.root_search.root_file_search_mode,
+            visible_loading: self.root_search.root_file_search_loading,
+            file_results: self.root_search.root_file_results.clone(),
+            recent_file_results: self.root_search.root_recent_file_results.clone(),
         };
-        self.root_file_frame = Some(frame.clone());
+        self.root_search.root_file_frame = Some(frame.clone());
         frame
     }
 
@@ -1715,7 +1715,7 @@ impl ScriptListApp {
 
         let should_refresh_root_recent_files = self.computed_filter_text.is_empty()
             || matches!(
-                self.root_file_search_mode,
+                self.root_search.root_file_search_mode,
                 Some(crate::file_search::RootFileSectionMode::GlobalQuery)
             )
             || self
@@ -1864,7 +1864,7 @@ impl ScriptListApp {
                     &raw_filter_text,
                     search_text,
                     advanced_predicate_active,
-                    self.root_file_search_mode,
+                    self.root_search.root_file_search_mode,
                 );
                 root_file_options.source_chip_visible_limit = Some(visible_limit);
                 if search_text.trim().is_empty() && !advanced_predicate_active {
@@ -1951,7 +1951,7 @@ impl ScriptListApp {
                 browser_history_options.clone(),
             );
             let root_file_frame = (matches!(
-                self.root_file_search_mode,
+                self.root_search.root_file_search_mode,
                 Some(crate::file_search::RootFileSectionMode::GlobalQuery)
             ) && source_filters
                 .allows(crate::menu_syntax::RootUnifiedSourceFilter::Files))
@@ -1966,19 +1966,19 @@ impl ScriptListApp {
             let root_file_search_mode_for_grouping = root_file_frame
                 .as_ref()
                 .map(|frame| frame.mode)
-                .unwrap_or(self.root_file_search_mode);
+                .unwrap_or(self.root_search.root_file_search_mode);
             let root_file_search_loading_for_grouping = root_file_frame
                 .as_ref()
                 .map(|frame| frame.visible_loading)
-                .unwrap_or(self.root_file_search_loading);
+                .unwrap_or(self.root_search.root_file_search_loading);
             let root_file_results_for_grouping = root_file_frame
                 .as_ref()
                 .map(|frame| frame.file_results.as_slice())
-                .unwrap_or(self.root_file_results.as_slice());
+                .unwrap_or(self.root_search.root_file_results.as_slice());
             let root_recent_file_results_for_grouping = root_file_frame
                 .as_ref()
                 .map(|frame| frame.recent_file_results.as_slice())
-                .unwrap_or(self.root_recent_file_results.as_slice());
+                .unwrap_or(self.root_search.root_recent_file_results.as_slice());
             let dynamic_builtin_entries =
                 current_app_commands_app_name.as_deref().map(|app_name| {
                     let mut entries = self.builtin_entries.clone();

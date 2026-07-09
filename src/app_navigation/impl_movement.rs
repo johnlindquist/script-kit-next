@@ -54,9 +54,9 @@ impl ScriptListApp {
             &raw_filter_text,
             stripped_query.as_str(),
             advanced_predicate_active,
-            self.root_file_search_mode,
+            self.root_search.root_file_search_mode,
         );
-        let max_visible = match self.root_file_search_mode {
+        let max_visible = match self.root_search.root_file_search_mode {
             Some(crate::file_search::RootFileSectionMode::DirectoryBrowse) => {
                 crate::file_search::ROOT_FILE_BROWSE_SOURCE_LIMIT
             }
@@ -101,10 +101,10 @@ impl ScriptListApp {
         }
 
         let snapshot = self.main_menu_selection_snapshot();
-        self.root_file_source_chip_visible_limit = current_limit
+        self.root_search.root_file_source_chip_visible_limit = current_limit
             .saturating_add(crate::file_search::ROOT_FILE_SOURCE_CHIP_PAGE_SIZE)
             .min(max_visible);
-        self.root_file_frame = None;
+        self.root_search.root_file_frame = None;
         self.invalidate_grouped_cache();
         self.get_grouped_results_cached();
         self.sync_list_state();

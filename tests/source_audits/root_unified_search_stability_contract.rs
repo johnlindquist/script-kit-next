@@ -90,7 +90,7 @@ fn main_window_preflight_exposes_selection_key_and_frame_fingerprint() {
     assert!(protocol.contains("mainWindowPreflight"));
     assert!(protocol.contains("rootFileSearch"));
     assert!(prompt_handler.contains("serde_json::to_value(receipt).ok()"));
-    assert!(prompt_handler.contains("\"loading\": self.root_file_provider_loading"));
+    assert!(prompt_handler.contains("\"loading\": self.root_search.root_file_provider_loading"));
 }
 
 #[test]
@@ -155,9 +155,9 @@ fn root_file_frame_key_latches_visible_generation_and_loading() {
     }
 
     for required in [
-        "search_generation: self.root_file_search_generation",
-        "recent_file_revision: self.root_recent_file_revision",
-        "visible_loading: self.root_file_search_loading",
+        "search_generation: self.root_search.root_file_search_generation",
+        "recent_file_revision: self.root_search.root_recent_file_revision",
+        "visible_loading: self.root_search.root_file_search_loading",
     ] {
         assert!(
             filtering.contains(required),
@@ -397,11 +397,11 @@ fn global_provider_completion_does_not_touch_visible_frame_fields() {
         })
         .expect("cache_root_file_search_results_for_generation body should be present");
 
-    assert!(body.contains("self.root_file_result_cache"));
-    assert!(body.contains("self.root_file_provider_loading = false"));
+    assert!(body.contains("self.root_search.root_file_result_cache"));
+    assert!(body.contains("self.root_search.root_file_provider_loading = false"));
     for forbidden in [
-        "self.root_file_results =",
-        "self.root_file_search_loading =",
+        "root_file_results =",
+        "root_file_search_loading =",
         "invalidate_grouped_cache",
         "sync_list_state_for_filter_replacement",
         "rebuild_main_window_preflight",
@@ -441,8 +441,8 @@ fn root_file_state_receipt_separates_provider_loading_from_visible_loading() {
         fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler");
 
     for required in [
-        "\"loading\": self.root_file_provider_loading",
-        "\"visibleLoading\": self.root_file_search_loading",
+        "\"loading\": self.root_search.root_file_provider_loading",
+        "\"visibleLoading\": self.root_search.root_file_search_loading",
         "\"cacheResultCount\": self.active_root_file_cache_result_count()",
         "let main_list_scroll = if script_list_active",
         "Some(self.main_list_scroll_receipt())",

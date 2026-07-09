@@ -4686,7 +4686,7 @@ impl ScriptListApp {
                         .unwrap_or(crate::file_search::RootFileQueryIntent::OrdinaryRoot);
                     let root_file_match_mode =
                         crate::file_search::root_file_inline_match_mode_for_query(
-                            &self.root_file_search_query,
+                            &self.root_search.root_file_search_query,
                             root_file_query_intent,
                         );
                     let root_file_section_label = root_file_match_mode
@@ -4694,21 +4694,21 @@ impl ScriptListApp {
                     let root_file_handoff_subtitle = root_file_match_mode
                         .map(crate::file_search::RootFileInlineMatchMode::handoff_subtitle);
                     Some(serde_json::json!({
-                        "query": self.root_file_search_query,
-                        "mode": self.root_file_search_mode.map(|mode| format!("{:?}", mode)),
+                        "query": self.root_search.root_file_search_query,
+                        "mode": self.root_search.root_file_search_mode.map(|mode| format!("{:?}", mode)),
                         "matchMode": root_file_match_mode.map(crate::file_search::RootFileInlineMatchMode::receipt_name),
                         "sectionLabel": root_file_section_label,
                         "handoffVisible": root_file_match_mode.is_some(),
                         "handoffSubtitle": root_file_handoff_subtitle,
-                        "loading": self.root_file_provider_loading,
-                        "providerLoading": self.root_file_provider_loading,
-                        "visibleLoading": self.root_file_search_loading,
-                        "generation": self.root_file_search_generation,
-                        "visibleResultCount": self.root_file_results.len(),
-                        "visibleRootFileCount": self.root_file_results.len(),
-                        "loadedFileCount": self.root_file_results.len(),
-                        "recentSeedCount": self.root_recent_file_results.len(),
-                        "cacheEntryCount": self.root_file_result_cache.len(),
+                        "loading": self.root_search.root_file_provider_loading,
+                        "providerLoading": self.root_search.root_file_provider_loading,
+                        "visibleLoading": self.root_search.root_file_search_loading,
+                        "generation": self.root_search.root_file_search_generation,
+                        "visibleResultCount": self.root_search.root_file_results.len(),
+                        "visibleRootFileCount": self.root_search.root_file_results.len(),
+                        "loadedFileCount": self.root_search.root_file_results.len(),
+                        "recentSeedCount": self.root_search.root_recent_file_results.len(),
+                        "cacheEntryCount": self.root_search.root_file_result_cache.len(),
                         "cacheResultCount": self.active_root_file_cache_result_count(),
                     }))
                 } else {

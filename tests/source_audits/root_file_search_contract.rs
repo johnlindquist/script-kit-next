@@ -842,10 +842,11 @@ mod tests {
             );
         }
         assert!(
-            filtering_source.contains("self.root_file_search_mode")
-                && filtering_source.contains("self.root_file_search_loading")
-                && (filtering_source.contains("&self.root_file_results")
-                    || filtering_source.contains("self.root_file_results.as_slice()")),
+            filtering_source.contains("self.root_search.root_file_search_mode")
+                && filtering_source.contains("self.root_search.root_file_search_loading")
+                && (filtering_source.contains("&self.root_search.root_file_results")
+                    || filtering_source
+                        .contains("self.root_search.root_file_results.as_slice()")),
             "filtering cache should pass the root file source mode, loading state, and collected rows"
         );
     }
@@ -879,7 +880,7 @@ mod tests {
             "ordinary root Files headers should not expose provider lifecycle as match mode copy"
         );
         assert!(
-            filtering_source.contains("self.root_file_search_loading"),
+            filtering_source.contains("self.root_search.root_file_search_loading"),
             "filtering cache should still pass visible loading state into grouping receipts/status"
         );
     }
@@ -1085,6 +1086,10 @@ mod tests {
         let file_search_source =
             fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
         let normalized = root_source.split_whitespace().collect::<Vec<_>>().join(" ");
+        let active_source_body = function_body(
+            &root_source,
+            "fn active_root_directory_browse_source_matches(",
+        );
 
         assert!(
             file_search_source.contains("pub fn root_directory_browse_source_key(")
@@ -1093,21 +1098,19 @@ mod tests {
             "file search should expose a provider key based on directory plus hidden-file mode"
         );
         assert!(
-            root_source.contains("fn active_root_directory_browse_source_matches(")
-                && root_source.contains(
-                    "root_directory_browse_source_key(&self.root_file_search_query)"
-                ),
+            active_source_body.contains("root_directory_browse_source_key(")
+                && active_source_body.contains("&self.root_search.root_file_search_query"),
             "root app layer should compare active directory-browse provider identity separately from the visible query"
         );
         assert!(
             normalized.contains(
                 "RootFileSearchRequest::DirectoryBrowse { query, directory, show_hidden, } if self.active_root_directory_browse_source_matches(directory, *show_hidden)"
-            ) && normalized.contains("self.root_file_search_query = query.clone();")
+            ) && normalized.contains("self.root_search.root_file_search_query = query.clone();")
                 && normalized.contains("self.refresh_root_file_grouping_after_query_only_change(cx);"),
             "directory child-fragment edits should only update the visible query and regroup cached rows"
         );
         assert!(
-            !normalized.contains("app.root_file_search_query != query_for_task"),
+            !normalized.contains("root_file_search_query != query_for_task"),
             "directory listings should be allowed to complete after the visible child fragment changes"
         );
     }
@@ -1708,14 +1711,16 @@ mod tests {
                 && utility_normalized.contains("file_result_from_existing_path(&path)")
                 && utility_normalized.contains("take(limit)")
                 && root_normalized.contains("recent_file_results_from_frecency(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT)")
-                && root_normalized.contains("self.root_recent_file_results = next_results"),
+                && root_normalized
+                    .contains("self.root_search.root_recent_file_results = next_results"),
             "recent root files should hydrate known frecency paths into a deeper seed pool in the app layer"
         );
         assert!(
             filtering_normalized.contains("RootFileSectionMode::GlobalQuery")
                 && filtering_normalized.contains("self.refresh_root_recent_file_results();")
-                && (filtering_normalized.contains("&self.root_recent_file_results")
-                    || filtering_normalized.contains("self.root_recent_file_results.as_slice()")),
+                && (filtering_normalized.contains("&self.root_search.root_recent_file_results")
+                    || filtering_normalized
+                        .contains("self.root_search.root_recent_file_results.as_slice()")),
             "empty and non-empty global root grouping should refresh and pass recent file rows explicitly"
         );
     }

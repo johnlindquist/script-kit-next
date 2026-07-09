@@ -528,13 +528,14 @@ impl ScriptListApp {
             advanced_predicate_active,
             mode,
         );
-        if self.root_file_source_chip_page_key.as_deref() != Some(key.as_str()) {
-            self.root_file_source_chip_page_key = Some(key);
-            self.root_file_source_chip_visible_limit =
+        if self.root_search.root_file_source_chip_page_key.as_deref() != Some(key.as_str()) {
+            self.root_search.root_file_source_chip_page_key = Some(key);
+            self.root_search.root_file_source_chip_visible_limit =
                 crate::file_search::ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS;
         }
 
-        self.root_file_source_chip_visible_limit
+        self.root_search
+            .root_file_source_chip_visible_limit
             .max(crate::file_search::ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS)
     }
 

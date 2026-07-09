@@ -48,10 +48,10 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(root_file.contains("let publish_active_results = source_filters"));
     assert!(root_file.contains(".includes(crate::menu_syntax::RootUnifiedSourceFilter::Files)"));
     assert!(root_file.contains("|| matches!(&request, RootFileSearchRequest::DirectoryBrowse"));
-    assert!(root_file.contains("self.root_file_frame = None;"));
+    assert!(root_file.contains("self.root_search.root_file_frame = None;"));
     assert!(root_file.contains(".is_none_or(|advanced_query| !advanced_query.has_predicates())"));
     assert!(root_file.contains("self.cached_root_file_results_for_request(&request)"));
-    assert!(root_file.contains("root_file_result_fingerprint(&self.root_file_results)"));
+    assert!(root_file.contains("root_file_result_fingerprint(&self.root_search.root_file_results)"));
 }
 
 #[test]

@@ -50,23 +50,6 @@ impl Default for RootSearchStore {
     }
 }
 
-// Temporary compatibility bridge for the first ownership slice. Call sites
-// continue to compile while explicit `root_search.*` migrations land in small,
-// reviewable follow-ups.
-impl std::ops::Deref for crate::ScriptListApp {
-    type Target = RootSearchStore;
-
-    fn deref(&self) -> &Self::Target {
-        &self.root_search
-    }
-}
-
-impl std::ops::DerefMut for crate::ScriptListApp {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.root_search
-    }
-}
-
 #[cfg(test)]
 mod root_search_store_tests {
     use super::*;
