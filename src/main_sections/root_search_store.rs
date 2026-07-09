@@ -19,19 +19,19 @@ pub(crate) struct RootSearchStore {
     /// Sequence number for in-memory root window recency.
     root_window_focus_seq: u64,
     /// Async hybrid brain hits keyed by the trimmed root-launcher search text.
-    pub(crate) root_brain_semantic_results: Option<(String, Vec<crate::brain::RootBrainSearchHit>)>,
+    root_brain_semantic_results: Option<(String, Vec<crate::brain::RootBrainSearchHit>)>,
     /// Generation counter used to ignore stale semantic brain batches.
-    pub(crate) root_brain_search_generation: u64,
+    root_brain_search_generation: u64,
     /// Last requested semantic brain search, used to avoid duplicate work.
-    pub(crate) root_brain_search_request: Option<(String, crate::brain::RootBrainSectionOptions)>,
+    root_brain_search_request: Option<(String, crate::brain::RootBrainSectionOptions)>,
     /// Revision folded into the passive-frame key when semantic results change.
-    pub(crate) root_brain_semantic_epoch: u64,
+    root_brain_semantic_epoch: u64,
     /// Open brain-inbox items pinned above the empty root-launcher query.
-    pub(crate) root_brain_inbox_items: Vec<crate::brain::InboxItem>,
+    root_brain_inbox_items: Vec<crate::brain::InboxItem>,
     /// When the root brain-inbox snapshot was last loaded.
-    pub(crate) root_brain_inbox_loaded_at: Option<std::time::Instant>,
+    root_brain_inbox_loaded_at: Option<std::time::Instant>,
     /// Revision folded into grouped cache keys when inbox items change.
-    pub(crate) root_brain_inbox_epoch: u64,
+    root_brain_inbox_epoch: u64,
     /// Latest capped Spotlight results appended to eligible root launcher searches.
     pub(crate) root_file_results: Vec<crate::file_search::FileResult>,
     /// Bounded completed global root file batches, keyed by root search request.
@@ -99,6 +99,116 @@ impl Default for RootSearchStore {
 }
 
 impl RootSearchStore {
+    pub(crate) fn root_brain_semantic_epoch(&self) -> u64 {
+        self.root_brain_semantic_epoch
+    }
+
+    pub(crate) fn root_brain_semantic_results(
+        &self,
+    ) -> Option<&(String, Vec<crate::brain::RootBrainSearchHit>)> {
+        self.root_brain_semantic_results.as_ref()
+    }
+
+    pub(crate) fn root_brain_semantic_request_matches(
+        &self,
+        query: &str,
+        options: crate::brain::RootBrainSectionOptions,
+    ) -> bool {
+        self.root_brain_search_request.as_ref().is_some_and(
+            |(requested_query, requested_options)| {
+                requested_query == query && *requested_options == options
+            },
+        )
+    }
+
+    pub(crate) fn begin_root_brain_semantic_request(
+        &mut self,
+        query: String,
+        options: crate::brain::RootBrainSectionOptions,
+    ) -> u64 {
+        self.root_brain_search_generation = self.root_brain_search_generation.wrapping_add(1);
+        self.root_brain_search_request = Some((query, options));
+        self.root_brain_search_generation
+    }
+
+    pub(crate) fn root_brain_semantic_generation_matches(&self, generation: u64) -> bool {
+        self.root_brain_search_generation == generation
+    }
+
+    pub(crate) fn install_root_brain_semantic_results(
+        &mut self,
+        generation: u64,
+        query: String,
+        hits: Vec<crate::brain::RootBrainSearchHit>,
+    ) -> bool {
+        if !self.root_brain_semantic_generation_matches(generation) {
+            return false;
+        }
+        self.root_brain_semantic_results = Some((query, hits));
+        self.root_brain_semantic_epoch = self.root_brain_semantic_epoch.wrapping_add(1);
+        true
+    }
+
+    pub(crate) fn clear_root_brain_semantic(&mut self) -> bool {
+        self.root_brain_search_generation = self.root_brain_search_generation.wrapping_add(1);
+        self.root_brain_search_request = None;
+        let changed = self.root_brain_semantic_results.take().is_some();
+        if changed {
+            self.root_brain_semantic_epoch = self.root_brain_semantic_epoch.wrapping_add(1);
+        }
+        changed
+    }
+
+    pub(crate) fn root_brain_inbox_epoch(&self) -> u64 {
+        self.root_brain_inbox_epoch
+    }
+
+    pub(crate) fn root_brain_inbox_items(&self) -> &[crate::brain::InboxItem] {
+        &self.root_brain_inbox_items
+    }
+
+    pub(crate) fn root_brain_inbox_refresh_if_stale(
+        &mut self,
+        now: std::time::Instant,
+        ttl: std::time::Duration,
+    ) -> bool {
+        let stale = self
+            .root_brain_inbox_loaded_at
+            .is_none_or(|loaded_at| now.saturating_duration_since(loaded_at) >= ttl);
+        if stale {
+            self.root_brain_inbox_loaded_at = Some(now);
+        }
+        stale
+    }
+
+    pub(crate) fn install_root_brain_inbox_items(
+        &mut self,
+        items: Vec<crate::brain::InboxItem>,
+    ) -> bool {
+        let ids_match = self.root_brain_inbox_items.len() == items.len()
+            && self
+                .root_brain_inbox_items
+                .iter()
+                .zip(&items)
+                .all(|(current, fresh)| current.id == fresh.id);
+        if ids_match {
+            return false;
+        }
+        self.root_brain_inbox_items = items;
+        self.root_brain_inbox_epoch = self.root_brain_inbox_epoch.wrapping_add(1);
+        true
+    }
+
+    pub(crate) fn remove_root_brain_inbox_item(&mut self, id: i64) -> bool {
+        let previous_len = self.root_brain_inbox_items.len();
+        self.root_brain_inbox_items.retain(|item| item.id != id);
+        let changed = self.root_brain_inbox_items.len() != previous_len;
+        if changed {
+            self.root_brain_inbox_epoch = self.root_brain_inbox_epoch.wrapping_add(1);
+        }
+        changed
+    }
+
     pub(crate) fn with_root_windows(
         windows: &[crate::window_control::WindowInfo],
         apps: &[crate::app_launcher::AppInfo],
@@ -316,6 +426,29 @@ impl RootSearchStore {
 mod root_search_store_tests {
     use super::*;
 
+    fn semantic_hit(title: &str) -> crate::brain::RootBrainSearchHit {
+        crate::brain::RootBrainSearchHit {
+            title: title.to_string(),
+            excerpt: String::new(),
+            source_label: "Note",
+            source: crate::brain::DocSource::Note,
+            source_id: title.to_string(),
+        }
+    }
+
+    fn inbox_item(id: i64, title: &str) -> crate::brain::InboxItem {
+        crate::brain::InboxItem {
+            id,
+            kind: crate::brain::InboxKind::Question,
+            title: title.to_string(),
+            detail: String::new(),
+            source: "note".to_string(),
+            source_id: id.to_string(),
+            created_at: 0,
+            resolved_at: None,
+        }
+    }
+
     fn passive_frame(query: &str) -> crate::RootPassiveFrame {
         crate::RootPassiveFrame {
             key: crate::RootPassiveFrameKey {
@@ -390,6 +523,103 @@ mod root_search_store_tests {
             store.root_file_source_chip_visible_limit,
             crate::file_search::ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS
         );
+    }
+
+    #[test]
+    fn stale_semantic_batches_are_rejected_and_current_batches_install() {
+        let mut store = RootSearchStore::default();
+        let options = crate::brain::RootBrainSectionOptions::default();
+        let stale_generation = store.begin_root_brain_semantic_request("old".to_string(), options);
+        let current_generation =
+            store.begin_root_brain_semantic_request("current".to_string(), options);
+
+        assert!(!store.install_root_brain_semantic_results(
+            stale_generation,
+            "old".to_string(),
+            vec![semantic_hit("stale")],
+        ));
+        assert!(store.root_brain_semantic_results().is_none());
+        assert_eq!(store.root_brain_semantic_epoch(), 0);
+
+        assert!(store.install_root_brain_semantic_results(
+            current_generation,
+            "current".to_string(),
+            vec![semantic_hit("installed")],
+        ));
+        let (query, hits) = store
+            .root_brain_semantic_results()
+            .expect("current semantic batch should install");
+        assert_eq!(query, "current");
+        assert_eq!(hits[0].title, "installed");
+        assert_eq!(store.root_brain_semantic_epoch(), 1);
+    }
+
+    #[test]
+    fn clearing_semantic_state_invalidates_generations() {
+        let mut store = RootSearchStore::default();
+        let options = crate::brain::RootBrainSectionOptions::default();
+        let generation = store.begin_root_brain_semantic_request("query".to_string(), options);
+        assert!(store.install_root_brain_semantic_results(
+            generation,
+            "query".to_string(),
+            vec![semantic_hit("installed")],
+        ));
+
+        assert!(store.clear_root_brain_semantic());
+        assert!(!store.root_brain_semantic_generation_matches(generation));
+        assert!(store.root_brain_semantic_results().is_none());
+        assert_eq!(store.root_brain_semantic_epoch(), 2);
+        assert!(!store.clear_root_brain_semantic());
+        assert!(!store.root_brain_semantic_generation_matches(generation));
+        assert_eq!(store.root_brain_semantic_epoch(), 2);
+    }
+
+    #[test]
+    fn brain_inbox_refresh_ttl_is_deterministic() {
+        let mut store = RootSearchStore::default();
+        let now = std::time::Instant::now();
+        let ttl = std::time::Duration::from_secs(30);
+
+        assert!(store.root_brain_inbox_refresh_if_stale(now, ttl));
+        assert!(!store.root_brain_inbox_refresh_if_stale(
+            now + ttl - std::time::Duration::from_nanos(1),
+            ttl,
+        ));
+        assert!(store.root_brain_inbox_refresh_if_stale(now + ttl, ttl));
+    }
+
+    #[test]
+    fn brain_inbox_identity_epoch_and_removal_follow_ordered_ids() {
+        let mut store = RootSearchStore::default();
+
+        assert!(
+            store.install_root_brain_inbox_items(vec![inbox_item(1, "one"), inbox_item(2, "two"),])
+        );
+        assert_eq!(store.root_brain_inbox_epoch(), 1);
+
+        assert!(!store.install_root_brain_inbox_items(vec![
+            inbox_item(1, "updated title is the same identity"),
+            inbox_item(2, "two"),
+        ]));
+        assert_eq!(store.root_brain_inbox_items()[0].title, "one");
+        assert_eq!(store.root_brain_inbox_epoch(), 1);
+
+        assert!(
+            store.install_root_brain_inbox_items(vec![inbox_item(2, "two"), inbox_item(1, "one"),])
+        );
+        assert_eq!(store.root_brain_inbox_epoch(), 2);
+        assert!(store.remove_root_brain_inbox_item(1));
+        assert_eq!(
+            store
+                .root_brain_inbox_items()
+                .iter()
+                .map(|item| item.id)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+        assert_eq!(store.root_brain_inbox_epoch(), 3);
+        assert!(!store.remove_root_brain_inbox_item(99));
+        assert_eq!(store.root_brain_inbox_epoch(), 3);
     }
 
     #[test]

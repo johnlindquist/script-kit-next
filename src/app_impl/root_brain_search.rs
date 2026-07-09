@@ -39,16 +39,7 @@ impl ScriptListApp {
     /// Drop in-flight + stored semantic state. Invalidates caches only when
     /// stored results actually existed.
     fn clear_root_brain_semantic_state(&mut self, cx: &mut Context<Self>) {
-        // Orphan any in-flight batch.
-        self.root_search.root_brain_search_generation = self
-            .root_search
-            .root_brain_search_generation
-            .wrapping_add(1);
-        self.root_search.root_brain_search_request = None;
-        if self.root_search.root_brain_semantic_results.is_some() {
-            self.root_search.root_brain_semantic_results = None;
-            self.root_search.root_brain_semantic_epoch =
-                self.root_search.root_brain_semantic_epoch.wrapping_add(1);
+        if self.root_search.clear_root_brain_semantic() {
             self.invalidate_root_passive_and_grouped_cache();
             cx.notify();
         }
@@ -127,19 +118,14 @@ impl ScriptListApp {
         // Already have (or are fetching) this exact request — nothing to do.
         if self
             .root_search
-            .root_brain_search_request
-            .as_ref()
-            .is_some_and(|(query, options)| query == &query_owned && *options == brain_options)
+            .root_brain_semantic_request_matches(&query_owned, brain_options)
         {
             return;
         }
 
-        self.root_search.root_brain_search_generation = self
+        let generation = self
             .root_search
-            .root_brain_search_generation
-            .wrapping_add(1);
-        let generation = self.root_search.root_brain_search_generation;
-        self.root_search.root_brain_search_request = Some((query_owned.clone(), brain_options));
+            .begin_root_brain_semantic_request(query_owned.clone(), brain_options);
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -152,7 +138,8 @@ impl ScriptListApp {
             let still_current = cx
                 .update(|cx| {
                     this.update(cx, |app, _| {
-                        app.root_search.root_brain_search_generation == generation
+                        app.root_search
+                            .root_brain_semantic_generation_matches(generation)
                     })
                 })
                 .unwrap_or(false);
@@ -225,12 +212,12 @@ impl ScriptListApp {
         hits: Vec<crate::brain::RootBrainSearchHit>,
         cx: &mut Context<Self>,
     ) {
-        if self.root_search.root_brain_search_generation != generation {
+        if !self
+            .root_search
+            .install_root_brain_semantic_results(generation, query, hits)
+        {
             return;
         }
-        self.root_search.root_brain_semantic_results = Some((query, hits));
-        self.root_search.root_brain_semantic_epoch =
-            self.root_search.root_brain_semantic_epoch.wrapping_add(1);
         if matches!(self.current_view, AppView::ScriptList) {
             // Identity-preserving landing, matching every other async source
             // (files/tabs/history/windows): snapshot the selection key BEFORE
