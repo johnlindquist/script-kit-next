@@ -1,6 +1,6 @@
 {
   "src/actions/dialog.rs": 5911,
-  "src/actions/window.rs": 3032,
+  "src/actions/window.rs": 2879,
   "src/ai/agent_chat/ui/config.rs": 2245,
   "src/ai/agent_chat/ui/thread.rs": 5900,
   "src/ai/agent_chat/ui/view.rs": 15449,
