@@ -80,8 +80,13 @@ Common envelope on every event:
 ```
 
 `seq` starts at 0, increments by 1 per event, no gaps. Event order contract:
-`protocol` first, `run.started` second, terminal event
-(`run.completed` | `run.error` | `run.cancelled`) last, exactly one terminal.
+`protocol` first, `run.started` second *when a run actually starts*, terminal
+event (`run.completed` | `run.error` | `run.cancelled`) last, exactly one
+terminal. Pre-start failures (interactive rejection, missing file, missing
+required inputs, document files) legitimately emit `protocol` → `run.error`
+with **no** `run.started` — no pid exists. Consumers must fail closed: a
+stream that ends without a terminal event is an error, and a missing
+`run.completed.exitCode` is never success.
 
 | event | payload |
 |---|---|
@@ -105,10 +110,21 @@ Common envelope on every event:
 
 ### Capability handshake
 
-Before first use of any contract above, the app runs `md --version` and
-`md roster --json`; if the latter fails or `protocolVersion` ≠ 1, the app
-falls back to terminal `--json` blob mode and marks the roster
-`capability: "legacy"` in automation state.
+Before first use of any contract above, the app runs `md roster --json`.
+Classification is deliberate, not blanket:
+
+- Parsed JSON with `protocolVersion` = 1 → `ready`.
+- Parsed JSON with a different `protocolVersion` → `legacy`.
+- Nonzero exit whose stderr shows `roster` being resolved as a flow name
+  ("not found" naming `roster`) → `legacy` (pre-protocol mdflow).
+- Any other nonzero exit or parse failure → `error`, with a stderr excerpt
+  surfaced in `roster.warnings` — a broken config must never hide behind a
+  calm "legacy mdflow" banner.
+
+Legacy mode is honest: the app shows the upgrade path (`npm i -g mdflow`)
+and disables protocol-driven launch. There is no silent `--json` blob
+fallback (`run.started.pid` for workflows is mdflow's own pid; single runs
+report the engine child's pid — informational only, never a signal target).
 
 ## 4. App-side domain model (src/flows/)
 

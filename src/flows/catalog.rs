@@ -73,16 +73,25 @@ pub fn flow_catalog() -> Arc<FlowCatalog> {
 /// Resolve the mdflow binary, preferring `mdflow` over `md` (`md` may shadow
 /// other tools on some systems; the long name is unambiguous).
 pub fn mdflow_binary() -> Option<&'static str> {
-    static RESOLVED: std::sync::OnceLock<Option<&'static str>> = std::sync::OnceLock::new();
-    *RESOLVED.get_or_init(|| {
-        if which::which("mdflow").is_ok() {
-            Some("mdflow")
-        } else if which::which("md").is_ok() {
-            Some("md")
-        } else {
-            None
-        }
-    })
+    // Success is cached forever; a miss is re-probed on every call so
+    // installing mdflow while the app is open starts working immediately
+    // (a cached "not found" was a permanent dead end until relaunch).
+    static RESOLVED: Mutex<Option<&'static str>> = Mutex::new(None);
+    let mut guard = RESOLVED.lock();
+    if guard.is_some() {
+        return *guard;
+    }
+    let found = if which::which("mdflow").is_ok() {
+        Some("mdflow")
+    } else if which::which("md").is_ok() {
+        Some("md")
+    } else {
+        None
+    };
+    if found.is_some() {
+        *guard = found;
+    }
+    found
 }
 
 #[derive(Default)]
@@ -186,9 +195,26 @@ pub fn fetch_roster_blocking(cwd: &str) -> RosterEntry {
         }
     };
     if !output.status.success() {
-        // Pre-protocol mdflow has no `roster` subcommand → legacy mode
-        // (capability handshake, protocol §3).
-        return RosterEntry::empty(RosterStatus::Legacy);
+        // Distinguish "this mdflow predates the protocol" from "this mdflow
+        // supports roster but failed" — classifying every nonzero exit as
+        // Legacy would hide real config/registry errors behind a calm
+        // 'legacy mdflow' banner. Pre-protocol mdflow resolves `roster` as a
+        // flow name and fails with a not-found error naming it.
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr_lower = stderr.to_lowercase();
+        let looks_pre_protocol =
+            stderr_lower.contains("not found") && stderr_lower.contains("roster");
+        if looks_pre_protocol {
+            return RosterEntry::empty(RosterStatus::Legacy);
+        }
+        let mut entry = RosterEntry::empty(RosterStatus::Error);
+        let excerpt: String = stderr.trim().chars().take(300).collect();
+        entry.warnings.push(if excerpt.is_empty() {
+            format!("{binary} roster exited {}", output.status)
+        } else {
+            format!("{binary} roster exited {}: {excerpt}", output.status)
+        });
+        return entry;
     }
     parse_roster_output(&String::from_utf8_lossy(&output.stdout))
 }

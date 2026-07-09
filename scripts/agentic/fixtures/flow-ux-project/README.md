@@ -29,5 +29,8 @@ Launch the app with both env vars set and the Flow UX built-ins
 | `streaming-output.streameng` | streameng (10 lines / ~1s) | incremental `output.delta` |
 | `slow-cancellable.sloweng` | sloweng (60s heartbeats + child sleeper) | cancel: SIGTERM→SIGKILL, dead process group |
 | `failing-flow.faileng` | faileng (exit 42, stderr) | `run.error` exit-code surfacing |
-| `input-matrix` | fasteng | all 5 input types; password redaction in state |
+| `input-matrix` | fasteng | all 5 input types; required password has NO default → `--events` must fail closed (input honesty) |
+| `input-defaults` | fasteng | password WITH default `FIXTURE-SECRET-TOKEN-9F2` — that string must never surface in app state/elements |
 | `workflow-dag` | fasteng (3-step `_steps`) | `step.started`/`step.completed` ordering |
+| `stubborn-cancel.stubborneng` | stubborneng (traps SIGTERM) | 2s SIGKILL escalation still kills the group |
+| `giant-line.gianteng` | gianteng (~128KB single line) | oversized lines truncated for display, never dropped |

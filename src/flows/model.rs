@@ -406,10 +406,23 @@ impl OutputTail {
         }
     }
 
-    fn push_line(&mut self, line: String) {
+    fn push_line(&mut self, mut line: String) {
+        // A single line larger than the byte cap must be truncated, not
+        // dropped — the eviction loop below would otherwise pop the very
+        // line that was just pushed and the output would silently vanish.
+        if line.len() > OUTPUT_TAIL_MAX_BYTES {
+            let mut cut = OUTPUT_TAIL_MAX_BYTES.saturating_sub(16);
+            while cut > 0 && !line.is_char_boundary(cut) {
+                cut -= 1;
+            }
+            line.truncate(cut);
+            line.push_str("… [truncated]");
+        }
         self.bytes += line.len();
         self.lines.push_back(line);
-        while self.lines.len() > OUTPUT_TAIL_MAX_LINES || self.bytes > OUTPUT_TAIL_MAX_BYTES {
+        while self.lines.len() > OUTPUT_TAIL_MAX_LINES
+            || (self.bytes > OUTPUT_TAIL_MAX_BYTES && self.lines.len() > 1)
+        {
             if let Some(dropped) = self.lines.pop_front() {
                 self.bytes = self.bytes.saturating_sub(dropped.len());
             } else {
@@ -561,5 +574,23 @@ mod tests {
         for variant in FlowUxVariant::ALL {
             assert_eq!(variant.next().prev(), variant);
         }
+    }
+
+    /// A single line larger than the byte cap is truncated for display,
+    /// never dropped (fusion-ultra 2026-07-09: the eviction loop used to pop
+    /// the very line that was just pushed).
+    #[test]
+    fn giant_single_line_is_truncated_not_dropped() {
+        let mut tail = OutputTail::default();
+        let giant = format!("{}END", "x".repeat(OUTPUT_TAIL_MAX_BYTES * 2));
+        tail.push_text(&format!("{giant}\n"));
+        assert_eq!(tail.line_count(), 1);
+        let line = tail.last_line().unwrap();
+        assert!(
+            line.ends_with("… [truncated]"),
+            "got tail: {:?}",
+            &line[line.len().saturating_sub(40)..]
+        );
+        assert!(line.len() <= OUTPUT_TAIL_MAX_BYTES);
     }
 }

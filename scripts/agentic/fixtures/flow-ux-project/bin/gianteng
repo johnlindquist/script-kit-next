@@ -1,0 +1,6 @@
+#!/bin/sh
+# Emits one giant single line (~128KB) with a known suffix, then exits 0 —
+# proves oversized lines are truncated for display, never dropped.
+awk 'BEGIN { s=""; while (length(s) < 131072) s = s "GIANTCHUNK"; print s "GIANT_END_MARKER" }'
+echo "GIANT_DONE"
+exit 0

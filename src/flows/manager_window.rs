@@ -40,22 +40,35 @@ pub fn remember_flow_cwd(cwd: &str) {
     }
 }
 
+pub fn last_flow_cwd() -> Option<String> {
+    LAST_FLOW_CWD.lock().ok().and_then(|guard| guard.clone())
+}
+
 pub fn manager_picker_cwd() -> String {
-    if let Ok(guard) = LAST_FLOW_CWD.lock() {
-        if let Some(cwd) = guard.as_ref() {
-            return cwd.clone();
-        }
-    }
-    std::env::current_dir()
-        .ok()
-        .and_then(|p| p.to_str().map(str::to_string))
-        .unwrap_or_else(|| "/".to_string())
+    // Same resolver as the Flow UX surfaces — the manager and the launcher
+    // must never disagree about which project's flows they are showing.
+    super::resolve_flow_cwd(None)
 }
 
 pub fn is_flow_manager_window_open() -> bool {
     let slot = FLOW_MANAGER_WINDOW.get_or_init(|| Mutex::new(None));
     let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
     guard.is_some()
+}
+
+/// True when `window` IS the Flow Manager window. Global keystroke
+/// interceptors must treat the manager as a secondary surface that owns its
+/// own keys — leasing `ScriptListApp` from inside a manager-window dispatch
+/// re-enters the entity and panics when the dispatch originated from the
+/// stdin automation path.
+pub fn is_flow_manager_window(window: &gpui::Window) -> bool {
+    let slot = FLOW_MANAGER_WINDOW.get_or_init(|| Mutex::new(None));
+    if let Ok(guard) = slot.lock() {
+        if let Some(state) = guard.as_ref() {
+            return window.window_handle() == state.handle;
+        }
+    }
+    false
 }
 
 fn clear_manager_window_slot() {
@@ -284,7 +297,9 @@ impl FlowManagerApp {
         }
         if cmd && key == "c" {
             if let Some(run) = registry.selected_id().and_then(|id| registry.get(id)) {
-                let text: Vec<String> = run.stdout_tail.lines().map(str::to_string).collect();
+                // Interleaved tail: a late stderr diagnostic must land in the
+                // copied output, not vanish behind stdout.
+                let text: Vec<String> = run.merged_tail.lines().map(str::to_string).collect();
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.join("\n")));
             }
             return;
@@ -322,7 +337,10 @@ impl FlowManagerApp {
                 }
             }
             ManagerZone::Runs => {
-                let runs = registry.snapshot();
+                // Arrow movement must match the DISPLAYED order (render_runs
+                // shows newest first via .rev()); walking raw snapshot order
+                // makes Up move visually down.
+                let runs: Vec<_> = registry.snapshot().into_iter().rev().collect();
                 let selected_pos = registry
                     .selected_id()
                     .and_then(|id| runs.iter().position(|r| r.local_id == id))
@@ -476,10 +494,9 @@ impl Render for FlowManagerApp {
         // --- detail pane ----------------------------------------------------
         let detail: gpui::AnyElement = match selected_run {
             Some(run) => {
-                let mut lines: Vec<String> = run.stdout_tail.lines().map(str::to_string).collect();
-                if lines.is_empty() {
-                    lines = run.stderr_tail.lines().map(str::to_string).collect();
-                }
+                // Interleaved stdout+stderr so a late error is always
+                // visible in the pane the user is actually looking at.
+                let lines: Vec<String> = run.merged_tail.lines().map(str::to_string).collect();
                 let shown: Vec<String> = lines.iter().rev().take(24).rev().cloned().collect();
                 let steps: Vec<gpui::AnyElement> = run
                     .steps

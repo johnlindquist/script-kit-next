@@ -14,18 +14,26 @@ impl ScriptListApp {
     /// Effective cwd for flow discovery: the spine cwd chip when set,
     /// otherwise $HOME. mdflow resolves project vs global flows from here.
     pub(crate) fn flow_ux_cwd(&self) -> String {
-        // Test seam: probes point flow discovery at a fixture project
-        // without touching spine state (same pattern as
-        // SCRIPT_KIT_TEST_BRAIN_DB_PATH).
-        if let Ok(dir) = std::env::var("SCRIPT_KIT_FLOW_UX_CWD") {
-            if !dir.is_empty() {
-                return dir;
-            }
+        crate::flows::resolve_flow_cwd(
+            self.spine_cwd
+                .as_ref()
+                .map(|cwd| cwd.to_string_lossy().to_string()),
+        )
+    }
+
+    /// Short human form of the flow cwd for chips/empty states: `~`-relative
+    /// when under $HOME, and never more than the last two components.
+    fn flow_ux_cwd_display(cwd: &str) -> String {
+        let home = std::env::var("HOME").unwrap_or_default();
+        if !home.is_empty() && cwd == home {
+            return "~".to_string();
         }
-        if let Some(cwd) = &self.spine_cwd {
-            return cwd.to_string_lossy().to_string();
+        let tail: Vec<&str> = cwd.rsplit('/').filter(|s| !s.is_empty()).take(2).collect();
+        match tail.as_slice() {
+            [last, parent] => format!("{parent}/{last}"),
+            [last] => (*last).to_string(),
+            _ => cwd.to_string(),
         }
-        std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
     }
 
     /// Spawn the repaint tick that keeps Flow UX surfaces live while runs
@@ -324,17 +332,23 @@ impl ScriptListApp {
         // ------------------------------------------------------------------
         // List element
         // ------------------------------------------------------------------
+        // Always name the resolved cwd: "no flows" is meaningless unless the
+        // user can see WHICH directory was searched.
+        let cwd_display = Self::flow_ux_cwd_display(&cwd);
         let empty_message = match roster.status {
-            crate::flows::catalog::RosterStatus::Loading => "Loading flows…",
+            crate::flows::catalog::RosterStatus::Loading => format!("Loading flows in {cwd_display}…"),
             crate::flows::catalog::RosterStatus::Legacy => {
-                "mdflow is pre-protocol — upgrade with: npm i -g mdflow"
+                "mdflow is pre-protocol — upgrade with: npm i -g mdflow".to_string()
             }
-            crate::flows::catalog::RosterStatus::Error => "Flow roster unavailable",
+            crate::flows::catalog::RosterStatus::Error => match roster.warnings.first() {
+                Some(warning) => format!("Flow roster unavailable — {warning}"),
+                None => format!("Flow roster unavailable in {cwd_display}"),
+            },
             crate::flows::catalog::RosterStatus::Ready => {
                 if filter.is_empty() {
-                    "No flows in this project — create one with: md create"
+                    format!("No flows in {cwd_display} — create one with: md create")
                 } else {
-                    "No flows match your filter"
+                    "No flows match your filter".to_string()
                 }
             }
         };
@@ -456,6 +470,13 @@ impl ScriptListApp {
         } else {
             format!("{filtered_len} flows")
         };
+        let cwd_chip = div()
+            .flex_none()
+            .whitespace_nowrap()
+            .text_sm()
+            .text_color(rgb(chrome.text_secondary_hex))
+            .child(cwd_display.clone())
+            .into_any_element();
         let variant_chip = div()
             .flex_none()
             .whitespace_nowrap()
@@ -464,6 +485,7 @@ impl ScriptListApp {
             .child(format!("{} · ⌥←→", variant.display_name()))
             .into_any_element();
         let trailing = vec![
+            cwd_chip,
             variant_chip,
             self.render_builtin_main_input_count_label(count_label),
         ];
@@ -499,10 +521,9 @@ impl ScriptListApp {
         run: &crate::flows::run_registry::FlowRun,
         chrome: &crate::theme::AppChromeColors,
     ) -> gpui::AnyElement {
-        let mut lines: Vec<String> = run.stdout_tail.lines().map(str::to_string).collect();
-        if lines.is_empty() {
-            lines = run.stderr_tail.lines().map(str::to_string).collect();
-        }
+        // Interleaved stdout+stderr: a late stderr diagnostic must show in
+        // the inline pane, not hide behind earlier stdout.
+        let lines: Vec<String> = run.merged_tail.lines().map(str::to_string).collect();
         let shown: Vec<String> = lines.iter().rev().take(18).rev().cloned().collect();
         let status_line = format!(
             "{} — {} · {}ms",
@@ -694,15 +715,41 @@ impl ScriptListApp {
         let roster_entry = crate::flows::catalog::flow_catalog().roster_for(&cwd);
         let (manager_visible, manager_focused) =
             crate::flows::manager_window::manager_automation_state();
+        // Lens previews report the REAL explain-cache state so receipts can
+        // prove the free `md explain --json` round trip, not just selection.
+        let explain_info = preview.as_ref().and_then(|(flow_id, variant)| {
+            if *variant != crate::flows::model::FlowUxVariant::Lens {
+                return None;
+            }
+            let flow = roster_entry.flows.iter().find(|f| &f.id == flow_id)?.clone();
+            match crate::flows::explain_cache::explain_cache().state_for(&flow, &cwd) {
+                crate::flows::explain_cache::ExplainState::Ready(info) => Some((true, Some(info))),
+                crate::flows::explain_cache::ExplainState::Loading => Some((false, None)),
+                crate::flows::explain_cache::ExplainState::Failed(_) => Some((false, None)),
+            }
+        });
+        let preview_valid = |variant: &crate::flows::model::FlowUxVariant| -> bool {
+            match (&explain_info, variant) {
+                (Some((valid, _)), _) => *valid,
+                // Lens with no cache lookup possible (flow vanished from the
+                // roster) is not a proven preview.
+                (None, crate::flows::model::FlowUxVariant::Lens) => false,
+                (None, _) => true,
+            }
+        };
+        let fingerprint: Option<&str> = explain_info
+            .as_ref()
+            .and_then(|(_, info)| info.as_ref())
+            .and_then(|info| info.config_fingerprint.as_deref());
         crate::flows::automation::flow_ux_state(crate::flows::automation::FlowUxSnapshotInputs {
             active_variant,
             selected_flow_id: selected_flow_id.as_deref(),
             roster: Some((&roster_entry, cwd.as_str())),
-            preview: preview.as_ref().map(|(flow_id, _)| {
+            preview: preview.as_ref().map(|(flow_id, variant)| {
                 crate::flows::automation::PreviewSnapshot {
                     flow_id,
-                    fingerprint: None,
-                    valid: true,
+                    fingerprint,
+                    valid: preview_valid(variant),
                 }
             }),
             manager_visible,

@@ -48,9 +48,20 @@ pub struct FlowRun {
     pub engagement: EngagementMode,
     pub exit_code: Option<i64>,
     pub error_message: Option<String>,
+    /// PGID of the app-spawned `md` process (group leader via
+    /// `process_group(0)`). Immutable once set — cancellation signals THIS.
     pub pid: Option<u32>,
+    /// Engine/orchestrator pid as reported by `run.started`. Informational
+    /// only; never a signal target (it is not a group leader).
+    pub engine_pid: Option<u32>,
+    /// Input override names recorded at launch (values are never stored —
+    /// password redaction holds by construction).
+    pub override_names: Vec<String>,
     pub stdout_tail: OutputTail,
     pub stderr_tail: OutputTail,
+    /// Chronologically interleaved stdout+stderr (stderr lines prefixed
+    /// "stderr· ") so late errors cannot disappear behind stdout.
+    pub merged_tail: OutputTail,
     pub steps: Vec<(String, StepState)>,
     pub timings: RunTimings,
     pub launched_at: Instant,
@@ -77,8 +88,9 @@ impl FlowRun {
     }
 
     pub fn last_output_line(&self) -> Option<&str> {
-        self.stdout_tail
+        self.merged_tail
             .last_line()
+            .or_else(|| self.stdout_tail.last_line())
             .or_else(|| self.stderr_tail.last_line())
     }
 }
@@ -114,6 +126,9 @@ impl FlowRunRegistry {
     }
 
     fn bump_and_notify(&self, state: &mut RegistryState) {
+        // Enforce retention on every mutation, not just inserts — a run
+        // turning terminal can push the finished count over the cap too.
+        Self::evict_finished_over_cap(state);
         state.generation = state.generation.wrapping_add(1);
         drop_notify(&self.notify);
     }
@@ -143,8 +158,11 @@ impl FlowRunRegistry {
             exit_code: None,
             error_message: None,
             pid: None,
+            engine_pid: None,
+            override_names: Vec::new(),
             stdout_tail: OutputTail::default(),
             stderr_tail: OutputTail::default(),
+            merged_tail: OutputTail::default(),
             steps: Vec::new(),
             timings: RunTimings::default(),
             launched_at: Instant::now(),
@@ -153,9 +171,42 @@ impl FlowRunRegistry {
         let mut state = self.state.lock();
         state.order.push(local_id);
         state.runs.insert(local_id, run);
-        state.selected = Some(local_id);
+        // Selection is presentation state: a new launch must not steal the
+        // manager's focus away from a run the user is inspecting.
+        if state.selected.is_none() {
+            state.selected = Some(local_id);
+        }
         self.bump_and_notify(&mut state);
         local_id
+    }
+
+    /// Bound completed-run retention so an all-day session cannot grow the
+    /// registry (and every snapshot clone) without limit. Active runs are
+    /// never evicted.
+    fn evict_finished_over_cap(state: &mut RegistryState) {
+        const FINISHED_RETENTION_CAP: usize = 100;
+        let finished: Vec<u64> = state
+            .order
+            .iter()
+            .copied()
+            .filter(|id| {
+                state
+                    .runs
+                    .get(id)
+                    .is_some_and(|run| run.phase.is_terminal())
+            })
+            .collect();
+        if finished.len() <= FINISHED_RETENTION_CAP {
+            return;
+        }
+        let excess = finished.len() - FINISHED_RETENTION_CAP;
+        for id in finished.into_iter().take(excess) {
+            state.runs.remove(&id);
+            state.order.retain(|other| *other != id);
+            if state.selected == Some(id) {
+                state.selected = None;
+            }
+        }
     }
 
     /// Apply one protocol event from the runner thread.
@@ -164,14 +215,26 @@ impl FlowRunRegistry {
         let Some(run) = state.runs.get_mut(&local_id) else {
             return;
         };
+        // Terminal phases are final: once a run is Cancelled/Failed/
+        // Succeeded, NO later lifecycle mutation is accepted — a late
+        // `run.started` must not resurrect a cancelled run as Running, and
+        // late output/exit data must not rewrite a settled outcome.
+        if run.phase.is_terminal() {
+            return;
+        }
         if run.protocol_run_id.is_none() {
             run.protocol_run_id = Some(envelope.run_id.clone());
         }
         match &envelope.event {
             RunEvent::Protocol { .. } => {}
             RunEvent::RunStarted { pid, .. } => {
-                run.phase = RunPhase::Running;
-                run.pid = *pid;
+                if run.phase == RunPhase::Starting {
+                    run.phase = RunPhase::Running;
+                }
+                // `run.pid` stays the app-spawned group leader (the ONLY
+                // valid killpg target); the protocol-reported pid is the
+                // engine/orchestrator, recorded separately.
+                run.engine_pid = *pid;
                 if run.timings.spawn_ms.is_none() {
                     run.timings.spawn_ms = Some(run.launched_at.elapsed().as_millis() as u64);
                 }
@@ -182,8 +245,16 @@ impl FlowRunRegistry {
                         Some(run.launched_at.elapsed().as_millis() as u64);
                 }
                 match channel {
-                    super::model::OutputChannel::Stdout => run.stdout_tail.push_text(text),
-                    super::model::OutputChannel::Stderr => run.stderr_tail.push_text(text),
+                    super::model::OutputChannel::Stdout => {
+                        run.stdout_tail.push_text(text);
+                        run.merged_tail.push_text(text);
+                    }
+                    super::model::OutputChannel::Stderr => {
+                        run.stderr_tail.push_text(text);
+                        for line in text.lines() {
+                            run.merged_tail.push_text(&format!("stderr· {line}\n"));
+                        }
+                    }
                 }
             }
             RunEvent::StepStarted { step_id, .. } => {
@@ -213,11 +284,17 @@ impl FlowRunRegistry {
                 exit_code,
                 duration_ms,
             } => {
-                run.phase = if *exit_code == 0 {
-                    RunPhase::Succeeded
-                } else {
-                    RunPhase::Failed
-                };
+                // An app-side cancel marks Cancelled before the process dies;
+                // the SIGTERM'd engine then surfaces as run.error/run.completed.
+                // Terminal phases never regress (a cancelled run must not
+                // flip to Failed because its engine exited 143).
+                if !run.phase.is_terminal() {
+                    run.phase = if *exit_code == 0 {
+                        RunPhase::Succeeded
+                    } else {
+                        RunPhase::Failed
+                    };
+                }
                 run.exit_code = Some(*exit_code);
                 run.duration_ms = Some(*duration_ms);
             }
@@ -226,13 +303,17 @@ impl FlowRunRegistry {
                 message,
                 duration_ms,
             } => {
-                run.phase = RunPhase::Failed;
+                if !run.phase.is_terminal() {
+                    run.phase = RunPhase::Failed;
+                    run.error_message = Some(message.clone());
+                }
                 run.exit_code = *exit_code;
-                run.error_message = Some(message.clone());
                 run.duration_ms = *duration_ms;
             }
             RunEvent::RunCancelled { duration_ms, .. } => {
-                run.phase = RunPhase::Cancelled;
+                if !run.phase.is_terminal() {
+                    run.phase = RunPhase::Cancelled;
+                }
                 run.duration_ms = *duration_ms;
             }
             RunEvent::Unknown { .. } => {}
@@ -285,8 +366,13 @@ impl FlowRunRegistry {
         self.bump_and_notify(&mut state);
     }
 
-    pub fn set_pid(&self, local_id: u64, pid: u32) {
+    /// Record the app-spawned process-group leader. Immutable once set, and
+    /// never flips a terminal phase back to Running (cancel can land between
+    /// spawn and this call). Returns the phase observed under the lock so
+    /// the runner can atomically detect cancel-during-spawn.
+    pub fn set_pid(&self, local_id: u64, pid: u32) -> Option<RunPhase> {
         let mut state = self.state.lock();
+        let mut observed = None;
         if let Some(run) = state.runs.get_mut(&local_id) {
             if run.pid.is_none() {
                 run.pid = Some(pid);
@@ -297,8 +383,19 @@ impl FlowRunRegistry {
             if run.phase == RunPhase::Starting {
                 run.phase = RunPhase::Running;
             }
+            observed = Some(run.phase);
         }
         self.bump_and_notify(&mut state);
+        observed
+    }
+
+    /// Record which inputs were overridden at launch (names only — values
+    /// are never stored, so password redaction holds by construction).
+    pub fn record_override_names(&self, local_id: u64, names: Vec<String>) {
+        let mut state = self.state.lock();
+        if let Some(run) = state.runs.get_mut(&local_id) {
+            run.override_names = names;
+        }
     }
 
     pub fn select(&self, local_id: u64) {
@@ -420,7 +517,10 @@ mod tests {
         }
         let run = registry.get(id).unwrap();
         assert_eq!(run.phase, RunPhase::Running);
-        assert_eq!(run.pid, Some(42));
+        // Protocol pid is the ENGINE, recorded separately; the killpg
+        // target (run.pid) only ever comes from the app's own spawn.
+        assert_eq!(run.engine_pid, Some(42));
+        assert_eq!(run.pid, None);
         assert_eq!(run.protocol_run_id.as_deref(), Some("r-9"));
         assert_eq!(run.last_output_line(), Some("hi"));
         assert!(run.timings.first_output_ms.is_some());
@@ -543,6 +643,106 @@ mod tests {
         let id = insert(&registry);
         registry.set_engagement(id, EngagementMode::Background);
         assert!(hits.load(Ordering::SeqCst) >= 2);
+        registry.reset_for_test();
+    }
+
+    // ---- Cancellation-truth regression set (fusion-ultra 2026-07-09) ----
+
+    /// A late `run.started` after cancellation must not resurrect the run
+    /// as Running — the demonstrated hole that made "Cancelled" a lie.
+    #[test]
+    fn late_run_started_never_resurrects_cancelled_run() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.mark_cancelled(id);
+        let started = parse_event_line(
+            r#"{"protocolVersion":1,"seq":1,"runId":"r-x","ts":1,"event":"run.started","flowId":"project:demo","pid":4242}"#,
+        )
+        .unwrap();
+        registry.apply_event(id, &started);
+        let run = registry.get(id).unwrap();
+        assert_eq!(run.phase, RunPhase::Cancelled);
+        assert_eq!(run.engine_pid, None, "terminal runs accept no mutations");
+    }
+
+    /// After ANY terminal phase, late output/exit events are rejected
+    /// entirely (no output growth, no exit-code rewrite).
+    #[test]
+    fn terminal_runs_reject_all_later_lifecycle_events() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.mark_cancelled(id);
+        for line in [
+            r#"{"protocolVersion":1,"seq":2,"runId":"r-x","ts":1,"event":"output.delta","channel":"stdout","text":"late\n"}"#,
+            r#"{"protocolVersion":1,"seq":3,"runId":"r-x","ts":1,"event":"run.completed","exitCode":0,"durationMs":5}"#,
+            r#"{"protocolVersion":1,"seq":4,"runId":"r-x","ts":1,"event":"run.error","exitCode":143,"message":"late","durationMs":5}"#,
+        ] {
+            registry.apply_event(id, &parse_event_line(line).unwrap());
+        }
+        let run = registry.get(id).unwrap();
+        assert_eq!(run.phase, RunPhase::Cancelled);
+        assert_eq!(run.exit_code, None);
+        assert_eq!(run.stdout_tail.line_count(), 0);
+    }
+
+    /// `run.started`'s pid is the engine, NOT a killpg target: the
+    /// app-spawned group leader recorded via set_pid must stay immutable.
+    #[test]
+    fn protocol_pid_never_overwrites_spawned_pgid() {
+        let registry = fresh();
+        let id = insert(&registry);
+        let observed = registry.set_pid(id, 1111);
+        assert_eq!(observed, Some(RunPhase::Running));
+        let started = parse_event_line(
+            r#"{"protocolVersion":1,"seq":1,"runId":"r-x","ts":1,"event":"run.started","flowId":"project:demo","pid":2222}"#,
+        )
+        .unwrap();
+        registry.apply_event(id, &started);
+        let run = registry.get(id).unwrap();
+        assert_eq!(run.pid, Some(1111), "pgid is immutable once spawned");
+        assert_eq!(run.engine_pid, Some(2222));
+    }
+
+    /// Cancel between spawn and pid publication: set_pid must report the
+    /// terminal phase (so the runner delivers the missed signal) and must
+    /// not flip Cancelled back to Running.
+    #[test]
+    fn set_pid_after_cancel_reports_terminal_and_keeps_cancelled() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.mark_cancelled(id);
+        let observed = registry.set_pid(id, 3333);
+        assert_eq!(observed, Some(RunPhase::Cancelled));
+        assert_eq!(registry.get(id).unwrap().phase, RunPhase::Cancelled);
+    }
+
+    /// New launches must not steal manager selection from the run the user
+    /// is inspecting (selection is presentation state, not lifecycle).
+    #[test]
+    fn new_runs_do_not_steal_existing_selection() {
+        let registry = fresh();
+        let first = insert(&registry);
+        assert_eq!(registry.selected_id(), Some(first));
+        let _second = insert(&registry);
+        assert_eq!(registry.selected_id(), Some(first));
+    }
+
+    /// Completed-run retention is bounded; active runs are never evicted.
+    #[test]
+    fn finished_runs_evicted_over_cap_active_preserved() {
+        let registry = fresh();
+        let active = insert(&registry);
+        for _ in 0..120 {
+            let id = insert(&registry);
+            registry.mark_cancelled(id);
+        }
+        let snapshot = registry.snapshot();
+        let finished = snapshot.iter().filter(|r| r.phase.is_terminal()).count();
+        assert!(
+            finished <= 100,
+            "finished retention cap exceeded: {finished}"
+        );
+        assert!(snapshot.iter().any(|r| r.local_id == active));
         registry.reset_for_test();
     }
 }

@@ -73,3 +73,12 @@ Searchable utility lists available directly from the launcher.
 | **Post-copy tracker** | Clipboard copies flow through sediment rules without opening popup UI. URLs auto-keep to the Day Page and non-URLs promote on re-copy. | `process_text_sediment` | [sediment.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/clipboard_history/sediment.rs) |
 
 ---
+
+## 6. Flow Launcher (mdflow)
+
+| UI Element | Description | Key Structs / Entities | Main Source File |
+| :--- | :--- | :--- | :--- |
+| **Flows** | The visible flow-first entry point: find and run mdflow flows for the resolved cwd. Enter runs inline, ⇧↵ backgrounds, ⌘↵ opens the Flow Manager, Esc backgrounds (never cancels), ⌥←/→ cycles exploration variants. Contract: `docs/ai/flow-ux-protocol.md`. | `AppView::FlowUxView`, `FlowUxVariant` | [flow_ux.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/flow_ux.rs) |
+| **Flow UX variants** | Hidden query-only built-ins (`Flow UX — Flash/Dispatch/Lens/Mission Control`) — the same FlowUxView with different interaction grammars, kept for by-feel comparison. | `is_query_only_builtin`, `BuiltInFeature::FlowUxVariant` | [mod.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/builtins/mod.rs) |
+| **Flow Manager** | Detached supervision window (notes-window pattern, automation id `flowManager`): picker + runs zones, ⌘⌫ cancel (SIGTERM→2s→SIGKILL on the process group), ⌘K clear finished, ⌘C copy interleaved output, Esc closes the window only — never cancels runs. | `FlowManagerApp` | [manager_window.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/flows/manager_window.rs) |
+| **Flow run substrate** | mdflow owns discovery/execution (`md roster --json`, `md explain --json`, `md <flow> --events`); the app-side registry is the single source of truth for RunPhase × EngagementMode, with terminal phases that never regress and an immutable spawned pgid for cancellation. | `FlowRunRegistry`, `flow_catalog`, `launch_flow` | [run_registry.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/flows/run_registry.rs) & [runner.rs](file:///Users/johnlindquist/dev/script-kit-gpui/src/flows/runner.rs) |

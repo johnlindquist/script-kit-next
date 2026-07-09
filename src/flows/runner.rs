@@ -40,6 +40,13 @@ pub fn launch_flow(
     let local_id =
         registry.insert_starting(flow_id, flow_name, flow_path, cwd, variant, engagement);
     registry.record_launch_ack(local_id, launch_requested.elapsed().as_millis() as u64);
+    registry.record_override_names(
+        local_id,
+        input_overrides
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect(),
+    );
 
     let flow_path = flow_path.to_string();
     let cwd = cwd.to_string();
@@ -52,6 +59,15 @@ pub fn launch_flow(
 
 fn run_flow_process(local_id: u64, flow_path: &str, cwd: &str, overrides: &[(String, String)]) {
     let registry = flow_run_registry();
+    // Cancel-before-spawn: a run cancelled while still queued must never
+    // spawn a process at all (a leaked process here would be invisible to
+    // cancellation, which only signals recorded pgids).
+    if registry
+        .get(local_id)
+        .is_none_or(|run| run.phase.is_terminal())
+    {
+        return;
+    }
     let Some(binary) = mdflow_binary() else {
         registry.mark_failed(local_id, "mdflow CLI not found on PATH (npm i -g mdflow)");
         return;
@@ -80,7 +96,17 @@ fn run_flow_process(local_id: u64, flow_path: &str, cwd: &str, overrides: &[(Str
         }
     };
     let pid = child.id();
-    registry.set_pid(local_id, pid);
+    // set_pid returns the phase observed under the registry lock: if a
+    // cancel landed between spawn and pid publication, the phase is already
+    // Cancelled and WE must deliver the signal cancel_run could not (it had
+    // no pgid to target yet).
+    let observed = registry.set_pid(local_id, pid);
+    if observed.is_some_and(|phase| phase.is_terminal()) {
+        unsafe {
+            libc::killpg(pid as libc::pid_t, libc::SIGTERM);
+        }
+        spawn_kill_escalation(local_id, pid);
+    }
     // Orphan hygiene only — run lifecycle state lives in the flow registry.
     crate::process_manager::PROCESS_MANAGER.register_process(pid, flow_path);
 
@@ -173,32 +199,50 @@ pub fn cancel_run(local_id: u64) {
         return;
     };
 
-    // `process_group(0)` made the child its own group leader → pgid == pid.
-    unsafe {
-        libc::killpg(pid as libc::pid_t, libc::SIGTERM);
-    }
+    // Mark Cancelled BEFORE signalling: the reader thread may observe the
+    // dying process's terminal event/EOF first, and terminal phases never
+    // regress, so the mark must win the race.
     registry.mark_cancelled(local_id);
+    // `process_group(0)` made the child its own group leader → pgid == pid.
+    let killpg_result = unsafe { libc::killpg(pid as libc::pid_t, libc::SIGTERM) };
+    if killpg_result != 0 {
+        let errno = std::io::Error::last_os_error();
+        if errno.raw_os_error() == Some(libc::ESRCH) {
+            // Group already gone — the run's own terminal event (or the
+            // reader fallback) settles it; Cancelled stands as the outcome.
+            return;
+        }
+        // Signal actually failed (e.g. EPERM): the process may still be
+        // running, so claiming "Cancelled" would be a lie. Surface it.
+        crate::logging::log(
+            "FLOWS",
+            &format!("run {local_id}: killpg({pid}, SIGTERM) failed: {errno} — escalating"),
+        );
+    }
+    spawn_kill_escalation(local_id, pid);
+}
 
+/// Bounded SIGTERM→SIGKILL escalation watcher for one process group.
+fn spawn_kill_escalation(local_id: u64, pgid: u32) {
     std::thread::Builder::new()
         .name(format!("flow-cancel-{local_id}"))
         .spawn(move || {
             // Poll the group (not just the leader) so descendants count,
-            // matching the executor's escalation style (runner.rs
-            // TERM_GRACE poll loop) with the protocol's 2s bound.
+            // with the protocol's 2s bound before SIGKILL.
             let deadline = Instant::now() + CANCEL_ESCALATION;
             while Instant::now() < deadline {
-                if !process_group_alive(pid) {
+                if !process_group_alive(pgid) {
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
-            if process_group_alive(pid) {
+            if process_group_alive(pgid) {
                 unsafe {
-                    libc::killpg(pid as libc::pid_t, libc::SIGKILL);
+                    libc::killpg(pgid as libc::pid_t, libc::SIGKILL);
                 }
                 crate::logging::log(
                     "FLOWS",
-                    &format!("run {local_id}: escalated cancel to SIGKILL for pgid {pid}"),
+                    &format!("run {local_id}: escalated cancel to SIGKILL for pgid {pgid}"),
                 );
             }
         })

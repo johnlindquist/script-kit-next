@@ -39,6 +39,8 @@ verify changed behavior -> git diff --check
 ## Owned paths
 - `src/main_sections/**`
 - `src/render_script_list/**`
+- `src/flows/**` (flow-first launcher substrate: mdflow roster/explain/events client, run registry, Flow Manager window — contract in docs/ai/flow-ux-protocol.md)
+- `src/render_builtins/flow_ux.rs`
 - `src/app_layout/**`
 - `src/components/main_view_chrome.rs`
 - `src/frecency/**`

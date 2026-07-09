@@ -1,0 +1,12 @@
+#!/bin/sh
+# Ignores SIGTERM — exists to prove the 2s SIGKILL escalation actually
+# fires and the process group still dies.
+trap '' TERM
+echo "STUBBORN_BEGAN"
+i=1
+while [ "$i" -le 240 ]; do
+  echo "STUBBORN_$i"
+  sleep 0.5
+  i=$((i + 1))
+done
+exit 0

@@ -1800,6 +1800,21 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "activity",
         ));
 
+        // THE visible flow-first entry point (fusion-ultra 2026-07-09: one
+        // visible "Flows" entry seeded from Flash beats four hidden
+        // built-ins). The variant entries below stay hidden for by-feel
+        // comparison.
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/flows",
+            "Flows",
+            "Find and run mdflow flows — Enter runs, ⇧↵ backgrounds, ⌘↵ supervises",
+            vec![
+                "flow", "flows", "mdflow", "md", "run", "agent", "agentic", "launcher",
+            ],
+            BuiltInFeature::FlowUxVariant(crate::flows::model::FlowUxVariant::Flash),
+            "zap",
+        ));
+
         // Flow UX exploration surfaces — hidden (query-only, see
         // `is_query_only_builtin`) variations for the flow-first launcher
         // experiment. Each opens the same FlowUxView with a different

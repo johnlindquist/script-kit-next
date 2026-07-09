@@ -1314,8 +1314,10 @@ impl ScriptListApp {
                 let is_actions = crate::actions::is_actions_window(window);
                 let is_shortcut_recorder =
                     super::shortcut_recorder::is_shortcut_recorder_window(window);
+                let is_flow_manager =
+                    crate::flows::manager_window::is_flow_manager_window(window);
 
-                if is_notes || is_ai || is_detached_agent_chat || is_shortcut_recorder {
+                if is_notes || is_ai || is_detached_agent_chat || is_shortcut_recorder || is_flow_manager {
                     return;
                 }
 
@@ -1361,7 +1363,15 @@ impl ScriptListApp {
                 let is_actions = crate::actions::is_actions_window(window);
                 let is_shortcut_recorder =
                     super::shortcut_recorder::is_shortcut_recorder_window(window);
-                if is_notes || is_ai || is_detached_agent_chat || is_actions || is_shortcut_recorder {
+                let is_flow_manager =
+                    crate::flows::manager_window::is_flow_manager_window(window);
+                if is_notes
+                    || is_ai
+                    || is_detached_agent_chat
+                    || is_actions
+                    || is_shortcut_recorder
+                    || is_flow_manager
+                {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
@@ -1370,6 +1380,7 @@ impl ScriptListApp {
                         is_detached_agent_chat,
                         is_actions,
                         is_shortcut_recorder,
+                        is_flow_manager,
                     );
                     return;
                 }
@@ -1946,6 +1957,7 @@ impl ScriptListApp {
                     || crate::ai::is_ai_window(window)
                     || crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
+                    || crate::flows::manager_window::is_flow_manager_window(window)
                 {
                     return;
                 }
@@ -2918,6 +2930,7 @@ impl ScriptListApp {
                     || crate::ai::is_ai_window(window)
                     || crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
+                    || crate::flows::manager_window::is_flow_manager_window(window)
                 {
                     return;
                 }
@@ -2989,8 +3002,13 @@ impl ScriptListApp {
                 let is_actions = crate::actions::is_actions_window(window);
                 let is_shortcut_recorder =
                     super::shortcut_recorder::is_shortcut_recorder_window(window);
-                let is_secondary_surface_window =
-                    is_notes || is_ai || is_detached_agent_chat || is_shortcut_recorder;
+                let is_flow_manager =
+                    crate::flows::manager_window::is_flow_manager_window(window);
+                let is_secondary_surface_window = is_notes
+                    || is_ai
+                    || is_detached_agent_chat
+                    || is_shortcut_recorder
+                    || is_flow_manager;
                 let actions_open_for_main = crate::actions::is_actions_window_open_for_main();
 
                 // A detached actions popup hosted by a secondary window (Notes,
