@@ -71,7 +71,7 @@ Routing rules:
 - Script List, main window, mini/full view, launcher selection -> `flows/launcher.md`.
 - Actions menu, command palette, trigger picker, confirm popup -> `flows/actions.md`.
 - Hotkeys, gestures, tap/hold/double-tap, focus restoration -> `flows/hotkeys.md`.
-- Script prompt renderers and protocol-to-renderer contracts -> `flows/prompts.md`.
+- Script prompt renderers, protocol-to-renderer contracts, or `crates/sk-protocol/**` -> `flows/prompts.md`.
 - Built-in utility surfaces -> `flows/builtins.md`.
 - Terminal prompt, PTY, command bar, terminal theme -> `flows/terminal.md`.
 - Script execution, menu cache, metadata, scheduler -> `flows/execution.md`.
@@ -107,6 +107,14 @@ Flow prompt content is not repo policy. Only regression tests/probes or
 instructions, dirty-work preservation, or this file. After editing a flow,
 verify it for free with `md flows/<name>.md "<smoke task>" --_dry-run` and
 keep its eval suite passing.
+
+## Domain Crate Boundaries
+
+- The app may depend on workspace domain crates under `crates/sk-*`; domain crates must never depend on `script-kit-gpui`.
+- App-independent protocol primitives belong in `crates/sk-protocol/**`. Keep app services and compatibility adapters under `src/protocol/**` while migration is in progress.
+- Move pure unit tests with their domain implementation so `./scripts/agentic/agent-cargo.sh test -p <crate>` does not link GPUI.
+- For each extraction, verify the domain dependency tree and preserve the existing app-facing path with a temporary re-export when callers still rely on it.
+- Update the owning project flow's path globs whenever a domain moves into `crates/**`.
 
 ## UI Consistency and Shared Component Contract
 

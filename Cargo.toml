@@ -2,6 +2,7 @@
 members = [
     ".",
     "crates/ghost-llm-helper",
+    "crates/sk-protocol",
 ]
 exclude = [
     "vendor/gpui-component/crates/macros",
@@ -79,6 +80,7 @@ path = "src/main.rs"
 test = false  # Tests run via lib.rs only - avoids duplicate test runs
 
 [dependencies]
+sk-protocol = { path = "crates/sk-protocol" }
 gpui = { path = "vendor/gpui", features = ["test-support"] }
 gpui_platform = { path = "vendor/gpui_platform", features = ["font-kit"] }
 gpui_macos = { path = "vendor/gpui_macos" }

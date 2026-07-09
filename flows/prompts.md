@@ -38,6 +38,7 @@ verify changed behavior -> runtime proof for changed visible prompt behavior
 - `src/prompts/**`
 - `src/prompt_handler/**`
 - `src/protocol/**`
+- `crates/sk-protocol/**`
 
 ## Workflow
 1. Preserve unrelated dirty work; note pre-existing dirty files before changing anything.
@@ -55,6 +56,7 @@ Allowed edit globs (advisory until launcher enforcement exists; leave them only 
 - `src/prompts/**`
 - `src/prompt_handler/**`
 - `src/protocol/**`
+- `crates/sk-protocol/**`
 - `tests/**/*prompt*`
 
 Never git commit, push, tag, stash, reset, or clean unless the user explicitly asks. Never run bare cargo; every cargo invocation goes through ./scripts/agentic/agent-cargo.sh.
