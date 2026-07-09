@@ -653,22 +653,6 @@ pub(crate) struct ScriptListApp {
     focused_clipboard_entry_id: Option<String>,
     /// P0 FIX: Cached windows for WindowSwitcherView (avoids cloning per frame)
     cached_windows: Vec<window_control::WindowInfo>,
-    /// App-layer enriched rows for root/unified `windows:` search.
-    cached_root_windows: Vec<scripts::RootWindowEntry>,
-    /// Last provider state for root unified `windows:` search.
-    root_windows_provider_status: window_control::RootWindowsProviderStatus,
-    /// Generation bumped when root unified search refreshes cached windows.
-    root_windows_refresh_generation: u64,
-    /// Token used to drop stale async root window refresh results.
-    root_windows_refresh_token: u64,
-    /// True while an async root window refresh is in flight.
-    root_windows_refreshing: bool,
-    /// Last successful root window refresh completion.
-    root_windows_last_completed_at: Option<std::time::Instant>,
-    /// In-memory local recency for windows focused through Script Kit.
-    root_window_focus_recency: std::collections::HashMap<String, u64>,
-    /// Sequence number for in-memory root window recency.
-    root_window_focus_seq: u64,
     /// Cached browser tabs for BrowserTabsView (avoids repeated AppleScript calls while open)
     cached_browser_tabs: Vec<browser_tabs::BrowserTabInfo>,
     /// Cached browser history entries for BrowserHistoryView.

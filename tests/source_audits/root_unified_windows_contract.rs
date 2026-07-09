@@ -20,9 +20,9 @@ fn root_windows_source_refreshes_in_app_layer_not_grouping() {
         "background_executor()",
         ".spawn(async move { crate::window_control::list_windows() })",
         "crate::window_control::list_windows()",
+        "begin_root_windows_refresh",
         "install_root_windows",
-        "cached_root_windows",
-        "RootWindowsProviderStatus::Refreshing",
+        "fail_root_windows_refresh",
     ] {
         assert!(
             refresh_method.contains(needle),

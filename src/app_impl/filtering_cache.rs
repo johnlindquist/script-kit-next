@@ -218,16 +218,12 @@ impl ScriptListApp {
     ) {
         let selection_before = self.main_menu_selection_snapshot();
         self.cached_windows = windows;
-        self.cached_root_windows = Self::build_root_window_entries(
+        let root_windows = Self::build_root_window_entries(
             &self.cached_windows,
             &self.apps,
-            &self.root_window_focus_recency,
+            &self.root_search.root_window_focus_recency,
         );
-        let count = self.cached_root_windows.len();
-        self.root_windows_refresh_generation = self.root_windows_refresh_generation.wrapping_add(1);
-        self.root_windows_provider_status =
-            crate::window_control::RootWindowsProviderStatus::Ready { count };
-        self.root_windows_last_completed_at = Some(std::time::Instant::now());
+        self.root_search.install_root_windows(root_windows);
         self.invalidate_grouped_cache();
         self.reconcile_script_list_after_results_refresh(
             "root_windows_refresh_complete",
@@ -247,12 +243,12 @@ impl ScriptListApp {
         }
 
         let selection_before = self.main_menu_selection_snapshot();
-        self.cached_root_windows = Self::build_root_window_entries(
+        let root_windows = Self::build_root_window_entries(
             &self.cached_windows,
             &self.apps,
-            &self.root_window_focus_recency,
+            &self.root_search.root_window_focus_recency,
         );
-        self.root_windows_refresh_generation = self.root_windows_refresh_generation.wrapping_add(1);
+        self.root_search.rebuild_root_windows(root_windows);
         self.invalidate_grouped_cache();
         self.reconcile_script_list_after_results_refresh(reason, selection_before, cx);
     }
@@ -271,25 +267,11 @@ impl ScriptListApp {
             && advanced_query
                 .source_filters
                 .allows(crate::menu_syntax::RootUnifiedSourceFilter::Windows);
-        if !windows_explicit || self.root_windows_refreshing {
+        if !windows_explicit || !self.root_search.root_windows_refresh_needed() {
             return;
         }
 
-        let stale = self
-            .root_windows_last_completed_at
-            .map(|completed_at| completed_at.elapsed() >= std::time::Duration::from_secs(3))
-            .unwrap_or(true);
-        if !self.cached_root_windows.is_empty() && !stale {
-            return;
-        }
-
-        self.root_windows_refreshing = true;
-        self.root_windows_refresh_token = self.root_windows_refresh_token.wrapping_add(1);
-        let token = self.root_windows_refresh_token;
-        let stale_count = self.cached_root_windows.len();
-        self.root_windows_provider_status =
-            crate::window_control::RootWindowsProviderStatus::Refreshing { count: stale_count };
-        self.root_windows_refresh_generation = self.root_windows_refresh_generation.wrapping_add(1);
+        let token = self.root_search.begin_root_windows_refresh();
         self.invalidate_grouped_cache();
         cx.notify();
 
@@ -300,17 +282,17 @@ impl ScriptListApp {
                 .await;
 
             let _ = this.update(cx, |app, cx| {
-                if app.root_windows_refresh_token != token {
+                if !app.root_search.root_windows_refresh_token_matches(token) {
                     return;
                 }
-                app.root_windows_refreshing = false;
+                app.root_search.finish_root_windows_refresh_request();
                 match result {
                     Ok(windows) => app.install_root_windows(windows, cx),
                     Err(error) => {
                         let selection_before = app.main_menu_selection_snapshot();
                         let message = error.to_string();
                         let lower = message.to_ascii_lowercase();
-                        app.root_windows_provider_status =
+                        let status =
                             if lower.contains("accessibility") || lower.contains("permission") {
                                 crate::window_control::RootWindowsProviderStatus::PermissionRequired
                             } else {
@@ -322,8 +304,7 @@ impl ScriptListApp {
                                         .to_string(),
                                 }
                             };
-                        app.root_windows_refresh_generation =
-                            app.root_windows_refresh_generation.wrapping_add(1);
+                        app.root_search.fail_root_windows_refresh(status);
                         app.invalidate_grouped_cache();
                         app.reconcile_script_list_after_results_refresh(
                             "root_windows_refresh_error",
@@ -1689,7 +1670,7 @@ impl ScriptListApp {
             crate::browser_tabs::root_browser_tabs_snapshot_status().generation;
         let browser_history_generation =
             crate::browser_history::root_browser_history_snapshot_status().generation;
-        let root_windows_generation = self.root_windows_refresh_generation;
+        let root_windows_generation = self.root_search.root_windows_refresh_generation;
         let brain_inbox_epoch = self.root_search.root_brain_inbox_epoch;
         let grouped_source_filter_key = format!("{grouped_source_filters:?}");
         let grouped_cache_key = match current_app_commands_app_name.as_deref() {
@@ -2009,8 +1990,8 @@ impl ScriptListApp {
                 &self.scriptlets,
                 builtins_for_grouping,
                 &self.apps,
-                &self.cached_root_windows,
-                self.root_windows_provider_status.clone(),
+                &self.root_search.cached_root_windows,
+                self.root_search.root_windows_provider_status.clone(),
                 &self.skills,
                 &self.frecency_store,
                 search_text,
