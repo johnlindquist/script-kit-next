@@ -41,7 +41,7 @@
   "src/menu_syntax/main_hint.rs": 4370,
   "src/menu_syntax/trigger_picker.rs": 2863,
   "src/notes/storage.rs": 3335,
-  "src/prompt_handler/mod.rs": 11087,
+  "src/prompt_handler/mod.rs": 10921,
   "src/render_builtins/theme_chooser.rs": 5066,
   "src/render_script_list/mod.rs": 2637,
   "src/scriptlets/mod.rs": 2060,
