@@ -51,21 +51,25 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let stale = self
+            .root_search
             .root_brain_inbox_loaded_at
             .is_none_or(|loaded_at| loaded_at.elapsed() >= ROOT_BRAIN_INBOX_TTL);
         if !stale {
             return;
         }
-        self.root_brain_inbox_loaded_at = Some(std::time::Instant::now());
+        self.root_search.root_brain_inbox_loaded_at = Some(std::time::Instant::now());
 
         // Errors degrade to "no section" — the launcher must never surface a
         // brain storage failure.
         let mut items =
             crate::brain::open_inbox_items(ROOT_BRAIN_INBOX_LOAD_LIMIT).unwrap_or_default();
         if !allow_reorder {
-            items = crate::brain::stable_merge_open_inbox(&self.root_brain_inbox_items, items);
+            items = crate::brain::stable_merge_open_inbox(
+                &self.root_search.root_brain_inbox_items,
+                items,
+            );
         }
-        if root_brain_inbox_items_equal(&self.root_brain_inbox_items, &items) {
+        if root_brain_inbox_items_equal(&self.root_search.root_brain_inbox_items, &items) {
             return;
         }
         tracing::debug!(
@@ -73,8 +77,9 @@ impl ScriptListApp {
             open_items = items.len(),
             "brain inbox snapshot refreshed"
         );
-        self.root_brain_inbox_items = items;
-        self.root_brain_inbox_epoch = self.root_brain_inbox_epoch.wrapping_add(1);
+        self.root_search.root_brain_inbox_items = items;
+        self.root_search.root_brain_inbox_epoch =
+            self.root_search.root_brain_inbox_epoch.wrapping_add(1);
         self.invalidate_root_passive_and_grouped_cache();
         cx.notify();
     }
@@ -89,8 +94,11 @@ impl ScriptListApp {
                 &format!("Failed to resolve brain inbox item {id}: {error}"),
             );
         }
-        self.root_brain_inbox_items.retain(|item| item.id != id);
-        self.root_brain_inbox_epoch = self.root_brain_inbox_epoch.wrapping_add(1);
+        self.root_search
+            .root_brain_inbox_items
+            .retain(|item| item.id != id);
+        self.root_search.root_brain_inbox_epoch =
+            self.root_search.root_brain_inbox_epoch.wrapping_add(1);
         self.invalidate_root_passive_and_grouped_cache();
         cx.notify();
     }

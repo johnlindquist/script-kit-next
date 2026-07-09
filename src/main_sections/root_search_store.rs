@@ -1,5 +1,19 @@
-/// Root-launcher file-search state owned as one coherent async cohort.
+/// Root-launcher file and Brain search state owned as one coherent async cohort.
 pub(crate) struct RootSearchStore {
+    /// Async hybrid brain hits keyed by the trimmed root-launcher search text.
+    pub(crate) root_brain_semantic_results: Option<(String, Vec<crate::brain::RootBrainSearchHit>)>,
+    /// Generation counter used to ignore stale semantic brain batches.
+    pub(crate) root_brain_search_generation: u64,
+    /// Last requested semantic brain search, used to avoid duplicate work.
+    pub(crate) root_brain_search_request: Option<(String, crate::brain::RootBrainSectionOptions)>,
+    /// Revision folded into the passive-frame key when semantic results change.
+    pub(crate) root_brain_semantic_epoch: u64,
+    /// Open brain-inbox items pinned above the empty root-launcher query.
+    pub(crate) root_brain_inbox_items: Vec<crate::brain::InboxItem>,
+    /// When the root brain-inbox snapshot was last loaded.
+    pub(crate) root_brain_inbox_loaded_at: Option<std::time::Instant>,
+    /// Revision folded into grouped cache keys when inbox items change.
+    pub(crate) root_brain_inbox_epoch: u64,
     /// Latest capped Spotlight results appended to eligible root launcher searches.
     pub(crate) root_file_results: Vec<crate::file_search::FileResult>,
     /// Bounded completed global root file batches, keyed by root search request.
@@ -32,6 +46,13 @@ pub(crate) struct RootSearchStore {
 impl Default for RootSearchStore {
     fn default() -> Self {
         Self {
+            root_brain_semantic_results: None,
+            root_brain_search_generation: 0,
+            root_brain_search_request: None,
+            root_brain_semantic_epoch: 0,
+            root_brain_inbox_items: Vec::new(),
+            root_brain_inbox_loaded_at: None,
+            root_brain_inbox_epoch: 0,
             root_file_results: Vec::new(),
             root_file_result_cache: std::collections::VecDeque::new(),
             root_file_search_mode: None,
@@ -55,9 +76,16 @@ mod root_search_store_tests {
     use super::*;
 
     #[test]
-    fn default_preserves_root_file_startup_contract() {
+    fn default_preserves_root_search_startup_contract() {
         let store = RootSearchStore::default();
 
+        assert!(store.root_brain_semantic_results.is_none());
+        assert_eq!(store.root_brain_search_generation, 0);
+        assert!(store.root_brain_search_request.is_none());
+        assert_eq!(store.root_brain_semantic_epoch, 0);
+        assert!(store.root_brain_inbox_items.is_empty());
+        assert!(store.root_brain_inbox_loaded_at.is_none());
+        assert_eq!(store.root_brain_inbox_epoch, 0);
         assert!(store.root_file_results.is_empty());
         assert!(store.root_file_result_cache.is_empty());
         assert_eq!(store.root_file_search_mode, None);

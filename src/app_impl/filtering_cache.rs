@@ -634,7 +634,7 @@ impl ScriptListApp {
             source_filters: source_filters.clone(),
             todo_options,
             brain_options,
-            brain_semantic_epoch: self.root_brain_semantic_epoch,
+            brain_semantic_epoch: self.root_search.root_brain_semantic_epoch,
             notes_options,
             clipboard_history_options,
             dictation_history_options,
@@ -706,7 +706,7 @@ impl ScriptListApp {
             crate::brain::RootBrainQueryPlan::Search(brain_query) => {
                 crate::brain::semantic_root_brain_hits_for_query(
                     brain_query,
-                    self.root_brain_semantic_results.as_ref(),
+                    self.root_search.root_brain_semantic_results.as_ref(),
                     &brain_options,
                 )
             }
@@ -1690,7 +1690,7 @@ impl ScriptListApp {
         let browser_history_generation =
             crate::browser_history::root_browser_history_snapshot_status().generation;
         let root_windows_generation = self.root_windows_refresh_generation;
-        let brain_inbox_epoch = self.root_brain_inbox_epoch;
+        let brain_inbox_epoch = self.root_search.root_brain_inbox_epoch;
         let grouped_source_filter_key = format!("{grouped_source_filters:?}");
         let grouped_cache_key = match current_app_commands_app_name.as_deref() {
             Some(app_name) => format!(
@@ -2074,13 +2074,13 @@ impl ScriptListApp {
             let (mut grouped_items, mut flat_results) = (grouped_items, flat_results);
             if !menu_syntax_owns_main_list
                 && !spine_owns_for_computed
-                && !self.root_brain_inbox_items.is_empty()
+                && !self.root_search.root_brain_inbox_items.is_empty()
             {
                 crate::scripts::prepend_root_brain_inbox_section(
                     &mut grouped_items,
                     &mut flat_results,
                     &raw_filter_text,
-                    &self.root_brain_inbox_items,
+                    &self.root_search.root_brain_inbox_items,
                     self.config
                         .get_unified_search()
                         .brain_inbox_section_options(),
