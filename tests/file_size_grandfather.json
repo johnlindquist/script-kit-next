@@ -16,7 +16,7 @@
   "src/app_impl/agent_handoff/mod.rs": 6887,
   "src/app_impl/filtering_cache.rs": 3940,
   "src/app_impl/simulate_key_dispatch.rs": 2342,
-  "src/app_impl/startup.rs": 3339,
+  "src/app_impl/startup.rs": 3326,
   "src/app_impl/ui_window.rs": 2531,
   "src/app_layout/build_layout_info.rs": 2596,
   "src/app_layout/collect_elements.rs": 3146,
