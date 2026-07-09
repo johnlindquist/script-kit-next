@@ -3,8 +3,9 @@ mod prompt_handler_message_tests {
         build_script_error_agent_chat_prompt, build_script_error_report_markdown,
         classify_prompt_message_route, escape_windows_cmd_open_target,
         persist_script_error_agent_chat_context_bundle_in_dir, prompt_coming_soon_warning,
-        resolve_ai_start_chat_provider, should_restore_main_window_after_script_exit,
-        unhandled_message_warning, PromptMessageRoute,
+        prompt_message_from_protocol_message, resolve_ai_start_chat_provider,
+        should_restore_main_window_after_script_exit, unhandled_message_warning,
+        PromptMessageRoute,
     };
     use crate::ai::providers::OpenAiProvider;
     use crate::PromptMessage;
@@ -36,6 +37,28 @@ mod prompt_handler_message_tests {
         let warning = unhandled_message_warning("widget");
         assert!(warning.contains("'widget'"));
         assert!(warning.contains("not supported yet"));
+    }
+
+    #[test]
+    fn test_fields_protocol_message_converts_to_show_fields() {
+        let message = crate::protocol::Message::Fields {
+            id: "fields-id".to_string(),
+            fields: Vec::new(),
+            actions: None,
+        };
+
+        let Some(PromptMessage::ShowFields {
+            id,
+            fields,
+            actions,
+        }) = prompt_message_from_protocol_message(message)
+        else {
+            panic!("Message::Fields must convert to PromptMessage::ShowFields");
+        };
+
+        assert_eq!(id, "fields-id");
+        assert!(fields.is_empty());
+        assert!(actions.is_none());
     }
 
     #[test]

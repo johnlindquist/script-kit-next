@@ -15,19 +15,6 @@ const SIMULATE_KEY_DISPATCH_PATH: &str = "src/app_impl/simulate_key_dispatch.rs"
 #[test]
 fn fields_protocol_routes_to_real_form_prompt_state() {
     let handler = read(PROMPT_HANDLER_PATH);
-    let route = handler
-        .split("Message::Fields")
-        .nth(1)
-        .and_then(|rest| rest.split("Message::Term").next())
-        .expect("Message::Fields route must exist before term route");
-    assert!(
-        route.contains("PromptMessage::ShowFields"),
-        "fields protocol messages must route to ShowFields"
-    );
-    assert!(
-        !route.contains("FieldsComingSoon"),
-        "fields protocol messages must not route to the coming-soon stub"
-    );
     assert!(
         handler.contains("FormPromptState::from_fields"),
         "ShowFields must reuse FormPromptState through a fields constructor"
