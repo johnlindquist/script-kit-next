@@ -331,6 +331,7 @@ impl Render for ScriptListApp {
                 | AppView::ThemeChooserView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::FlowUxView { .. }
+                | AppView::FlowSessionView { .. }
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }

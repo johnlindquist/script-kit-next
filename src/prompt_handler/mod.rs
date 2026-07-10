@@ -9850,6 +9850,11 @@ impl ScriptListApp {
                 });
                 cx.notify();
             }
+            // Flow sessions compose in the shared MAIN input.
+            AppView::FlowSessionView { .. } => {
+                self.set_filter_text_immediate(text.to_string(), window, cx);
+                cx.notify();
+            }
             _ => self.set_input_text(text, cx),
         }
     }
@@ -9905,24 +9910,8 @@ impl ScriptListApp {
                     cx.notify();
                 });
             }
-            AppView::FlowSessionView { session_id } => {
-                let entity = self
-                    .flow_sessions
-                    .iter()
-                    .find(|(meta, _)| meta.id == *session_id)
-                    .map(|(_, entity)| entity.clone());
-                if let Some(entity) = entity {
-                    let payload = text.to_string();
-                    entity.update(cx, |chat, cx| {
-                        chat.set_input(payload, cx);
-                    });
-                } else {
-                    tracing::warn!(
-                        category = "BATCH",
-                        "setInput: flow session entity missing"
-                    );
-                }
-            }
+            // FlowSessionView is handled by the window-aware setInput path
+            // (main-filter composer); it never reaches this fallback.
             _ => {
                 tracing::warn!(
                     category = "BATCH",

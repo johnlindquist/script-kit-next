@@ -457,6 +457,13 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::FlowSessionView { .. } => {
+                // The main input is the session composer: the text is a
+                // message draft, not a query. Hold it and repaint only.
+                self.filter_text = new_text.clone();
+                cx.notify();
+                return; // Don't run main menu filter logic
+            }
             AppView::ProfileSearchView {
                 filter,
                 selected_index,

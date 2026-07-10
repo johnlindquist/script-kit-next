@@ -756,6 +756,9 @@ impl ScriptListApp {
                 Self::sync_builtin_query_state(filter, selected_index, text);
                 true
             }
+            // Flow sessions: the main input holds a message draft, not a
+            // query. Consume the write so main-menu filter logic never runs.
+            AppView::FlowSessionView { .. } => true,
             _ => false,
         }
     }

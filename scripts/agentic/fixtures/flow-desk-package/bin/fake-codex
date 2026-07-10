@@ -10,6 +10,8 @@ if (process.argv[2] !== "app-server") {
 
 let threadCounter = 0;
 const out = (msg: unknown) => process.stdout.write(JSON.stringify(msg) + "\n");
+// threadId -> pending timers for a SLOW turn still streaming.
+const activeTurns = new Map<string, ReturnType<typeof setTimeout>[]>();
 
 process.stdin.setEncoding("utf8");
 let buffer = "";
@@ -50,6 +52,40 @@ function handle(msg: any) {
       params: { threadId, turn: { id: `turn-${threadId}`, status: "inProgress" } },
     });
     const reply = `FAKE-CODEX-REPLY: ${text.slice(0, 160)}`;
+    if (text.includes("SLOW")) {
+      // Slow mode: stream word-by-word over ~12s so probes can exercise
+      // honest "working" state and mid-turn interrupt. A real interrupt
+      // cancels the pending timers — no completed event ever follows.
+      const words = `Working through this slowly, one honest word at a time, so the state chip and stop verb can be proven on camera. ${reply}`.split(" ");
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      let acc = "";
+      words.forEach((word, i) => {
+        timers.push(
+          setTimeout(() => {
+            acc += (i === 0 ? "" : " ") + word;
+            out({
+              method: "item/agentMessage/delta",
+              params: { threadId, turnId: `turn-${threadId}`, itemId: "item-1", delta: (i === 0 ? "" : " ") + word },
+            });
+          }, 400 * (i + 1)),
+        );
+      });
+      timers.push(
+        setTimeout(() => {
+          activeTurns.delete(threadId);
+          out({
+            method: "item/completed",
+            params: { threadId, item: { type: "agentMessage", id: "item-1", text: acc } },
+          });
+          out({
+            method: "turn/completed",
+            params: { threadId, turn: { id: `turn-${threadId}`, status: "completed" } },
+          });
+        }, 400 * (words.length + 2)),
+      );
+      activeTurns.set(threadId, timers);
+      return;
+    }
     const half = Math.ceil(reply.length / 2);
     out({
       method: "item/agentMessage/delta",
@@ -71,6 +107,11 @@ function handle(msg: any) {
     });
   } else if (method === "turn/interrupt") {
     const threadId = params.threadId;
+    const timers = activeTurns.get(threadId);
+    if (timers) {
+      for (const t of timers) clearTimeout(t);
+      activeTurns.delete(threadId);
+    }
     out({ id, result: {} });
     out({
       method: "turn/completed",

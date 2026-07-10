@@ -57,9 +57,9 @@ impl ScriptListApp {
                 AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
                     FocusTarget::TermPrompt
                 }
-                AppView::ChatPrompt { .. } | AppView::FlowSessionView { .. } => {
-                    FocusTarget::ChatPrompt
-                }
+                AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
+                // Flow sessions compose in the shared MAIN input.
+                AppView::FlowSessionView { .. } => FocusTarget::MainFilter,
                 AppView::AgentChatView { .. } => FocusTarget::AgentChat,
                 AppView::DayPage { .. } => FocusTarget::EditorPrompt,
                 AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,

@@ -28,6 +28,15 @@ pub(crate) enum FlowDeskRow {
     CreateFlow,
 }
 
+/// How a settled turn presents in the transcript: normal completion, a quiet
+/// user-initiated stop (never the red error treatment), or a real failure.
+#[derive(Clone)]
+pub(crate) enum FlowTurnOutcome {
+    Ok,
+    Stopped,
+    Failed(String),
+}
+
 /// What the Flow Desk ⌘K dialog acts on. Derived fresh from view state at
 /// toggle/execute time so the popup never captures a stale row.
 #[derive(Clone)]
@@ -289,7 +298,16 @@ impl ScriptListApp {
         .with_title(friendly.clone())
         .with_save_history(false)
         .with_escape_callback(escape_callback)
-        .with_escape_over_stop(true);
+        .with_escape_over_stop(true)
+        .with_external_footer(true)
+        .with_external_header(true)
+        .with_external_input(true)
+        .with_empty_state_note(
+            flow.description
+                .clone()
+                .unwrap_or_else(|| format!("Converse with {friendly}.")),
+        )
+        .with_top_aligned_turns();
         let actions_sender = self.flow_chat_sender.clone();
         chat.set_on_show_actions(std::sync::Arc::new(move |_id: String| {
             let _ = actions_sender.try_send(
@@ -446,13 +464,15 @@ impl ScriptListApp {
         });
     }
 
-    /// Settle a session's open turn: close the streaming bubble, surface a
-    /// failure note when there is one, commit the SessionTurn, set state.
+    /// Settle a session's open turn: close the streaming bubble, surface the
+    /// outcome, commit the SessionTurn, set state. A user-initiated stop is
+    /// NOT an error — it renders as a quiet italic caption, never the red
+    /// error treatment.
     fn finish_flow_turn(
         &mut self,
         session_id: u64,
         state: crate::flows::session::SessionState,
-        error_note: Option<String>,
+        outcome: FlowTurnOutcome,
         cx: &mut Context<Self>,
     ) {
         let Some(index) = self.flow_session_index(session_id) else {
@@ -463,10 +483,22 @@ impl ScriptListApp {
         };
         let entity = self.flow_sessions[index].1.clone();
         let message_id = active.message_id.clone();
-        let note = error_note.clone();
+        let had_error = matches!(outcome, FlowTurnOutcome::Failed(_));
+        let stopped_caption = match &outcome {
+            FlowTurnOutcome::Stopped if active.assistant_acc.is_empty() => {
+                Some("*Stopped.*".to_string())
+            }
+            FlowTurnOutcome::Stopped => Some("\n\n*Stopped.*".to_string()),
+            _ => None,
+        };
         entity.update(cx, |chat, cx| {
+            // append_chunk is gated on the live stream — captions go in
+            // before the stream closes.
+            if let Some(caption) = stopped_caption {
+                chat.append_chunk(&message_id, &caption, cx);
+            }
             chat.complete_streaming(&message_id, cx);
-            if let Some(note) = note {
+            if let FlowTurnOutcome::Failed(note) = outcome {
                 chat.set_message_error(&message_id, note, cx);
             }
         });
@@ -481,7 +513,7 @@ impl ScriptListApp {
             event = "flow_turn_settled",
             session_id,
             state = state.label(),
-            had_error = error_note.is_some(),
+            had_error,
             "Flow turn settled"
         );
     }
@@ -536,15 +568,17 @@ impl ScriptListApp {
                 status,
                 error,
             } => {
-                let (state, note) = match status.as_str() {
-                    "completed" => (SessionState::NeedsYou, None),
-                    "interrupted" => (SessionState::NeedsYou, Some("Stopped".to_string())),
+                let (state, outcome) = match status.as_str() {
+                    "completed" => (SessionState::NeedsYou, FlowTurnOutcome::Ok),
+                    "interrupted" => (SessionState::NeedsYou, FlowTurnOutcome::Stopped),
                     _ => (
                         SessionState::Done(None),
-                        Some(error.unwrap_or_else(|| "Turn failed".to_string())),
+                        FlowTurnOutcome::Failed(
+                            error.unwrap_or_else(|| "Turn failed".to_string()),
+                        ),
                     ),
                 };
-                self.finish_flow_turn(session_id, state, note, cx);
+                self.finish_flow_turn(session_id, state, outcome, cx);
             }
             FlowThreadEvent::SessionFailed { session_id, error } => {
                 let Some(index) = self.flow_session_index(session_id) else {
@@ -554,7 +588,7 @@ impl ScriptListApp {
                     self.finish_flow_turn(
                         session_id,
                         crate::flows::session::SessionState::Done(None),
-                        Some(error),
+                        FlowTurnOutcome::Failed(error),
                         cx,
                     );
                 } else {
@@ -585,7 +619,7 @@ impl ScriptListApp {
                 self.finish_flow_turn(
                     session_id,
                     crate::flows::session::SessionState::Done(None),
-                    Some("run disappeared from the registry".to_string()),
+                    FlowTurnOutcome::Failed("run disappeared from the registry".to_string()),
                     cx,
                 );
                 dirty = true;
@@ -606,21 +640,19 @@ impl ScriptListApp {
             if run.phase.is_terminal() {
                 use crate::flows::model::RunPhase;
                 use crate::flows::session::SessionState;
-                let (state, note) = match run.phase {
-                    RunPhase::Succeeded => (SessionState::NeedsYou, None),
-                    RunPhase::Cancelled => {
-                        (SessionState::NeedsYou, Some("Stopped".to_string()))
-                    }
+                let (state, outcome) = match run.phase {
+                    RunPhase::Succeeded => (SessionState::NeedsYou, FlowTurnOutcome::Ok),
+                    RunPhase::Cancelled => (SessionState::NeedsYou, FlowTurnOutcome::Stopped),
                     _ => (
                         SessionState::Done(run.exit_code.map(|code| code as i32)),
-                        Some(
+                        FlowTurnOutcome::Failed(
                             run.error_message
                                 .clone()
                                 .unwrap_or_else(|| run.display_status()),
                         ),
                     ),
                 };
-                self.finish_flow_turn(session_id, state, note, cx);
+                self.finish_flow_turn(session_id, state, outcome, cx);
                 dirty = true;
             }
         }
@@ -629,12 +661,18 @@ impl ScriptListApp {
 
     /// Show an existing session (same ChatPrompt entity — the reattach).
     pub(crate) fn open_flow_session(&mut self, session_id: u64, cx: &mut Context<Self>) {
-        if self.flow_session_index(session_id).is_none() {
+        let Some(index) = self.flow_session_index(session_id) else {
             return;
-        }
+        };
+        let friendly = self.flow_sessions[index].0.friendly_name.clone();
         self.current_view = AppView::FlowSessionView { session_id };
-        self.focused_input = FocusedInput::None;
-        self.pending_focus = Some(FocusTarget::ChatPrompt);
+        // The MAIN input is the composer (with all its context-attachment
+        // features) — clear any desk query and retitle the placeholder.
+        self.filter_text.clear();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some(format!("Message {friendly}…"));
+        self.focused_input = FocusedInput::MainFilter;
+        self.pending_focus = Some(FocusTarget::MainFilter);
         cx.spawn(async move |_this, _cx| {
             crate::window_resize::resize_to_view_sync(
                 crate::window_resize::ViewType::MainWindow,
@@ -657,6 +695,12 @@ impl ScriptListApp {
             session_id,
             "Backgrounding flow session (process stays alive)"
         );
+        // Clear the shared filter INPUT too (pending_filter_sync flushes the
+        // widget on next render) — the desk must never show a stale query
+        // over an unfiltered list — and restore the desk placeholder.
+        self.filter_text.clear();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some("Search flows...".to_string());
         self.current_view = AppView::FlowUxView {
             variant: crate::flows::model::FlowUxVariant::Flash,
             filter: String::new(),
@@ -1139,36 +1183,76 @@ impl ScriptListApp {
             (meta.clone(), entity.clone())
         };
 
-        let header = div()
+        // The MAIN input is the composer — the same shared input every
+        // surface uses (with its context-attachment features). Identity and
+        // honest state ride as trailing chips on that one input row;
+        // ChatPrompt renders transcript only.
+        let state_color = if meta.state.is_live() {
+            rgb(chrome.accent_hex)
+        } else {
+            rgb(chrome.text_muted_hex)
+        };
+        let identity_chip = div()
+            .flex_none()
+            .whitespace_nowrap()
+            .text_sm()
+            .text_color(rgb(chrome.text_secondary_hex))
+            .child(format!(
+                "{} · {} · {}",
+                meta.friendly_name, meta.engine, meta.origin
+            ))
+            .into_any_element();
+        let state_chip = div()
+            .flex_none()
             .flex()
             .flex_row()
             .items_center()
-            .gap_2()
-            .px_3()
-            .py_2()
+            .gap_1()
+            .pr(px(self.current_main_menu_theme.def().search.text_inset_x))
+            .child(div().w(px(6.)).h(px(6.)).rounded_full().bg(state_color))
             .child(
                 div()
                     .text_sm()
-                    .text_color(rgb(chrome.text_primary_hex))
-                    .child(format!("💬 {}", meta.friendly_name)),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(chrome.text_secondary_hex))
-                    .child(format!("{} · {}", meta.engine, meta.origin)),
-            )
-            .child(div().flex_1())
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(if meta.state.is_live() {
-                        rgb(chrome.accent_hex)
-                    } else {
-                        rgb(chrome.text_muted_hex)
-                    })
+                    .whitespace_nowrap()
+                    .text_color(state_color)
                     .child(format!("{} · {}", meta.state.label(), meta.elapsed_label())),
-            );
+            )
+            .into_any_element();
+        let trailing = vec![identity_chip, state_chip];
+
+        // Enter = send the main-input draft as the next turn; Esc =
+        // background to the desk; ⌘K = session actions. Same shell-level
+        // key routing the desk uses while the main input is focused.
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  window: &mut Window,
+                  cx: &mut Context<Self>| {
+                let AppView::FlowSessionView { session_id } = this.current_view else {
+                    return;
+                };
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+                if is_key_escape(key) && !this.show_actions_popup {
+                    this.background_flow_session(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                if has_cmd && key.eq_ignore_ascii_case("k") {
+                    this.dispatch_actions_toggle_for_current_view(window, cx, "flow_session_chat");
+                    cx.stop_propagation();
+                    return;
+                }
+                if is_key_enter(key) {
+                    let text = this.filter_text.trim().to_string();
+                    if !text.is_empty() {
+                        this.set_filter_text_immediate(String::new(), window, cx);
+                        this.submit_flow_chat_message(session_id, text, cx);
+                    }
+                    cx.stop_propagation();
+                }
+            },
+        );
 
         let hints: Vec<gpui::SharedString> = vec![
             gpui::SharedString::from("↵ Send"),
@@ -1185,17 +1269,13 @@ impl ScriptListApp {
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(chrome.text_primary_hex))
                 .font_family(self.theme_font_family())
-                .key_context("flow_session"),
+                .key_context("flow_session")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewChrome {
-                header: crate::components::main_view_chrome::MainViewHeaderChrome {
-                    context: None,
-                    input: header.into_any_element(),
-                    padding_x: shell.header_padding_x,
-                    padding_y: shell.header_padding_y,
-                    gap: shell.header_gap,
-                },
+                header: self.render_builtin_main_input_header(trailing, cx),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,

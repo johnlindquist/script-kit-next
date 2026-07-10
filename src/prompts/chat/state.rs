@@ -287,8 +287,37 @@ impl ChatPrompt {
     }
 
     /// Render conversation starters for empty state
-    pub(super) fn render_conversation_starters(&self, cx: &Context<Self>) -> impl IntoElement {
+    pub(super) fn render_conversation_starters(&self, cx: &Context<Self>) -> gpui::AnyElement {
         let colors = &self.prompt_colors;
+
+        // Hosted surfaces (flow sessions) replace the stock starter chips —
+        // canned "Explain this code" suggestions are wrong for an agent
+        // identity. Show the agent's own purpose, quietly.
+        if let Some(note) = &self.empty_state_note {
+            return div()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .flex_1()
+                .gap(px(8.))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(colors.text_secondary))
+                        .max_w(px(480.))
+                        .text_center()
+                        .child(note.clone()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(colors.text_tertiary))
+                        .child("Type a message to start the conversation"),
+                )
+                .into_any_element();
+        }
+
         let starters = self.get_conversation_starters(cx);
 
         // Chip styling - use theme-aware overlays
@@ -340,6 +369,7 @@ impl ChatPrompt {
                     .mt(px(8.))
                     .child("or type your own question..."),
             )
+            .into_any_element()
     }
 
     /// Set an error on a message (typically on streaming failure)

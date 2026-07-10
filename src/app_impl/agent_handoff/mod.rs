@@ -3920,9 +3920,9 @@ impl ScriptListApp {
                 FocusTarget::TermPrompt
             }
 
-            AppView::ChatPrompt { .. }
-            | AppView::AgentChatView { .. }
-            | AppView::FlowSessionView { .. } => FocusTarget::ChatPrompt,
+            AppView::ChatPrompt { .. } | AppView::AgentChatView { .. } => FocusTarget::ChatPrompt,
+            // Flow sessions compose in the shared MAIN input.
+            AppView::FlowSessionView { .. } => FocusTarget::MainFilter,
             AppView::DayPage { .. } => FocusTarget::EditorPrompt,
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
 
@@ -5249,6 +5249,10 @@ impl ScriptListApp {
         match &self.current_view {
             AppView::ScriptList => non_empty(self.filter_text.clone()),
 
+            // Flow sessions compose in the shared MAIN input — the draft
+            // message lives in filter_text.
+            AppView::FlowSessionView { .. } => non_empty(self.filter_text.clone()),
+
             AppView::ArgPrompt { .. }
             | AppView::MiniPrompt { .. }
             | AppView::MicroPrompt { .. } => non_empty(self.arg_input.text().to_string()),
@@ -5355,7 +5359,6 @@ impl ScriptListApp {
             | AppView::FormPrompt { .. }
             | AppView::TermPrompt { .. }
             | AppView::QuickTerminalView { .. }
-            | AppView::FlowSessionView { .. }
             | AppView::AgentChatView { .. }
             | AppView::DropPrompt { .. }
             | AppView::HotkeyPrompt { .. }

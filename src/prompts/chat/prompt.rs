@@ -78,6 +78,20 @@ pub struct ChatPrompt {
     /// with an external transport (flow sessions) own stop semantics — Esc
     /// must background, never half-stop the visual stream.
     pub(super) escape_over_stop: bool,
+    /// When true, the host renders the footer (native main-window footer);
+    /// the internal hint strip and model label are suppressed.
+    pub(super) external_footer: bool,
+    /// When true, the host renders the surface header (identity + state);
+    /// the internal back-arrow/title header is suppressed so the surface
+    /// never shows two stacked titles.
+    pub(super) external_header: bool,
+    /// When true, the host owns the composer (the shared main input, with
+    /// all its context-attachment features); the internal input area is
+    /// suppressed and this surface renders transcript only.
+    pub(super) external_input: bool,
+    /// Hosted empty state: replaces the stock starter chips with the
+    /// hosting agent's own purpose line (flow sessions).
+    pub(super) empty_state_note: Option<String>,
 }
 
 impl ChatPrompt {
@@ -154,6 +168,10 @@ impl ChatPrompt {
             pasted_text_tokens: Vec::new(),
             mini_mode: false,
             escape_over_stop: false,
+            external_footer: false,
+            external_header: false,
+            external_input: false,
+            empty_state_note: None,
         }
     }
 
@@ -343,6 +361,44 @@ impl ChatPrompt {
     /// Esc backgrounds; stopping is an explicit host verb.
     pub fn with_escape_over_stop(mut self, enabled: bool) -> Self {
         self.escape_over_stop = enabled;
+        self
+    }
+
+    /// The host owns the footer (native main-window footer). Suppresses the
+    /// internal hint strip so the surface never shows two footers or a model
+    /// label that belongs to a different transport.
+    pub fn with_external_footer(mut self, enabled: bool) -> Self {
+        self.external_footer = enabled;
+        self
+    }
+
+    /// The host owns the surface header (identity + state chips). Suppresses
+    /// the internal back-arrow/title header — one header, never two.
+    pub fn with_external_header(mut self, enabled: bool) -> Self {
+        self.external_header = enabled;
+        self
+    }
+
+    /// The host owns the composer — the shared MAIN input with its
+    /// established context-attachment features. Suppresses the internal
+    /// input area; this surface renders the transcript only.
+    pub fn with_external_input(mut self, enabled: bool) -> Self {
+        self.external_input = enabled;
+        self
+    }
+
+    /// Empty-state purpose line for hosted surfaces (replaces the stock
+    /// conversation-starter chips).
+    pub fn with_empty_state_note(mut self, note: impl Into<String>) -> Self {
+        self.empty_state_note = Some(note.into());
+        self
+    }
+
+    /// Anchor the transcript to the TOP of the messages area. With the
+    /// composer at the top, a short conversation must read top-down right
+    /// under it — bottom anchoring leaves a dead void between them.
+    pub fn with_top_aligned_turns(mut self) -> Self {
+        self.turns_list_state = ListState::new(0, ListAlignment::Top, px(1024.0));
         self
     }
 

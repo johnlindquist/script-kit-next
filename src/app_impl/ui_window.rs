@@ -283,13 +283,11 @@ impl ScriptListApp {
                     });
                     return;
                 } else if let AppView::FlowSessionView { session_id } = self.current_view {
-                    let entity = self
-                        .flow_sessions
-                        .iter()
-                        .find(|(meta, _)| meta.id == session_id)
-                        .map(|(_, entity)| entity.clone());
-                    if let Some(entity) = entity {
-                        entity.update(cx, |chat, cx| chat.submit(cx));
+                    // The MAIN input is the composer: send its draft.
+                    let text = self.filter_text.trim().to_string();
+                    if !text.is_empty() {
+                        self.set_filter_text_immediate(String::new(), window, cx);
+                        self.submit_flow_chat_message(session_id, text, cx);
                     }
                     return;
                 } else if matches!(self.current_view, AppView::FlowUxView { .. }) {

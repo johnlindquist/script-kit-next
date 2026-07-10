@@ -493,18 +493,29 @@ impl Render for ChatPrompt {
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key);
 
-        // Mini mode: no header (matches mini main window). Rich mode: show header.
-        let prompt = if self.mini_mode {
+        // Mini mode: no header (matches mini main window). External-header
+        // hosts (flow sessions) draw their own identity row — never stack a
+        // second title. Rich mode: show header.
+        let prompt = if self.mini_mode || self.external_header {
             prompt
         } else {
             prompt.child(self.render_header())
         };
 
-        prompt
-            .child(input_area)
-            .child(messages_content)
-            .child(self.render_footer(cx))
-            .into_any_element()
+        // External-input hosts (flow sessions) own the composer — the shared
+        // main input with its context-attachment features. Never render a
+        // second input box under it.
+        let prompt = if self.external_input {
+            prompt.child(messages_content)
+        } else {
+            prompt.child(input_area).child(messages_content)
+        };
+        // Hosts that own the native footer (flow sessions) suppress the
+        // internal strip: one footer, and no transport-mismatched model label.
+        if self.external_footer {
+            return prompt.into_any_element();
+        }
+        prompt.child(self.render_footer(cx)).into_any_element()
     }
 }
 
