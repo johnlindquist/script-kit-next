@@ -53,6 +53,12 @@ fn inline_source_filters_parse_for_files_notes_and_clipboard() {
         ("d: note", "note", RootUnifiedSourceFilter::Dictation),
         ("windows: zed", "zed", RootUnifiedSourceFilter::Windows),
         ("w: zed", "zed", RootUnifiedSourceFilter::Windows),
+        (
+            "processes: cargo",
+            "cargo",
+            RootUnifiedSourceFilter::Processes,
+        ),
+        ("p: cargo", "cargo", RootUnifiedSourceFilter::Processes),
     ] {
         match parse(input) {
             MenuSyntaxParse::AdvancedQuery(query) => {
@@ -71,8 +77,6 @@ fn source_filters_are_standalone_tokens_only() {
     assert_eq!(parse("project \"f:\""), MenuSyntaxParse::None);
     assert_eq!(parse("project unknown:"), MenuSyntaxParse::None);
     assert_eq!(parse("project :f"), MenuSyntaxParse::None);
-    assert_eq!(parse("project p:"), MenuSyntaxParse::None);
-    assert_eq!(parse("project processes:"), MenuSyntaxParse::None);
 }
 
 #[test]
@@ -116,6 +120,12 @@ fn source_filters_accept_attached_query_text() {
         ("commands:build", "build", RootUnifiedSourceFilter::Commands),
         ("w:finder", "finder", RootUnifiedSourceFilter::Windows),
         ("windows:finder", "finder", RootUnifiedSourceFilter::Windows),
+        ("p:cargo", "cargo", RootUnifiedSourceFilter::Processes),
+        (
+            "processes:cargo",
+            "cargo",
+            RootUnifiedSourceFilter::Processes,
+        ),
         (
             "h:https://example.com",
             "https://example.com",
@@ -153,7 +163,9 @@ fn source_filter_exclusion_is_structured_and_exclusion_wins() {
 #[test]
 fn source_only_filters_parse_as_empty_advanced_queries() {
     for (input, source) in [
+        ("f:", RootUnifiedSourceFilter::Files),
         ("f: ", RootUnifiedSourceFilter::Files),
+        ("files:", RootUnifiedSourceFilter::Files),
         ("files: ", RootUnifiedSourceFilter::Files),
         ("c: ", RootUnifiedSourceFilter::ClipboardHistory),
         ("clipboard: ", RootUnifiedSourceFilter::ClipboardHistory),
@@ -168,6 +180,10 @@ fn source_only_filters_parse_as_empty_advanced_queries() {
         ("d: ", RootUnifiedSourceFilter::Dictation),
         ("windows: ", RootUnifiedSourceFilter::Windows),
         ("w: ", RootUnifiedSourceFilter::Windows),
+        ("p:", RootUnifiedSourceFilter::Processes),
+        ("p: ", RootUnifiedSourceFilter::Processes),
+        ("processes:", RootUnifiedSourceFilter::Processes),
+        ("processes: ", RootUnifiedSourceFilter::Processes),
     ] {
         match parse(input) {
             MenuSyntaxParse::AdvancedQuery(query) => {

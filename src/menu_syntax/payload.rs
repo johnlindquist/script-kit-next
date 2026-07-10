@@ -305,6 +305,14 @@ pub const SOURCE_HEAD_SPECS: &[SourceHeadSpec] = &[
         description: "Search window records",
         planned: true,
     },
+    SourceHeadSpec {
+        source: RootUnifiedSourceFilter::Processes,
+        canonical: "processes:",
+        short: Some("p:"),
+        label: "Processes",
+        description: "Search running process records",
+        planned: true,
+    },
 ];
 
 pub fn source_for_head(head_with_colon: &str) -> Option<RootUnifiedSourceFilter> {

@@ -39,7 +39,7 @@
   "src/mcp_resources/mod.rs": 5556,
   "src/menu_bar/current_app_commands.rs": 2524,
   "src/menu_syntax/main_hint.rs": 4370,
-  "src/menu_syntax/trigger_picker.rs": 2863,
+  "src/menu_syntax/trigger_picker.rs": 2851,
   "src/notes/storage.rs": 3335,
   "src/prompt_handler/mod.rs": 10341,
   "src/render_builtins/theme_chooser.rs": 5062,

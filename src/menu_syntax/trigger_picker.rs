@@ -782,25 +782,28 @@ const ADVANCED_QUERY_HEAD_ROW_SPECS: &[AdvancedQueryHeadRowSpec] = &[
 ];
 
 fn bare_colon_filter_head_rows() -> Vec<TriggerPickerRow> {
-    ADVANCED_QUERY_HEAD_ROW_SPECS
-        .iter()
-        .map(|spec| TriggerPickerRow {
-            id: format!("qualifier-head:{}", spec.id),
-            mode: TriggerPickerMode::AdvancedQuery,
-            kind: TriggerPickerRowKind::Qualifier,
-            title: spec.title.to_string(),
-            token: Some(spec.display_token.to_string()),
-            subtitle: Some(spec.subtitle.to_string()),
-            detail: None,
-            example: None,
-            badges: Vec::new(),
-            action: TriggerPickerAction::InsertToken {
-                token: spec.insert_token.to_string(),
-                keep_open: true,
-            },
-            enabled: true,
-        })
-        .collect()
+    let mut rows = source_filter_head_rows(false);
+    rows.extend(
+        ADVANCED_QUERY_HEAD_ROW_SPECS
+            .iter()
+            .map(|spec| TriggerPickerRow {
+                id: format!("qualifier-head:{}", spec.id),
+                mode: TriggerPickerMode::AdvancedQuery,
+                kind: TriggerPickerRowKind::Qualifier,
+                title: spec.title.to_string(),
+                token: Some(spec.display_token.to_string()),
+                subtitle: Some(spec.subtitle.to_string()),
+                detail: None,
+                example: None,
+                badges: Vec::new(),
+                action: TriggerPickerAction::InsertToken {
+                    token: spec.insert_token.to_string(),
+                    keep_open: true,
+                },
+                enabled: true,
+            }),
+    );
+    rows
 }
 
 fn filtered_bare_colon_filter_head_rows(active: &str) -> Vec<TriggerPickerRow> {
@@ -1021,25 +1024,7 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
         },
     ];
 
-    let mut rows: Vec<TriggerPickerRow> = crate::menu_syntax::SOURCE_HEAD_SPECS
-        .iter()
-        .map(|spec| TriggerPickerRow {
-            id: format!("source:{}", spec.canonical),
-            mode: TriggerPickerMode::AdvancedQuery,
-            kind: TriggerPickerRowKind::Qualifier,
-            title: spec.label.to_string(),
-            token: Some(spec.canonical.to_string()),
-            subtitle: Some(spec.description.to_string()),
-            detail: spec.short.map(|short| format!("Shortcut: {short}")),
-            example: Some(format!("{} project", spec.canonical)),
-            badges: Vec::new(),
-            action: TriggerPickerAction::InsertToken {
-                token: spec.canonical.to_string(),
-                keep_open: false,
-            },
-            enabled: true,
-        })
-        .collect();
+    let mut rows = source_filter_head_rows(true);
 
     rows.extend(qualifiers.iter().map(|row| TriggerPickerRow {
         id: format!("qualifier:{}", row.token),
@@ -1058,6 +1043,28 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
         enabled: true,
     }));
     rows
+}
+
+fn source_filter_head_rows(include_examples: bool) -> Vec<TriggerPickerRow> {
+    crate::menu_syntax::SOURCE_HEAD_SPECS
+        .iter()
+        .map(|spec| TriggerPickerRow {
+            id: format!("source:{}", spec.canonical),
+            mode: TriggerPickerMode::AdvancedQuery,
+            kind: TriggerPickerRowKind::Qualifier,
+            title: spec.label.to_string(),
+            token: Some(spec.canonical.to_string()),
+            subtitle: Some(spec.description.to_string()),
+            detail: spec.short.map(|short| format!("Shortcut: {short}")),
+            example: include_examples.then(|| format!("{} project", spec.canonical)),
+            badges: Vec::new(),
+            action: TriggerPickerAction::InsertToken {
+                token: spec.canonical.to_string(),
+                keep_open: false,
+            },
+            enabled: true,
+        })
+        .collect()
 }
 
 fn typo_fix_rows(input: &str) -> Vec<TriggerPickerRow> {
@@ -1880,7 +1887,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_bare_colon_lists_filter_heads_not_terminal_examples() {
+    fn exact_bare_colon_lists_source_and_property_heads_not_terminal_examples() {
         let ctx = ctx_empty();
         let snap = build_trigger_picker_snapshot(":", &ctx).expect("snapshot");
         assert_eq!(snap.mode, TriggerPickerMode::AdvancedQuery);
@@ -1892,18 +1899,22 @@ mod tests {
             .filter_map(|row| row.token.as_deref())
             .collect();
 
-        for expected in [
-            "has:",
-            "type:",
-            "shortcut:",
-            "source:",
-            "plugin:",
-            "name:",
-            "desc:",
-            "alias:",
-            "tag:",
-            "meta.<path>:",
-        ] {
+        for expected in crate::menu_syntax::SOURCE_HEAD_SPECS
+            .iter()
+            .map(|spec| spec.canonical)
+            .chain([
+                "has:",
+                "type:",
+                "shortcut:",
+                "source:",
+                "plugin:",
+                "name:",
+                "desc:",
+                "alias:",
+                "tag:",
+                "meta.<path>:",
+            ])
+        {
             assert!(
                 tokens.contains(&expected),
                 "bare ':' should list filter head {expected}, got {tokens:?}"
@@ -1911,19 +1922,6 @@ mod tests {
         }
 
         for forbidden in [
-            "files:",
-            "notes:",
-            "todo:",
-            "clipboard:",
-            "tabs:",
-            "history:",
-            "apps:",
-            "scripts:",
-            "commands:",
-            "conversations:",
-            "vault:",
-            "dictation:",
-            "windows:",
             "type:script",
             "type:scriptlet",
             "shortcut:any",
@@ -1940,16 +1938,11 @@ mod tests {
             );
         }
 
-        assert!(
-            snap.rows
-                .iter()
-                .all(|row| row.detail.is_none() && row.example.is_none()),
-            "bare ':' head rows should not reserve synopsis/help space"
-        );
+        assert!(snap.rows.iter().all(|row| row.example.is_none()));
         assert_eq!(
             snap.rows.first().and_then(|row| row.token.as_deref()),
-            Some("has:"),
-            "has: should be the first filter head"
+            Some("files:"),
+            "files: should be the first source head"
         );
     }
 
@@ -1964,12 +1957,7 @@ mod tests {
             .filter_map(|row| row.token.as_deref())
             .collect();
 
-        assert_eq!(
-            qualifier_tokens,
-            vec!["type:", "tag:"],
-            "partial :t should show matching filter heads only"
-        );
-        assert!(!qualifier_tokens.contains(&"tabs:"));
+        assert_eq!(qualifier_tokens, vec!["todo:", "tabs:", "type:", "tag:"]);
         assert!(!qualifier_tokens.contains(&"type:script"));
         assert!(!qualifier_tokens.contains(&"shortcut:any"));
     }

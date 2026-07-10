@@ -511,28 +511,51 @@ mod tests {
     }
 
     #[test]
-    fn accept_default_from_exact_colon_inserts_first_qualifier_head_and_keeps_open() {
-        // b3f83a991 removed root source heads (`files:`, `notes:`, …) from
-        // the bare `:` picker; it now lists open-value qualifier heads with
-        // `has:` first. Accept with no explicit selection falls back to that
-        // first row and keeps the picker open for the value.
+    fn accept_default_from_exact_colon_inserts_first_source_head_and_closes() {
         let snap = build_trigger_picker_snapshot(":", &ctx()).expect("colon snapshot");
-        let has_idx = snap
+        let files_idx = snap
             .rows
             .iter()
-            .position(|r| r.token.as_deref() == Some("has:"))
-            .expect("has qualifier head row");
+            .position(|r| r.token.as_deref() == Some("files:"))
+            .expect("files source head row");
         let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, None, ":");
         match outcome {
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
-                assert_eq!(has_idx, 0, "has: should be the first qualifier head");
-                assert_eq!(text, "has:");
+                assert_eq!(files_idx, 0, "files: should be the first source head");
+                assert_eq!(text, "files:");
                 assert!(
-                    keep_open,
-                    "Accept on an open-value qualifier head should keep the picker open"
+                    !keep_open,
+                    "Accept on a source head should close the picker"
                 );
             }
             other => panic!("expected ReplaceInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn accept_source_heads_from_colon_commit_without_leading_colon_and_close() {
+        let snap = build_trigger_picker_snapshot(":", &ctx()).expect("colon snapshot");
+        for spec in crate::menu_syntax::SOURCE_HEAD_SPECS {
+            let source_idx = snap
+                .rows
+                .iter()
+                .position(|row| row.token.as_deref() == Some(spec.canonical))
+                .unwrap_or_else(|| panic!("missing {} source head row", spec.canonical));
+            let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(source_idx), ":");
+            match outcome {
+                TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                    assert_eq!(text, spec.canonical);
+                    assert!(
+                        !keep_open,
+                        "Accept on {} should close the picker",
+                        spec.canonical
+                    );
+                }
+                other => panic!(
+                    "expected ReplaceInput for {}, got {other:?}",
+                    spec.canonical
+                ),
+            }
         }
     }
 
@@ -765,6 +788,13 @@ mod tests {
             (":", "type:", "type:"),
             (":", "tag:", "tag:"),
             (":", "has:", "has:"),
+            (":", "shortcut:", "shortcut:"),
+            (":", "source:", "source:"),
+            (":", "plugin:", "plugin:"),
+            (":", "name:", "name:"),
+            (":", "desc:", "desc:"),
+            (":", "alias:", "alias:"),
+            (":", "meta.<path>:", "meta."),
         ] {
             let snap = build_trigger_picker_snapshot(input, &ctx()).expect("snapshot");
             let row_idx = snap
