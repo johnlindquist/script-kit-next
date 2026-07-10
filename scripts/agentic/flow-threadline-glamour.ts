@@ -206,18 +206,22 @@ const SCENARIOS: Scenario[] = [
       );
       const done = await pollState(driver, (s) => lastSession(s)?.turns === 1, 90_000);
       await Bun.sleep(3500); // linger on the reply for the recording
+      const engine = String(lastSession(done)?.engine ?? "");
       return {
         promptTypeAfterEnter: opened.promptType,
         transport: lastSession(opened)?.transport,
         workingState: lastSession(working)?.state,
         finalState: lastSession(done)?.state,
         turns: lastSession(done)?.turns,
+        engine,
+        modelPinned: engine.includes("gpt-5.6-luna"),
         pass:
           opened.promptType === "flowSession" &&
           lastSession(opened)?.transport === "codexThread" &&
           lastSession(working)?.state === "working" &&
           lastSession(done)?.turns === 1 &&
-          lastSession(done)?.state === "needs you",
+          lastSession(done)?.state === "needs you" &&
+          engine.includes("gpt-5.6-luna"),
       };
     },
   },
@@ -376,7 +380,8 @@ try {
         throw new Error(`seed-sandbox-home failed: ${seeded.stderr.toString()}`);
       }
       // Flow tests run on the cheap/fast tier: gpt-5.6-luna at low effort.
-      // Strip any seeded model pins, then append ours (TOML forbids dup keys).
+      // Strip any seeded root-level model pins, then PREPEND ours — appended
+      // keys would land inside the file's last [section] and be ignored.
       const cfgPath = join(home, ".codex/config.toml");
       const seededCfg = (await Bun.file(cfgPath).text().catch(() => "")) ?? "";
       const filtered = seededCfg
@@ -385,7 +390,7 @@ try {
         .join("\n");
       writeFileSync(
         cfgPath,
-        `${filtered.trimEnd()}\nmodel = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n`,
+        `model = "gpt-5.6-luna"\nmodel_reasoning_effort = "low"\n${filtered.trimStart()}\n`,
       );
     }
 

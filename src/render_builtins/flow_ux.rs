@@ -1342,6 +1342,7 @@ impl ScriptListApp {
                     crate::flows::session::SessionTransport::CodexThread => "codexThread",
                     crate::flows::session::SessionTransport::MdflowTurns => "mdflowTurns",
                 },
+                engine: meta.engine.clone(),
             })
             .collect();
         crate::flows::automation::flow_ux_state(crate::flows::automation::FlowUxSnapshotInputs {

@@ -36,6 +36,8 @@ pub struct SessionSnapshot {
     pub turn_in_flight: bool,
     /// `codexThread` or `mdflowTurns`.
     pub transport: &'static str,
+    /// Engine label as shown in the session chip (e.g. `codex · gpt-5.6-luna`).
+    pub engine: String,
 }
 
 pub struct PreviewSnapshot<'a> {
@@ -127,6 +129,7 @@ pub fn flow_ux_state(inputs: FlowUxSnapshotInputs<'_>) -> Value {
                     "turns": s.turns,
                     "turnInFlight": s.turn_in_flight,
                     "transport": s.transport,
+                    "engine": s.engine,
                 })
             })
             .collect::<Vec<_>>(),
@@ -174,6 +177,7 @@ mod tests {
                 turns: 2,
                 turn_in_flight: true,
                 transport: "codexThread",
+                engine: "codex · gpt-5.6-luna".into(),
             }],
         });
         assert_eq!(value["activeVariant"], "lens");
