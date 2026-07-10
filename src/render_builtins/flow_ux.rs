@@ -1063,13 +1063,36 @@ impl ScriptListApp {
 
         let list_scrollbar =
             self.builtin_uniform_list_scrollbar(&self.flow_ux_scroll_handle, row_count, 8);
+        // Every list leads with a persistent section separator (POLISH.md
+        // layout-stability bar; same rule as the main menu's "Results"
+        // header, 4d76327b8): the label may swap but the row never appears
+        // or disappears, so filtering can't shift the rows below it.
+        let leading_header = crate::list_item::render_section_header(
+            if filter.trim().is_empty() {
+                "Flows"
+            } else {
+                "Results"
+            },
+            None,
+            list_colors,
+            true,
+        );
         let mut list_pane = div()
             .relative()
             .w_full()
             .h_full()
             .min_h(px(0.))
-            .child(list_element)
-            .child(list_scrollbar);
+            .flex()
+            .flex_col()
+            .child(leading_header)
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .child(list_element)
+                    .child(list_scrollbar),
+            );
         if !empty_message.is_empty() && roster.flows.is_empty() {
             // Roster problems surface as a banner above the (package) rows
             // instead of replacing the whole list — package flows still work
@@ -1121,17 +1144,10 @@ impl ScriptListApp {
         }
         count_parts.push(format!("{} flows", row_count.saturating_sub(1)));
         let count_label = count_parts.join(" · ");
-        let cwd_chip = div()
-            .flex_none()
-            .whitespace_nowrap()
-            .text_sm()
-            .text_color(rgb(chrome.text_secondary_hex))
-            .child(cwd_display.clone())
-            .into_any_element();
-        let trailing = vec![
-            cwd_chip,
-            self.render_builtin_main_input_count_label(count_label),
-        ];
+        // Trailing slot = the standard muted count label only. The flow cwd
+        // already shows in the shared context zone (top-left chip) — never
+        // duplicate it beside the input.
+        let trailing = vec![self.render_builtin_main_input_count_label(count_label)];
 
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
@@ -1184,41 +1200,13 @@ impl ScriptListApp {
         };
 
         // The MAIN input is the composer — the same shared input every
-        // surface uses (with its context-attachment features). Identity and
-        // honest state ride as trailing chips on that one input row;
-        // ChatPrompt renders transcript only.
-        let state_color = if meta.state.is_live() {
-            rgb(chrome.accent_hex)
-        } else {
-            rgb(chrome.text_muted_hex)
-        };
-        let identity_chip = div()
-            .flex_none()
-            .whitespace_nowrap()
-            .text_sm()
-            .text_color(rgb(chrome.text_secondary_hex))
-            .child(format!(
-                "{} · {} · {}",
-                meta.friendly_name, meta.engine, meta.origin
-            ))
-            .into_any_element();
-        let state_chip = div()
-            .flex_none()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_1()
-            .pr(px(self.current_main_menu_theme.def().search.text_inset_x))
-            .child(div().w(px(6.)).h(px(6.)).rounded_full().bg(state_color))
-            .child(
-                div()
-                    .text_sm()
-                    .whitespace_nowrap()
-                    .text_color(state_color)
-                    .child(format!("{} · {}", meta.state.label(), meta.elapsed_label())),
-            )
-            .into_any_element();
-        let trailing = vec![identity_chip, state_chip];
+        // surface uses (with its context-attachment features). Identity
+        // lives where every surface puts it: the placeholder names the flow
+        // and the shared context zone's Agent·Model chip carries
+        // flow · engine (see `main_view_context_labels`). The input row's
+        // trailing slot stays empty — it is a count-label slot on list
+        // surfaces, never a status bar.
+        let trailing: Vec<gpui::AnyElement> = Vec::new();
 
         // Enter = send the main-input draft as the next turn; Esc =
         // background to the desk; ⌘K = session actions. Same shell-level
@@ -1254,13 +1242,25 @@ impl ScriptListApp {
             },
         );
 
+        // Honest state rides as the footer hint strip's leading status text —
+        // the same slot ChatPrompt's own footer uses ("Streaming · model").
+        // No ticking elapsed timer in chrome; the desk row carries elapsed.
+        let status_text = if meta.active_turn.is_some() {
+            format!("Working · {}", meta.engine)
+        } else {
+            meta.engine.clone()
+        };
         let hints: Vec<gpui::SharedString> = vec![
             gpui::SharedString::from("↵ Send"),
             gpui::SharedString::from("Esc Desk"),
             gpui::SharedString::from("⌘K Actions"),
         ];
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-            hints, None,
+            hints,
+            Some(crate::components::render_hint_strip_leading_text(
+                status_text,
+                self.theme.colors.text.primary,
+            )),
         ));
 
         let menu_def = self.current_main_menu_theme.def();

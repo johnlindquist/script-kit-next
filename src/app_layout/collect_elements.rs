@@ -1625,8 +1625,33 @@ impl ScriptListApp {
                     .map(|(_, entity)| entity.clone());
                 if let Some(entity) = entity {
                     let chat = entity.read(cx);
-                    let (elements, total_count) =
+                    let (mut elements, mut total_count) =
                         self.collect_chat_prompt_elements(chat, limit);
+                    // The chat's internal composer/model rows are suppressed
+                    // in this surface (`external_input`): the shared MAIN
+                    // input is the composer. Report that input — with its
+                    // real draft and real focus — instead of the hidden ones.
+                    let removed = elements.len();
+                    elements.retain(|el| {
+                        el.semantic_id != "input:chat-input"
+                            && el.semantic_id != "input:chat-model"
+                    });
+                    total_count = total_count.saturating_sub(removed - elements.len());
+                    let placeholder = chat
+                        .placeholder
+                        .clone()
+                        .unwrap_or_else(|| "Message".to_string());
+                    elements.insert(
+                        0,
+                        Self::input_element(
+                            "flow-session-composer",
+                            placeholder,
+                            Some(Self::preview_value(&self.filter_text, 240)),
+                            self.focused_input == FocusedInput::MainFilter,
+                            Some(0),
+                        ),
+                    );
+                    total_count += 1;
                     Self::finalize_surface_outcome(
                         "flow-session",
                         "flow-session",

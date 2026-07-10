@@ -3500,7 +3500,9 @@ impl ScriptListApp {
                         "flowSession".to_string(),
                         Some("flow-session".to_string()),
                         None,
-                        String::new(),
+                        // The shared MAIN input is the composer; its draft is
+                        // the session's observable input value.
+                        self.filter_text.clone(),
                         0,
                         0,
                         -1,

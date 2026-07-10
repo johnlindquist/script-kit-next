@@ -381,9 +381,14 @@ impl ChatPrompt {
 
     /// The host owns the composer — the shared MAIN input with its
     /// established context-attachment features. Suppresses the internal
-    /// input area; this surface renders the transcript only.
+    /// input area; this surface renders the transcript only. Also cancels
+    /// the first-render auto-focus: the suppressed internal input must
+    /// never steal focus from the host's composer.
     pub fn with_external_input(mut self, enabled: bool) -> Self {
         self.external_input = enabled;
+        if enabled {
+            self.pending_auto_focus = false;
+        }
         self
     }
 

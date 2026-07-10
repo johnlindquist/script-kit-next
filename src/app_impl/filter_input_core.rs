@@ -52,6 +52,10 @@ impl ScriptListApp {
                 | AppView::ProfileSearchView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::FlowUxView { .. }
+                // Flow sessions compose in the shared MAIN input: the text is
+                // a message draft, not a query, but the input plumbing (change
+                // events, actions-open preservation, resync) is the same.
+                | AppView::FlowSessionView { .. }
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
@@ -554,6 +558,9 @@ mod tests {
             "AppView::FileSearchView",
             "AppView::SettingsView",
             "AppView::BrowserHistoryView",
+            // Flow sessions compose in the shared MAIN input; dropping this
+            // arm makes the composer draft silently vanish (2026-07-10).
+            "AppView::FlowSessionView",
         ];
 
         for view in required_views {

@@ -1676,9 +1676,24 @@ impl ScriptListApp {
                 crate::components::main_view_chrome::MAIN_VIEW_CWD_UNAVAILABLE_LABEL.to_string()
             });
 
-        let agent_model_label = self.agent_model_footer_label().unwrap_or_else(|| {
-            crate::components::main_view_chrome::MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL.to_string()
-        });
+        // In a flow session the active agent IS the flow: the shared
+        // Agent·Model chip carries "<flow> · <engine>" (the engine label
+        // grows the model once the thread reports it) instead of the global
+        // spine agent, which is not what this conversation talks to.
+        let flow_session_label = match &self.current_view {
+            AppView::FlowSessionView { session_id } => self
+                .flow_sessions
+                .iter()
+                .find(|(meta, _)| meta.id == *session_id)
+                .map(|(meta, _)| format!("{} · {}", meta.friendly_name, meta.engine)),
+            _ => None,
+        };
+        let agent_model_label = flow_session_label
+            .or_else(|| self.agent_model_footer_label())
+            .unwrap_or_else(|| {
+                crate::components::main_view_chrome::MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL
+                    .to_string()
+            });
 
         crate::components::main_view_chrome::MainViewContextLabels::new(
             cwd_label,
