@@ -468,6 +468,12 @@ pub(crate) enum SurfaceKind {
     #[cfg(feature = "storybook")]
     DesignExplorer,
     UtilityChildContent,
+    /// Main-window Threadline flow conversation. Split from
+    /// `UtilityChildContent` because its blur semantics differ: clicking
+    /// away hides the launcher and resets to the main menu while the flow
+    /// session keeps running in the background (Escape stays view-owned —
+    /// it backgrounds to the flow desk, never closes the window).
+    FlowSession,
     FileSearchMini,
     FileSearchFull,
     ProfileSearch,
@@ -753,6 +759,18 @@ impl DismissPolicy {
         )
     }
 
+    /// Background-on-blur surfaces (flow sessions): clicking away hides the
+    /// launcher (work continues in the background), Escape stays view-owned
+    /// (it backgrounds to the flow desk), Cmd+W closes.
+    pub(crate) const fn blur_closes_escape_view_owned() -> Self {
+        Self::new(
+            DismissEffect::CloseMainWindow,
+            DismissEffect::CloseMainWindow,
+            DismissEffect::LetViewHandle,
+            DismissEffect::CloseMainWindow,
+        )
+    }
+
     pub(crate) const fn effect_for(self, trigger: DismissTrigger) -> DismissEffect {
         match trigger {
             DismissTrigger::WindowBlur => self.window_blur,
@@ -923,9 +941,10 @@ impl AppView {
             AppView::NonListStatesView { .. } => SurfaceKind::NonListStates,
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => SurfaceKind::DesignExplorer,
-            AppView::ScratchPadView { .. }
-            | AppView::QuickTerminalView { .. }
-            | AppView::FlowSessionView { .. } => SurfaceKind::UtilityChildContent,
+            AppView::ScratchPadView { .. } | AppView::QuickTerminalView { .. } => {
+                SurfaceKind::UtilityChildContent
+            }
+            AppView::FlowSessionView { .. } => SurfaceKind::FlowSession,
             AppView::FileSearchView {
                 presentation: FileSearchPresentation::Mini,
                 ..
@@ -1466,6 +1485,20 @@ impl SurfaceKind {
                 explicit,
                 "scriptList",
             ),
+            // Flow sessions background on blur: the conversation keeps
+            // running while the launcher hides and resets to the main menu,
+            // so the next hotkey press lands on the main menu with the
+            // session still live under the desk's Active rows.
+            SurfaceKind::FlowSession => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(UtilityWorkspace, ChildView, ContentPane),
+                ChildViewFocus,
+                ChildViewKeyboard,
+                ChildViewActions,
+                ChildViewStateProof,
+                ContentPaneVisual,
+                DismissPolicy::blur_closes_escape_view_owned(),
+                "flowSession",
+            ),
             SurfaceKind::FileSearchMini => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     UtilityWorkspace,
@@ -1914,6 +1947,30 @@ mod dismiss_contract_tests {
             .surface_contract()
             .dismiss_policy
             .closes_main_window_on(DismissTrigger::CmdW));
+    }
+
+    /// Flow sessions background instead of dying: clicking away (blur) hides
+    /// the launcher while the turn keeps running, Escape stays view-owned
+    /// (backgrounds to the desk, never kills the session), and Cmd+W closes
+    /// the window. Pairs with the runtime probe proving `flow_sessions`
+    /// survive `close_and_reset_window`.
+    #[test]
+    fn flow_session_backgrounds_on_blur_and_owns_escape() {
+        let policy = SurfaceKind::FlowSession.surface_contract().dismiss_policy;
+        assert!(
+            policy.closes_main_window_on(DismissTrigger::WindowBlur),
+            "unfocusing a flow must hide the launcher (session keeps running)"
+        );
+        assert!(
+            !policy.closes_main_window_on(DismissTrigger::Escape),
+            "Escape is view-owned: back to the desk, never window-close"
+        );
+        assert!(policy.closes_main_window_on(DismissTrigger::CmdW));
+        assert_eq!(
+            AppView::FlowSessionView { session_id: 1 }.surface_kind(),
+            SurfaceKind::FlowSession,
+            "the flow session view must map to its dedicated surface kind"
+        );
     }
 
     /// The cancellable prompt views must map to the cancel-to-script surface

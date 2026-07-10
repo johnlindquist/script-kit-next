@@ -330,7 +330,37 @@ impl ScriptListApp {
             started_at: std::time::Instant::now(),
             turns: Vec::new(),
             active_turn: None,
+            thread_ready: !matches!(
+                transport,
+                crate::flows::session::SessionTransport::CodexThread
+            ),
+            needs_rethread: false,
         };
+        // Codex transport: warm the protocol thread while the user types
+        // their first message. File read + server spawn + thread/start all
+        // happen off the GPUI thread; failures surface as SessionFailed
+        // through the normal event drain.
+        if matches!(
+            meta.transport,
+            crate::flows::session::SessionTransport::CodexThread
+        ) {
+            let flow_path = meta.flow_path.clone();
+            let warm_cwd = meta.cwd.clone();
+            std::thread::Builder::new()
+                .name("flow-thread-warm".into())
+                .spawn(move || {
+                    let profile = std::fs::read_to_string(&flow_path)
+                        .map(|markdown| {
+                            crate::flows::session::resolve_flow_thread_contract(&markdown, "")
+                                .profile
+                        })
+                        .unwrap_or_default();
+                    crate::flows::codex_client::codex_app_server().prepare_thread(
+                        session_id, &warm_cwd, profile,
+                    );
+                })
+                .ok();
+        }
         self.flow_sessions.push((meta, entity));
         self.open_flow_session(session_id, cx);
         self.start_flow_ux_tick(cx);
@@ -367,16 +397,43 @@ impl ScriptListApp {
             return;
         }
 
+        let mut thread_profile: Option<crate::flows::session::FlowThreadProfile> = None;
+        let mut flow_unreadable: Option<String> = None;
         let (transport, prompt) = {
             let meta = &self.flow_sessions[index].0;
             let prompt = match meta.transport {
                 crate::flows::session::SessionTransport::CodexThread => {
-                    if meta.turns.is_empty() {
-                        // First turn carries the flow's resolved mission;
-                        // the protocol thread holds context afterwards.
-                        let markdown =
-                            std::fs::read_to_string(&meta.flow_path).unwrap_or_default();
-                        crate::flows::session::resolve_flow_mission(&markdown, &text)
+                    if meta.turns.is_empty() || meta.needs_rethread {
+                        // First turn — or the first turn on a FRESH thread
+                        // after the engine died — resolves the flow's
+                        // contract: mission + any pinned model/sandbox go to
+                        // thread/start. A re-thread carries the transcript
+                        // rollup as its task so the conversation survives.
+                        // An unreadable definition fails CLOSED — never
+                        // degrade into a generic codex chat wearing the
+                        // flow's name.
+                        match std::fs::read_to_string(&meta.flow_path) {
+                            Ok(markdown) => {
+                                let task = if meta.turns.is_empty() {
+                                    text.clone()
+                                } else {
+                                    crate::flows::session::build_turn_task(&meta.turns, &text)
+                                };
+                                let contract =
+                                    crate::flows::session::resolve_flow_thread_contract(
+                                        &markdown, &task,
+                                    );
+                                thread_profile = Some(contract.profile);
+                                contract.first_prompt
+                            }
+                            Err(err) => {
+                                flow_unreadable = Some(format!(
+                                    "Flow definition unreadable: {} ({err})",
+                                    meta.flow_path
+                                ));
+                                String::new()
+                            }
+                        }
                     } else {
                         text.clone()
                     }
@@ -401,6 +458,33 @@ impl ScriptListApp {
             );
         });
 
+        if let Some(error) = flow_unreadable {
+            tracing::warn!(
+                target: "script_kit::flows",
+                event = "flow_turn_failed_closed",
+                session_id,
+                error = %error,
+                "Flow definition unreadable — failing the turn closed"
+            );
+            let meta = &mut self.flow_sessions[index].0;
+            meta.active_turn = Some(crate::flows::session::ActiveTurn {
+                run_id: None,
+                message_id,
+                assistant_acc: String::new(),
+                current_item_id: None,
+                item_acc: String::new(),
+                user_text: text,
+            });
+            self.finish_flow_turn(
+                session_id,
+                crate::flows::session::SessionState::Done(None),
+                FlowTurnOutcome::Failed(error),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
         tracing::info!(
             target: "script_kit::flows",
             event = "flow_turn_submit",
@@ -416,6 +500,7 @@ impl ScriptListApp {
                 crate::flows::codex_client::codex_app_server().converse(
                     session_id,
                     &meta.cwd,
+                    thread_profile.take(),
                     prompt,
                 );
                 None
@@ -440,8 +525,11 @@ impl ScriptListApp {
             run_id,
             message_id,
             assistant_acc: String::new(),
+            current_item_id: None,
+            item_acc: String::new(),
             user_text: text,
         });
+        meta.needs_rethread = false;
         meta.state = crate::flows::session::SessionState::Working;
         self.start_flow_ux_tick(cx);
         cx.notify();
@@ -457,11 +545,35 @@ impl ScriptListApp {
             return;
         };
         active.assistant_acc.push_str(delta);
+        active.item_acc.push_str(delta);
         let message_id = active.message_id.clone();
         let delta = delta.to_string();
         entity.update(cx, |chat, cx| {
             chat.append_chunk(&message_id, &delta, cx);
         });
+    }
+
+    /// Enter an agentMessage item: when the turn moves to a NEW item after
+    /// prior text, insert a paragraph break so consecutive items never
+    /// butt-join ("…summarizing.The listed…"), then reset the per-item
+    /// accumulator that `item/completed` reconciliation compares against.
+    fn begin_flow_turn_item(&mut self, session_id: u64, item_id: &str, cx: &mut Context<Self>) {
+        let Some(index) = self.flow_session_index(session_id) else {
+            return;
+        };
+        let needs_break = {
+            let Some(active) = self.flow_sessions[index].0.active_turn.as_mut() else {
+                return;
+            };
+            active.enter_item(item_id)
+        };
+        if needs_break {
+            self.append_flow_turn_text(session_id, "\n\n", cx);
+            // The break belongs to the boundary, not the new item's text.
+            if let Some(active) = self.flow_sessions[index].0.active_turn.as_mut() {
+                active.item_acc.clear();
+            }
+        }
     }
 
     /// Settle a session's open turn: close the streaming bubble, surface the
@@ -529,6 +641,7 @@ impl ScriptListApp {
         match event {
             FlowThreadEvent::ThreadStarted { session_id, model } => {
                 if let Some(index) = self.flow_session_index(session_id) {
+                    self.flow_sessions[index].0.thread_ready = true;
                     if !model.is_empty() {
                         self.flow_sessions[index].0.engine = format!("codex · {model}");
                     }
@@ -541,25 +654,38 @@ impl ScriptListApp {
                     }
                 }
             }
-            FlowThreadEvent::AgentDelta { session_id, delta } => {
+            FlowThreadEvent::AgentDelta {
+                session_id,
+                item_id,
+                delta,
+            } => {
+                self.begin_flow_turn_item(session_id, &item_id, cx);
                 self.append_flow_turn_text(session_id, &delta, cx);
             }
-            FlowThreadEvent::AgentMessageFinal { session_id, text } => {
-                // Authoritative full text: append whatever the deltas
-                // missed (deltas can lag or be skipped entirely).
+            FlowThreadEvent::AgentMessageFinal {
+                session_id,
+                item_id,
+                text,
+            } => {
+                // Authoritative full text of ONE item: append whatever its
+                // deltas missed (deltas can lag or be skipped entirely).
+                // Reconcile against the item accumulator, never the whole
+                // turn — a turn carries several items and comparing across
+                // items would drop or butt-join them.
+                self.begin_flow_turn_item(session_id, &item_id, cx);
                 let Some(index) = self.flow_session_index(session_id) else {
                     return;
                 };
-                let acc = self.flow_sessions[index]
+                let item_acc = self.flow_sessions[index]
                     .0
                     .active_turn
                     .as_ref()
-                    .map(|active| active.assistant_acc.clone())
+                    .map(|active| active.item_acc.clone())
                     .unwrap_or_default();
-                if text.len() > acc.len() && text.starts_with(&acc) {
-                    let suffix = text[acc.len()..].to_string();
+                if text.len() > item_acc.len() && text.starts_with(&item_acc) {
+                    let suffix = text[item_acc.len()..].to_string();
                     self.append_flow_turn_text(session_id, &suffix, cx);
-                } else if acc.is_empty() && !text.is_empty() {
+                } else if item_acc.is_empty() && !text.is_empty() {
                     self.append_flow_turn_text(session_id, &text, cx);
                 }
             }
@@ -584,6 +710,12 @@ impl ScriptListApp {
                 let Some(index) = self.flow_session_index(session_id) else {
                     return;
                 };
+                // The protocol thread is gone (server death or thread/start
+                // failure). The next submit must re-thread with the flow's
+                // contract + transcript rollup, and the footer must show
+                // Connecting again instead of pretending the thread lives.
+                self.flow_sessions[index].0.thread_ready = false;
+                self.flow_sessions[index].0.needs_rethread = true;
                 if self.flow_sessions[index].0.active_turn.is_some() {
                     self.finish_flow_turn(
                         session_id,
@@ -1245,7 +1377,9 @@ impl ScriptListApp {
         // Honest state rides as the footer hint strip's leading status text —
         // the same slot ChatPrompt's own footer uses ("Streaming · model").
         // No ticking elapsed timer in chrome; the desk row carries elapsed.
-        let status_text = if meta.active_turn.is_some() {
+        let status_text = if meta.active_turn.is_some() && !meta.thread_ready {
+            format!("Connecting · {}", meta.engine)
+        } else if meta.active_turn.is_some() {
             format!("Working · {}", meta.engine)
         } else {
             meta.engine.clone()

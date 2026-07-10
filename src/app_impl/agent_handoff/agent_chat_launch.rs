@@ -595,6 +595,11 @@ impl ScriptListApp {
             .spine_cwd
             .as_ref()
             .map(|p| p.to_string_lossy().to_string());
+        // Every persisted cwd change is also a flow-discovery boundary:
+        // kick the roster fetch for the new effective cwd immediately so
+        // the main-menu Flows section reflects it without waiting for TTL.
+        crate::flows::catalog::flow_catalog()
+            .refresh(&crate::flows::resolve_flow_cwd(cwd.clone()));
         std::thread::Builder::new()
             .name("persist-spine-cwd".into())
             .spawn(move || {

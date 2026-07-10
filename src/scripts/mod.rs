@@ -48,6 +48,8 @@ pub(crate) use self::grouping::get_grouped_results_with_validation_query_and_roo
 #[allow(unused_imports)]
 pub(crate) use self::grouping::get_grouped_results_with_validation_query_and_root_files_with_options;
 #[allow(unused_imports)]
+pub(crate) use self::grouping::grouped_view::FlowDiscoveryNote;
+#[allow(unused_imports)]
 pub(crate) use self::grouping::pin_alias_match_first;
 #[allow(unused_imports)]
 pub(crate) use self::grouping::prepend_root_brain_inbox_section;

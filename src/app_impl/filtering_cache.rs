@@ -967,6 +967,10 @@ impl ScriptListApp {
     fn sync_flow_roster_cache_generation(&mut self) {
         use std::sync::atomic::{AtomicU64, Ordering};
         static SEEN: AtomicU64 = AtomicU64::new(0);
+        // Keep the roster fresh even when result caches stay hot: a cache
+        // hit skips recompute (and therefore roster_for), so without this
+        // poke a stale roster could be pinned indefinitely.
+        crate::flows::catalog::flow_catalog().poke(&self.flow_ux_cwd());
         let generation = crate::flows::catalog::roster_generation();
         if SEEN.swap(generation, Ordering::Relaxed) != generation {
             self.invalidate_filter_cache();
@@ -1908,6 +1912,16 @@ impl ScriptListApp {
                 .as_deref()
                 .unwrap_or(&self.builtin_entries);
             let (root_windows, root_windows_provider_status) = self.root_search.root_windows();
+            // One roster read feeds both the flow corpus and the degraded
+            // discovery note (loading/error/legacy) for the Flows section.
+            let flow_roster =
+                crate::flows::catalog::flow_catalog().roster_for(&self.flow_ux_cwd());
+            let flow_corpus_for_grouping = crate::flows::catalog::desk_flows(&flow_roster);
+            let flow_discovery_note =
+                Some(crate::scripts::FlowDiscoveryNote {
+                    status: flow_roster.status,
+                    detail: flow_roster.warnings.first().cloned(),
+                });
             crate::scripts::get_grouped_results_with_validation_query_and_root_files_with_options(
                 &self.scripts,
                 &self.scriptlets,
@@ -1916,7 +1930,8 @@ impl ScriptListApp {
                 root_windows,
                 root_windows_provider_status,
                 &self.skills,
-                &self.flow_desk_corpus(),
+                &flow_corpus_for_grouping,
+                flow_discovery_note.as_ref(),
                 &self.frecency_store,
                 search_text,
                 &suggested_config,

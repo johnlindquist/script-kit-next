@@ -690,10 +690,6 @@ impl ScriptListApp {
                 .unwrap_or_default();
             skills.into_iter().map(std::sync::Arc::new).collect()
         };
-        // Prewarm the flow roster so flows are already in the main-menu
-        // corpus by the first open (roster_for spawns a background fetch).
-        crate::flows::catalog::flow_catalog()
-            .roster_for(&crate::flows::resolve_flow_cwd(None));
         crate::dictation::hydrate_dictation_resource_from_history();
         let window_search_test_provider =
             std::env::var_os("SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER").is_some();
@@ -740,6 +736,41 @@ impl ScriptListApp {
                 ),
             }
         };
+
+        // Prewarm the flow roster for the RESTORED effective cwd so flows
+        // are already in the main-menu corpus by the first open. Must run
+        // after the spine_cwd restore above — resolve_flow_cwd(None) would
+        // warm the wrong cache key when a persisted cwd exists.
+        {
+            let restored_cwd = initial_spine_cwd
+                .as_ref()
+                .map(|path| path.to_string_lossy().to_string());
+            crate::flows::catalog::flow_catalog()
+                .roster_for(&crate::flows::resolve_flow_cwd(restored_cwd));
+        }
+
+        // Push-driven roster arrival: rosters land on a background fetch
+        // thread; without this hook an idle open window never repaints when
+        // flows appear. The generation poll in filtering_cache stays as the
+        // fallback for the same signal.
+        {
+            let (roster_tx, roster_rx) = async_channel::bounded::<()>(4);
+            crate::flows::catalog::flow_catalog().set_notify_hook(move || {
+                let _ = roster_tx.try_send(());
+            });
+            cx.spawn(async move |this, cx| {
+                while roster_rx.recv().await.is_ok() {
+                    let _ = cx.update(|cx| {
+                        this.update(cx, |app, cx| {
+                            app.invalidate_filter_cache();
+                            app.invalidate_grouped_cache();
+                            cx.notify();
+                        })
+                    });
+                }
+            })
+            .detach();
+        }
 
         // Resolve the persisted profile/model into header display labels so the
         // selection (Shift+Tab Profile Switcher) is visible on first paint.

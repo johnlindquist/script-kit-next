@@ -17,6 +17,10 @@ use super::model::{FlowDescriptor, RosterSnapshot, FLOW_UX_PROTOCOL_VERSION};
 
 /// Roster entries older than this refetch on next access.
 const ROSTER_TTL: Duration = Duration::from_secs(10);
+/// Hard deadline on one `md roster --json` run. Without it a hung mdflow
+/// pins the cwd's entry at Loading forever (spawn_refresh refuses to stack
+/// a second fetch), permanently wedging flow discovery.
+const ROSTER_FETCH_DEADLINE: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RosterStatus {
@@ -125,10 +129,7 @@ impl FlowCatalog {
     pub fn roster_for(self: &Arc<Self>, cwd: &str) -> RosterEntry {
         let needs_refresh = {
             let entries = self.entries.lock();
-            match entries.get(cwd) {
-                Some(entry) => entry.is_stale() && entry.status != RosterStatus::Loading,
-                None => true,
-            }
+            entry_needs_refresh(entries.get(cwd))
         };
         if needs_refresh {
             self.spawn_refresh(cwd);
@@ -143,6 +144,21 @@ impl FlowCatalog {
     /// Force refresh (cwd chip changed, manual reload action).
     pub fn refresh(self: &Arc<Self>, cwd: &str) {
         self.spawn_refresh(cwd);
+    }
+
+    /// Cheap staleness check without cloning the entry: spawns a background
+    /// refresh when the cwd's roster is stale or missing. Main-menu cache
+    /// getters call this every read so a hot cache can never pin a stale
+    /// roster forever (the refresh completion bumps the generation, which
+    /// invalidates those caches and repaints via the notify hook).
+    pub fn poke(self: &Arc<Self>, cwd: &str) {
+        let needs_refresh = {
+            let entries = self.entries.lock();
+            entry_needs_refresh(entries.get(cwd))
+        };
+        if needs_refresh {
+            self.spawn_refresh(cwd);
+        }
     }
 
     fn spawn_refresh(self: &Arc<Self>, cwd: &str) {
@@ -162,17 +178,98 @@ impl FlowCatalog {
             .name("flow-roster-fetch".into())
             .spawn(move || {
                 let entry = fetch_roster_blocking(&cwd);
-                catalog.entries.lock().insert(cwd, entry);
-                ROSTER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                catalog.notify();
+                catalog.complete_refresh(cwd, entry);
             })
             .ok();
+    }
+
+    /// Land a fetched roster: store the entry, bump the generation so
+    /// main-menu caches invalidate on their next read, THEN fire the notify
+    /// hook — a repaint triggered by the hook must already see the new
+    /// generation, or the repaint reads the stale cache and the arrival is
+    /// invisible until the next interaction.
+    fn complete_refresh(&self, cwd: String, entry: RosterEntry) {
+        self.entries.lock().insert(cwd, entry);
+        ROSTER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.notify();
     }
 
     #[cfg(test)]
     fn insert_for_test(&self, cwd: &str, entry: RosterEntry) {
         self.entries.lock().insert(cwd.to_string(), entry);
     }
+}
+
+/// One staleness decision for every cache-side read (`roster_for`, `poke`):
+/// missing → fetch; stale → refetch unless a refresh is already in flight
+/// (Loading). Keeping this shared means a hot grouped cache can never pin a
+/// stale roster by reading through a path with laxer rules.
+fn entry_needs_refresh(entry: Option<&RosterEntry>) -> bool {
+    match entry {
+        Some(entry) => entry.is_stale() && entry.status != RosterStatus::Loading,
+        None => true,
+    }
+}
+
+/// Run `<binary> roster --json` with a hard deadline. Stdout/stderr drain
+/// on reader threads so a large roster can never deadlock the pipe while
+/// the deadline loop polls `try_wait`.
+fn run_roster_with_deadline(binary: &str, cwd: &str) -> std::io::Result<std::process::Output> {
+    use std::io::Read;
+    use std::process::Stdio;
+
+    let mut child = Command::new(binary)
+        .arg("roster")
+        .arg("--json")
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let mut stdout_pipe = child.stdout.take();
+    let mut stderr_pipe = child.stderr.take();
+    let stdout_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(pipe) = stdout_pipe.as_mut() {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let stderr_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(pipe) = stderr_pipe.as_mut() {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait()? {
+            Some(status) => break status,
+            None if started.elapsed() > ROSTER_FETCH_DEADLINE => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!(
+                        "roster fetch exceeded {}s deadline",
+                        ROSTER_FETCH_DEADLINE.as_secs()
+                    ),
+                ));
+            }
+            None => std::thread::sleep(Duration::from_millis(50)),
+        }
+    };
+
+    Ok(std::process::Output {
+        status,
+        stdout: stdout_reader.join().unwrap_or_default(),
+        stderr: stderr_reader.join().unwrap_or_default(),
+    })
 }
 
 /// Blocking roster fetch — call only from background threads.
@@ -189,12 +286,7 @@ pub fn fetch_roster_blocking(cwd: &str) -> RosterEntry {
         entry.warnings.push(format!("cwd does not exist: {cwd}"));
         return entry;
     }
-    let output = Command::new(binary)
-        .arg("roster")
-        .arg("--json")
-        .current_dir(cwd)
-        .output();
-    let output = match output {
+    let output = match run_roster_with_deadline(binary, cwd) {
         Ok(output) => output,
         Err(err) => {
             let mut entry = RosterEntry::empty(RosterStatus::Error);
@@ -358,6 +450,56 @@ mod tests {
         let hits = filter_flows(&flows, "  ");
         assert_eq!(hits.len(), 2);
         assert_eq!(hits[0].name, "b", "roster order preserved for empty query");
+    }
+
+    #[test]
+    fn refresh_decision_fetches_missing_and_stale_but_not_inflight() {
+        assert!(entry_needs_refresh(None), "missing cwd must fetch");
+
+        let fresh = RosterEntry::empty(RosterStatus::Ready);
+        assert!(
+            !entry_needs_refresh(Some(&fresh)),
+            "fresh entry must not refetch"
+        );
+
+        let mut stale = RosterEntry::empty(RosterStatus::Ready);
+        stale.fetched_at = Instant::now()
+            .checked_sub(ROSTER_TTL + Duration::from_secs(1))
+            .unwrap_or_else(Instant::now);
+        if stale.is_stale() {
+            assert!(
+                entry_needs_refresh(Some(&stale)),
+                "stale entry must refetch"
+            );
+            stale.status = RosterStatus::Loading;
+            assert!(
+                !entry_needs_refresh(Some(&stale)),
+                "in-flight refresh must not stack another"
+            );
+        }
+    }
+
+    #[test]
+    fn completed_refresh_bumps_generation_before_notifying() {
+        let catalog = FlowCatalog::default();
+        let seen_generation = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let hook_seen = Arc::clone(&seen_generation);
+        catalog.set_notify_hook(move || {
+            hook_seen.store(roster_generation(), std::sync::atomic::Ordering::SeqCst);
+        });
+        let before = roster_generation();
+        catalog.complete_refresh(
+            "/tmp/gen-cwd".to_string(),
+            RosterEntry::empty(RosterStatus::Ready),
+        );
+        let after = roster_generation();
+        assert!(after > before, "landing a roster must bump the generation");
+        assert_eq!(
+            seen_generation.load(std::sync::atomic::Ordering::SeqCst),
+            after,
+            "notify hook must observe the NEW generation (bump-then-notify)"
+        );
+        assert!(catalog.entries.lock().contains_key("/tmp/gen-cwd"));
     }
 
     #[test]

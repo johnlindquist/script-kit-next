@@ -10,8 +10,10 @@
 //!   transport is ordered, so we pipeline all three writes at spawn instead
 //!   of blocking the UI thread on the response.
 //! - One protocol thread per flow session: `thread/start {cwd,
-//!   approvalPolicy: "never"}` (sandbox defers to the user's
-//!   `~/.codex/config.toml`, matching how `md`/mdflow runs `codex exec`).
+//!   approvalPolicy: "never"}` plus the flow's declared contract when the
+//!   frontmatter pins one (`model`, `sandbox`, and the mission body as
+//!   `developerInstructions`). Unpinned fields defer to the user's
+//!   `~/.codex/config.toml`, matching how `md`/mdflow runs `codex exec`.
 //! - One turn per user message: `turn/start {threadId, input: [{type:
 //!   "text", text}]}`. Assistant text arrives as `item/agentMessage/delta`
 //!   plus an authoritative full text on `item/completed
@@ -40,10 +42,20 @@ pub enum FlowThreadEvent {
     ThreadStarted { session_id: u64, model: String },
     /// A turn is running on the server (honest "working" edge).
     TurnStarted { session_id: u64 },
-    /// Streamed assistant text.
-    AgentDelta { session_id: u64, delta: String },
-    /// Authoritative full assistant message text (from `item/completed`).
-    AgentMessageFinal { session_id: u64, text: String },
+    /// Streamed assistant text. `item_id` marks agentMessage item
+    /// boundaries — a turn can carry several items and the renderer must
+    /// separate them (paragraph break), never butt-join their text.
+    AgentDelta {
+        session_id: u64,
+        item_id: String,
+        delta: String,
+    },
+    /// Authoritative full text of ONE agentMessage item (`item/completed`).
+    AgentMessageFinal {
+        session_id: u64,
+        item_id: String,
+        text: String,
+    },
     /// The turn settled. `status` is `completed|interrupted|failed`.
     TurnCompleted {
         session_id: u64,
@@ -68,6 +80,9 @@ enum PendingKind {
 #[derive(Debug, Default)]
 struct SessionLink {
     cwd: String,
+    /// Flow-declared thread contract (model/sandbox/developer
+    /// instructions), applied on `thread/start`.
+    profile: super::session::FlowThreadProfile,
     thread_id: Option<String>,
     thread_starting: bool,
     queued_prompts: Vec<String>,
@@ -108,7 +123,13 @@ impl CodexAppServer {
     /// The single public entry: send one user turn for a session, spawning
     /// the server and/or starting the session's thread as needed. Returns
     /// immediately; outcomes arrive via [`drain_events`].
-    pub fn converse(&self, session_id: u64, cwd: &str, prompt: String) {
+    pub fn converse(
+        &self,
+        session_id: u64,
+        cwd: &str,
+        profile: Option<super::session::FlowThreadProfile>,
+        prompt: String,
+    ) {
         let mut shared = self.shared.lock().unwrap();
         if let Err(err) = ensure_child(&mut shared) {
             shared.events.push(FlowThreadEvent::SessionFailed {
@@ -119,6 +140,9 @@ impl CodexAppServer {
         }
         let link = shared.sessions.entry(session_id).or_default();
         link.cwd = cwd.to_string();
+        if let Some(profile) = profile {
+            link.profile = profile;
+        }
         match link.thread_id.clone() {
             Some(thread_id) => {
                 send_turn_start(&mut shared, session_id, &thread_id, &prompt);
@@ -129,16 +153,50 @@ impl CodexAppServer {
                 let needs_start = !link.thread_starting;
                 if needs_start {
                     link.thread_starting = true;
-                    let cwd = link.cwd.clone();
+                    let params = thread_start_params(link);
                     send_request(
                         &mut shared,
                         PendingKind::ThreadStart { session_id },
                         "thread/start",
-                        serde_json::json!({ "cwd": cwd, "approvalPolicy": "never" }),
+                        params,
                     );
                 }
             }
         }
+    }
+
+    /// Warm a session's protocol thread before the first message: spawn
+    /// the server, initialize, and send `thread/start` with the flow's
+    /// contract. By the time the user finishes typing, the first submit is
+    /// usually just `turn/start` — no perceived spawn/handshake dead time.
+    pub fn prepare_thread(
+        &self,
+        session_id: u64,
+        cwd: &str,
+        profile: super::session::FlowThreadProfile,
+    ) {
+        let mut shared = self.shared.lock().unwrap();
+        if let Err(err) = ensure_child(&mut shared) {
+            shared.events.push(FlowThreadEvent::SessionFailed {
+                session_id,
+                error: err,
+            });
+            return;
+        }
+        let link = shared.sessions.entry(session_id).or_default();
+        link.cwd = cwd.to_string();
+        link.profile = profile;
+        if link.thread_id.is_some() || link.thread_starting {
+            return;
+        }
+        link.thread_starting = true;
+        let params = thread_start_params(link);
+        send_request(
+            &mut shared,
+            PendingKind::ThreadStart { session_id },
+            "thread/start",
+            params,
+        );
     }
 
     /// Interrupt the session's in-flight turn (⌘K Stop). No-op when the
@@ -415,8 +473,14 @@ fn handle_message(shared: &mut Shared, msg: &serde_json::Value) {
         "item/agentMessage/delta" => {
             if let Some(session_id) = session_for_thread(shared, &params) {
                 if let Some(delta) = params.get("delta").and_then(|d| d.as_str()) {
+                    let item_id = params
+                        .get("itemId")
+                        .and_then(|id| id.as_str())
+                        .unwrap_or_default()
+                        .to_string();
                     shared.events.push(FlowThreadEvent::AgentDelta {
                         session_id,
+                        item_id,
                         delta: delta.to_string(),
                     });
                 }
@@ -430,15 +494,22 @@ fn handle_message(shared: &mut Shared, msg: &serde_json::Value) {
                 == Some("agentMessage");
             if is_agent_message {
                 if let Some(session_id) = session_for_thread(shared, &params) {
-                    let text = params
-                        .get("item")
+                    let item = params.get("item");
+                    let text = item
                         .and_then(|item| item.get("text"))
                         .and_then(|t| t.as_str())
                         .unwrap_or_default()
                         .to_string();
-                    shared
-                        .events
-                        .push(FlowThreadEvent::AgentMessageFinal { session_id, text });
+                    let item_id = item
+                        .and_then(|item| item.get("id"))
+                        .and_then(|id| id.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    shared.events.push(FlowThreadEvent::AgentMessageFinal {
+                        session_id,
+                        item_id,
+                        text,
+                    });
                 }
             }
         }
@@ -530,6 +601,24 @@ fn handle_rpc_error(shared: &mut Shared, kind: PendingKind, message: String) {
     }
 }
 
+/// `thread/start` params for a session: cwd + never-ask approvals, plus the
+/// flow's declared contract when it pins one. A flow's `model:`/`sandbox:`
+/// frontmatter must reach the server — otherwise the session silently runs
+/// on the user's global codex defaults wearing the flow's name.
+fn thread_start_params(link: &SessionLink) -> serde_json::Value {
+    let mut params = serde_json::json!({ "cwd": link.cwd, "approvalPolicy": "never" });
+    if let Some(model) = &link.profile.model {
+        params["model"] = serde_json::Value::String(model.clone());
+    }
+    if let Some(sandbox) = &link.profile.sandbox {
+        params["sandbox"] = serde_json::Value::String(sandbox.clone());
+    }
+    if let Some(instructions) = &link.profile.developer_instructions {
+        params["developerInstructions"] = serde_json::Value::String(instructions.clone());
+    }
+    params
+}
+
 fn handle_response(shared: &mut Shared, kind: PendingKind, result: &serde_json::Value) {
     match kind {
         PendingKind::Initialize | PendingKind::TurnInterrupt => {}
@@ -609,7 +698,8 @@ mod tests {
         assert_eq!(shared.events.len(), 2);
         assert!(matches!(
             &shared.events[0],
-            FlowThreadEvent::AgentDelta { session_id: 7, delta } if delta == "Hello"
+            FlowThreadEvent::AgentDelta { session_id: 7, item_id, delta }
+                if delta == "Hello" && item_id == "i"
         ));
         assert!(matches!(
             &shared.events[1],
@@ -626,6 +716,7 @@ mod tests {
             3,
             SessionLink {
                 cwd: "/tmp".into(),
+                profile: Default::default(),
                 thread_id: None,
                 thread_starting: true,
                 queued_prompts: vec!["first task".into()],

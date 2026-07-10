@@ -95,10 +95,22 @@ fn default_suggested_lookup_name(result: &SearchResult) -> &str {
     }
 }
 
+/// Degraded flow-discovery signal for the empty-query Flows section: when
+/// no flow rows exist, the section still tells the user WHY (loading,
+/// mdflow missing/broken, pre-protocol mdflow) instead of silently
+/// vanishing. `None`/`Ready` with zero flows hides the section — a user
+/// with genuinely no flows shouldn't see an empty header.
+#[derive(Debug, Clone)]
+pub struct FlowDiscoveryNote {
+    pub status: crate::flows::catalog::RosterStatus,
+    pub detail: Option<String>,
+}
+
 pub(super) fn build_grouped_view_results(
     results: Vec<SearchResult>,
     frecency_store: &FrecencyStore,
     suggested_config: &SuggestedConfig,
+    flow_discovery: Option<&FlowDiscoveryNote>,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     // Grouped view mode: create SUGGESTED and plugin-based sections
     let mut grouped = Vec::new();
@@ -375,6 +387,45 @@ pub(super) fn build_grouped_view_results(
         ));
         for idx in &flows_indices {
             grouped.push(GroupedListItem::Item(*idx));
+        }
+    } else if let Some(note) = flow_discovery {
+        use crate::flows::catalog::RosterStatus;
+        use crate::list_item::{SourceChipStatusKind, SourceChipStatusRow};
+        let status_row = |kind: SourceChipStatusKind, label: String| {
+            GroupedListItem::Status(SourceChipStatusRow {
+                source: crate::menu_syntax::RootUnifiedSourceFilter::Commands,
+                source_name: "Flows".to_string(),
+                status_kind: kind,
+                label,
+                shown: 0,
+                loaded: 0,
+                total: None,
+            })
+        };
+        let row = match note.status {
+            // Zero flows + Ready is a real answer, not a degraded state.
+            RosterStatus::Ready => None,
+            RosterStatus::Loading => Some(status_row(
+                SourceChipStatusKind::Loading,
+                "Loading flows…".to_string(),
+            )),
+            RosterStatus::Error => Some(status_row(
+                SourceChipStatusKind::Disabled,
+                note.detail
+                    .clone()
+                    .unwrap_or_else(|| "Flow discovery failed — check mdflow".to_string()),
+            )),
+            RosterStatus::Legacy => Some(status_row(
+                SourceChipStatusKind::Disabled,
+                "mdflow predates the flows protocol — npm i -g mdflow@next".to_string(),
+            )),
+        };
+        if let Some(row) = row {
+            grouped.push(GroupedListItem::SectionHeader(
+                "Flows".to_string(),
+                Some("Bot".to_string()),
+            ));
+            grouped.push(row);
         }
     }
 

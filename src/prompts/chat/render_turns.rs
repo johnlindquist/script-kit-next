@@ -125,17 +125,43 @@ impl ChatPrompt {
 
             // Use markdown rendering for assistant responses
             if turn.streaming && response.is_empty() {
-                // Empty streaming state
-                content = content.child(div().text_xs().opacity(0.6).child("Thinking..."));
+                // Empty streaming state: pulse so a slow first token reads
+                // as alive, not stuck (same sine pulse as Agent Chat).
+                content = content.child(div().text_xs().child("Thinking...").with_animation(
+                    ("chat-turn-thinking-pulse", turn_index),
+                    Animation::new(std::time::Duration::from_millis(1200)).repeat(),
+                    |style, delta| {
+                        let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                        style.opacity(0.35 + (0.3 * ((sine + 1.0) / 2.0)))
+                    },
+                ));
             } else if turn.streaming {
-                // Streaming with content - render markdown separately from cursor
-                // to avoid invalidating the markdown cache on every frame
+                // Streaming with content: markdown renders separately from
+                // the live affordance so the cache survives every frame; the
+                // pulsing accent dot below is the "still working" signal
+                // between chunks (Agent Chat's dot-pulse pattern).
                 content = content.child(
                     div()
                         .w_full()
                         .min_w_0()
                         .overflow_x_hidden()
                         .child(render_markdown(markdown_response.as_ref(), colors)),
+                );
+                content = content.child(
+                    div().pt(px(2.0)).child(
+                        div()
+                            .size(px(7.0))
+                            .rounded(px(999.0))
+                            .bg(rgb(theme_colors.accent.selected))
+                            .with_animation(
+                                ("chat-turn-streaming-dot-pulse", turn_index),
+                                Animation::new(std::time::Duration::from_millis(1200)).repeat(),
+                                |style, delta| {
+                                    let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                                    style.opacity(0.65 + (0.35 * ((sine + 1.0) / 2.0)))
+                                },
+                            ),
+                    ),
                 );
             } else {
                 // Complete response - full markdown rendering (with container for proper wrapping)

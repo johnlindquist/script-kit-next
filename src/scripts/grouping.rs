@@ -30,7 +30,7 @@ use super::types::{
 };
 use super::validation::ValidationReport;
 
-mod grouped_view;
+pub(crate) mod grouped_view;
 mod search_mode;
 
 /// Default maximum number of items to show in the RECENT section
@@ -116,6 +116,7 @@ pub(crate) fn get_grouped_results_with_input_history(
         apps,
         skills,
         &[],
+        None,
         frecency_store,
         filter_text,
         suggested_config,
@@ -144,6 +145,7 @@ pub(crate) fn get_grouped_results_with_input_history_and_query(
     apps: &[AppInfo],
     skills: &[Arc<PluginSkill>],
     flows: &[crate::flows::model::FlowDescriptor],
+    flow_discovery: Option<&grouped_view::FlowDiscoveryNote>,
     frecency_store: &FrecencyStore,
     filter_text: &str,
     suggested_config: &SuggestedConfig,
@@ -195,7 +197,12 @@ pub(crate) fn get_grouped_results_with_input_history_and_query(
         );
     }
 
-    grouped_view::build_grouped_view_results(results, frecency_store, suggested_config)
+    grouped_view::build_grouped_view_results(
+        results,
+        frecency_store,
+        suggested_config,
+        flow_discovery,
+    )
 }
 
 /// Pins a synthetic `SearchResult::ScriptIssue` row at `flat_results[0]` and
@@ -405,6 +412,7 @@ pub(crate) fn get_grouped_results_with_validation(
         apps,
         skills,
         &[],
+        None,
         frecency_store,
         filter_text,
         suggested_config,
@@ -431,6 +439,7 @@ pub(crate) fn get_grouped_results_with_validation_and_query(
     apps: &[AppInfo],
     skills: &[Arc<PluginSkill>],
     flows: &[crate::flows::model::FlowDescriptor],
+    flow_discovery: Option<&grouped_view::FlowDiscoveryNote>,
     frecency_store: &FrecencyStore,
     filter_text: &str,
     suggested_config: &SuggestedConfig,
@@ -447,6 +456,7 @@ pub(crate) fn get_grouped_results_with_validation_and_query(
         apps,
         skills,
         flows,
+        flow_discovery,
         frecency_store,
         filter_text,
         suggested_config,
@@ -510,6 +520,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
         skills,
         &[],
+        None,
         frecency_store,
         filter_text,
         suggested_config,
@@ -587,6 +598,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_windows_provider_status: crate::window_control::RootWindowsProviderStatus,
     skills: &[Arc<PluginSkill>],
     flows: &[crate::flows::model::FlowDescriptor],
+    flow_discovery: Option<&grouped_view::FlowDiscoveryNote>,
     frecency_store: &FrecencyStore,
     filter_text: &str,
     suggested_config: &SuggestedConfig,
@@ -629,6 +641,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         apps,
         skills,
         flows,
+        flow_discovery,
         frecency_store,
         filter_text,
         suggested_config,
@@ -2482,6 +2495,7 @@ mod advanced_query_tests {
             &[AppInfo],
             &[Arc<PluginSkill>],
             &[crate::flows::model::FlowDescriptor],
+            Option<&grouped_view::FlowDiscoveryNote>,
             &FrecencyStore,
             &str,
             &SuggestedConfig,
@@ -2500,6 +2514,7 @@ mod advanced_query_tests {
             &[AppInfo],
             &[Arc<PluginSkill>],
             &[crate::flows::model::FlowDescriptor],
+            Option<&grouped_view::FlowDiscoveryNote>,
             &FrecencyStore,
             &str,
             &SuggestedConfig,
@@ -3126,6 +3141,7 @@ mod advanced_query_tests {
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
             &[],
+            None,
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -3295,6 +3311,7 @@ mod advanced_query_tests {
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
             &[],
+            None,
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -3426,6 +3443,7 @@ mod advanced_query_tests {
                 crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
                 &[],
                 &[],
+                None,
                 &frecency_store,
                 query,
                 &SuggestedConfig::default(),
@@ -3616,6 +3634,7 @@ mod advanced_query_tests {
                     crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
                     &[],
                     &[],
+                    None,
                     &frecency_store,
                     query,
                     &SuggestedConfig::default(),
@@ -3739,6 +3758,7 @@ mod advanced_query_tests {
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
             &[],
+            None,
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -3863,6 +3883,7 @@ mod advanced_query_tests {
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
             &[],
+            None,
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -3980,6 +4001,7 @@ mod advanced_query_tests {
                 crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
                 &[],
                 &[],
+                None,
                 &frecency_store,
                 query,
                 &SuggestedConfig::default(),
@@ -5878,6 +5900,7 @@ mod advanced_query_tests {
                 crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
                 &[],
                 &[],
+                None,
                 &FrecencyStore::new(),
                 "",
                 &SuggestedConfig::default(),
