@@ -118,6 +118,9 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         SearchResult::ScriptIssue(_) => ArtifactKind::Issue,
         // Spine projections don't have a dedicated ArtifactKind; map to Fallback
         SearchResult::SpineProjection(_) => ArtifactKind::Fallback,
+        // Flows don't have a dedicated ArtifactKind yet; map to Fallback like
+        // SpineProjection until menu-syntax grows a flow kind.
+        SearchResult::Flow(_) => ArtifactKind::Fallback,
     }
 }
 

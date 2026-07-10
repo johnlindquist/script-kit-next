@@ -167,7 +167,8 @@ fn visible_row_fingerprint(app: &crate::ScriptListApp) -> String {
 
 fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResultRole {
     match result {
-        crate::scripts::SearchResult::Script(_)
+        crate::scripts::SearchResult::Flow(_)
+        | crate::scripts::SearchResult::Script(_)
         | crate::scripts::SearchResult::Scriptlet(_)
         | crate::scripts::SearchResult::Skill(_)
         | crate::scripts::SearchResult::BuiltIn(_)
@@ -197,6 +198,8 @@ fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResu
 
 fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflightActionKind {
     match result {
+        // Flows converse via Threadline — the closest preflight kind is a command run.
+        crate::scripts::SearchResult::Flow(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::Script(_) => MainWindowPreflightActionKind::RunScript,
         crate::scripts::SearchResult::Scriptlet(_) => MainWindowPreflightActionKind::RunSnippet,
         crate::scripts::SearchResult::BuiltIn(_) => MainWindowPreflightActionKind::RunCommand,

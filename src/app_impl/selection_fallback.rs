@@ -405,6 +405,9 @@ impl ScriptListApp {
                         "skill:{}:{}",
                         sm.skill.plugin_id, sm.skill.skill_id
                     )),
+                    // Same frecency key as history_result_key so ranking and
+                    // input-history preference agree on the flow identity.
+                    scripts::SearchResult::Flow(fm) => Some(format!("flow:{}", fm.flow.id)),
                     scripts::SearchResult::Window(wm) => {
                         Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                     }
@@ -584,6 +587,18 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::BrowserHistory(browser_match) => {
                         self.execute_root_browser_history_open(&browser_match.hit.url, cx);
+                    }
+                    scripts::SearchResult::Flow(flow_match) => {
+                        // Flows are the primary launcher rows: Enter always
+                        // starts a Threadline conversation with the flow.
+                        tracing::info!(
+                            event = "flow_session_launch_requested",
+                            flow_id = %flow_match.flow.id,
+                            flow_name = %flow_match.flow.name,
+                            engine = %flow_match.flow.engine,
+                            "Flow selected from main menu"
+                        );
+                        self.start_flow_session(&flow_match.flow, None, cx);
                     }
                     scripts::SearchResult::Skill(skill_match) => {
                         // Skills always open Agent Chat with the selected skill staged

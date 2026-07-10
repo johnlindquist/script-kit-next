@@ -63,6 +63,15 @@ impl RosterEntry {
 
 static CATALOG: Mutex<Option<Arc<FlowCatalog>>> = Mutex::new(None);
 
+/// Monotonic counter bumped whenever any roster entry lands. Main-menu
+/// result caches poll this to notice async roster arrivals without a
+/// cx handle (the desk repaints via its tick loop instead).
+static ROSTER_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub fn roster_generation() -> u64 {
+    ROSTER_GENERATION.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn flow_catalog() -> Arc<FlowCatalog> {
     let mut guard = CATALOG.lock();
     guard
@@ -154,6 +163,7 @@ impl FlowCatalog {
             .spawn(move || {
                 let entry = fetch_roster_blocking(&cwd);
                 catalog.entries.lock().insert(cwd, entry);
+                ROSTER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 catalog.notify();
             })
             .ok();

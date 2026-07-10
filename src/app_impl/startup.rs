@@ -690,6 +690,10 @@ impl ScriptListApp {
                 .unwrap_or_default();
             skills.into_iter().map(std::sync::Arc::new).collect()
         };
+        // Prewarm the flow roster so flows are already in the main-menu
+        // corpus by the first open (roster_for spawns a background fetch).
+        crate::flows::catalog::flow_catalog()
+            .roster_for(&crate::flows::resolve_flow_cwd(None));
         crate::dictation::hydrate_dictation_resource_from_history();
         let window_search_test_provider =
             std::env::var_os("SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER").is_some();

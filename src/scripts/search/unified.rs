@@ -7,6 +7,8 @@ use crate::plugins::PluginSkill;
 use crate::window_control::WindowInfo;
 
 use super::super::types::{Script, Scriptlet, SearchResult};
+use super::flows::fuzzy_search_flows;
+use super::prefix_filters::flow_passes_prefix_filter;
 use super::{
     app_passes_prefix_filter, builtin_passes_prefix_filter, fuzzy_search_apps,
     fuzzy_search_builtins, fuzzy_search_scriptlets, fuzzy_search_scripts, fuzzy_search_skills,
@@ -15,13 +17,16 @@ use super::{
     skill_passes_prefix_filter, window_passes_prefix_filter,
 };
 
+use crate::flows::model::FlowDescriptor;
+
 #[inline]
 pub(crate) fn result_type_order(r: &SearchResult) -> i32 {
     match r {
+        SearchResult::Flow(_) => -1, // Flows are the primary experience — above everything
         SearchResult::BuiltIn(_) => 0, // Built-ins first
-        SearchResult::App(_) => 1,     // Apps second
-        SearchResult::Window(_) => 2,  // Windows third
-        SearchResult::Skill(_) => 3,   // Skills promoted above scripts/scriptlets
+        SearchResult::App(_) => 1,   // Apps second
+        SearchResult::Window(_) => 2, // Windows third
+        SearchResult::Skill(_) => 3, // Skills promoted above scripts/scriptlets
         SearchResult::Script(_) => 4,
         SearchResult::Scriptlet(_) => 5,
         SearchResult::File(_) => 6,
@@ -100,6 +105,30 @@ pub fn fuzzy_search_unified_all_with_skills(
     skills: &[Arc<PluginSkill>],
     query: &str,
 ) -> Vec<SearchResult> {
+    fuzzy_search_unified_all_with_skills_and_flows(
+        scripts,
+        scriptlets,
+        builtins,
+        apps,
+        skills,
+        &[],
+        query,
+    )
+}
+
+/// Perform unified fuzzy search including plugin skills and mdflow flows.
+/// Flows are the primary launcher rows and rank above every other kind on
+/// equal scores (see `result_type_order`).
+#[allow(clippy::too_many_arguments)]
+pub fn fuzzy_search_unified_all_with_skills_and_flows(
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
+    builtins: &[BuiltInEntry],
+    apps: &[AppInfo],
+    skills: &[Arc<PluginSkill>],
+    flows: &[FlowDescriptor],
+    query: &str,
+) -> Vec<SearchResult> {
     use crate::logging;
     let total_start = std::time::Instant::now();
     let mut results = Vec::new();
@@ -172,6 +201,15 @@ pub fn fuzzy_search_unified_all_with_skills(
         }
     }
     let skills_elapsed = skills_start.elapsed();
+
+    // Search mdflow flows — the primary experience; included unless a
+    // prefix filter targets another kind.
+    if !flows.is_empty() && flow_passes_prefix_filter(&parsed) {
+        let flow_matches = fuzzy_search_flows(flows, search_query);
+        for fm in flow_matches {
+            results.push(SearchResult::Flow(fm));
+        }
+    }
 
     // Log search timing breakdown
     if !query.is_empty() && logging::filter_perf_trace_enabled() {

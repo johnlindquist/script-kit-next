@@ -172,6 +172,20 @@ pub(crate) fn window_passes_prefix_filter(parsed: &ParsedQuery) -> bool {
     }
 }
 
+/// Flows behave like skills for prefix filters: always included unless a
+/// `type:` filter targets something else. `type:flow`/`type:flows` targets
+/// them directly.
+pub(crate) fn flow_passes_prefix_filter(parsed: &ParsedQuery) -> bool {
+    let (kind, value) = match (&parsed.filter_kind, &parsed.filter_value) {
+        (Some(k), Some(v)) => (k.as_str(), v.as_str()),
+        _ => return true,
+    };
+    match kind {
+        "type" => matches!(value, "flow" | "flows" | "command" | "commands"),
+        _ => false,
+    }
+}
+
 /// Check if a plugin skill passes a prefix filter.
 pub(crate) fn skill_passes_prefix_filter(parsed: &ParsedQuery) -> bool {
     let (kind, value) = match (&parsed.filter_kind, &parsed.filter_value) {

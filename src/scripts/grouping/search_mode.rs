@@ -36,6 +36,7 @@ pub(super) fn build_search_mode_results(
                     "scriptlet:{}:{}",
                     sm.scriptlet.plugin_id, sm.scriptlet.name
                 )),
+                SearchResult::Flow(fm) => Some(format!("flow:{}", fm.flow.id)),
                 SearchResult::Skill(sm) => Some(format!(
                     "skill:{}:{}",
                     sm.skill.plugin_id, sm.skill.skill_id

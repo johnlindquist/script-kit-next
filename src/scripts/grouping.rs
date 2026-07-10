@@ -23,7 +23,7 @@ use crate::list_item::{GroupedListItem, SourceChipStatusKind, SourceChipStatusRo
 use crate::menu_bar::MenuBarItem;
 use crate::plugins::PluginSkill;
 
-use super::search::{fuzzy_search_root_windows, fuzzy_search_unified_all_with_skills};
+use super::search::{fuzzy_search_root_windows, fuzzy_search_unified_all_with_skills_and_flows};
 use super::types::{
     FallbackMatch, MatchIndices, Script, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet,
     SearchResult,
@@ -115,6 +115,7 @@ pub(crate) fn get_grouped_results_with_input_history(
         builtins,
         apps,
         skills,
+        &[],
         frecency_store,
         filter_text,
         suggested_config,
@@ -142,6 +143,7 @@ pub(crate) fn get_grouped_results_with_input_history_and_query(
     builtins: &[BuiltInEntry],
     apps: &[AppInfo],
     skills: &[Arc<PluginSkill>],
+    flows: &[crate::flows::model::FlowDescriptor],
     frecency_store: &FrecencyStore,
     filter_text: &str,
     suggested_config: &SuggestedConfig,
@@ -164,12 +166,13 @@ pub(crate) fn get_grouped_results_with_input_history_and_query(
         builtins
     };
 
-    let results = fuzzy_search_unified_all_with_skills(
+    let results = fuzzy_search_unified_all_with_skills_and_flows(
         scripts,
         scriptlets,
         builtins_to_use,
         apps,
         skills,
+        flows,
         filter_text,
     );
 
@@ -401,6 +404,7 @@ pub(crate) fn get_grouped_results_with_validation(
         builtins,
         apps,
         skills,
+        &[],
         frecency_store,
         filter_text,
         suggested_config,
@@ -426,6 +430,7 @@ pub(crate) fn get_grouped_results_with_validation_and_query(
     builtins: &[BuiltInEntry],
     apps: &[AppInfo],
     skills: &[Arc<PluginSkill>],
+    flows: &[crate::flows::model::FlowDescriptor],
     frecency_store: &FrecencyStore,
     filter_text: &str,
     suggested_config: &SuggestedConfig,
@@ -441,6 +446,7 @@ pub(crate) fn get_grouped_results_with_validation_and_query(
         builtins,
         apps,
         skills,
+        flows,
         frecency_store,
         filter_text,
         suggested_config,
@@ -503,6 +509,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         &[],
         crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
         skills,
+        &[],
         frecency_store,
         filter_text,
         suggested_config,
@@ -579,6 +586,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     windows: &[crate::scripts::RootWindowEntry],
     root_windows_provider_status: crate::window_control::RootWindowsProviderStatus,
     skills: &[Arc<PluginSkill>],
+    flows: &[crate::flows::model::FlowDescriptor],
     frecency_store: &FrecencyStore,
     filter_text: &str,
     suggested_config: &SuggestedConfig,
@@ -620,6 +628,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         builtins,
         apps,
         skills,
+        flows,
         frecency_store,
         filter_text,
         suggested_config,
@@ -2472,6 +2481,7 @@ mod advanced_query_tests {
             &[BuiltInEntry],
             &[AppInfo],
             &[Arc<PluginSkill>],
+            &[crate::flows::model::FlowDescriptor],
             &FrecencyStore,
             &str,
             &SuggestedConfig,
@@ -2489,6 +2499,7 @@ mod advanced_query_tests {
             &[BuiltInEntry],
             &[AppInfo],
             &[Arc<PluginSkill>],
+            &[crate::flows::model::FlowDescriptor],
             &FrecencyStore,
             &str,
             &SuggestedConfig,
@@ -2858,7 +2869,8 @@ mod advanced_query_tests {
                     return None;
                 };
                 let role = match flat.get(*flat_index)? {
-                    SearchResult::Script(_)
+                    SearchResult::Flow(_)
+                    | SearchResult::Script(_)
                     | SearchResult::Scriptlet(_)
                     | SearchResult::Skill(_)
                     | SearchResult::BuiltIn(_)
@@ -3113,6 +3125,7 @@ mod advanced_query_tests {
             &[],
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
+            &[],
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -3281,6 +3294,7 @@ mod advanced_query_tests {
             &[],
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
+            &[],
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -3410,6 +3424,7 @@ mod advanced_query_tests {
                 &[],
                 &[],
                 crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
+                &[],
                 &[],
                 &frecency_store,
                 query,
@@ -3600,6 +3615,7 @@ mod advanced_query_tests {
                     &[],
                     crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
                     &[],
+                    &[],
                     &frecency_store,
                     query,
                     &SuggestedConfig::default(),
@@ -3721,6 +3737,7 @@ mod advanced_query_tests {
             &[],
             &[],
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
+            &[],
             &[],
             &frecency_store,
             query,
@@ -3845,6 +3862,7 @@ mod advanced_query_tests {
             &[],
             crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
+            &[],
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -3960,6 +3978,7 @@ mod advanced_query_tests {
                 &[],
                 &[],
                 crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
+                &[],
                 &[],
                 &frecency_store,
                 query,
@@ -5857,6 +5876,7 @@ mod advanced_query_tests {
                 &[],
                 &[],
                 crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
+                &[],
                 &[],
                 &FrecencyStore::new(),
                 "",

@@ -57,8 +57,9 @@ pub use self::scheduling::register_scheduled_scripts;
 pub use self::scriptlet_loader::{load_scriptlets, read_scriptlets_from_file};
 #[allow(unused_imports)]
 pub use self::search::{
-    compute_match_indices_for_result, fuzzy_search_builtins, fuzzy_search_skills,
-    fuzzy_search_unified, fuzzy_search_unified_all, fuzzy_search_unified_all_with_skills,
+    compute_match_indices_for_result, fuzzy_search_builtins, fuzzy_search_flows,
+    fuzzy_search_skills, fuzzy_search_unified, fuzzy_search_unified_all,
+    fuzzy_search_unified_all_with_skills, fuzzy_search_unified_all_with_skills_and_flows,
     NucleoCtx,
 };
 #[allow(unused_imports)]
@@ -66,9 +67,9 @@ pub use self::types::{
     preview_cache_is_valid, preview_match_signature, AgentChatHistoryMatch, AgentMatch,
     AiVaultMatch, AppMatch, BrainInboxMatch, BrainMatch, BrowserHistoryMatch, BrowserTabMatch,
     BuiltInMatch, ClipboardHistoryMatch, DictationHistoryMatch, FallbackConfig, FallbackMatch,
-    FileMatch, MatchEvidence, MatchEvidenceField, MatchIndices, NoteMatch, RootWindowEntry, Script,
-    ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch,
-    SearchResult, SkillMatch, TodoMatch, WindowMatch,
+    FileMatch, FlowMatch, MatchEvidence, MatchEvidenceField, MatchIndices, NoteMatch,
+    RootWindowEntry, Script, ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind,
+    Scriptlet, ScriptletMatch, SearchResult, SkillMatch, TodoMatch, WindowMatch,
 };
 #[allow(unused_imports)]
 pub use self::validation::{

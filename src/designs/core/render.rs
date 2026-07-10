@@ -430,6 +430,12 @@ pub fn render_design_item(
                             .unwrap_or_else(|| "list".to_string()),
                     )),
                 ),
+                SearchResult::Flow(fm) => (
+                    fm.display_name.clone(),
+                    Some(fm.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("Bot".to_string())),
+                ),
             };
 
             // During search mode, keep only quiet type icons.

@@ -1097,6 +1097,24 @@ fn render_focused_info_for_result(
             let _ = match_indices;
             let _ = shortcut_display;
         }
+        scripts::SearchResult::Flow(flow_match) => {
+            // Flow rows keep the focused panel minimal: engine + origin.
+            content = content.child(focused_info_labeled_section(
+                "ENGINE",
+                &flow_match.flow.engine,
+                style,
+            ));
+            content = content.child(focused_info_labeled_section(
+                "ORIGIN",
+                flow_match.flow.origin_label(),
+                style,
+            ));
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Flow", style));
+            let _ = match_indices;
+            let _ = shortcut_display;
+        }
     }
 
     content
@@ -1266,6 +1284,7 @@ impl ScriptListApp {
                         Some(format!("agent:{}", m.agent.path.to_string_lossy()))
                     }
                     scripts::SearchResult::Skill(_) => None, // Skills don't track frecency
+                    scripts::SearchResult::Flow(m) => Some(format!("flow:{}", m.flow.id)),
                     scripts::SearchResult::Fallback(_) => None, // Fallbacks don't track frecency
                     scripts::SearchResult::ScriptIssue(_) => None, // Diagnostic row doesn't track frecency
                     scripts::SearchResult::SpineProjection(_) => None, // Spine projections don't track frecency
@@ -1495,6 +1514,12 @@ impl ScriptListApp {
                         "Inspect",
                     )),
                     scripts::SearchResult::SpineProjection(_) => None, // Spine projections have no info panel
+                    scripts::SearchResult::Flow(m) => Some(ScriptInfo::with_action_verb(
+                        &m.display_name,
+                        m.flow.path.clone(),
+                        false,
+                        "Converse",
+                    )),
                 }
             } else {
                 None

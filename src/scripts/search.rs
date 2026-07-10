@@ -6,6 +6,7 @@
 mod apps;
 mod ascii;
 mod builtins;
+mod flows;
 mod highlight;
 mod match_contract;
 mod nucleo;
@@ -26,6 +27,7 @@ pub(crate) fn query_is_ascii_punctuation_only(query: &str) -> bool {
 
 pub use apps::fuzzy_search_apps;
 pub use builtins::fuzzy_search_builtins;
+pub use flows::fuzzy_search_flows;
 pub use highlight::compute_match_indices_for_result;
 pub(crate) use highlight::SearchHighlightMatchCtx;
 
@@ -41,6 +43,7 @@ pub use skills::fuzzy_search_skills;
 pub(crate) use unified::result_type_order;
 pub use unified::{
     fuzzy_search_unified, fuzzy_search_unified_all, fuzzy_search_unified_all_with_skills,
+    fuzzy_search_unified_all_with_skills_and_flows,
 };
 #[cfg(test)]
 pub use unified::{fuzzy_search_unified_with_builtins, fuzzy_search_unified_with_windows};

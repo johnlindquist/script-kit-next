@@ -260,6 +260,21 @@ pub struct SkillMatch {
     pub match_evidence: Option<MatchEvidence>,
 }
 
+/// Represents a scored match result for an mdflow flow.
+/// Flows are the primary launcher experience: selecting one starts a
+/// Threadline conversation with that flow (never a raw run).
+#[derive(Clone, Debug)]
+pub struct FlowMatch {
+    pub flow: crate::flows::model::FlowDescriptor,
+    /// Precomputed `friendly_name()` so `name()` can return a borrow.
+    pub display_name: String,
+    /// Precomputed "purpose · engine · origin" row subtitle.
+    pub subtitle: String,
+    pub score: i32,
+    /// Indices of matched characters for UI highlighting
+    pub match_indices: MatchIndices,
+}
+
 /// Represents a scored match result for fuzzy search on agents
 /// Uses Arc<Agent> for cheap cloning during filter operations
 #[derive(Clone, Debug)]
@@ -451,6 +466,9 @@ pub struct BrowserTabMatch {
 pub enum SearchResult {
     Script(ScriptMatch),
     Scriptlet(ScriptletMatch),
+    /// mdflow flow — the primary launcher row kind; Enter starts a
+    /// Threadline conversation with the flow.
+    Flow(FlowMatch),
     /// Plugin-owned skill that always opens Agent Chat when selected
     Skill(SkillMatch),
     BuiltIn(BuiltInMatch),
@@ -510,9 +528,10 @@ impl SearchResult {
             SearchResult::Script(_) | SearchResult::Scriptlet(_) => {
                 Some(RootUnifiedSourceFilter::Scripts)
             }
-            SearchResult::BuiltIn(_) | SearchResult::Skill(_) | SearchResult::ScriptIssue(_) => {
-                Some(RootUnifiedSourceFilter::Commands)
-            }
+            SearchResult::BuiltIn(_)
+            | SearchResult::Flow(_)
+            | SearchResult::Skill(_)
+            | SearchResult::ScriptIssue(_) => Some(RootUnifiedSourceFilter::Commands),
             SearchResult::App(_) => Some(RootUnifiedSourceFilter::Apps),
             SearchResult::Window(_) => Some(RootUnifiedSourceFilter::Windows),
             SearchResult::File(_) => Some(RootUnifiedSourceFilter::Files),
@@ -539,6 +558,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(sm) => &sm.script.name,
             SearchResult::Scriptlet(sm) => &sm.scriptlet.name,
+            SearchResult::Flow(fm) => &fm.display_name,
             SearchResult::Skill(sm) => &sm.skill.title,
             SearchResult::BuiltIn(bm) => &bm.entry.name,
             SearchResult::App(am) => &am.app.name,
@@ -569,6 +589,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(sm) => sm.script.description.as_deref(),
             SearchResult::Scriptlet(sm) => sm.scriptlet.description.as_deref(),
+            SearchResult::Flow(fm) => Some(fm.subtitle.as_str()),
             SearchResult::Skill(sm) => {
                 if sm.skill.description.is_empty() {
                     None
@@ -605,6 +626,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(sm) => sm.score,
             SearchResult::Scriptlet(sm) => sm.score,
+            SearchResult::Flow(fm) => fm.score,
             SearchResult::Skill(sm) => sm.score,
             SearchResult::BuiltIn(bm) => bm.score,
             SearchResult::App(am) => am.score,
@@ -641,6 +663,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(_) => "Script",
             SearchResult::Scriptlet(_) => "Snippet",
+            SearchResult::Flow(_) => "Flow",
             SearchResult::Skill(_) => "Skill",
             SearchResult::BuiltIn(_) => "Built-in",
             SearchResult::App(_) => "App",
@@ -694,7 +717,10 @@ impl SearchResult {
             SearchResult::DictationHistory(_) => None,
             SearchResult::BrowserTab(_) => None,
             SearchResult::BrowserHistory(_) => None,
-            SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
+            SearchResult::Window(_)
+            | SearchResult::Flow(_)
+            | SearchResult::Skill(_)
+            | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
             SearchResult::ScriptIssue(_) => None,
             SearchResult::SpineProjection(_) => None,
@@ -707,6 +733,7 @@ impl SearchResult {
     /// needs to remember non-bindable items like skills and windows.
     pub fn history_result_key(&self) -> Option<String> {
         match self {
+            SearchResult::Flow(fm) => Some(format!("flow:{}", fm.flow.id)),
             SearchResult::Skill(sm) => Some(format!(
                 "skill:{}:{}",
                 sm.skill.plugin_id, sm.skill.skill_id
@@ -773,6 +800,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(_) => ("Script", "file-code"),
             SearchResult::Scriptlet(_) => ("Snippet", "scroll-text"),
+            SearchResult::Flow(_) => ("Flow", "bot"),
             SearchResult::Skill(_) => ("Skill", "workflow"),
             SearchResult::BuiltIn(_) => ("Command", "command"),
             SearchResult::App(_) => ("App", "package"),
@@ -821,6 +849,7 @@ impl SearchResult {
                         Some(sm.scriptlet.plugin_id.as_str())
                     })
             }
+            SearchResult::Flow(_) => Some("Flows"),
             SearchResult::Skill(sm) => {
                 if sm.skill.plugin_title.is_empty() {
                     Some(&sm.skill.plugin_id)
@@ -882,6 +911,7 @@ impl SearchResult {
                     _ => "Run Snippet",
                 }
             }
+            SearchResult::Flow(_) => "Converse",
             SearchResult::Skill(_) => "Open Skill",
             SearchResult::BuiltIn(bm) => bm.entry.default_action_text(),
             SearchResult::App(_) => "Launch App",

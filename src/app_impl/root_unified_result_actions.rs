@@ -367,7 +367,10 @@ pub(crate) fn root_unified_action_subject_from_result(
         SearchResult::ScriptIssue(issue) => {
             Some(RootUnifiedActionSubject::ScriptIssue(issue.clone()))
         }
-        SearchResult::Script(_)
+        // Flows use the script-context action path (reveal/copy path work via
+        // action_helpers); no dedicated root-unified subject yet.
+        SearchResult::Flow(_)
+        | SearchResult::Script(_)
         | SearchResult::Scriptlet(_)
         | SearchResult::Todo(_)
         | SearchResult::BrainHit(_)

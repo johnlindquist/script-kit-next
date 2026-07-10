@@ -130,6 +130,7 @@ pub(super) fn build_grouped_view_results(
                 "scriptlet:{}:{}",
                 sm.scriptlet.plugin_id, sm.scriptlet.name
             )),
+            SearchResult::Flow(fm) => Some(format!("flow:{}", fm.flow.id)),
             SearchResult::Skill(sm) => Some(format!(
                 "skill:{}:{}",
                 sm.skill.plugin_id, sm.skill.skill_id
@@ -172,6 +173,8 @@ pub(super) fn build_grouped_view_results(
     let mut plugin_groups: HashMap<String, PluginGroupSection> = HashMap::new();
     let mut commands_indices: Vec<usize> = Vec::new();
     let mut apps_indices: Vec<usize> = Vec::new();
+    // Flows are the primary launcher experience — they get the leading section.
+    let mut flows_indices: Vec<usize> = Vec::new();
 
     // Get excluded commands for filtering builtins from SUGGESTED section
     let excluded_commands = &suggested_config.excluded_commands;
@@ -208,6 +211,7 @@ pub(super) fn build_grouped_view_results(
                             .indices
                             .push(idx);
                     }
+                    SearchResult::Flow(_) => flows_indices.push(idx),
                     SearchResult::BuiltIn(_) | SearchResult::Window(_) => {
                         commands_indices.push(idx)
                     }
@@ -254,6 +258,7 @@ pub(super) fn build_grouped_view_results(
                         .indices
                         .push(idx);
                 }
+                SearchResult::Flow(_) => flows_indices.push(idx),
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::File(_) => {}
                 SearchResult::Note(_) => {}
@@ -311,6 +316,7 @@ pub(super) fn build_grouped_view_results(
         let default_set: HashSet<usize> = default_suggested_indices.iter().copied().collect();
         commands_indices.retain(|idx| !default_set.contains(idx));
         apps_indices.retain(|idx| !default_set.contains(idx));
+        flows_indices.retain(|idx| !default_set.contains(idx));
         for section in plugin_groups.values_mut() {
             section.indices.retain(|idx| !default_set.contains(idx));
         }
@@ -350,6 +356,7 @@ pub(super) fn build_grouped_view_results(
     }
     sort_alphabetically(&mut commands_indices);
     sort_alphabetically(&mut apps_indices);
+    sort_alphabetically(&mut flows_indices);
 
     // Get non-main plugin keys sorted alphabetically by display label
     let mut other_plugin_keys: Vec<&String> = plugin_groups
@@ -358,7 +365,19 @@ pub(super) fn build_grouped_view_results(
         .collect();
     other_plugin_keys.sort_by_cached_key(|k| plugin_groups[*k].label.to_lowercase());
 
-    // Build grouped list in order: Suggested, Main, Commands, other kits, Apps
+    // Build grouped list in order: Flows, Suggested, Main, Commands, other
+    // kits, Apps. Flows lead — they are the primary launcher experience
+    // (mdflow pivot, 2026-07-10).
+    if !flows_indices.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            "Flows".to_string(),
+            Some("Bot".to_string()),
+        ));
+        for idx in &flows_indices {
+            grouped.push(GroupedListItem::Item(*idx));
+        }
+    }
+
     // Each section header includes an item count suffix (e.g., "Suggested · 5")
     // 1. Suggested (frecency-based, or default items for new users)
     if suggested_config.enabled {

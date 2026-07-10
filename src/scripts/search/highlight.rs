@@ -566,6 +566,8 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::ScriptIssue(_) => MatchIndices::default(),
         // Spine projections are not matched against the query
         SearchResult::SpineProjection(_) => MatchIndices::default(),
+        // Flow matches carry indices precomputed by the flow fuzzy scorer
+        SearchResult::Flow(fm) => fm.match_indices.clone(),
     }
 }
 

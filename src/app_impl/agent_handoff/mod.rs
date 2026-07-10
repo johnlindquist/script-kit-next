@@ -4072,6 +4072,7 @@ impl ScriptListApp {
             scripts::SearchResult::BrowserHistory(_) => "browserHistory",
             scripts::SearchResult::Agent(_) => "agent",
             scripts::SearchResult::Skill(_) => "skill",
+            scripts::SearchResult::Flow(_) => "flow",
             scripts::SearchResult::Fallback(_) => "fallback",
             scripts::SearchResult::ScriptIssue(_) => "scriptIssue",
             scripts::SearchResult::SpineProjection(_) => "spineProjection",
@@ -4196,6 +4197,15 @@ impl ScriptListApp {
                 "name": m.agent.name,
                 "path": m.agent.path.to_string_lossy(),
                 "description": m.agent.description,
+            }),
+            scripts::SearchResult::Flow(m) => serde_json::json!({
+                "flowId": m.flow.id,
+                "name": m.flow.name,
+                "displayName": m.display_name,
+                "path": m.flow.path,
+                "description": m.flow.description,
+                "engine": m.flow.engine,
+                "origin": m.flow.origin_label(),
             }),
             scripts::SearchResult::Skill(m) => serde_json::json!({
                 "pluginId": m.skill.plugin_id,

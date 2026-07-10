@@ -91,6 +91,7 @@ impl ScriptListApp {
             scripts::SearchResult::Fallback(m) => m.display_label(),
             scripts::SearchResult::ScriptIssue(m) => m.title.clone(),
             scripts::SearchResult::SpineProjection(row) => row.title.to_string(),
+            scripts::SearchResult::Flow(m) => m.display_name.clone(),
         }
     }
 }

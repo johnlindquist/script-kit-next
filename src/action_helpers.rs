@@ -94,6 +94,7 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::SpineProjection(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Spine projection row has no filesystem path"),
         )),
+        Some(SearchResult::Flow(m)) => Ok(PathBuf::from(&m.flow.path)),
     }
 }
 
@@ -156,6 +157,7 @@ pub fn extract_path_for_copy(
         Some(SearchResult::SpineProjection(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Spine projection row has no filesystem path"),
         )),
+        Some(SearchResult::Flow(m)) => Ok(PathBuf::from(&m.flow.path)),
     }
 }
 
@@ -228,6 +230,7 @@ pub fn extract_path_for_quick_terminal(
         Some(SearchResult::SpineProjection(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Spine projection row has no filesystem path"),
         )),
+        Some(SearchResult::Flow(m)) => Ok(PathBuf::from(&m.flow.path)),
     }
 }
 
@@ -319,6 +322,7 @@ pub fn extract_path_for_edit(
         Some(SearchResult::SpineProjection(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Spine projection row cannot be edited"),
         )),
+        Some(SearchResult::Flow(m)) => Ok(PathBuf::from(&m.flow.path)),
     }
 }
 

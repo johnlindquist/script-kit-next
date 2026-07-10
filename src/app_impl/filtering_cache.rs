@@ -867,12 +867,14 @@ impl ScriptListApp {
             return Vec::new();
         }
         let search_start = std::time::Instant::now();
-        let results = scripts::fuzzy_search_unified_all_with_skills(
+        let flows = self.flow_desk_corpus();
+        let results = scripts::fuzzy_search_unified_all_with_skills_and_flows(
             &self.scripts,
             &self.scriptlets,
             &self.builtin_entries,
             &self.apps,
             &self.skills,
+            &flows,
             search_text,
         );
         let results = match self.menu_syntax_mode.advanced_query_for(filter_text) {
@@ -958,9 +960,24 @@ impl ScriptListApp {
         self.recompute_filtered_results(filter_text)
     }
 
+    /// Flow rosters land asynchronously (background `md roster` fetch); the
+    /// main-menu result caches poll the catalog generation so a roster that
+    /// arrives after a render still surfaces on the next cache read, without
+    /// a background-thread cx handle.
+    fn sync_flow_roster_cache_generation(&mut self) {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEEN: AtomicU64 = AtomicU64::new(0);
+        let generation = crate::flows::catalog::roster_generation();
+        if SEEN.swap(generation, Ordering::Relaxed) != generation {
+            self.invalidate_filter_cache();
+            self.invalidate_grouped_cache();
+        }
+    }
+
     /// P1: Get filtered results with cache update (mutable version)
     /// Call this when you need to ensure cache is updated
     pub(crate) fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
+        self.sync_flow_roster_cache_generation();
         if self.menu_syntax_object_selector_state.owns_main_list()
             || self.menu_syntax_trigger_picker_state.owns_main_list()
             || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
@@ -1097,6 +1114,7 @@ impl ScriptListApp {
     pub(crate) fn get_grouped_results_cached(
         &mut self,
     ) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
+        self.sync_flow_roster_cache_generation();
         // The grouped cache is keyed by `computed_filter_text`. Menu syntax is
         // an ownership boundary, so never return stale grouped rows while the
         // live input is owned by the trigger picker or capture composer.
@@ -1898,6 +1916,7 @@ impl ScriptListApp {
                 root_windows,
                 root_windows_provider_status,
                 &self.skills,
+                &self.flow_desk_corpus(),
                 &self.frecency_store,
                 search_text,
                 &suggested_config,
