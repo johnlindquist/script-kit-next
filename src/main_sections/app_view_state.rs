@@ -981,6 +981,7 @@ impl AppView {
                 | AppView::InstalledKitsView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::FlowUxView { .. }
+                | AppView::FlowSessionView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::SettingsView { .. }
