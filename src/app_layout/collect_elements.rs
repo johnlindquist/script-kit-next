@@ -1624,9 +1624,9 @@ impl ScriptListApp {
                     .find(|(meta, _)| meta.id == *session_id)
                     .map(|(_, entity)| entity.clone());
                 if let Some(entity) = entity {
-                    let term = entity.read(cx);
+                    let chat = entity.read(cx);
                     let (elements, total_count) =
-                        self.collect_term_prompt_elements(term, "flow-session", limit);
+                        self.collect_chat_prompt_elements(chat, limit);
                     Self::finalize_surface_outcome(
                         "flow-session",
                         "flow-session",

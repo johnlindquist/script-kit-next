@@ -7,6 +7,7 @@
         // the modal callback sends (entry_id, confirmed) through this channel
         // Legacy chat channels (retained for TabAiChat compatibility — not the primary Tab AI surface)
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
+        let (flow_chat_tx, flow_chat_rx) = mpsc::sync_channel(32);
         let (inline_chat_actions_tx, inline_chat_actions_rx) = mpsc::sync_channel(4);
         let (inline_chat_continue_tx, inline_chat_continue_rx) = mpsc::sync_channel(4);
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
@@ -119,6 +120,8 @@
             flow_ux_tick_running: false,
             flow_sessions: Vec::new(),
             flow_session_counter: 0,
+            flow_chat_sender: flow_chat_tx,
+            flow_chat_receiver: flow_chat_rx,
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),

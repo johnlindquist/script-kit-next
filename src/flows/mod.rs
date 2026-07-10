@@ -10,8 +10,10 @@
 //! - [`explain_cache`] — free `md explain --json` previews.
 //! - [`runner`] — `md <flow> --events` run-once spawn + NDJSON reader.
 //! - [`run_registry`] — the single source of truth for run-once state.
+//! - [`codex_client`] — persistent `codex app-server` JSON-RPC client, the
+//!   native transport for codex-engine flow conversations.
 //! - [`session`] — conversational session metadata (Enter = converse; the
-//!   live PTY entities live on `ScriptListApp`).
+//!   live `ChatPrompt` entities live on `ScriptListApp`).
 //! - [`router`] — Tab flow router: free text → best flow.
 //! - [`automation`] — the `flowUx` getState payload for devtools receipts.
 //!
@@ -20,6 +22,7 @@
 
 pub mod automation;
 pub mod catalog;
+pub mod codex_client;
 pub mod explain_cache;
 pub mod manager_window;
 pub mod model;

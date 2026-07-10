@@ -3916,11 +3916,13 @@ impl ScriptListApp {
             AppView::TemplatePrompt { .. } => FocusTarget::TemplatePrompt,
             AppView::HotkeyPrompt { .. } => FocusTarget::AppRoot,
 
-            AppView::TermPrompt { .. }
-            | AppView::QuickTerminalView { .. }
-            | AppView::FlowSessionView { .. } => FocusTarget::TermPrompt,
+            AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
+                FocusTarget::TermPrompt
+            }
 
-            AppView::ChatPrompt { .. } | AppView::AgentChatView { .. } => FocusTarget::ChatPrompt,
+            AppView::ChatPrompt { .. }
+            | AppView::AgentChatView { .. }
+            | AppView::FlowSessionView { .. } => FocusTarget::ChatPrompt,
             AppView::DayPage { .. } => FocusTarget::EditorPrompt,
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
 

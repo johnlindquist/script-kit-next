@@ -74,6 +74,10 @@ pub struct ChatPrompt {
     pub(super) pasted_text_tokens: Vec<crate::pasted_text::PastedTextToken>,
     /// When true, renders input as a borderless text field (cursor + text + placeholder only).
     pub(super) mini_mode: bool,
+    /// When true, Escape always invokes `on_escape`, even mid-stream. Hosts
+    /// with an external transport (flow sessions) own stop semantics — Esc
+    /// must background, never half-stop the visual stream.
+    pub(super) escape_over_stop: bool,
 }
 
 impl ChatPrompt {
@@ -149,6 +153,7 @@ impl ChatPrompt {
             image_render_cache: HashMap::new(),
             pasted_text_tokens: Vec::new(),
             mini_mode: false,
+            escape_over_stop: false,
         }
     }
 
@@ -172,6 +177,13 @@ impl ChatPrompt {
 
     pub fn pending_submit(&self) -> bool {
         self.pending_submit
+    }
+
+    /// Submit the current composer text through the same pipeline as
+    /// pressing Enter. Public for host surfaces whose native footer "Send"
+    /// button must mirror the keyboard grammar (e.g. flow sessions).
+    pub fn submit(&mut self, cx: &mut Context<Self>) {
+        self.handle_submit(cx);
     }
 
     /// Enable mini mode — renders input as a borderless text field matching the mini main window.
@@ -323,6 +335,14 @@ impl ChatPrompt {
     /// Set the escape callback
     pub fn with_escape_callback(mut self, callback: ChatEscapeCallback) -> Self {
         self.on_escape = Some(callback);
+        self
+    }
+
+    /// Escape always fires `on_escape`, even while a response is streaming.
+    /// For hosts whose transport outlives the visual stream (flow sessions):
+    /// Esc backgrounds; stopping is an explicit host verb.
+    pub fn with_escape_over_stop(mut self, enabled: bool) -> Self {
+        self.escape_over_stop = enabled;
         self
     }
 

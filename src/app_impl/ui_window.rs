@@ -282,6 +282,19 @@ impl ScriptListApp {
                         chat.submit_with_expanded_tokens(cx);
                     });
                     return;
+                } else if let AppView::FlowSessionView { session_id } = self.current_view {
+                    let entity = self
+                        .flow_sessions
+                        .iter()
+                        .find(|(meta, _)| meta.id == session_id)
+                        .map(|(_, entity)| entity.clone());
+                    if let Some(entity) = entity {
+                        entity.update(cx, |chat, cx| chat.submit(cx));
+                    }
+                    return;
+                } else if matches!(self.current_view, AppView::FlowUxView { .. }) {
+                    self.flow_desk_activate_selected(false, cx);
+                    return;
                 } else if let AppView::ScriptIssuesView { report } = &self.current_view {
                     let report = report.clone();
                     self.fix_script_issues_in_agent(&report, cx);
@@ -413,7 +426,10 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::Apply => {
-                if let AppView::ScriptIssuesView { report } = &self.current_view {
+                if matches!(self.current_view, AppView::FlowUxView { .. }) {
+                    self.flow_desk_activate_selected(true, cx);
+                    return;
+                } else if let AppView::ScriptIssuesView { report } = &self.current_view {
                     let report = report.clone();
                     self.copy_script_issues_to_clipboard(&report, cx);
                     return;
@@ -887,6 +903,61 @@ impl ScriptListApp {
                 view = ?self.current_view,
                 button_count = buttons.len(),
                 "Resolved Quick Terminal footer buttons"
+            );
+            return buttons;
+        }
+
+        // Flow session (Threadline): the footer mirrors the chat grammar —
+        // Send + Actions, with Send honestly disabled while a turn runs.
+        if let AppView::FlowSessionView { session_id } = self.current_view {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let enabled = !footer_disabled;
+            let working = self
+                .flow_sessions
+                .iter()
+                .find(|(meta, _)| meta.id == session_id)
+                .is_some_and(|(meta, _)| meta.active_turn.is_some());
+            let send_label = if working { "Working…" } else { "Send" };
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", send_label)
+                    .enabled(enabled && !working),
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(actions_open)
+                    .enabled(enabled),
+            ];
+            tracing::debug!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Flow Session footer buttons"
+            );
+            return buttons;
+        }
+
+        // Flow Desk: Converse / Run Once / Actions — the desk grammar.
+        if matches!(self.current_view, AppView::FlowUxView { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let enabled = !footer_disabled;
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Converse").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Apply, "⇧↵", "Run Once").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(actions_open)
+                    .enabled(enabled),
+            ];
+            tracing::debug!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Flow Desk footer buttons"
             );
             return buttons;
         }
@@ -1926,7 +1997,7 @@ impl ScriptListApp {
             }
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
-            AppView::FlowSessionView { .. } => Some((ViewType::TermPrompt, 0)),
+            AppView::FlowSessionView { .. } => Some((ViewType::MainWindow, 0)),
             AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::FileSearchView {
                 ref query,

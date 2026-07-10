@@ -179,8 +179,10 @@ impl Render for ChatPrompt {
 
             match resolve_chat_input_key_action(key, modifiers.platform, modifiers.shift) {
                 ChatInputKeyAction::Escape => {
-                    // Escape - stop streaming if active, otherwise close chat
-                    if this.is_streaming() {
+                    // Escape - stop streaming if active, otherwise close chat.
+                    // Hosts with an external transport opt out of the stop
+                    // ladder: Esc always escapes (flow sessions background).
+                    if this.is_streaming() && !this.escape_over_stop {
                         this.stop_streaming(cx);
                     } else {
                         this.handle_escape(cx);

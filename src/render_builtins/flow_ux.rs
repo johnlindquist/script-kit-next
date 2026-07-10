@@ -1,15 +1,18 @@
-// Flow Desk (Conversation Desk, fusion-ultra 2026-07-09).
+// Flow Desk (Conversation Desk → Threadline, 2026-07-09).
 //
 // Every flow is an agent identity. One main-window surface over the shared
 // flow substrate (`crate::flows`):
 //
-// - Enter on a flow = CONVERSE: launch the real `flow-*` wrapper (or
-//   `md <path> --_interactive`) in an embedded PTY session in this window.
-// - Enter on an Active session row = reattach the SAME PTY entity.
+// - Enter on a flow = CONVERSE: open a Threadline session — Script Kit's
+//   own `ChatPrompt` transcript + composer. No engine TUI is ever wrapped.
+//   Codex-engine flows talk to a persistent `codex app-server` thread
+//   (`crate::flows::codex_client`); other engines run one
+//   `md <flow> --_task … --events` registry run per turn (second-class).
+// - Enter on an Active session row = reattach the SAME transcript entity.
 // - ⇧↵ = run once in the background via `md <flow> --events` (registry).
-// - ⌘⇧D (in a session) = background: leave the process alive, return here.
-// - Esc in a session goes to the TUI (codex/claude own Escape); Esc in the
-//   desk clears the filter / goes back. Stop is an explicit ⌘K verb only.
+// - Esc in a session = background (never kills); ⌘⇧D does the same. Esc in
+//   the desk clears the filter / goes back. Stop is an explicit ⌘K verb
+//   that cancels only the in-flight turn.
 //
 // The detached Flow Manager and the Flash/Dispatch/Lens/Mission-Control
 // variants are dead; `FlowUxVariant` survives only as builtin-entry plumbing.
@@ -63,10 +66,12 @@ impl ScriptListApp {
         }
     }
 
-    /// Spawn the repaint tick that keeps flow surfaces live while runs
-    /// stream or sessions are open. Single instance; exits when nothing is
-    /// active. Also the seam that notices a session's PTY exited (the
-    /// process is polled here — never scraped).
+    /// Spawn the repaint tick that keeps flow surfaces live. Single
+    /// instance; exits when nothing is active. The tick is the ONLY seam
+    /// where transport events reach GPUI entities: codex app-server events
+    /// and mdflow run tails apply here on the main thread every 120ms.
+    /// (ChatPrompt callback requests drain in the render pass instead —
+    /// they need window access.)
     pub(crate) fn start_flow_ux_tick(&mut self, cx: &mut Context<Self>) {
         if self.flow_ux_tick_running {
             return;
@@ -84,20 +89,27 @@ impl ScriptListApp {
                         let mut dirty = generation != app.flow_ux_seen_generation;
                         app.flow_ux_seen_generation = generation;
 
-                        // Poll session liveness: a PTY that exited flips its
-                        // meta to Done exactly once.
-                        let mut any_live_session = false;
-                        for index in 0..app.flow_sessions.len() {
-                            let entity = app.flow_sessions[index].1.clone();
-                            let running =
-                                entity.update(cx, |term, _cx| term.terminal.is_running());
-                            let meta = &mut app.flow_sessions[index].0;
-                            if meta.state.is_live() && !running {
-                                meta.state =
-                                    crate::flows::session::SessionState::Done(None);
-                                dirty = true;
-                            }
-                            any_live_session |= meta.state.is_live();
+                        // ChatPrompt callback requests are drained in the
+                        // app render pass (render_impl — needs window
+                        // access); this tick owns transport events only.
+                        // While a session view is open, repaint every tick
+                        // so that drain is guaranteed to run within 120ms
+                        // of a callback posting a request.
+                        if matches!(app.current_view, AppView::FlowSessionView { .. }) {
+                            dirty = true;
+                        }
+
+                        // 1. Codex app-server events (native transport).
+                        for event in
+                            crate::flows::codex_client::codex_app_server().drain_events()
+                        {
+                            dirty = true;
+                            app.apply_flow_thread_event(event, cx);
+                        }
+
+                        // 2. mdflow-turn runs: stream stdout, settle turns.
+                        if app.sync_mdflow_turns(cx) {
+                            dirty = true;
                         }
 
                         if dirty {
@@ -107,8 +119,9 @@ impl ScriptListApp {
                             app.current_view,
                             AppView::FlowUxView { .. } | AppView::FlowSessionView { .. }
                         );
-                        let keep =
-                            view_active || registry.active_count() > 0 || any_live_session;
+                        let keep = view_active
+                            || registry.active_count() > 0
+                            || !app.flow_sessions.is_empty();
                         if !keep {
                             app.flow_ux_tick_running = false;
                         }
@@ -169,101 +182,464 @@ impl ScriptListApp {
             .position(|(meta, _)| meta.id == session_id)
     }
 
+    /// Activate the desk's selected row — Enter (`run_once: false`) and ⇧↵
+    /// (`run_once: true`) share this with the native footer buttons so
+    /// keyboard and footer can never diverge.
+    pub(crate) fn flow_desk_activate_selected(&mut self, run_once: bool, cx: &mut Context<Self>) {
+        let AppView::FlowUxView {
+            filter,
+            selected_index,
+            ..
+        } = &self.current_view
+        else {
+            return;
+        };
+        let filter = filter.clone();
+        let selected = *selected_index;
+        let rows = self.flow_desk_rows(&filter);
+        let Some(row) = rows.get(selected).cloned() else {
+            return;
+        };
+        match row {
+            FlowDeskRow::Session(session_id) => {
+                self.open_flow_session(session_id, cx);
+            }
+            FlowDeskRow::Flow(flow) => {
+                if run_once || flow.is_workflow {
+                    // Workflows (DAGs) are run-once by nature; ⇧↵ is
+                    // explicit run-once for anything.
+                    self.flow_desk_run_once(&flow, cx);
+                } else {
+                    // Typed text rides along as the first message only when
+                    // it reads like a request (multi-word, not the flow's
+                    // own name) — fuzzy lookups must never become the task.
+                    let trimmed = filter.trim();
+                    let lowered = trimmed.to_lowercase();
+                    let is_name_lookup = trimmed.is_empty()
+                        || !trimmed.contains(' ')
+                        || flow.name.to_lowercase() == lowered
+                        || flow.friendly_name().to_lowercase() == lowered;
+                    let first_message = (!is_name_lookup).then(|| trimmed.to_string());
+                    self.start_flow_session(&flow, first_message, cx);
+                }
+            }
+            FlowDeskRow::CreateFlow => {
+                self.start_flow_create_session(cx);
+            }
+        }
+        cx.notify();
+    }
+
     // ------------------------------------------------------------------
     // Conversation lifecycle
     // ------------------------------------------------------------------
 
-    /// Start a conversation with a flow: spawn its wrapper interactively in
-    /// a new PTY session and show it. `initial_task` (Tab router / typed
-    /// text) rides along as the engine's first prompt.
+    /// Start a conversation with a flow: create its Threadline (ChatPrompt)
+    /// session and show it. `initial_message` (Tab router / typed text)
+    /// becomes the first submitted turn.
     pub(crate) fn start_flow_session(
         &mut self,
         flow: &crate::flows::model::FlowDescriptor,
-        initial_task: Option<String>,
+        initial_message: Option<String>,
         cx: &mut Context<Self>,
     ) {
         let cwd = self.flow_ux_cwd();
         crate::flows::manager_window::remember_flow_cwd(&cwd);
         self.flow_session_counter += 1;
         let session_id = self.flow_session_counter;
-        let command = crate::flows::session::build_conversation_command(
-            session_id,
-            &cwd,
-            flow.wrapper_command.as_deref(),
-            &flow.path,
-            initial_task.as_deref(),
-        );
+        let transport = crate::flows::session::SessionTransport::for_engine(&flow.engine);
 
-        // Log length only — task text can carry anything.
+        // Log length only — message text can carry anything.
         tracing::info!(
             target: "script_kit::flows",
             event = "flow_session_start",
             session_id,
             flow_id = %flow.id,
-            wrapper = ?flow.wrapper_command,
-            task_len = initial_task.as_deref().map(str::len).unwrap_or(0),
+            transport = ?transport,
+            message_len = initial_message.as_deref().map(str::len).unwrap_or(0),
             "Starting flow conversation"
         );
 
-        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-            std::sync::Arc::new(move |_id: String, _value: Option<String>| {
-                // Exit is observed by the flow tick (PTY liveness poll).
+        let friendly = flow.friendly_name();
+        let submit_sender = self.flow_chat_sender.clone();
+        let submit_callback: crate::prompts::ChatSubmitCallback =
+            std::sync::Arc::new(move |_id: String, text: String| {
+                let _ = submit_sender.try_send(
+                    crate::flows::session::FlowChatRequest::Submit { session_id, text },
+                );
             });
-        let term_height = crate::window_resize::layout::MAX_HEIGHT
-            - px(crate::window_resize::layout::FOOTER_HEIGHT);
-        match crate::term_prompt::TermPrompt::with_height(
+        let escape_sender = self.flow_chat_sender.clone();
+        let escape_callback: crate::prompts::ChatEscapeCallback =
+            std::sync::Arc::new(move |_id: String| {
+                let _ = escape_sender.try_send(
+                    crate::flows::session::FlowChatRequest::Background { session_id },
+                );
+            });
+
+        let mut chat = crate::prompts::ChatPrompt::new(
             format!("flow-session-{session_id}"),
-            Some(command.clone()),
+            Some(format!("Message {friendly}…")),
+            vec![],
+            None,
+            None,
             self.focus_handle.clone(),
             submit_callback,
             std::sync::Arc::clone(&self.theme),
-            std::sync::Arc::new(self.config.clone()),
-            Some(term_height),
-        ) {
-            Ok(mut term) => {
-                // Codex/Claude TUIs own Escape (interrupt); backgrounding is
-                // ⌘⇧D. Never let Escape cancel the session.
-                term.escape_cancels = false;
-                let entity = cx.new(|_| term);
-                let meta = crate::flows::session::FlowSessionMeta {
-                    id: session_id,
-                    flow_id: flow.id.clone(),
-                    flow_name: flow.name.clone(),
-                    friendly_name: flow.friendly_name(),
-                    origin: flow.origin_label().to_string(),
-                    engine: flow.engine.clone(),
-                    command,
-                    initial_task,
-                    state: crate::flows::session::SessionState::Working,
-                    started_at: std::time::Instant::now(),
-                };
-                self.flow_sessions.push((meta, entity));
-                self.open_flow_session(session_id, cx);
-                self.start_flow_ux_tick(cx);
-            }
-            Err(err) => {
-                self.toast_manager.push(
-                    crate::components::toast::Toast::error(
-                        format!("Couldn't start {}: {err}", flow.friendly_name()),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(4000)),
+        )
+        .with_title(friendly.clone())
+        .with_save_history(false)
+        .with_escape_callback(escape_callback)
+        .with_escape_over_stop(true);
+        let actions_sender = self.flow_chat_sender.clone();
+        chat.set_on_show_actions(std::sync::Arc::new(move |_id: String| {
+            let _ = actions_sender.try_send(
+                crate::flows::session::FlowChatRequest::ShowActions { session_id },
+            );
+        }));
+        let entity = cx.new(|_| chat);
+
+        let meta = crate::flows::session::FlowSessionMeta {
+            id: session_id,
+            flow_id: flow.id.clone(),
+            flow_name: flow.name.clone(),
+            friendly_name: friendly,
+            origin: flow.origin_label().to_string(),
+            engine: flow.engine.clone(),
+            flow_path: flow.path.clone(),
+            cwd,
+            transport,
+            state: crate::flows::session::SessionState::NeedsYou,
+            started_at: std::time::Instant::now(),
+            turns: Vec::new(),
+            active_turn: None,
+        };
+        self.flow_sessions.push((meta, entity));
+        self.open_flow_session(session_id, cx);
+        self.start_flow_ux_tick(cx);
+        if let Some(message) = initial_message {
+            self.submit_flow_chat_message(session_id, message, cx);
+        }
+    }
+
+    /// Submit one user message on a session: echo it into the transcript,
+    /// open a streaming assistant bubble, and dispatch the turn on the
+    /// session's transport. One turn in flight per session.
+    pub(crate) fn submit_flow_chat_message(
+        &mut self,
+        session_id: u64,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self.flow_session_index(session_id) else {
+            return;
+        };
+        let text = text.trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        if self.flow_sessions[index].0.active_turn.is_some() {
+            self.toast_manager.push(
+                crate::components::toast::Toast::error(
+                    "Still working — stop the current turn first (⌘K)".to_string(),
+                    &self.theme,
+                )
+                .duration_ms(Some(2500)),
+            );
+            cx.notify();
+            return;
+        }
+
+        let (transport, prompt) = {
+            let meta = &self.flow_sessions[index].0;
+            let prompt = match meta.transport {
+                crate::flows::session::SessionTransport::CodexThread => {
+                    if meta.turns.is_empty() {
+                        // First turn carries the flow's resolved mission;
+                        // the protocol thread holds context afterwards.
+                        let markdown =
+                            std::fs::read_to_string(&meta.flow_path).unwrap_or_default();
+                        crate::flows::session::resolve_flow_mission(&markdown, &text)
+                    } else {
+                        text.clone()
+                    }
+                }
+                crate::flows::session::SessionTransport::MdflowTurns => {
+                    crate::flows::session::build_turn_task(&meta.turns, &text)
+                }
+            };
+            (meta.transport, prompt)
+        };
+
+        let turn_index = self.flow_sessions[index].0.turns.len();
+        let message_id = format!("flow-{session_id}-turn-{turn_index}");
+        let entity = self.flow_sessions[index].1.clone();
+        let user_text = text.clone();
+        entity.update(cx, |chat, cx| {
+            chat.add_message(crate::protocol::ChatPromptMessage::user(user_text), cx);
+            chat.start_streaming(
+                message_id.clone(),
+                crate::protocol::ChatMessagePosition::Left,
+                cx,
+            );
+        });
+
+        tracing::info!(
+            target: "script_kit::flows",
+            event = "flow_turn_submit",
+            session_id,
+            transport = ?transport,
+            prompt_len = prompt.len(),
+            "Submitting flow turn"
+        );
+
+        let run_id = match transport {
+            crate::flows::session::SessionTransport::CodexThread => {
+                let meta = &self.flow_sessions[index].0;
+                crate::flows::codex_client::codex_app_server().converse(
+                    session_id,
+                    &meta.cwd,
+                    prompt,
                 );
-                cx.notify();
+                None
+            }
+            crate::flows::session::SessionTransport::MdflowTurns => {
+                let meta = &self.flow_sessions[index].0;
+                Some(crate::flows::runner::launch_flow(
+                    &meta.flow_id,
+                    &meta.flow_name,
+                    &meta.flow_path,
+                    &meta.cwd,
+                    crate::flows::model::FlowUxVariant::Flash,
+                    crate::flows::model::EngagementMode::Background,
+                    vec![("task".to_string(), prompt)],
+                    std::time::Instant::now(),
+                ))
+            }
+        };
+
+        let meta = &mut self.flow_sessions[index].0;
+        meta.active_turn = Some(crate::flows::session::ActiveTurn {
+            run_id,
+            message_id,
+            assistant_acc: String::new(),
+            user_text: text,
+        });
+        meta.state = crate::flows::session::SessionState::Working;
+        self.start_flow_ux_tick(cx);
+        cx.notify();
+    }
+
+    /// Append streamed assistant text to a session's open turn.
+    fn append_flow_turn_text(&mut self, session_id: u64, delta: &str, cx: &mut Context<Self>) {
+        let Some(index) = self.flow_session_index(session_id) else {
+            return;
+        };
+        let entity = self.flow_sessions[index].1.clone();
+        let Some(active) = self.flow_sessions[index].0.active_turn.as_mut() else {
+            return;
+        };
+        active.assistant_acc.push_str(delta);
+        let message_id = active.message_id.clone();
+        let delta = delta.to_string();
+        entity.update(cx, |chat, cx| {
+            chat.append_chunk(&message_id, &delta, cx);
+        });
+    }
+
+    /// Settle a session's open turn: close the streaming bubble, surface a
+    /// failure note when there is one, commit the SessionTurn, set state.
+    fn finish_flow_turn(
+        &mut self,
+        session_id: u64,
+        state: crate::flows::session::SessionState,
+        error_note: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self.flow_session_index(session_id) else {
+            return;
+        };
+        let Some(active) = self.flow_sessions[index].0.active_turn.take() else {
+            return;
+        };
+        let entity = self.flow_sessions[index].1.clone();
+        let message_id = active.message_id.clone();
+        let note = error_note.clone();
+        entity.update(cx, |chat, cx| {
+            chat.complete_streaming(&message_id, cx);
+            if let Some(note) = note {
+                chat.set_message_error(&message_id, note, cx);
+            }
+        });
+        let meta = &mut self.flow_sessions[index].0;
+        meta.turns.push(crate::flows::session::SessionTurn {
+            user: active.user_text,
+            assistant: active.assistant_acc,
+        });
+        meta.state = state;
+        tracing::info!(
+            target: "script_kit::flows",
+            event = "flow_turn_settled",
+            session_id,
+            state = state.label(),
+            had_error = error_note.is_some(),
+            "Flow turn settled"
+        );
+    }
+
+    /// Apply one codex app-server event to its session.
+    fn apply_flow_thread_event(
+        &mut self,
+        event: crate::flows::codex_client::FlowThreadEvent,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::flows::codex_client::FlowThreadEvent;
+        use crate::flows::session::SessionState;
+        match event {
+            FlowThreadEvent::ThreadStarted { session_id, model } => {
+                if let Some(index) = self.flow_session_index(session_id) {
+                    if !model.is_empty() {
+                        self.flow_sessions[index].0.engine = format!("codex · {model}");
+                    }
+                }
+            }
+            FlowThreadEvent::TurnStarted { session_id } => {
+                if let Some(index) = self.flow_session_index(session_id) {
+                    if self.flow_sessions[index].0.active_turn.is_some() {
+                        self.flow_sessions[index].0.state = SessionState::Working;
+                    }
+                }
+            }
+            FlowThreadEvent::AgentDelta { session_id, delta } => {
+                self.append_flow_turn_text(session_id, &delta, cx);
+            }
+            FlowThreadEvent::AgentMessageFinal { session_id, text } => {
+                // Authoritative full text: append whatever the deltas
+                // missed (deltas can lag or be skipped entirely).
+                let Some(index) = self.flow_session_index(session_id) else {
+                    return;
+                };
+                let acc = self.flow_sessions[index]
+                    .0
+                    .active_turn
+                    .as_ref()
+                    .map(|active| active.assistant_acc.clone())
+                    .unwrap_or_default();
+                if text.len() > acc.len() && text.starts_with(&acc) {
+                    let suffix = text[acc.len()..].to_string();
+                    self.append_flow_turn_text(session_id, &suffix, cx);
+                } else if acc.is_empty() && !text.is_empty() {
+                    self.append_flow_turn_text(session_id, &text, cx);
+                }
+            }
+            FlowThreadEvent::TurnCompleted {
+                session_id,
+                status,
+                error,
+            } => {
+                let (state, note) = match status.as_str() {
+                    "completed" => (SessionState::NeedsYou, None),
+                    "interrupted" => (SessionState::NeedsYou, Some("Stopped".to_string())),
+                    _ => (
+                        SessionState::Done(None),
+                        Some(error.unwrap_or_else(|| "Turn failed".to_string())),
+                    ),
+                };
+                self.finish_flow_turn(session_id, state, note, cx);
+            }
+            FlowThreadEvent::SessionFailed { session_id, error } => {
+                let Some(index) = self.flow_session_index(session_id) else {
+                    return;
+                };
+                if self.flow_sessions[index].0.active_turn.is_some() {
+                    self.finish_flow_turn(
+                        session_id,
+                        crate::flows::session::SessionState::Done(None),
+                        Some(error),
+                        cx,
+                    );
+                } else {
+                    self.flow_sessions[index].0.state =
+                        crate::flows::session::SessionState::Done(None);
+                }
             }
         }
     }
 
-    /// Show an existing session (same PTY entity — this is the reattach).
+    /// Stream mdflow-turn run output into transcripts and settle finished
+    /// turns. Returns true when anything changed.
+    fn sync_mdflow_turns(&mut self, cx: &mut Context<Self>) -> bool {
+        let registry = crate::flows::run_registry::flow_run_registry();
+        let mut dirty = false;
+        for index in 0..self.flow_sessions.len() {
+            let (session_id, run_id, acc_len) = {
+                let meta = &self.flow_sessions[index].0;
+                let Some(active) = &meta.active_turn else {
+                    continue;
+                };
+                let Some(run_id) = active.run_id else {
+                    continue;
+                };
+                (meta.id, run_id, active.assistant_acc.len())
+            };
+            let Some(run) = registry.get(run_id) else {
+                self.finish_flow_turn(
+                    session_id,
+                    crate::flows::session::SessionState::Done(None),
+                    Some("run disappeared from the registry".to_string()),
+                    cx,
+                );
+                dirty = true;
+                continue;
+            };
+            let full: String = run
+                .stdout_tail
+                .lines()
+                .collect::<Vec<&str>>()
+                .join("\n");
+            if full.len() > acc_len {
+                if let Some(delta) = full.get(acc_len..) {
+                    let delta = delta.to_string();
+                    self.append_flow_turn_text(session_id, &delta, cx);
+                    dirty = true;
+                }
+            }
+            if run.phase.is_terminal() {
+                use crate::flows::model::RunPhase;
+                use crate::flows::session::SessionState;
+                let (state, note) = match run.phase {
+                    RunPhase::Succeeded => (SessionState::NeedsYou, None),
+                    RunPhase::Cancelled => {
+                        (SessionState::NeedsYou, Some("Stopped".to_string()))
+                    }
+                    _ => (
+                        SessionState::Done(run.exit_code.map(|code| code as i32)),
+                        Some(
+                            run.error_message
+                                .clone()
+                                .unwrap_or_else(|| run.display_status()),
+                        ),
+                    ),
+                };
+                self.finish_flow_turn(session_id, state, note, cx);
+                dirty = true;
+            }
+        }
+        dirty
+    }
+
+    /// Show an existing session (same ChatPrompt entity — the reattach).
     pub(crate) fn open_flow_session(&mut self, session_id: u64, cx: &mut Context<Self>) {
         if self.flow_session_index(session_id).is_none() {
             return;
         }
         self.current_view = AppView::FlowSessionView { session_id };
         self.focused_input = FocusedInput::None;
-        self.pending_focus = Some(FocusTarget::TermPrompt);
+        self.pending_focus = Some(FocusTarget::ChatPrompt);
         cx.spawn(async move |_this, _cx| {
-            crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::TermPrompt, 0);
+            crate::window_resize::resize_to_view_sync(
+                crate::window_resize::ViewType::MainWindow,
+                0,
+            );
         })
         .detach();
         cx.notify();
@@ -291,25 +667,43 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Explicit stop (⌘K verb): kill the PTY process group and mark Done.
-    /// The row stays visible with its final state until dismissed.
+    /// Explicit stop (⌘K verb): cancel the in-flight turn only. The
+    /// conversation survives and the composer stays usable.
     pub(crate) fn stop_flow_session(&mut self, session_id: u64, cx: &mut Context<Self>) {
         let Some(index) = self.flow_session_index(session_id) else {
             return;
         };
-        let entity = self.flow_sessions[index].1.clone();
-        entity.update(cx, |term, _cx| {
-            let _ = term.terminal.kill();
-        });
-        self.flow_sessions[index].0.state = crate::flows::session::SessionState::Done(None);
+        let Some(active) = self.flow_sessions[index].0.active_turn.clone() else {
+            return;
+        };
+        match self.flow_sessions[index].0.transport {
+            crate::flows::session::SessionTransport::CodexThread => {
+                crate::flows::codex_client::codex_app_server().interrupt(session_id);
+                // turn/completed {status: interrupted} settles the turn.
+            }
+            crate::flows::session::SessionTransport::MdflowTurns => {
+                if let Some(run_id) = active.run_id {
+                    crate::flows::runner::cancel_run(run_id);
+                    // The registry's Cancelled phase settles the turn.
+                }
+            }
+        }
         cx.notify();
     }
 
-    /// Remove an ended session row (⌘K "Dismiss").
+    /// Remove a session row (⌘K "Dismiss"). Only idle sessions can be
+    /// dismissed — stop the in-flight turn first.
     pub(crate) fn dismiss_flow_session(&mut self, session_id: u64, cx: &mut Context<Self>) {
         if let Some(index) = self.flow_session_index(session_id) {
-            if !self.flow_sessions[index].0.state.is_live() {
+            if self.flow_sessions[index].0.active_turn.is_none() {
+                crate::flows::codex_client::codex_app_server().forget_session(session_id);
                 self.flow_sessions.remove(index);
+                if matches!(
+                    self.current_view,
+                    AppView::FlowSessionView { session_id: current } if current == session_id
+                ) {
+                    self.background_flow_session(cx);
+                }
                 cx.notify();
             }
         }
@@ -345,75 +739,21 @@ impl ScriptListApp {
         run_id
     }
 
-    /// Start the plain-English creation path in a conversation session.
+    /// Start the plain-English creation path. `md create` is a genuinely
+    /// interactive CLI wizard, so it runs in the shared Quick Terminal
+    /// (honest transport) rather than being faked into a chat surface.
     pub(crate) fn start_flow_create_session(&mut self, cx: &mut Context<Self>) {
-        let create = crate::flows::model::FlowDescriptor {
-            id: "builtin:create-flow".to_string(),
-            path: String::new(),
-            source: crate::flows::model::FlowSource::Global,
-            name: "flow-create".to_string(),
-            description: Some("Create a new Markdown flow".to_string()),
-            engine: "md".to_string(),
-            engine_source: None,
-            inputs: Vec::new(),
-            is_workflow: false,
-            interactive: true,
-            mtime_ms: 0,
-            origin: Some("mdflow".to_string()),
-            wrapper_command: None,
-        };
-        // `md create` is itself interactive; reuse the session plumbing with
-        // a bespoke command (no --_interactive suffix needed).
         let cwd = self.flow_ux_cwd();
-        self.flow_session_counter += 1;
-        let session_id = self.flow_session_counter;
-        let command = format!(
-            "cd {} && SCRIPT_KIT_FLOW_SESSION_ID={session_id} md create",
-            crate::flows::session::shell_quote(&cwd)
+        tracing::info!(
+            target: "script_kit::flows",
+            event = "flow_create_open",
+            "Opening md create in Quick Terminal"
         );
-        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
-            std::sync::Arc::new(move |_id, _value| {});
-        let term_height = crate::window_resize::layout::MAX_HEIGHT
-            - px(crate::window_resize::layout::FOOTER_HEIGHT);
-        match crate::term_prompt::TermPrompt::with_height(
-            format!("flow-session-{session_id}"),
-            Some(command.clone()),
-            self.focus_handle.clone(),
-            submit_callback,
-            std::sync::Arc::clone(&self.theme),
-            std::sync::Arc::new(self.config.clone()),
-            Some(term_height),
-        ) {
-            Ok(mut term) => {
-                term.escape_cancels = false;
-                let entity = cx.new(|_| term);
-                let meta = crate::flows::session::FlowSessionMeta {
-                    id: session_id,
-                    flow_id: create.id.clone(),
-                    flow_name: create.name.clone(),
-                    friendly_name: "Create Flow".to_string(),
-                    origin: "mdflow".to_string(),
-                    engine: create.engine.clone(),
-                    command,
-                    initial_task: None,
-                    state: crate::flows::session::SessionState::Working,
-                    started_at: std::time::Instant::now(),
-                };
-                self.flow_sessions.push((meta, entity));
-                self.open_flow_session(session_id, cx);
-                self.start_flow_ux_tick(cx);
-            }
-            Err(err) => {
-                self.toast_manager.push(
-                    crate::components::toast::Toast::error(
-                        format!("Couldn't start flow creation: {err}"),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(4000)),
-                );
-                cx.notify();
-            }
-        }
+        self.open_quick_terminal_with_command(
+            Some(std::path::PathBuf::from(cwd)),
+            "md create".to_string(),
+            cx,
+        );
     }
 
     // ------------------------------------------------------------------
@@ -421,9 +761,11 @@ impl ScriptListApp {
     // ------------------------------------------------------------------
 
     /// Route free text typed in the main menu to a flow (Tab). Confident →
-    /// start the conversation with the text as the first task. Otherwise →
-    /// open the desk with the text as the filter so the user picks (the
-    /// Create Flow row is always present for the no-match case).
+    /// start the conversation; the text rides along as the first message
+    /// ONLY when it reads like a request rather than the flow's own name
+    /// (a lookup query like "githu" must never become the agent's task).
+    /// Otherwise → open the desk with the text as the filter so the user
+    /// picks (the Create Flow row is always present for the no-match case).
     pub(crate) fn route_text_to_flow(
         &mut self,
         text: String,
@@ -434,14 +776,22 @@ impl ScriptListApp {
         let decision = crate::flows::router::route(&text, &corpus);
         match decision {
             crate::flows::router::RouteDecision::AutoStart { flow } => {
+                let trimmed = text.trim();
+                let lowered = trimmed.to_lowercase();
+                let is_name_lookup = !trimmed.contains(' ')
+                    || flow.name.to_lowercase() == lowered
+                    || flow.friendly_name().to_lowercase() == lowered;
+                let first_message =
+                    (!is_name_lookup).then(|| trimmed.to_string());
                 tracing::info!(
                     target: "script_kit::flows",
                     event = "flow_router_auto_start",
                     flow_id = %flow.id,
                     query_len = text.len(),
+                    carries_message = first_message.is_some(),
                     "Tab router: confident match, starting conversation"
                 );
-                self.start_flow_session(&flow, Some(text), cx);
+                self.start_flow_session(&flow, first_message, cx);
             }
             crate::flows::router::RouteDecision::Candidates { .. }
             | crate::flows::router::RouteDecision::NoMatch => {
@@ -570,39 +920,7 @@ impl ScriptListApp {
                 }
 
                 if is_key_enter(key) {
-                    let Some(row) = rows.get(current_selected).cloned() else {
-                        cx.stop_propagation();
-                        return;
-                    };
-                    match row {
-                        FlowDeskRow::Session(session_id) => {
-                            this.open_flow_session(session_id, cx);
-                        }
-                        FlowDeskRow::Flow(flow) => {
-                            if has_shift || flow.is_workflow {
-                                // Workflows (DAGs) are run-once by nature;
-                                // ⇧↵ is explicit run-once for anything.
-                                this.flow_desk_run_once(&flow, cx);
-                            } else {
-                                let task = if current_filter.trim().is_empty() {
-                                    None
-                                } else {
-                                    // Typed text that found this flow rides
-                                    // along as the first prompt only when it
-                                    // is more than the flow's own name.
-                                    let trimmed = current_filter.trim().to_lowercase();
-                                    let is_just_name = flow.name.to_lowercase() == trimmed
-                                        || flow.friendly_name().to_lowercase() == trimmed;
-                                    (!is_just_name).then(|| current_filter.trim().to_string())
-                                };
-                                this.start_flow_session(&flow, task, cx);
-                            }
-                        }
-                        FlowDeskRow::CreateFlow => {
-                            this.start_flow_create_session(cx);
-                        }
-                    }
-                    cx.notify();
+                    this.flow_desk_activate_selected(has_shift, cx);
                     cx.stop_propagation();
                 }
             },
@@ -853,7 +1171,8 @@ impl ScriptListApp {
             );
 
         let hints: Vec<gpui::SharedString> = vec![
-            gpui::SharedString::from("⌘⇧D Background"),
+            gpui::SharedString::from("↵ Send"),
+            gpui::SharedString::from("Esc Desk"),
             gpui::SharedString::from("⌘K Actions"),
         ];
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
@@ -937,6 +1256,12 @@ impl ScriptListApp {
                 state: meta.state.label(),
                 live: meta.state.is_live(),
                 elapsed_ms: meta.started_at.elapsed().as_millis() as u64,
+                turns: meta.turns.len(),
+                turn_in_flight: meta.active_turn.is_some(),
+                transport: match meta.transport {
+                    crate::flows::session::SessionTransport::CodexThread => "codexThread",
+                    crate::flows::session::SessionTransport::MdflowTurns => "mdflowTurns",
+                },
             })
             .collect();
         crate::flows::automation::flow_ux_state(crate::flows::automation::FlowUxSnapshotInputs {

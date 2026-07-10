@@ -9913,15 +9913,8 @@ impl ScriptListApp {
                     .map(|(_, entity)| entity.clone());
                 if let Some(entity) = entity {
                     let payload = text.to_string();
-                    entity.update(cx, |term, cx| {
-                        if let Err(error) = term.send_raw_input(&payload) {
-                            tracing::warn!(
-                                category = "BATCH",
-                                %error,
-                                "setInput failed for FlowSessionView"
-                            );
-                        }
-                        cx.notify();
+                    entity.update(cx, |chat, cx| {
+                        chat.set_input(payload, cx);
                     });
                 } else {
                     tracing::warn!(

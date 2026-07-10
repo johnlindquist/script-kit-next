@@ -28,9 +28,8 @@ impl ScriptListApp {
                 crate::window_resize::ViewType::ArgPromptNoChoices
             }
             AppView::ScratchPadView { .. } => crate::window_resize::ViewType::EditorPrompt,
-            AppView::QuickTerminalView { .. } | AppView::FlowSessionView { .. } => {
-                crate::window_resize::ViewType::TermPrompt
-            }
+            AppView::QuickTerminalView { .. } => crate::window_resize::ViewType::TermPrompt,
+            AppView::FlowSessionView { .. } => crate::window_resize::ViewType::MainWindow,
             AppView::ClipboardHistoryView { .. }
             | AppView::ThemeChooserView { .. }
             | AppView::SdkReferenceView { .. }
@@ -2167,8 +2166,8 @@ impl ScriptListApp {
                     "content.promptBody",
                 ),
                 AppView::FlowSessionView { .. } => (
-                    "TerminalContent",
-                    "FlowSessionView fills the content area with the live flow conversation PTY and reserves native-footer space through the shared main-window footer slot.",
+                    "FlowSessionContent",
+                    "FlowSessionView fills the content area with the Threadline conversation (ChatPrompt transcript + composer) and reserves native-footer space through the shared main-window footer slot.",
                     "content.promptBody",
                 ),
                 AppView::ScratchPadView { .. } => (

@@ -2254,8 +2254,8 @@ impl ScriptListApp {
                         );
                         view.background_flow_session(ctx);
                     } else {
-                        // Real keystrokes reach the session PTY only through
-                        // simulateGpuiEvent; legacy simulateKey stays inert here.
+                        // Flow sessions are ChatPrompt surfaces; real
+                        // keystrokes go through simulateGpuiEvent only.
                         logging::log(
                             "STDIN",
                             &format!(

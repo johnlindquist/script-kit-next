@@ -85,6 +85,39 @@ impl Render for ScriptListApp {
             self.go_back_or_close(window, cx);
         }
 
+        // Flow-session Threadline callbacks (submit / Esc-background / ⌘K).
+        // ChatPrompt callbacks have no app access; they post here and the
+        // render pass (which has the window) applies them.
+        while let Ok(request) = self.flow_chat_receiver.try_recv() {
+            match request {
+                crate::flows::session::FlowChatRequest::Submit { session_id, text } => {
+                    self.submit_flow_chat_message(session_id, text, cx);
+                }
+                crate::flows::session::FlowChatRequest::Background { session_id } => {
+                    let in_session = matches!(
+                        self.current_view,
+                        AppView::FlowSessionView { session_id: current } if current == session_id
+                    );
+                    if in_session {
+                        self.background_flow_session(cx);
+                    }
+                }
+                crate::flows::session::FlowChatRequest::ShowActions { session_id } => {
+                    let in_session = matches!(
+                        self.current_view,
+                        AppView::FlowSessionView { session_id: current } if current == session_id
+                    );
+                    if in_session {
+                        self.dispatch_actions_toggle_for_current_view(
+                            window,
+                            cx,
+                            "flow_session_chat",
+                        );
+                    }
+                }
+            }
+        }
+
         while let Ok(request) = self.inline_chat_actions_receiver.try_recv() {
             match request {
                 MiniAiUiRequest::ToggleActions { prompt_id, source } => {

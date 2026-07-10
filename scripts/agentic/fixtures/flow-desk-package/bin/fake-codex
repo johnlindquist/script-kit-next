@@ -1,0 +1,82 @@
+#!/usr/bin/env bun
+// Deterministic stand-in for `codex app-server` (SCRIPT_KIT_CODEX_BIN seam).
+// Speaks the 0.144.0 wire shape: JSONL, no "jsonrpc" field, camelCase params.
+// Every turn replies "FAKE-CODEX-REPLY: <prompt prefix>" so receipts can
+// prove the exact prompt that reached the "engine".
+if (process.argv[2] !== "app-server") {
+  console.error("fake-codex: expected app-server subcommand");
+  process.exit(2);
+}
+
+let threadCounter = 0;
+const out = (msg: unknown) => process.stdout.write(JSON.stringify(msg) + "\n");
+
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk: string) => {
+  buffer += chunk;
+  let idx: number;
+  while ((idx = buffer.indexOf("\n")) >= 0) {
+    const line = buffer.slice(0, idx).trim();
+    buffer = buffer.slice(idx + 1);
+    if (!line) continue;
+    let msg: any;
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    handle(msg);
+  }
+});
+process.stdin.on("end", () => process.exit(0));
+
+function handle(msg: any) {
+  const { id, method, params } = msg;
+  if (method === "initialize") {
+    out({ id, result: { userAgent: "fake-codex/0.0.0" } });
+  } else if (method === "thread/start") {
+    threadCounter += 1;
+    out({
+      id,
+      result: { thread: { id: `fake-thread-${threadCounter}` }, model: "fake-model" },
+    });
+  } else if (method === "turn/start") {
+    const threadId = params.threadId;
+    const text: string = params.input?.[0]?.text ?? "";
+    out({ id, result: { turn: { id: `turn-${threadId}`, status: "inProgress" } } });
+    out({
+      method: "turn/started",
+      params: { threadId, turn: { id: `turn-${threadId}`, status: "inProgress" } },
+    });
+    const reply = `FAKE-CODEX-REPLY: ${text.slice(0, 160)}`;
+    const half = Math.ceil(reply.length / 2);
+    out({
+      method: "item/agentMessage/delta",
+      params: { threadId, turnId: `turn-${threadId}`, itemId: "item-1", delta: reply.slice(0, half) },
+    });
+    out({
+      method: "item/agentMessage/delta",
+      params: { threadId, turnId: `turn-${threadId}`, itemId: "item-1", delta: reply.slice(half) },
+    });
+    out({
+      method: "item/completed",
+      params: { threadId, item: { type: "agentMessage", id: "item-1", text: reply } },
+    });
+    // Unknown notification — the client must ignore it.
+    out({ method: "hook/started", params: { threadId, run: { id: "noise" } } });
+    out({
+      method: "turn/completed",
+      params: { threadId, turn: { id: `turn-${threadId}`, status: "completed" } },
+    });
+  } else if (method === "turn/interrupt") {
+    const threadId = params.threadId;
+    out({ id, result: {} });
+    out({
+      method: "turn/completed",
+      params: { threadId, turn: { id: `turn-${threadId}`, status: "interrupted" } },
+    });
+  } else if (id !== undefined) {
+    out({ id, result: {} });
+  }
+}

@@ -818,14 +818,20 @@ pub(crate) struct ScriptListApp {
     // Guards the single Flow UX repaint tick task (spawned on first open).
     flow_ux_tick_running: bool,
     // Live conversational flow sessions (Enter = converse). Each pairs
-    // metadata with the live PTY entity; backgrounding keeps the entity (and
-    // its process) alive, re-entering an Active row restores the SAME one.
+    // metadata with its Threadline ChatPrompt entity; backgrounding keeps
+    // the entity (and any in-flight turn) alive, re-entering an Active row
+    // restores the SAME transcript.
     pub(crate) flow_sessions: Vec<(
         crate::flows::session::FlowSessionMeta,
-        Entity<crate::term_prompt::TermPrompt>,
+        Entity<crate::prompts::ChatPrompt>,
     )>,
     // Monotonic id source for flow sessions.
     pub(crate) flow_session_counter: u64,
+    /// Sender for flow-session chat requests (submit/background). Cloned
+    /// into ChatPrompt callbacks, which have no app access.
+    pub(crate) flow_chat_sender: mpsc::SyncSender<crate::flows::session::FlowChatRequest>,
+    /// Receiver drained by the flow tick on the main thread.
+    pub(crate) flow_chat_receiver: mpsc::Receiver<crate::flows::session::FlowChatRequest>,
     // Scroll handle for current app commands list
     current_app_commands_scroll_handle: UniformListScrollHandle,
     // Scroll handle for Agent Chat history list

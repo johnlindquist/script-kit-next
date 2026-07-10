@@ -30,6 +30,12 @@ pub struct SessionSnapshot {
     pub state: &'static str,
     pub live: bool,
     pub elapsed_ms: u64,
+    /// Committed conversation turns (user + assistant pairs).
+    pub turns: usize,
+    /// True while a turn is in flight on the session's transport.
+    pub turn_in_flight: bool,
+    /// `codexThread` or `mdflowTurns`.
+    pub transport: &'static str,
 }
 
 pub struct PreviewSnapshot<'a> {
@@ -118,6 +124,9 @@ pub fn flow_ux_state(inputs: FlowUxSnapshotInputs<'_>) -> Value {
                     "state": s.state,
                     "live": s.live,
                     "elapsedMs": s.elapsed_ms,
+                    "turns": s.turns,
+                    "turnInFlight": s.turn_in_flight,
+                    "transport": s.transport,
                 })
             })
             .collect::<Vec<_>>(),
@@ -162,6 +171,9 @@ mod tests {
                 state: "working",
                 live: true,
                 elapsed_ms: 5,
+                turns: 2,
+                turn_in_flight: true,
+                transport: "codexThread",
             }],
         });
         assert_eq!(value["activeVariant"], "lens");
@@ -169,6 +181,9 @@ mod tests {
         assert_eq!(value["manager"]["visible"], false);
         assert_eq!(value["sessions"][0]["state"], "working");
         assert_eq!(value["sessions"][0]["live"], true);
+        assert_eq!(value["sessions"][0]["turns"], 2);
+        assert_eq!(value["sessions"][0]["turnInFlight"], true);
+        assert_eq!(value["sessions"][0]["transport"], "codexThread");
         let run = value["runs"]
             .as_array()
             .unwrap()

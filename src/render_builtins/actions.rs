@@ -1019,25 +1019,25 @@ impl ScriptListApp {
                 .with_section("Session")
                 .with_icon(IconName::ArrowDown),
                 Action::new(
-                    "flow_desk_session_copy_command",
-                    "Copy Launch Command",
-                    None,
+                    "flow_desk_session_copy_transcript",
+                    "Copy Transcript",
+                    Some("All turns as Markdown".to_string()),
                     ActionCategory::ScriptContext,
                 )
                 .with_section("Session")
                 .with_icon(IconName::Copy),
                 Action::new(
                     "flow_desk_session_stop",
-                    "Stop Session",
-                    Some("Kill the process — the only way a session dies".to_string()),
+                    "Stop Current Turn",
+                    Some("Cancel the in-flight turn — the conversation survives".to_string()),
                     ActionCategory::ScriptContext,
                 )
                 .with_section("Danger")
                 .with_icon(IconName::Close),
                 Action::new(
                     "flow_desk_session_dismiss",
-                    "Dismiss Ended Session",
-                    Some("Remove the row (ended sessions only)".to_string()),
+                    "Dismiss Session",
+                    Some("Remove the conversation (idle sessions only)".to_string()),
                     ActionCategory::ScriptContext,
                 )
                 .with_section("Danger")
@@ -1190,13 +1190,21 @@ impl ScriptListApp {
                 self.background_flow_session(cx);
             }
             (
-                "flow_desk_session_copy_command",
+                "flow_desk_session_copy_transcript",
                 Some(FlowDeskSubject::Session(id)),
             ) => {
                 if let Some((meta, _)) =
                     self.flow_sessions.iter().find(|(meta, _)| meta.id == id)
                 {
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(meta.command.clone()));
+                    let transcript = meta
+                        .turns
+                        .iter()
+                        .map(|turn| {
+                            format!("**You:** {}\n\n{}", turn.user, turn.assistant)
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n\n---\n\n");
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(transcript));
                 }
             }
             (

@@ -675,6 +675,7 @@ impl ScriptListApp {
 
         // Legacy chat channels (retained for inline chat compatibility — not the primary Tab AI surface)
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
+        let (flow_chat_tx, flow_chat_rx) = mpsc::sync_channel(32);
         let (inline_chat_actions_tx, inline_chat_actions_rx) = mpsc::sync_channel(4);
         let (inline_chat_continue_tx, inline_chat_continue_rx) = mpsc::sync_channel(4);
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
@@ -839,6 +840,8 @@ impl ScriptListApp {
             flow_ux_tick_running: false,
             flow_sessions: Vec::new(),
             flow_session_counter: 0,
+            flow_chat_sender: flow_chat_tx,
+            flow_chat_receiver: flow_chat_rx,
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),
@@ -1673,31 +1676,6 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Flow sessions own Tab the same way: the agent
-                            // TUI (codex/claude) needs it, and GPUI focus
-                            // traversal must never steal it.
-                            if let AppView::FlowSessionView { session_id } = this.current_view {
-                                let entity = this
-                                    .flow_sessions
-                                    .iter()
-                                    .find(|(meta, _)| meta.id == session_id)
-                                    .map(|(_, entity)| entity.clone());
-                                if let Some(entity) = entity {
-                                    entity.update(cx, |term, _cx| {
-                                        if !term.terminal.is_running() {
-                                            return;
-                                        }
-                                        let bytes: &[u8] = if has_shift {
-                                            b"\x1b[Z"
-                                        } else {
-                                            b"\t"
-                                        };
-                                        let _ = term.terminal.input(bytes);
-                                    });
-                                }
-                                cx.stop_propagation();
-                                return;
-                            }
 
                             // Block Tab while the save-offer overlay is visible
                             if this.tab_ai_save_offer_state.is_some() {

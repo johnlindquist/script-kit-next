@@ -17,11 +17,6 @@ impl ScriptListApp {
         let terminal = match &self.current_view {
             AppView::TermPrompt { entity, .. } => Some(entity.clone()),
             AppView::QuickTerminalView { entity, .. } => Some(entity.clone()),
-            AppView::FlowSessionView { session_id } => self
-                .flow_sessions
-                .iter()
-                .find(|(meta, _)| meta.id == *session_id)
-                .map(|(_, entity)| entity.clone()),
             _ => None,
         };
 
@@ -376,11 +371,6 @@ impl ScriptListApp {
                 let entity = match &self.current_view {
                     AppView::TermPrompt { entity, .. } => Some(entity),
                     AppView::QuickTerminalView { entity, .. } => Some(entity),
-                    AppView::FlowSessionView { session_id } => self
-                        .flow_sessions
-                        .iter()
-                        .find(|(meta, _)| meta.id == *session_id)
-                        .map(|(_, entity)| entity),
                     _ => None,
                 };
                 if let Some(entity) = entity {
@@ -394,6 +384,11 @@ impl ScriptListApp {
                 let entity = match &self.current_view {
                     AppView::ChatPrompt { entity, .. } => Some(entity.read(cx).focus_handle(cx)),
                     AppView::AgentChatView { .. } => self.embedded_agent_chat_focus_handle.clone(),
+                    AppView::FlowSessionView { session_id } => self
+                        .flow_sessions
+                        .iter()
+                        .find(|(meta, _)| meta.id == *session_id)
+                        .map(|(_, entity)| entity.read(cx).focus_handle(cx)),
                     _ => None,
                 };
                 if let Some(fh) = entity {
