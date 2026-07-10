@@ -351,19 +351,13 @@ pub struct BuiltInEntry {
 }
 
 /// Query-only built-ins never appear in the empty-query launcher list; they
-/// surface only when the user types a matching query. Used for experimental
-/// surfaces (the Flow UX variations) that must be reachable by name without
-/// cluttering the default menu. Kept as a predicate (not a field) so the
-/// many existing `BuiltInEntry` literals stay untouched.
+/// surface only when the user types a matching query. Kept as a predicate
+/// (not a field) so the many existing `BuiltInEntry` literals stay untouched.
+/// Currently empty: the Flow UX exploration variants and the detached Flow
+/// Manager were removed by the Conversation Desk redesign (2026-07-09).
 pub fn is_query_only_builtin(id: &str) -> bool {
-    matches!(
-        id,
-        "builtin/flow-ux-flash"
-            | "builtin/flow-ux-dispatch"
-            | "builtin/flow-ux-lens"
-            | "builtin/flow-ux-mission-control"
-            | "builtin/flow-manager"
-    )
+    let _ = id;
+    false
 }
 impl BuiltInEntry {
     /// Create a new built-in entry (Core group, no icon)

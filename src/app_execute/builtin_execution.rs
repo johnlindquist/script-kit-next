@@ -3905,24 +3905,10 @@ impl ScriptListApp {
             }
 
             // =========================================================================
-            // Flow UX exploration surfaces (docs/ai/flow-ux-protocol.md)
+            // Flow Desk (Conversation Desk — docs/ai/flow-ux-protocol.md)
             // =========================================================================
             builtins::BuiltInFeature::FlowUxVariant(variant) => {
                 let variant = *variant;
-                if variant == crate::flows::model::FlowUxVariant::MissionControl {
-                    // Mission Control's home is the detached manager window;
-                    // it never occupies the main-window view stack.
-                    if let Err(err) = crate::flows::manager_window::open_flow_manager_window(cx) {
-                        self.show_error_toast(format!("Flow Manager failed: {err}"), cx);
-                        return Self::builtin_error(
-                            dctx,
-                            "flow_manager_open_failed",
-                            err.to_string(),
-                            "flow_ux::mission_control_open",
-                        );
-                    }
-                    return Self::builtin_success(dctx, "flow_ux::mission_control");
-                }
                 // Prewarm the roster for the effective cwd before the view
                 // paints, so the first frame already has flows.
                 let cwd = self.flow_ux_cwd();
@@ -3945,16 +3931,24 @@ impl ScriptListApp {
                 )
             }
             builtins::BuiltInFeature::FlowManager => {
-                if let Err(err) = crate::flows::manager_window::open_flow_manager_window(cx) {
-                    self.show_error_toast(format!("Flow Manager failed: {err}"), cx);
-                    return Self::builtin_error(
-                        dctx,
-                        "flow_manager_open_failed",
-                        err.to_string(),
-                        "flow_manager::open",
-                    );
-                }
-                Self::builtin_success(dctx, "flow_manager::open")
+                // The detached Flow Manager is dead (Conversation Desk
+                // decision 2026-07-09): supervision lives in the main-window
+                // desk. Route any stale trigger to the desk instead.
+                let cwd = self.flow_ux_cwd();
+                crate::flows::catalog::flow_catalog().refresh(&cwd);
+                self.open_builtin_filterable_view(
+                    AppView::FlowUxView {
+                        variant: crate::flows::model::FlowUxVariant::Flash,
+                        filter: String::new(),
+                        selected_index: 0,
+                        inline_run: None,
+                    },
+                    "Search flows...",
+                    false,
+                    cx,
+                );
+                self.start_flow_ux_tick(cx);
+                Self::builtin_success(dctx, "flow_ux::desk_from_manager_alias")
             }
 
             // NOTE: Window Actions removed - now handled by window-management extension

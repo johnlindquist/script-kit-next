@@ -28,7 +28,9 @@ impl ScriptListApp {
                 crate::window_resize::ViewType::ArgPromptNoChoices
             }
             AppView::ScratchPadView { .. } => crate::window_resize::ViewType::EditorPrompt,
-            AppView::QuickTerminalView { .. } => crate::window_resize::ViewType::TermPrompt,
+            AppView::QuickTerminalView { .. } | AppView::FlowSessionView { .. } => {
+                crate::window_resize::ViewType::TermPrompt
+            }
             AppView::ClipboardHistoryView { .. }
             | AppView::ThemeChooserView { .. }
             | AppView::SdkReferenceView { .. }
@@ -95,6 +97,7 @@ impl ScriptListApp {
             AppView::DesignExplorerView { .. } => "designExplorer",
             AppView::ScratchPadView { .. } => "scratchPad",
             AppView::QuickTerminalView { .. } => "quickTerminal",
+            AppView::FlowSessionView { .. } => "flowSession",
             AppView::FileSearchView { .. } => "fileSearch",
             AppView::ProfileSearchView { .. } => "profileSearch",
             AppView::ThemeChooserView { .. } => "themeChooser",
@@ -2140,6 +2143,7 @@ impl ScriptListApp {
                 | AppView::TermPrompt { .. }
                 | AppView::ScratchPadView { .. }
                 | AppView::QuickTerminalView { .. }
+                | AppView::FlowSessionView { .. }
         ) {
             let (component_name, explanation, token) = match &self.current_view {
                 AppView::WebcamView { .. } => (
@@ -2160,6 +2164,11 @@ impl ScriptListApp {
                 AppView::QuickTerminalView { .. } => (
                     "TerminalContent",
                     "QuickTerminalView fills the compact content area and reserves native-footer space through the shared main-window footer slot.",
+                    "content.promptBody",
+                ),
+                AppView::FlowSessionView { .. } => (
+                    "TerminalContent",
+                    "FlowSessionView fills the content area with the live flow conversation PTY and reserves native-footer space through the shared main-window footer slot.",
                     "content.promptBody",
                 ),
                 AppView::ScratchPadView { .. } => (

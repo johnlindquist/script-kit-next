@@ -206,6 +206,7 @@ impl ScriptListApp {
             AppView::DesignExplorerView { .. } => "DesignExplorerView",
             AppView::ScratchPadView { .. } => "ScratchPadView",
             AppView::QuickTerminalView { .. } => "QuickTerminalView",
+            AppView::FlowSessionView { .. } => "FlowSessionView",
             AppView::WebcamView { .. } => "WebcamView",
             AppView::FileSearchView { .. } => "FileSearchView",
             AppView::ProfileSearchView { .. } => "ProfileSearchView",

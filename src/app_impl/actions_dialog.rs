@@ -23,7 +23,6 @@ impl ScriptListApp {
                 | AppView::WindowSwitcherView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::ProcessManagerView { .. }
-                | AppView::FlowUxView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::CreateAiPresetView { .. }
                 | AppView::SettingsView { .. }
@@ -60,12 +59,14 @@ impl ScriptListApp {
             AppView::AgentChatView { .. } => Some(ActionsDialogHost::AgentChat),
             AppView::AgentChatHistoryView { .. } => Some(ActionsDialogHost::AgentChatHistory),
             AppView::AppLauncherView { .. } => Some(ActionsDialogHost::AppLauncher),
+            AppView::FlowUxView { .. } | AppView::FlowSessionView { .. } => {
+                Some(ActionsDialogHost::FlowDesk)
+            }
             AppView::BrowserHistoryView { .. }
             | AppView::BrowserTabsView { .. }
             | AppView::WindowSwitcherView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::ProcessManagerView { .. }
-            | AppView::FlowUxView { .. }
             | AppView::SearchAiPresetsView { .. }
             | AppView::CreateAiPresetView { .. }
             | AppView::SettingsView { .. }
@@ -354,6 +355,9 @@ impl ScriptListApp {
             ActionsDialogHost::ThemeChooser => {
                 self.execute_theme_chooser_action(&action_id, window, cx);
             }
+            ActionsDialogHost::FlowDesk => {
+                self.execute_flow_desk_action(&action_id, window, cx);
+            }
             _ => {
                 self.handle_action(action_id, window, cx);
             }
@@ -553,6 +557,10 @@ impl ScriptListApp {
             | ActionsDialogHost::TermPrompt
             | ActionsDialogHost::FormPrompt => {
                 self.toggle_actions(cx, window);
+                true
+            }
+            ActionsDialogHost::FlowDesk => {
+                self.toggle_flow_desk_actions(window, cx);
                 true
             }
             ActionsDialogHost::BuiltinList => {
@@ -1285,6 +1293,13 @@ impl ScriptListApp {
             ActionsDialogHost::MainList if matches!(self.current_view, AppView::DayPage { .. }) => {
                 FocusRequest::editor_prompt()
             }
+            // Flow Desk dialog opened from an open conversation returns focus
+            // to the session PTY; from the desk list it returns to the filter.
+            ActionsDialogHost::FlowDesk
+                if matches!(self.current_view, AppView::FlowSessionView { .. }) =>
+            {
+                FocusRequest::term_prompt()
+            }
             ActionsDialogHost::MainList
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory
@@ -1294,6 +1309,7 @@ impl ScriptListApp {
             | ActionsDialogHost::EmojiPicker
             | ActionsDialogHost::AppLauncher
             | ActionsDialogHost::BuiltinList
+            | ActionsDialogHost::FlowDesk
             | ActionsDialogHost::AgentChatHistory
             | ActionsDialogHost::AgentChatDetached => FocusRequest::main_filter(),
         };

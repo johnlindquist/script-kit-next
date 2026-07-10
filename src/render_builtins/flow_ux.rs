@@ -1,14 +1,41 @@
-// Flow UX exploration surfaces (Flash / Dispatch / Lens).
+// Flow Desk (Conversation Desk, fusion-ultra 2026-07-09).
 //
-// One renderer, parameterized by `crate::flows::model::FlowUxVariant`, over
-// the shared flow substrate (`crate::flows`): the mdflow CLI owns discovery
-// and execution (docs/ai/flow-ux-protocol.md); these surfaces are thin,
-// swappable views so John can compare interaction grammars by feel.
+// Every flow is an agent identity. One main-window surface over the shared
+// flow substrate (`crate::flows`):
 //
-// Shared grammar (protocol §5): Enter = variant's primary lifecycle,
-// Shift+Enter = background, Cmd+Enter = launch + focus Flow Manager,
-// Esc backgrounds Flash's engaged run (never cancels), ⌥←/⌥→ cycles
-// variants in place.
+// - Enter on a flow = CONVERSE: launch the real `flow-*` wrapper (or
+//   `md <path> --_interactive`) in an embedded PTY session in this window.
+// - Enter on an Active session row = reattach the SAME PTY entity.
+// - ⇧↵ = run once in the background via `md <flow> --events` (registry).
+// - ⌘⇧D (in a session) = background: leave the process alive, return here.
+// - Esc in a session goes to the TUI (codex/claude own Escape); Esc in the
+//   desk clears the filter / goes back. Stop is an explicit ⌘K verb only.
+//
+// The detached Flow Manager and the Flash/Dispatch/Lens/Mission-Control
+// variants are dead; `FlowUxVariant` survives only as builtin-entry plumbing.
+
+/// One selectable row in the desk list.
+#[derive(Clone)]
+pub(crate) enum FlowDeskRow {
+    /// Live or recently-ended conversation (index into `flow_sessions`).
+    Session(u64),
+    /// A flow identity from the combined roster+package corpus.
+    Flow(crate::flows::model::FlowDescriptor),
+    /// The plain-English creation affordance (always last).
+    CreateFlow,
+}
+
+/// What the Flow Desk ⌘K dialog acts on. Derived fresh from view state at
+/// toggle/execute time so the popup never captures a stale row.
+#[derive(Clone)]
+pub(crate) enum FlowDeskSubject {
+    /// A flow identity row (or the desk's flow list generally).
+    Flow(crate::flows::model::FlowDescriptor),
+    /// A conversation session by id — selected row or the open session view.
+    Session(u64),
+    /// The Create Flow affordance.
+    Create,
+}
 
 impl ScriptListApp {
     /// Effective cwd for flow discovery: the spine cwd chip when set,
@@ -36,9 +63,10 @@ impl ScriptListApp {
         }
     }
 
-    /// Spawn the repaint tick that keeps Flow UX surfaces live while runs
-    /// stream. Single instance; exits when no Flow UX view is active and no
-    /// run is still executing.
+    /// Spawn the repaint tick that keeps flow surfaces live while runs
+    /// stream or sessions are open. Single instance; exits when nothing is
+    /// active. Also the seam that notices a session's PTY exited (the
+    /// process is polled here — never scraped).
     pub(crate) fn start_flow_ux_tick(&mut self, cx: &mut Context<Self>) {
         if self.flow_ux_tick_running {
             return;
@@ -53,14 +81,34 @@ impl ScriptListApp {
                     this.update(cx, |app, cx| {
                         let registry = crate::flows::run_registry::flow_run_registry();
                         let generation = registry.generation();
-                        if generation != app.flow_ux_seen_generation {
-                            app.flow_ux_seen_generation = generation;
+                        let mut dirty = generation != app.flow_ux_seen_generation;
+                        app.flow_ux_seen_generation = generation;
+
+                        // Poll session liveness: a PTY that exited flips its
+                        // meta to Done exactly once.
+                        let mut any_live_session = false;
+                        for index in 0..app.flow_sessions.len() {
+                            let entity = app.flow_sessions[index].1.clone();
+                            let running =
+                                entity.update(cx, |term, _cx| term.terminal.is_running());
+                            let meta = &mut app.flow_sessions[index].0;
+                            if meta.state.is_live() && !running {
+                                meta.state =
+                                    crate::flows::session::SessionState::Done(None);
+                                dirty = true;
+                            }
+                            any_live_session |= meta.state.is_live();
+                        }
+
+                        if dirty {
                             cx.notify();
                         }
-                        let view_active =
-                            matches!(app.current_view, AppView::FlowUxView { .. });
-                        let runs_active = registry.active_count() > 0;
-                        let keep = view_active || runs_active;
+                        let view_active = matches!(
+                            app.current_view,
+                            AppView::FlowUxView { .. } | AppView::FlowSessionView { .. }
+                        );
+                        let keep =
+                            view_active || registry.active_count() > 0 || any_live_session;
                         if !keep {
                             app.flow_ux_tick_running = false;
                         }
@@ -76,13 +124,201 @@ impl ScriptListApp {
         .detach();
     }
 
-    /// Launch a flow through the shared runner and record the ack. Returns
-    /// the registry-local run id.
-    fn flow_ux_launch(
+    // ------------------------------------------------------------------
+    // Desk corpus + rows
+    // ------------------------------------------------------------------
+
+    /// The combined flow corpus for the desk (roster for the effective cwd
+    /// plus the installed flows package).
+    pub(crate) fn flow_desk_corpus(&self) -> Vec<crate::flows::model::FlowDescriptor> {
+        let cwd = self.flow_ux_cwd();
+        let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
+        crate::flows::catalog::desk_flows(&roster)
+    }
+
+    /// Build the selectable desk rows for a filter: Active/recent sessions
+    /// first (newest first), then matching flows, then Create Flow.
+    pub(crate) fn flow_desk_rows(&self, filter: &str) -> Vec<FlowDeskRow> {
+        let mut rows: Vec<FlowDeskRow> = Vec::new();
+        let query = filter.trim().to_lowercase();
+
+        let mut sessions: Vec<&crate::flows::session::FlowSessionMeta> =
+            self.flow_sessions.iter().map(|(meta, _)| meta).collect();
+        sessions.sort_by(|a, b| b.id.cmp(&a.id));
+        for meta in sessions {
+            let matches = query.is_empty()
+                || meta.friendly_name.to_lowercase().contains(&query)
+                || meta.flow_name.to_lowercase().contains(&query);
+            if matches {
+                rows.push(FlowDeskRow::Session(meta.id));
+            }
+        }
+
+        let corpus = self.flow_desk_corpus();
+        for flow in crate::flows::catalog::filter_flows(&corpus, filter) {
+            rows.push(FlowDeskRow::Flow(flow.clone()));
+        }
+
+        rows.push(FlowDeskRow::CreateFlow);
+        rows
+    }
+
+    fn flow_session_index(&self, session_id: u64) -> Option<usize> {
+        self.flow_sessions
+            .iter()
+            .position(|(meta, _)| meta.id == session_id)
+    }
+
+    // ------------------------------------------------------------------
+    // Conversation lifecycle
+    // ------------------------------------------------------------------
+
+    /// Start a conversation with a flow: spawn its wrapper interactively in
+    /// a new PTY session and show it. `initial_task` (Tab router / typed
+    /// text) rides along as the engine's first prompt.
+    pub(crate) fn start_flow_session(
         &mut self,
         flow: &crate::flows::model::FlowDescriptor,
-        variant: crate::flows::model::FlowUxVariant,
-        engagement: crate::flows::model::EngagementMode,
+        initial_task: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let cwd = self.flow_ux_cwd();
+        crate::flows::manager_window::remember_flow_cwd(&cwd);
+        self.flow_session_counter += 1;
+        let session_id = self.flow_session_counter;
+        let command = crate::flows::session::build_conversation_command(
+            session_id,
+            &cwd,
+            flow.wrapper_command.as_deref(),
+            &flow.path,
+            initial_task.as_deref(),
+        );
+
+        // Log length only — task text can carry anything.
+        tracing::info!(
+            target: "script_kit::flows",
+            event = "flow_session_start",
+            session_id,
+            flow_id = %flow.id,
+            wrapper = ?flow.wrapper_command,
+            task_len = initial_task.as_deref().map(str::len).unwrap_or(0),
+            "Starting flow conversation"
+        );
+
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(move |_id: String, _value: Option<String>| {
+                // Exit is observed by the flow tick (PTY liveness poll).
+            });
+        let term_height = crate::window_resize::layout::MAX_HEIGHT
+            - px(crate::window_resize::layout::FOOTER_HEIGHT);
+        match crate::term_prompt::TermPrompt::with_height(
+            format!("flow-session-{session_id}"),
+            Some(command.clone()),
+            self.focus_handle.clone(),
+            submit_callback,
+            std::sync::Arc::clone(&self.theme),
+            std::sync::Arc::new(self.config.clone()),
+            Some(term_height),
+        ) {
+            Ok(mut term) => {
+                // Codex/Claude TUIs own Escape (interrupt); backgrounding is
+                // ⌘⇧D. Never let Escape cancel the session.
+                term.escape_cancels = false;
+                let entity = cx.new(|_| term);
+                let meta = crate::flows::session::FlowSessionMeta {
+                    id: session_id,
+                    flow_id: flow.id.clone(),
+                    flow_name: flow.name.clone(),
+                    friendly_name: flow.friendly_name(),
+                    origin: flow.origin_label().to_string(),
+                    engine: flow.engine.clone(),
+                    command,
+                    initial_task,
+                    state: crate::flows::session::SessionState::Working,
+                    started_at: std::time::Instant::now(),
+                };
+                self.flow_sessions.push((meta, entity));
+                self.open_flow_session(session_id, cx);
+                self.start_flow_ux_tick(cx);
+            }
+            Err(err) => {
+                self.toast_manager.push(
+                    crate::components::toast::Toast::error(
+                        format!("Couldn't start {}: {err}", flow.friendly_name()),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(4000)),
+                );
+                cx.notify();
+            }
+        }
+    }
+
+    /// Show an existing session (same PTY entity — this is the reattach).
+    pub(crate) fn open_flow_session(&mut self, session_id: u64, cx: &mut Context<Self>) {
+        if self.flow_session_index(session_id).is_none() {
+            return;
+        }
+        self.current_view = AppView::FlowSessionView { session_id };
+        self.focused_input = FocusedInput::None;
+        self.pending_focus = Some(FocusTarget::TermPrompt);
+        cx.spawn(async move |_this, _cx| {
+            crate::window_resize::resize_to_view_sync(crate::window_resize::ViewType::TermPrompt, 0);
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Leave the session view without touching the process. The session
+    /// stays in `flow_sessions` and reappears under Active.
+    pub(crate) fn background_flow_session(&mut self, cx: &mut Context<Self>) {
+        let AppView::FlowSessionView { session_id } = self.current_view else {
+            return;
+        };
+        tracing::info!(
+            target: "script_kit::flows",
+            event = "flow_session_backgrounded",
+            session_id,
+            "Backgrounding flow session (process stays alive)"
+        );
+        self.current_view = AppView::FlowUxView {
+            variant: crate::flows::model::FlowUxVariant::Flash,
+            filter: String::new(),
+            selected_index: 0,
+            inline_run: None,
+        };
+        self.focused_input = FocusedInput::MainFilter;
+        cx.notify();
+    }
+
+    /// Explicit stop (⌘K verb): kill the PTY process group and mark Done.
+    /// The row stays visible with its final state until dismissed.
+    pub(crate) fn stop_flow_session(&mut self, session_id: u64, cx: &mut Context<Self>) {
+        let Some(index) = self.flow_session_index(session_id) else {
+            return;
+        };
+        let entity = self.flow_sessions[index].1.clone();
+        entity.update(cx, |term, _cx| {
+            let _ = term.terminal.kill();
+        });
+        self.flow_sessions[index].0.state = crate::flows::session::SessionState::Done(None);
+        cx.notify();
+    }
+
+    /// Remove an ended session row (⌘K "Dismiss").
+    pub(crate) fn dismiss_flow_session(&mut self, session_id: u64, cx: &mut Context<Self>) {
+        if let Some(index) = self.flow_session_index(session_id) {
+            if !self.flow_sessions[index].0.state.is_live() {
+                self.flow_sessions.remove(index);
+                cx.notify();
+            }
+        }
+    }
+
+    /// Run once in the background via the run registry (`--events`).
+    pub(crate) fn flow_desk_run_once(
+        &mut self,
+        flow: &crate::flows::model::FlowDescriptor,
         cx: &mut Context<Self>,
     ) -> u64 {
         let cwd = self.flow_ux_cwd();
@@ -92,64 +328,178 @@ impl ScriptListApp {
             &flow.name,
             &flow.path,
             &cwd,
-            variant,
-            engagement,
+            crate::flows::model::FlowUxVariant::Flash,
+            crate::flows::model::EngagementMode::Background,
             Vec::new(),
             std::time::Instant::now(),
         );
         self.start_flow_ux_tick(cx);
+        self.toast_manager.push(
+            crate::components::toast::Toast::success(
+                format!("{} running once in background", flow.friendly_name()),
+                &self.theme,
+            )
+            .duration_ms(Some(1800)),
+        );
         cx.notify();
         run_id
     }
 
-    fn flow_ux_selected_flow(
-        filter: &str,
-        selected_index: usize,
-        roster: &crate::flows::catalog::RosterEntry,
-    ) -> Option<crate::flows::model::FlowDescriptor> {
-        crate::flows::catalog::filter_flows(&roster.flows, filter)
-            .get(selected_index)
-            .map(|flow| (*flow).clone())
+    /// Start the plain-English creation path in a conversation session.
+    pub(crate) fn start_flow_create_session(&mut self, cx: &mut Context<Self>) {
+        let create = crate::flows::model::FlowDescriptor {
+            id: "builtin:create-flow".to_string(),
+            path: String::new(),
+            source: crate::flows::model::FlowSource::Global,
+            name: "flow-create".to_string(),
+            description: Some("Create a new Markdown flow".to_string()),
+            engine: "md".to_string(),
+            engine_source: None,
+            inputs: Vec::new(),
+            is_workflow: false,
+            interactive: true,
+            mtime_ms: 0,
+            origin: Some("mdflow".to_string()),
+            wrapper_command: None,
+        };
+        // `md create` is itself interactive; reuse the session plumbing with
+        // a bespoke command (no --_interactive suffix needed).
+        let cwd = self.flow_ux_cwd();
+        self.flow_session_counter += 1;
+        let session_id = self.flow_session_counter;
+        let command = format!(
+            "cd {} && SCRIPT_KIT_FLOW_SESSION_ID={session_id} md create",
+            crate::flows::session::shell_quote(&cwd)
+        );
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(move |_id, _value| {});
+        let term_height = crate::window_resize::layout::MAX_HEIGHT
+            - px(crate::window_resize::layout::FOOTER_HEIGHT);
+        match crate::term_prompt::TermPrompt::with_height(
+            format!("flow-session-{session_id}"),
+            Some(command.clone()),
+            self.focus_handle.clone(),
+            submit_callback,
+            std::sync::Arc::clone(&self.theme),
+            std::sync::Arc::new(self.config.clone()),
+            Some(term_height),
+        ) {
+            Ok(mut term) => {
+                term.escape_cancels = false;
+                let entity = cx.new(|_| term);
+                let meta = crate::flows::session::FlowSessionMeta {
+                    id: session_id,
+                    flow_id: create.id.clone(),
+                    flow_name: create.name.clone(),
+                    friendly_name: "Create Flow".to_string(),
+                    origin: "mdflow".to_string(),
+                    engine: create.engine.clone(),
+                    command,
+                    initial_task: None,
+                    state: crate::flows::session::SessionState::Working,
+                    started_at: std::time::Instant::now(),
+                };
+                self.flow_sessions.push((meta, entity));
+                self.open_flow_session(session_id, cx);
+                self.start_flow_ux_tick(cx);
+            }
+            Err(err) => {
+                self.toast_manager.push(
+                    crate::components::toast::Toast::error(
+                        format!("Couldn't start flow creation: {err}"),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(4000)),
+                );
+                cx.notify();
+            }
+        }
     }
 
-    /// Cycle ⌥←/⌥→ between the main-window variants (Mission Control lives
-    /// in the detached manager, so the ring here is Flash→Dispatch→Lens).
-    fn flow_ux_cycle_variant(
-        current: crate::flows::model::FlowUxVariant,
-        forward: bool,
-    ) -> crate::flows::model::FlowUxVariant {
-        use crate::flows::model::FlowUxVariant;
-        let mut next = if forward { current.next() } else { current.prev() };
-        if next == FlowUxVariant::MissionControl {
-            next = if forward { next.next() } else { next.prev() };
+    // ------------------------------------------------------------------
+    // Tab flow router entry (from the main menu input)
+    // ------------------------------------------------------------------
+
+    /// Route free text typed in the main menu to a flow (Tab). Confident →
+    /// start the conversation with the text as the first task. Otherwise →
+    /// open the desk with the text as the filter so the user picks (the
+    /// Create Flow row is always present for the no-match case).
+    pub(crate) fn route_text_to_flow(
+        &mut self,
+        text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let corpus = self.flow_desk_corpus();
+        let decision = crate::flows::router::route(&text, &corpus);
+        match decision {
+            crate::flows::router::RouteDecision::AutoStart { flow } => {
+                tracing::info!(
+                    target: "script_kit::flows",
+                    event = "flow_router_auto_start",
+                    flow_id = %flow.id,
+                    query_len = text.len(),
+                    "Tab router: confident match, starting conversation"
+                );
+                self.start_flow_session(&flow, Some(text), cx);
+            }
+            crate::flows::router::RouteDecision::Candidates { .. }
+            | crate::flows::router::RouteDecision::NoMatch => {
+                tracing::info!(
+                    target: "script_kit::flows",
+                    event = "flow_router_candidates",
+                    query_len = text.len(),
+                    "Tab router: opening desk with candidates"
+                );
+                let cwd = self.flow_ux_cwd();
+                crate::flows::catalog::flow_catalog().refresh(&cwd);
+                self.open_builtin_filterable_view(
+                    AppView::FlowUxView {
+                        variant: crate::flows::model::FlowUxVariant::Flash,
+                        filter: text.clone(),
+                        selected_index: 0,
+                        inline_run: None,
+                    },
+                    "Search flows...",
+                    false,
+                    cx,
+                );
+                // Seed the visible input with the routed text so the desk
+                // filter and the header input agree (cwd-pick pattern).
+                self.suppress_filter_events = true;
+                self.gpui_input_state.update(cx, |state, cx| {
+                    state.set_value(text.clone(), window, cx);
+                    let len = text.len();
+                    state.set_selection(len, len, window, cx);
+                });
+                self.suppress_filter_events = false;
+                self.start_flow_ux_tick(cx);
+            }
         }
-        next
     }
+
+    // ------------------------------------------------------------------
+    // Desk render
+    // ------------------------------------------------------------------
 
     fn render_flow_ux(
         &mut self,
-        variant: crate::flows::model::FlowUxVariant,
+        _variant: crate::flows::model::FlowUxVariant,
         filter: String,
         selected_index: usize,
-        inline_run: Option<u64>,
+        _inline_run: Option<u64>,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        use crate::flows::model::{EngagementMode, FlowUxVariant};
-
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let list_colors = crate::list_item::ListItemColors::from_theme(&self.theme);
         let cwd = self.flow_ux_cwd();
         let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
-        let filtered: Vec<crate::flows::model::FlowDescriptor> =
-            crate::flows::catalog::filter_flows(&roster.flows, &filter)
-                .into_iter()
-                .cloned()
-                .collect();
-        let filtered_len = filtered.len();
+        let rows = self.flow_desk_rows(&filter);
+        let row_count = rows.len();
         let registry = crate::flows::run_registry::flow_run_registry();
 
         // ------------------------------------------------------------------
-        // Key handler (shared grammar, protocol §5)
+        // Key handler — the Conversation Desk grammar.
         // ------------------------------------------------------------------
         let handle_key = cx.listener(
             move |this: &mut Self,
@@ -160,36 +510,22 @@ impl ScriptListApp {
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
                 let has_shift = event.keystroke.modifiers.shift;
-                let has_alt = event.keystroke.modifiers.alt;
 
                 let view_state = if let AppView::FlowUxView {
-                    variant,
                     filter,
                     selected_index,
-                    inline_run,
+                    ..
                 } = &this.current_view
                 {
-                    Some((*variant, filter.clone(), *selected_index, *inline_run))
+                    Some((filter.clone(), *selected_index))
                 } else {
                     None
                 };
-                let Some((variant, current_filter, current_selected, inline_run)) = view_state
-                else {
+                let Some((current_filter, current_selected)) = view_state else {
                     return;
                 };
 
-                // Esc backgrounds Flash's engaged run; never cancels it.
                 if is_key_escape(key) && !this.show_actions_popup {
-                    if let Some(run_id) = inline_run {
-                        crate::flows::run_registry::flow_run_registry()
-                            .set_engagement(run_id, EngagementMode::Background);
-                        if let AppView::FlowUxView { inline_run, .. } = &mut this.current_view {
-                            *inline_run = None;
-                        }
-                        cx.notify();
-                        cx.stop_propagation();
-                        return;
-                    }
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -203,21 +539,8 @@ impl ScriptListApp {
                     return;
                 }
 
-                // ⌥←/⌥→ cycles Flash → Dispatch → Lens in place.
-                if has_alt && (key == "left" || key == "right") {
-                    let next = Self::flow_ux_cycle_variant(variant, key == "right");
-                    if let AppView::FlowUxView { variant, .. } = &mut this.current_view {
-                        *variant = next;
-                    }
-                    cx.notify();
-                    cx.stop_propagation();
-                    return;
-                }
-
-                let cwd = this.flow_ux_cwd();
-                let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
-                let current_len =
-                    crate::flows::catalog::filter_flows(&roster.flows, &current_filter).len();
+                let rows = this.flow_desk_rows(&current_filter);
+                let current_len = rows.len();
 
                 if is_key_up(key) {
                     if current_selected > 0 {
@@ -247,81 +570,37 @@ impl ScriptListApp {
                 }
 
                 if is_key_enter(key) {
-                    let Some(flow) =
-                        Self::flow_ux_selected_flow(&current_filter, current_selected, &roster)
-                    else {
+                    let Some(row) = rows.get(current_selected).cloned() else {
                         cx.stop_propagation();
                         return;
                     };
-
-                    // Cmd+Enter: launch and focus the Flow Manager.
-                    if has_cmd {
-                        let run_id = this.flow_ux_launch(
-                            &flow,
-                            variant,
-                            EngagementMode::ManagerFocused,
-                            cx,
-                        );
-                        crate::flows::run_registry::flow_run_registry().select(run_id);
-                        cx.defer(move |cx| {
-                            let _ = crate::flows::manager_window::open_flow_manager_window(cx);
-                        });
-                        cx.stop_propagation();
-                        return;
-                    }
-
-                    // Shift+Enter: background launch, stay put.
-                    if has_shift {
-                        this.flow_ux_launch(&flow, variant, EngagementMode::Background, cx);
-                        this.toast_manager.push(
-                            crate::components::toast::Toast::success(
-                                format!("{} running in background", flow.name),
-                                &this.theme,
-                            )
-                            .duration_ms(Some(1800)),
-                        );
-                        cx.stop_propagation();
-                        return;
-                    }
-
-                    match variant {
-                        FlowUxVariant::Flash => {
-                            let run_id = this.flow_ux_launch(
-                                &flow,
-                                variant,
-                                EngagementMode::Inline,
-                                cx,
-                            );
-                            if let AppView::FlowUxView { inline_run, .. } =
-                                &mut this.current_view
-                            {
-                                *inline_run = Some(run_id);
+                    match row {
+                        FlowDeskRow::Session(session_id) => {
+                            this.open_flow_session(session_id, cx);
+                        }
+                        FlowDeskRow::Flow(flow) => {
+                            if has_shift || flow.is_workflow {
+                                // Workflows (DAGs) are run-once by nature;
+                                // ⇧↵ is explicit run-once for anything.
+                                this.flow_desk_run_once(&flow, cx);
+                            } else {
+                                let task = if current_filter.trim().is_empty() {
+                                    None
+                                } else {
+                                    // Typed text that found this flow rides
+                                    // along as the first prompt only when it
+                                    // is more than the flow's own name.
+                                    let trimmed = current_filter.trim().to_lowercase();
+                                    let is_just_name = flow.name.to_lowercase() == trimmed
+                                        || flow.friendly_name().to_lowercase() == trimmed;
+                                    (!is_just_name).then(|| current_filter.trim().to_string())
+                                };
+                                this.start_flow_session(&flow, task, cx);
                             }
                         }
-                        FlowUxVariant::Dispatch => {
-                            this.flow_ux_launch(&flow, variant, EngagementMode::Background, cx);
-                            this.toast_manager.push(
-                                crate::components::toast::Toast::success(
-                                    format!("{} dispatched — ⌘↵ opens the manager", flow.name),
-                                    &this.theme,
-                                )
-                                .duration_ms(Some(2200)),
-                            );
+                        FlowDeskRow::CreateFlow => {
+                            this.start_flow_create_session(cx);
                         }
-                        FlowUxVariant::Lens => {
-                            let run_id = this.flow_ux_launch(
-                                &flow,
-                                variant,
-                                EngagementMode::ManagerFocused,
-                                cx,
-                            );
-                            crate::flows::run_registry::flow_run_registry().select(run_id);
-                            cx.defer(move |cx| {
-                                let _ =
-                                    crate::flows::manager_window::open_flow_manager_window(cx);
-                            });
-                        }
-                        FlowUxVariant::MissionControl => {}
                     }
                     cx.notify();
                     cx.stop_propagation();
@@ -332,11 +611,11 @@ impl ScriptListApp {
         // ------------------------------------------------------------------
         // List element
         // ------------------------------------------------------------------
-        // Always name the resolved cwd: "no flows" is meaningless unless the
-        // user can see WHICH directory was searched.
         let cwd_display = Self::flow_ux_cwd_display(&cwd);
         let empty_message = match roster.status {
-            crate::flows::catalog::RosterStatus::Loading => format!("Loading flows in {cwd_display}…"),
+            crate::flows::catalog::RosterStatus::Loading => {
+                format!("Loading flows in {cwd_display}…")
+            }
             crate::flows::catalog::RosterStatus::Legacy => {
                 "mdflow is pre-protocol — upgrade with: npm i -g mdflow".to_string()
             }
@@ -344,49 +623,68 @@ impl ScriptListApp {
                 Some(warning) => format!("Flow roster unavailable — {warning}"),
                 None => format!("Flow roster unavailable in {cwd_display}"),
             },
-            crate::flows::catalog::RosterStatus::Ready => {
-                if filter.is_empty() {
-                    format!("No flows in {cwd_display} — create one with: md create")
-                } else {
-                    "No flows match your filter".to_string()
-                }
-            }
+            crate::flows::catalog::RosterStatus::Ready => String::new(),
         };
 
-        let list_element: gpui::AnyElement = if filtered_len == 0 {
-            let color_resolver =
-                crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
-            let typography_resolver = crate::theme::TypographyResolver::new_theme_first(
-                &self.theme,
-                self.current_design,
-            );
-            let empty_font_family = typography_resolver.primary_font().to_string();
-            crate::list_item::EmptyState::new(
-                empty_message,
-                color_resolver.empty_text_color(),
-                &empty_font_family,
-            )
-            .icon(crate::designs::icon_variations::IconName::Terminal)
-            .into_element()
-        } else {
-            let rows = filtered.clone();
+        let list_element: gpui::AnyElement = {
+            let display_rows = rows.clone();
             let hovered = self.hovered_index;
-            uniform_list("flow-ux-list", filtered_len, move |visible_range, _window, _cx| {
+            let session_meta: Vec<crate::flows::session::FlowSessionMeta> = self
+                .flow_sessions
+                .iter()
+                .map(|(meta, _)| meta.clone())
+                .collect();
+            uniform_list("flow-desk-list", row_count, move |visible_range, _window, _cx| {
                 visible_range
                     .map(|ix| {
-                        let flow = &rows[ix];
                         let is_selected = ix == selected_index;
                         let is_hovered = hovered == Some(ix);
-                        let source_label = flow.source.label();
-                        let description = match &flow.description {
-                            Some(description) => {
-                                format!("{description} · {} · {source_label}", flow.engine)
+                        let (title, description, icon) = match &display_rows[ix] {
+                            FlowDeskRow::Session(session_id) => {
+                                let meta =
+                                    session_meta.iter().find(|m| m.id == *session_id);
+                                match meta {
+                                    Some(meta) => (
+                                        meta.friendly_name.clone(),
+                                        format!(
+                                            "{} · {} · {} · conversation",
+                                            meta.state.label(),
+                                            meta.elapsed_label(),
+                                            meta.engine,
+                                        ),
+                                        if meta.state.is_live() { "💬" } else { "◽" },
+                                    ),
+                                    None => (
+                                        "Session".to_string(),
+                                        "ended".to_string(),
+                                        "◽",
+                                    ),
+                                }
                             }
-                            None => format!("{} · {source_label}", flow.engine),
+                            FlowDeskRow::Flow(flow) => {
+                                let purpose = flow
+                                    .description
+                                    .clone()
+                                    .unwrap_or_else(|| flow.name.clone());
+                                (
+                                    flow.friendly_name(),
+                                    format!(
+                                        "{purpose} · {} · {}",
+                                        flow.engine,
+                                        flow.origin_label()
+                                    ),
+                                    if flow.is_workflow { "🧩" } else { "⚡" },
+                                )
+                            }
+                            FlowDeskRow::CreateFlow => (
+                                "Create a flow…".to_string(),
+                                "Describe an agent in plain English (md create)"
+                                    .to_string(),
+                                "✚",
+                            ),
                         };
-                        let icon = if flow.is_workflow { "🧩" } else { "⚡" };
                         div().id(ix).cursor_pointer().child(
-                            ListItem::new(flow.name.clone(), list_colors)
+                            ListItem::new(title, list_colors)
                                 .description_opt(Some(description))
                                 .icon(icon)
                                 .selected(is_selected)
@@ -402,74 +700,65 @@ impl ScriptListApp {
         };
 
         let list_scrollbar =
-            self.builtin_uniform_list_scrollbar(&self.flow_ux_scroll_handle, filtered_len, 8);
-        let list_pane = div()
+            self.builtin_uniform_list_scrollbar(&self.flow_ux_scroll_handle, row_count, 8);
+        let mut list_pane = div()
             .relative()
             .w_full()
             .h_full()
             .min_h(px(0.))
             .child(list_element)
-            .child(list_scrollbar)
-            .into_any_element();
+            .child(list_scrollbar);
+        if !empty_message.is_empty() && roster.flows.is_empty() {
+            // Roster problems surface as a banner above the (package) rows
+            // instead of replacing the whole list — package flows still work
+            // when a repo has none of its own.
+            list_pane = div()
+                .relative()
+                .w_full()
+                .h_full()
+                .min_h(px(0.))
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .px_3()
+                        .py_1()
+                        .text_xs()
+                        .text_color(rgb(chrome.text_muted_hex))
+                        .child(empty_message),
+                )
+                .child(div().flex_1().min_h(px(0.)).child(list_pane));
+        }
+        let main = list_pane.into_any_element();
 
         // ------------------------------------------------------------------
-        // Variant-specific main content
+        // Footer + shell (Conversation Desk contract: primary verbs only).
         // ------------------------------------------------------------------
-        let main: gpui::AnyElement = match variant {
-            FlowUxVariant::Flash => {
-                if let Some(run) = inline_run.and_then(|id| registry.get(id)) {
-                    self.render_flow_ux_inline_run(&run, &chrome)
-                } else {
-                    list_pane
-                }
-            }
-            FlowUxVariant::Dispatch => list_pane,
-            FlowUxVariant::Lens => {
-                let preview = self.render_flow_ux_lens_preview(
-                    Self::flow_ux_selected_flow(&filter, selected_index, &roster),
-                    &cwd,
-                    &chrome,
-                );
-                self.render_builtin_split_main_content(list_pane, preview)
-            }
-            FlowUxVariant::MissionControl => list_pane,
-        };
-
-        // ------------------------------------------------------------------
-        // Footer + shell
-        // ------------------------------------------------------------------
+        let live_sessions = self
+            .flow_sessions
+            .iter()
+            .filter(|(meta, _)| meta.state.is_live())
+            .count();
         let active_runs = registry.active_count();
-        let hints: Vec<gpui::SharedString> = match variant {
-            FlowUxVariant::Flash if inline_run.is_some() => vec![
-                gpui::SharedString::from("Esc Background"),
-                gpui::SharedString::from("⌘↵ Manager"),
-            ],
-            FlowUxVariant::Flash => vec![
-                gpui::SharedString::from("↵ Run"),
-                gpui::SharedString::from("⇧↵ Background"),
-                gpui::SharedString::from("⌘↵ Manager"),
-                gpui::SharedString::from("Esc Back"),
-            ],
-            FlowUxVariant::Dispatch => vec![
-                gpui::SharedString::from("↵ Dispatch"),
-                gpui::SharedString::from("⌘↵ Manager"),
-                gpui::SharedString::from("Esc Back"),
-            ],
-            _ => vec![
-                gpui::SharedString::from("↵ Run + Manager"),
-                gpui::SharedString::from("⇧↵ Background"),
-                gpui::SharedString::from("Esc Back"),
-            ],
-        };
+        let hints: Vec<gpui::SharedString> = vec![
+            gpui::SharedString::from("↵ Converse"),
+            gpui::SharedString::from("⇧↵ Run once"),
+            gpui::SharedString::from("⌘K Actions"),
+            gpui::SharedString::from("Esc Back"),
+        ];
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
             hints, None,
         ));
 
-        let count_label = if active_runs > 0 {
-            format!("{filtered_len} flows · {active_runs} running")
-        } else {
-            format!("{filtered_len} flows")
-        };
+        let mut count_parts: Vec<String> = Vec::new();
+        if live_sessions > 0 {
+            count_parts.push(format!("{live_sessions} active"));
+        }
+        if active_runs > 0 {
+            count_parts.push(format!("{active_runs} running"));
+        }
+        count_parts.push(format!("{} flows", row_count.saturating_sub(1)));
+        let count_label = count_parts.join(" · ");
         let cwd_chip = div()
             .flex_none()
             .whitespace_nowrap()
@@ -477,16 +766,8 @@ impl ScriptListApp {
             .text_color(rgb(chrome.text_secondary_hex))
             .child(cwd_display.clone())
             .into_any_element();
-        let variant_chip = div()
-            .flex_none()
-            .whitespace_nowrap()
-            .text_sm()
-            .text_color(rgb(chrome.accent_hex))
-            .child(format!("{} · ⌥←→", variant.display_name()))
-            .into_any_element();
         let trailing = vec![
             cwd_chip,
-            variant_chip,
             self.render_builtin_main_input_count_label(count_label),
         ];
 
@@ -515,245 +796,157 @@ impl ScriptListApp {
         )
     }
 
-    /// Flash's engaged run pane: live output where the list was.
-    fn render_flow_ux_inline_run(
-        &self,
-        run: &crate::flows::run_registry::FlowRun,
-        chrome: &crate::theme::AppChromeColors,
+    // ------------------------------------------------------------------
+    // Session render (FlowSessionView)
+    // ------------------------------------------------------------------
+
+    pub(crate) fn render_flow_session(
+        &mut self,
+        session_id: u64,
+        cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        // Interleaved stdout+stderr: a late stderr diagnostic must show in
-        // the inline pane, not hide behind earlier stdout.
-        let lines: Vec<String> = run.merged_tail.lines().map(str::to_string).collect();
-        let shown: Vec<String> = lines.iter().rev().take(18).rev().cloned().collect();
-        let status_line = format!(
-            "{} — {} · {}ms",
-            run.flow_name,
-            run.display_status(),
-            run.elapsed_ms()
-        );
-        div()
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let Some(index) = self.flow_session_index(session_id) else {
+            // Session vanished (dismissed elsewhere) — fall back to the desk.
+            return self.render_flow_ux(
+                crate::flows::model::FlowUxVariant::Flash,
+                String::new(),
+                0,
+                None,
+                cx,
+            );
+        };
+        let (meta, entity) = {
+            let (meta, entity) = &self.flow_sessions[index];
+            (meta.clone(), entity.clone())
+        };
+
+        let header = div()
             .flex()
-            .flex_col()
-            .flex_1()
-            .min_h(px(0.))
-            .w_full()
-            .overflow_hidden()
-            .p_3()
+            .flex_row()
+            .items_center()
             .gap_2()
+            .px_3()
+            .py_2()
             .child(
                 div()
                     .text_sm()
                     .text_color(rgb(chrome.text_primary_hex))
-                    .child(status_line),
+                    .child(format!("💬 {}", meta.friendly_name)),
             )
             .child(
                 div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_secondary_hex))
+                    .child(format!("{} · {}", meta.engine, meta.origin)),
+            )
+            .child(div().flex_1())
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(if meta.state.is_live() {
+                        rgb(chrome.accent_hex)
+                    } else {
+                        rgb(chrome.text_muted_hex)
+                    })
+                    .child(format!("{} · {}", meta.state.label(), meta.elapsed_label())),
+            );
+
+        let hints: Vec<gpui::SharedString> = vec![
+            gpui::SharedString::from("⌘⇧D Background"),
+            gpui::SharedString::from("⌘K Actions"),
+        ];
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            hints, None,
+        ));
+
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(rgb(chrome.text_primary_hex))
+                .font_family(self.theme_font_family())
+                .key_context("flow_session"),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: crate::components::main_view_chrome::MainViewHeaderChrome {
+                    context: None,
+                    input: header.into_any_element(),
+                    padding_x: shell.header_padding_x,
+                    padding_y: shell.header_padding_y,
+                    gap: shell.header_gap,
+                },
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: div()
                     .flex()
                     .flex_col()
                     .flex_1()
                     .min_h(px(0.))
-                    .p_2()
-                    .rounded_md()
-                    .bg(rgba(chrome.preview_surface_rgba))
-                    .overflow_hidden()
-                    .children(shown.into_iter().map(|line| {
-                        div()
-                            .text_xs()
-                            .text_color(rgb(chrome.text_secondary_hex))
-                            .child(line)
-                    })),
-            )
-            .into_any_element()
-    }
-
-    /// Lens preview: FREE resolved-command view via `md explain --json`.
-    fn render_flow_ux_lens_preview(
-        &self,
-        flow: Option<crate::flows::model::FlowDescriptor>,
-        cwd: &str,
-        chrome: &crate::theme::AppChromeColors,
-    ) -> gpui::AnyElement {
-        let container = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .p_3()
-            .h_full()
-            .min_h(px(0.))
-            .overflow_hidden()
-            .bg(rgba(chrome.preview_surface_rgba));
-
-        let Some(flow) = flow else {
-            return container
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(chrome.text_muted_hex))
-                        .child("Select a flow to preview it."),
-                )
-                .into_any_element();
-        };
-
-        match crate::flows::explain_cache::explain_cache().state_for(&flow, cwd) {
-            crate::flows::explain_cache::ExplainState::Loading => container
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(chrome.text_muted_hex))
-                        .child(format!("Resolving {}…", flow.name)),
-                )
-                .into_any_element(),
-            crate::flows::explain_cache::ExplainState::Failed(message) => container
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(chrome.text_muted_hex))
-                        .child(format!("Preview unavailable: {message}")),
-                )
-                .into_any_element(),
-            crate::flows::explain_cache::ExplainState::Ready(info) => {
-                let command_line = format!("{} {}", info.command, info.args.join(" "));
-                let prompt_lines: Vec<String> = info
-                    .prompt
-                    .lines()
-                    .take(14)
-                    .map(str::to_string)
-                    .collect();
-                let inputs_line = if info.inputs.is_empty() {
-                    None
-                } else {
-                    Some(format!(
-                        "Inputs: {}",
-                        info.inputs
-                            .iter()
-                            .map(|input| {
-                                // Password inputs surface by name only —
-                                // values never render anywhere (protocol §6).
-                                format!("{} ({:?})", input.name, input.input_type)
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ))
-                };
-                container
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(chrome.text_primary_hex))
-                            .child(format!(
-                                "{} · {} · ~{} tokens",
-                                info.engine, flow.name, info.prompt_tokens_estimate
-                            )),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(chrome.accent_hex))
-                            .child(command_line),
-                    )
-                    .children(
-                        info.warnings
-                            .iter()
-                            .map(|warning| {
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(chrome.text_muted_hex))
-                                    .child(format!("⚠ {warning}"))
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                    .children(inputs_line.map(|line| {
-                        div()
-                            .text_xs()
-                            .text_color(rgb(chrome.text_secondary_hex))
-                            .child(line)
-                    }))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_h(px(0.))
-                            .mt_1()
-                            .p_2()
-                            .rounded_md()
-                            .bg(rgba(chrome.panel_surface_rgba))
-                            .overflow_hidden()
-                            .children(prompt_lines.into_iter().map(|line| {
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(chrome.text_secondary_hex))
-                                    .child(line)
-                            })),
-                    )
-                    .into_any_element()
-            }
-        }
+                    .w_full()
+                    .child(entity)
+                    .into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
+        )
     }
 
     /// `flowUx` automation snapshot for getState (protocol §6).
     pub(crate) fn flow_ux_automation_snapshot(&self) -> serde_json::Value {
-        let (active_variant, selected_flow_id, preview) = match &self.current_view {
+        let (desk_active, selected_flow_id) = match &self.current_view {
             AppView::FlowUxView {
-                variant,
                 filter,
                 selected_index,
                 ..
             } => {
-                let cwd = self.flow_ux_cwd();
-                let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
-                let selected = Self::flow_ux_selected_flow(filter, *selected_index, &roster);
-                (
-                    Some(*variant),
-                    selected.as_ref().map(|flow| flow.id.clone()),
-                    selected.map(|flow| (flow.id.clone(), *variant)),
-                )
+                let rows = self.flow_desk_rows(filter);
+                let selected = rows.get(*selected_index).and_then(|row| match row {
+                    FlowDeskRow::Flow(flow) => Some(flow.id.clone()),
+                    FlowDeskRow::Session(id) => self
+                        .flow_sessions
+                        .iter()
+                        .find(|(meta, _)| meta.id == *id)
+                        .map(|(meta, _)| meta.flow_id.clone()),
+                    FlowDeskRow::CreateFlow => Some("builtin:create-flow".to_string()),
+                });
+                (true, selected)
             }
-            _ => (None, None, None),
+            AppView::FlowSessionView { session_id } => (
+                false,
+                self.flow_sessions
+                    .iter()
+                    .find(|(meta, _)| meta.id == *session_id)
+                    .map(|(meta, _)| meta.flow_id.clone()),
+            ),
+            _ => (false, None),
         };
         let cwd = self.flow_ux_cwd();
         let roster_entry = crate::flows::catalog::flow_catalog().roster_for(&cwd);
-        let (manager_visible, manager_focused) =
-            crate::flows::manager_window::manager_automation_state();
-        // Lens previews report the REAL explain-cache state so receipts can
-        // prove the free `md explain --json` round trip, not just selection.
-        let explain_info = preview.as_ref().and_then(|(flow_id, variant)| {
-            if *variant != crate::flows::model::FlowUxVariant::Lens {
-                return None;
-            }
-            let flow = roster_entry.flows.iter().find(|f| &f.id == flow_id)?.clone();
-            match crate::flows::explain_cache::explain_cache().state_for(&flow, &cwd) {
-                crate::flows::explain_cache::ExplainState::Ready(info) => Some((true, Some(info))),
-                crate::flows::explain_cache::ExplainState::Loading => Some((false, None)),
-                crate::flows::explain_cache::ExplainState::Failed(_) => Some((false, None)),
-            }
-        });
-        let preview_valid = |variant: &crate::flows::model::FlowUxVariant| -> bool {
-            match (&explain_info, variant) {
-                (Some((valid, _)), _) => *valid,
-                // Lens with no cache lookup possible (flow vanished from the
-                // roster) is not a proven preview.
-                (None, crate::flows::model::FlowUxVariant::Lens) => false,
-                (None, _) => true,
-            }
-        };
-        let fingerprint: Option<&str> = explain_info
-            .as_ref()
-            .and_then(|(_, info)| info.as_ref())
-            .and_then(|info| info.config_fingerprint.as_deref());
+        let sessions: Vec<crate::flows::automation::SessionSnapshot> = self
+            .flow_sessions
+            .iter()
+            .map(|(meta, _)| crate::flows::automation::SessionSnapshot {
+                id: meta.id,
+                flow_id: meta.flow_id.clone(),
+                flow_name: meta.flow_name.clone(),
+                state: meta.state.label(),
+                live: meta.state.is_live(),
+                elapsed_ms: meta.started_at.elapsed().as_millis() as u64,
+            })
+            .collect();
         crate::flows::automation::flow_ux_state(crate::flows::automation::FlowUxSnapshotInputs {
-            active_variant,
+            active_variant: desk_active.then_some(crate::flows::model::FlowUxVariant::Flash),
             selected_flow_id: selected_flow_id.as_deref(),
             roster: Some((&roster_entry, cwd.as_str())),
-            preview: preview.as_ref().map(|(flow_id, variant)| {
-                crate::flows::automation::PreviewSnapshot {
-                    flow_id,
-                    fingerprint,
-                    valid: preview_valid(variant),
-                }
-            }),
-            manager_visible,
-            manager_focused_run_id: manager_focused,
+            preview: None,
+            manager_visible: false,
+            manager_focused_run_id: None,
+            sessions,
         })
     }
 }

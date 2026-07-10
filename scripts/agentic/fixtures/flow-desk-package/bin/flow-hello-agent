@@ -1,0 +1,9 @@
+#!/bin/sh
+# Fake bun-linked wrapper for the desk probe's package flow. Mimics an
+# interactive engine session: prints a banner, then idles reading stdin so
+# the PTY session stays live until explicitly stopped (like a real TUI).
+echo "HELLO_AGENT_SESSION_START args=$*"
+echo "session=${SCRIPT_KIT_FLOW_SESSION_ID:-none}"
+while IFS= read -r line; do
+  echo "HELLO_AGENT_ECHO: $line"
+done

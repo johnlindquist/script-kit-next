@@ -236,9 +236,25 @@ fn parse_roster_output(stdout: &str) -> RosterEntry {
     }
 }
 
+/// The full desk corpus for a cwd: `md roster` flows plus the installed
+/// flows package. Package flows lose to a roster flow with the same name
+/// (a project override of a packaged flow should win locally).
+pub fn desk_flows(roster: &RosterEntry) -> Vec<FlowDescriptor> {
+    let mut flows: Vec<FlowDescriptor> = roster.flows.iter().cloned().collect();
+    let roster_names: std::collections::HashSet<&str> =
+        roster.flows.iter().map(|f| f.name.as_str()).collect();
+    for flow in crate::flows::package_source::package_flows() {
+        if !roster_names.contains(flow.name.as_str()) {
+            flows.push(flow);
+        }
+    }
+    flows
+}
+
 /// Simple case-insensitive subsequence filter for roster rows, ranked:
-/// name prefix > name contains > description contains. Frecency integration
-/// can replace this without touching renderers.
+/// name prefix > name contains > description contains. The friendly agent
+/// name matches too, so "gmail" finds `flow-gmail` shown as "Gmail".
+/// Frecency integration can replace this without touching renderers.
 pub fn filter_flows<'a>(flows: &'a [FlowDescriptor], query: &str) -> Vec<&'a FlowDescriptor> {
     let query = query.trim().to_lowercase();
     if query.is_empty() {
@@ -248,14 +264,15 @@ pub fn filter_flows<'a>(flows: &'a [FlowDescriptor], query: &str) -> Vec<&'a Flo
         .iter()
         .filter_map(|flow| {
             let name = flow.name.to_lowercase();
+            let friendly = flow.friendly_name().to_lowercase();
             let description = flow
                 .description
                 .as_deref()
                 .unwrap_or_default()
                 .to_lowercase();
-            if name.starts_with(&query) {
+            if name.starts_with(&query) || friendly.starts_with(&query) {
                 Some((0u8, flow))
-            } else if name.contains(&query) {
+            } else if name.contains(&query) || friendly.contains(&query) {
                 Some((1u8, flow))
             } else if description.contains(&query) {
                 Some((2u8, flow))

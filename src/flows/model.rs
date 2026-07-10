@@ -33,7 +33,7 @@ pub struct RosterSnapshot {
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowDescriptor {
     /// Stable id: `<source>:<slug>`.
@@ -54,11 +54,59 @@ pub struct FlowDescriptor {
     pub interactive: bool,
     #[serde(default)]
     pub mtime_ms: u64,
+    /// Human origin of the flow definition — the actual package or directory
+    /// it came from (e.g. `@johnlindquist/flows`, `repo flows/`), not just the
+    /// coarse source class. Rows always show this so the user can discern
+    /// where a flow lives.
+    #[serde(default)]
+    pub origin: Option<String>,
+    /// Bun-linked wrapper command (e.g. `flow-gmail`) when one exists on
+    /// PATH. Conversations launch the wrapper so package semantics (local
+    /// `.flows` overrides, package cwd) are preserved exactly as in a shell.
+    #[serde(default)]
+    pub wrapper_command: Option<String>,
 }
 
 impl FlowDescriptor {
     pub fn display_title(&self) -> &str {
         self.description.as_deref().unwrap_or(&self.name)
+    }
+
+    /// Friendly agent-identity name for desk rows: `flow-gmail` → `Gmail`,
+    /// `flow-npm` → `NPM`. Filenames make bad identities; rows lead with this.
+    pub fn friendly_name(&self) -> String {
+        let base = self.name.strip_prefix("flow-").unwrap_or(&self.name);
+        if base.is_empty() {
+            return self.name.clone();
+        }
+        let words: Vec<String> = base
+            .split(['-', '_'])
+            .filter(|w| !w.is_empty())
+            .map(|w| {
+                if w.len() <= 3 {
+                    w.to_uppercase()
+                } else {
+                    let mut chars = w.chars();
+                    match chars.next() {
+                        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                        None => String::new(),
+                    }
+                }
+            })
+            .collect();
+        if words.is_empty() {
+            self.name.clone()
+        } else {
+            words.join(" ")
+        }
+    }
+
+    /// Origin string for rows/detail: the concrete package/path when known,
+    /// otherwise the coarse source class.
+    pub fn origin_label(&self) -> &str {
+        self.origin
+            .as_deref()
+            .unwrap_or_else(|| self.source.label())
     }
 }
 
@@ -68,6 +116,9 @@ pub enum FlowSource {
     Project,
     Global,
     Registry,
+    /// Installed flows package (e.g. `@johnlindquist/flows`), discovered by
+    /// the app-side package scanner rather than `md roster`.
+    Package,
 }
 
 impl FlowSource {
@@ -76,11 +127,12 @@ impl FlowSource {
             FlowSource::Project => "Project",
             FlowSource::Global => "Global",
             FlowSource::Registry => "Registry",
+            FlowSource::Package => "Package",
         }
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowInput {
     pub name: String,

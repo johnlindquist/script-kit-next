@@ -1554,7 +1554,7 @@ impl ScriptListApp {
     /// What Tab actually does on the current surface — the single source of
     /// truth for the header Tab chip. MUST mirror the Tab interceptor's
     /// branch order in `startup.rs` (menu-syntax pickers → empty-input cwd
-    /// pick → directory-browse completion → Quick AI) so the chip never
+    /// pick → directory-browse completion → flow router) so the chip never
     /// advertises an action Tab won't take.
     pub(crate) fn main_header_tab_chip_action(
         &self,
@@ -1581,7 +1581,7 @@ impl ScriptListApp {
         if crate::file_search::looks_like_root_directory_browse_query(&self.filter_text) {
             return MainViewTabChipAction::Inactive;
         }
-        MainViewTabChipAction::QuickAi
+        MainViewTabChipAction::FlowRoute
     }
 
     /// Whether Shift+Tab opens the profile (agent/model) picker on the
@@ -1631,13 +1631,13 @@ impl ScriptListApp {
             self.selection_hint_chip(),
             cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
                 // The chip is a button for whatever Tab currently does:
-                // Quick AI submit when the input has text, cwd picker otherwise.
+                // flow-router submit when the input has text, cwd picker otherwise.
                 if matches!(
                     this.main_header_tab_chip_action(),
-                    crate::components::main_view_chrome::MainViewTabChipAction::QuickAi
+                    crate::components::main_view_chrome::MainViewTabChipAction::FlowRoute
                 ) {
                     let query = this.filter_text.clone();
-                    this.open_quick_ai_from_launcher(query, window, cx);
+                    this.route_text_to_flow(query, window, cx);
                     return;
                 }
                 this.dispatch_main_window_footer_action(
@@ -1926,6 +1926,7 @@ impl ScriptListApp {
             }
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
+            AppView::FlowSessionView { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::FileSearchView {
                 ref query,

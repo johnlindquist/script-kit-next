@@ -810,13 +810,22 @@ pub(crate) struct ScriptListApp {
     browser_tabs_scroll_handle: UniformListScrollHandle,
     // Scroll handle for process manager list
     process_list_scroll_handle: UniformListScrollHandle,
-    // Scroll handle for Flow UX roster list (Flash/Dispatch/Lens variants)
+    // Scroll handle for the Flow Desk list
     flow_ux_scroll_handle: UniformListScrollHandle,
     // Registry generation last painted by a Flow UX surface; the tick task
     // uses this to repaint only when run state actually changed.
     flow_ux_seen_generation: u64,
     // Guards the single Flow UX repaint tick task (spawned on first open).
     flow_ux_tick_running: bool,
+    // Live conversational flow sessions (Enter = converse). Each pairs
+    // metadata with the live PTY entity; backgrounding keeps the entity (and
+    // its process) alive, re-entering an Active row restores the SAME one.
+    pub(crate) flow_sessions: Vec<(
+        crate::flows::session::FlowSessionMeta,
+        Entity<crate::term_prompt::TermPrompt>,
+    )>,
+    // Monotonic id source for flow sessions.
+    pub(crate) flow_session_counter: u64,
     // Scroll handle for current app commands list
     current_app_commands_scroll_handle: UniformListScrollHandle,
     // Scroll handle for Agent Chat history list

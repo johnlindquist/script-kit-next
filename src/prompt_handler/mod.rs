@@ -3496,6 +3496,16 @@ impl ScriptListApp {
                         -1,
                         None,
                     ),
+                    AppView::FlowSessionView { .. } => (
+                        "flowSession".to_string(),
+                        Some("flow-session".to_string()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
                     AppView::FileSearchView {
                         ref query,
                         selected_index,
@@ -9894,6 +9904,31 @@ impl ScriptListApp {
                     }
                     cx.notify();
                 });
+            }
+            AppView::FlowSessionView { session_id } => {
+                let entity = self
+                    .flow_sessions
+                    .iter()
+                    .find(|(meta, _)| meta.id == *session_id)
+                    .map(|(_, entity)| entity.clone());
+                if let Some(entity) = entity {
+                    let payload = text.to_string();
+                    entity.update(cx, |term, cx| {
+                        if let Err(error) = term.send_raw_input(&payload) {
+                            tracing::warn!(
+                                category = "BATCH",
+                                %error,
+                                "setInput failed for FlowSessionView"
+                            );
+                        }
+                        cx.notify();
+                    });
+                } else {
+                    tracing::warn!(
+                        category = "BATCH",
+                        "setInput: flow session entity missing"
+                    );
+                }
             }
             _ => {
                 tracing::warn!(

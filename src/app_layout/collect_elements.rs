@@ -508,13 +508,36 @@ impl ScriptListApp {
                 selected_index,
                 ..
             } => {
-                let cwd = self.flow_ux_cwd();
-                let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
-                let rows: Vec<String> =
-                    crate::flows::catalog::filter_flows(&roster.flows, filter)
-                        .iter()
-                        .map(|flow| flow.name.clone())
-                        .collect();
+                // Desk rows carry identity + provenance so automation can
+                // prove what the user sees: friendly name, purpose, origin.
+                let rows: Vec<String> = self
+                    .flow_desk_rows(filter)
+                    .iter()
+                    .map(|row| match row {
+                        FlowDeskRow::Session(id) => self
+                            .flow_sessions
+                            .iter()
+                            .find(|(meta, _)| meta.id == *id)
+                            .map(|(meta, _)| {
+                                format!(
+                                    "{} — {} session",
+                                    meta.friendly_name,
+                                    meta.state.label()
+                                )
+                            })
+                            .unwrap_or_else(|| format!("session:{id}")),
+                        FlowDeskRow::Flow(flow) => {
+                            let mut parts = vec![flow.friendly_name()];
+                            if let Some(description) = &flow.description {
+                                parts.push(description.clone());
+                            }
+                            parts.push(flow.engine.clone());
+                            parts.push(flow.origin_label().to_string());
+                            parts.join(" · ")
+                        }
+                        FlowDeskRow::CreateFlow => "Create a Flow".to_string(),
+                    })
+                    .collect();
                 self.collect_named_rows(
                     "flow-ux-filter",
                     filter.clone(),
@@ -1592,6 +1615,33 @@ impl ScriptListApp {
                     elements,
                     total_count,
                 )
+            }
+
+            AppView::FlowSessionView { session_id } => {
+                let entity = self
+                    .flow_sessions
+                    .iter()
+                    .find(|(meta, _)| meta.id == *session_id)
+                    .map(|(_, entity)| entity.clone());
+                if let Some(entity) = entity {
+                    let term = entity.read(cx);
+                    let (elements, total_count) =
+                        self.collect_term_prompt_elements(term, "flow-session", limit);
+                    Self::finalize_surface_outcome(
+                        "flow-session",
+                        "flow-session",
+                        "panel_only_flow_session",
+                        limit,
+                        elements,
+                        total_count,
+                    )
+                } else {
+                    ElementCollectionOutcome::new(
+                        vec![protocol::ElementInfo::panel("flow-session")],
+                        1,
+                    )
+                    .with_warning("flow_session_entity_missing")
+                }
             }
 
             _ => {

@@ -35,16 +35,16 @@ pub(crate) const MAIN_VIEW_SCROLL_FLOW_ID: &str = "main-view-scroll-flow";
 pub(crate) enum MainViewTabChipAction {
     /// Tab opens the cwd picker — chip shows the cwd label with a ⇥ keycap.
     ChangeCwd,
-    /// Tab sends the typed query to the zero-context Quick AI — chip swaps to
-    /// a "Quick AI" label with the ⇥ keycap.
-    #[allow(dead_code)] // WIP: Quick AI Tab chip; constructed once the mode ships.
-    QuickAi,
+    /// Tab routes the typed query to a flow via the flow router — chip swaps
+    /// to a "Route to Flow" label with the ⇥ keycap.
+    #[allow(dead_code)] // Constructed only in the binary target (ui_window.rs).
+    FlowRoute,
     /// Tab does something else (or nothing) here — keep the cwd label for
     /// orientation but hide the ⇥ keycap so the chip never lies.
     Inactive,
 }
 
-pub(crate) const MAIN_VIEW_QUICK_AI_CHIP_LABEL: &str = "Quick AI";
+pub(crate) const MAIN_VIEW_FLOW_ROUTE_CHIP_LABEL: &str = "Route to Flow";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MainViewContextLabels {
@@ -382,7 +382,7 @@ pub(crate) fn render_main_view_context_zone_required(
     // when Tab opens the cwd picker, "Quick AI" when Tab submits the typed
     // query, and a keycap-less cwd label when Tab does neither here.
     let cwd_label = match labels.tab_action {
-        MainViewTabChipAction::QuickAi => MAIN_VIEW_QUICK_AI_CHIP_LABEL.to_string(),
+        MainViewTabChipAction::FlowRoute => MAIN_VIEW_FLOW_ROUTE_CHIP_LABEL.to_string(),
         MainViewTabChipAction::ChangeCwd | MainViewTabChipAction::Inactive => labels.cwd_label,
     };
     let tab_key_active = !matches!(labels.tab_action, MainViewTabChipAction::Inactive);

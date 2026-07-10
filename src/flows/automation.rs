@@ -18,6 +18,18 @@ pub struct FlowUxSnapshotInputs<'a> {
     pub preview: Option<PreviewSnapshot<'a>>,
     pub manager_visible: bool,
     pub manager_focused_run_id: Option<u64>,
+    /// Conversational sessions (Conversation Desk). Metadata only — the PTY
+    /// entities live on the app.
+    pub sessions: Vec<SessionSnapshot>,
+}
+
+pub struct SessionSnapshot {
+    pub id: u64,
+    pub flow_id: String,
+    pub flow_name: String,
+    pub state: &'static str,
+    pub live: bool,
+    pub elapsed_ms: u64,
 }
 
 pub struct PreviewSnapshot<'a> {
@@ -95,6 +107,20 @@ pub fn flow_ux_state(inputs: FlowUxSnapshotInputs<'_>) -> Value {
             })
         }),
         "runs": runs,
+        "sessions": inputs
+            .sessions
+            .iter()
+            .map(|s| {
+                json!({
+                    "sessionId": s.id,
+                    "flowId": s.flow_id,
+                    "flowName": s.flow_name,
+                    "state": s.state,
+                    "live": s.live,
+                    "elapsedMs": s.elapsed_ms,
+                })
+            })
+            .collect::<Vec<_>>(),
         "manager": {
             "visible": inputs.manager_visible,
             "focusedRunId": inputs.manager_focused_run_id,
@@ -129,10 +155,20 @@ mod tests {
             }),
             manager_visible: false,
             manager_focused_run_id: None,
+            sessions: vec![SessionSnapshot {
+                id: 1,
+                flow_id: "package:flow-gmail".into(),
+                flow_name: "flow-gmail".into(),
+                state: "working",
+                live: true,
+                elapsed_ms: 5,
+            }],
         });
         assert_eq!(value["activeVariant"], "lens");
         assert_eq!(value["preview"]["valid"], true);
         assert_eq!(value["manager"]["visible"], false);
+        assert_eq!(value["sessions"][0]["state"], "working");
+        assert_eq!(value["sessions"][0]["live"], true);
         let run = value["runs"]
             .as_array()
             .unwrap()

@@ -837,6 +837,8 @@ impl ScriptListApp {
             flow_ux_scroll_handle: UniformListScrollHandle::new(),
             flow_ux_seen_generation: 0,
             flow_ux_tick_running: false,
+            flow_sessions: Vec::new(),
+            flow_session_counter: 0,
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),
@@ -1247,6 +1249,28 @@ impl ScriptListApp {
                     }
                 }
 
+                // Flow session host chord: ⌘⇧D backgrounds the conversation
+                // (process stays alive; desk shows it under Active).
+                // Intercepted here so the agent TUI never sees the chord.
+                if key.eq_ignore_ascii_case("d")
+                    && event.keystroke.modifiers.platform
+                    && event.keystroke.modifiers.shift
+                {
+                    let mut handled = false;
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if matches!(this.current_view, AppView::FlowSessionView { .. }) {
+                                this.background_flow_session(cx);
+                                handled = true;
+                            }
+                        });
+                    }
+                    if handled {
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
+
                 let global_key_intent = main_window_global_key_intent(event);
                 if let Some(intent) = global_key_intent {
                     if let Some(app) = app_entity.upgrade() {
@@ -1533,14 +1557,16 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Quick AI: Tab with a non-empty query sends the
-                            // typed text to the zero-context Quick AI profile
-                            // (spark model, no tools/skills/memories). This is
-                            // the header Tab chip's advertised action whenever
-                            // the input has text, so it runs BEFORE root-file
-                            // directory completion — only path-shaped queries
-                            // (~/, /) keep Tab for browsing, matching the
-                            // chip's predicate in `main_header_tab_chip_action`.
+                            // FLOW ROUTER: Tab with a non-empty query routes
+                            // the typed text to the best mdflow flow
+                            // (Conversation Desk, 2026-07-09 — replaces the
+                            // Quick AI Tab entry; Quick AI remains reachable
+                            // via the Cmd+Enter AI hierarchy). Confident
+                            // match auto-starts the conversation with the
+                            // text as the first task; otherwise the desk
+                            // opens with ranked candidates + Create Flow.
+                            // Path-shaped queries (~/, /) keep Tab for
+                            // directory browsing.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !has_shift
                                 && !this.show_actions_popup
@@ -1551,11 +1577,12 @@ impl ScriptListApp {
                             {
                                 let query = this.filter_text.clone();
                                 tracing::info!(
-                                    target: "script_kit::tab_ai",
-                                    event = "quick_ai_tab_entry",
-                                    "Tab → Quick AI (zero-context spark)"
+                                    target: "script_kit::flows",
+                                    event = "flow_router_tab_entry",
+                                    query_len = query.len(),
+                                    "Tab → Flow Router"
                                 );
-                                this.open_quick_ai_from_launcher(query, window, cx);
+                                this.route_text_to_flow(query, window, cx);
                                 cx.stop_propagation();
                                 return;
                             }
@@ -1642,6 +1669,32 @@ impl ScriptListApp {
                                         ),
                                     }
                                 });
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Flow sessions own Tab the same way: the agent
+                            // TUI (codex/claude) needs it, and GPUI focus
+                            // traversal must never steal it.
+                            if let AppView::FlowSessionView { session_id } = this.current_view {
+                                let entity = this
+                                    .flow_sessions
+                                    .iter()
+                                    .find(|(meta, _)| meta.id == session_id)
+                                    .map(|(_, entity)| entity.clone());
+                                if let Some(entity) = entity {
+                                    entity.update(cx, |term, _cx| {
+                                        if !term.terminal.is_running() {
+                                            return;
+                                        }
+                                        let bytes: &[u8] = if has_shift {
+                                            b"\x1b[Z"
+                                        } else {
+                                            b"\t"
+                                        };
+                                        let _ = term.terminal.input(bytes);
+                                    });
+                                }
                                 cx.stop_propagation();
                                 return;
                             }

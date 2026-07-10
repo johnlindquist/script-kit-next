@@ -226,6 +226,10 @@ enum AppView {
     QuickTerminalView {
         entity: Entity<term_prompt::TermPrompt>,
     },
+    /// Conversing with a flow agent: the session's PTY (running the real
+    /// `flow-*` wrapper interactively) fills the main window. The entity
+    /// lives in `flow_sessions`; leaving this view NEVER kills the process.
+    FlowSessionView { session_id: u64 },
     /// Showing file search results
     FileSearchView {
         query: String,
@@ -850,6 +854,7 @@ impl AppView {
             AppView::DesignExplorerView { .. } => "DesignExplorerView",
             AppView::ScratchPadView { .. } => "ScratchPadView",
             AppView::QuickTerminalView { .. } => "QuickTerminalView",
+            AppView::FlowSessionView { .. } => "FlowSessionView",
             AppView::FileSearchView { .. } => "FileSearchView",
             AppView::ProfileSearchView { .. } => "ProfileSearchView",
             AppView::ThemeChooserView { .. } => "ThemeChooserView",
@@ -918,9 +923,9 @@ impl AppView {
             AppView::NonListStatesView { .. } => SurfaceKind::NonListStates,
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => SurfaceKind::DesignExplorer,
-            AppView::ScratchPadView { .. } | AppView::QuickTerminalView { .. } => {
-                SurfaceKind::UtilityChildContent
-            }
+            AppView::ScratchPadView { .. }
+            | AppView::QuickTerminalView { .. }
+            | AppView::FlowSessionView { .. } => SurfaceKind::UtilityChildContent,
             AppView::FileSearchView {
                 presentation: FileSearchPresentation::Mini,
                 ..
@@ -1032,6 +1037,7 @@ impl AppView {
             AppView::DayPage { .. } => Some("day_page"),
             AppView::ChatPrompt { .. } => Some("chat_prompt"),
             AppView::QuickTerminalView { .. } => Some("quick_terminal"),
+            AppView::FlowSessionView { .. } => Some("flow_session"),
             AppView::PathPrompt { .. } => Some("path_prompt"),
             AppView::AppLauncherView { .. } => Some("app_launcher"),
             AppView::WindowSwitcherView { .. } => Some("window_switcher"),
@@ -1755,6 +1761,9 @@ enum ActionsDialogHost {
     AppLauncher,
     /// Actions in built-in list and gallery surfaces (restore focus to main filter)
     BuiltinList,
+    /// Actions in the Flow Desk / a flow session (focused flow or session
+    /// verbs: converse, run once, edit, reveal, stop, dismiss)
+    FlowDesk,
     /// Actions in webcam prompt (restore focus to None - webcam has no input)
     WebcamPrompt,
     /// Actions in Agent Chat chat (restore focus to Agent Chat chat input)

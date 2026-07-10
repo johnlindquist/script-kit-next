@@ -562,6 +562,7 @@ impl Render for ScriptListApp {
             AppView::QuickTerminalView { entity, .. } => {
                 self.render_term_prompt(entity, cx).into_any_element()
             }
+            AppView::FlowSessionView { session_id } => self.render_flow_session(session_id, cx),
             AppView::FileSearchView {
                 ref query,
                 selected_index,

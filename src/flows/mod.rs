@@ -5,22 +5,29 @@
 //! `docs/ai/flow-ux-protocol.md`:
 //!
 //! - [`catalog`] — `md roster --json` per-cwd cache.
-//! - [`explain_cache`] — free `md explain --json` previews (Lens).
-//! - [`runner`] — `md <flow> --events` process-group spawn + NDJSON reader.
-//! - [`run_registry`] — the single source of truth for run state; every
-//!   Flow UX variation and the Flow Manager render from it.
+//! - [`package_source`] — installed `@johnlindquist/flows` corpus with true
+//!   provenance and bun-linked wrapper commands.
+//! - [`explain_cache`] — free `md explain --json` previews.
+//! - [`runner`] — `md <flow> --events` run-once spawn + NDJSON reader.
+//! - [`run_registry`] — the single source of truth for run-once state.
+//! - [`session`] — conversational session metadata (Enter = converse; the
+//!   live PTY entities live on `ScriptListApp`).
+//! - [`router`] — Tab flow router: free text → best flow.
 //! - [`automation`] — the `flowUx` getState payload for devtools receipts.
 //!
-//! Design rule: variations are thin renderers over the registry/catalog.
-//! Adding or deleting a variation must not touch the run lifecycle.
+//! Design rule: the desk is a thin renderer over the registry/catalog.
+//! UI changes must not touch the run lifecycle.
 
 pub mod automation;
 pub mod catalog;
 pub mod explain_cache;
 pub mod manager_window;
 pub mod model;
+pub mod package_source;
+pub mod router;
 pub mod run_registry;
 pub mod runner;
+pub mod session;
 
 /// THE cwd resolver for every flow surface (Flow UX variations, Flow
 /// Manager, automation snapshots). Precedence:

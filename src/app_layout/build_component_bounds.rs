@@ -46,6 +46,7 @@ impl ScriptListApp {
             AppView::DesignExplorerView { .. } => "DesignExplorer",
             AppView::ScratchPadView { .. } => "ScratchPad",
             AppView::QuickTerminalView { .. } => "QuickTerminal",
+            AppView::FlowSessionView { .. } => "FlowSession",
             AppView::FileSearchView { .. } => "FileSearch",
             AppView::ProfileSearchView { .. } => "ProfileSearch",
             AppView::ThemeChooserView { .. } => "ThemeChooser",

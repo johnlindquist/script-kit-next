@@ -54,9 +54,9 @@ impl ScriptListApp {
                 AppView::EnvPrompt { .. } => FocusTarget::EnvPrompt,
                 AppView::DropPrompt { .. } => FocusTarget::DropPrompt,
                 AppView::TemplatePrompt { .. } => FocusTarget::TemplatePrompt,
-                AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
-                    FocusTarget::TermPrompt
-                }
+                AppView::TermPrompt { .. }
+                | AppView::QuickTerminalView { .. }
+                | AppView::FlowSessionView { .. } => FocusTarget::TermPrompt,
                 AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
                 AppView::AgentChatView { .. } => FocusTarget::AgentChat,
                 AppView::DayPage { .. } => FocusTarget::EditorPrompt,

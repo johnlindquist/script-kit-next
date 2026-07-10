@@ -260,6 +260,7 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
         ActionsDialogHost::WebcamPrompt => "WebcamPrompt",
         ActionsDialogHost::AppLauncher => "AppLauncher",
         ActionsDialogHost::BuiltinList => "BuiltinList",
+        ActionsDialogHost::FlowDesk => "FlowDesk",
         ActionsDialogHost::AgentChat => "AgentChat",
         ActionsDialogHost::AgentChatHistory => "AgentChatHistory",
         ActionsDialogHost::AgentChatDetached => "AgentChatDetached",
@@ -683,6 +684,14 @@ impl ScriptListApp {
 
         if matches!(&self.current_view, AppView::ThemeChooserView { .. }) {
             self.toggle_theme_chooser_actions(window, cx);
+            return true;
+        }
+
+        if matches!(
+            &self.current_view,
+            AppView::FlowUxView { .. } | AppView::FlowSessionView { .. }
+        ) {
+            self.toggle_flow_desk_actions(window, cx);
             return true;
         }
 

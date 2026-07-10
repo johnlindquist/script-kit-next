@@ -897,6 +897,333 @@ impl ScriptListApp {
         }
         cx.notify();
     }
+
+    // ------------------------------------------------------------------
+    // Flow Desk actions (Conversation Desk ⌘K contract): every focused-item
+    // verb lives here, never inline in the desk chrome.
+    // ------------------------------------------------------------------
+
+    /// Subject the desk dialog acts on, derived from the live view state so
+    /// no stale copy is captured while the popup is open.
+    fn flow_desk_actions_subject(&self) -> Option<FlowDeskSubject> {
+        match &self.current_view {
+            AppView::FlowSessionView { session_id } => {
+                Some(FlowDeskSubject::Session(*session_id))
+            }
+            AppView::FlowUxView {
+                filter,
+                selected_index,
+                ..
+            } => {
+                let rows = self.flow_desk_rows(filter);
+                match rows.get(*selected_index)? {
+                    FlowDeskRow::Session(id) => {
+                        Some(FlowDeskSubject::Session(*id))
+                    }
+                    FlowDeskRow::Flow(flow) => {
+                        Some(FlowDeskSubject::Flow(flow.clone()))
+                    }
+                    FlowDeskRow::CreateFlow => {
+                        Some(FlowDeskSubject::Create)
+                    }
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn flow_desk_actions_for_dialog(
+        &self,
+        subject: &FlowDeskSubject,
+    ) -> Vec<crate::actions::Action> {
+        use crate::actions::{Action, ActionCategory};
+        use crate::designs::icon_variations::IconName;
+
+        match subject {
+            FlowDeskSubject::Flow(flow) => {
+                let mut actions = vec![
+                    Action::new(
+                        "flow_desk_converse",
+                        "Start Conversation",
+                        Some(format!("Talk to {} interactively", flow.friendly_name())),
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_shortcut("↵")
+                    .with_section("Flow")
+                    .with_icon(IconName::Terminal),
+                    Action::new(
+                        "flow_desk_run_once",
+                        "Run Once in Background",
+                        Some("One `--events` run, supervised from the desk".to_string()),
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_shortcut("⇧↵")
+                    .with_section("Flow")
+                    .with_icon(IconName::PlayFilled),
+                    Action::new(
+                        "flow_desk_edit",
+                        "Edit Definition",
+                        Some("Open the flow's Markdown in your editor".to_string()),
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_section("Definition")
+                    .with_icon(IconName::Pencil),
+                    Action::new(
+                        "flow_desk_reveal",
+                        "Reveal Source in Finder",
+                        Some(flow.path.clone()),
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_section("Definition")
+                    .with_icon(IconName::Folder),
+                    Action::new(
+                        "flow_desk_copy_path",
+                        "Copy Definition Path",
+                        None,
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_section("Definition")
+                    .with_icon(IconName::Copy),
+                ];
+                if flow.wrapper_command.is_some() {
+                    actions.push(
+                        Action::new(
+                            "flow_desk_copy_command",
+                            "Copy Wrapper Command",
+                            flow.wrapper_command.clone(),
+                            ActionCategory::ScriptContext,
+                        )
+                        .with_section("Definition")
+                        .with_icon(IconName::Copy),
+                    );
+                }
+                actions
+            }
+            FlowDeskSubject::Session(_) => vec![
+                Action::new(
+                    "flow_desk_session_open",
+                    "Open Conversation",
+                    Some("Reattach to the same live session".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("↵")
+                .with_section("Session")
+                .with_icon(IconName::Terminal),
+                Action::new(
+                    "flow_desk_session_background",
+                    "Background",
+                    Some("Leave it running and return to the desk".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧D")
+                .with_section("Session")
+                .with_icon(IconName::ArrowDown),
+                Action::new(
+                    "flow_desk_session_copy_command",
+                    "Copy Launch Command",
+                    None,
+                    ActionCategory::ScriptContext,
+                )
+                .with_section("Session")
+                .with_icon(IconName::Copy),
+                Action::new(
+                    "flow_desk_session_stop",
+                    "Stop Session",
+                    Some("Kill the process — the only way a session dies".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_section("Danger")
+                .with_icon(IconName::Close),
+                Action::new(
+                    "flow_desk_session_dismiss",
+                    "Dismiss Ended Session",
+                    Some("Remove the row (ended sessions only)".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_section("Danger")
+                .with_icon(IconName::Trash),
+            ],
+            FlowDeskSubject::Create => vec![Action::new(
+                "flow_desk_create",
+                "Create a Flow",
+                Some("Describe an agent in plain English (md create)".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵")
+            .with_section("Flow")
+            .with_icon(IconName::Plus)],
+        }
+    }
+
+    pub(crate) fn toggle_flow_desk_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        logging::log("KEY", "Toggling Flow Desk actions popup");
+
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(ActionsDialogHost::FlowDesk, window, cx);
+            return;
+        }
+
+        let Some(subject) = self.flow_desk_actions_subject() else {
+            logging::log("ACTIONS", "Flow Desk actions ignored: no subject");
+            return;
+        };
+
+        self.mark_actions_popup_opening();
+        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+        self.focus_handle.focus(window, cx);
+        self.gpui_input_focused = false;
+        self.focused_input = FocusedInput::ActionsSearch;
+
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let actions = self.flow_desk_actions_for_dialog(&subject);
+        let placeholder = match &subject {
+            FlowDeskSubject::Flow(flow) => flow.friendly_name(),
+            FlowDeskSubject::Session(_) => "Session actions".to_string(),
+            FlowDeskSubject::Create => "Create a flow".to_string(),
+        };
+        let dialog = cx.new(move |cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = ActionsDialog::with_config(
+                focus_handle,
+                std::sync::Arc::new(|_action_id| {}),
+                actions,
+                theme_arc,
+                crate::actions::ActionsDialogConfig {
+                    search_position: crate::actions::SearchPosition::Top,
+                    section_style: crate::actions::SectionStyle::Headers,
+                    anchor: crate::actions::AnchorPosition::Top,
+                    show_icons: true,
+                    search_placeholder: Some(placeholder),
+                    show_context_header: false,
+                    ..crate::actions::ActionsDialogConfig::default()
+                },
+            );
+            dialog.set_match_main_window_background(true);
+            dialog
+        });
+
+        self.actions_dialog = Some(dialog.clone());
+
+        let app_entity = cx.entity().clone();
+        dialog.update(cx, |d, _cx| {
+            d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                app_entity.clone(),
+                ActionsDialogHost::FlowDesk,
+            ));
+            d.set_on_close(Self::make_actions_window_on_close_callback(
+                app_entity,
+                ActionsDialogHost::FlowDesk,
+                "Flow Desk actions closed via escape, focus restored via coordinator",
+            ));
+        });
+
+        let parent_window_handle = window.window_handle();
+        let main_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
+
+        Self::spawn_open_actions_window(
+            cx,
+            parent_window_handle,
+            main_bounds,
+            display_id,
+            dialog,
+            crate::actions::WindowPosition::TopCenter,
+            "Flow Desk actions popup window opened",
+            "Failed to open Flow Desk actions window",
+        );
+
+        cx.notify();
+    }
+
+    pub(crate) fn execute_flow_desk_action(
+        &mut self,
+        action_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let subject = self.flow_desk_actions_subject();
+        tracing::info!(
+            target: "script_kit::flows",
+            event = "flow_desk_action",
+            action_id = %action_id,
+            "Executing Flow Desk action"
+        );
+        self.close_actions_popup(ActionsDialogHost::FlowDesk, window, cx);
+
+        match (action_id, subject) {
+            ("flow_desk_converse", Some(FlowDeskSubject::Flow(flow))) => {
+                self.start_flow_session(&flow, None, cx);
+            }
+            ("flow_desk_run_once", Some(FlowDeskSubject::Flow(flow))) => {
+                self.flow_desk_run_once(&flow, cx);
+            }
+            ("flow_desk_edit", Some(FlowDeskSubject::Flow(flow))) => {
+                let _ = std::process::Command::new("open")
+                    .arg("-t")
+                    .arg(&flow.path)
+                    .spawn();
+            }
+            ("flow_desk_reveal", Some(FlowDeskSubject::Flow(flow))) => {
+                let _ = std::process::Command::new("open")
+                    .arg("-R")
+                    .arg(&flow.path)
+                    .spawn();
+            }
+            ("flow_desk_copy_path", Some(FlowDeskSubject::Flow(flow))) => {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(flow.path.clone()));
+            }
+            (
+                "flow_desk_copy_command",
+                Some(FlowDeskSubject::Flow(flow)),
+            ) => {
+                if let Some(wrapper) = flow.wrapper_command {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(wrapper));
+                }
+            }
+            (
+                "flow_desk_session_open",
+                Some(FlowDeskSubject::Session(id)),
+            ) => {
+                self.open_flow_session(id, cx);
+            }
+            ("flow_desk_session_background", _) => {
+                self.background_flow_session(cx);
+            }
+            (
+                "flow_desk_session_copy_command",
+                Some(FlowDeskSubject::Session(id)),
+            ) => {
+                if let Some((meta, _)) =
+                    self.flow_sessions.iter().find(|(meta, _)| meta.id == id)
+                {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(meta.command.clone()));
+                }
+            }
+            (
+                "flow_desk_session_stop",
+                Some(FlowDeskSubject::Session(id)),
+            ) => {
+                self.stop_flow_session(id, cx);
+            }
+            (
+                "flow_desk_session_dismiss",
+                Some(FlowDeskSubject::Session(id)),
+            ) => {
+                self.dismiss_flow_session(id, cx);
+            }
+            ("flow_desk_create", _) => {
+                self.start_flow_create_session(cx);
+            }
+            (other, _) => {
+                tracing::warn!(
+                    target: "script_kit::flows",
+                    event = "flow_desk_action_unknown",
+                    action_id = %other,
+                    "Unknown Flow Desk action id"
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]

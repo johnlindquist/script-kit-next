@@ -117,6 +117,8 @@
             flow_ux_scroll_handle: UniformListScrollHandle::new(),
             flow_ux_seen_generation: 0,
             flow_ux_tick_running: false,
+            flow_sessions: Vec::new(),
+            flow_session_counter: 0,
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),

@@ -3916,9 +3916,9 @@ impl ScriptListApp {
             AppView::TemplatePrompt { .. } => FocusTarget::TemplatePrompt,
             AppView::HotkeyPrompt { .. } => FocusTarget::AppRoot,
 
-            AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
-                FocusTarget::TermPrompt
-            }
+            AppView::TermPrompt { .. }
+            | AppView::QuickTerminalView { .. }
+            | AppView::FlowSessionView { .. } => FocusTarget::TermPrompt,
 
             AppView::ChatPrompt { .. } | AppView::AgentChatView { .. } => FocusTarget::ChatPrompt,
             AppView::DayPage { .. } => FocusTarget::EditorPrompt,
@@ -5202,6 +5202,7 @@ impl ScriptListApp {
             AppView::WebcamView { .. } => "Webcam".to_string(),
             AppView::ScratchPadView { .. } => "ScratchPad".to_string(),
             AppView::QuickTerminalView { .. } => "QuickTerminal".to_string(),
+            AppView::FlowSessionView { .. } => "FlowSessionView".to_string(),
             AppView::NamingPrompt { .. } => "NamingPrompt".to_string(),
             AppView::CreationFeedback { .. } => "CreationFeedback".to_string(),
             AppView::DesignGalleryView { .. } => "DesignGallery".to_string(),
@@ -5352,6 +5353,7 @@ impl ScriptListApp {
             | AppView::FormPrompt { .. }
             | AppView::TermPrompt { .. }
             | AppView::QuickTerminalView { .. }
+            | AppView::FlowSessionView { .. }
             | AppView::AgentChatView { .. }
             | AppView::DropPrompt { .. }
             | AppView::HotkeyPrompt { .. }
