@@ -291,6 +291,7 @@ fn get_elements_with_actions_dialog_target_round_trip() {
             request_id,
             limit,
             target,
+            ..
         } => {
             assert_eq!(request_id, "ge-actions-1");
             assert_eq!(limit, Some(20));

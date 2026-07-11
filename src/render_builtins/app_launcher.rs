@@ -402,10 +402,28 @@ impl ScriptListApp {
             .w_full()
             .py(px(design_spacing.padding_xs))
             .child(
+                // Every list leads with a persistent section separator
+                // (POLISH.md layout-stability bar; same rule as the main
+                // menu's "Results" header, 4d76327b8): the label may swap but
+                // the row never appears or disappears, so filtering can't
+                // shift the rows below it.
+                crate::list_item::render_section_header(
+                    if filter.trim().is_empty() {
+                        "Apps"
+                    } else {
+                        "Results"
+                    },
+                    None,
+                    list_colors,
+                    true,
+                ),
+            )
+            .child(
                 div()
                     .relative()
                     .w_full()
-                    .h_full()
+                    .flex_1()
+                    .min_h(px(0.))
                     .on_scroll_wheel(cx.listener(
                         move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
                             let view_state = if let AppView::AppLauncherView {

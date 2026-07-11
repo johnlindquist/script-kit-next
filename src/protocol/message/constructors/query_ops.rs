@@ -162,6 +162,7 @@ impl Message {
             request_id,
             limit: None,
             target: None,
+            include_headers: None,
         }
     }
 
@@ -171,6 +172,7 @@ impl Message {
             request_id,
             limit: Some(limit),
             target: None,
+            include_headers: None,
         }
     }
 

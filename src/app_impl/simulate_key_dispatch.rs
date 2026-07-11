@@ -1898,6 +1898,34 @@ impl ScriptListApp {
                     selected_index,
                     selected_category,
                 } => {
+                    // Escape mirrors the live GPUI handler at
+                    // src/render_builtins/emoji_picker.rs:222-224 (clear the
+                    // typed filter first, then go_back_or_close honoring
+                    // origin) and must run BEFORE the zero-match early
+                    // return below — otherwise an empty grid (zero-match
+                    // filter) swallows Escape and the picker becomes
+                    // inescapable via automation. Same class as the
+                    // WindowSwitcher Pass 20 finding.
+                    if crate::ui_foundation::is_key_escape(&key_lower)
+                        && !has_cmd
+                        && !has_shift
+                        && !_has_alt
+                        && !_has_ctrl
+                    {
+                        if view.clear_builtin_view_filter(ctx) {
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Escape - clear EmojiPicker filter",
+                            );
+                        } else {
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Escape - EmojiPicker go back or close",
+                            );
+                            view.go_back_or_close(window, ctx);
+                        }
+                        return;
+                    }
                     let filter_clone = filter.clone();
                     let cat = *selected_category;
                     let old_idx = *selected_index;
@@ -1921,10 +1949,6 @@ impl ScriptListApp {
                                 ));
                                 view.close_and_reset_window(ctx);
                             }
-                            return;
-                        }
-                        "escape" => {
-                            view.close_and_reset_window(ctx);
                             return;
                         }
                         _ => {
@@ -1957,7 +1981,34 @@ impl ScriptListApp {
                     // simulateKey path fell through to "unhandled_view" and
                     // the actions-cmdk-builtin-clipboard-history story could
                     // not be verified via stdin — actions dialog never opened.
-                    if has_cmd && key_lower == "k" {
+                    if crate::ui_foundation::is_key_escape(&key_lower)
+                        && !has_cmd
+                        && !has_shift
+                        && !_has_alt
+                        && !_has_ctrl
+                    {
+                        // Mirrors the live Escape ladder in
+                        // src/render_builtins/clipboard.rs (portal cancel →
+                        // clear filter → go_back_or_close honoring origin).
+                        if view.is_in_attachment_portal() {
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Escape - cancel clipboard attachment portal",
+                            );
+                            view.close_attachment_portal_cancel(ctx);
+                        } else if view.clear_builtin_view_filter(ctx) {
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Escape - clear ClipboardHistory filter",
+                            );
+                        } else {
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Escape - ClipboardHistory go back or close",
+                            );
+                            view.go_back_or_close(window, ctx);
+                        }
+                    } else if has_cmd && key_lower == "k" {
                         if let Some(entry) = view.selected_clipboard_entry() {
                             logging::log("STDIN", "SimulateKey: Cmd+K - toggle clipboard actions");
                             view.toggle_clipboard_actions(entry, window, ctx);
@@ -2330,7 +2381,49 @@ impl ScriptListApp {
                                 view_name
                             ),
                         );
-                        view.toggle_actions(ctx, window);
+                        // Route through the canonical per-view dispatcher so a
+                        // simulated Cmd+K opens the SAME dialog as the real
+                        // keyboard interceptor (e.g. FlowUxView must get the
+                        // Flow Desk host's actions, not the main-list set).
+                        view.dispatch_actions_toggle_for_current_view(
+                            window,
+                            ctx,
+                            "simulate_key_fallback",
+                        );
+                    } else if crate::ui_foundation::is_key_escape(&key_lower)
+                        && !has_cmd
+                        && !has_shift
+                        && !_has_alt
+                        && !_has_ctrl
+                    {
+                        // Generic Escape fallback for views without a
+                        // per-view arm. Escape semantics are centralized
+                        // (clear the typed builtin filter first, then
+                        // go_back_or_close, which derives destination from
+                        // DismissPolicy + the opened_from_main_menu origin),
+                        // so per-view mirrors are not required just to
+                        // dismiss. Closes the same tool-gap class as the
+                        // generic Cmd+K fallback above — automation could
+                        // enter builtin views but never leave them.
+                        let view_name = view.app_view_name();
+                        if view.clear_builtin_view_filter(ctx) {
+                            logging::log(
+                                "STDIN",
+                                &format!(
+                                    "SimulateKey: Escape - clear filter (fallback for view={})",
+                                    view_name
+                                ),
+                            );
+                        } else {
+                            logging::log(
+                                "STDIN",
+                                &format!(
+                                    "SimulateKey: Escape - go back or close (fallback for view={})",
+                                    view_name
+                                ),
+                            );
+                            view.go_back_or_close(window, ctx);
+                        }
                     } else {
                         // Loud-fail when a view has no simulateKey arm.
                         // Agentic-testing callers expect a structured receipt

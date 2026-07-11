@@ -209,6 +209,8 @@ enum PromptMessage {
         request_id: String,
         limit: Option<usize>,
         target: Option<protocol::AutomationWindowTarget>,
+        /// Include non-selectable section-header rows (layout-stability probes).
+        include_headers: bool,
     },
     /// Request to get layout info with component tree and computed styles
     GetLayoutInfo {

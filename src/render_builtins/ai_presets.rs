@@ -247,6 +247,27 @@ impl ScriptListApp {
                 list_items,
             )
         };
+        // Every list leads with a persistent section separator (POLISH.md
+        // layout-stability bar; same rule as the main menu's "Results"
+        // header, 4d76327b8): the label may swap but the row never appears
+        // or disappears, so filtering can't shift the rows below it.
+        let list_element = div()
+            .flex()
+            .flex_col()
+            .h_full()
+            .min_h(px(0.))
+            .child(crate::list_item::render_section_header(
+                if filter.trim().is_empty() {
+                    "Presets"
+                } else {
+                    "Results"
+                },
+                None,
+                list_colors,
+                true,
+            ))
+            .child(div().relative().flex_1().min_h(px(0.)).child(list_element))
+            .into_any_element();
 
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
             vec![

@@ -4708,6 +4708,7 @@ impl ScriptListApp {
                 request_id,
                 limit,
                 target,
+                include_headers,
             } => {
                 let max_elements = limit.unwrap_or(50).clamp(1, 1000);
 
@@ -4767,7 +4768,11 @@ impl ScriptListApp {
                         if matches!(self.current_view, AppView::ScriptList) {
                             self.get_grouped_results_cached();
                         }
-                        let outcome = self.collect_visible_elements(max_elements, cx);
+                        let outcome = self.collect_visible_elements_with_headers(
+                            max_elements,
+                            include_headers,
+                            cx,
+                        );
                         crate::windows::automation_surface_collector::SurfaceElementSnapshot {
                             total_count: outcome.total_count,
                             focused_semantic_id: outcome.focused_semantic_id(),

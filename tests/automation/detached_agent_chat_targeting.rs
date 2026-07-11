@@ -493,6 +493,7 @@ fn get_elements_with_agent_chat_detached_target_parses() {
             request_id,
             target,
             limit,
+            ..
         } => {
             assert_eq!(request_id, "elm-agent_chat-det");
             assert!(target.is_some());

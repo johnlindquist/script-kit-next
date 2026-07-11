@@ -207,10 +207,12 @@ fn prompt_message_from_protocol_message(
             request_id,
             limit,
             target,
+            include_headers,
         } => Some(PromptMessage::GetElements {
             request_id,
             limit,
             target,
+            include_headers: include_headers.unwrap_or(false),
         }),
         Message::GetAgentChatState { request_id, target } => {
             Some(PromptMessage::GetAgentChatState { request_id, target })

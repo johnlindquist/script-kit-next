@@ -1848,6 +1848,7 @@ impl ScriptListApp {
                                         request_id,
                                         limit,
                                         target,
+                                        include_headers,
                                     } = &msg
                                     {
                                         tracing::info!(
@@ -1861,6 +1862,7 @@ impl ScriptListApp {
                                             request_id: request_id.clone(),
                                             limit: *limit,
                                             target: target.clone(),
+                                            include_headers: include_headers.unwrap_or(false),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(

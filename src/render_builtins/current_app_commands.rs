@@ -353,6 +353,8 @@ impl ScriptListApp {
         let total_count = self.cached_current_app_entries.len();
 
         let content = div()
+            .flex()
+            .flex_col()
             .flex_1()
             .min_h(px(0.))
             .w_full()
@@ -445,12 +447,35 @@ impl ScriptListApp {
                     cx.stop_propagation();
                 },
             ))
-            .child(list_element)
-            .child(self.builtin_uniform_list_scrollbar(
-                &self.current_app_commands_scroll_handle,
-                filtered_len,
-                8,
-            ));
+            .child(
+                // Every list leads with a persistent section separator
+                // (POLISH.md layout-stability bar; same rule as the main
+                // menu's "Results" header, 4d76327b8): the label may swap but
+                // the row never appears or disappears, so filtering can't
+                // shift the rows below it.
+                crate::list_item::render_section_header(
+                    if filter.trim().is_empty() {
+                        "Commands"
+                    } else {
+                        "Results"
+                    },
+                    None,
+                    list_colors,
+                    true,
+                ),
+            )
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .child(list_element)
+                    .child(self.builtin_uniform_list_scrollbar(
+                        &self.current_app_commands_scroll_handle,
+                        filtered_len,
+                        8,
+                    )),
+            );
 
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
             vec![

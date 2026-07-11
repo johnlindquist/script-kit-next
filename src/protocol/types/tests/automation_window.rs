@@ -321,6 +321,7 @@ fn legacy_get_elements_request_still_parses_without_target() {
             request_id,
             limit,
             target,
+            ..
         } => {
             assert_eq!(request_id, "elm-1");
             assert_eq!(limit, None);
@@ -418,6 +419,7 @@ fn get_elements_with_target_parses() {
             request_id,
             limit,
             target,
+            ..
         } => {
             assert_eq!(request_id, "elm-notes");
             assert_eq!(limit, Some(50));

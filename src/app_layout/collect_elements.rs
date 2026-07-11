@@ -92,9 +92,22 @@ impl ScriptListApp {
         limit: usize,
         cx: &Context<Self>,
     ) -> ElementCollectionOutcome {
+        self.collect_visible_elements_with_headers(limit, false, cx)
+    }
+
+    /// Like [`Self::collect_visible_elements`], but optionally emits
+    /// non-selectable section-header rows so layout-stability probes can audit
+    /// the persistent leading separator contract (POLISH.md §2).
+    pub(crate) fn collect_visible_elements_with_headers(
+        &self,
+        limit: usize,
+        include_headers: bool,
+        cx: &Context<Self>,
+    ) -> ElementCollectionOutcome {
         let mut outcome = match &self.current_view {
             AppView::ScriptList => {
-                let (elements, total_count) = self.collect_script_list_elements(limit);
+                let (elements, total_count) =
+                    self.collect_script_list_elements(limit, include_headers);
                 ElementCollectionOutcome::new(elements, total_count)
             }
 
@@ -2903,7 +2916,11 @@ impl ScriptListApp {
         (row_names, selected_row_index)
     }
 
-    fn collect_script_list_elements(&self, limit: usize) -> (Vec<protocol::ElementInfo>, usize) {
+    fn collect_script_list_elements(
+        &self,
+        limit: usize,
+        include_headers: bool,
+    ) -> (Vec<protocol::ElementInfo>, usize) {
         let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
         let source_statuses = self.cached_source_statuses_snapshot();
         let selected_grouped_index =
@@ -3084,7 +3101,31 @@ impl ScriptListApp {
                 break;
             }
             match item {
-                crate::list_item::GroupedListItem::SectionHeader(..) => {}
+                crate::list_item::GroupedListItem::SectionHeader(label, _) => {
+                    if include_headers {
+                        elements.push(protocol::ElementInfo {
+                            semantic_id: protocol::generate_semantic_id(
+                                "section",
+                                grouped_index,
+                                label,
+                            ),
+                            element_type: protocol::ElementType::Panel,
+                            text: Some(label.clone()),
+                            value: None,
+                            selected: Some(false),
+                            focused: None,
+                            index: None,
+                            role: Some("sectionHeader".to_string()),
+                            kind: Some("sectionHeader".to_string()),
+                            source: None,
+                            source_name: None,
+                            selectable: Some(false),
+                            status_kind: None,
+                            action_disabled: None,
+                            style: None,
+                        });
+                    }
+                }
                 crate::list_item::GroupedListItem::Item(result_idx) => {
                     let Some(result) = flat_results.get(*result_idx) else {
                         continue;

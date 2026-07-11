@@ -283,6 +283,15 @@ macro_rules! protocol_message_variants_query_ops {
         /// Optional window target (defaults to focused window).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         target: Option<AutomationWindowTarget>,
+        /// Include non-selectable section-header rows (default: false).
+        /// Layout-stability probes use this to audit the persistent leading
+        /// separator contract; ordinary consumers keep the selectable-only view.
+        #[serde(
+            rename = "includeHeaders",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        include_headers: Option<bool>,
     },
 
     /// Response with list of visible UI elements

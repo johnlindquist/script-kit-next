@@ -433,7 +433,26 @@ impl ScriptListApp {
             .h_full()
             .min_h(px(0.))
             .py(px(design_spacing.padding_xs))
-            .child(list_element);
+            .flex()
+            .flex_col()
+            .child(
+                // Every list leads with a persistent section separator
+                // (POLISH.md layout-stability bar; same rule as the main
+                // menu's "Results" header, 4d76327b8): the label may swap but
+                // the row never appears or disappears, so filtering can't
+                // shift the rows below it.
+                crate::list_item::render_section_header(
+                    if filter.trim().is_empty() {
+                        "Chats"
+                    } else {
+                        "Results"
+                    },
+                    None,
+                    list_colors,
+                    true,
+                ),
+            )
+            .child(div().relative().flex_1().min_h(px(0.)).child(list_element));
 
         let hints: Vec<SharedString> = if in_portal {
             vec![
