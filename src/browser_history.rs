@@ -632,12 +632,25 @@ pub(crate) fn root_fuzzy_search_browser_history_hits(
     }
 
     let query_lower = query.to_lowercase();
+    let query_terms: Vec<&str> = query_lower.split_whitespace().collect();
     let query_is_ascii = query_lower.is_ascii();
     let use_nucleo = query_lower.len() >= crate::scripts::search::MIN_FUZZY_QUERY_LEN;
     let mut nucleo = crate::scripts::NucleoCtx::new(&query_lower);
     let mut scored = Vec::with_capacity(hits.len());
 
     for hit in hits {
+        let title_lower = hit.title.to_lowercase();
+        let domain_lower = hit.domain.to_lowercase();
+        let url_lower = search_urls.then(|| hit.url.to_lowercase());
+        let qualifies = query_terms.iter().all(|term| {
+            title_lower.contains(term)
+                || domain_lower.contains(term)
+                || url_lower.as_ref().is_some_and(|url| url.contains(term))
+        });
+        if !qualifies {
+            continue;
+        }
+
         let mut score = 0i32;
         if query_is_ascii && hit.title.is_ascii() {
             if let Some(pos) =
@@ -673,9 +686,7 @@ pub(crate) fn root_fuzzy_search_browser_history_hits(
                 }
             }
         }
-        if score > 0 {
-            scored.push((score, hit.clone()));
-        }
+        scored.push((score, hit.clone()));
     }
 
     scored.sort_by(|(score_a, hit_a), (score_b, hit_b)| {
@@ -1570,6 +1581,71 @@ fn firefox_visit_time_to_unix_ms(visit_time: i64) -> i64 {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    fn root_history_hit(title: &str, domain: &str, url: &str) -> RootBrowserHistorySearchHit {
+        RootBrowserHistorySearchHit {
+            stable_key: "browser-history/chrome/default/test".to_string(),
+            provider_label: "Chrome".to_string(),
+            profile_label: "Default".to_string(),
+            title: title.to_string(),
+            url: url.to_string(),
+            domain: domain.to_string(),
+            last_visit_unix_ms: Utc::now().timestamp_millis(),
+            visit_count: 1,
+        }
+    }
+
+    #[test]
+    fn root_browser_history_rejects_unrelated_multi_word_fuzzy_subsequence() {
+        let hit = root_history_hit(
+            "Pliny the Liberator 🐉 on X: \"what happens when you prompt Fable to use up an entire week&apos;s worth of tokens\"",
+            "x.com",
+            "https://x.com/pliny/status/1",
+        );
+
+        let matches = root_fuzzy_search_browser_history_hits(&[hit], "create a new flow", true);
+
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn root_browser_history_accepts_multi_word_terms_across_title() {
+        let hit = root_history_hit(
+            "Pliny the Liberator 🐉 on X: what happens when you prompt Fable",
+            "x.com",
+            "https://x.com/pliny/status/1",
+        );
+
+        let matches = root_fuzzy_search_browser_history_hits(&[hit.clone()], "pliny fable", true);
+
+        assert_eq!(matches, vec![hit]);
+    }
+
+    #[test]
+    fn root_browser_history_accepts_terms_split_across_title_and_domain() {
+        let hit = root_history_hit(
+            "Rust reference",
+            "docs.example.com",
+            "https://docs.example.com/reference",
+        );
+
+        let matches = root_fuzzy_search_browser_history_hits(&[hit.clone()], "rust example", false);
+
+        assert_eq!(matches, vec![hit]);
+    }
+
+    #[test]
+    fn root_browser_history_rejects_single_word_subsequence_only_match() {
+        let hit = root_history_hit(
+            "Create delightful launcher workflows",
+            "example.com",
+            "https://example.com/workflows",
+        );
+
+        let matches = root_fuzzy_search_browser_history_hits(&[hit], "cdlw", true);
+
+        assert!(matches.is_empty());
+    }
 
     #[test]
     fn fuzzy_search_prefers_title_match_over_browser_name_only() {

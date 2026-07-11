@@ -14,6 +14,17 @@ use std::fmt::Write as _;
 const RRF_K: f64 = 60.0;
 const SIGNAL_WINDOW: usize = 200;
 const SIGNAL_BOOST: f64 = 0.05;
+/// Total attention boost a doc can receive, capped at half a rank-1 RRF
+/// contribution so signals break ties but can never hoist an unranked doc
+/// over a genuinely matching one (Brain-Inbox follow-up turns quote the top
+/// drifting topics verbatim and previously won every launcher search).
+const MAX_SIGNAL_BOOST: f64 = 0.5 / (RRF_K + 1.0);
+/// Semantic-leg floor, measured against the real embeddinggemma index: docs
+/// of ≥[`store::MIN_SEMANTIC_CONTENT_CHARS`] content score ≤0.36 cosine for
+/// unrelated queries and ≥0.43 for genuine matches, so 0.40 splits the bands
+/// with margin. Without a floor the top-N by relative rank qualify for ANY
+/// query. Embeddings are unit-normalized, so dot product == cosine.
+const MIN_COSINE_SIMILARITY: f32 = 0.40;
 
 #[derive(Debug, Clone)]
 pub struct BrainHit {
@@ -129,11 +140,13 @@ pub(crate) fn fuse_ranks(
                     doc.title.to_lowercase(),
                     doc.content.to_lowercase()
                 );
+                let mut signal_boost = 0.0;
                 for (topic, weight) in signal_topics {
                     if haystack.contains(topic.as_str()) {
-                        *score += SIGNAL_BOOST * (*weight as f64).min(3.0) / (RRF_K / 10.0);
+                        signal_boost += SIGNAL_BOOST * (*weight as f64).min(3.0) / (RRF_K / 10.0);
                     }
                 }
+                *score += signal_boost.min(MAX_SIGNAL_BOOST);
             }
         }
     }
@@ -157,6 +170,9 @@ pub(crate) fn cosine_top_ids(
             continue;
         }
         let dot: f32 = query_vec.iter().zip(v.iter()).map(|(a, b)| a * b).sum();
+        if dot < MIN_COSINE_SIMILARITY {
+            continue;
+        }
         let entry = best.entry(*id).or_insert(f32::NEG_INFINITY);
         if dot > *entry {
             *entry = dot;
@@ -192,13 +208,54 @@ pub fn brain_search(
     model_id: Option<&str>,
     limit: usize,
 ) -> Result<Vec<BrainHit>> {
+    brain_search_with_lexical_mode(query, query_vec, model_id, limit, LexicalMode::RecallOr)
+}
+
+/// Hybrid search for passive launcher results. Its lexical leg requires
+/// multi-word terms to occur near each other; all semantic ranking and fusion
+/// behavior is shared with [`brain_search`].
+pub fn brain_search_proximity(
+    query: &str,
+    query_vec: Option<&[f32]>,
+    model_id: Option<&str>,
+    limit: usize,
+) -> Result<Vec<BrainHit>> {
+    brain_search_with_lexical_mode(query, query_vec, model_id, limit, LexicalMode::Proximity)
+}
+
+#[derive(Clone, Copy)]
+enum LexicalMode {
+    RecallOr,
+    Proximity,
+}
+
+fn brain_search_with_lexical_mode(
+    query: &str,
+    query_vec: Option<&[f32]>,
+    model_id: Option<&str>,
+    limit: usize,
+    lexical_mode: LexicalMode,
+) -> Result<Vec<BrainHit>> {
     let candidate_limit = limit.max(8) * 4;
-    let mut fts_ids = store::fts_search(query, candidate_limit)?;
-    if fts_ids.is_empty() && !query.trim().is_empty() {
+    let mut fts_ids = match lexical_mode {
+        LexicalMode::RecallOr => store::fts_search(query, candidate_limit)?,
+        LexicalMode::Proximity => store::fts_search_proximity(query, candidate_limit)?,
+    };
+    let should_fallback = match lexical_mode {
+        LexicalMode::RecallOr => !query.trim().is_empty(),
+        LexicalMode::Proximity => {
+            !query.trim().is_empty() && !query.chars().any(char::is_alphanumeric)
+        }
+    };
+    if fts_ids.is_empty() && should_fallback {
         // unicode61 drops emoji/symbol tokens, so FTS can come back empty for
         // text that exists verbatim in docs. Fall back to a substring scan as
         // the lexical leg before giving up.
-        fts_ids = store::substring_search(query, candidate_limit).unwrap_or_default();
+        fts_ids = match lexical_mode {
+            LexicalMode::RecallOr => store::substring_search(query, candidate_limit),
+            LexicalMode::Proximity => store::substring_search_proximity(query, candidate_limit),
+        }
+        .unwrap_or_default();
     }
     let vec_ids = match (query_vec, model_id) {
         (Some(qv), Some(mid)) if !qv.is_empty() => {

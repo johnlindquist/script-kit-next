@@ -144,6 +144,116 @@ fn brain_search_dedupes_identical_content_across_sources() {
     );
 }
 
+#[test]
+fn brain_search_proximity_filters_scattered_and_partial_multi_word_hits() {
+    let _db = init_test_db();
+    store::upsert_doc(
+        DocSource::Note,
+        "proximity-partial",
+        "A new memory",
+        "This contains new but neither of the other requested terms.",
+        100,
+    )
+    .unwrap();
+    store::upsert_doc(
+        DocSource::Note,
+        "proximity-scattered",
+        "Create plans",
+        "create one two three four five six seven eight nine ten eleven twelve new thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty flow",
+        100,
+    )
+    .unwrap();
+
+    let hits = search::brain_search_proximity("create new flow", None, None, 4).unwrap();
+    assert!(
+        !hits.iter().any(|hit| matches!(
+            hit.doc.source_id.as_str(),
+            "proximity-partial" | "proximity-scattered"
+        )),
+        "partial and widely scattered terms must not enter passive launcher results"
+    );
+
+    let or_hits = search::brain_search("create new flow", None, None, 4).unwrap();
+    assert!(
+        or_hits
+            .iter()
+            .any(|hit| hit.doc.source_id == "proximity-partial"),
+        "agent recall must retain OR semantics"
+    );
+}
+
+#[test]
+fn brain_search_proximity_matches_nearby_and_single_terms() {
+    let _db = init_test_db();
+    store::upsert_doc(
+        DocSource::Note,
+        "proximity-nearby",
+        "Deployment inbox",
+        "Review the vercel emails before lunch.",
+        100,
+    )
+    .unwrap();
+    store::upsert_doc(
+        DocSource::Note,
+        "proximity-single",
+        "Wildlife",
+        "A quokka checks the build status.",
+        100,
+    )
+    .unwrap();
+
+    let nearby = search::brain_search_proximity("vercel emails", None, None, 4).unwrap();
+    assert!(nearby
+        .iter()
+        .any(|hit| hit.doc.source_id == "proximity-nearby"));
+    let single = search::brain_search_proximity("quokka", None, None, 4).unwrap();
+    assert!(single
+        .iter()
+        .any(|hit| hit.doc.source_id == "proximity-single"));
+}
+
+/// The proximity substring fallback (emoji/symbol queries FTS cannot tokenize)
+/// must require EVERY term. Each per-term `title LIKE ?n OR content LIKE ?n`
+/// group needs its own parentheses — without them SQL's tighter-binding AND
+/// turns the multi-term clause into an effective OR and readmits partial
+/// matches.
+#[test]
+fn substring_search_proximity_requires_every_term() {
+    let _db = init_test_db();
+    store::upsert_doc(
+        DocSource::Note,
+        "emoji-both",
+        "Launch day",
+        "Shipping the 🚀 build after the 🌮 party.",
+        100,
+    )
+    .unwrap();
+    store::upsert_doc(
+        DocSource::Note,
+        "emoji-partial",
+        "Snack notes",
+        "Only the 🌮 shows up in this memory.",
+        100,
+    )
+    .unwrap();
+
+    let both = store::substring_search_proximity("🚀 🌮", 10).unwrap();
+    let partial_doc = store::get_doc(DocSource::Note, "emoji-partial")
+        .unwrap()
+        .unwrap();
+    let both_doc = store::get_doc(DocSource::Note, "emoji-both")
+        .unwrap()
+        .unwrap();
+    assert!(
+        both.contains(&both_doc.id),
+        "doc with every term must match"
+    );
+    assert!(
+        !both.contains(&partial_doc.id),
+        "doc missing a term must not match the AND fallback"
+    );
+}
+
 /// Recall SELECTs route through a SEPARATE read-only connection so an in-flight
 /// indexer write (which holds the single write `Mutex<Connection>`) cannot stall
 /// a submit-path recall query. Proves both correctness (read path returns the
@@ -318,27 +428,29 @@ fn fts_finds_doc_by_content_and_respects_deletion() {
 #[test]
 fn embedding_roundtrip_and_staleness() {
     let _db = init_test_db();
-    let id = store::upsert_doc(DocSource::Note, "n-embed", "T", "v1", 100).unwrap();
+    let v1 = "version one of a note long enough to embed semantically";
+    let v2 = "version two of a note long enough to embed semantically";
+    let id = store::upsert_doc(DocSource::Note, "n-embed", "T", v1, 100).unwrap();
     let pending = store::docs_needing_embedding("model-a", 50).unwrap();
     assert!(
         pending.iter().any(|d| d.id == id),
         "new doc needs embedding"
     );
-    store::store_embedding(id, "model-a", "T", "v1", &[0.6, 0.8]).unwrap();
+    store::store_embedding(id, "model-a", "T", v1, &[0.6, 0.8]).unwrap();
     let pending = store::docs_needing_embedding("model-a", 50).unwrap();
     assert!(
         !pending.iter().any(|d| d.id == id),
         "embedded doc is current"
     );
     // Content change invalidates by hash.
-    store::upsert_doc(DocSource::Note, "n-embed", "T", "v2", 200).unwrap();
+    store::upsert_doc(DocSource::Note, "n-embed", "T", v2, 200).unwrap();
     let pending = store::docs_needing_embedding("model-a", 50).unwrap();
     assert!(
         pending.iter().any(|d| d.id == id),
         "changed doc needs re-embed"
     );
     // Different model invalidates everything.
-    store::store_embedding(id, "model-a", "T", "v2", &[1.0, 0.0]).unwrap();
+    store::store_embedding(id, "model-a", "T", v2, &[1.0, 0.0]).unwrap();
     let pending = store::docs_needing_embedding("model-b", 50).unwrap();
     assert!(
         pending.iter().any(|d| d.id == id),
@@ -375,6 +487,13 @@ fn cosine_dedupes_chunks_keeping_best_per_doc() {
 }
 
 #[test]
+fn cosine_drops_candidates_below_similarity_floor() {
+    let embeddings = vec![(1, vec![0.39, 0.0]), (2, vec![0.41, 0.0])];
+    let top = cosine_top_ids(&[1.0, 0.0], &embeddings, 10);
+    assert_eq!(top, vec![2], "unused slots must not admit weak matches");
+}
+
+#[test]
 fn chunked_embeddings_roundtrip_and_staleness() {
     let _db = init_test_db();
     let long_content = "alpha section about rust gpui internals. ".repeat(40);
@@ -393,12 +512,13 @@ fn chunked_embeddings_roundtrip_and_staleness() {
     );
 
     // Content change invalidates ALL chunks via the doc-level hash.
-    store::upsert_doc(DocSource::Note, "n-chunked", "T", "changed", 200).unwrap();
+    let changed = "changed content long enough to stay in the semantic leg";
+    store::upsert_doc(DocSource::Note, "n-chunked", "T", changed, 200).unwrap();
     let pending = store::docs_needing_embedding("model-a", 500).unwrap();
     assert!(pending.iter().any(|d| d.id == id), "stale chunks re-embed");
 
     // Re-storing replaces the old chunk set atomically.
-    store::store_chunk_embeddings(id, "model-a", "T", "changed", &[(0, vec![0.5, 0.5])]).unwrap();
+    store::store_chunk_embeddings(id, "model-a", "T", changed, &[(0, vec![0.5, 0.5])]).unwrap();
     let loaded = store::load_embeddings("model-a").unwrap();
     let mine: Vec<_> = loaded.iter().filter(|(i, _)| *i == id).collect();
     assert_eq!(mine.len(), 1, "stale chunk rows are deleted on re-store");
@@ -422,6 +542,78 @@ fn signals_boost_matching_docs() {
     assert_eq!(no_boost[0].0, 1);
     let boosted = fuse_ranks(&[1, 2], &[], &[("youtube".to_string(), 6)], &docs, 10);
     assert_eq!(boosted[0].0, 2, "attention signal should re-rank");
+}
+
+#[test]
+fn signals_cannot_hoist_a_bottom_ranked_doc_over_a_clean_rank_one_doc() {
+    let ids: Vec<i64> = (1..=100).collect();
+    let docs = vec![
+        doc(1, "clean rank one", "directly relevant"),
+        doc(100, "all signal topics", "alpha beta gamma delta epsilon"),
+    ];
+    let topics = ["alpha", "beta", "gamma", "delta", "epsilon"]
+        .into_iter()
+        .map(|topic| (topic.to_string(), 100))
+        .collect::<Vec<_>>();
+    let ranked = fuse_ranks(&ids, &ids, &topics, &docs, 100);
+    assert_eq!(ranked[0].0, 1, "signals must remain a bounded tiebreaker");
+}
+
+#[test]
+fn load_embeddings_excludes_short_content_docs() {
+    let _db = init_test_db();
+    let real_content = "substantial semantic content that clears the minimum length gate";
+    let empty =
+        store::upsert_doc(DocSource::Note, "empty-semantic", "Untitled Note", "", 100).unwrap();
+    let tiny = store::upsert_doc(
+        DocSource::Note,
+        "tiny-semantic",
+        "Chat",
+        "clipstays too",
+        100,
+    )
+    .unwrap();
+    let real = store::upsert_doc(
+        DocSource::Note,
+        "real-semantic",
+        "Real note",
+        real_content,
+        100,
+    )
+    .unwrap();
+    store::store_embedding(
+        empty,
+        "model-short-filter",
+        "Untitled Note",
+        "",
+        &[1.0, 0.0],
+    )
+    .unwrap();
+    store::store_embedding(
+        tiny,
+        "model-short-filter",
+        "Chat",
+        "clipstays too",
+        &[1.0, 0.0],
+    )
+    .unwrap();
+    store::store_embedding(
+        real,
+        "model-short-filter",
+        "Real note",
+        real_content,
+        &[0.9, 0.1],
+    )
+    .unwrap();
+
+    let loaded = store::load_embeddings("model-short-filter").unwrap();
+    assert!(!loaded.iter().any(|(id, _)| *id == empty));
+    assert!(!loaded.iter().any(|(id, _)| *id == tiny));
+    assert!(loaded.iter().any(|(id, _)| *id == real));
+    let pending = store::docs_needing_embedding("another-model", 50).unwrap();
+    assert!(!pending.iter().any(|doc| doc.id == empty));
+    assert!(!pending.iter().any(|doc| doc.id == tiny));
+    assert!(pending.iter().any(|doc| doc.id == real));
 }
 
 #[test]
@@ -2028,7 +2220,7 @@ fn embed_cycle_chunks_long_docs_and_clears_pending() {
         DocSource::Note,
         "n-embed-cycle-short",
         "Short",
-        "tiny note",
+        "a short note that still clears the semantic minimum length gate",
         100,
     )
     .unwrap();
@@ -2071,7 +2263,7 @@ fn embed_cycle_chunks_long_docs_and_clears_pending() {
         DocSource::Note,
         "n-embed-cycle-short",
         "Short",
-        "tiny note v2",
+        "a short note v2 that still clears the semantic minimum length gate",
         200,
     )
     .unwrap();

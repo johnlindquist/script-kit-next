@@ -844,10 +844,20 @@ pub fn remove_doc(source: DocSource, source_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Minimum trimmed content length (chars) for a doc to participate in the
+/// SEMANTIC leg of search. Measured against the real embeddinggemma index:
+/// tiny docs ("clipstays too", "Link: GitHub") embed to near-generic vectors
+/// that score 0.35–0.49 cosine against every query — including nonsense —
+/// while genuine matches on substantive docs score ≥0.43. Short docs stay
+/// fully searchable lexically via FTS on title and content.
+pub(crate) const MIN_SEMANTIC_CONTENT_CHARS: usize = 40;
+
 /// Docs whose embedding is missing or stale for the given model. Ordered by
 /// recency so fresh material becomes searchable first. A doc is current only
 /// when chunk rows exist for this model AND they were produced from the
-/// doc's current content (chunk rows all carry the doc-level hash).
+/// doc's current content (chunk rows all carry the doc-level hash). Docs
+/// below [`MIN_SEMANTIC_CONTENT_CHARS`] are never embedded (similarity
+/// magnets — see the const doc).
 pub fn docs_needing_embedding(model_id: &str, limit: usize) -> Result<Vec<BrainDoc>> {
     let db = get_db()?;
     let conn = db.lock().map_err(|_| anyhow!("brain db lock poisoned"))?;
@@ -859,7 +869,8 @@ pub fn docs_needing_embedding(model_id: &str, limit: usize) -> Result<Vec<BrainD
     let mut stmt = conn.prepare(&format!(
         "SELECT {columns}
          FROM brain_docs d
-         WHERE NOT EXISTS (
+         WHERE length(trim(d.content)) >= {MIN_SEMANTIC_CONTENT_CHARS}
+           AND NOT EXISTS (
             SELECT 1 FROM brain_chunk_embeddings e
             WHERE e.doc_id = d.id
               AND e.model_id = ?1
@@ -935,10 +946,13 @@ pub fn store_chunk_embeddings(
 /// memory for brute-force cosine — see module docs for why this is fine.
 pub fn load_embeddings(model_id: &str) -> Result<Vec<(i64, Vec<f32>)>> {
     with_read_conn(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT doc_id, vec FROM brain_chunk_embeddings WHERE model_id = ?1
-             ORDER BY doc_id, chunk_index",
-        )?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT e.doc_id, e.vec
+             FROM brain_chunk_embeddings e
+             JOIN brain_docs d ON d.id = e.doc_id
+             WHERE e.model_id = ?1 AND length(trim(d.content)) >= {MIN_SEMANTIC_CONTENT_CHARS}
+             ORDER BY e.doc_id, e.chunk_index",
+        ))?;
         let rows = stmt
             .query_map(params![model_id], |row| {
                 Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
@@ -960,6 +974,17 @@ pub fn load_embeddings(model_id: &str) -> Result<Vec<(i64, Vec<f32>)>> {
 /// FTS5 BM25 search over all brain docs. Returns (doc_id, rank) best-first.
 pub fn fts_search(query: &str, limit: usize) -> Result<Vec<i64>> {
     let fts_query = sanitize_fts_query(query);
+    fts_search_sanitized(&fts_query, limit)
+}
+
+/// FTS5 search requiring multi-word launcher queries to occur within ten
+/// tokens. Single-term behavior is identical to [`fts_search`].
+pub fn fts_search_proximity(query: &str, limit: usize) -> Result<Vec<i64>> {
+    let fts_query = sanitize_fts_query_proximity(query);
+    fts_search_sanitized(&fts_query, limit)
+}
+
+fn fts_search_sanitized(fts_query: &str, limit: usize) -> Result<Vec<i64>> {
     if fts_query.is_empty() {
         return Ok(Vec::new());
     }
@@ -991,6 +1016,17 @@ pub fn fts_search(query: &str, limit: usize) -> Result<Vec<i64>> {
 /// first) so those queries still recall. Callers should only reach for this
 /// when [`fts_search`] returns empty — it is a table scan, not an index hit.
 pub fn substring_search(query: &str, limit: usize) -> Result<Vec<i64>> {
+    substring_search_with_join(query, limit, " OR ")
+}
+
+/// Substring fallback for proximity search. Every query term must occur in
+/// the title or content, preventing an emoji/symbol fallback from restoring
+/// the broad OR behavior that proximity mode intentionally avoids.
+pub fn substring_search_proximity(query: &str, limit: usize) -> Result<Vec<i64>> {
+    substring_search_with_join(query, limit, " AND ")
+}
+
+fn substring_search_with_join(query: &str, limit: usize, joiner: &str) -> Result<Vec<i64>> {
     let terms: Vec<String> = query
         .split_whitespace()
         .map(|term| {
@@ -1004,9 +1040,9 @@ pub fn substring_search(query: &str, limit: usize) -> Result<Vec<i64>> {
     }
     with_read_conn(|conn| {
         let clause = (1..=terms.len())
-            .map(|n| format!("title LIKE ?{n} ESCAPE '\\' OR content LIKE ?{n} ESCAPE '\\'"))
+            .map(|n| format!("(title LIKE ?{n} ESCAPE '\\' OR content LIKE ?{n} ESCAPE '\\')"))
             .collect::<Vec<_>>()
-            .join(" OR ");
+            .join(joiner);
         let sql = format!(
             "SELECT id FROM brain_docs WHERE {clause}
              ORDER BY updated_at DESC LIMIT {limit}"
@@ -1023,13 +1059,25 @@ pub fn substring_search(query: &str, limit: usize) -> Result<Vec<i64>> {
 }
 
 fn sanitize_fts_query(query: &str) -> String {
+    sanitized_fts_terms(query).join(" OR ")
+}
+
+fn sanitize_fts_query_proximity(query: &str) -> String {
+    let terms = sanitized_fts_terms(query);
+    match terms.len() {
+        0 => String::new(),
+        1 => terms.into_iter().next().unwrap_or_default(),
+        _ => format!("NEAR({}, 10)", terms.join(" ")),
+    }
+}
+
+fn sanitized_fts_terms(query: &str) -> Vec<String> {
     query
         .split_whitespace()
         .map(|term| term.replace('"', ""))
         .filter(|term| term.len() > 1)
         .map(|term| format!("\"{term}\""))
-        .collect::<Vec<_>>()
-        .join(" OR ")
+        .collect()
 }
 
 pub fn get_docs_by_ids(ids: &[i64]) -> Result<Vec<BrainDoc>> {

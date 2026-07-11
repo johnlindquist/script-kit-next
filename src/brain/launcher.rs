@@ -226,9 +226,13 @@ pub fn search_root_brain_direct(
 
     // The sync per-keystroke pass stays lexical-only (query_vec: None); the
     // async pass ([`search_root_brain_semantic`]) upgrades it to hybrid.
-    map_root_brain_hits(
-        super::brain_search(query.trim(), None, None, options.max_results).unwrap_or_default(),
-    )
+    let fetch_limit = options.max_results.saturating_mul(2);
+    let mut hits = map_root_brain_hits(
+        super::search::brain_search_proximity(query.trim(), None, None, fetch_limit)
+            .unwrap_or_default(),
+    );
+    hits.truncate(options.max_results);
+    hits
 }
 
 /// Async hybrid pass for the root launcher: embed the query on the warm
@@ -244,15 +248,18 @@ pub fn search_root_brain_semantic(
     }
     let query = query.trim();
     let (model_id, query_vec) = super::indexer::embed_query_within_budget(query)?;
-    Some(map_root_brain_hits(
-        super::brain_search(
+    let fetch_limit = options.max_results.saturating_mul(2);
+    let mut hits = map_root_brain_hits(
+        super::search::brain_search_proximity(
             query,
             Some(&query_vec),
             Some(&model_id),
-            options.max_results,
+            fetch_limit,
         )
         .unwrap_or_default(),
-    ))
+    );
+    hits.truncate(options.max_results);
+    Some(hits)
 }
 
 /// Most recent brain docs as launcher rows. Backs the armed-but-empty
@@ -300,6 +307,7 @@ pub fn semantic_root_brain_hits_for_query(
 /// Map full brain hits down to launcher rows. Shared by the sync lexical and
 /// async semantic passes so both produce identical row shapes.
 pub(crate) fn map_root_brain_hits(hits: Vec<super::search::BrainHit>) -> Vec<RootBrainSearchHit> {
+    let mut seen_rendered = std::collections::HashSet::new();
     hits.into_iter()
         .map(|hit| {
             let excerpt = match hit.doc.source {
@@ -319,6 +327,7 @@ pub(crate) fn map_root_brain_hits(hits: Vec<super::search::BrainHit>) -> Vec<Roo
                 source_id: hit.doc.source_id.clone(),
             }
         })
+        .filter(|hit| seen_rendered.insert((hit.title.clone(), hit.excerpt.clone())))
         .collect()
 }
 
@@ -411,6 +420,27 @@ fn strip_activity_stamp(line: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mapping_dedupes_rendered_identity_and_keeps_best_ranked_hit() {
+        let hit = |id: i64, source_id: &str| super::super::search::BrainHit {
+            doc: super::super::store::BrainDoc {
+                id,
+                source: DocSource::ChatTurn,
+                source_id: source_id.to_string(),
+                title: "Follow up on this Brain Inbox item.".to_string(),
+                content: "User: Follow up on this Brain Inbox item.\nDistinct hidden detail"
+                    .to_string(),
+                canonical_path: None,
+                updated_at: id,
+            },
+            score: 1.0 / id as f64,
+        };
+        let mapped = map_root_brain_hits(vec![hit(1, "best"), hit(2, "lower")]);
+
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].source_id, "best", "first ranked hit must win");
+    }
 
     #[test]
     fn query_plan_locks_shared_sync_async_decisions() {
