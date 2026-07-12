@@ -21,10 +21,13 @@ describe("Agent Chat fidelity manifest", () => {
     );
 
     expect(screenMatch?.[1]).toBe(manifest.screen.id);
+    expect(manifest.schemaVersion).toBe(2);
+    expect(manifest.captureMode).toBe("raster-replay-with-semantic-dom");
+    expect(manifest.closedWorld).toBe(true);
     expect(manifest.screen).toEqual({
       id: "agent-chat",
-      target: { automationId: "main", targetKind: "Main" },
-      viewport: { width: 750, height: 480 },
+      target: { automationId: "main", targetKind: "Main", surfaceKind: "agentChatChat" },
+      viewport: { width: 750, height: 480, dpr: 2 },
     });
     expect(manifest.tolerance).toBe(0.5);
     expect(manifest.requirePaintMeasurement).toBe(true);
@@ -36,10 +39,26 @@ describe("Agent Chat fidelity manifest", () => {
       requireInputHashes: true,
       requireRedOsEvidence: true,
     });
-    expect(manifest.elements).toHaveLength(13);
+    expect(manifest.pixelPlane).toEqual({
+      proofKind: "direct-byte-replay",
+      maxChangedPixels: 0,
+      requireSameSize: true,
+      requireSourceFreshness: true,
+    });
+    expect(manifest.elements).toHaveLength(14);
     expect(new Set(htmlIds).size).toBe(htmlIds.length);
     expect(new Set(fidelityIds).size).toBe(fidelityIds.length);
     expect(new Set(gpuiIds).size).toBe(gpuiIds.length);
     expect([...htmlIds].sort()).toEqual([...fidelityIds].sort());
+    expect(manifest.inventory.expectedDomIds).toEqual(fidelityIds);
+    expect(manifest.inventory.expectedGpuiIds).toEqual(gpuiIds);
+    expect(gpuiIds.slice(7, 13)).toEqual([
+      "agent-chat-transcript-row-user-16",
+      "agent-chat-transcript-row-assistant-17",
+      "agent-chat-transcript-row-system-18",
+      "agent-chat-transcript-row-tool-20",
+      "agent-chat-transcript-row-tool-21",
+      "agent-chat-transcript-row-assistant-19",
+    ]);
   });
 });

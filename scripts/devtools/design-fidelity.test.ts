@@ -47,4 +47,29 @@ describe("design fidelity comparator", () => {
     expect(r.classification).toBe("reproduced");
     expect(r.errors).toContain("All mapped GPUI elements must come from one completed paint frame");
   });
+  test("closed-world inventory rejects unexpected GPUI scopes", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:[]}});
+    const extra={semanticId:"extra",bounds:{x:0,y:0,width:1,height:1},primitiveCount:1};
+    const r=compareDesignFidelity(m,gpui(undefined,[...gpui().elements,extra]),dom());
+    expect(r.errors).toContain("Closed-world gpui inventory mismatch");
+  });
+  test("closed-world inventory rejects duplicates and missing AppKit nodes", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:["footer"],expectedOverlayIds:[]}});
+    const g={...gpui(),appKitNodes:[{identifier:"other"},{identifier:"other"}]};
+    const r=compareDesignFidelity(m,g,dom());
+    expect(r.errors).toContain("Closed-world appKit inventory mismatch");
+  });
+  test("closed-world comparison checks clip edges", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:[]}});
+    const node={...gpui().elements[0],primitiveCount:1,clipBounds:{x:101,y:200,width:99,height:80}};
+    const r=compareDesignFidelity(m,gpui(undefined,[node]),dom());
+    expect(r.errors).toContain("Clip geometry exceeds tolerance for title");
+  });
+  test("direct replay rejects browser-render evidence and stale source", () => {
+    const m=manifest({pixelPlane:{proofKind:"direct-byte-replay",maxChangedPixels:0,requireSourceFreshness:true}});
+    const image={tool:"script-kit-devtools.image-diff",classification:"ok",proofKind:"browser-screenshot",changedPixels:0,sourceFreshness:{matchesCurrentWorkspace:false}};
+    const r=compareDesignFidelity(m,gpui(),dom(),image);
+    expect(r.errors).toContain("Image receipt is not classified as direct byte raster replay");
+    expect(r.errors).toContain("Raster replay source is stale or lacks a current workspace fingerprint");
+  });
 });

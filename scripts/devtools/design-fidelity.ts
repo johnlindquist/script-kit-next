@@ -3,16 +3,21 @@
 export type Rect = { x: number; y: number; width: number; height: number; right?: number; bottom?: number };
 
 export type FidelityManifest = {
+  schemaVersion?: number;
+  captureMode?: string;
+  closedWorld?: boolean;
   screen: {
     id: string;
     target: { automationId?: string; targetKind?: string; surfaceKind?: string };
-    viewport: { width: number; height: number };
+    viewport: { width: number; height: number; dpr?: number };
   };
+  pixelPlane?: { proofKind?: string; maxChangedPixels?: number; requireSameSize?: boolean; requireSourceFreshness?: boolean };
+  inventory?: { expectedDomIds?: string[]; expectedGpuiIds?: string[]; expectedAppKitIds?: string[]; expectedOverlayIds?: string[]; inventorySha256?: string };
   tolerance?: number;
   requirePaintMeasurement?: boolean;
   requireVisibleMeasurement?: boolean;
   imageDiff?: { required?: boolean; maxChangedPixelRatio?: number; requireSameSize?: boolean; requireInputHashes?: boolean; requireRedOsEvidence?: boolean };
-  elements: Array<{ fidelityId: string; gpuiId: string; exactText?: boolean }>;
+  elements: Array<{ fidelityId: string; gpuiId: string; kind?: string; parentId?: string | null; paintOrder?: number; textMode?: "exact" | "hash" | "none"; exactText?: boolean; requireFullBounds?: boolean; requireVisibleBounds?: boolean; requireClipBounds?: boolean }>;
 };
 
 export type DomElementMeasurement = {
@@ -137,6 +142,21 @@ function gpuiId(node: AnyObject) { return String(node.semanticId ?? node.id ?? n
 function gpuiRect(node: AnyObject) { return firstRect(node.rect, node.bounds, node.frame); }
 function provenance(node: AnyObject, receipt: AnyObject) { return String(node.measurementProvenance ?? node.provenance ?? receipt.measurementProvenance ?? receipt.provenance ?? ""); }
 function identity(receipt: AnyObject) { return object(receipt.resolvedTarget ?? receipt.target ?? receipt.result?.resolvedTarget ?? receipt.result?.target); }
+function ids(values: unknown, idKeys = ["fidelityId", "id", "identifier", "name"]): string[] {
+  if (!Array.isArray(values)) return [];
+  return values.map(object).map(value => {
+    for (const key of idKeys) if (typeof value[key] === "string") return value[key];
+    return "";
+  });
+}
+function inventoryDelta(expected: string[], actual: string[]) {
+  const duplicates = [...new Set(actual.filter((id, index) => !id || actual.indexOf(id) !== index))];
+  return {
+    missing: expected.filter(id => !actual.includes(id)),
+    unexpected: actual.filter(id => !expected.includes(id)),
+    duplicates,
+  };
+}
 
 function gpuiCoordinateSpace(node: AnyObject, receipt: AnyObject) {
   const explicit = String(
@@ -217,6 +237,21 @@ export function compareDesignFidelity(manifest: FidelityManifest, gpuiInput: unk
   duplicateDom.length ? fail("domIdsUnique", "Every data-fidelity-id must occur exactly once", duplicateDom) : pass("domIdsUnique");
   const unmappedDom = markedIds.filter(id => !manifestIds.includes(id));
   unmappedDom.length ? fail("allDomNodesMapped", "Every data-fidelity-id must be mapped", unmappedDom) : pass("allDomNodesMapped");
+  if (manifest.closedWorld) {
+    if (manifest.schemaVersion !== 2) fail("manifest.schemaVersion", "Closed-world fidelity requires manifest schema version 2", {actual:manifest.schemaVersion ?? null});
+    else pass("manifest.schemaVersion", 2);
+    const inventories = [
+      ["dom", manifest.inventory?.expectedDomIds ?? [], markedIds],
+      ["gpui", manifest.inventory?.expectedGpuiIds ?? [], gpuiNodes.map(gpuiId)],
+      ["appKit", manifest.inventory?.expectedAppKitIds ?? [], ids(gpui.appKitNodes ?? gpui.appKit?.nodes)],
+      ["overlay", manifest.inventory?.expectedOverlayIds ?? [], ids(gpui.overlayNodes ?? gpui.overlay?.nodes)],
+    ] as const;
+    for (const [name, expected, actual] of inventories) {
+      const delta = inventoryDelta([...expected], actual);
+      const ok = !delta.missing.length && !delta.unexpected.length && !delta.duplicates.length;
+      ok ? pass(`inventory.${name}`, {count:actual.length}) : fail(`inventory.${name}`, `Closed-world ${name} inventory mismatch`, delta);
+    }
+  }
   for (const mapping of manifest.elements) {
     const domMatches = domNodes.filter(n => n.fidelityId === mapping.fidelityId);
     const gpuiMatches = gpuiNodes.filter(n => gpuiId(n) === mapping.gpuiId);
@@ -224,6 +259,13 @@ export function compareDesignFidelity(manifest: FidelityManifest, gpuiInput: unk
     if (gpuiMatches.length !== 1) { fail(`element.${mapping.fidelityId}.gpuiPresent`, `GPUI mapping ${mapping.gpuiId} resolved ${gpuiMatches.length} times`); continue; }
     const dr = rect(domMatches[0].rect), gr = gpuiRect(gpuiMatches[0]);
     if (!dr || !gr || !domRoot || !gpuiWindow) { fail(`element.${mapping.fidelityId}.geometryAvailable`, `Missing geometry for ${mapping.fidelityId}`); continue; }
+    const node = gpuiMatches[0];
+    if (manifest.closedWorld) {
+      if (mapping.kind !== undefined) node.kind === mapping.kind ? pass(`element.${mapping.fidelityId}.kind`) : fail(`element.${mapping.fidelityId}.kind`, `Node kind mismatch for ${mapping.gpuiId}`, {expected:mapping.kind,actual:node.kind ?? null});
+      if (mapping.parentId !== undefined) (node.parentId ?? null) === mapping.parentId ? pass(`element.${mapping.fidelityId}.parent`) : fail(`element.${mapping.fidelityId}.parent`, `Node parent mismatch for ${mapping.gpuiId}`, {expected:mapping.parentId,actual:node.parentId ?? null});
+      if (mapping.paintOrder !== undefined) node.paintOrder === mapping.paintOrder ? pass(`element.${mapping.fidelityId}.paintOrder`) : fail(`element.${mapping.fidelityId}.paintOrder`, `Node paint order mismatch for ${mapping.gpuiId}`, {expected:mapping.paintOrder,actual:node.paintOrder ?? null});
+      if (!finite(node.primitiveCount) || node.primitiveCount <= 0) fail(`element.${mapping.fidelityId}.paintAtoms`, `Visible fidelity scope must own paint primitives: ${mapping.gpuiId}`, {primitiveCount:node.primitiveCount ?? null});
+    }
     if (manifest.requirePaintMeasurement) {
       const source = provenance(gpuiMatches[0], gpui).toLowerCase();
       if (!source.includes("paint")) { fail(`element.${mapping.fidelityId}.paintProvenance`, `Paint-time GPUI measurement required for ${mapping.gpuiId}`, {provenance:source || null}); continue; }
@@ -255,9 +297,22 @@ export function compareDesignFidelity(manifest: FidelityManifest, gpuiInput: unk
           : fail(`element.${mapping.fidelityId}.visibleGeometry`, `Visible geometry exceeds tolerance for ${mapping.fidelityId}`, visibleDeltas);
       }
     }
+    if (mapping.requireClipBounds || manifest.closedWorld) {
+      const domClip = rect(domMatches[0].clipRect);
+      const nativeClip = firstRect(node.clipBounds, node.clipRect);
+      if (!domClip || !nativeClip) fail(`element.${mapping.fidelityId}.clipGeometryAvailable`, `Clip geometry is required for ${mapping.fidelityId}`);
+      else {
+        const htmlClip = relative(domClip, domRoot);
+        const gpuiClip = gpuiRelativeRect(node, nativeClip, gpuiWindow, gpui);
+        const clipDeltas = Object.fromEntries(["x","y","right","bottom","width","height"].map(k => [k, Math.abs(htmlClip[k as keyof Rect] as number-gpuiClip[k as keyof Rect] as number)]));
+        Object.values(clipDeltas).every(delta => delta <= tolerance)
+          ? pass(`element.${mapping.fidelityId}.clipGeometry`, clipDeltas)
+          : fail(`element.${mapping.fidelityId}.clipGeometry`, `Clip geometry exceeds tolerance for ${mapping.fidelityId}`, clipDeltas);
+      }
+    }
     const withinTolerance = fullWithinTolerance && visibleWithinTolerance;
     const text = { html:normalizedText(domMatches[0].text), gpui:normalizedText(gpuiMatches[0].text ?? gpuiMatches[0].label) };
-    const textExact = !mapping.exactText || text.html === text.gpui;
+    const textExact = !(mapping.exactText || mapping.textMode === "exact") || text.html === text.gpui;
     fullWithinTolerance ? pass(`element.${mapping.fidelityId}.geometry`, deltas) : fail(`element.${mapping.fidelityId}.geometry`, `Geometry exceeds tolerance for ${mapping.fidelityId}`, deltas);
     textExact ? pass(`element.${mapping.fidelityId}.text`, text) : fail(`element.${mapping.fidelityId}.text`, `Normalized text mismatch for ${mapping.fidelityId}`, text);
     elements.push({ fidelityId:mapping.fidelityId, gpuiId:mapping.gpuiId, htmlRect:html, gpuiRect:native, deltas, iou:iou(html,native), htmlVisibleRect:htmlVisible, gpuiVisibleRect:gpuiVisible, visibleDeltas, visibleWithinTolerance, tolerance, withinTolerance, paintFrameGeneration:gpuiMatches[0].measurementFrameGeneration ?? null, ...(mapping.exactText ? {text,exactText:textExact}:{}), domStyle:domMatches[0].style ?? null, domOverflow:domMatches[0].overflow ?? null });
@@ -314,6 +369,20 @@ export function compareDesignFidelity(manifest: FidelityManifest, gpuiInput: unk
           ? pass("imageDiff.redOsEvidence", redEvidence)
           : fail("imageDiff.redOsEvidence", "The GPUI image must be a nonblank OS compositor capture", {redEvidence:redEvidence ?? null});
       }
+    }
+  }
+  if (manifest.pixelPlane) {
+    const changedPixels = imageDiffEvidence?.changedPixelCount;
+    imageDiff?.proofKind === manifest.pixelPlane.proofKind
+      ? pass("pixelPlane.proofKind", imageDiff.proofKind)
+      : fail("pixelPlane.proofKind", "Image receipt is not classified as direct byte raster replay", {expected:manifest.pixelPlane.proofKind,actual:imageDiff?.proofKind ?? null});
+    finite(changedPixels) && changedPixels <= (manifest.pixelPlane.maxChangedPixels ?? 0)
+      ? pass("pixelPlane.changedPixels", changedPixels)
+      : fail("pixelPlane.changedPixels", "Changed pixels exceed the manifest limit", {actual:changedPixels ?? null,maximum:manifest.pixelPlane.maxChangedPixels ?? 0});
+    if (manifest.pixelPlane.requireSourceFreshness) {
+      imageDiff?.sourceFreshness?.matchesCurrentWorkspace === true
+        ? pass("pixelPlane.sourceFreshness")
+        : fail("pixelPlane.sourceFreshness", "Raster replay source is stale or lacks a current workspace fingerprint");
     }
   }
   const classification = errors.length ? "reproduced" : "ok";

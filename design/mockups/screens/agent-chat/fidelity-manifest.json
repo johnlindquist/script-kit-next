@@ -1,18 +1,25 @@
 {
+  "schemaVersion": 2,
+  "captureMode": "raster-replay-with-semantic-dom",
+  "closedWorld": true,
   "screen": {
     "id": "agent-chat",
     "target": {
       "automationId": "main",
-      "targetKind": "Main"
+      "targetKind": "Main",
+      "surfaceKind": "agentChatChat"
     },
-    "viewport": {
-      "width": 750,
-      "height": 480
-    }
+    "viewport": { "width": 750, "height": 480, "dpr": 2 }
   },
   "tolerance": 0.5,
   "requirePaintMeasurement": true,
   "requireVisibleMeasurement": true,
+  "pixelPlane": {
+    "proofKind": "direct-byte-replay",
+    "maxChangedPixels": 0,
+    "requireSameSize": true,
+    "requireSourceFreshness": true
+  },
   "imageDiff": {
     "required": true,
     "maxChangedPixelRatio": 0,
@@ -20,58 +27,41 @@
     "requireInputHashes": true,
     "requireRedOsEvidence": true
   },
+  "inventory": {
+    "expectedDomIds": [
+      "agent-chat.header.context-zone", "agent-chat.header.cwd-chip", "agent-chat.header.trailing-chip",
+      "agent-chat.composer.shell", "agent-chat.composer.input", "agent-chat.composer.send",
+      "agent-chat.transcript.viewport", "agent-chat.transcript.message.user-16",
+      "agent-chat.transcript.message.assistant-17", "agent-chat.transcript.message.system-18",
+      "agent-chat.transcript.tool.edit-diff", "agent-chat.transcript.tool.bash-failed",
+      "agent-chat.transcript.message.assistant-19", "agent-chat.footer.host"
+    ],
+    "expectedGpuiIds": [
+      "main-view-context-zone", "main-view-context-cwd-button", "main-view-context-model-button",
+      "main-view-input-shell", "main-view-input-body", "agent-chat-send-button",
+      "agent-chat-transcript-viewport", "agent-chat-transcript-row-user-16",
+      "agent-chat-transcript-row-assistant-17", "agent-chat-transcript-row-system-18",
+      "agent-chat-transcript-row-tool-20", "agent-chat-transcript-row-tool-21",
+      "agent-chat-transcript-row-assistant-19", "native-main-window-footer-spacer"
+    ],
+    "expectedAppKitIds": ["script-kit-footer-effect", "script-kit-footer-divider", "script-kit-footer-hints", "script-kit-footer-left-info"],
+    "expectedOverlayIds": ["gpui-footer-overlay"],
+    "inventorySha256": "pending-fresh-runtime-inventory"
+  },
   "elements": [
-    {
-      "fidelityId": "agent-chat.header.context-zone",
-      "gpuiId": "main-view-context-zone"
-    },
-    {
-      "fidelityId": "agent-chat.header.cwd-chip",
-      "gpuiId": "main-view-context-cwd-button"
-    },
-    {
-      "fidelityId": "agent-chat.header.trailing-chip",
-      "gpuiId": "main-view-context-model-button"
-    },
-    {
-      "fidelityId": "agent-chat.composer.shell",
-      "gpuiId": "main-view-input-shell"
-    },
-    {
-      "fidelityId": "agent-chat.composer.input",
-      "gpuiId": "main-view-input-body"
-    },
-    {
-      "fidelityId": "agent-chat.composer.send",
-      "gpuiId": "agent-chat-send-button"
-    },
-    {
-      "fidelityId": "agent-chat.transcript.viewport",
-      "gpuiId": "agent-chat-transcript-viewport"
-    },
-    {
-      "fidelityId": "agent-chat.transcript.message.assistant-17",
-      "gpuiId": "agent-chat-transcript-row-assistant-17"
-    },
-    {
-      "fidelityId": "agent-chat.transcript.message.system-18",
-      "gpuiId": "agent-chat-transcript-row-system-18"
-    },
-    {
-      "fidelityId": "agent-chat.transcript.tool.edit-diff",
-      "gpuiId": "agent-chat-transcript-row-tool-19"
-    },
-    {
-      "fidelityId": "agent-chat.transcript.tool.bash-failed",
-      "gpuiId": "agent-chat-transcript-row-tool-20"
-    },
-    {
-      "fidelityId": "agent-chat.transcript.message.assistant-21",
-      "gpuiId": "agent-chat-transcript-row-assistant-21"
-    },
-    {
-      "fidelityId": "agent-chat.footer.host",
-      "gpuiId": "native-main-window-footer-spacer"
-    }
+    { "fidelityId": "agent-chat.header.context-zone", "gpuiId": "main-view-context-zone" },
+    { "fidelityId": "agent-chat.header.cwd-chip", "gpuiId": "main-view-context-cwd-button" },
+    { "fidelityId": "agent-chat.header.trailing-chip", "gpuiId": "main-view-context-model-button" },
+    { "fidelityId": "agent-chat.composer.shell", "gpuiId": "main-view-input-shell" },
+    { "fidelityId": "agent-chat.composer.input", "gpuiId": "main-view-input-body" },
+    { "fidelityId": "agent-chat.composer.send", "gpuiId": "agent-chat-send-button" },
+    { "fidelityId": "agent-chat.transcript.viewport", "gpuiId": "agent-chat-transcript-viewport" },
+    { "fidelityId": "agent-chat.transcript.message.user-16", "gpuiId": "agent-chat-transcript-row-user-16" },
+    { "fidelityId": "agent-chat.transcript.message.assistant-17", "gpuiId": "agent-chat-transcript-row-assistant-17" },
+    { "fidelityId": "agent-chat.transcript.message.system-18", "gpuiId": "agent-chat-transcript-row-system-18" },
+    { "fidelityId": "agent-chat.transcript.tool.edit-diff", "gpuiId": "agent-chat-transcript-row-tool-20" },
+    { "fidelityId": "agent-chat.transcript.tool.bash-failed", "gpuiId": "agent-chat-transcript-row-tool-21" },
+    { "fidelityId": "agent-chat.transcript.message.assistant-19", "gpuiId": "agent-chat-transcript-row-assistant-19" },
+    { "fidelityId": "agent-chat.footer.host", "gpuiId": "native-main-window-footer-spacer" }
   ]
 }

@@ -23,7 +23,7 @@
 
   The transcript list is bottom-aligned (ListAlignment::Bottom + follow_tail),
   so this mockup shows the TAIL of the fixture:
-  messages 16 → 17 → 18 → tool-edit-diff (19) → tool-bash-failed (20) → 21.
+  messages 16 → 17 → 18 → tool-edit-diff (20) → tool-bash-failed (21) → 19.
 
   Composer: load_kitchen_sink_fixture clears the input, and the transcript is
   non-empty, so the placeholder is "Follow up…"
@@ -84,7 +84,8 @@
                data-component="AgentChatTranscript (bottom-aligned list)"
                data-fidelity-id="agent-chat.transcript.viewport">
         <!-- fixture message 16 — user, new turn -->
-        <div class="sk-agent-chat-row" data-new-turn="true" data-component="transcript row">
+        <div class="sk-agent-chat-row" data-new-turn="true" data-component="transcript row"
+             data-fidelity-id="agent-chat.transcript.message.user-16">
           <div class="sk-agent-chat-user sk-agent-chat-md" data-component="render_user_message">
             <p>Scroll sentinel 2 from the user side.</p>
           </div>
@@ -150,9 +151,9 @@
           </div>
         </div>
 
-        <!-- fixture message 21 — final assistant sentinel -->
+        <!-- fixture message 19 — final assistant sentinel -->
         <div class="sk-agent-chat-row" data-component="transcript row"
-             data-fidelity-id="agent-chat.transcript.message.assistant-21">
+             data-fidelity-id="agent-chat.transcript.message.assistant-19">
           <div class="sk-agent-chat-assistant sk-agent-chat-md"
                data-component="render_assistant_message">
             <p>Final visible sentinel: <strong>Agent Chat Kitchen Sink complete</strong>.</p>
