@@ -67,7 +67,9 @@ pub use elements_actions_scriptlets::{
     ScriptletData, ScriptletMetadataData,
 };
 pub use grid_layout::{
-    BoxModelSides, ComputedBoxModel, ComputedFlexStyle, FidelityLayoutNode, FidelityLayoutSnapshot,
+    AppKitFidelityColor, AppKitFidelityImage, AppKitFidelityLayer, AppKitFidelityNode,
+    AppKitFidelitySnapshot, AppKitFidelityText, BoxModelSides, ComputedBoxModel, ComputedFlexStyle,
+    FidelityCaptureStatus, FidelityLayoutNode, FidelityLayoutSnapshot, FidelityPaintTargetSnapshot,
     FidelityUnscopedPaintSummary, GridColorScheme, GridDepthOption, GridOptions, LayoutBounds,
     LayoutComponentInfo, LayoutComponentType, LayoutInfo, ScriptErrorData,
 };

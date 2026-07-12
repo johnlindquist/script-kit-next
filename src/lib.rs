@@ -41,6 +41,7 @@ pub mod emoji;
 pub mod emoji_usage;
 pub mod error;
 pub mod executor;
+pub(crate) mod fidelity_capture;
 pub mod focus_coordinator;
 pub mod form_prompt;
 pub mod formatting;

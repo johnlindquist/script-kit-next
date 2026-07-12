@@ -4,7 +4,7 @@ use gpui::{
     ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled, Window,
     WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, OnceLock};
 
 #[cfg(target_os = "macos")]
@@ -492,6 +492,68 @@ fn automation_bounds_from_gpui(bounds: Bounds<Pixels>) -> crate::protocol::Autom
 static MAIN_WINDOW_GPUI_FOOTER_OVERLAY: OnceLock<Mutex<Option<GpuiFooterOverlaySlot>>> =
     OnceLock::new();
 
+static MAIN_WINDOW_GPUI_FOOTER_OVERLAY_FIDELITY: OnceLock<
+    Mutex<Option<crate::protocol::FidelityPaintTargetSnapshot>>,
+> = OnceLock::new();
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct AppKitFidelityCaptureOutcome {
+    pub status: crate::protocol::FidelityCaptureStatus,
+    pub snapshot: Option<crate::protocol::AppKitFidelitySnapshot>,
+}
+
+impl AppKitFidelityCaptureOutcome {
+    fn blocked(status: crate::protocol::FidelityCaptureStatus) -> Self {
+        Self {
+            status,
+            snapshot: None,
+        }
+    }
+
+    fn captured(snapshot: crate::protocol::AppKitFidelitySnapshot) -> Self {
+        Self {
+            status: crate::protocol::FidelityCaptureStatus::Captured,
+            snapshot: Some(snapshot),
+        }
+    }
+}
+
+fn appkit_fidelity_inventory_blocker(
+    nodes: &[crate::protocol::AppKitFidelityNode],
+) -> Option<crate::protocol::FidelityCaptureStatus> {
+    if nodes.is_empty() {
+        return Some(crate::protocol::FidelityCaptureStatus::EmptyInventory);
+    }
+    let unique_ids: BTreeSet<_> = nodes.iter().map(|node| node.id.as_str()).collect();
+    (unique_ids.len() != nodes.len())
+        .then_some(crate::protocol::FidelityCaptureStatus::DuplicateIdentifiers)
+}
+
+fn clear_main_footer_overlay_fidelity_snapshot() {
+    let storage = MAIN_WINDOW_GPUI_FOOTER_OVERLAY_FIDELITY.get_or_init(|| Mutex::new(None));
+    if let Ok(mut snapshot) = storage.lock() {
+        *snapshot = None;
+    }
+}
+
+fn store_main_footer_overlay_fidelity_snapshot(
+    snapshot: crate::protocol::FidelityPaintTargetSnapshot,
+) {
+    let storage = MAIN_WINDOW_GPUI_FOOTER_OVERLAY_FIDELITY.get_or_init(|| Mutex::new(None));
+    if let Ok(mut current) = storage.lock() {
+        *current = Some(snapshot);
+    }
+}
+
+pub(crate) fn main_footer_overlay_fidelity_snapshot(
+) -> Option<crate::protocol::FidelityPaintTargetSnapshot> {
+    MAIN_WINDOW_GPUI_FOOTER_OVERLAY_FIDELITY
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|snapshot| snapshot.clone())
+}
+
 struct GpuiFooterOverlay {
     config: MainWindowFooterConfig,
     overlay_width_px: f32,
@@ -526,6 +588,7 @@ impl GpuiFooterOverlay {
         };
         let mut row = div()
             .id(row_id)
+            .debug_selector(|| "agent-chat.footer-overlay.profile".to_string())
             .flex()
             .flex_1()
             .items_center()
@@ -581,6 +644,7 @@ impl GpuiFooterOverlay {
             row = row.child(
                 div()
                     .id("footer-braille-spinner")
+                    .debug_selector(|| "agent-chat.footer-overlay.spinner".to_string())
                     .w(px(FOOTER_BRAILLE_SPINNER_LANE_PX))
                     .flex_shrink_0()
                     .flex()
@@ -626,6 +690,7 @@ impl GpuiFooterOverlay {
             row = row.child(
                 div()
                     .id("agent_chat-model-display")
+                    .debug_selector(|| "agent-chat.footer-overlay.model".to_string())
                     .min_w(px(0.0))
                     .font_family(crate::list_item::FONT_SYSTEM_UI)
                     .font_weight(label_weight)
@@ -674,11 +739,16 @@ impl GpuiFooterOverlay {
         // ellipsize under real layout pressure instead of against estimated
         // character widths.
         let min_width = footer_hint_slot_width(action) as f32;
+        let fidelity_id = format!(
+            "agent-chat.footer-overlay.button.{}",
+            footer_action_key(action)
+        );
         let mut item = div()
             .id(format!(
                 "gpui-footer-overlay-button-{}",
                 footer_action_key(action)
             ))
+            .debug_selector(move || fidelity_id.clone())
             .min_w(px(min_width))
             .when(matches!(action, FooterAction::Run), |style| {
                 style.max_w(px(
@@ -727,7 +797,28 @@ impl GpuiFooterOverlay {
 }
 
 impl Render for GpuiFooterOverlay {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if window.fidelity_capture_active() {
+            // App effects flush after this draw completes, so the deferred
+            // callback observes the completed frame rendered below. This is
+            // also deterministic on GPUI's test platform, whose platform
+            // frame callback is intentionally inert.
+            window.defer(cx, |window, _cx| {
+                if !window.fidelity_capture_active() {
+                    return;
+                }
+                let snapshot = crate::fidelity_capture::paint_target_snapshot(
+                    window,
+                    GPUI_FOOTER_OVERLAY_AUTOMATION_ID,
+                    "footerOverlay",
+                    Some("main".to_string()),
+                );
+                store_main_footer_overlay_fidelity_snapshot(snapshot);
+            });
+        } else {
+            clear_main_footer_overlay_fidelity_snapshot();
+        }
+
         let theme = crate::theme::get_cached_theme();
         let left_pinned_buttons: Vec<_> = self
             .config
@@ -857,6 +948,7 @@ pub(crate) fn refresh_main_footer_popup_for_runtime_style(window: &mut Window, c
 }
 
 fn close_gpui_footer_overlay(cx: &mut App) {
+    clear_main_footer_overlay_fidelity_snapshot();
     let storage = MAIN_WINDOW_GPUI_FOOTER_OVERLAY.get_or_init(|| Mutex::new(None));
     let slot = storage.lock().ok().and_then(|mut guard| guard.take());
     if let Some(slot) = slot {
@@ -880,6 +972,7 @@ fn sync_gpui_footer_overlay(
     }
 
     let bounds = gpui_footer_overlay_bounds(parent_bounds);
+    clear_main_footer_overlay_fidelity_snapshot();
     let overlay_width_px: f32 = bounds.size.width.into();
     let storage = MAIN_WINDOW_GPUI_FOOTER_OVERLAY.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = storage.lock() {
@@ -1187,7 +1280,7 @@ pub(crate) fn close_main_footer_popup(cx: &mut App) {
 }
 
 #[cfg(target_os = "macos")]
-fn main_window_ns_window(window: &mut Window) -> Option<id> {
+fn main_window_ns_window(window: &Window) -> Option<id> {
     if let Ok(window_handle) = raw_window_handle::HasWindowHandle::window_handle(window) {
         if let raw_window_handle::RawWindowHandle::AppKit(appkit) = window_handle.as_raw() {
             use objc::{msg_send, sel, sel_impl};
@@ -1205,6 +1298,382 @@ fn main_window_ns_window(window: &mut Window) -> Option<id> {
     }
 
     None
+}
+
+#[cfg(target_os = "macos")]
+fn appkit_layout_bounds(rect: cocoa::foundation::NSRect) -> crate::protocol::LayoutBounds {
+    crate::protocol::LayoutBounds {
+        x: rect.origin.x as f32,
+        y: rect.origin.y as f32,
+        width: rect.size.width as f32,
+        height: rect.size.height as f32,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn appkit_screenshot_bounds(
+    window_rect: cocoa::foundation::NSRect,
+    screenshot_height: f64,
+) -> crate::protocol::LayoutBounds {
+    crate::protocol::LayoutBounds {
+        x: window_rect.origin.x as f32,
+        y: (screenshot_height - window_rect.origin.y - window_rect.size.height) as f32,
+        width: window_rect.size.width as f32,
+        height: window_rect.size.height as f32,
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_ns_string(value: id) -> Option<String> {
+    use objc::{msg_send, sel, sel_impl};
+    use std::ffi::CStr;
+
+    if value == nil {
+        return None;
+    }
+    let utf8: *const std::os::raw::c_char = msg_send![value, UTF8String];
+    if utf8.is_null() {
+        return None;
+    }
+    Some(CStr::from_ptr(utf8).to_string_lossy().into_owned())
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_view_identifier(view: id) -> Option<String> {
+    use objc::{msg_send, sel, sel_impl};
+
+    if view == nil {
+        return None;
+    }
+    let identifier: id = msg_send![view, identifier];
+    appkit_ns_string(identifier).filter(|identifier| !identifier.is_empty())
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_class_name(view: id) -> String {
+    use objc::{msg_send, sel, sel_impl};
+
+    let class: id = msg_send![view, class];
+    let class_name: id = if class == nil {
+        nil
+    } else {
+        msg_send![class, className]
+    };
+    appkit_ns_string(class_name).unwrap_or_else(|| "unknown".to_string())
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_color_from_ns_color(color: id) -> Option<crate::protocol::AppKitFidelityColor> {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if color == nil {
+        return None;
+    }
+    let color_space: id = msg_send![class!(NSColorSpace), sRGBColorSpace];
+    let color: id = msg_send![color, colorUsingColorSpace: color_space];
+    if color == nil {
+        return None;
+    }
+    let mut red = 0.0_f64;
+    let mut green = 0.0_f64;
+    let mut blue = 0.0_f64;
+    let mut alpha = 0.0_f64;
+    let _: () = msg_send![
+        color,
+        getRed: &mut red
+        green: &mut green
+        blue: &mut blue
+        alpha: &mut alpha
+    ];
+    Some(crate::protocol::AppKitFidelityColor {
+        red,
+        green,
+        blue,
+        alpha,
+    })
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_color_from_cg_color(color: id) -> Option<crate::protocol::AppKitFidelityColor> {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if color == nil {
+        return None;
+    }
+    let ns_color: id = msg_send![class!(NSColor), colorWithCGColor: color];
+    appkit_color_from_ns_color(ns_color)
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_layer_fidelity(view: id) -> Option<crate::protocol::AppKitFidelityLayer> {
+    use objc::{msg_send, sel, sel_impl};
+
+    let layer: id = msg_send![view, layer];
+    if layer == nil {
+        return None;
+    }
+    let contents_scale: f64 = msg_send![layer, contentsScale];
+    let masks_to_bounds: cocoa::base::BOOL = msg_send![layer, masksToBounds];
+    let border_width: f64 = msg_send![layer, borderWidth];
+    let corner_radius: f64 = msg_send![layer, cornerRadius];
+    let background_color: id = msg_send![layer, backgroundColor];
+    let border_color: id = msg_send![layer, borderColor];
+    Some(crate::protocol::AppKitFidelityLayer {
+        contents_scale,
+        masks_to_bounds: masks_to_bounds == YES,
+        border_width,
+        corner_radius,
+        background_color: appkit_color_from_cg_color(background_color),
+        border_color: appkit_color_from_cg_color(border_color),
+    })
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_text_fidelity(view: id) -> Option<crate::protocol::AppKitFidelityText> {
+    use objc::{class, msg_send, sel, sel_impl};
+    use sha2::{Digest as _, Sha256};
+
+    let is_text_field: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSTextField)];
+    if is_text_field != YES {
+        return None;
+    }
+    let value: id = msg_send![view, stringValue];
+    let value = appkit_ns_string(value).unwrap_or_default();
+    let font: id = msg_send![view, font];
+    let font_name = if font == nil {
+        String::new()
+    } else {
+        let name: id = msg_send![font, fontName];
+        appkit_ns_string(name).unwrap_or_default()
+    };
+    let font_size: f64 = if font == nil {
+        0.0
+    } else {
+        msg_send![font, pointSize]
+    };
+    let font_weight: isize = if font == nil {
+        0
+    } else {
+        let manager: id = msg_send![class!(NSFontManager), sharedFontManager];
+        msg_send![manager, weightOfFont: font]
+    };
+    let alignment: usize = msg_send![view, alignment];
+    let fitting_size: cocoa::foundation::NSSize = msg_send![view, fittingSize];
+    let text_color: id = msg_send![view, textColor];
+    let mut hasher = Sha256::new();
+    hasher.update(value.as_bytes());
+    Some(crate::protocol::AppKitFidelityText {
+        value,
+        value_sha256: format!("{:x}", hasher.finalize()),
+        font_name,
+        font_size,
+        font_weight: font_weight as i64,
+        alignment: alignment as i64,
+        fitting_size: crate::protocol::LayoutBounds {
+            x: 0.0,
+            y: 0.0,
+            width: fitting_size.width as f32,
+            height: fitting_size.height as f32,
+        },
+        color: appkit_color_from_ns_color(text_color),
+    })
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_image_fidelity(view: id) -> Option<crate::protocol::AppKitFidelityImage> {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let is_image_view: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSImageView)];
+    if is_image_view != YES {
+        return None;
+    }
+    let image: id = msg_send![view, image];
+    let size = if image == nil {
+        cocoa::foundation::NSSize::new(0.0, 0.0)
+    } else {
+        msg_send![image, size]
+    };
+    let supports_tint: cocoa::base::BOOL =
+        msg_send![view, respondsToSelector: sel!(contentTintColor)];
+    let tint: id = if supports_tint == YES {
+        msg_send![view, contentTintColor]
+    } else {
+        nil
+    };
+    Some(crate::protocol::AppKitFidelityImage {
+        width: size.width,
+        height: size.height,
+        tint: appkit_color_from_ns_color(tint),
+    })
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_action_selector(view: id) -> Option<String> {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let is_button: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSButton)];
+    if is_button != YES {
+        return None;
+    }
+    let action: objc::runtime::Sel = msg_send![view, action];
+    (!action.as_ptr().is_null()).then(|| action.name().to_string())
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn collect_identified_appkit_views(
+    view: id,
+    content_view: id,
+    parent_id: Option<String>,
+    subview_order: usize,
+    screenshot_height: f64,
+    nodes: &mut Vec<crate::protocol::AppKitFidelityNode>,
+) {
+    use objc::{msg_send, sel, sel_impl};
+
+    if view == nil {
+        return;
+    }
+    let identifier = appkit_view_identifier(view);
+    let node_parent_id = parent_id.clone();
+    let child_parent_id = identifier.clone().or(parent_id);
+    if let Some(identifier) = identifier {
+        let frame: cocoa::foundation::NSRect = msg_send![view, frame];
+        let bounds: cocoa::foundation::NSRect = msg_send![view, bounds];
+        let window_frame: cocoa::foundation::NSRect =
+            msg_send![view, convertRect: bounds toView: content_view];
+        let hidden: cocoa::base::BOOL = msg_send![view, isHidden];
+        let alpha: f64 = msg_send![view, alphaValue];
+        let layer = appkit_layer_fidelity(view);
+        let layer_masks_to_bounds = layer
+            .as_ref()
+            .map(|layer| layer.masks_to_bounds)
+            .unwrap_or(false);
+        nodes.push(crate::protocol::AppKitFidelityNode {
+            id: identifier,
+            parent_id: node_parent_id,
+            class_name: appkit_class_name(view),
+            subview_order,
+            frame: appkit_layout_bounds(frame),
+            bounds: appkit_layout_bounds(bounds),
+            window_frame: appkit_layout_bounds(window_frame),
+            screenshot_frame: appkit_screenshot_bounds(window_frame, screenshot_height),
+            hidden: hidden == YES,
+            alpha,
+            // `-[NSView clipsToBounds]` is not available on every supported
+            // macOS SDK/runtime pair. The backing layer is the raster clipping
+            // authority here and avoids an unrecognized-selector crash.
+            clips_to_bounds: layer_masks_to_bounds,
+            layer,
+            text: appkit_text_fidelity(view),
+            image: appkit_image_fidelity(view),
+            action_selector: appkit_action_selector(view),
+        });
+    }
+
+    let subviews: id = msg_send![view, subviews];
+    if subviews == nil {
+        return;
+    }
+    let count: usize = msg_send![subviews, count];
+    for index in 0..count {
+        let child: id = msg_send![subviews, objectAtIndex: index];
+        collect_identified_appkit_views(
+            child,
+            content_view,
+            child_parent_id.clone(),
+            index,
+            screenshot_height,
+            nodes,
+        );
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn appkit_subview_order(parent: id, child: id) -> usize {
+    use objc::{msg_send, sel, sel_impl};
+
+    let subviews: id = msg_send![parent, subviews];
+    if subviews == nil {
+        return 0;
+    }
+    let count: usize = msg_send![subviews, count];
+    for index in 0..count {
+        let candidate: id = msg_send![subviews, objectAtIndex: index];
+        if candidate == child {
+            return index;
+        }
+    }
+    0
+}
+
+/// Collect capture-only AppKit telemetry for the in-window footer material
+/// host. The separate GPUI glyph overlay is intentionally excluded and emitted
+/// through `main_footer_overlay_fidelity_snapshot`.
+pub(crate) fn collect_main_footer_appkit_fidelity_snapshot(
+    window: &Window,
+) -> AppKitFidelityCaptureOutcome {
+    if !window.fidelity_capture_active() {
+        return AppKitFidelityCaptureOutcome::blocked(
+            crate::protocol::FidelityCaptureStatus::NotRequested,
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let Some(ns_window) = main_window_ns_window(window) else {
+            return AppKitFidelityCaptureOutcome::blocked(
+                crate::protocol::FidelityCaptureStatus::MissingWindow,
+            );
+        };
+        // SAFETY: `ns_window` and its content tree belong to the live main
+        // window. getLayoutInfo invokes this on the AppKit/GPUI main thread.
+        unsafe {
+            use objc::{msg_send, sel, sel_impl};
+
+            let content_view: id = msg_send![ns_window, contentView];
+            if content_view == nil {
+                return AppKitFidelityCaptureOutcome::blocked(
+                    crate::protocol::FidelityCaptureStatus::MissingContentView,
+                );
+            }
+            let footer_view = find_subview_by_identifier(content_view, FOOTER_EFFECT_ID);
+            if footer_view == nil {
+                return AppKitFidelityCaptureOutcome::blocked(
+                    crate::protocol::FidelityCaptureStatus::MissingFooterHost,
+                );
+            }
+            let content_bounds: cocoa::foundation::NSRect = msg_send![content_view, bounds];
+            let mut nodes = Vec::new();
+            let footer_order = appkit_subview_order(content_view, footer_view);
+            collect_identified_appkit_views(
+                footer_view,
+                content_view,
+                None,
+                footer_order,
+                content_bounds.size.height,
+                &mut nodes,
+            );
+            if let Some(status) = appkit_fidelity_inventory_blocker(&nodes) {
+                return AppKitFidelityCaptureOutcome::blocked(status);
+            }
+
+            AppKitFidelityCaptureOutcome::captured(crate::protocol::AppKitFidelitySnapshot {
+                target_id: "main-footer-host".to_string(),
+                target_kind: "appKitFooterHost".to_string(),
+                coordinate_space: "appkit-content-bottom-left+screenshot-top-left".to_string(),
+                window_bounds: crate::fidelity_capture::layout_bounds(window.bounds()),
+                nodes,
+            })
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window;
+        AppKitFidelityCaptureOutcome::blocked(
+            crate::protocol::FidelityCaptureStatus::UnsupportedPlatform,
+        )
+    }
 }
 
 fn set_gpui_footer_overlay_window_bounds(
@@ -3470,6 +3939,103 @@ mod footer_layout_tests {
         footer_selected_background_rgba, FooterAction, FooterButtonConfig, FooterDotStatus,
         FOOTER_HINT_KEY_LABEL_GAP, FOOTER_HINT_PADDING_X, FOOTER_RUN_HINT_PADDING_X,
     };
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn appkit_footer_rect_converts_to_top_left_screenshot_coordinates() {
+        use cocoa::foundation::{NSPoint, NSRect, NSSize};
+
+        let converted = super::appkit_screenshot_bounds(
+            NSRect::new(NSPoint::new(10.0, 4.0), NSSize::new(100.0, 28.0)),
+            480.0,
+        );
+
+        assert_eq!(converted.x, 10.0);
+        assert_eq!(converted.y, 448.0);
+        assert_eq!(converted.width, 100.0);
+        assert_eq!(converted.height, 28.0);
+    }
+
+    #[test]
+    fn appkit_inventory_fails_closed_for_empty_or_duplicate_ids() {
+        use crate::protocol::{AppKitFidelityNode, FidelityCaptureStatus};
+
+        assert_eq!(
+            super::appkit_fidelity_inventory_blocker(&[]),
+            Some(FidelityCaptureStatus::EmptyInventory)
+        );
+
+        let duplicate = AppKitFidelityNode {
+            id: "script-kit-footer-effect".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            super::appkit_fidelity_inventory_blocker(&[duplicate.clone(), duplicate]),
+            Some(FidelityCaptureStatus::DuplicateIdentifiers)
+        );
+
+        let unique = AppKitFidelityNode {
+            id: "script-kit-footer-divider".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(super::appkit_fidelity_inventory_blocker(&[unique]), None);
+    }
+
+    #[gpui::test]
+    fn footer_overlay_fidelity_is_a_separate_paint_target(cx: &mut gpui::TestAppContext) {
+        use gpui::AppContext as _;
+
+        super::clear_main_footer_overlay_fidelity_snapshot();
+        let window = cx.update(|cx| {
+            gpui_component::init(cx);
+            let mut config = super::MainWindowFooterConfig::new(
+                "agent_chat",
+                vec![super::FooterButtonConfig::new(
+                    super::FooterAction::Run,
+                    "↵",
+                    "Send",
+                )],
+            );
+            config.left_info = Some(super::FooterLeftInfo {
+                model_name: "GPT-5.6 SOL".to_string(),
+                ..Default::default()
+            });
+            cx.open_window(Default::default(), |_, cx| {
+                cx.new(|_| super::GpuiFooterOverlay::new(config, 320.0))
+            })
+            .unwrap()
+        });
+
+        window
+            .update(cx, |_, window, cx| {
+                window.set_fidelity_capture_target_for_test(Some("agent-chat"));
+                cx.notify();
+            })
+            .unwrap();
+        cx.run_until_parked();
+
+        let snapshot = super::main_footer_overlay_fidelity_snapshot()
+            .expect("footer overlay completed-frame fidelity snapshot");
+        assert_eq!(snapshot.target_id, "footer-overlay");
+        assert_eq!(snapshot.target_kind, "footerOverlay");
+        assert_eq!(snapshot.parent_target_id.as_deref(), Some("main"));
+        assert!(snapshot.frame_generation > 0);
+        assert!(snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id == "agent-chat.footer-overlay.button.run"
+                && node.primitive_count > 0));
+        assert!(snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id == "agent-chat.footer-overlay.model" && node.primitive_count > 0));
+        assert!(snapshot.nodes.iter().all(|node| {
+            node.measurement_frame_generation == snapshot.frame_generation
+                && node.measurement_provenance == "paint-time"
+        }));
+
+        super::clear_main_footer_overlay_fidelity_snapshot();
+    }
 
     #[test]
     fn left_pinned_buttons_do_not_receive_legacy_extra_padding() {

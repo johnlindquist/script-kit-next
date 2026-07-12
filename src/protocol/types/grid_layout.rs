@@ -510,6 +510,132 @@ pub struct FidelityUnscopedPaintSummary {
     pub union_paint_bounds: LayoutBounds,
 }
 
+/// Finite RGBA evidence extracted from an AppKit view or backing layer.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppKitFidelityColor {
+    pub red: f64,
+    pub green: f64,
+    pub blue: f64,
+    pub alpha: f64,
+}
+
+/// Capture-only text evidence for an identified AppKit text field.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppKitFidelityText {
+    pub value: String,
+    pub value_sha256: String,
+    pub font_name: String,
+    pub font_size: f64,
+    pub font_weight: i64,
+    pub alignment: i64,
+    pub fitting_size: LayoutBounds,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<AppKitFidelityColor>,
+}
+
+/// Capture-only image evidence for an identified AppKit image view.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppKitFidelityImage {
+    pub width: f64,
+    pub height: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tint: Option<AppKitFidelityColor>,
+}
+
+/// Backing-layer evidence for an identified AppKit view.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppKitFidelityLayer {
+    pub contents_scale: f64,
+    pub masks_to_bounds: bool,
+    pub border_width: f64,
+    pub corner_radius: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_color: Option<AppKitFidelityColor>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub border_color: Option<AppKitFidelityColor>,
+}
+
+/// One identified AppKit view in the main-window footer host tree.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppKitFidelityNode {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    pub class_name: String,
+    pub subview_order: usize,
+    /// Frame in the immediate superview's AppKit coordinate space.
+    pub frame: LayoutBounds,
+    /// Bounds in the view's local AppKit coordinate space.
+    pub bounds: LayoutBounds,
+    /// Bounds converted into the main content view's bottom-left coordinate space.
+    pub window_frame: LayoutBounds,
+    /// Bounds converted into the captured PNG's top-left logical coordinate space.
+    pub screenshot_frame: LayoutBounds,
+    pub hidden: bool,
+    pub alpha: f64,
+    pub clips_to_bounds: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layer: Option<AppKitFidelityLayer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<AppKitFidelityText>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<AppKitFidelityImage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action_selector: Option<String>,
+}
+
+/// Main-window AppKit footer-host evidence. This never includes the separate
+/// GPUI footer overlay child window.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppKitFidelitySnapshot {
+    pub target_id: String,
+    pub target_kind: String,
+    pub coordinate_space: String,
+    pub window_bounds: LayoutBounds,
+    pub nodes: Vec<AppKitFidelityNode>,
+}
+
+/// Fidelity telemetry for a separate GPUI paint target such as the footer
+/// overlay child window. Keeping this distinct prevents main-window receipts
+/// from claiming that overlay glyphs are part of the main raster.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FidelityPaintTargetSnapshot {
+    pub target_id: String,
+    pub target_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_target_id: Option<String>,
+    pub window_bounds: LayoutBounds,
+    pub frame_generation: u64,
+    pub nodes: Vec<FidelityLayoutNode>,
+    pub unscoped: FidelityUnscopedPaintSummary,
+}
+
+/// Fail-closed result for an auxiliary fidelity capture plane.
+///
+/// Legacy receipts deserialize as `notRequested`; a current Agent Chat
+/// capture must report either `captured` or a concrete blocking reason.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum FidelityCaptureStatus {
+    #[default]
+    NotRequested,
+    Captured,
+    MissingWindow,
+    MissingContentView,
+    MissingFooterHost,
+    EmptyInventory,
+    DuplicateIdentifiers,
+    UnsupportedPlatform,
+    MissingOverlay,
+}
+
 /// Capture-only finite paint inventory for one completed GPUI frame.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -522,6 +648,19 @@ pub struct FidelityLayoutSnapshot {
     pub nodes: Vec<FidelityLayoutNode>,
     /// Paint primitives not owned by any stable node.
     pub unscoped: FidelityUnscopedPaintSummary,
+    /// Explicit result for the native main-window footer-host capture.
+    #[serde(default)]
+    pub appkit_status: FidelityCaptureStatus,
+    /// Native main-window footer-host evidence, collected from AppKit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appkit: Option<AppKitFidelitySnapshot>,
+    /// Explicit result for the separate GPUI footer-overlay capture.
+    #[serde(default)]
+    pub overlay_status: FidelityCaptureStatus,
+    /// Separate GPUI overlay-window inventories; never composited into the
+    /// main-window target implicitly.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overlays: Vec<FidelityPaintTargetSnapshot>,
 }
 
 impl LayoutComponentInfo {
@@ -782,8 +921,9 @@ pub struct LayoutInfo {
 #[cfg(test)]
 mod tests {
     use super::{
-        FidelityLayoutNode, FidelityLayoutSnapshot, FidelityUnscopedPaintSummary, LayoutBounds,
-        LayoutComponentInfo, LayoutComponentType, LayoutInfo,
+        AppKitFidelityNode, AppKitFidelitySnapshot, FidelityCaptureStatus, FidelityLayoutNode,
+        FidelityLayoutSnapshot, FidelityPaintTargetSnapshot, FidelityUnscopedPaintSummary,
+        LayoutBounds, LayoutComponentInfo, LayoutComponentType, LayoutInfo,
     };
 
     #[test]
@@ -874,6 +1014,29 @@ mod tests {
                 primitive_kinds: Vec::new(),
                 union_paint_bounds: LayoutBounds::default(),
             },
+            appkit_status: FidelityCaptureStatus::Captured,
+            appkit: Some(AppKitFidelitySnapshot {
+                target_id: "main-footer-host".to_string(),
+                target_kind: "appKitFooterHost".to_string(),
+                coordinate_space: "appkit-content-bottom-left+screenshot-top-left".to_string(),
+                window_bounds: bounds.clone(),
+                nodes: vec![AppKitFidelityNode {
+                    id: "script-kit-footer-effect".to_string(),
+                    class_name: "NSVisualEffectView".to_string(),
+                    screenshot_frame: bounds.clone(),
+                    ..Default::default()
+                }],
+            }),
+            overlay_status: FidelityCaptureStatus::Captured,
+            overlays: vec![FidelityPaintTargetSnapshot {
+                target_id: "footer-overlay".to_string(),
+                target_kind: "footerOverlay".to_string(),
+                parent_target_id: Some("main".to_string()),
+                window_bounds: bounds.clone(),
+                frame_generation: 42,
+                nodes: Vec::new(),
+                unscoped: FidelityUnscopedPaintSummary::default(),
+            }],
         };
 
         let json = serde_json::to_value(snapshot).expect("serialize fidelity snapshot");
@@ -887,7 +1050,40 @@ mod tests {
         assert_eq!(json["nodes"][0]["measurementFrameGeneration"], 42);
         assert_eq!(json["nodes"][0]["measurementProvenance"], "paint-time");
         assert_eq!(json["nodes"][0]["coordinateSpace"], "window");
+        assert_eq!(json["appkitStatus"], "captured");
+        assert_eq!(json["appkit"]["targetId"], "main-footer-host");
+        assert_eq!(json["appkit"]["nodes"][0]["id"], "script-kit-footer-effect");
+        assert_eq!(json["overlayStatus"], "captured");
+        assert_eq!(json["overlays"][0]["targetId"], "footer-overlay");
+        assert_eq!(json["overlays"][0]["parentTargetId"], "main");
         assert_eq!(json["unscoped"]["primitiveCount"], 0);
+    }
+
+    #[test]
+    fn fidelity_snapshot_defaults_auxiliary_status_for_legacy_receipts() {
+        let legacy = serde_json::json!({
+            "captureTarget": "agent-chat",
+            "frameGeneration": 42,
+            "nodes": [],
+            "unscoped": {
+                "primitiveCount": 0,
+                "primitiveDigest": "empty",
+                "primitiveKinds": [],
+                "unionPaintBounds": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "width": 0.0,
+                    "height": 0.0
+                }
+            }
+        });
+
+        let decoded: FidelityLayoutSnapshot =
+            serde_json::from_value(legacy).expect("deserialize pre-AppKit fidelity receipt");
+        assert_eq!(decoded.appkit_status, FidelityCaptureStatus::NotRequested);
+        assert_eq!(decoded.appkit, None);
+        assert_eq!(decoded.overlay_status, FidelityCaptureStatus::NotRequested);
+        assert!(decoded.overlays.is_empty());
     }
 
     #[test]

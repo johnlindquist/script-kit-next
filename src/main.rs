@@ -91,6 +91,7 @@ mod effects;
 #[allow(dead_code)] // Public API in lib.rs; binary only uses ErrorSeverity currently
 mod error;
 mod executor;
+mod fidelity_capture;
 mod filter_coalescer;
 mod focus_coordinator;
 mod footer_popup;
