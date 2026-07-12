@@ -8,8 +8,8 @@
  * - list built-in: ClipboardHistory
  * - picker: EmojiPicker
  * - attachment preview: DictationHistory
- * - intentional compact exception: FocusedTextMini input and result/footer phases
- * - embedded multiline surface: AgentChat (empty one-line composer)
+ * - intentional compact exception: FocusedTextMini input, scoped, and result/footer phases
+ * - embedded multiline surface: AgentChat one-line and deterministic wrapped composer
  * - view-owned context-only surface: DayPage
  * - root-owned context-only surfaces: PermissionsWizard and ConfirmPrompt
  *
@@ -21,10 +21,12 @@
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { Driver, type Json } from "../devtools/driver";
 import { tapMainHotkey } from "./day-page-open-helper";
@@ -40,12 +42,15 @@ const outputDir = resolve(
   process.env.PROBE_OUTPUT_DIR ??
     ".test-output/main-window-header-input-parity",
 );
+const probePath = resolve(import.meta.path);
 mkdirSync(outputDir, { recursive: true });
 
 type Bounds = { x: number; y: number; width: number; height: number };
 type Size = { width: number; height: number };
 type PaintMeasurement = {
-  bounds: Bounds;
+  bounds: Bounds | null;
+  visibleBounds: Bounds | null;
+  clipBounds: Bounds | null;
   measurementProvenance: string | null;
   coordinateSpace: string | null;
   measurementFrameGeneration: number | null;
@@ -87,6 +92,14 @@ function componentBounds(
   return bounds ?? null;
 }
 
+function componentType(layout: Json, name: string): string | null {
+  if (!Array.isArray(layout.components)) return null;
+  const entry = (layout.components as Json[]).find(
+    (component) => component.name === name,
+  );
+  return entry === undefined ? null : String(entry.type ?? "") || null;
+}
+
 function paintMeasurement(
   layout: Json,
   label: string,
@@ -110,7 +123,9 @@ function paintMeasurement(
   const entry = matches[0];
   if (entry === undefined) return null;
   const measurement = {
-    bounds: entry.bounds as Bounds,
+    bounds: (entry.bounds as Bounds | undefined) ?? null,
+    visibleBounds: (entry.visibleBounds as Bounds | undefined) ?? null,
+    clipBounds: (entry.clipBounds as Bounds | undefined) ?? null,
     measurementProvenance: String(entry.measurementProvenance ?? "") || null,
     coordinateSpace: String(entry.coordinateSpace ?? "") || null,
     measurementFrameGeneration:
@@ -125,6 +140,28 @@ function paintMeasurement(
       Number.isSafeInteger(measurement.measurementFrameGeneration) &&
       Number(measurement.measurementFrameGeneration) > 0,
     measurement,
+  );
+  check(
+    `${label}-paint-${name}-has-positive-full-visible-and-clip-bounds`,
+    boundsHavePositiveArea(measurement.bounds) &&
+      boundsHavePositiveArea(measurement.visibleBounds) &&
+      boundsHavePositiveArea(measurement.clipBounds),
+    {
+      bounds: measurement.bounds,
+      visibleBounds: measurement.visibleBounds,
+      clipBounds: measurement.clipBounds,
+    },
+  );
+  check(
+    `${label}-paint-${name}-visible-bounds-stay-inside-full-and-clip-bounds`,
+    boundsContainedBy(measurement.visibleBounds, measurement.bounds) &&
+      boundsContainedBy(measurement.visibleBounds, measurement.clipBounds),
+    {
+      bounds: measurement.bounds,
+      visibleBounds: measurement.visibleBounds,
+      clipBounds: measurement.clipBounds,
+      tolerancePx: 1,
+    },
   );
   return measurement;
 }
@@ -174,6 +211,7 @@ function compactPaint(layout: Json, label: string): Json {
   const paint: Record<string, PaintMeasurement | null> = {
     root: paintMeasurement(layout, label, "focused-text-mini-root"),
     input: paintMeasurement(layout, label, "focused-text-mini-input-row"),
+    scope: paintMeasurement(layout, label, "focused-text-mini-scope-row"),
     content: paintMeasurement(layout, label, "focused-text-mini-content"),
     footerSpacer: paintMeasurement(
       layout,
@@ -183,6 +221,7 @@ function compactPaint(layout: Json, label: string): Json {
     sharedShell: paintMeasurement(layout, label, "main-view-shell"),
     sharedHeader: paintMeasurement(layout, label, "main-view-header"),
     sharedInput: paintMeasurement(layout, label, "main-view-input-shell"),
+    sharedMain: paintMeasurement(layout, label, "main-view-main"),
   };
   const frames = Object.values(paint)
     .map((entry) => entry?.measurementFrameGeneration ?? null)
@@ -250,8 +289,29 @@ function leadingBoundsNear(
   );
 }
 
+function leadingOriginNear(
+  a: Bounds | null,
+  b: Bounds | null,
+  tolerance = 1,
+): boolean {
+  return (
+    boundsAreFinite(a) &&
+    boundsAreFinite(b) &&
+    near(a.x, b.x, tolerance) &&
+    near(a.y, b.y, tolerance)
+  );
+}
+
 function measuredBounds(value: unknown): Bounds | null {
   return (value as PaintMeasurement | null)?.bounds ?? null;
+}
+
+function measuredVisibleBounds(value: unknown): Bounds | null {
+  return (value as PaintMeasurement | null)?.visibleBounds ?? null;
+}
+
+function measuredClipBounds(value: unknown): Bounds | null {
+  return (value as PaintMeasurement | null)?.clipBounds ?? null;
 }
 
 function boundsAreFinite(bounds: Bounds | null): bounds is Bounds {
@@ -288,6 +348,25 @@ function optionalBoundsNear(
 ): boolean {
   if (modeled === null || painted === null) return modeled === painted;
   return boundsNear(modeled, painted, tolerance);
+}
+
+function assertPaintEffectivelyFullyVisible(
+  label: string,
+  part: string,
+  value: unknown,
+) {
+  const full = measuredBounds(value);
+  const visible = measuredVisibleBounds(value);
+  const clip = measuredClipBounds(value);
+  check(
+    `${label}-paint-${part}-is-effectively-fully-visible`,
+    boundsHavePositiveArea(full) &&
+      boundsHavePositiveArea(visible) &&
+      boundsHavePositiveArea(clip) &&
+      boundsNear(full, visible) &&
+      boundsContainedBy(full, clip),
+    { full, visible, clip, tolerancePx: 1 },
+  );
 }
 
 function sizeNear(a: Size | null, b: Size | null, tolerance = 1): boolean {
@@ -420,6 +499,75 @@ function fileSize(path: string): number | null {
   }
 }
 
+function fileMtimeMs(path: string): number | null {
+  try {
+    const stats = statSync(path);
+    return stats.isFile() ? stats.mtimeMs : null;
+  } catch {
+    return null;
+  }
+}
+
+function sha256File(path: string): string | null {
+  try {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+function validSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+}
+
+async function captureScreenshotReceipt(
+  driver: Driver,
+  label: string,
+): Promise<Json> {
+  const screenshotPath = join(outputDir, `${label}.png`);
+  rmSync(screenshotPath, { force: true });
+  let result: Json;
+  try {
+    result = await driver.captureScreenshot({
+      hiDpi: true,
+      savePath: screenshotPath,
+      timeoutMs: 10_000,
+    });
+  } catch (error) {
+    result = { error: String(error) };
+  }
+  const bytes = fileSize(screenshotPath);
+  const sha256 = sha256File(screenshotPath);
+  const responseOk =
+    typeof result.data === "string" &&
+    result.data.length > 0 &&
+    result.error == null &&
+    Number(result.width) > 0 &&
+    Number(result.height) > 0;
+  check(`${label}-screenshot-response-ok`, responseOk, {
+    width: result.width ?? null,
+    height: result.height ?? null,
+    error: result.error ?? null,
+    hasData: typeof result.data === "string" && result.data.length > 0,
+  });
+  check(`${label}-screenshot-file-present`, bytes !== null && bytes > 0, {
+    path: screenshotPath,
+    bytes,
+  });
+  check(`${label}-screenshot-has-sha256`, validSha256(sha256), {
+    path: screenshotPath,
+    sha256,
+  });
+  return {
+    width: result.width ?? null,
+    height: result.height ?? null,
+    error: result.error ?? null,
+    path: screenshotPath,
+    bytes,
+    sha256,
+  };
+}
+
 async function snapshot(
   driver: Driver,
   label: string,
@@ -491,9 +639,9 @@ async function snapshot(
   if (currentPaintFrameGeneration !== null) {
     previousSnapshotPaintFrameGeneration = currentPaintFrameGeneration;
   }
-  const contextBounds = measuredBounds(measuredPaintChrome.context);
-  const cwdChipBounds = measuredBounds(measuredPaintChrome.cwdChip);
-  const modelChipBounds = measuredBounds(measuredPaintChrome.modelChip);
+  const contextBounds = measuredVisibleBounds(measuredPaintChrome.context);
+  const cwdChipBounds = measuredVisibleBounds(measuredPaintChrome.cwdChip);
+  const modelChipBounds = measuredVisibleBounds(measuredPaintChrome.modelChip);
   check(
     `${label}-context-and-chip-bounds-have-positive-area`,
     boundsHavePositiveArea(contextBounds) &&
@@ -503,6 +651,7 @@ async function snapshot(
       context: contextBounds,
       cwdChip: cwdChipBounds,
       modelChip: modelChipBounds,
+      geometry: "visibleBounds",
     },
   );
   check(
@@ -518,46 +667,12 @@ async function snapshot(
       cwdChip: cwdChipBounds,
       modelChip: modelChipBounds,
       tolerancePx: 1,
+      geometry: "visibleBounds",
     },
   );
   let screenshotReceipt: Json | null = null;
   if (screenshot) {
-    const screenshotPath = join(outputDir, `${label}.png`);
-    rmSync(screenshotPath, { force: true });
-    let result: Json;
-    try {
-      result = await driver.captureScreenshot({
-        hiDpi: true,
-        savePath: screenshotPath,
-        timeoutMs: 10_000,
-      });
-    } catch (error) {
-      result = { error: String(error) };
-    }
-    const bytes = fileSize(screenshotPath);
-    const responseOk =
-      typeof result.data === "string" &&
-      result.data.length > 0 &&
-      result.error == null &&
-      Number(result.width) > 0 &&
-      Number(result.height) > 0;
-    check(`${label}-screenshot-response-ok`, responseOk, {
-      width: result.width ?? null,
-      height: result.height ?? null,
-      error: result.error ?? null,
-      hasData: typeof result.data === "string" && result.data.length > 0,
-    });
-    check(`${label}-screenshot-file-present`, bytes !== null && bytes > 0, {
-      path: screenshotPath,
-      bytes,
-    });
-    screenshotReceipt = {
-      width: result.width ?? null,
-      height: result.height ?? null,
-      error: result.error ?? null,
-      path: screenshotPath,
-      bytes,
-    };
+    screenshotReceipt = await captureScreenshotReceipt(driver, label);
   }
   return {
     surfaceKind: surfaceKind(stateAfter),
@@ -575,11 +690,31 @@ async function snapshot(
   };
 }
 
+async function getAgentChatState(
+  driver: Driver,
+): Promise<{ state: Json | null; error: string | null }> {
+  try {
+    const response = await driver.request(
+      { type: "getAgentChatState" },
+      { expect: "agent_chatStateResult", timeoutMs: 10_000 },
+    );
+    return { state: (response.state ?? response) as Json, error: null };
+  } catch (error) {
+    return { state: null, error: String(error) };
+  }
+}
+
+type CompactExpectation = {
+  scopeVisible: boolean;
+  resultFooterVisible: boolean;
+  screenshot?: boolean;
+};
+
 async function compactSnapshot(
   driver: Driver,
   label: string,
   expected: SnapshotExpectation,
-  expectsResultFooter: boolean,
+  expectation: CompactExpectation,
 ): Promise<Json> {
   const stateBefore = await driver.getState({ timeoutMs: 10_000 });
   assertStateBinding(label, "before-layout", stateBefore, expected);
@@ -594,6 +729,17 @@ async function compactSnapshot(
   );
   const stateAfter = await driver.getState({ timeoutMs: 10_000 });
   assertStateBinding(label, "after-layout", stateAfter, expected);
+  const agentChatStateReceipt = await getAgentChatState(driver);
+  const focusedText = (agentChatStateReceipt.state?.focusedText ?? null) as
+    | Json
+    | null;
+  const elements = await driver.getElements(
+    { limit: 160, includeHeaders: true },
+    { timeoutMs: 10_000 },
+  );
+  const semanticIds = Array.isArray(elements.elements)
+    ? (elements.elements as Json[]).map((entry) => String(entry.semanticId ?? ""))
+    : [];
 
   const root = componentBounds(layout, label, "FocusedTextMiniRoot");
   const input = componentBounds(layout, label, "FocusedTextMiniInputRow");
@@ -607,8 +753,21 @@ async function compactSnapshot(
   const paint = compactPaint(layout, label);
   const paintRoot = measuredBounds(paint.root);
   const paintInput = measuredBounds(paint.input);
+  const paintScope = measuredBounds(paint.scope);
   const paintContent = measuredBounds(paint.content);
   const paintFooterSpacer = measuredBounds(paint.footerSpacer);
+  const modeledContentBottom = [input, scope, result]
+    .filter((bounds): bounds is Bounds => boundsHavePositiveArea(bounds))
+    .reduce((bottom, bounds) => Math.max(bottom, bounds.y + bounds.height), 0);
+  const modeledContent =
+    boundsHavePositiveArea(root) && modeledContentBottom > root.y
+      ? {
+          x: root.x,
+          y: root.y,
+          width: root.width,
+          height: modeledContentBottom - root.y,
+        }
+      : null;
 
   check(
     `${label}-intentional-compact-policy-emits-no-fake-shared-header-input-nodes`,
@@ -618,7 +777,8 @@ async function compactSnapshot(
       sharedMain === null &&
       paint.sharedShell === null &&
       paint.sharedHeader === null &&
-      paint.sharedInput === null,
+      paint.sharedInput === null &&
+      paint.sharedMain === null,
     {
       sharedHeader,
       sharedContext,
@@ -628,6 +788,7 @@ async function compactSnapshot(
         shell: paint.sharedShell,
         header: paint.sharedHeader,
         input: paint.sharedInput,
+        main: paint.sharedMain,
       },
     },
   );
@@ -641,12 +802,38 @@ async function compactSnapshot(
       boundsNear(input, paintInput, 2),
     { root, input, paintRoot, paintInput, tolerancePx: 2 },
   );
-  check(`${label}-compact-scope-row-is-absent-for-fixture`, scope === null, {
-    scope,
-  });
+  check(
+    `${label}-compact-content-has-positive-model-and-paint-area`,
+    boundsHavePositiveArea(modeledContent) &&
+      boundsHavePositiveArea(paintContent) &&
+      boundsNear(modeledContent, paintContent, 2),
+    { modeledContent, paintContent, tolerancePx: 2 },
+  );
+  check(
+    `${label}-compact-scope-row-matches-phase`,
+    expectation.scopeVisible
+      ? boundsHavePositiveArea(scope) &&
+          boundsHavePositiveArea(input) &&
+          componentType(layout, "FocusedTextMiniScopeRow") === "input" &&
+          boundsHavePositiveArea(paintScope) &&
+          componentType(layout, "focused-text-mini-scope-row") === "input" &&
+          boundsNear(scope, paintScope, 2) &&
+          near(scope.y, input.y + input.height) &&
+          near(scope.height, input.height)
+      : scope === null && paint.scope === null,
+    {
+      expectedVisible: expectation.scopeVisible,
+      scope,
+      scopeType: componentType(layout, "FocusedTextMiniScopeRow"),
+      paintScope,
+      paintScopeType: componentType(layout, "focused-text-mini-scope-row"),
+      input,
+      tolerancePx: 2,
+    },
+  );
   check(
     `${label}-compact-footer-safe-area-matches-phase`,
-    expectsResultFooter
+    expectation.resultFooterVisible
       ? boundsHavePositiveArea(result) &&
           boundsHavePositiveArea(footer) &&
           result.y + result.height <= footer.y + 1 &&
@@ -655,13 +842,42 @@ async function compactSnapshot(
           paintContent.y + paintContent.height <= paintFooterSpacer.y + 1
       : result === null && footer === null && paintFooterSpacer === null,
     {
-      expectsResultFooter,
+      expectsResultFooter: expectation.resultFooterVisible,
       result,
       footer,
       paintContent,
       paintFooterSpacer,
       tolerancePx: 1,
     },
+  );
+  const expectedPhase = expectation.resultFooterVisible ? "result" : "inputOnly";
+  check(
+    `${label}-compact-redacted-state-matches-phase`,
+    agentChatStateReceipt.error === null &&
+      focusedText?.mode === "mini" &&
+      focusedText?.phase === expectedPhase &&
+      focusedText?.inputRedacted === true &&
+      focusedText?.footerVisible === expectation.resultFooterVisible &&
+      focusedText?.actionsVisible === expectation.resultFooterVisible &&
+      (expectation.resultFooterVisible
+        ? focusedText?.hasOutput === true
+        : focusedText?.hasOutput === false),
+    {
+      error: agentChatStateReceipt.error,
+      focusedText,
+      expectedPhase,
+      expectedFooterVisible: expectation.resultFooterVisible,
+    },
+  );
+  check(
+    `${label}-compact-semantic-content-matches-phase`,
+    semanticIds.includes("focused-text-mini-root") &&
+      semanticIds.includes("focused-text-input") &&
+      semanticIds.includes("focused-text-context-status") &&
+      (expectation.resultFooterVisible
+        ? semanticIds.includes("focused-text-preview")
+        : !semanticIds.includes("focused-text-preview")),
+    { semanticIds, expectedPhase },
   );
 
   const currentPaintFrameGeneration = paintFrameGeneration(paint);
@@ -679,15 +895,92 @@ async function compactSnapshot(
     previousSnapshotPaintFrameGeneration = currentPaintFrameGeneration;
   }
 
+  const screenshotReceipt = expectation.screenshot
+    ? await captureScreenshotReceipt(driver, label)
+    : null;
   return {
     surfaceKind: surfaceKind(stateAfter),
     promptType: stateAfter.promptType ?? null,
     layoutPromptType: layout.promptType ?? null,
     windowVisible: stateAfter.windowVisible ?? null,
-    compact: { root, input, scope, result, footer },
+    window: {
+      width: layout.windowWidth ?? null,
+      height: layout.windowHeight ?? null,
+    },
+    compact: { root, input, scope, result, footer, content: modeledContent },
     paintCompact: paint,
     paintFrameGeneration: currentPaintFrameGeneration,
+    agentChatStateError: agentChatStateReceipt.error,
+    focusedTextState: focusedText,
+    semanticIds,
+    screenshot: screenshotReceipt,
   };
+}
+
+function assertCompactScopeExpansion(scoped: Json, inputOnly: Json) {
+  const scopedModel = scoped.compact as Json;
+  const inputModel = inputOnly.compact as Json;
+  const scopedPaint = scoped.paintCompact as Json;
+  const inputPaint = inputOnly.paintCompact as Json;
+  const scopedRoot = scopedModel.root as Bounds | null;
+  const inputRoot = inputModel.root as Bounds | null;
+  const scopedWindow = scoped.window as Size | null;
+  const inputWindow = inputOnly.window as Size | null;
+  const scopedInput = scopedModel.input as Bounds | null;
+  const scopedScope = scopedModel.scope as Bounds | null;
+  const scopedPaintRoot = measuredBounds(scopedPaint.root);
+  const inputPaintRoot = measuredBounds(inputPaint.root);
+  const scopedPaintContent = measuredBounds(scopedPaint.content);
+  const inputPaintContent = measuredBounds(inputPaint.content);
+  const scopedPaintScope = measuredBounds(scopedPaint.scope);
+
+  check(
+    "focused-text-mini-scope-adds-exactly-one-input-row-to-model-window",
+    scopedWindow !== null &&
+      inputWindow !== null &&
+      boundsHavePositiveArea(scopedRoot) &&
+      boundsHavePositiveArea(inputRoot) &&
+      boundsHavePositiveArea(scopedInput) &&
+      boundsHavePositiveArea(scopedScope) &&
+      near(scopedWindow.height - inputWindow.height, scopedInput.height) &&
+      near(scopedRoot.height - inputRoot.height, scopedInput.height) &&
+      near(scopedScope.height, scopedInput.height),
+    {
+      inputWindow,
+      scopedWindow,
+      inputRoot,
+      scopedRoot,
+      scopedInput,
+      scopedScope,
+      tolerancePx: 1,
+    },
+  );
+  check(
+    "focused-text-mini-scope-adds-exactly-one-row-to-painted-root-and-content",
+    boundsHavePositiveArea(scopedPaintRoot) &&
+      boundsHavePositiveArea(inputPaintRoot) &&
+      boundsHavePositiveArea(scopedPaintContent) &&
+      boundsHavePositiveArea(inputPaintContent) &&
+      boundsHavePositiveArea(scopedPaintScope) &&
+      near(
+        scopedPaintRoot.height - inputPaintRoot.height,
+        scopedPaintScope.height,
+        2,
+      ) &&
+      near(
+        scopedPaintContent.height - inputPaintContent.height,
+        scopedPaintScope.height,
+        2,
+      ),
+    {
+      inputPaintRoot,
+      scopedPaintRoot,
+      inputPaintContent,
+      scopedPaintContent,
+      scopedPaintScope,
+      tolerancePx: 2,
+    },
+  );
 }
 
 function assertCanonical(
@@ -756,36 +1049,238 @@ function assertCanonical(
       trailingWidthMayDiffer: allowTrailingInputAction,
     },
   );
+  assertPaintEffectivelyFullyVisible(
+    label,
+    "input-shell",
+    actualPaint.inputShell,
+  );
+  assertPaintEffectivelyFullyVisible(
+    label,
+    "input-body",
+    actualPaint.inputBody,
+  );
   if (allowTrailingInputAction) {
-    const actualInputShell = measuredBounds(actualPaint.inputShell);
-    const actualSendButton = measuredBounds(actualPaint.sendButton);
+    const visibleInputBody = measuredVisibleBounds(actualPaint.inputBody);
+    const visibleInputShell = measuredVisibleBounds(actualPaint.inputShell);
+    const visibleSendButton = measuredVisibleBounds(actualPaint.sendButton);
     check(
       `${label}-paint-input-body-has-positive-width-and-stays-inside-input-shell`,
-      boundsHavePositiveArea(actualInputBody) &&
-        boundsContainedBy(actualInputBody, actualInputShell),
+      boundsHavePositiveArea(visibleInputBody) &&
+        boundsContainedBy(visibleInputBody, visibleInputShell),
       {
-        inputBody: actualInputBody,
-        inputShell: actualInputShell,
+        inputBody: visibleInputBody,
+        inputShell: visibleInputShell,
+        geometry: "visibleBounds",
         tolerancePx: 1,
       },
     );
     check(
       `${label}-paint-send-button-is-measured-inside-input-shell-without-overlap`,
-      boundsHavePositiveArea(actualSendButton) &&
-        boundsContainedBy(actualSendButton, actualInputShell) &&
-        boundsHavePositiveArea(actualInputBody) &&
-        actualInputBody.x + actualInputBody.width <= actualSendButton.x + 1,
+      boundsHavePositiveArea(visibleSendButton) &&
+        boundsContainedBy(visibleSendButton, visibleInputShell) &&
+        boundsHavePositiveArea(visibleInputBody) &&
+        visibleInputBody.x + visibleInputBody.width <=
+          visibleSendButton.x + 1,
       {
-        inputBody: actualInputBody,
-        sendButton: actualSendButton,
-        inputShell: actualInputShell,
+        inputBody: visibleInputBody,
+        sendButton: visibleSendButton,
+        inputShell: visibleInputShell,
+        geometry: "visibleBounds",
         tolerancePx: 1,
       },
+    );
+    assertPaintEffectivelyFullyVisible(
+      label,
+      "send-button",
+      actualPaint.sendButton,
     );
   }
 }
 
-function assertContextOnly(label: string, candidate: Json, baseline: Json) {
+function assertCanonicalMultilineExpanded(
+  candidate: Json,
+  baseline: Json,
+  oneLine: Json,
+) {
+  const label = "agent-chat-wrapped";
+  const actual = candidate.chrome as Json;
+  const expected = baseline.chrome as Json;
+  const oneLineChrome = oneLine.chrome as Json;
+  const actualHeader = actual.header as Bounds | null;
+  const expectedHeader = expected.header as Bounds | null;
+  const actualContext = actual.context as Bounds | null;
+  const expectedContext = expected.context as Bounds | null;
+  const actualInput = actual.input as Bounds | null;
+  const expectedInput = expected.input as Bounds | null;
+  const actualMain = actual.main as Bounds | null;
+  const expectedMain = expected.main as Bounds | null;
+  const inputGrowth =
+    actualInput !== null && expectedInput !== null
+      ? actualInput.height - expectedInput.height
+      : null;
+
+  check(
+    `${label}-shell-and-footer-stay-canonical`,
+    sizeNear(actual.shell as Size | null, expected.shell as Size | null) &&
+      boundsNear(actual.footer as Bounds | null, expected.footer as Bounds | null),
+    {
+      shell: actual.shell,
+      expectedShell: expected.shell,
+      footer: actual.footer,
+      expectedFooter: expected.footer,
+      tolerancePx: 1,
+    },
+  );
+  check(
+    `${label}-context-stays-canonical`,
+    boundsNear(actualContext, expectedContext),
+    { actual: actualContext, expected: expectedContext, tolerancePx: 1 },
+  );
+  check(
+    `${label}-input-keeps-canonical-leading-geometry-and-expands`,
+    boundsHavePositiveArea(actualInput) &&
+      boundsHavePositiveArea(expectedInput) &&
+      near(actualInput.x, expectedInput.x) &&
+      near(actualInput.y, expectedInput.y) &&
+      near(actualInput.width, expectedInput.width) &&
+      actualInput.height > expectedInput.height + 1,
+    { actual: actualInput, expected: expectedInput, tolerancePx: 1 },
+  );
+  check(
+    `${label}-header-growth-equals-input-growth`,
+    boundsHavePositiveArea(actualHeader) &&
+      boundsHavePositiveArea(expectedHeader) &&
+      inputGrowth !== null &&
+      inputGrowth > 0 &&
+      near(actualHeader.height - expectedHeader.height, inputGrowth),
+    { actualHeader, expectedHeader, inputGrowth, tolerancePx: 1 },
+  );
+  check(
+    `${label}-main-follows-header-and-shrinks-by-input-growth`,
+    boundsHavePositiveArea(actualHeader) &&
+      boundsHavePositiveArea(actualMain) &&
+      boundsHavePositiveArea(expectedMain) &&
+      inputGrowth !== null &&
+      near(actualMain.y, actualHeader.y + actualHeader.height) &&
+      near(expectedMain.height - actualMain.height, inputGrowth),
+    { actualHeader, actualMain, expectedMain, inputGrowth, tolerancePx: 1 },
+  );
+
+  const actualPaint = candidate.paintChrome as Json;
+  const expectedPaint = baseline.paintChrome as Json;
+  const oneLinePaint = oneLine.paintChrome as Json;
+  check(
+    `${label}-paint-shell-and-context-stay-canonical`,
+    boundsNear(
+      measuredBounds(actualPaint.shell),
+      measuredBounds(expectedPaint.shell),
+    ) &&
+      boundsNear(
+        measuredBounds(actualPaint.context),
+        measuredBounds(expectedPaint.context),
+      ),
+    {
+      shell: measuredBounds(actualPaint.shell),
+      expectedShell: measuredBounds(expectedPaint.shell),
+      context: measuredBounds(actualPaint.context),
+      expectedContext: measuredBounds(expectedPaint.context),
+      tolerancePx: 1,
+    },
+  );
+  const actualBody = measuredBounds(actualPaint.inputBody);
+  const oneLineBody = measuredBounds(oneLinePaint.inputBody);
+  const actualInputShell = measuredBounds(actualPaint.inputShell);
+  check(
+    `${label}-paint-input-shell-agrees-with-expanded-model`,
+    boundsNear(actualInput, actualInputShell),
+    { modeled: actualInput, painted: actualInputShell, tolerancePx: 1 },
+  );
+  check(
+    `${label}-paint-input-body-keeps-leading-line-geometry`,
+    boundsHavePositiveArea(actualBody) &&
+      boundsHavePositiveArea(oneLineBody) &&
+      boundsHavePositiveArea(actualInputShell) &&
+      leadingOriginNear(actualBody, oneLineBody) &&
+      actualBody.height > oneLineBody.height + 1,
+    {
+      actualBody,
+      oneLineBody,
+      actualInputShell,
+      trailingWidthMayDifferForSend: true,
+      tolerancePx: 1,
+    },
+  );
+  const visibleBody = measuredVisibleBounds(actualPaint.inputBody);
+  const visibleShell = measuredVisibleBounds(actualPaint.inputShell);
+  const visibleSend = measuredVisibleBounds(actualPaint.sendButton);
+  check(
+    `${label}-visible-input-body-and-send-stay-separated-inside-shell`,
+    boundsHavePositiveArea(visibleBody) &&
+      boundsHavePositiveArea(visibleShell) &&
+      boundsHavePositiveArea(visibleSend) &&
+      boundsContainedBy(visibleBody, visibleShell) &&
+      boundsContainedBy(visibleSend, visibleShell) &&
+      visibleBody.x + visibleBody.width <= visibleSend.x + 1,
+    { visibleBody, visibleShell, visibleSend, tolerancePx: 1 },
+  );
+  assertPaintEffectivelyFullyVisible(label, "input-shell", actualPaint.inputShell);
+  assertPaintEffectivelyFullyVisible(label, "input-body", actualPaint.inputBody);
+  assertPaintEffectivelyFullyVisible(label, "send-button", actualPaint.sendButton);
+
+  const composerScroll = (candidate.agentChatComposerScroll ?? null) as
+    | Json
+    | null;
+  const oneLineComposerScroll = (oneLine.agentChatComposerScroll ?? null) as
+    | Json
+    | null;
+  const viewportHeight =
+    typeof composerScroll?.viewportHeightPx === "number"
+      ? composerScroll.viewportHeightPx
+      : null;
+  const oneLineViewportHeight =
+    typeof oneLineComposerScroll?.viewportHeightPx === "number"
+      ? oneLineComposerScroll.viewportHeightPx
+      : null;
+  check(
+    `${label}-typed-three-line-state-grew-composer-viewport`,
+    boundsHavePositiveArea(actualBody) &&
+      viewportHeight !== null &&
+      oneLineViewportHeight !== null &&
+      viewportHeight > oneLineViewportHeight + 1 &&
+      near(viewportHeight, actualBody.height),
+    {
+      composerScroll,
+      oneLineComposerScroll,
+      paintedInputBody: actualBody,
+      tolerancePx: 1,
+    },
+  );
+  check(
+    `${label}-one-line-reference-was-canonical-before-growth`,
+    boundsNear(oneLineChrome.input as Bounds | null, expectedInput),
+    {
+      oneLineInput: oneLineChrome.input,
+      canonicalInput: expectedInput,
+      tolerancePx: 1,
+    },
+  );
+  check(
+    `${label}-paint-frame-is-newer-than-one-line-agent-chat`,
+    typeof candidate.paintFrameGeneration === "number" &&
+      typeof oneLine.paintFrameGeneration === "number" &&
+      candidate.paintFrameGeneration > oneLine.paintFrameGeneration,
+    {
+      oneLineFrameGeneration: oneLine.paintFrameGeneration ?? null,
+      wrappedFrameGeneration: candidate.paintFrameGeneration ?? null,
+    },
+  );
+}
+
+function assertViewOwnedContextOnly(
+  label: string,
+  candidate: Json,
+  baseline: Json,
+) {
   const actual = candidate.chrome as Json;
   const expected = baseline.chrome as Json;
   check(
@@ -901,6 +1396,125 @@ function assertContextOnly(label: string, candidate: Json, baseline: Json) {
   );
 }
 
+function assertRootOwnedContextOnly(
+  label: string,
+  candidate: Json,
+  baseline: Json,
+) {
+  const actual = candidate.chrome as Json;
+  const expected = baseline.chrome as Json;
+  const shell = actual.shell as Size | null;
+  const baselineShell = expected.shell as Size | null;
+  const header = actual.header as Bounds | null;
+  const context = actual.context as Bounds | null;
+  const main = actual.main as Bounds | null;
+  const footer = actual.footer as Bounds | null;
+  const baselineHeader = expected.header as Bounds | null;
+  const baselineContext = expected.context as Bounds | null;
+  const baselineInput = expected.input as Bounds | null;
+  const baselineFooter = expected.footer as Bounds | null;
+  const topInset =
+    baselineHeader !== null && baselineContext !== null
+      ? baselineContext.y - baselineHeader.y
+      : null;
+  const bottomInset =
+    baselineHeader !== null && baselineInput !== null
+      ? baselineHeader.y +
+        baselineHeader.height -
+        (baselineInput.y + baselineInput.height)
+      : null;
+  const expectedHeaderHeight =
+    topInset !== null && bottomInset !== null && baselineContext !== null
+      ? topInset + baselineContext.height + bottomInset
+      : null;
+
+  check(
+    `${label}-root-owned-shell-keeps-canonical-width`,
+    shell !== null &&
+      baselineShell !== null &&
+      near(shell.width, baselineShell.width) &&
+      Number.isFinite(shell.height) &&
+      shell.height > 0,
+    { actual: shell, baseline: baselineShell, candidateHeightMayDiffer: true },
+  );
+  check(`${label}-root-owned-context-has-no-main-input`, actual.input == null, {
+    actual: actual.input,
+  });
+  check(
+    `${label}-root-owned-context-matches-main-menu`,
+    boundsNear(context, baselineContext),
+    { actual: context, expected: baselineContext, tolerancePx: 1 },
+  );
+  check(
+    `${label}-root-owned-context-header-uses-derived-height`,
+    boundsHavePositiveArea(header) &&
+      expectedHeaderHeight !== null &&
+      near(header.height, expectedHeaderHeight),
+    { header, expectedHeaderHeight, topInset, bottomInset, tolerancePx: 1 },
+  );
+  check(
+    `${label}-root-owned-main-starts-after-header`,
+    boundsHavePositiveArea(header) &&
+      boundsHavePositiveArea(main) &&
+      near(main.y, header.y + header.height),
+    { header, main, tolerancePx: 1 },
+  );
+  check(
+    `${label}-root-owned-footer-is-candidate-bottom-anchored`,
+    footer === null ||
+      (shell !== null &&
+        boundsHavePositiveArea(baselineFooter) &&
+        near(footer.height, baselineFooter.height) &&
+        near(footer.y + footer.height, shell.height)),
+    {
+      footer,
+      baselineFooter,
+      candidateShell: shell,
+      candidateHeightMayDiffer: true,
+      tolerancePx: 1,
+    },
+  );
+
+  const actualPaint = candidate.paintChrome as Json;
+  const expectedPaint = baseline.paintChrome as Json;
+  const paintShell = measuredBounds(actualPaint.shell);
+  const modeledShellBounds =
+    shell === null
+      ? null
+      : { x: 0, y: 0, width: shell.width, height: shell.height };
+  const paintHeader = measuredBounds(actualPaint.header);
+  const paintContext = measuredBounds(actualPaint.context);
+  const paintMain = measuredBounds(actualPaint.main);
+  check(
+    `${label}-root-owned-paint-shell-matches-candidate-model`,
+    boundsNear(paintShell, modeledShellBounds),
+    { painted: paintShell, modeled: modeledShellBounds, tolerancePx: 1 },
+  );
+  check(
+    `${label}-root-owned-paint-context-matches-main-menu`,
+    boundsNear(paintContext, measuredBounds(expectedPaint.context)),
+    {
+      actual: paintContext,
+      expected: measuredBounds(expectedPaint.context),
+      tolerancePx: 1,
+    },
+  );
+  check(
+    `${label}-root-owned-paint-has-no-main-input`,
+    actualPaint.inputShell == null && actualPaint.inputBody == null,
+    { inputShell: actualPaint.inputShell, inputBody: actualPaint.inputBody },
+  );
+  check(
+    `${label}-root-owned-paint-header-and-main-follow-derived-anatomy`,
+    boundsHavePositiveArea(paintHeader) &&
+      boundsHavePositiveArea(paintMain) &&
+      expectedHeaderHeight !== null &&
+      near(paintHeader.height, expectedHeaderHeight) &&
+      near(paintMain.y, paintHeader.y + paintHeader.height),
+    { paintHeader, paintMain, expectedHeaderHeight, tolerancePx: 1 },
+  );
+}
+
 const snapshotExpectations = {
   mainMenu: {
     surfaceKind: "ScriptList",
@@ -954,10 +1568,27 @@ const snapshotExpectations = {
   },
 } satisfies Record<string, SnapshotExpectation>;
 
+const startedAt = new Date();
+const binaryBytes = fileSize(binary);
+const binaryMtimeMs = fileMtimeMs(binary);
+const binarySha256 = sha256File(binary);
+const probeBytes = fileSize(probePath);
+const probeMtimeMs = fileMtimeMs(probePath);
+const probeSha256 = sha256File(probePath);
+
 const receipt: Json = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   probe: "main-window-header-input-parity",
   binary,
+  binarySha256,
+  binaryBytes,
+  binaryMtimeMs,
+  probePath,
+  probeSha256,
+  probeBytes,
+  probeMtimeMs,
+  startedAt: startedAt.toISOString(),
+  generatedAt: null,
   coverage: [
     "launcher",
     "split-preview-built-in",
@@ -965,7 +1596,9 @@ const receipt: Json = {
     "picker",
     "attachment-preview",
     "embedded-multiline",
+    "embedded-multiline-wrapped",
     "view-owned-intentional-compact",
+    "view-owned-intentional-compact-scope",
     "view-context-only",
     "root-context-only-built-in",
     "root-context-only-prompt",
@@ -982,7 +1615,7 @@ const receipt: Json = {
     footerContextOwnership:
       "CWD/model context is owned by MainViewContextZone, so activeFooter.contextChipCount must equal 0 on every sampled surface.",
     contextOnlyGeometry:
-      "Context-only header height is derived from the measured ScriptList top inset, context height, and post-input bottom inset.",
+      "View-owned Day Page keeps the fixed ScriptList shell/footer; root-owned prompt surfaces may choose another height while preserving canonical width, context/header anatomy, and a bottom-anchored footer.",
     typography:
       "Runtime proof covers placement and sizing; resolved font-family/weight parity is covered by code-level contracts because GPUI paint receipts do not expose glyph typography.",
   },
@@ -991,7 +1624,6 @@ const receipt: Json = {
 
 let driver: Driver | null = null;
 try {
-  const binaryBytes = fileSize(binary);
   check("binary-file-present", binaryBytes !== null && binaryBytes > 0, {
     path: binary,
     exists: existsSync(binary),
@@ -1001,6 +1633,40 @@ try {
     throw new Error(
       `Required Script Kit binary is missing or empty at ${binary}. ` +
         "Build it with SCRIPT_KIT_AGENT_ARTIFACT_NAME=main-header-parity ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui, or set SCRIPT_KIT_GPUI_BINARY.",
+    );
+  }
+  check(
+    "binary-sha256-present-before-launch",
+    validSha256(binarySha256),
+    { path: binary, sha256: binarySha256 },
+  );
+  check(
+    "binary-and-probe-file-metadata-present-before-launch",
+    binaryBytes !== null &&
+      binaryBytes > 0 &&
+      binaryMtimeMs !== null &&
+      Number.isFinite(binaryMtimeMs) &&
+      binaryMtimeMs > 0 &&
+      probeBytes !== null &&
+      probeBytes > 0 &&
+      probeMtimeMs !== null &&
+      Number.isFinite(probeMtimeMs) &&
+      probeMtimeMs > 0,
+    {
+      binaryBytes,
+      binaryMtimeMs,
+      probeBytes,
+      probeMtimeMs,
+    },
+  );
+  check(
+    "probe-sha256-present-before-launch",
+    validSha256(probeSha256),
+    { path: probePath, sha256: probeSha256 },
+  );
+  if (!validSha256(binarySha256) || !validSha256(probeSha256)) {
+    throw new Error(
+      `Required SHA-256 provenance is unavailable: binary=${binarySha256} probe=${probeSha256}`,
     );
   }
 
@@ -1078,12 +1744,34 @@ try {
     compactInputOpen,
   );
   await waitForSurface(driver, "AgentChat");
-  receipt.surfaces.focusedTextMiniInput = await compactSnapshot(
+  const focusedTextMiniInput = await compactSnapshot(
     driver,
     "focused-text-mini-input",
     snapshotExpectations.focusedTextMini,
-    false,
+    { scopeVisible: false, resultFooterVisible: false },
   );
+  receipt.surfaces.focusedTextMiniInput = focusedTextMiniInput;
+
+  const scopeTabDispatch = await driver.simulateGpuiEvent(
+    { type: "keyDown", key: "tab" },
+    { target: { type: "kind", kind: "main" }, timeoutMs: 10_000 },
+  );
+  check(
+    "focused-text-mini-scope-tab-dispatched-through-gpui",
+    scopeTabDispatch.success === true &&
+      (scopeTabDispatch.dispatchCompleted === true ||
+        scopeTabDispatch.dispatchScheduled === true),
+    scopeTabDispatch,
+  );
+  await waitForSurface(driver, "AgentChat");
+  const focusedTextMiniScope = await compactSnapshot(
+    driver,
+    "focused-text-mini-scope",
+    snapshotExpectations.focusedTextMini,
+    { scopeVisible: true, resultFooterVisible: false, screenshot: true },
+  );
+  receipt.surfaces.focusedTextMiniScope = focusedTextMiniScope;
+  assertCompactScopeExpansion(focusedTextMiniScope, focusedTextMiniInput);
 
   const compactResultOpen = await driver.request(
     {
@@ -1103,7 +1791,7 @@ try {
     driver,
     "focused-text-mini-result",
     snapshotExpectations.focusedTextMini,
-    true,
+    { scopeVisible: false, resultFooterVisible: true },
   );
 
   await resetToVisibleScriptList(driver);
@@ -1118,25 +1806,17 @@ try {
     snapshotExpectations.agentChat,
     true,
   );
-  let agentChatState: Json | null = null;
-  let agentChatStateError: string | null = null;
-  try {
-    agentChatState = await driver.request(
-      { type: "getAgentChatState" },
-      { expect: "agent_chatStateResult", timeoutMs: 10_000 },
-    );
-  } catch (error) {
-    agentChatStateError = String(error);
-  }
+  const agentChatStateReceipt = await getAgentChatState(driver);
+  const agentChatState = agentChatStateReceipt.state;
+  const agentChatStateError = agentChatStateReceipt.error;
   const agentChatInputLayout = agentChatState?.inputLayout ?? null;
   const agentChatComposerScroll = agentChatState?.composerScroll ?? null;
   check(
     "agent-chat-state-available",
-    agentChatStateError === null &&
-      agentChatState?.type === "agent_chatStateResult",
+    agentChatStateError === null && agentChatState !== null,
     {
       error: agentChatStateError,
-      responseType: agentChatState?.type ?? null,
+      statePresent: agentChatState !== null,
     },
   );
   check(
@@ -1173,6 +1853,52 @@ try {
   receipt.surfaces.agentChat = agentChat;
   assertCanonical("agent-chat", agentChat, baseline, true);
 
+  const wrappedAgentChatInput =
+    "Deterministic wrapped line one\nDeterministic wrapped line two\nDeterministic wrapped line three";
+  const wrappedInputResult = await driver.request(
+    {
+      type: "setAgentChatInput",
+      text: wrappedAgentChatInput,
+      submit: false,
+    },
+    { expect: "externalCommandResult", timeoutMs: 10_000 },
+  );
+  check(
+    "agent-chat-wrapped-input-set-through-typed-command",
+    wrappedInputResult.type === "externalCommandResult" &&
+      wrappedInputResult.command === "setAgentChatInput" &&
+      wrappedInputResult.ok === true,
+    wrappedInputResult,
+  );
+  await waitForSurface(driver, "AgentChat");
+  const agentChatWrapped = await snapshot(
+    driver,
+    "agent-chat-wrapped",
+    snapshotExpectations.agentChat,
+    true,
+  );
+  const wrappedStateReceipt = await getAgentChatState(driver);
+  const wrappedState = wrappedStateReceipt.state;
+  agentChatWrapped.agentChatStateError = wrappedStateReceipt.error;
+  agentChatWrapped.agentChatInputLayout = wrappedState?.inputLayout ?? null;
+  agentChatWrapped.agentChatComposerScroll = wrappedState?.composerScroll ?? null;
+  agentChatWrapped.typedInputLength = wrappedAgentChatInput.length;
+  check(
+    "agent-chat-wrapped-state-reflects-typed-input",
+    wrappedStateReceipt.error === null &&
+      wrappedState?.inputText === wrappedAgentChatInput,
+    {
+      error: wrappedStateReceipt.error,
+      expectedLength: wrappedAgentChatInput.length,
+      actualLength:
+        typeof wrappedState?.inputText === "string"
+          ? wrappedState.inputText.length
+          : null,
+    },
+  );
+  receipt.surfaces.agentChatWrapped = agentChatWrapped;
+  assertCanonicalMultilineExpanded(agentChatWrapped, baseline, agentChat);
+
   await resetToVisibleScriptList(driver);
   // A bare-space launcher filter is the production Today/Day Page route. It
   // exercises the real filter-change transition without relying on the
@@ -1186,7 +1912,7 @@ try {
     false,
   );
   receipt.surfaces.dayPage = dayPage;
-  assertContextOnly("day-page", dayPage, baseline);
+  assertViewOwnedContextOnly("day-page", dayPage, baseline);
 
   await resetToVisibleScriptList(driver);
   driver.send({
@@ -1201,7 +1927,7 @@ try {
     false,
   );
   receipt.surfaces.permissionsWizard = permissions;
-  assertContextOnly("permissions-wizard", permissions, baseline);
+  assertRootOwnedContextOnly("permissions-wizard", permissions, baseline);
 
   driver.send({ type: "openConfirmPrompt" });
   await waitForSurface(driver, "ConfirmPrompt");
@@ -1209,10 +1935,10 @@ try {
     driver,
     "confirm-prompt",
     snapshotExpectations.confirmPrompt,
-    false,
+    true,
   );
   receipt.surfaces.confirmPrompt = confirm;
-  assertContextOnly("confirm-prompt", confirm, baseline);
+  assertRootOwnedContextOnly("confirm-prompt", confirm, baseline);
   check("probe-completed", true);
 } catch (error) {
   receipt.error = String(error);
@@ -1220,13 +1946,44 @@ try {
 } finally {
   if (driver !== null) {
     try {
+      driver.send({
+        type: "hide",
+        requestId: `main-header-parity-cleanup-${Date.now()}`,
+      });
+      const hidden = await driver.waitForState(
+        { windowVisible: false },
+        { timeoutMs: 8_000 },
+      );
+      check("cleanup-main-window-hidden", hidden.windowVisible === false, {
+        windowVisible: hidden.windowVisible ?? null,
+      });
+    } catch (error) {
+      check("cleanup-main-window-hidden", false, { error: String(error) });
+    }
+    try {
       await driver.close();
+      check("driver-closed", true);
     } catch (error) {
       check("driver-closed", false, { error: String(error) });
     }
   }
 }
 
+const finalBinarySha256 = sha256File(binary);
+const finalProbeSha256 = sha256File(probePath);
+check(
+  "binary-provenance-stable-through-probe",
+  validSha256(finalBinarySha256) && finalBinarySha256 === binarySha256,
+  { before: binarySha256, after: finalBinarySha256 },
+);
+check(
+  "probe-provenance-stable-through-probe",
+  validSha256(finalProbeSha256) && finalProbeSha256 === probeSha256,
+  { before: probeSha256, after: finalProbeSha256 },
+);
+const generatedAt = new Date();
+receipt.generatedAt = generatedAt.toISOString();
+receipt.durationMs = generatedAt.getTime() - startedAt.getTime();
 receipt.checks = checks;
 receipt.status =
   checks.length > 0 && checks.every((entry) => entry.pass) ? "green" : "red";

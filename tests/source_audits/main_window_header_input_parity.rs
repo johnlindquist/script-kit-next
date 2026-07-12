@@ -2,67 +2,66 @@ use std::collections::BTreeSet;
 
 use super::read_source;
 
-fn app_view_variants() -> BTreeSet<String> {
-    let source = read_source("src/main_sections/app_view_state.rs");
-    let enum_start = source
-        .find("enum AppView {")
-        .expect("AppView enum should exist");
-    let enum_body = source[enum_start..]
-        .split("/// Exhaustive host-level header/input ownership")
-        .next()
-        .expect("AppView enum should precede the header/input policy docs");
-
-    enum_body
-        .lines()
-        .filter_map(|line| {
-            let trimmed = line.trim_start();
-            if !line.starts_with("    ")
-                || trimmed.starts_with("//")
-                || trimmed.starts_with("#[")
-                || trimmed.starts_with("///")
-                || trimmed.is_empty()
-            {
-                return None;
+fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("missing function signature `{signature}`"));
+    let open = source[start..]
+        .find('{')
+        .map(|offset| start + offset)
+        .unwrap_or_else(|| panic!("missing opening brace for `{signature}`"));
+    let mut depth = 0usize;
+    for (offset, byte) in source.as_bytes()[open..].iter().enumerate() {
+        match byte {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &source[open..=open + offset];
+                }
             }
-
-            let name = trimmed
-                .split(|ch: char| ch == '{' || ch == ',' || ch.is_whitespace())
-                .next()
-                .unwrap_or("");
-            if name.chars().next().is_some_and(char::is_uppercase) {
-                Some(name.to_string())
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-#[test]
-fn every_app_view_is_classified_for_main_window_header_input_policy() {
-    let actual = app_view_variants();
-    let source = read_source("src/main_sections/app_view_state.rs");
-    let policy = source
-        .split("pub(crate) fn main_view_header_input_policy(&self)")
-        .nth(1)
-        .and_then(|body| body.split("/// Resolve stateful sub-variants").next())
-        .expect("AppView must expose the exhaustive main-window header/input policy");
-
-    for variant in actual {
-        assert!(
-            policy.contains(&format!("AppView::{variant}")),
-            "new AppView variant {variant} must be classified by main_view_header_input_policy"
-        );
+            _ => {}
+        }
     }
-    assert!(
-        !policy.contains("_ =>"),
-        "main_view_header_input_policy must stay exhaustive so rustc catches new views"
-    );
+    panic!("missing closing brace for `{signature}`");
 }
 
-#[test]
-fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
-    let surfaces = [
+fn app_view_names(line: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut rest = line;
+    while let Some(offset) = rest.find("AppView::") {
+        let after = &rest[offset + "AppView::".len()..];
+        let name = after
+            .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
+            .next()
+            .unwrap_or("");
+        if !name.is_empty() {
+            names.push(name.to_string());
+        }
+        rest = &after[name.len()..];
+    }
+    names
+}
+
+fn variants_for_policy(function: &str, policy: &str) -> BTreeSet<String> {
+    let marker = format!("MainViewHeaderInputPolicy::{policy}");
+    let mut pending = BTreeSet::new();
+    let mut classified = BTreeSet::new();
+    for line in function.lines() {
+        pending.extend(app_view_names(line));
+        if line.contains("MainViewHeaderInputPolicy::") {
+            if line.contains(&marker) {
+                classified.append(&mut pending);
+            } else {
+                pending.clear();
+            }
+        }
+    }
+    classified
+}
+
+fn canonical_input_renderers() -> &'static [(&'static str, &'static str, &'static str)] {
+    &[
         (
             "ScriptList",
             "src/render_script_list/mod.rs",
@@ -203,9 +202,69 @@ fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
             "src/render_builtins/notes_browse.rs",
             "render_builtin_main_input_header(",
         ),
-    ];
+    ]
+}
 
-    for (surface, path, required) in surfaces {
+fn app_view_variants() -> BTreeSet<String> {
+    let source = read_source("src/main_sections/app_view_state.rs");
+    let enum_start = source
+        .find("enum AppView {")
+        .expect("AppView enum should exist");
+    let enum_body = source[enum_start..]
+        .split("/// Exhaustive host-level header/input ownership")
+        .next()
+        .expect("AppView enum should precede the header/input policy docs");
+
+    enum_body
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim_start();
+            if !line.starts_with("    ")
+                || trimmed.starts_with("//")
+                || trimmed.starts_with("#[")
+                || trimmed.starts_with("///")
+                || trimmed.is_empty()
+            {
+                return None;
+            }
+
+            let name = trimmed
+                .split(|ch: char| ch == '{' || ch == ',' || ch.is_whitespace())
+                .next()
+                .unwrap_or("");
+            if name.chars().next().is_some_and(char::is_uppercase) {
+                Some(name.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn every_app_view_is_classified_for_main_window_header_input_policy() {
+    let actual = app_view_variants();
+    let source = read_source("src/main_sections/app_view_state.rs");
+    let policy = function_body(
+        &source,
+        "pub(crate) fn main_view_header_input_policy(&self)",
+    );
+
+    for variant in actual {
+        assert!(
+            policy.contains(&format!("AppView::{variant}")),
+            "new AppView variant {variant} must be classified by main_view_header_input_policy"
+        );
+    }
+    assert!(
+        !policy.contains("_ =>"),
+        "main_view_header_input_policy must stay exhaustive so rustc catches new views"
+    );
+}
+
+#[test]
+fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
+    for (surface, path, required) in canonical_input_renderers() {
         let source = read_source(path);
         assert!(
             source.contains("render_main_view_chrome_footer_flush(")
@@ -250,29 +309,54 @@ fn searchable_main_window_surfaces_have_shared_runtime_layout_context_zone() {
 #[test]
 fn searchable_shared_header_inventory_is_owned_by_the_exhaustive_app_view_policy() {
     let app_view_state = read_source("src/main_sections/app_view_state.rs");
-    let policy = app_view_state
-        .split("pub(crate) fn main_view_header_input_policy(&self)")
-        .nth(1)
-        .and_then(|body| body.split("/// Resolve stateful sub-variants").next())
-        .expect("exhaustive AppView main-window policy should exist");
+    let policy = function_body(
+        &app_view_state,
+        "pub(crate) fn main_view_header_input_policy(&self)",
+    );
+    let policy_inventory = variants_for_policy(policy, "ViewOwnedCanonicalInput");
+    let renderer_inventory = canonical_input_renderers()
+        .iter()
+        .map(|(variant, _, _)| (*variant).to_string())
+        .collect::<BTreeSet<_>>();
 
-    for variant in searchable_shared_header_variants() {
-        assert!(
-            policy.contains(variant),
-            "{variant} must be present in the exhaustive AppView shared-header policy"
-        );
-    }
+    assert_eq!(
+        policy_inventory, renderer_inventory,
+        "canonical-input policy membership and shared renderer inventory must match exactly"
+    );
+    assert_eq!(
+        variants_for_policy(policy, "ViewOwnedCanonicalMultilineInput"),
+        BTreeSet::from(["AgentChatView".to_string()]),
+        "standard Agent Chat must remain the sole canonical multiline owner"
+    );
+    assert_eq!(
+        variants_for_policy(policy, "ViewOwnedContextOnly"),
+        BTreeSet::from(["DayPage".to_string()]),
+        "Day Page must remain the sole view-owned context-only owner"
+    );
+
+    let resolved = function_body(
+        &app_view_state,
+        "pub(crate) fn resolved_main_view_header_input_policy(",
+    );
+    assert_eq!(
+        variants_for_policy(resolved, "ViewOwnedIntentionalCompact"),
+        BTreeSet::from(["AgentChatView".to_string()]),
+        "Focused Text Mini must remain the sole intentional-compact resolution"
+    );
+    assert!(
+        resolved.contains("entity.read(cx).is_focused_text_mini()"),
+        "the intentional-compact Agent Chat resolution must stay scoped to Focused Text Mini"
+    );
 }
 
 #[test]
 fn prompt_and_child_content_surfaces_use_root_shared_context_header_fallback() {
     let render_impl = read_source("src/main_sections/render_impl.rs");
     let app_view_state = read_source("src/main_sections/app_view_state.rs");
-    let ownership_body = app_view_state
-        .split("pub(crate) fn main_view_header_input_policy(&self)")
-        .nth(1)
-        .and_then(|body| body.split("/// Resolve stateful sub-variants").next())
-        .expect("exhaustive main-window header/input policy should exist");
+    let ownership_body = function_body(
+        &app_view_state,
+        "pub(crate) fn main_view_header_input_policy(&self)",
+    );
 
     assert!(
         render_impl.contains(".uses_view_owned_main_window_shell(&*cx)"),
@@ -309,36 +393,6 @@ fn prompt_and_child_content_surfaces_use_root_shared_context_header_fallback() {
         );
     }
     assert!(ownership_body.contains("MainViewHeaderInputPolicy::RootContextOnly"));
-}
-
-fn searchable_shared_header_variants() -> &'static [&'static str] {
-    &[
-        "AppView::ScriptList",
-        "AppView::ClipboardHistoryView { .. }",
-        "AppView::AppLauncherView { .. }",
-        "AppView::WindowSwitcherView { .. }",
-        "AppView::BrowserTabsView { .. }",
-        "AppView::DesignGalleryView { .. }",
-        "AppView::FooterGalleryView { .. }",
-        "AppView::FileSearchView { .. }",
-        "AppView::ProfileSearchView { .. }",
-        "AppView::ThemeChooserView { .. }",
-        "AppView::EmojiPickerView { .. }",
-        "AppView::SdkReferenceView { .. }",
-        "AppView::ScriptTemplateCatalogView { .. }",
-        "AppView::BrowseKitsView { .. }",
-        "AppView::InstalledKitsView { .. }",
-        "AppView::ProcessManagerView { .. }",
-        "AppView::SearchAiPresetsView { .. }",
-        "AppView::SettingsView { .. }",
-        "AppView::FavoritesBrowseView { .. }",
-        "AppView::CurrentAppCommandsView { .. }",
-        "AppView::AgentChatHistoryView { .. }",
-        "AppView::BrowserHistoryView { .. }",
-        "AppView::DictationHistoryView { .. }",
-        "AppView::NotesBrowseView { .. }",
-        "AppView::AgentChatView { .. }",
-    ]
 }
 
 #[test]
