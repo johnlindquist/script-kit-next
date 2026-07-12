@@ -67,9 +67,9 @@ pub use elements_actions_scriptlets::{
     ScriptletData, ScriptletMetadataData,
 };
 pub use grid_layout::{
-    BoxModelSides, ComputedBoxModel, ComputedFlexStyle, GridColorScheme, GridDepthOption,
-    GridOptions, LayoutBounds, LayoutComponentInfo, LayoutComponentType, LayoutInfo,
-    ScriptErrorData,
+    BoxModelSides, ComputedBoxModel, ComputedFlexStyle, FidelityLayoutNode, FidelityLayoutSnapshot,
+    FidelityUnscopedPaintSummary, GridColorScheme, GridDepthOption, GridOptions, LayoutBounds,
+    LayoutComponentInfo, LayoutComponentType, LayoutInfo, ScriptErrorData,
 };
 pub use input::{ExecOptions, MouseData};
 pub use menu_bar::MenuBarItemData;

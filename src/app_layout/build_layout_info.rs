@@ -527,6 +527,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -835,6 +836,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -1126,6 +1128,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -1265,6 +1268,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -1435,6 +1439,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -1567,6 +1572,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -1727,6 +1733,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -1850,6 +1857,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -1924,6 +1932,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -1970,6 +1979,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -2020,6 +2030,7 @@ impl ScriptListApp {
                 window_height,
                 prompt_type: prompt_type.to_string(),
                 components,
+                fidelity: None,
                 handler_form: None,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -2032,6 +2043,7 @@ impl ScriptListApp {
             window_height,
             prompt_type: prompt_type.to_string(),
             components,
+            fidelity: None,
             handler_form: self.build_handler_form_layout_info(
                 content_top,
                 content_height,

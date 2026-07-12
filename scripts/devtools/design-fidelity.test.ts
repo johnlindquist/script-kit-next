@@ -65,6 +65,24 @@ describe("design fidelity comparator", () => {
     const r=compareDesignFidelity(m,gpui(undefined,[node]),dom());
     expect(r.errors).toContain("Clip geometry exceeds tolerance for title");
   });
+  test("closed-world comparison prefers scoped fidelity nodes over legacy components", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:[]},elements:[{fidelityId:"title",gpuiId:"title",kind:"element",parentId:null,paintOrder:0}]});
+    const node={id:"title",kind:"element",parentId:null,paintOrder:0,bounds:{x:102,y:203,width:30,height:10},visibleBounds:{x:102,y:203,width:30,height:10},clipBounds:{x:100,y:200,width:100,height:80},primitiveCount:1};
+    const g={...gpui(undefined,[{semanticId:"stale-legacy-node",bounds:{x:0,y:0,width:1,height:1}}]),fidelity:{nodes:[node],unscoped:{primitiveCount:0}}};
+    expect(compareDesignFidelity(m,g,dom()).classification).toBe("ok");
+  });
+  test("closed-world comparison reads scoped fidelity from a layout.ts raw envelope", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:[]},elements:[{fidelityId:"title",gpuiId:"title",kind:"element",parentId:null,paintOrder:0}],requirePaintMeasurement:true});
+    const node={id:"title",kind:"element",parentId:null,paintOrder:0,bounds:{x:2,y:3,width:30,height:10},visibleBounds:{x:2,y:3,width:30,height:10},clipBounds:{x:0,y:0,width:100,height:80},primitiveCount:1,measurementProvenance:"paint-time",coordinateSpace:"window",measurementFrameGeneration:7};
+    const g={tool:"script-kit-devtools.layout",target:{automationId:"main"},windowRect:{x:100,y:200,width:100,height:80},rawLayout:{info:{fidelity:{nodes:[node],unscoped:{primitiveCount:0}},components:[{name:"stale-legacy-node"}]}}};
+    expect(compareDesignFidelity(m,g,dom()).classification).toBe("ok");
+  });
+  test("closed-world comparison rejects unscoped paint primitives", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:[]},elements:[{fidelityId:"title",gpuiId:"title"}]});
+    const node={id:"title",bounds:{x:102,y:203,width:30,height:10},visibleBounds:{x:102,y:203,width:30,height:10},clipBounds:{x:100,y:200,width:100,height:80},primitiveCount:1};
+    const g={...gpui(),fidelity:{nodes:[node],unscoped:{primitiveCount:1,primitiveKinds:["quad"],primitiveDigest:"unexpected"}}};
+    expect(compareDesignFidelity(m,g,dom()).errors).toContain("Unexpected unscoped GPUI paint primitives");
+  });
   test("direct replay rejects browser-render evidence and stale source", () => {
     const m=manifest({pixelPlane:{proofKind:"direct-byte-replay",maxChangedPixels:0,requireSourceFreshness:true}});
     const image={tool:"script-kit-devtools.image-diff",classification:"ok",proofKind:"browser-screenshot",changedPixels:0,sourceFreshness:{matchesCurrentWorkspace:false}};

@@ -34,6 +34,8 @@ use parking_lot::RwLock;
 use raw_window_handle::{HandleError, HasDisplayHandle, HasWindowHandle};
 use refineable::Refineable;
 use scheduler::Instant;
+#[cfg(any(test, feature = "test-support"))]
+use seahash::SeaHasher;
 use slotmap::SlotMap;
 use smallvec::SmallVec;
 use std::{
@@ -766,6 +768,105 @@ pub struct DebugBoundsEntry {
     pub clip_bounds: Bounds<Pixels>,
 }
 
+/// Capture-only semantic category for a paint scope.
+///
+/// These values intentionally stay small and transport-agnostic. Higher-level
+/// DevTools receipts can add text/scroll-specific metadata without teaching
+/// GPUI about application surfaces.
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FidelityNodeKind {
+    /// A regular element identified by a stable debug selector.
+    #[default]
+    Element,
+    /// The root document rendered by a rich-text view.
+    TextDocument,
+    /// One semantic block in a rich-text document.
+    TextBlock,
+    /// One laid-out line in a rich-text block.
+    TextLine,
+    /// One consistently styled glyph run in a rich-text line.
+    TextRun,
+    /// A real scrollbar, track, or thumb measured after prepaint.
+    Scrollbar,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl FidelityNodeKind {
+    /// Return the stable camel-case transport name for this category.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Element => "element",
+            Self::TextDocument => "textDocument",
+            Self::TextBlock => "textBlock",
+            Self::TextLine => "textLine",
+            Self::TextRun => "textRun",
+            Self::Scrollbar => "scrollbar",
+        }
+    }
+}
+
+/// One actual GPUI paint call recorded while the Agent Chat fidelity capture
+/// flag is active. Bounds are window-relative logical pixels.
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone, Debug)]
+pub struct FidelityPaintAtom {
+    /// GPUI paint entry point that emitted the primitive.
+    pub primitive_kind: String,
+    /// Innermost active stable scope, or `__unscoped__`.
+    pub scope_id: String,
+    /// Full primitive bounds in window-relative logical pixels.
+    pub bounds: Bounds<Pixels>,
+    /// Primitive bounds after applying the active content mask.
+    pub clipped_bounds: Bounds<Pixels>,
+    /// Effective element opacity when the primitive was emitted.
+    pub opacity: f32,
+    /// Stable hash of the primitive's raster-affecting payload.
+    pub payload_hash: String,
+    /// Monotonic order within the completed paint frame.
+    pub paint_order: u64,
+}
+
+/// Finite summary for one stable fidelity selector occurrence.
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone, Debug)]
+pub struct FidelityScopeSummary {
+    /// Stable selector or explicitly assigned semantic scope ID.
+    pub id: String,
+    /// Stable ID of the nearest enclosing fidelity scope.
+    pub parent_id: Option<String>,
+    /// Semantic category of the scope.
+    pub kind: FidelityNodeKind,
+    /// Full scope bounds in window-relative logical pixels.
+    pub bounds: Bounds<Pixels>,
+    /// Scope bounds after applying the active content mask.
+    pub visible_bounds: Bounds<Pixels>,
+    /// Active content mask at the scope boundary.
+    pub clip_bounds: Bounds<Pixels>,
+    /// Union of all paint atoms owned directly by this scope.
+    pub union_paint_bounds: Bounds<Pixels>,
+    /// Number of ordered paint atoms owned directly by this scope.
+    pub primitive_count: usize,
+    /// Stable ordered digest of the scope's paint atoms.
+    pub primitive_digest: String,
+    /// First paint order included in the scope, if it painted.
+    pub first_paint_order: Option<u64>,
+    /// Last paint order included in the scope, if it painted.
+    pub last_paint_order: Option<u64>,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone, Debug)]
+struct FidelityScope {
+    id: String,
+    parent_id: Option<String>,
+    kind: FidelityNodeKind,
+    bounds: Bounds<Pixels>,
+    visible_bounds: Bounds<Pixels>,
+    clip_bounds: Bounds<Pixels>,
+    atom_start: usize,
+}
+
 pub(crate) struct Frame {
     pub(crate) focus: Option<FocusId>,
     pub(crate) window_active: bool,
@@ -784,6 +885,10 @@ pub(crate) struct Frame {
     pub(crate) debug_bounds: FxHashMap<String, Bounds<Pixels>>,
     #[cfg(any(test, feature = "test-support"))]
     debug_bounds_log: Vec<DebugBoundsEntry>,
+    #[cfg(any(test, feature = "test-support"))]
+    fidelity_paint_atoms: Vec<FidelityPaintAtom>,
+    #[cfg(any(test, feature = "test-support"))]
+    fidelity_scope_summaries: Vec<FidelityScopeSummary>,
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub(crate) next_inspector_instance_ids: FxHashMap<Rc<crate::InspectorElementPath>, usize>,
     #[cfg(any(feature = "inspector", debug_assertions))]
@@ -812,6 +917,10 @@ pub(crate) struct PaintIndex {
     line_layout_index: LineLayoutIndex,
     #[cfg(any(test, feature = "test-support"))]
     debug_bounds_index: usize,
+    #[cfg(any(test, feature = "test-support"))]
+    fidelity_paint_atoms_index: usize,
+    #[cfg(any(test, feature = "test-support"))]
+    fidelity_scope_summaries_index: usize,
 }
 
 impl Frame {
@@ -835,6 +944,10 @@ impl Frame {
             debug_bounds: FxHashMap::default(),
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds_log: Vec::new(),
+            #[cfg(any(test, feature = "test-support"))]
+            fidelity_paint_atoms: Vec::new(),
+            #[cfg(any(test, feature = "test-support"))]
+            fidelity_scope_summaries: Vec::new(),
 
             #[cfg(any(feature = "inspector", debug_assertions))]
             next_inspector_instance_ids: FxHashMap::default(),
@@ -864,6 +977,8 @@ impl Frame {
         {
             self.debug_bounds.clear();
             self.debug_bounds_log.clear();
+            self.fidelity_paint_atoms.clear();
+            self.fidelity_scope_summaries.clear();
         }
 
         #[cfg(any(feature = "inspector", debug_assertions))]
@@ -965,6 +1080,12 @@ pub struct Window {
     pub(crate) rendered_frame: Frame,
     pub(crate) next_frame: Frame,
     rendered_frame_generation: u64,
+    #[cfg(any(test, feature = "test-support"))]
+    fidelity_capture_target: Option<String>,
+    #[cfg(any(test, feature = "test-support"))]
+    fidelity_scope_stack: Vec<FidelityScope>,
+    #[cfg(any(test, feature = "test-support"))]
+    fidelity_paint_order: u64,
     next_hitbox_id: HitboxId,
     pub(crate) next_tooltip_id: TooltipId,
     pub(crate) tooltip_bounds: Option<TooltipBounds>,
@@ -1491,6 +1612,12 @@ impl Window {
             rendered_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
             next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
             rendered_frame_generation: 0,
+            #[cfg(any(test, feature = "test-support"))]
+            fidelity_capture_target: std::env::var("SCRIPT_KIT_FIDELITY_CAPTURE").ok(),
+            #[cfg(any(test, feature = "test-support"))]
+            fidelity_scope_stack: Vec::new(),
+            #[cfg(any(test, feature = "test-support"))]
+            fidelity_paint_order: 0,
             next_frame_callbacks,
             next_hitbox_id: HitboxId(0),
             next_tooltip_id: TooltipId::default(),
@@ -2070,6 +2197,203 @@ impl Window {
         &self.rendered_frame.debug_bounds_log
     }
 
+    /// Whether this window was launched for the bounded Agent Chat fidelity
+    /// capture. Normal app windows pay no per-primitive telemetry cost.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn fidelity_capture_active(&self) -> bool {
+        self.fidelity_capture_target.as_deref() == Some("agent-chat")
+    }
+
+    /// Override the capture target in a test without mutating process-global
+    /// environment variables.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_fidelity_capture_target_for_test(&mut self, target: Option<&str>) {
+        self.fidelity_capture_target = target.map(str::to_string);
+    }
+
+    /// Restricts automatic debug-selector scoping to selectors that are part
+    /// of the Agent Chat proof contract. Other debug selectors retain their
+    /// existing test behavior without silently entering the closed world.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn should_capture_fidelity_selector(&self, selector: &str) -> bool {
+        self.fidelity_capture_active()
+            && (selector.starts_with("agent-chat-")
+                || selector.starts_with("agent-chat.")
+                || matches!(
+                    selector,
+                    "main-view-context-zone"
+                        | "main-view-context-cwd-button"
+                        | "main-view-context-model-button"
+                        | "main-view-input-shell"
+                        | "main-view-input-body"
+                        | "native-main-window-footer-spacer"
+                ))
+    }
+
+    /// Runs a paint subtree inside a stable fidelity scope. Nested calls
+    /// retain parent identity, and every paint entry point belongs to the
+    /// innermost active scope for an unambiguous ordered digest.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_fidelity_scope<R>(
+        &mut self,
+        id: impl Into<String>,
+        kind: FidelityNodeKind,
+        bounds: Bounds<Pixels>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        if !self.fidelity_capture_active() {
+            return f(self);
+        }
+
+        let id = id.into();
+        let clip_bounds = self.content_mask().bounds;
+        let visible_bounds = bounds.intersect(&clip_bounds);
+        let parent_id = self
+            .fidelity_scope_stack
+            .last()
+            .map(|scope| scope.id.clone());
+        self.fidelity_scope_stack.push(FidelityScope {
+            id,
+            parent_id,
+            kind,
+            bounds,
+            visible_bounds,
+            clip_bounds,
+            atom_start: self.next_frame.fidelity_paint_atoms.len(),
+        });
+
+        let result = f(self);
+        self.finish_fidelity_scope();
+        result
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn finish_fidelity_scope(&mut self) {
+        let Some(scope) = self.fidelity_scope_stack.pop() else {
+            return;
+        };
+        let atoms: Vec<_> = self.next_frame.fidelity_paint_atoms[scope.atom_start..]
+            .iter()
+            .filter(|atom| atom.scope_id == scope.id)
+            .collect();
+        let mut digest = SeaHasher::new();
+        let mut union_paint_bounds: Option<Bounds<Pixels>> = None;
+        for atom in &atoms {
+            atom.primitive_kind.hash(&mut digest);
+            atom.payload_hash.hash(&mut digest);
+            atom.bounds.origin.x.as_f32().to_bits().hash(&mut digest);
+            atom.bounds.origin.y.as_f32().to_bits().hash(&mut digest);
+            atom.bounds.size.width.as_f32().to_bits().hash(&mut digest);
+            atom.bounds.size.height.as_f32().to_bits().hash(&mut digest);
+            atom.clipped_bounds
+                .origin
+                .x
+                .as_f32()
+                .to_bits()
+                .hash(&mut digest);
+            atom.clipped_bounds
+                .origin
+                .y
+                .as_f32()
+                .to_bits()
+                .hash(&mut digest);
+            atom.clipped_bounds
+                .size
+                .width
+                .as_f32()
+                .to_bits()
+                .hash(&mut digest);
+            atom.clipped_bounds
+                .size
+                .height
+                .as_f32()
+                .to_bits()
+                .hash(&mut digest);
+            atom.opacity.to_bits().hash(&mut digest);
+            union_paint_bounds = Some(match union_paint_bounds {
+                Some(current) => current.union(&atom.bounds),
+                None => atom.bounds,
+            });
+        }
+
+        self.next_frame
+            .fidelity_scope_summaries
+            .push(FidelityScopeSummary {
+                id: scope.id,
+                parent_id: scope.parent_id,
+                kind: scope.kind,
+                bounds: scope.bounds,
+                visible_bounds: scope.visible_bounds,
+                clip_bounds: scope.clip_bounds,
+                union_paint_bounds: union_paint_bounds.unwrap_or_default(),
+                primitive_count: atoms.len(),
+                primitive_digest: format!("{:016x}", digest.finish()),
+                first_paint_order: atoms.first().map(|atom| atom.paint_order),
+                last_paint_order: atoms.last().map(|atom| atom.paint_order),
+            });
+    }
+
+    /// Record one actual paint primitive in the current completed-frame
+    /// telemetry stream. The payload is hashed immediately and never exposed.
+    #[cfg(any(test, feature = "test-support"))]
+    fn record_fidelity_paint_atom(
+        &mut self,
+        primitive_kind: &'static str,
+        bounds: Bounds<Pixels>,
+        payload: impl Hash,
+    ) {
+        if !self.fidelity_capture_active() {
+            return;
+        }
+        let mut payload_hasher = SeaHasher::new();
+        primitive_kind.hash(&mut payload_hasher);
+        payload.hash(&mut payload_hasher);
+        let clip_bounds = self.content_mask().bounds;
+        let paint_order = self.fidelity_paint_order;
+        self.fidelity_paint_order = self.fidelity_paint_order.wrapping_add(1);
+        self.next_frame
+            .fidelity_paint_atoms
+            .push(FidelityPaintAtom {
+                primitive_kind: primitive_kind.to_string(),
+                scope_id: self
+                    .fidelity_scope_stack
+                    .last()
+                    .map(|scope| scope.id.clone())
+                    .unwrap_or_else(|| "__unscoped__".to_string()),
+                bounds,
+                clipped_bounds: bounds.intersect(&clip_bounds),
+                opacity: self.element_opacity(),
+                payload_hash: format!("{:016x}", payload_hasher.finish()),
+                paint_order,
+            });
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn fidelity_logical_bounds(bounds: Bounds<ScaledPixels>, scale_factor: f32) -> Bounds<Pixels> {
+        Bounds {
+            origin: point(
+                px(bounds.origin.x.as_f32() / scale_factor),
+                px(bounds.origin.y.as_f32() / scale_factor),
+            ),
+            size: size(
+                px(bounds.size.width.as_f32() / scale_factor),
+                px(bounds.size.height.as_f32() / scale_factor),
+            ),
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    /// Return stable scope summaries from the most recently completed frame.
+    pub fn fidelity_scope_summaries(&self) -> &[FidelityScopeSummary] {
+        &self.rendered_frame.fidelity_scope_summaries
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    /// Return raw paint atoms from the most recently completed frame.
+    pub fn fidelity_paint_atoms(&self) -> &[FidelityPaintAtom] {
+        &self.rendered_frame.fidelity_paint_atoms
+    }
+
     /// Monotonic identity of the most recently completed rendered frame.
     pub fn rendered_frame_generation(&self) -> u64 {
         self.rendered_frame_generation
@@ -2388,6 +2712,11 @@ impl Window {
         debug_assert!(self.rendered_entity_stack.is_empty());
         self.invalidator.set_dirty(false);
         self.requested_autoscroll = None;
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            self.fidelity_scope_stack.clear();
+            self.fidelity_paint_order = 0;
+        }
 
         // Restore the previously-used input handler.
         if let Some(input_handler) = self.platform_window.take_input_handler() {
@@ -2804,6 +3133,10 @@ impl Window {
             line_layout_index: self.text_system.layout_index(),
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds_index: self.next_frame.debug_bounds_log.len(),
+            #[cfg(any(test, feature = "test-support"))]
+            fidelity_paint_atoms_index: self.next_frame.fidelity_paint_atoms.len(),
+            #[cfg(any(test, feature = "test-support"))]
+            fidelity_scope_summaries_index: self.next_frame.fidelity_scope_summaries.len(),
         }
     }
 
@@ -2847,6 +3180,40 @@ impl Window {
                 .debug_bounds
                 .insert(entry.selector.clone(), entry.bounds);
             self.next_frame.debug_bounds_log.push(entry);
+        }
+
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            let source_atoms = self.rendered_frame.fidelity_paint_atoms
+                [range.start.fidelity_paint_atoms_index..range.end.fidelity_paint_atoms_index]
+                .to_vec();
+            let source_summaries = self.rendered_frame.fidelity_scope_summaries[range
+                .start
+                .fidelity_scope_summaries_index
+                ..range.end.fidelity_scope_summaries_index]
+                .to_vec();
+            let source_first_order = source_atoms
+                .first()
+                .map(|atom| atom.paint_order)
+                .unwrap_or(0);
+            let replay_first_order = self.fidelity_paint_order;
+            for mut atom in source_atoms {
+                atom.paint_order = replay_first_order
+                    .wrapping_add(atom.paint_order.wrapping_sub(source_first_order));
+                self.fidelity_paint_order = self
+                    .fidelity_paint_order
+                    .max(atom.paint_order.wrapping_add(1));
+                self.next_frame.fidelity_paint_atoms.push(atom);
+            }
+            for mut summary in source_summaries {
+                summary.first_paint_order = summary.first_paint_order.map(|order| {
+                    replay_first_order.wrapping_add(order.wrapping_sub(source_first_order))
+                });
+                summary.last_paint_order = summary.last_paint_order.map(|order| {
+                    replay_first_order.wrapping_add(order.wrapping_sub(source_first_order))
+                });
+                self.next_frame.fidelity_scope_summaries.push(summary);
+            }
         }
 
         self.text_system
@@ -3320,6 +3687,17 @@ impl Window {
         let content_mask = self.content_mask();
         let clipped_bounds = bounds.intersect(&content_mask.bounds);
         if !clipped_bounds.is_empty() {
+            #[cfg(any(test, feature = "test-support"))]
+            self.record_fidelity_paint_atom(
+                "layer",
+                bounds,
+                (
+                    bounds.origin.x.as_f32().to_bits(),
+                    bounds.origin.y.as_f32().to_bits(),
+                    bounds.size.width.as_f32().to_bits(),
+                    bounds.size.height.as_f32().to_bits(),
+                ),
+            );
             self.next_frame
                 .scene
                 .push_layer(clipped_bounds.scale(scale_factor));
@@ -3350,6 +3728,14 @@ impl Window {
         let opacity = self.element_opacity();
         for shadow in shadows {
             let shadow_bounds = (bounds + shadow.offset).dilate(shadow.spread_radius);
+            #[cfg(any(test, feature = "test-support"))]
+            if self.fidelity_capture_active() {
+                self.record_fidelity_paint_atom(
+                    "shadow",
+                    shadow_bounds,
+                    format!("{shadow:?}|{corner_radii:?}"),
+                );
+            }
             self.next_frame.scene.insert_primitive(Shadow {
                 order: 0,
                 blur_radius: shadow.blur_radius.scale(scale_factor),
@@ -3373,6 +3759,21 @@ impl Window {
     pub fn paint_quad(&mut self, quad: PaintQuad) {
         self.invalidator.debug_assert_paint();
 
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            self.record_fidelity_paint_atom(
+                "quad",
+                quad.bounds,
+                format!(
+                    "{:?}|{:?}|{:?}|{:?}|{:?}",
+                    quad.background,
+                    quad.border_color,
+                    quad.border_widths,
+                    quad.corner_radii,
+                    quad.border_style
+                ),
+            );
+        }
         let scale_factor = self.scale_factor();
         let content_mask = self.content_mask();
         let opacity = self.element_opacity();
@@ -3399,6 +3800,14 @@ impl Window {
         let opacity = self.element_opacity();
         path.content_mask = content_mask;
         let color: Background = color.into();
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            self.record_fidelity_paint_atom(
+                "path",
+                path.bounds,
+                format!("{:?}|{:?}", path.vertices, color),
+            );
+        }
         path.color = color.opacity(opacity);
         self.next_frame
             .scene
@@ -3428,6 +3837,11 @@ impl Window {
         };
         let content_mask = self.content_mask();
         let element_opacity = self.element_opacity();
+
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            self.record_fidelity_paint_atom("underline", bounds, format!("{style:?}"));
+        }
 
         self.next_frame.scene.insert_primitive(Underline {
             order: 0,
@@ -3459,6 +3873,11 @@ impl Window {
         };
         let content_mask = self.content_mask();
         let opacity = self.element_opacity();
+
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            self.record_fidelity_paint_atom("strikethrough", bounds, format!("{style:?}"));
+        }
 
         self.next_frame.scene.insert_primitive(Underline {
             order: 0,
@@ -3525,6 +3944,15 @@ impl Window {
             };
             let content_mask = self.content_mask().scale(scale_factor);
 
+            #[cfg(any(test, feature = "test-support"))]
+            if self.fidelity_capture_active() {
+                self.record_fidelity_paint_atom(
+                    "glyph",
+                    Self::fidelity_logical_bounds(bounds, scale_factor),
+                    format!("{font_id:?}|{glyph_id:?}|{font_size:?}|{color:?}|{params:?}"),
+                );
+            }
+
             if subpixel_rendering {
                 self.next_frame.scene.insert_primitive(SubpixelSprite {
                     order: 0,
@@ -3583,6 +4011,14 @@ impl Window {
                 size: tile.bounds.size.map(Into::into),
             };
             let content_mask = self.content_mask().scale(scale_factor);
+            #[cfg(any(test, feature = "test-support"))]
+            if self.fidelity_capture_active() {
+                self.record_fidelity_paint_atom(
+                    "glyph",
+                    Self::fidelity_logical_bounds(bounds, scale_factor),
+                    format!("{params:?}|{color:?}"),
+                );
+            }
             self.next_frame.scene.insert_primitive(MonochromeSprite {
                 order: 0,
                 pad: 0,
@@ -3629,6 +4065,14 @@ impl Window {
             };
             let content_mask = self.content_mask().scale(scale_factor);
             let opacity = self.element_opacity();
+            #[cfg(any(test, feature = "test-support"))]
+            if self.fidelity_capture_active() {
+                self.record_fidelity_paint_atom(
+                    "emoji",
+                    Self::fidelity_logical_bounds(bounds, scale_factor),
+                    format!("{params:?}"),
+                );
+            }
 
             self.next_frame.scene.insert_primitive(PolychromeSprite {
                 order: 0,
@@ -3710,6 +4154,14 @@ impl Window {
             };
             let content_mask = self.content_mask().scale(scale_factor);
             let opacity = self.element_opacity();
+            #[cfg(any(test, feature = "test-support"))]
+            if self.fidelity_capture_active() {
+                self.record_fidelity_paint_atom(
+                    "emoji",
+                    Self::fidelity_logical_bounds(bounds, scale_factor),
+                    format!("{params:?}"),
+                );
+            }
 
             self.next_frame.scene.insert_primitive(PolychromeSprite {
                 order: 0,
@@ -3775,6 +4227,18 @@ impl Window {
                 .map(|value| ScaledPixels(value.0 as f32 / SMOOTH_SVG_SCALE_FACTOR)),
         };
 
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            self.record_fidelity_paint_atom(
+                "svg",
+                Self::fidelity_logical_bounds(svg_bounds, scale_factor),
+                format!(
+                    "{}|{}x{}|{color:?}|{transformation:?}",
+                    params.path, params.size.width.0, params.size.height.0,
+                ),
+            );
+        }
+
         self.next_frame.scene.insert_primitive(MonochromeSprite {
             order: 0,
             pad: 0,
@@ -3805,6 +4269,14 @@ impl Window {
         self.invalidator.debug_assert_paint();
 
         let scale_factor = self.scale_factor();
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            self.record_fidelity_paint_atom(
+                "image",
+                bounds,
+                format!("{:?}|{frame_index}|{grayscale}|{corner_radii:?}", data.id),
+            );
+        }
         let bounds = bounds.scale(scale_factor);
         let params = RenderImageParams {
             image_id: data.id,
@@ -3852,6 +4324,19 @@ impl Window {
         self.invalidator.debug_assert_paint();
 
         let scale_factor = self.scale_factor();
+        #[cfg(any(test, feature = "test-support"))]
+        if self.fidelity_capture_active() {
+            self.record_fidelity_paint_atom(
+                "surface",
+                bounds,
+                (
+                    bounds.origin.x.as_f32().to_bits(),
+                    bounds.origin.y.as_f32().to_bits(),
+                    bounds.size.width.as_f32().to_bits(),
+                    bounds.size.height.as_f32().to_bits(),
+                ),
+            );
+        }
         let bounds = bounds.scale(scale_factor);
         let content_mask = self.content_mask().scale(scale_factor);
         self.next_frame.scene.insert_primitive(PaintSurface {

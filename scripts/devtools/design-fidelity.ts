@@ -120,8 +120,26 @@ function gpuiRoot(receipt: AnyObject) {
     ? rect({ x: 0, y: 0, width, height })
     : null;
 }
+function gpuiFidelity(receipt: AnyObject): AnyObject {
+  for (const value of [
+    receipt.fidelity,
+    receipt.info?.fidelity,
+    receipt.rawLayout?.fidelity,
+    receipt.rawLayout?.info?.fidelity,
+    receipt.result?.fidelity,
+    receipt.result?.info?.fidelity,
+  ]) {
+    if (!value || typeof value !== "object") continue;
+    const candidate = object(value);
+    if (Array.isArray(candidate.nodes) || candidate.unscoped !== undefined) {
+      return candidate;
+    }
+  }
+  return {};
+}
 function gpuiElements(receipt: AnyObject): AnyObject[] {
   for (const value of [
+    gpuiFidelity(receipt).nodes,
     receipt.elements,
     receipt.nodes,
     receipt.regions,
@@ -262,7 +280,7 @@ export function compareDesignFidelity(manifest: FidelityManifest, gpuiInput: unk
     const node = gpuiMatches[0];
     if (manifest.closedWorld) {
       if (mapping.kind !== undefined) node.kind === mapping.kind ? pass(`element.${mapping.fidelityId}.kind`) : fail(`element.${mapping.fidelityId}.kind`, `Node kind mismatch for ${mapping.gpuiId}`, {expected:mapping.kind,actual:node.kind ?? null});
-      if (mapping.parentId !== undefined) (node.parentId ?? null) === mapping.parentId ? pass(`element.${mapping.fidelityId}.parent`) : fail(`element.${mapping.fidelityId}.parent`, `Node parent mismatch for ${mapping.gpuiId}`, {expected:mapping.parentId,actual:node.parentId ?? null});
+      if (mapping.parentId !== undefined) (node.parentId ?? node.parent ?? null) === mapping.parentId ? pass(`element.${mapping.fidelityId}.parent`) : fail(`element.${mapping.fidelityId}.parent`, `Node parent mismatch for ${mapping.gpuiId}`, {expected:mapping.parentId,actual:node.parentId ?? node.parent ?? null});
       if (mapping.paintOrder !== undefined) node.paintOrder === mapping.paintOrder ? pass(`element.${mapping.fidelityId}.paintOrder`) : fail(`element.${mapping.fidelityId}.paintOrder`, `Node paint order mismatch for ${mapping.gpuiId}`, {expected:mapping.paintOrder,actual:node.paintOrder ?? null});
       if (!finite(node.primitiveCount) || node.primitiveCount <= 0) fail(`element.${mapping.fidelityId}.paintAtoms`, `Visible fidelity scope must own paint primitives: ${mapping.gpuiId}`, {primitiveCount:node.primitiveCount ?? null});
     }
@@ -322,6 +340,18 @@ export function compareDesignFidelity(manifest: FidelityManifest, gpuiInput: unk
     uniqueFrames.length === 1 && paintFrameGenerations.length === manifest.elements.length
       ? pass("paintFrameCoherent", {frameGeneration:uniqueFrames[0],elementCount:paintFrameGenerations.length})
       : fail("paintFrameCoherent", "All mapped GPUI elements must come from one completed paint frame", {uniqueFrames,measured:paintFrameGenerations.length,required:manifest.elements.length});
+  }
+  if (manifest.closedWorld) {
+    const fidelity = gpuiFidelity(gpui);
+    const unscoped = object(fidelity.unscoped);
+    const primitiveCount = unscoped.primitiveCount;
+    primitiveCount === 0
+      ? pass("inventory.unscopedPaint", {primitiveCount:0})
+      : fail("inventory.unscopedPaint", "Unexpected unscoped GPUI paint primitives", {
+          primitiveCount: primitiveCount ?? null,
+          primitiveKinds: unscoped.primitiveKinds ?? [],
+          primitiveDigest: unscoped.primitiveDigest ?? null,
+        });
   }
   let imageDiffEvidence: AnyObject | null = null;
   if (imageDiff) {

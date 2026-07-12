@@ -444,6 +444,86 @@ pub struct LayoutComponentInfo {
     pub measurement_frame_generation: Option<u64>,
 }
 
+/// One capture-only GPUI fidelity scope summarized from an actual completed
+/// paint frame. The manifest pins identity and hierarchy; this runtime record
+/// supplies current geometry and ordered primitive evidence.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FidelityLayoutNode {
+    /// Stable closed-world identity for the paint-owning node.
+    pub id: String,
+    /// Semantic node category such as `element`, `textRun`, or `scrollbar`.
+    pub kind: String,
+    /// Stable ID of the nearest enclosing fidelity node.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    /// Full node bounds in window-relative logical pixels.
+    pub bounds: LayoutBounds,
+    /// Full bounds clipped by all visible ancestors.
+    pub visible_bounds: LayoutBounds,
+    /// Active ancestor clip rectangle.
+    pub clip_bounds: LayoutBounds,
+    /// Union of all raster primitives owned by this node.
+    pub union_paint_bounds: LayoutBounds,
+    /// Number of raster primitives owned by this node.
+    pub primitive_count: usize,
+    /// Deterministic ordered digest of the owned raster primitives.
+    pub primitive_digest: String,
+    /// Stable closed-world order among visible fidelity nodes.
+    pub paint_order: u64,
+    /// First raster primitive order owned by this node.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_paint_order: Option<u64>,
+    /// Last raster primitive order owned by this node.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_paint_order: Option<u64>,
+    /// Completed GPUI frame that supplied every measurement on this node.
+    pub measurement_frame_generation: u64,
+    /// Explicit evidence that the geometry came from GPUI's completed paint frame.
+    pub measurement_provenance: String,
+    /// Coordinate space used by every bounds field on this node.
+    pub coordinate_space: String,
+    /// Optional normalized source-text hash for text-bearing nodes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_hash: Option<String>,
+    /// Optional digest of text shaping and layout metadata.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_layout_hash: Option<String>,
+    /// Node-kind-specific finite telemetry such as scrollbar prepaint values.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Paint calls that occurred outside any stable fidelity scope. The Agent
+/// Chat proof fails closed when non-background atoms remain here.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FidelityUnscopedPaintSummary {
+    /// Number of primitives emitted outside a stable fidelity scope.
+    pub primitive_count: usize,
+    /// Deterministic ordered digest of unscoped primitives.
+    pub primitive_digest: String,
+    /// Distinct primitive entry points present in the unscoped bucket.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub primitive_kinds: Vec<String>,
+    /// Union of all unscoped primitive bounds.
+    pub union_paint_bounds: LayoutBounds,
+}
+
+/// Capture-only finite paint inventory for one completed GPUI frame.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FidelityLayoutSnapshot {
+    /// Bounded capture target that enabled this snapshot.
+    pub capture_target: String,
+    /// Completed GPUI frame shared by every node in this snapshot.
+    pub frame_generation: u64,
+    /// Closed-world visible fidelity nodes.
+    pub nodes: Vec<FidelityLayoutNode>,
+    /// Paint primitives not owned by any stable node.
+    pub unscoped: FidelityUnscopedPaintSummary,
+}
+
 impl LayoutComponentInfo {
     pub fn new(name: impl Into<String>, component_type: LayoutComponentType) -> Self {
         Self {
@@ -685,6 +765,9 @@ pub struct LayoutInfo {
     pub prompt_type: String,
     /// All components in the layout tree
     pub components: Vec<LayoutComponentInfo>,
+    /// Present only when SCRIPT_KIT_FIDELITY_CAPTURE selects a bounded proof.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fidelity: Option<FidelityLayoutSnapshot>,
     /// Handler-form-specific layout details for DevTools focus/scroll receipts.
     #[serde(
         default,
@@ -698,7 +781,10 @@ pub struct LayoutInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::{LayoutComponentInfo, LayoutComponentType};
+    use super::{
+        FidelityLayoutNode, FidelityLayoutSnapshot, FidelityUnscopedPaintSummary, LayoutBounds,
+        LayoutComponentInfo, LayoutComponentType, LayoutInfo,
+    };
 
     #[test]
     fn visual_style_serializes_for_devtools_receipts() {
@@ -749,5 +835,75 @@ mod tests {
         assert_eq!(json["measurementFrameGeneration"], 42);
         assert_eq!(json["visibleBounds"]["y"], 40.0);
         assert_eq!(json["clipBounds"]["height"], 404.0);
+    }
+
+    #[test]
+    fn fidelity_snapshot_serializes_closed_world_paint_evidence() {
+        let bounds = LayoutBounds {
+            x: 10.0,
+            y: 20.0,
+            width: 30.0,
+            height: 40.0,
+        };
+        let snapshot = FidelityLayoutSnapshot {
+            capture_target: "agent-chat".to_string(),
+            frame_generation: 42,
+            nodes: vec![FidelityLayoutNode {
+                id: "agent-chat.transcript.row.user-16".to_string(),
+                kind: "element".to_string(),
+                parent_id: Some("agent-chat.transcript.viewport".to_string()),
+                bounds: bounds.clone(),
+                visible_bounds: bounds.clone(),
+                clip_bounds: bounds.clone(),
+                union_paint_bounds: bounds.clone(),
+                primitive_count: 3,
+                primitive_digest: "paint-digest".to_string(),
+                paint_order: 1,
+                first_paint_order: Some(4),
+                last_paint_order: Some(6),
+                measurement_frame_generation: 42,
+                measurement_provenance: "paint-time".to_string(),
+                coordinate_space: "window".to_string(),
+                text_hash: Some("text-digest".to_string()),
+                text_layout_hash: None,
+                metadata: None,
+            }],
+            unscoped: FidelityUnscopedPaintSummary {
+                primitive_count: 0,
+                primitive_digest: "empty-digest".to_string(),
+                primitive_kinds: Vec::new(),
+                union_paint_bounds: LayoutBounds::default(),
+            },
+        };
+
+        let json = serde_json::to_value(snapshot).expect("serialize fidelity snapshot");
+        assert_eq!(json["captureTarget"], "agent-chat");
+        assert_eq!(json["frameGeneration"], 42);
+        assert_eq!(
+            json["nodes"][0]["parentId"],
+            "agent-chat.transcript.viewport"
+        );
+        assert_eq!(json["nodes"][0]["primitiveCount"], 3);
+        assert_eq!(json["nodes"][0]["measurementFrameGeneration"], 42);
+        assert_eq!(json["nodes"][0]["measurementProvenance"], "paint-time");
+        assert_eq!(json["nodes"][0]["coordinateSpace"], "window");
+        assert_eq!(json["unscoped"]["primitiveCount"], 0);
+    }
+
+    #[test]
+    fn layout_info_omits_inactive_fidelity_and_accepts_legacy_receipts() {
+        let json = serde_json::to_value(LayoutInfo::default()).expect("serialize default layout");
+        assert!(json.get("fidelity").is_none());
+
+        let legacy = serde_json::json!({
+            "windowWidth": 750.0,
+            "windowHeight": 480.0,
+            "promptType": "agentChatChat",
+            "components": [],
+            "timestamp": "2026-07-11T00:00:00Z"
+        });
+        let decoded: LayoutInfo =
+            serde_json::from_value(legacy).expect("deserialize layout without fidelity");
+        assert_eq!(decoded.fidelity, None);
     }
 }

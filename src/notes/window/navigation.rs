@@ -825,6 +825,7 @@ impl NotesApp {
             window_height,
             prompt_type: "notes".to_string(),
             components,
+            fidelity: None,
             handler_form: None,
             timestamp: chrono::Utc::now().to_rfc3339(),
         }

@@ -1333,6 +1333,7 @@ impl AgentChatView {
             window_height,
             prompt_type: "focusedTextMini".to_string(),
             components,
+            fidelity: None,
             handler_form: None,
             timestamp: chrono::Utc::now().to_rfc3339(),
         }
@@ -1529,6 +1530,7 @@ impl AgentChatView {
                 "agentChatDetached".to_string()
             },
             components,
+            fidelity: None,
             handler_form: None,
             timestamp: chrono::Utc::now().to_rfc3339(),
         }
@@ -1613,6 +1615,7 @@ impl AgentChatView {
                     .with_parent("AgentChatDetachedWindow")
                     .with_explanation("Placeholder Agent Chat footer rail for window-shell proof."),
             ],
+            fidelity: None,
             handler_form: None,
             timestamp: chrono::Utc::now().to_rfc3339(),
         }

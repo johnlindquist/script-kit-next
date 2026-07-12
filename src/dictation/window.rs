@@ -3378,6 +3378,7 @@ pub fn automation_layout_info(
         window_height: height,
         prompt_type: "dictation".to_string(),
         components,
+        fidelity: None,
         handler_form: None,
         timestamp: chrono::Utc::now().to_rfc3339(),
     }
