@@ -258,11 +258,37 @@ export function compareDesignFidelity(manifest: FidelityManifest, gpuiInput: unk
   if (manifest.closedWorld) {
     if (manifest.schemaVersion !== 2) fail("manifest.schemaVersion", "Closed-world fidelity requires manifest schema version 2", {actual:manifest.schemaVersion ?? null});
     else pass("manifest.schemaVersion", 2);
+    const fidelity = gpuiFidelity(gpui);
+    const appKit = object(fidelity.appKit ?? fidelity.appkit);
+    const appKitNodes = Array.isArray(appKit.nodes)
+      ? appKit.nodes
+      : Array.isArray(gpui.appKitNodes)
+        ? gpui.appKitNodes
+        : Array.isArray(object(gpui.appKit ?? gpui.appkit).nodes)
+          ? object(gpui.appKit ?? gpui.appkit).nodes
+          : [];
+    const overlayTargets = Array.isArray(fidelity.overlays)
+      ? fidelity.overlays
+      : Array.isArray(gpui.overlayNodes)
+        ? gpui.overlayNodes
+        : Array.isArray(object(gpui.overlay).nodes)
+          ? object(gpui.overlay).nodes
+          : [];
+    const appKitStatus = String(
+      fidelity.appKitStatus ?? fidelity.appkitStatus ?? gpui.appKitStatus ?? gpui.appkitStatus ?? "",
+    );
+    const overlayStatus = String(fidelity.overlayStatus ?? gpui.overlayStatus ?? "");
+    appKitStatus === "captured"
+      ? pass("inventory.appKitStatus", appKitStatus)
+      : fail("inventory.appKitStatus", "Closed-world AppKit capture status is not captured", {actual:appKitStatus || null});
+    overlayStatus === "captured"
+      ? pass("inventory.overlayStatus", overlayStatus)
+      : fail("inventory.overlayStatus", "Closed-world overlay capture status is not captured", {actual:overlayStatus || null});
     const inventories = [
       ["dom", manifest.inventory?.expectedDomIds ?? [], markedIds],
       ["gpui", manifest.inventory?.expectedGpuiIds ?? [], gpuiNodes.map(gpuiId)],
-      ["appKit", manifest.inventory?.expectedAppKitIds ?? [], ids(gpui.appKitNodes ?? gpui.appKit?.nodes)],
-      ["overlay", manifest.inventory?.expectedOverlayIds ?? [], ids(gpui.overlayNodes ?? gpui.overlay?.nodes)],
+      ["appKit", manifest.inventory?.expectedAppKitIds ?? [], ids(appKitNodes)],
+      ["overlay", manifest.inventory?.expectedOverlayIds ?? [], ids(overlayTargets, ["targetId", "id", "automationId", "name"])],
     ] as const;
     for (const [name, expected, actual] of inventories) {
       const delta = inventoryDelta([...expected], actual);

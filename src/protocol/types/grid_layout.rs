@@ -649,10 +649,15 @@ pub struct FidelityLayoutSnapshot {
     /// Paint primitives not owned by any stable node.
     pub unscoped: FidelityUnscopedPaintSummary,
     /// Explicit result for the native main-window footer-host capture.
-    #[serde(default)]
+    #[serde(default, rename = "appKitStatus", alias = "appkitStatus")]
     pub appkit_status: FidelityCaptureStatus,
     /// Native main-window footer-host evidence, collected from AppKit.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "appKit",
+        alias = "appkit",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub appkit: Option<AppKitFidelitySnapshot>,
     /// Explicit result for the separate GPUI footer-overlay capture.
     #[serde(default)]
@@ -1029,7 +1034,7 @@ mod tests {
             }),
             overlay_status: FidelityCaptureStatus::Captured,
             overlays: vec![FidelityPaintTargetSnapshot {
-                target_id: "footer-overlay".to_string(),
+                target_id: "gpui-footer-overlay".to_string(),
                 target_kind: "footerOverlay".to_string(),
                 parent_target_id: Some("main".to_string()),
                 window_bounds: bounds.clone(),
@@ -1050,11 +1055,13 @@ mod tests {
         assert_eq!(json["nodes"][0]["measurementFrameGeneration"], 42);
         assert_eq!(json["nodes"][0]["measurementProvenance"], "paint-time");
         assert_eq!(json["nodes"][0]["coordinateSpace"], "window");
-        assert_eq!(json["appkitStatus"], "captured");
-        assert_eq!(json["appkit"]["targetId"], "main-footer-host");
-        assert_eq!(json["appkit"]["nodes"][0]["id"], "script-kit-footer-effect");
+        assert_eq!(json["appKitStatus"], "captured");
+        assert!(json.get("appkitStatus").is_none());
+        assert_eq!(json["appKit"]["targetId"], "main-footer-host");
+        assert_eq!(json["appKit"]["nodes"][0]["id"], "script-kit-footer-effect");
+        assert!(json.get("appkit").is_none());
         assert_eq!(json["overlayStatus"], "captured");
-        assert_eq!(json["overlays"][0]["targetId"], "footer-overlay");
+        assert_eq!(json["overlays"][0]["targetId"], "gpui-footer-overlay");
         assert_eq!(json["overlays"][0]["parentTargetId"], "main");
         assert_eq!(json["unscoped"]["primitiveCount"], 0);
     }
@@ -1084,6 +1091,34 @@ mod tests {
         assert_eq!(decoded.appkit, None);
         assert_eq!(decoded.overlay_status, FidelityCaptureStatus::NotRequested);
         assert!(decoded.overlays.is_empty());
+    }
+
+    #[test]
+    fn fidelity_snapshot_accepts_lowercase_appkit_compatibility_keys() {
+        let legacy = serde_json::json!({
+            "captureTarget": "agent-chat",
+            "frameGeneration": 42,
+            "nodes": [],
+            "unscoped": {
+                "primitiveCount": 0,
+                "primitiveDigest": "empty",
+                "primitiveKinds": [],
+                "unionPaintBounds": LayoutBounds::default()
+            },
+            "appkitStatus": "captured",
+            "appkit": {
+                "targetId": "main-footer-host",
+                "targetKind": "appKitFooterHost",
+                "coordinateSpace": "appkit-content-bottom-left+screenshot-top-left",
+                "windowBounds": LayoutBounds::default(),
+                "nodes": []
+            }
+        });
+
+        let decoded: FidelityLayoutSnapshot = serde_json::from_value(legacy)
+            .expect("deserialize lowercase AppKit compatibility keys");
+        assert_eq!(decoded.appkit_status, FidelityCaptureStatus::Captured);
+        assert_eq!(decoded.appkit.unwrap().target_id, "main-footer-host");
     }
 
     #[test]

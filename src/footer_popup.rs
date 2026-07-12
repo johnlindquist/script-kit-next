@@ -478,6 +478,7 @@ struct GpuiFooterOverlaySlot {
 /// Stable automation-registry identity for the GPUI footer overlay window so
 /// DevTools primitives (captureWindow, inspectAutomationWindow) can target it.
 const GPUI_FOOTER_OVERLAY_AUTOMATION_ID: &str = "footer-overlay";
+const GPUI_FOOTER_OVERLAY_FIDELITY_TARGET_ID: &str = "gpui-footer-overlay";
 const GPUI_FOOTER_OVERLAY_WINDOW_TITLE: &str = "Script Kit Footer Overlay";
 
 fn automation_bounds_from_gpui(bounds: Bounds<Pixels>) -> crate::protocol::AutomationWindowBounds {
@@ -809,7 +810,7 @@ impl Render for GpuiFooterOverlay {
                 }
                 let snapshot = crate::fidelity_capture::paint_target_snapshot(
                     window,
-                    GPUI_FOOTER_OVERLAY_AUTOMATION_ID,
+                    GPUI_FOOTER_OVERLAY_FIDELITY_TARGET_ID,
                     "footerOverlay",
                     Some("main".to_string()),
                 );
@@ -840,7 +841,7 @@ impl Render for GpuiFooterOverlay {
         // with each button able to shrink to its slot minimum, so the two
         // groups can never overlap regardless of window width.
         div()
-            .id("gpui-footer-overlay")
+            .id(GPUI_FOOTER_OVERLAY_FIDELITY_TARGET_ID)
             .w_full()
             .h_full()
             .px(px(crate::window_resize::main_layout::HINT_STRIP_PADDING_X))
@@ -4016,7 +4017,7 @@ mod footer_layout_tests {
 
         let snapshot = super::main_footer_overlay_fidelity_snapshot()
             .expect("footer overlay completed-frame fidelity snapshot");
-        assert_eq!(snapshot.target_id, "footer-overlay");
+        assert_eq!(snapshot.target_id, "gpui-footer-overlay");
         assert_eq!(snapshot.target_kind, "footerOverlay");
         assert_eq!(snapshot.parent_target_id.as_deref(), Some("main"));
         assert!(snapshot.frame_generation > 0);

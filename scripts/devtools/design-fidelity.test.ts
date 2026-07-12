@@ -59,6 +59,36 @@ describe("design fidelity comparator", () => {
     const r=compareDesignFidelity(m,g,dom());
     expect(r.errors).toContain("Closed-world appKit inventory mismatch");
   });
+  test("closed-world inventory accepts current AppKit and overlay transport", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:["footer"],expectedOverlayIds:["gpui-footer-overlay"]}});
+    const node={id:"title",bounds:{x:102,y:203,width:30,height:10},visibleBounds:{x:102,y:203,width:30,height:10},clipBounds:{x:100,y:200,width:100,height:80},primitiveCount:1,text:"Hello world"};
+    const g={...gpui(),fidelity:{nodes:[node],unscoped:{primitiveCount:0},appKitStatus:"captured",appKit:{nodes:[{id:"footer"}]},overlayStatus:"captured",overlays:[{targetId:"gpui-footer-overlay"}]}};
+    expect(compareDesignFidelity(m,g,dom()).classification).toBe("ok");
+  });
+  test("closed-world inventory accepts lowercase AppKit read compatibility", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:["footer"],expectedOverlayIds:["gpui-footer-overlay"]}});
+    const node={id:"title",bounds:{x:102,y:203,width:30,height:10},visibleBounds:{x:102,y:203,width:30,height:10},clipBounds:{x:100,y:200,width:100,height:80},primitiveCount:1,text:"Hello world"};
+    const g={...gpui(),fidelity:{nodes:[node],unscoped:{primitiveCount:0},appkitStatus:"captured",appkit:{nodes:[{id:"footer"}]},overlayStatus:"captured",overlays:[{targetId:"gpui-footer-overlay"}]}};
+    expect(compareDesignFidelity(m,g,dom()).classification).toBe("ok");
+  });
+  test("closed-world inventory rejects uncaptured auxiliary planes", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:["footer"],expectedOverlayIds:["gpui-footer-overlay"]}});
+    const g={...gpui(),fidelity:{nodes:gpui().elements,unscoped:{primitiveCount:0},appKitStatus:"missingFooterHost",appKit:{nodes:[]},overlayStatus:"missingOverlay",overlays:[]}};
+    const r=compareDesignFidelity(m,g,dom());
+    expect(r.errors).toContain("Closed-world AppKit capture status is not captured");
+    expect(r.errors).toContain("Closed-world overlay capture status is not captured");
+    const inventory = r.assertions.find(entry => entry.name === "inventory.overlay");
+    expect(inventory?.details.missing).toContain("gpui-footer-overlay");
+  });
+  test("closed-world overlay inventory rejects duplicate and unexpected target IDs", () => {
+    const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:["gpui-footer-overlay"]}});
+    const g={...gpui(),fidelity:{nodes:gpui().elements,unscoped:{primitiveCount:0},appKitStatus:"captured",appKit:{nodes:[]},overlayStatus:"captured",overlays:[{targetId:"gpui-footer-overlay"},{targetId:"gpui-footer-overlay"},{targetId:"extra-overlay"}]}};
+    const r=compareDesignFidelity(m,g,dom());
+    expect(r.errors).toContain("Closed-world overlay inventory mismatch");
+    const inventory = r.assertions.find(entry => entry.name === "inventory.overlay");
+    expect(inventory?.details.duplicates).toContain("gpui-footer-overlay");
+    expect(inventory?.details.unexpected).toContain("extra-overlay");
+  });
   test("closed-world comparison checks clip edges", () => {
     const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:[]}});
     const node={...gpui().elements[0],primitiveCount:1,clipBounds:{x:101,y:200,width:99,height:80}};
@@ -68,13 +98,13 @@ describe("design fidelity comparator", () => {
   test("closed-world comparison prefers scoped fidelity nodes over legacy components", () => {
     const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:[]},elements:[{fidelityId:"title",gpuiId:"title",kind:"element",parentId:null,paintOrder:0}]});
     const node={id:"title",kind:"element",parentId:null,paintOrder:0,bounds:{x:102,y:203,width:30,height:10},visibleBounds:{x:102,y:203,width:30,height:10},clipBounds:{x:100,y:200,width:100,height:80},primitiveCount:1};
-    const g={...gpui(undefined,[{semanticId:"stale-legacy-node",bounds:{x:0,y:0,width:1,height:1}}]),fidelity:{nodes:[node],unscoped:{primitiveCount:0}}};
+    const g={...gpui(undefined,[{semanticId:"stale-legacy-node",bounds:{x:0,y:0,width:1,height:1}}]),fidelity:{nodes:[node],unscoped:{primitiveCount:0},appKitStatus:"captured",appKit:{nodes:[]},overlayStatus:"captured",overlays:[]}};
     expect(compareDesignFidelity(m,g,dom()).classification).toBe("ok");
   });
   test("closed-world comparison reads scoped fidelity from a layout.ts raw envelope", () => {
     const m=manifest({schemaVersion:2,closedWorld:true,inventory:{expectedDomIds:["title"],expectedGpuiIds:["title"],expectedAppKitIds:[],expectedOverlayIds:[]},elements:[{fidelityId:"title",gpuiId:"title",kind:"element",parentId:null,paintOrder:0}],requirePaintMeasurement:true});
     const node={id:"title",kind:"element",parentId:null,paintOrder:0,bounds:{x:2,y:3,width:30,height:10},visibleBounds:{x:2,y:3,width:30,height:10},clipBounds:{x:0,y:0,width:100,height:80},primitiveCount:1,measurementProvenance:"paint-time",coordinateSpace:"window",measurementFrameGeneration:7};
-    const g={tool:"script-kit-devtools.layout",target:{automationId:"main"},windowRect:{x:100,y:200,width:100,height:80},rawLayout:{info:{fidelity:{nodes:[node],unscoped:{primitiveCount:0}},components:[{name:"stale-legacy-node"}]}}};
+    const g={tool:"script-kit-devtools.layout",target:{automationId:"main"},windowRect:{x:100,y:200,width:100,height:80},rawLayout:{info:{fidelity:{nodes:[node],unscoped:{primitiveCount:0},appKitStatus:"captured",appKit:{nodes:[]},overlayStatus:"captured",overlays:[]},components:[{name:"stale-legacy-node"}]}}};
     expect(compareDesignFidelity(m,g,dom()).classification).toBe("ok");
   });
   test("closed-world comparison rejects unscoped paint primitives", () => {
