@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use gpui::prelude::FluentBuilder as _;
 use gpui::{
     AnyElement, App, Bounds, Element, ElementId, Entity, GlobalElementId, InspectorElementId,
     InteractiveElement, IntoElement, LayoutId, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
@@ -17,6 +16,23 @@ use crate::{global_state::GlobalState, text::TextViewStyle};
 /// Type for code block actions generator function.
 pub(crate) type CodeBlockActionsFn =
     dyn Fn(&CodeBlock, &mut Window, &mut App) -> AnyElement + Send + Sync;
+
+#[cfg(feature = "fidelity")]
+fn fidelity_text_evidence(
+    source: &str,
+    selectable: bool,
+    scrollable: bool,
+) -> (String, serde_json::Value) {
+    (
+        Window::fidelity_text_hash(source),
+        serde_json::json!({
+            "sourceByteLength": source.len(),
+            "selectable": selectable,
+            "scrollable": scrollable,
+            "textHashMode": "exact-source-bytes"
+        }),
+    )
+}
 
 /// A text view that can render Markdown or HTML.
 ///
@@ -45,6 +61,8 @@ pub struct TextView {
     selectable: bool,
     scrollable: bool,
     code_block_actions: Option<Arc<CodeBlockActionsFn>>,
+    #[cfg(feature = "fidelity")]
+    fidelity_scope: Option<SharedString>,
 }
 
 impl Styled for TextView {
@@ -66,6 +84,8 @@ impl TextView {
             selectable: false,
             scrollable: false,
             code_block_actions: None,
+            #[cfg(feature = "fidelity")]
+            fidelity_scope: None,
         }
     }
 
@@ -81,6 +101,8 @@ impl TextView {
             selectable: false,
             scrollable: false,
             code_block_actions: None,
+            #[cfg(feature = "fidelity")]
+            fidelity_scope: None,
         }
     }
 
@@ -96,6 +118,8 @@ impl TextView {
             selectable: false,
             scrollable: false,
             code_block_actions: None,
+            #[cfg(feature = "fidelity")]
+            fidelity_scope: None,
         }
     }
 
@@ -125,6 +149,16 @@ impl TextView {
     /// This mode is suitable for small content, such as a few lines of text, a label, etc.
     pub fn scrollable(mut self, scrollable: bool) -> Self {
         self.scrollable = scrollable;
+        self
+    }
+
+    /// Assign a stable capture-only scope for rich-text paint telemetry.
+    ///
+    /// The source text is represented only by a deterministic hash. This API
+    /// is available when gpui-component's `fidelity` feature is enabled.
+    #[cfg(feature = "fidelity")]
+    pub fn fidelity_scope(mut self, scope: impl Into<SharedString>) -> Self {
+        self.fidelity_scope = Some(scope.into());
         self
     }
 
@@ -211,12 +245,26 @@ impl Element for TextView {
         let focus_handle = state.read(cx).focus_handle.clone();
         let list_state = state.read(cx).list_state.clone();
 
-        let mut el = div()
-            .key_context("TextView")
-            .track_focus(&focus_handle)
-            .when(self.scrollable, |this| {
-                this.size_full().vertical_scrollbar(&list_state)
-            })
+        let mut el = div().key_context("TextView").track_focus(&focus_handle);
+        if self.scrollable {
+            el = el.size_full();
+            #[cfg(feature = "fidelity")]
+            {
+                el = if let Some(scope) = self.fidelity_scope.clone() {
+                    el.vertical_scrollbar_with_fidelity_scope(
+                        &list_state,
+                        format!("{scope}/scrollbar"),
+                    )
+                } else {
+                    el.vertical_scrollbar(&list_state)
+                };
+            }
+            #[cfg(not(feature = "fidelity"))]
+            {
+                el = el.vertical_scrollbar(&list_state);
+            }
+        }
+        let mut el = el
             .relative()
             .on_action(window.listener_for(&state, TextViewState::on_action_copy))
             .child(state.clone())
@@ -249,11 +297,41 @@ impl Element for TextView {
         cx: &mut App,
     ) {
         let state = &request_layout.state;
-        GlobalState::global_mut(cx)
-            .text_view_state_stack
-            .push(state.clone());
-        request_layout.element.paint(window, cx);
-        GlobalState::global_mut(cx).text_view_state_stack.pop();
+        #[cfg(feature = "fidelity")]
+        let fidelity_evidence = self.fidelity_scope.clone().map(|scope| {
+            let source = state.read(cx).source();
+            let (text_hash, metadata) =
+                fidelity_text_evidence(source.as_ref(), self.selectable, self.scrollable);
+            (scope, text_hash, metadata)
+        });
+
+        let mut paint_element = |window: &mut Window| {
+            GlobalState::global_mut(cx)
+                .text_view_state_stack
+                .push(state.clone());
+            request_layout.element.paint(window, cx);
+            GlobalState::global_mut(cx).text_view_state_stack.pop();
+        };
+
+        #[cfg(feature = "fidelity")]
+        if let Some((scope, text_hash, metadata)) = fidelity_evidence {
+            window.with_fidelity_scope(
+                format!("{scope}/document"),
+                gpui::FidelityNodeKind::TextDocument,
+                bounds,
+                |window| {
+                    window.annotate_current_fidelity_scope(Some(text_hash), None, Some(metadata));
+                    paint_element(window);
+                },
+            );
+        } else {
+            paint_element(window);
+        }
+
+        #[cfg(not(feature = "fidelity"))]
+        paint_element(window);
+
+        drop(paint_element);
 
         if self.selectable {
             let is_selecting = state.read(cx).is_selecting;
@@ -324,5 +402,25 @@ impl Element for TextView {
                 });
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "fidelity"))]
+mod fidelity_tests {
+    use super::fidelity_text_evidence;
+
+    #[test]
+    fn fidelity_text_evidence_hashes_exact_source_without_retaining_it() {
+        let (text_hash, metadata) = fidelity_text_evidence("abc", true, false);
+
+        assert_eq!(
+            text_hash,
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        assert_eq!(metadata["sourceByteLength"], 3);
+        assert_eq!(metadata["selectable"], true);
+        assert_eq!(metadata["scrollable"], false);
+        assert_eq!(metadata["textHashMode"], "exact-source-bytes");
+        assert!(!metadata.to_string().contains("abc"));
     }
 }

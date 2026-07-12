@@ -3385,6 +3385,7 @@ dependencies = [
  "seahash",
  "serde",
  "serde_json",
+ "sha2",
  "slotmap",
  "smallvec",
  "spin 0.10.0",

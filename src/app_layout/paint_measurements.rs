@@ -103,9 +103,9 @@ impl ScriptListApp {
                     measurement_frame_generation: frame_generation,
                     measurement_provenance: "paint-time".to_string(),
                     coordinate_space: "window".to_string(),
-                    text_hash: None,
-                    text_layout_hash: None,
-                    metadata: None,
+                    text_hash: summary.text_hash.clone(),
+                    text_layout_hash: summary.text_layout_hash.clone(),
+                    metadata: summary.metadata.clone(),
                 })
                 .collect();
 

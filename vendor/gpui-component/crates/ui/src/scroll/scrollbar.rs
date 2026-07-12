@@ -11,8 +11,8 @@ use gpui::{
     App, Axis, BorderStyle, Bounds, ContentMask, Corner, CursorStyle, Edges, Element, ElementId,
     GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement, IsZero,
     LayoutId, ListState, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point,
-    Position, ScrollHandle, ScrollWheelEvent, Size, Style, UniformListScrollHandle, Window, fill,
-    point, px, relative, size,
+    Position, ScrollHandle, ScrollWheelEvent, SharedString, Size, Style, UniformListScrollHandle,
+    Window, fill, point, px, relative, size,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -321,6 +321,8 @@ pub struct Scrollbar {
     /// This is used to limit the update rate of the scrollbar when it is
     /// being dragged for some complex interactions for reducing CPU usage.
     max_fps: usize,
+    #[cfg(feature = "fidelity")]
+    fidelity_scope: Option<SharedString>,
 }
 
 impl Scrollbar {
@@ -337,6 +339,8 @@ impl Scrollbar {
             scroll_handle: Rc::new(scroll_handle.clone()),
             max_fps: 120,
             scroll_size: None,
+            #[cfg(feature = "fidelity")]
+            fidelity_scope: None,
         }
     }
 
@@ -377,6 +381,14 @@ impl Scrollbar {
     /// Set scrollbar axis.
     pub fn axis(mut self, axis: impl Into<ScrollbarAxis>) -> Self {
         self.axis = axis.into();
+        self
+    }
+
+    /// Assign a stable capture-only scope for actual prepaint scrollbar
+    /// geometry. The capture freezes hover, drag, and fade phases.
+    #[cfg(feature = "fidelity")]
+    pub fn fidelity_scope(mut self, scope: impl Into<SharedString>) -> Self {
+        self.fidelity_scope = Some(scope.into());
         self
     }
 
@@ -428,8 +440,11 @@ impl Scrollbar {
         )
     }
 
-    fn style_for_normal(&self, cx: &App) -> (Hsla, Hsla, Hsla, Pixels, Pixels, Pixels) {
-        let scrollbar_show = self.scrollbar_show.unwrap_or(cx.theme().scrollbar_show);
+    fn style_for_normal(
+        &self,
+        scrollbar_show: ScrollbarShow,
+        cx: &App,
+    ) -> (Hsla, Hsla, Hsla, Pixels, Pixels, Pixels) {
         let (width, inset, radius) = match scrollbar_show {
             ScrollbarShow::Scrolling => (THUMB_WIDTH, THUMB_INSET, THUMB_RADIUS),
             _ => (THUMB_ACTIVE_WIDTH, THUMB_ACTIVE_INSET, THUMB_ACTIVE_RADIUS),
@@ -445,8 +460,11 @@ impl Scrollbar {
         )
     }
 
-    fn style_for_idle(&self, cx: &App) -> (Hsla, Hsla, Hsla, Pixels, Pixels, Pixels) {
-        let scrollbar_show = self.scrollbar_show.unwrap_or(cx.theme().scrollbar_show);
+    fn style_for_idle(
+        &self,
+        scrollbar_show: ScrollbarShow,
+        _cx: &App,
+    ) -> (Hsla, Hsla, Hsla, Pixels, Pixels, Pixels) {
         let (width, inset, radius) = match scrollbar_show {
             ScrollbarShow::Scrolling => (THUMB_WIDTH, THUMB_INSET, THUMB_RADIUS),
             _ => (THUMB_ACTIVE_WIDTH, THUMB_ACTIVE_INSET, THUMB_ACTIVE_RADIUS),
@@ -460,6 +478,191 @@ impl Scrollbar {
             inset,
             radius,
         )
+    }
+
+    #[cfg(feature = "fidelity")]
+    fn fidelity_capture_active(&self, window: &Window) -> bool {
+        self.fidelity_scope.is_some() && window.fidelity_capture_active()
+    }
+
+    fn resolved_scrollbar_show(&self, window: &Window, cx: &App) -> ScrollbarShow {
+        #[cfg(feature = "fidelity")]
+        if self.fidelity_capture_active(window) {
+            return ScrollbarShow::Always;
+        }
+        self.scrollbar_show.unwrap_or(cx.theme().scrollbar_show)
+    }
+
+    fn paint_track(state: &AxisPrepaintState, window: &mut Window) {
+        window.paint_quad(fill(state.bounds, state.bg));
+        window.paint_quad(PaintQuad {
+            bounds: state.bounds,
+            corner_radii: (0.).into(),
+            background: gpui::transparent_black().into(),
+            border_widths: Edges::default(),
+            border_color: state.border,
+            border_style: BorderStyle::default(),
+        });
+    }
+
+    fn paint_thumb(state: &AxisPrepaintState, radius: Pixels, window: &mut Window) {
+        window.paint_quad(fill(state.thumb_fill_bounds, state.thumb_bg).corner_radii(radius));
+    }
+
+    #[cfg(feature = "fidelity")]
+    fn fidelity_bounds(bounds: Bounds<Pixels>) -> serde_json::Value {
+        serde_json::json!({
+            "x": bounds.origin.x.as_f32(),
+            "y": bounds.origin.y.as_f32(),
+            "width": bounds.size.width.as_f32(),
+            "height": bounds.size.height.as_f32()
+        })
+    }
+
+    #[cfg(feature = "fidelity")]
+    fn fidelity_color(color: Hsla) -> serde_json::Value {
+        serde_json::json!({ "h": color.h, "s": color.s, "l": color.l, "a": color.a })
+    }
+
+    #[cfg(feature = "fidelity")]
+    fn fidelity_show_mode(show: ScrollbarShow) -> &'static str {
+        match show {
+            ScrollbarShow::Scrolling => "scrolling",
+            ScrollbarShow::Hover => "hover",
+            ScrollbarShow::Always => "always",
+        }
+    }
+
+    #[cfg(feature = "fidelity")]
+    fn fidelity_axis_metadata(
+        &self,
+        state: &AxisPrepaintState,
+        scrollbar_state: &ScrollbarState,
+        scrollbar_show: ScrollbarShow,
+        configured_scrollbar_show: ScrollbarShow,
+        radius: Pixels,
+        part: &'static str,
+    ) -> serde_json::Value {
+        let axis = if state.axis.is_vertical() {
+            "vertical"
+        } else {
+            "horizontal"
+        };
+        let offset = self.scroll_handle.offset();
+        serde_json::json!({
+            "part": part,
+            "axis": axis,
+            "barBounds": Self::fidelity_bounds(state.bounds),
+            "thumbBounds": Self::fidelity_bounds(state.thumb_bounds),
+            "thumbFillBounds": Self::fidelity_bounds(state.thumb_fill_bounds),
+            "radius": radius.as_f32(),
+            "barBackground": Self::fidelity_color(state.bg),
+            "barBorder": Self::fidelity_color(state.border),
+            "thumbBackground": Self::fidelity_color(state.thumb_bg),
+            "scrollSize": state.scroll_size.as_f32(),
+            "containerSize": state.container_size.as_f32(),
+            "thumbSize": state.thumb_size.as_f32(),
+            "marginEnd": state.margin_end.as_f32(),
+            "scrollOffset": if state.axis.is_vertical() { offset.y.as_f32() } else { offset.x.as_f32() },
+            "showMode": Self::fidelity_show_mode(scrollbar_show),
+            "configuredShowMode": Self::fidelity_show_mode(configured_scrollbar_show),
+            "captureFrozen": true,
+            "hovered": false,
+            "hoveredOnThumb": false,
+            "dragged": false,
+            "rawHovered": scrollbar_state.get().hovered_axis == Some(state.axis),
+            "rawHoveredOnThumb": scrollbar_state.get().hovered_on_thumb == Some(state.axis),
+            "rawDragged": scrollbar_state.get().dragged_axis == Some(state.axis),
+            "thumbPainted": state.thumb_bg.a > 0.0
+                && state.thumb_fill_bounds.size.width > px(0.)
+                && state.thumb_fill_bounds.size.height > px(0.)
+        })
+    }
+
+    #[cfg(feature = "fidelity")]
+    fn paint_axis_with_fidelity(
+        &self,
+        state: &AxisPrepaintState,
+        scrollbar_state: &ScrollbarState,
+        scrollbar_show: ScrollbarShow,
+        configured_scrollbar_show: ScrollbarShow,
+        hitbox_bounds: Bounds<Pixels>,
+        radius: Pixels,
+        window: &mut Window,
+    ) {
+        let Some(base_scope) = self.fidelity_scope.as_ref() else {
+            return;
+        };
+        let axis = if state.axis.is_vertical() {
+            "vertical"
+        } else {
+            "horizontal"
+        };
+        let axis_scope = format!("{base_scope}.{axis}");
+        let track_scope = format!("{axis_scope}.track");
+        let thumb_scope = format!("{axis_scope}.thumb");
+
+        window.with_fidelity_scope(
+            axis_scope,
+            gpui::FidelityNodeKind::Scrollbar,
+            state.bounds,
+            |window| {
+                window.annotate_current_fidelity_scope(
+                    None,
+                    None,
+                    Some(self.fidelity_axis_metadata(
+                        state,
+                        scrollbar_state,
+                        scrollbar_show,
+                        configured_scrollbar_show,
+                        radius,
+                        "axis",
+                    )),
+                );
+                window.paint_layer(hitbox_bounds, |window| {
+                    window.with_fidelity_scope(
+                        track_scope,
+                        gpui::FidelityNodeKind::Scrollbar,
+                        state.bounds,
+                        |window| {
+                            window.annotate_current_fidelity_scope(
+                                None,
+                                None,
+                                Some(self.fidelity_axis_metadata(
+                                    state,
+                                    scrollbar_state,
+                                    scrollbar_show,
+                                    configured_scrollbar_show,
+                                    radius,
+                                    "track",
+                                )),
+                            );
+                            Self::paint_track(state, window);
+                        },
+                    );
+                    window.with_fidelity_scope(
+                        thumb_scope,
+                        gpui::FidelityNodeKind::Scrollbar,
+                        state.thumb_fill_bounds,
+                        |window| {
+                            window.annotate_current_fidelity_scope(
+                                None,
+                                None,
+                                Some(self.fidelity_axis_metadata(
+                                    state,
+                                    scrollbar_state,
+                                    scrollbar_show,
+                                    configured_scrollbar_show,
+                                    radius,
+                                    "thumb",
+                                )),
+                            );
+                            Self::paint_thumb(state, radius, window);
+                        },
+                    );
+                });
+            },
+        );
     }
 }
 
@@ -607,15 +810,21 @@ impl Element for Scrollbar {
                 },
             };
 
-            let scrollbar_show = self.scrollbar_show.unwrap_or(cx.theme().scrollbar_show);
+            let scrollbar_show = self.resolved_scrollbar_show(window, cx);
+            #[cfg(feature = "fidelity")]
+            let fidelity_capture = self.fidelity_capture_active(window);
+            #[cfg(not(feature = "fidelity"))]
+            let fidelity_capture = false;
             let is_always_to_show = scrollbar_show.is_always();
             let is_hover_to_show = scrollbar_show.is_hover();
-            let is_hovered_on_bar = state.get().hovered_axis == Some(axis);
-            let is_hovered_on_thumb = state.get().hovered_on_thumb == Some(axis);
-            let is_offset_changed = state.get().last_scroll_offset != self.scroll_handle.offset();
+            let is_hovered_on_bar = !fidelity_capture && state.get().hovered_axis == Some(axis);
+            let is_hovered_on_thumb =
+                !fidelity_capture && state.get().hovered_on_thumb == Some(axis);
+            let is_offset_changed =
+                !fidelity_capture && state.get().last_scroll_offset != self.scroll_handle.offset();
 
             let (thumb_bg, bar_bg, bar_border, thumb_width, inset, radius) =
-                if state.get().dragged_axis == Some(axis) {
+                if !fidelity_capture && state.get().dragged_axis == Some(axis) {
                     Self::style_for_active(cx)
                 } else if is_hover_to_show && (is_hovered_on_bar || is_hovered_on_thumb) {
                     if is_hovered_on_thumb {
@@ -624,7 +833,7 @@ impl Element for Scrollbar {
                         Self::style_for_hovered_bar(cx)
                     }
                 } else if is_offset_changed {
-                    self.style_for_normal(cx)
+                    self.style_for_normal(scrollbar_show, cx)
                 } else if is_always_to_show {
                     if is_hovered_on_thumb {
                         Self::style_for_hovered_thumb(cx)
@@ -632,7 +841,7 @@ impl Element for Scrollbar {
                         Self::style_for_hovered_bar(cx)
                     }
                 } else {
-                    let mut idle_state = self.style_for_idle(cx);
+                    let mut idle_state = self.style_for_idle(scrollbar_show, cx);
                     // Delay 2s to fade out the scrollbar thumb (in 1s)
                     if let Some(last_time) = state.get().last_scroll_time {
                         let elapsed = Instant::now().duration_since(last_time).as_secs_f32();
@@ -740,14 +949,22 @@ impl Element for Scrollbar {
         cx: &mut App,
     ) {
         let scrollbar_state = &prepaint.scrollbar_state;
-        let scrollbar_show = self.scrollbar_show.unwrap_or(cx.theme().scrollbar_show);
+        #[cfg(feature = "fidelity")]
+        let configured_scrollbar_show = self.scrollbar_show.unwrap_or(cx.theme().scrollbar_show);
+        let scrollbar_show = self.resolved_scrollbar_show(window, cx);
+        #[cfg(feature = "fidelity")]
+        let fidelity_capture = self.fidelity_capture_active(window);
+        #[cfg(not(feature = "fidelity"))]
+        let fidelity_capture = false;
         let view_id = window.current_view();
         let hitbox_bounds = prepaint.hitbox.bounds;
         let is_visible = scrollbar_state.get().is_scrollbar_visible() || scrollbar_show.is_always();
         let is_hover_to_show = scrollbar_show.is_hover();
 
         // Update last_scroll_time when offset is changed.
-        if self.scroll_handle.offset() != scrollbar_state.get().last_scroll_offset {
+        if !fidelity_capture
+            && self.scroll_handle.offset() != scrollbar_state.get().last_scroll_offset
+        {
             scrollbar_state.set(
                 scrollbar_state
                     .get()
@@ -777,35 +994,27 @@ impl Element for Scrollbar {
 
                     window.set_cursor_style(CursorStyle::default(), &state.bar_hitbox);
 
-                    window.paint_layer(hitbox_bounds, |cx| {
-                        cx.paint_quad(fill(state.bounds, state.bg));
-
-                        cx.paint_quad(PaintQuad {
-                            bounds,
-                            corner_radii: (0.).into(),
-                            background: gpui::transparent_black().into(),
-                            border_widths: if is_vertical {
-                                Edges {
-                                    top: px(0.),
-                                    right: px(0.),
-                                    bottom: px(0.),
-                                    left: px(0.),
-                                }
-                            } else {
-                                Edges {
-                                    top: px(0.),
-                                    right: px(0.),
-                                    bottom: px(0.),
-                                    left: px(0.),
-                                }
-                            },
-                            border_color: state.border,
-                            border_style: BorderStyle::default(),
-                        });
-
-                        cx.paint_quad(
-                            fill(state.thumb_fill_bounds, state.thumb_bg).corner_radii(radius),
+                    #[cfg(feature = "fidelity")]
+                    if fidelity_capture {
+                        self.paint_axis_with_fidelity(
+                            state,
+                            scrollbar_state,
+                            scrollbar_show,
+                            configured_scrollbar_show,
+                            hitbox_bounds,
+                            radius,
+                            window,
                         );
+                    } else {
+                        window.paint_layer(hitbox_bounds, |window| {
+                            Self::paint_track(state, window);
+                            Self::paint_thumb(state, radius, window);
+                        });
+                    }
+                    #[cfg(not(feature = "fidelity"))]
+                    window.paint_layer(hitbox_bounds, |window| {
+                        Self::paint_track(state, window);
+                        Self::paint_thumb(state, radius, window);
                     });
 
                     window.on_mouse_event({

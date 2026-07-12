@@ -483,7 +483,7 @@ pub struct FidelityLayoutNode {
     pub measurement_provenance: String,
     /// Coordinate space used by every bounds field on this node.
     pub coordinate_space: String,
-    /// Optional normalized source-text hash for text-bearing nodes.
+    /// Optional SHA-256 hash of exact UTF-8 source bytes for text-bearing nodes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_hash: Option<String>,
     /// Optional digest of text shaping and layout metadata.

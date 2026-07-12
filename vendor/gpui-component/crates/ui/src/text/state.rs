@@ -74,16 +74,31 @@ pub struct TextViewState {
 impl TextViewState {
     /// Create a Markdown TextViewState.
     pub fn markdown(text: &str, cx: &mut Context<Self>) -> Self {
-        Self::new(TextViewFormat::Markdown, text, cx)
+        Self::new(TextViewFormat::Markdown, text, false, cx)
+    }
+
+    /// Create a Markdown TextViewState with its initial document parsed inline.
+    ///
+    /// Fidelity paint tests use this constructor so their first frame does not
+    /// depend on the parser's wall-clock debounce timer. Subsequent updates
+    /// still use the regular asynchronous parser.
+    #[cfg(feature = "fidelity")]
+    pub fn markdown_for_fidelity_test(text: &str, cx: &mut Context<Self>) -> Self {
+        Self::new(TextViewFormat::Markdown, text, true, cx)
     }
 
     /// Create a HTML TextViewState.
     pub fn html(text: &str, cx: &mut Context<Self>) -> Self {
-        Self::new(TextViewFormat::Html, text, cx)
+        Self::new(TextViewFormat::Html, text, false, cx)
     }
 
     /// Create a new TextViewState.
-    fn new(format: TextViewFormat, text: &str, cx: &mut Context<Self>) -> Self {
+    fn new(
+        format: TextViewFormat,
+        text: &str,
+        parse_initial_synchronously: bool,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let focus_handle = cx.focus_handle();
 
         let (tx, rx) = smol::channel::unbounded::<UpdateOptions>();
@@ -121,7 +136,21 @@ impl TextViewState {
             _parse_task,
             _receive_task,
         };
-        this.increment_update(&text, false, cx);
+        if parse_initial_synchronously {
+            let options = UpdateOptions {
+                append: false,
+                content: this.parsed_content.clone(),
+                pending_text: text.to_string(),
+                highlight_theme: cx.theme().highlight_theme.clone(),
+                code_block_actions: this.code_block_actions.clone(),
+                text_view_style: this.text_view_style.clone(),
+            };
+            if let Err(err) = parse_content(format, &options) {
+                this.parsed_error = Some(err);
+            }
+        } else {
+            this.increment_update(text, false, cx);
+        }
         this
     }
 

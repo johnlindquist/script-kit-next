@@ -665,13 +665,19 @@ impl AgentChatTranscript {
         colors: &PromptColors,
         text_color: Rgba,
         style_def: &AgentChatStyleDef,
+        fidelity_scope: SharedString,
     ) -> TextView {
         TextView::new(text_view_state)
             .style(Self::transcript_text_style(theme, colors, style_def))
             .selectable(crate::logging::agent_chat_markdown_selectable_enabled())
+            .fidelity_scope(fidelity_scope)
             .w_full()
             .text_size(px(style_def.markdown.body_font_size))
             .text_color(text_color)
+    }
+
+    fn message_text_fidelity_scope(msg: &AgentChatThreadMessage) -> SharedString {
+        format!("{}/text", transcript_row_fidelity_id(msg)).into()
     }
 
     fn render_heavy_markdown_preview(
@@ -985,6 +991,7 @@ impl AgentChatTranscript {
                 _colors,
                 rgb(_colors.text_primary),
                 style_def,
+                Self::message_text_fidelity_scope(msg),
             ))
             .when_some(edit_button, |d, button| d.child(button));
 
@@ -1001,7 +1008,7 @@ impl AgentChatTranscript {
     }
 
     fn render_assistant_message(
-        _msg: &AgentChatThreadMessage,
+        msg: &AgentChatThreadMessage,
         _colors: &PromptColors,
         _theme: &crate::theme::Theme,
         text_view_state: &gpui::Entity<TextViewState>,
@@ -1032,6 +1039,7 @@ impl AgentChatTranscript {
                 _colors,
                 rgb(_colors.text_primary),
                 style_def,
+                Self::message_text_fidelity_scope(msg),
             ));
 
         if matches!(presentation, AgentChatTranscriptPresentation::RoleSplit) {
@@ -1241,6 +1249,7 @@ impl AgentChatTranscript {
                             _colors,
                             rgb(_colors.accent_color),
                             style_def,
+                            Self::message_text_fidelity_scope(msg),
                         )),
                 );
             }
@@ -1384,6 +1393,7 @@ impl AgentChatTranscript {
                     _colors,
                     body_color,
                     style_def,
+                    Self::message_text_fidelity_scope(msg),
                 ));
 
             container = container.child(body);
@@ -1393,7 +1403,7 @@ impl AgentChatTranscript {
     }
 
     fn render_error_message(
-        _msg: &AgentChatThreadMessage,
+        msg: &AgentChatThreadMessage,
         _colors: &PromptColors,
         text_view_state: &gpui::Entity<TextViewState>,
         style_def: &AgentChatStyleDef,
@@ -1434,6 +1444,7 @@ impl AgentChatTranscript {
                 _colors,
                 rgb(_colors.text_primary),
                 style_def,
+                Self::message_text_fidelity_scope(msg),
             ))
             .child(
                 div()
@@ -1446,7 +1457,7 @@ impl AgentChatTranscript {
     }
 
     fn render_system_message(
-        _msg: &AgentChatThreadMessage,
+        msg: &AgentChatThreadMessage,
         _colors: &PromptColors,
         theme: &crate::theme::Theme,
         text_view_state: &gpui::Entity<TextViewState>,
@@ -1468,6 +1479,7 @@ impl AgentChatTranscript {
                 _colors,
                 rgb(_colors.text_primary),
                 style_def,
+                Self::message_text_fidelity_scope(msg),
             ))
             .into_any_element()
     }
@@ -1705,7 +1717,10 @@ impl Render for AgentChatTranscript {
             .min_h(px(0.))
             .overflow_hidden()
             .child(transcript_content)
-            .vertical_scrollbar(&self.list_state)
+            .vertical_scrollbar_with_fidelity_scope(
+                &self.list_state,
+                "agent-chat-transcript-scrollbar",
+            )
     }
 }
 

@@ -36,6 +36,8 @@ use refineable::Refineable;
 use scheduler::Instant;
 #[cfg(any(test, feature = "test-support"))]
 use seahash::SeaHasher;
+#[cfg(any(test, feature = "test-support"))]
+use sha2::{Digest as _, Sha256};
 use slotmap::SlotMap;
 use smallvec::SmallVec;
 use std::{
@@ -853,6 +855,12 @@ pub struct FidelityScopeSummary {
     pub first_paint_order: Option<u64>,
     /// Last paint order included in the scope, if it painted.
     pub last_paint_order: Option<u64>,
+    /// Optional SHA-256 hash of exact UTF-8 source bytes; raw text is never retained.
+    pub text_hash: Option<String>,
+    /// Optional hash of finite shaping/layout metadata.
+    pub text_layout_hash: Option<String>,
+    /// Optional finite, redacted node-kind-specific measurements.
+    pub metadata: Option<serde_json::Value>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -865,6 +873,9 @@ struct FidelityScope {
     visible_bounds: Bounds<Pixels>,
     clip_bounds: Bounds<Pixels>,
     atom_start: usize,
+    text_hash: Option<String>,
+    text_layout_hash: Option<String>,
+    metadata: Option<serde_json::Value>,
 }
 
 pub(crate) struct Frame {
@@ -2260,6 +2271,9 @@ impl Window {
             visible_bounds,
             clip_bounds,
             atom_start: self.next_frame.fidelity_paint_atoms.len(),
+            text_hash: None,
+            text_layout_hash: None,
+            metadata: None,
         });
 
         let result = f(self);
@@ -2330,7 +2344,40 @@ impl Window {
                 primitive_digest: format!("{:016x}", digest.finish()),
                 first_paint_order: atoms.first().map(|atom| atom.paint_order),
                 last_paint_order: atoms.last().map(|atom| atom.paint_order),
+                text_hash: scope.text_hash,
+                text_layout_hash: scope.text_layout_hash,
+                metadata: scope.metadata,
             });
+    }
+
+    /// Attach finite, already-redacted semantic measurements to the active
+    /// scope. Callers should hash source text and must not place raw user text
+    /// in `metadata`.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn annotate_current_fidelity_scope(
+        &mut self,
+        text_hash: Option<String>,
+        text_layout_hash: Option<String>,
+        metadata: Option<serde_json::Value>,
+    ) {
+        if !self.fidelity_capture_active() {
+            return;
+        }
+        let Some(scope) = self.fidelity_scope_stack.last_mut() else {
+            return;
+        };
+        scope.text_hash = text_hash;
+        scope.text_layout_hash = text_layout_hash;
+        scope.metadata = metadata;
+    }
+
+    /// Produce the exact SHA-256 digest of UTF-8 source bytes used by
+    /// capture-only semantic telemetry. Raw text is never stored in the frame.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn fidelity_text_hash(text: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(text.as_bytes());
+        format!("{:x}", hasher.finalize())
     }
 
     /// Record one actual paint primitive in the current completed-frame

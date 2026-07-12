@@ -190,7 +190,7 @@ meval = "0.2"
 
 # gpui-component - Community UI component library for GPUI (FORKED)
 # Local vendored fork keeps Script Kit-specific input APIs while adapting to gpui rev 03416097.
-gpui-component = { path = "vendor/gpui-component/crates/ui", package = "gpui-component" }
+gpui-component = { path = "vendor/gpui-component/crates/ui", package = "gpui-component", features = ["fidelity"] }
 # Embedded Lucide icon SVGs for gpui-component's IconName paths ("icons/monitor.svg").
 # Registered as the app AssetSource fallback in src/utils/assets.rs — without an
 # asset source, every svg().path(...) icon silently renders nothing.

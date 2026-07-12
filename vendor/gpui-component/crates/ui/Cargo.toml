@@ -16,6 +16,7 @@ doctest = false
 
 [features]
 decimal = ["dep:rust_decimal"]
+fidelity = ["gpui/test-support"]
 inspector = ["gpui-macros/inspector", "gpui/inspector"]
 
 # For syntax highlighting in Markdown and CodeEditor.

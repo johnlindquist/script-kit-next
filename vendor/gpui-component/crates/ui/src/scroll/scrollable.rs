@@ -22,6 +22,8 @@ pub trait ScrollableElement: InteractiveElement + Styled + ParentElement + Eleme
             id: "scrollbar_layer".into(),
             axis: axis.into(),
             scroll_handle: Rc::new(scroll_handle.clone()),
+            #[cfg(feature = "fidelity")]
+            fidelity_scope: None,
         })
     }
 
@@ -29,6 +31,22 @@ pub trait ScrollableElement: InteractiveElement + Styled + ParentElement + Eleme
     #[track_caller]
     fn vertical_scrollbar<H: ScrollbarHandle + Clone>(self, scroll_handle: &H) -> Self {
         self.scrollbar(scroll_handle, ScrollbarAxis::Vertical)
+    }
+
+    /// Adds a vertical scrollbar with a stable capture-only telemetry scope.
+    #[cfg(feature = "fidelity")]
+    #[track_caller]
+    fn vertical_scrollbar_with_fidelity_scope<H: ScrollbarHandle + Clone>(
+        self,
+        scroll_handle: &H,
+        fidelity_scope: impl Into<gpui::SharedString>,
+    ) -> Self {
+        self.child(ScrollbarLayer {
+            id: "scrollbar_layer".into(),
+            axis: ScrollbarAxis::Vertical,
+            scroll_handle: Rc::new(scroll_handle.clone()),
+            fidelity_scope: Some(fidelity_scope.into()),
+        })
     }
     /// Adds a horizontal scrollbar to the element.
     #[track_caller]
@@ -143,6 +161,7 @@ where
                 "scrollbar",
                 &scroll_handle,
                 self.axis,
+                None,
                 window,
                 cx,
             ))
@@ -162,6 +181,8 @@ struct ScrollbarLayer<H: ScrollbarHandle + Clone> {
     id: ElementId,
     axis: ScrollbarAxis,
     scroll_handle: Rc<H>,
+    #[cfg(feature = "fidelity")]
+    fidelity_scope: Option<gpui::SharedString>,
 }
 
 impl<H> RenderOnce for ScrollbarLayer<H>
@@ -169,7 +190,18 @@ where
     H: ScrollbarHandle + Clone + 'static,
 {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        render_scrollbar(self.id, self.scroll_handle.as_ref(), self.axis, window, cx)
+        #[cfg(feature = "fidelity")]
+        let fidelity_scope = self.fidelity_scope;
+        #[cfg(not(feature = "fidelity"))]
+        let fidelity_scope = None;
+        render_scrollbar(
+            self.id,
+            self.scroll_handle.as_ref(),
+            self.axis,
+            fidelity_scope,
+            window,
+            cx,
+        )
     }
 }
 
@@ -179,6 +211,7 @@ fn render_scrollbar<H: ScrollbarHandle + Clone>(
     id: impl Into<ElementId>,
     scroll_handle: &H,
     axis: ScrollbarAxis,
+    fidelity_scope: Option<gpui::SharedString>,
     window: &mut Window,
     cx: &mut App,
 ) -> Div {
@@ -189,11 +222,17 @@ fn render_scrollbar<H: ScrollbarHandle + Clone>(
         return div();
     }
 
+    let scrollbar = Scrollbar::new(scroll_handle).id(id).axis(axis);
+    #[cfg(feature = "fidelity")]
+    let scrollbar = scrollbar.when_some(fidelity_scope, |this, scope| this.fidelity_scope(scope));
+    #[cfg(not(feature = "fidelity"))]
+    let _ = fidelity_scope;
+
     div()
         .absolute()
         .top_0()
         .left_0()
         .right_0()
         .bottom_0()
-        .child(Scrollbar::new(scroll_handle).id(id).axis(axis))
+        .child(scrollbar)
 }

@@ -1,6 +1,8 @@
+use std::{cell::Cell, rc::Rc};
+
 use gpui::{
-    div, px, AnyView, AppContext as _, Context, InteractiveElement, IntoElement, ParentElement,
-    Render, StyleRefinement, Styled, TestAppContext, Window,
+    div, point, px, size, AnyView, AppContext as _, Context, Entity, InteractiveElement,
+    IntoElement, ParentElement, Render, StyleRefinement, Styled, TestAppContext, Window,
 };
 
 struct CachedSelectorChild;
@@ -16,6 +18,69 @@ impl Render for CachedSelectorChild {
 
 struct FidelitySelectorView {
     muted: bool,
+}
+
+#[derive(Clone)]
+struct FidelityScrollbarHandle {
+    offset: Rc<Cell<gpui::Point<gpui::Pixels>>>,
+}
+
+impl FidelityScrollbarHandle {
+    fn new() -> Self {
+        Self {
+            offset: Rc::new(Cell::new(point(px(0.), px(0.)))),
+        }
+    }
+}
+
+impl gpui_component::scroll::ScrollbarHandle for FidelityScrollbarHandle {
+    fn offset(&self) -> gpui::Point<gpui::Pixels> {
+        self.offset.get()
+    }
+
+    fn set_offset(&self, offset: gpui::Point<gpui::Pixels>) {
+        self.offset.set(offset);
+    }
+
+    fn content_size(&self) -> gpui::Size<gpui::Pixels> {
+        size(px(100.), px(1_000.))
+    }
+}
+
+struct FidelityScrollbarView {
+    scrollbar_handle: FidelityScrollbarHandle,
+}
+
+struct FidelityTextView {
+    state: Entity<gpui_component::text::TextViewState>,
+}
+
+impl Render for FidelityTextView {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().w(px(240.)).h(px(120.)).child(
+            gpui_component::text::TextView::new(&self.state)
+                .selectable(true)
+                .fidelity_scope("agent-chat.test.text"),
+        )
+    }
+}
+
+impl Render for FidelityScrollbarView {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().relative().size_full().child(
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .w(px(100.))
+                .h(px(120.))
+                .child(
+                    gpui_component::scroll::Scrollbar::vertical(&self.scrollbar_handle)
+                        .scrollbar_show(gpui_component::scroll::ScrollbarShow::Hover)
+                        .fidelity_scope("agent-chat.test.scrollbar"),
+                ),
+        )
+    }
 }
 
 impl Render for FidelitySelectorView {
@@ -237,6 +302,120 @@ fn fidelity_paint_telemetry_is_opt_in_nested_and_payload_sensitive(cx: &mut Test
         .update(cx, |_, window, _| {
             assert!(window.fidelity_scope_summaries().is_empty());
             assert!(window.fidelity_paint_atoms().is_empty());
+        })
+        .unwrap();
+}
+
+#[gpui::test]
+fn fidelity_scrollbar_capture_uses_real_frozen_prepaint_state(cx: &mut TestAppContext) {
+    let window = cx.update(|cx| {
+        gpui_component::init(cx);
+        cx.open_window(Default::default(), |_, cx| {
+            cx.new(|_| FidelityScrollbarView {
+                scrollbar_handle: FidelityScrollbarHandle::new(),
+            })
+        })
+        .unwrap()
+    });
+
+    window
+        .update(cx, |_, window, cx| {
+            window.set_fidelity_capture_target_for_test(Some("agent-chat"));
+            cx.notify();
+        })
+        .unwrap();
+    cx.run_until_parked();
+
+    window
+        .update(cx, |_, window, _| {
+            let summaries = window.fidelity_scope_summaries();
+            let axis = summaries
+                .iter()
+                .find(|scope| scope.id == "agent-chat.test.scrollbar.vertical")
+                .expect("vertical scrollbar fidelity scope");
+            let track = summaries
+                .iter()
+                .find(|scope| scope.id == "agent-chat.test.scrollbar.vertical.track")
+                .expect("scrollbar track fidelity scope");
+            let thumb = summaries
+                .iter()
+                .find(|scope| scope.id == "agent-chat.test.scrollbar.vertical.thumb")
+                .expect("scrollbar thumb fidelity scope");
+            assert_eq!(axis.kind, gpui::FidelityNodeKind::Scrollbar);
+            assert_eq!(track.kind, gpui::FidelityNodeKind::Scrollbar);
+            assert_eq!(thumb.kind, gpui::FidelityNodeKind::Scrollbar);
+            assert_eq!(axis.parent_id, None);
+            assert_eq!(track.parent_id.as_deref(), Some(axis.id.as_str()));
+            assert_eq!(thumb.parent_id.as_deref(), Some(axis.id.as_str()));
+            assert!(axis.primitive_count > 0);
+            assert!(track.primitive_count > 0);
+            assert!(thumb.primitive_count > 0);
+
+            for (scope, part) in [(axis, "axis"), (track, "track"), (thumb, "thumb")] {
+                let metadata = scope.metadata.as_ref().expect("scrollbar metadata");
+                assert_eq!(metadata["part"], part);
+                assert_eq!(metadata["axis"], "vertical");
+                assert_eq!(metadata["showMode"], "always");
+                assert_eq!(metadata["configuredShowMode"], "hover");
+                assert_eq!(metadata["captureFrozen"], true);
+                assert_eq!(metadata["hovered"], false);
+                assert_eq!(metadata["hoveredOnThumb"], false);
+                assert_eq!(metadata["dragged"], false);
+                assert_eq!(metadata["thumbPainted"], true);
+                assert!(metadata["barBounds"]["height"].as_f64().unwrap() > 0.0);
+                assert!(metadata["thumbFillBounds"]["height"].as_f64().unwrap() > 0.0);
+            }
+        })
+        .unwrap();
+}
+
+#[gpui::test]
+fn fidelity_textview_capture_hashes_exact_source_without_retaining_it(cx: &mut TestAppContext) {
+    const SOURCE: &str = "abc";
+    const SOURCE_SHA256: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    let window = cx.update(|cx| {
+        gpui_component::init(cx);
+        cx.open_window(Default::default(), |_, cx| {
+            let state = cx.new(|cx| {
+                gpui_component::text::TextViewState::markdown_for_fidelity_test(SOURCE, cx)
+            });
+            cx.new(|_| FidelityTextView { state })
+        })
+        .unwrap()
+    });
+
+    window
+        .update(cx, |_, window, cx| {
+            window.set_fidelity_capture_target_for_test(Some("agent-chat"));
+            cx.notify();
+        })
+        .unwrap();
+    cx.run_until_parked();
+
+    window
+        .update(cx, |_, window, _| {
+            let summaries = window.fidelity_scope_summaries();
+            let document = summaries
+                .iter()
+                .find(|scope| scope.id == "agent-chat.test.text/document")
+                .expect("TextView document fidelity scope");
+            assert_eq!(document.kind, gpui::FidelityNodeKind::TextDocument);
+            assert_eq!(document.text_hash.as_deref(), Some(SOURCE_SHA256));
+            assert!(document.text_layout_hash.is_none());
+            assert!(document.primitive_count > 0);
+
+            let metadata = document.metadata.as_ref().expect("text metadata");
+            assert_eq!(metadata["sourceByteLength"], SOURCE.len());
+            assert_eq!(metadata["selectable"], true);
+            assert_eq!(metadata["scrollable"], false);
+            assert_eq!(metadata["textHashMode"], "exact-source-bytes");
+            assert!(!metadata.to_string().contains(SOURCE));
+
+            assert!(window
+                .fidelity_paint_atoms()
+                .iter()
+                .all(|atom| !atom.payload_hash.contains(SOURCE)));
         })
         .unwrap();
 }
