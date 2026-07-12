@@ -52,6 +52,8 @@ resolve_default_binary() {
 }
 BINARY="${SCRIPT_KIT_GPUI_BINARY:-$(resolve_default_binary)}"
 READY_TIMEOUT_MS="${SCRIPT_KIT_SESSION_READY_TIMEOUT_MS:-3000}"
+STOP_GRACE_MS="${SCRIPT_KIT_SESSION_STOP_GRACE_MS:-2000}"
+STOP_KILL_TIMEOUT_MS="${SCRIPT_KIT_SESSION_STOP_KILL_TIMEOUT_MS:-2000}"
 READY_LOG_MARKER_APP="APP_READY|main-window-ready show=false focus=false stdin-safe"
 READY_LOG_MARKER_STARTUP="STARTUP_READY "
 READY_WAIT_MS_RESULT=0
@@ -228,6 +230,65 @@ wait_for_ready_log() {
   return 1
 }
 
+wait_for_process_exit() {
+  local pid="$1"
+  local timeout_ms="$2"
+  local waited=0
+  local step_ms=25
+
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge "$timeout_ms" ]; then
+      return 1
+    fi
+    sleep 0.025
+    waited=$((waited + step_ms))
+  done
+  return 0
+}
+
+# Session apps are children of session-supervisor.py, not of the shell running
+# `session.sh stop`. A shell `wait "$pid"` therefore returns immediately and
+# cannot prove teardown. Keep the supervisor alive to reap the app, wait for a
+# bounded graceful exit, then kill the app's dedicated process group before any
+# session registry files are removed.
+SESSION_STOP_FORCED_KILL=false
+terminate_session_app() {
+  local name="$1"
+  local sdir="$2"
+  local pid="$3"
+  local supervisor_pid="${4:-}"
+
+  SESSION_STOP_FORCED_KILL=false
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+
+  if [ -n "$supervisor_pid" ] && kill -0 "$supervisor_pid" 2>/dev/null; then
+    # The supervisor forwards SIGTERM to the app's dedicated process group and
+    # stays alive until it has reaped the child and written its exit receipt.
+    kill -TERM "$supervisor_pid" 2>/dev/null || true
+  else
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  fi
+
+  if wait_for_process_exit "$pid" "$STOP_GRACE_MS"; then
+    log "Stopped session '${name}' gracefully (pid ${pid})"
+    return 0
+  fi
+
+  SESSION_STOP_FORCED_KILL=true
+  log "Session '${name}' ignored SIGTERM; sending SIGKILL to process group ${pid}"
+  kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+  if wait_for_process_exit "$pid" "$STOP_KILL_TIMEOUT_MS"; then
+    log "Stopped session '${name}' with SIGKILL (pid ${pid})"
+    return 0
+  fi
+
+  json_lifecycle_error "$name" "session_stop_failed" \
+    "Session '${name}' app process (pid ${pid}) survived SIGTERM and SIGKILL; preserving ${sdir} for recovery."
+  return 1
+}
+
 path_aliases() {
   local file_path="$1"
   printf '%s\n' "$file_path"
@@ -327,6 +388,10 @@ cmd_start() {
     if [ -f "${sdir}/fwd_pid" ]; then
       old_fwd_pid="$(cat "${sdir}/fwd_pid")"
     fi
+    local old_supervisor_pid=""
+    if [ -f "${sdir}/supervisor_pid" ]; then
+      old_supervisor_pid="$(cat "${sdir}/supervisor_pid")"
+    fi
     local primary_pipe="${sdir}/pipe"
 
     local can_resume=true
@@ -374,12 +439,17 @@ cmd_start() {
       return 0
     else
       log "Stale session '${name}': ${reason}. Cleaning up."
-      # Kill any remaining processes before cleanup
-      if kill -0 "$old_pid" 2>/dev/null; then
-        kill "$old_pid" 2>/dev/null || true
+      # Preserve the registry unless the stale app is confirmed dead; removing
+      # it first makes a stubborn global-hotkey owner impossible to address by
+      # session name.
+      if ! terminate_session_app "$name" "$sdir" "$old_pid" "$old_supervisor_pid"; then
+        return 1
       fi
       if [ -n "$old_fwd_pid" ] && kill -0 "$old_fwd_pid" 2>/dev/null; then
-        kill "$old_fwd_pid" 2>/dev/null || true
+        kill -TERM "$old_fwd_pid" 2>/dev/null || true
+      fi
+      if [ -n "$old_supervisor_pid" ] && kill -0 "$old_supervisor_pid" 2>/dev/null; then
+        kill -TERM "$old_supervisor_pid" 2>/dev/null || true
       fi
       cleanup_orphan_session_forwarders "$primary_pipe" "$input_fifo"
       rm -rf "${sdir}"
@@ -1065,37 +1135,44 @@ cmd_stop() {
     return 0
   fi
 
-  # Kill forwarder
+  local fwd_pid=""
+  local supervisor_pid=""
+  local pid=""
   if [ -f "${sdir}/fwd_pid" ]; then
-    local fwd_pid
     fwd_pid="$(cat "${sdir}/fwd_pid")"
-    kill "$fwd_pid" 2>/dev/null || true
-    wait "$fwd_pid" 2>/dev/null || true
   fi
   if [ -f "${sdir}/supervisor_pid" ]; then
-    local supervisor_pid
     supervisor_pid="$(cat "${sdir}/supervisor_pid")"
-    kill "$supervisor_pid" 2>/dev/null || true
-    wait "$supervisor_pid" 2>/dev/null || true
+  fi
+  if [ -f "${sdir}/pid" ]; then
+    pid="$(cat "${sdir}/pid")"
+  fi
+
+  # Stop and confirm the supervisor-owned app before deleting the registry that
+  # identifies it. Otherwise an ignored SIGTERM becomes an unaddressable,
+  # globally-hotkey-owning orphan.
+  if [ -n "$pid" ] && ! terminate_session_app "$name" "$sdir" "$pid" "$supervisor_pid"; then
+    return 1
+  fi
+
+  # The app is confirmed dead; its supervisor should exit after writing the
+  # receipt, but stop any straggling supervisor/forwarder before FIFO cleanup.
+  if [ -n "$supervisor_pid" ] && kill -0 "$supervisor_pid" 2>/dev/null; then
+    kill -TERM "$supervisor_pid" 2>/dev/null || true
+  fi
+  if [ -n "$fwd_pid" ] && kill -0 "$fwd_pid" 2>/dev/null; then
+    kill -TERM "$fwd_pid" 2>/dev/null || true
   fi
   cleanup_orphan_session_forwarders "${sdir}/pipe" "${sdir}/input"
-
-  # Kill app
-  if [ -f "${sdir}/pid" ]; then
-    local pid
-    pid="$(cat "${sdir}/pid")"
-    if kill -0 "$pid" 2>/dev/null; then
-      kill "$pid" 2>/dev/null || true
-      wait "$pid" 2>/dev/null || true
-      log "Stopped session '${name}' (pid ${pid})"
-    fi
-  fi
 
   # Clean up FIFOs and directory
   rm -f "${sdir}/pipe" "${sdir}/input"
   rm -rf "${sdir}"
 
-  json_envelope "ok" "session:\"${name}\"" "wasRunning:true"
+  json_envelope "ok" \
+    "session:\"${name}\"" \
+    "wasRunning:true" \
+    "forcedKill:${SESSION_STOP_FORCED_KILL}"
 }
 
 # --- main -------------------------------------------------------------------
