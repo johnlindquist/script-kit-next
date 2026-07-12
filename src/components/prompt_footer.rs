@@ -965,14 +965,29 @@ mod tests {
     }
 
     #[test]
-    fn test_return_key_glyph_gets_special_optical_nudge() {
+    fn test_shortcut_key_glyph_nudges_follow_shared_footer_contract() {
+        let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
         assert!(is_footer_return_key_glyph("↵"));
         assert!(!is_footer_return_key_glyph("Enter"));
         assert!(!is_footer_return_key_glyph("Return"));
         assert!(!is_footer_return_key_glyph("⌘"));
-        assert_eq!(super::return_key_glyph_nudge_y(None), 2.0);
+        // Non-return glyphs delegate to the shared footer resolver so
+        // PromptFooter cannot become a second owner of per-glyph token
+        // routing (footer_chrome owns the resolver-to-token mapping).
+        assert_eq!(
+            super::shortcut_key_glyph_nudge_y("⌘", None),
+            crate::components::footer_chrome::footer_key_glyph_nudge_y("⌘"),
+        );
+        assert_eq!(
+            crate::components::footer_chrome::footer_key_glyph_nudge_y("⌘"),
+            metrics.cmd_glyph_nudge_y,
+        );
+        // Return remains the one PromptFooter-specific override path.
+        assert_eq!(
+            super::shortcut_key_glyph_nudge_y("↵", None),
+            metrics.key_glyph_nudge_y + metrics.return_glyph_nudge_y,
+        );
         assert_eq!(super::return_key_glyph_nudge_y(Some(100.0)), 100.0);
-        assert_eq!(super::shortcut_key_glyph_nudge_y("⌘", None), 1.0);
-        assert_eq!(super::shortcut_key_glyph_nudge_y("↵", None), 2.0);
+        assert_eq!(super::shortcut_key_glyph_nudge_y("↵", Some(100.0)), 100.0);
     }
 }

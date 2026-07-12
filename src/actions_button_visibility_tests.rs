@@ -28,6 +28,63 @@ mod tests {
         content
     }
 
+    // -----------------------------------------------------------------------
+    // Helpers: structural scoping (function bodies and match arms) instead of
+    // fixed character windows, per the source-audit enforcement ladder.
+    // -----------------------------------------------------------------------
+    fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+        let start = source
+            .find(signature)
+            .unwrap_or_else(|| panic!("{signature} function not found"));
+        let after_start = &source[start..];
+        let open_brace = after_start
+            .find('{')
+            .unwrap_or_else(|| panic!("{signature} function body not found"));
+        let body_start = start + open_brace;
+        let mut depth = 0usize;
+        for (offset, ch) in source[body_start..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &source[body_start..body_start + offset + 1];
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("{signature} function body did not close")
+    }
+
+    /// Extract the block body of a `match` arm (`Pattern => { ... }`) from an
+    /// already-scoped function body. Panics if the arm is missing or does not
+    /// use a block, so assertions stay pinned to the arm they audit.
+    fn match_arm_body<'a>(function_body: &'a str, arm_marker: &str) -> &'a str {
+        let arm_start = function_body
+            .find(arm_marker)
+            .unwrap_or_else(|| panic!("{arm_marker} arm must exist"));
+        let after_arm = &function_body[arm_start..];
+        let open_brace = after_arm
+            .find('{')
+            .unwrap_or_else(|| panic!("{arm_marker} arm must use a block body"));
+        let body_start = arm_start + open_brace;
+        let mut depth = 0usize;
+        for (offset, ch) in function_body[body_start..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return &function_body[body_start..body_start + offset + 1];
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("{arm_marker} arm body did not close")
+    }
+
     // =======================================================================
     // Existing tests (preserved)
     // =======================================================================
@@ -191,52 +248,58 @@ mod tests {
         let content = fs::read_to_string("src/app_impl/ui_window.rs")
             .expect("Failed to read src/app_impl/ui_window.rs");
 
-        // Locate handle_main_footer_action
-        let handler_pos = content
-            .find("fn handle_main_footer_action")
-            .expect("handle_main_footer_action must exist in ui_window.rs");
-        let handler_section = &content[handler_pos..content.len().min(handler_pos + 3000)];
-
-        // Must route through the shared dispatch_main_window_footer_action
+        // The handler must route through the shared dispatcher.
+        let handler = function_body(&content, "fn handle_main_footer_action");
         assert!(
-            handler_section.contains("dispatch_main_window_footer_action(action"),
+            handler.contains("dispatch_main_window_footer_action(action"),
             "handle_main_footer_action must route through dispatch_main_window_footer_action()"
         );
 
-        // dispatch_main_window_footer_action must dispatch the canonical actions
-        let dispatcher_pos = content
-            .find("fn dispatch_main_window_footer_action")
-            .expect("dispatch_main_window_footer_action must exist in ui_window.rs");
-        let dispatcher_section =
-            &content[dispatcher_pos..content.len().min(dispatcher_pos + 20000)];
+        // Scope every arm assertion to the dispatcher's actual match arm so
+        // unrelated growth elsewhere in the function can never mask (or fake)
+        // a routing regression.
+        let dispatcher = function_body(&content, "fn dispatch_main_window_footer_action");
 
+        let run_arm = match_arm_body(dispatcher, "crate::footer_popup::FooterAction::Run =>");
         assert!(
-            dispatcher_section.contains("FooterAction::Run")
-                && dispatcher_section.contains("execute_selected"),
+            run_arm.contains("try_run_ready_agent_chat_script"),
+            "FooterAction::Run must check for a ready Agent Chat script before falling back"
+        );
+        assert!(
+            run_arm.contains("execute_selected"),
             "FooterAction::Run must fall back to execute_selected() for non-Agent Chat views"
         );
+
+        let actions_arm =
+            match_arm_body(dispatcher, "crate::footer_popup::FooterAction::Actions =>");
         assert!(
-            dispatcher_section.contains("try_run_ready_agent_chat_script"),
-            "FooterAction::Run must check for a ready Agent Chat script before falling back to execute_selected()"
+            actions_arm.contains("dispatch_actions_toggle_for_current_view("),
+            "FooterAction::Actions must dispatch through dispatch_actions_toggle_for_current_view(), \
+             which owns the has_actions() gating"
         );
         assert!(
-            dispatcher_section.contains("FooterAction::Actions")
-                && dispatcher_section.contains("dispatch_actions_toggle_for_current_view"),
-            "FooterAction::Actions must dispatch through dispatch_actions_toggle_for_current_view()"
+            !actions_arm.contains("self.toggle_actions("),
+            "FooterAction::Actions must not bypass dispatch_actions_toggle_for_current_view()"
         );
+
+        let stop_arm = match_arm_body(dispatcher, "crate::footer_popup::FooterAction::Stop =>");
         assert!(
-            dispatcher_section.contains("FooterAction::Stop")
-                && dispatcher_section.contains("cancel_streaming_from_escape"),
+            stop_arm.contains("cancel_streaming_from_escape"),
             "FooterAction::Stop must dispatch through the Agent Chat streaming cancellation path"
         );
-        assert!(
-            dispatcher_section.contains("FooterAction::PasteResponse")
-                && dispatcher_section.contains("paste_latest_agent_chat_response_to_frontmost"),
-            "FooterAction::PasteResponse must paste the latest Agent Chat assistant response"
+
+        let paste_arm = match_arm_body(
+            dispatcher,
+            "crate::footer_popup::FooterAction::PasteResponse =>",
         );
         assert!(
-            dispatcher_section.contains("FooterAction::Ai")
-                && dispatcher_section.contains("open_tab_ai_agent_chat_with_entry_intent"),
+            paste_arm.contains("paste_latest_agent_chat_response_to_frontmost"),
+            "FooterAction::PasteResponse must paste the latest Agent Chat assistant response"
+        );
+
+        let ai_arm = match_arm_body(dispatcher, "crate::footer_popup::FooterAction::Ai =>");
+        assert!(
+            ai_arm.contains("open_tab_ai_agent_chat_with_entry_intent"),
             "FooterAction::Ai must dispatch to open_tab_ai_agent_chat_with_entry_intent()"
         );
     }
@@ -276,41 +339,6 @@ mod tests {
         assert!(
             hint_content.contains("\"Agent\".into()"),
             "Agent hint should show the Agent label"
-        );
-    }
-
-    /// Fails if the native footer Actions dispatch stops using the shared toggle
-    /// dispatcher. The shared dispatcher (`dispatch_main_window_footer_action` →
-    /// `dispatch_actions_toggle_for_current_view`) handles the has_actions()
-    /// gating internally, so the native footer must delegate to it.
-    #[test]
-    fn test_native_footer_actions_gated_by_has_actions() {
-        let content = fs::read_to_string("src/app_impl/ui_window.rs")
-            .expect("Failed to read src/app_impl/ui_window.rs");
-
-        // handle_main_footer_action must route through dispatch_main_window_footer_action
-        let handler_pos = content
-            .find("fn handle_main_footer_action")
-            .expect("handle_main_footer_action must exist in ui_window.rs");
-        let handler_section = &content[handler_pos..content.len().min(handler_pos + 3000)];
-        assert!(
-            handler_section.contains("dispatch_main_window_footer_action(action"),
-            "Native footer handler must route through dispatch_main_window_footer_action"
-        );
-
-        // dispatch_main_window_footer_action must dispatch Actions through the shared dispatcher
-        let dispatcher_pos = content
-            .find("fn dispatch_main_window_footer_action")
-            .expect("dispatch_main_window_footer_action must exist");
-        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 6000)];
-        let actions_pos = dispatcher_section
-            .find("FooterAction::Actions")
-            .expect("FooterAction::Actions arm must exist in dispatcher");
-        let after_actions =
-            &dispatcher_section[actions_pos..dispatcher_section.len().min(actions_pos + 600)];
-        assert!(
-            after_actions.contains("dispatch_actions_toggle_for_current_view"),
-            "Native footer Actions dispatch must use the shared dispatcher (dispatch_actions_toggle_for_current_view)"
         );
     }
 
