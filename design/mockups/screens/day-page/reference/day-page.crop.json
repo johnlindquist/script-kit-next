@@ -1,6 +1,6 @@
 {
   "source": "scripts/agentic/design-reference-capture.ts --screen day-page (protocol captureScreenshot, hiDpi, target kind=main; sandboxHome:true, env SCRIPT_KIT_BRAIN_TZ=America/Denver, seeded day file, openDayPage hold-gesture helper)",
-  "capturedAt": "2026-07-11",
+  "capturedAt": "2026-07-12",
   "logicalSize": [
     750,
     480
@@ -21,17 +21,17 @@
     960
   ],
   "backdrop": "user's live desktop (NOT the synthetic fixture backdrop)",
-  "colorProfile": "recorded-at-capture (heading/link amber drifts warm vs stock #FBBF24 — same non-blocking class as confirmCapture.stockThemeVsReferenceRaster)",
+  "colorProfile": "recorded-at-capture (heading/link amber drifts warm vs stock #FBBF24 \u2014 same non-blocking class as confirmCapture.stockThemeVsReferenceRaster)",
   "fixture": {
     "command": "seed ~/.scriptkit/brain/days/<today>.md (sandbox HOME) then openDayPage (main-hotkey HOLD gesture helper)",
     "sandboxHome": true,
     "brainTz": "America/Denver",
-    "dayFileMarkdown": "# Friday · ship the Day Page mockup\n09:12 sketched the Day Page fixture and token list\n09:31 - [ ] wire day-page tokens into export_design_tokens #design\n10:02 [Script Kit](https://scriptkit.com) landing refresh notes\n09:47 [Clipboard entry](kit://clipboard-history?id=day-page-mockup-seed)\n",
-    "shelf": "COLLAPSED (shipped rest state; clipboard_shelf_expanded initializes false) — '▸ Clipboard · 1 kept entry'; the kit:// line is lifted out of the editor into the shelf",
-    "expandedState": "PENDING — no driver element-click primitive; expanded raster needs its own reference + receipt (geometry already locked: list 24, shelf 66, editor 350)",
-    "caret": "trailing BLANK line (seeded file ends with a newline) — keeps the link destination deterministically in the REST state",
-    "contextZone": "fixture-variable capture state (left '~/.scriptkit', model pill read 'Brain · GPT-5.6 SOL'); inert — no keycaps",
-    "activeFooter": "native overlay owns a single Actions ⌘K on the plain Day Page (day_page_footer_buttons) — NOT part of this PNG; the GPUI band is the empty 32px rail"
+    "dayFileMarkdown": "# Friday \u00b7 ship the Day Page mockup\n09:12 sketched the Day Page fixture and token list\n09:31 - [ ] wire day-page tokens into export_design_tokens #design\n10:02 [Script Kit](https://scriptkit.com) landing refresh notes\n09:47 [Clipboard entry](kit://clipboard-history?id=day-page-mockup-seed)\n",
+    "shelf": "COLLAPSED (shipped rest state; clipboard_shelf_expanded initializes false) \u2014 '\u25b8 Clipboard \u00b7 1 kept entry'; the kit:// line is lifted out of the editor into the shelf",
+    "expandedState": "PENDING \u2014 no driver element-click primitive; expanded raster needs its own reference + receipt (geometry already locked: list 24, shelf 66, editor 350)",
+    "caret": "trailing BLANK line (seeded file ends with a newline) \u2014 keeps the link destination deterministically in the REST state",
+    "contextZone": "fixture-variable capture state (left '~/.scriptkit', model pill read 'Brain \u00b7 GPT-5.6 SOL'); inert \u2014 no keycaps",
+    "activeFooter": "native overlay owns a single Actions \u2318K on the plain Day Page (day_page_footer_buttons) \u2014 NOT part of this PNG; the GPUI band is the empty 32px rail"
   },
   "pixelReceipts": {
     "lineGridStep": 20,
@@ -39,11 +39,11 @@
       30,
       52
     ],
-    "headingSameNominalSize": "bold amber title inks from y≈56 in the 52–72 line box — same mono advance as body lines, weight+clip only (no larger font)",
-    "caretQuad": "x≈31, y≈134.5–151 logical (2×17, centered in the blank fifth line's 132–152 box)",
-    "shelfToggleInk": "toggle text ink y≈415–426 logical inside the modeled 416–436 toggle band (collapsed 38px accessory: 448−38=410 shelf top + 6 padding)",
-    "footerBandEdge": "darker band starts at y=448 exactly — the 32px footer.railHeight edge, NOT the 36px modeled native host band (dayPageFooter.spacerVsNativeHostBand receipt)",
+    "headingSameNominalSize": "bold amber title inks from y\u224856 in the 52\u201372 line box \u2014 same mono advance as body lines, weight+clip only (no larger font)",
+    "caretQuad": "x\u224831, y\u2248134.5\u2013151 logical (2\u00d717, centered in the blank fifth line's 132\u2013152 box)",
+    "shelfToggleInk": "toggle text ink y\u2248415\u2013426 logical inside the modeled 416\u2013436 toggle band (collapsed 38px accessory: 448\u221238=410 shelf top + 6 padding)",
+    "footerBandEdge": "darker band starts at y=448 exactly \u2014 the 32px footer.railHeight edge, NOT the 36px modeled native host band (dayPageFooter.spacerVsNativeHostBand receipt)",
     "collapsedBudget": "day_page_layout_budget(480,32,32,1,false,12) = body 416 / editor 378 / shelf 38 / list 0 (locked in day_page::layout tests)"
   },
-  "tokenBundleHash": "sha256:cb709721ef84ef9b2faa29828408fcd83422c5f5567bd1ce3fff695162487922"
+  "tokenBundleHash": "sha256:630bc4155e92ba7dd840c19763e300398f5885ea2db77314978c547a376336da"
 }

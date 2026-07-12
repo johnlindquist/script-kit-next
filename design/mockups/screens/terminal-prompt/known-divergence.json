@@ -1,6 +1,6 @@
 {
   "screen": "terminal-prompt",
-  "status": "draft — reference PNG not captured yet; --sk-terminal-* tokens not yet generator-backed",
+  "status": "generator-backed 2026-07-12; reference re-captured via design-reference-capture",
   "regions": [
     {
       "selector": ".sk-window__material",
@@ -13,12 +13,6 @@
       "kind": "renderer",
       "blocking": false,
       "reason": "Canvas 2D approximation of fx_starfield; colors are token-exact, geometry/phase are not."
-    },
-    {
-      "selector": ":root",
-      "kind": "contract",
-      "blocking": true,
-      "reason": "export_design_tokens has no terminal section: every --sk-terminal-* token is a screen-local alias of an --sk-emulator-proposed-terminal-* value transcribed from Rust source (receipts in design/mockups/briefs/terminal-prompt-brief.md). Values are MEASURED-from-source but NOT generator-backed — blocking until the proposed src/design_contract section ships and the proposed block is deleted."
     },
     {
       "selector": ".sk-term-hint-strip",

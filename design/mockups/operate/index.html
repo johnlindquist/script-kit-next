@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Operate</title>
+<link rel="stylesheet" href="../generated/tokens.css">
+<style>
+  /* Landing chrome only — emulator tokens for the theater, app chrome stays in iframes */
+  :root {
+    --sk-emulator-desktop:
+      radial-gradient(1200px 700px at 18% 12%, rgb(64 46 88 / 0.95), transparent 60%),
+      radial-gradient(1000px 800px at 82% 78%, rgb(26 58 74 / 0.95), transparent 55%),
+      linear-gradient(160deg, rgb(18 17 24), rgb(8 8 10));
+    --sk-emulator-panel: rgb(12 12 14 / 0.82);
+    --sk-emulator-border: rgb(255 255 255 / 0.1);
+    --sk-emulator-fg: rgb(236 236 238);
+    --sk-emulator-muted: rgb(160 160 168);
+    --sk-emulator-accent: rgb(251 191 36);
+    --sk-emulator-pad: 24px;
+    --sk-emulator-gap: 16px;
+    --sk-emulator-radius: 14px;
+    --sk-emulator-font: 13px;
+    --sk-emulator-title: 28px;
+    --sk-emulator-stage-max: 920px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    min-height: 100vh;
+    background: var(--sk-emulator-desktop);
+    color: var(--sk-emulator-fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: var(--sk-emulator-font);
+  }
+  .theater {
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sk-emulator-gap);
+    padding: var(--sk-emulator-pad);
+    border-bottom: 1px solid var(--sk-emulator-border);
+    background: var(--sk-emulator-panel);
+    backdrop-filter: blur(18px);
+  }
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .brand h1 {
+    margin: 0;
+    font-size: var(--sk-emulator-title);
+    letter-spacing: -0.03em;
+    font-weight: 650;
+  }
+  .brand p {
+    margin: 0;
+    color: var(--sk-emulator-muted);
+    max-width: 52ch;
+    line-height: 1.45;
+  }
+  .top-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .top-actions a, .top-actions button {
+    appearance: none;
+    border: 1px solid var(--sk-emulator-border);
+    background: rgb(255 255 255 / 0.05);
+    color: inherit;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .top-actions a.primary, .top-actions button.primary {
+    border-color: rgb(251 191 36 / 0.45);
+    color: var(--sk-emulator-accent);
+  }
+  .stage-wrap {
+    display: grid;
+    place-items: center;
+    padding: 28px 20px 12px;
+    position: relative;
+  }
+  .desk {
+    width: min(100%, var(--sk-emulator-stage-max));
+    display: grid;
+    gap: 14px;
+  }
+  .now-playing {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--sk-emulator-muted);
+  }
+  .now-playing strong {
+    color: var(--sk-emulator-fg);
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .viewport {
+    position: relative;
+    border-radius: var(--sk-emulator-radius);
+    border: 1px solid var(--sk-emulator-border);
+    background: rgb(0 0 0 / 0.28);
+    box-shadow:
+      0 30px 80px rgb(0 0 0 / 0.45),
+      inset 0 1px 0 rgb(255 255 255 / 0.06);
+    overflow: hidden;
+    aspect-ratio: 16 / 11;
+    min-height: 520px;
+  }
+  .viewport iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: transparent;
+  }
+  .hint {
+    position: absolute;
+    left: 14px;
+    bottom: 14px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: rgb(0 0 0 / 0.55);
+    border: 1px solid var(--sk-emulator-border);
+    color: var(--sk-emulator-muted);
+    font-size: 12px;
+    pointer-events: none;
+    max-width: min(42ch, 70%);
+    line-height: 1.4;
+  }
+  .hint b { color: var(--sk-emulator-accent); font-weight: 600; }
+  .rail {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0 var(--sk-emulator-pad) var(--sk-emulator-pad);
+  }
+  .rail button {
+    appearance: none;
+    text-align: left;
+    border: 1px solid var(--sk-emulator-border);
+    background: var(--sk-emulator-panel);
+    color: var(--sk-emulator-muted);
+    border-radius: 12px;
+    padding: 10px 10px 12px;
+    font: inherit;
+    cursor: pointer;
+    min-height: 74px;
+  }
+  .rail button.is-active {
+    border-color: rgb(251 191 36 / 0.45);
+    color: var(--sk-emulator-fg);
+    box-shadow: 0 0 0 1px rgb(251 191 36 / 0.15);
+  }
+  .rail .n {
+    display: block;
+    color: var(--sk-emulator-accent);
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .rail .t {
+    display: block;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  @media (max-width: 960px) {
+    .rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .brand h1 { font-size: 22px; }
+    .viewport { min-height: 420px; }
+  }
+</style>
+</head>
+<body>
+<!--
+  Operate landing: watch continuous DevTools-style story replays as if
+  someone is driving Script Kit. Stories embed real screen fixtures with
+  live filter, moving caret, and correct footers.
+-->
+<div class="theater">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Operate Script Kit</h1>
+      <p>
+        Live pixel-token mockups of real flows — searching, list filtering,
+        selection, markdown typing, actions, and chat — driven like a smoke test.
+      </p>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="primary" id="btn-replay">Replay</button>
+      <button type="button" id="btn-next">Next story</button>
+      <a href="../stories/">All stories</a>
+      <a href="../">Mockup gallery</a>
+    </div>
+  </header>
+
+  <section class="stage-wrap">
+    <div class="desk">
+      <div class="now-playing">
+        <div>
+          <strong id="story-title">Loading…</strong>
+          <div id="story-blurb" style="margin-top:4px"></div>
+        </div>
+        <div id="story-meta">autoplay · continuous timeline</div>
+      </div>
+      <div class="viewport" id="viewport">
+        <iframe id="story-frame" title="Script Kit story" allow="autoplay"></iframe>
+        <div class="hint" id="hint">
+          Watch the <b>caret</b> advance as text is typed and the <b>list</b> narrow to real matches.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <nav class="rail" id="rail" aria-label="Stories"></nav>
+</div>
+
+<script>
+(function () {
+  var STORIES = [];
+  var index = 0;
+  var frame = document.getElementById("story-frame");
+  var titleEl = document.getElementById("story-title");
+  var blurbEl = document.getElementById("story-blurb");
+  var metaEl = document.getElementById("story-meta");
+  var rail = document.getElementById("rail");
+  var timer = null;
+
+  var HINTS = {
+    "01-run-script-with-arg": "Typing <b>fruit</b> filters the launcher to matching scripts; caret sits at the end of the query.",
+    "02-delete-via-actions": "Actions ⌘K overlays the live launcher; type <b>del</b> to filter the popup list.",
+    "03-clipboard-paste": "Selection walks the clipboard list while the preview pane updates.",
+    "04-day-page-capture": "Day Page markdown lines type in with a trailing caret.",
+    "05-notes-scratchpad": "Notes panel types markdown character-by-character.",
+    "06-settings-theme": "Typing <b>theme</b> collapses settings to matching rows (Theme Designer).",
+    "07-chat-follow-up": "Composer types a follow-up, then the reply streams in.",
+    "08-terminal-command": "Terminal types a command cell-by-cell, then prints ANSI output.",
+    "09-agent-chat-handoff": "Agent Chat types a follow-up, arms Send, streams a reply."
+  };
+
+  function load(i) {
+    if (!STORIES.length) return;
+    index = ((i % STORIES.length) + STORIES.length) % STORIES.length;
+    var s = STORIES[index];
+    titleEl.textContent = s.title;
+    blurbEl.textContent = s.blurb || "";
+    metaEl.textContent = (s.durationMs / 1000).toFixed(0) + "s · " + (s.surfaces || []).join(" → ");
+    document.getElementById("hint").innerHTML =
+      HINTS[s.id] || "Continuous rAF timeline over real screen fixtures.";
+    // autoplay=1, hide story chrome via CSS? stories have sidebar — for theater we want clean
+    // Load story with ?theater=1 so story pages can hide sidebar
+    frame.src = "../stories/" + s.id + "/index.html?theater=1&autoplay=1";
+    Array.prototype.forEach.call(rail.querySelectorAll("button"), function (btn, j) {
+      btn.classList.toggle("is-active", j === index);
+    });
+    scheduleAdvance(s.durationMs || 8000);
+  }
+
+  function scheduleAdvance(ms) {
+    if (timer) clearTimeout(timer);
+    // loop to next slightly after story loop length so viewer sees a full pass
+    timer = setTimeout(function () {
+      load(index + 1);
+    }, Math.min(ms + 400, 20000));
+  }
+
+  function renderRail() {
+    rail.innerHTML = STORIES.map(function (s, i) {
+      return (
+        '<button type="button" data-i="' + i + '">' +
+        '<span class="n">' + String(i + 1).padStart(2, "0") + "</span>" +
+        '<span class="t">' + s.title + "</span></button>"
+      );
+    }).join("");
+    rail.querySelectorAll("button").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        load(Number(btn.getAttribute("data-i")));
+      });
+    });
+  }
+
+  document.getElementById("btn-next").addEventListener("click", function () {
+    load(index + 1);
+  });
+  document.getElementById("btn-replay").addEventListener("click", function () {
+    load(index);
+  });
+
+  fetch("../stories/stories.json")
+    .then(function (r) { return r.json(); })
+    .then(function (m) {
+      STORIES = m.stories || [];
+      renderRail();
+      load(0);
+    })
+    .catch(function (err) {
+      titleEl.textContent = "Failed to load stories.json";
+      blurbEl.textContent = String(err);
+    });
+})();
+</script>
+</body>
+</html>

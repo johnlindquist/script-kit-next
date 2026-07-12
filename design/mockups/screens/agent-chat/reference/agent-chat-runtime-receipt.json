@@ -3,11 +3,11 @@
   "tool": "script-kit-devtools.agent-chat-design-reference",
   "command": "capture-exact-state",
   "screenId": "agent-chat",
-  "classification": "ok",
-  "pass": true,
+  "classification": "reproduced",
+  "pass": false,
   "binary": {
     "path": "target-agent/artifacts/design-agent-chat/script-kit-gpui",
-    "sha256": "899689039b5edf6a9edf41a5a1b9b10e3c5836d30393284d25d5a2d7d2ccc0d2"
+    "sha256": "e68ad440245c4c4ac79cd561b6bc7b28d9893bef93c281424f308f0d5d463270"
   },
   "fixture": {
     "command": "openAgentChatKitchenSinkFixture",
@@ -83,9 +83,9 @@
     },
     {
       "name": "fixture.ready.atomic",
-      "passed": true,
+      "passed": false,
       "expected": true,
-      "actual": true
+      "actual": false
     },
     {
       "name": "captureIdentity.windowId",
@@ -129,9 +129,9 @@
     },
     {
       "name": "captureBracket.valid",
-      "passed": true,
+      "passed": false,
       "expected": true,
-      "actual": true
+      "actual": false
     },
     {
       "name": "target.windowId",
@@ -547,9 +547,9 @@
     },
     {
       "name": "manifest.paintSelectorCount",
-      "passed": true,
+      "passed": false,
       "expected": 13,
-      "actual": 13
+      "actual": 14
     },
     {
       "name": "manifest.paintSelectorIds.valid",
@@ -816,6 +816,12 @@
       "actual": true
     },
     {
+      "name": "layout.paintSelector.agent-chat-transcript-row-user-16.matchCount",
+      "passed": false,
+      "expected": 1,
+      "actual": 0
+    },
+    {
       "name": "layout.paintSelector.agent-chat-transcript-row-assistant-17.matchCount",
       "passed": true,
       "expected": 1,
@@ -888,42 +894,6 @@
       "actual": true
     },
     {
-      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.matchCount",
-      "passed": true,
-      "expected": 1,
-      "actual": 1
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.measurementProvenance",
-      "passed": true,
-      "expected": "paint-time",
-      "actual": "paint-time"
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.coordinateSpace",
-      "passed": true,
-      "expected": "window",
-      "actual": "window"
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.measurementFrameGeneration.valid",
-      "passed": true,
-      "expected": true,
-      "actual": true
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.visibleBounds.valid",
-      "passed": true,
-      "expected": true,
-      "actual": true
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.clipBounds.valid",
-      "passed": true,
-      "expected": true,
-      "actual": true
-    },
-    {
       "name": "layout.paintSelector.agent-chat-transcript-row-tool-20.matchCount",
       "passed": true,
       "expected": 1,
@@ -960,40 +930,16 @@
       "actual": true
     },
     {
-      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.matchCount",
-      "passed": true,
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-21.matchCount",
+      "passed": false,
       "expected": 1,
-      "actual": 1
+      "actual": 0
     },
     {
-      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.measurementProvenance",
-      "passed": true,
-      "expected": "paint-time",
-      "actual": "paint-time"
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.coordinateSpace",
-      "passed": true,
-      "expected": "window",
-      "actual": "window"
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.measurementFrameGeneration.valid",
-      "passed": true,
-      "expected": true,
-      "actual": true
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.visibleBounds.valid",
-      "passed": true,
-      "expected": true,
-      "actual": true
-    },
-    {
-      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.clipBounds.valid",
-      "passed": true,
-      "expected": true,
-      "actual": true
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-19.matchCount",
+      "passed": false,
+      "expected": 1,
+      "actual": 0
     },
     {
       "name": "layout.paintSelector.native-main-window-footer-spacer.matchCount",
@@ -1033,9 +979,13 @@
     },
     {
       "name": "layout.paintSelectors.missingIds",
-      "passed": true,
+      "passed": false,
       "expected": [],
-      "actual": []
+      "actual": [
+        "agent-chat-transcript-row-user-16",
+        "agent-chat-transcript-row-tool-21",
+        "agent-chat-transcript-row-assistant-19"
+      ]
     },
     {
       "name": "layout.paintSelectors.duplicateIds",
@@ -1075,12 +1025,65 @@
     },
     {
       "name": "layout.paintSelectors.frameCoherent",
-      "passed": true,
+      "passed": false,
       "expected": true,
-      "actual": true
+      "actual": false
     }
   ],
-  "failures": [],
+  "failures": [
+    {
+      "name": "fixture.ready.atomic",
+      "expected": true,
+      "actual": false
+    },
+    {
+      "name": "captureBracket.valid",
+      "expected": true,
+      "actual": false
+    },
+    {
+      "name": "captureBracket.reasons",
+      "expected": [],
+      "actual": [
+        "paint frame generations were invalid or moved backwards",
+        "consecutive OS captures were not byte-identical"
+      ]
+    },
+    {
+      "name": "manifest.paintSelectorCount",
+      "expected": 13,
+      "actual": 14
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-user-16.matchCount",
+      "expected": 1,
+      "actual": 0
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-21.matchCount",
+      "expected": 1,
+      "actual": 0
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-19.matchCount",
+      "expected": 1,
+      "actual": 0
+    },
+    {
+      "name": "layout.paintSelectors.missingIds",
+      "expected": [],
+      "actual": [
+        "agent-chat-transcript-row-user-16",
+        "agent-chat-transcript-row-tool-21",
+        "agent-chat-transcript-row-assistant-19"
+      ]
+    },
+    {
+      "name": "layout.paintSelectors.frameCoherent",
+      "expected": true,
+      "actual": false
+    }
+  ],
   "opened": {
     "type": "externalCommandResult",
     "command": "openAgentChatKitchenSinkFixture",
@@ -1123,7 +1126,7 @@
     "transcriptViewportSource": "listState",
     "selectorManifest": "design/mockups/screens/agent-chat/fidelity-manifest.json",
     "requiredPaintSelectorCount": 13,
-    "paintTimeElementBoundsAvailable": true,
+    "paintTimeElementBoundsAvailable": false,
     "requiredSelectorIds": [
       "main-view-context-zone",
       "main-view-context-cwd-button",
@@ -1132,11 +1135,12 @@
       "main-view-input-body",
       "agent-chat-send-button",
       "agent-chat-transcript-viewport",
+      "agent-chat-transcript-row-user-16",
       "agent-chat-transcript-row-assistant-17",
       "agent-chat-transcript-row-system-18",
-      "agent-chat-transcript-row-tool-19",
       "agent-chat-transcript-row-tool-20",
-      "agent-chat-transcript-row-assistant-21",
+      "agent-chat-transcript-row-tool-21",
+      "agent-chat-transcript-row-assistant-19",
       "native-main-window-footer-spacer"
     ],
     "observedSelectorIds": [
@@ -1149,12 +1153,14 @@
       "agent-chat-transcript-viewport",
       "agent-chat-transcript-row-assistant-17",
       "agent-chat-transcript-row-system-18",
-      "agent-chat-transcript-row-tool-19",
       "agent-chat-transcript-row-tool-20",
-      "agent-chat-transcript-row-assistant-21",
       "native-main-window-footer-spacer"
     ],
-    "missingSelectorIds": [],
+    "missingSelectorIds": [
+      "agent-chat-transcript-row-user-16",
+      "agent-chat-transcript-row-tool-21",
+      "agent-chat-transcript-row-assistant-19"
+    ],
     "duplicateSelectorIds": [],
     "invalidProvenanceSelectorIds": [],
     "invalidCoordinateSpaceSelectorIds": [],
@@ -1162,33 +1168,33 @@
     "invalidClipBoundsSelectorIds": [],
     "invalidFrameGenerationSelectorIds": [],
     "uniqueFrameGenerations": [
-      189
+      337
     ],
-    "frameGeneration": 189,
-    "frameCoherent": true
+    "frameGeneration": null,
+    "frameCoherent": false
   },
   "frameEvidence": {
-    "generation": 189,
+    "generation": null,
     "layoutGenerations": [
-      181,
-      183,
-      185,
-      187,
-      189
+      null,
+      null,
+      null,
+      null,
+      null
     ],
     "stateStable": true,
     "layoutStable": true,
-    "frameCoherent": true,
+    "frameCoherent": false,
     "bracket": "L0-S0-L1-shotA-L2-shotB-L3-S1-L4"
   },
   "screenshotEvidence": {
     "path": "design/mockups/screens/agent-chat/reference/agent-chat@2x.png",
-    "sha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
-    "duplicateCaptureSha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
-    "capturesIdentical": true,
+    "sha256": "a2256bb3d098d98bdbef9309c3fff5007e5a2c92a4bcfbd5baf39e5ca579e13b",
+    "duplicateCaptureSha256": "b09a168bcec455f9eee1fc08941d26ac94bb0436549ead3569efb843191fe992",
+    "capturesIdentical": false,
     "pixelAudit": {
       "blank": false,
-      "standardDeviation": 0.107333
+      "standardDeviation": 0.107332
     },
     "width": 1500,
     "height": 960,
@@ -1203,25 +1209,30 @@
     "captureIdentity": {
       "windowId": "main",
       "windowKind": "Main",
-      "osWindowId": 31040,
-      "pid": 38813,
+      "osWindowId": 33269,
+      "pid": 73089,
       "resolvedBounds": {
         "x": 100,
         "y": 100,
         "width": 750,
         "height": 480
       }
-    }
+    },
+    "diagnosticPaths": [
+      ".test-output/design-fidelity/agent-chat/gpui-capture-a@2x.png",
+      ".test-output/design-fidelity/agent-chat/gpui-capture-b@2x.png"
+    ],
+    "diagnosticCaptureAttempt": 4
   },
   "visualEvidence": {
     "source": "os-window-capture",
-    "classification": "captured",
+    "classification": "blocked",
     "captureKind": "resolver-targeted-window",
-    "countsAsOsScreenshotEvidence": true,
-    "countsAsCompositorEvidence": true,
+    "countsAsOsScreenshotEvidence": false,
+    "countsAsCompositorEvidence": false,
     "pixelAudit": {
       "blank": false,
-      "standardDeviation": 0.107333
+      "standardDeviation": 0.107332
     },
     "captureIdentity": {
       "target": {
@@ -1231,14 +1242,14 @@
       },
       "width": 1500,
       "height": 960,
-      "sha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d"
+      "sha256": "a2256bb3d098d98bdbef9309c3fff5007e5a2c92a4bcfbd5baf39e5ca579e13b"
     }
   },
   "captureIdentity": {
     "windowId": "main",
     "windowKind": "Main",
-    "osWindowId": 31040,
-    "pid": 38813,
+    "osWindowId": 33269,
+    "pid": 73089,
     "resolvedBounds": {
       "x": 100,
       "y": 100,
@@ -1500,12 +1511,12 @@
           "height": 422
         },
         "flex": {
-          "direction": "row",
+          "direction": "column",
           "grow": 1
         },
         "depth": 1,
         "parent": "Window",
-        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "explanation": "flex-grow:1 fills remaining height after header. Mini receipts use a single full-width column.",
         "visualStyle": {
           "chromeLayer": "content",
           "materialSource": "solidThemeToken",
@@ -1680,7 +1691,7 @@
           "width": 748,
           "height": 478
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "agent-chat-transcript-row-assistant-17",
@@ -1706,7 +1717,7 @@
           "width": 748,
           "height": 382.5
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "agent-chat-transcript-row-assistant-21",
@@ -1732,7 +1743,7 @@
           "width": 748,
           "height": 382.5
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "agent-chat-transcript-row-system-18",
@@ -1758,7 +1769,7 @@
           "width": 748,
           "height": 382.5
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "agent-chat-transcript-row-tool-19",
@@ -1784,7 +1795,7 @@
           "width": 748,
           "height": 382.5
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "agent-chat-transcript-row-tool-20",
@@ -1810,7 +1821,7 @@
           "width": 748,
           "height": 382.5
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "agent-chat-transcript-viewport",
@@ -1836,7 +1847,7 @@
           "width": 748,
           "height": 382.5
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "main-view-context-cwd-button",
@@ -1857,38 +1868,38 @@
           "height": 26
         },
         "clipBounds": {
-          "x": 1,
-          "y": 1,
-          "width": 748,
-          "height": 478
+          "x": 3,
+          "y": 3,
+          "width": 368.5,
+          "height": 26
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "main-view-context-model-button",
         "type": "button",
         "bounds": {
-          "x": 429,
+          "x": 560,
           "y": 3,
-          "width": 318,
+          "width": 187,
           "height": 26
         },
         "depth": 0,
         "measurementProvenance": "paint-time",
         "coordinateSpace": "window",
         "visibleBounds": {
-          "x": 429,
+          "x": 560,
           "y": 3,
-          "width": 318,
+          "width": 187,
           "height": 26
         },
         "clipBounds": {
-          "x": 1,
-          "y": 1,
-          "width": 748,
-          "height": 478
+          "x": 378.5,
+          "y": 3,
+          "width": 368.5,
+          "height": 26
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "main-view-context-zone",
@@ -1914,7 +1925,7 @@
           "width": 748,
           "height": 478
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "main-view-header",
@@ -1940,7 +1951,7 @@
           "width": 748,
           "height": 478
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "main-view-input-body",
@@ -1966,7 +1977,7 @@
           "width": 748,
           "height": 478
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "main-view-input-shell",
@@ -1992,7 +2003,7 @@
           "width": 748,
           "height": 478
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "main-view-main",
@@ -2018,7 +2029,7 @@
           "width": 748,
           "height": 478
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "main-view-shell",
@@ -2044,7 +2055,7 @@
           "width": 748,
           "height": 478
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       },
       {
         "name": "native-main-window-footer-spacer",
@@ -2070,7 +2081,7 @@
           "width": 748,
           "height": 478
         },
-        "measurementFrameGeneration": 189
+        "measurementFrameGeneration": 337
       }
     ]
   }

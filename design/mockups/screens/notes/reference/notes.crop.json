@@ -1,6 +1,6 @@
 {
   "source": "scripts/agentic/design-reference-capture.ts --screen notes (protocol captureScreenshot, hiDpi, target kind=notes; SCRIPT_KIT_TEST_NOTES_DB_PATH sandbox pins default 350x280 bounds)",
-  "capturedAt": "2026-07-11",
+  "capturedAt": "2026-07-12",
   "logicalSize": [
     350,
     280
@@ -21,12 +21,12 @@
     560
   ],
   "backdrop": "user's live desktop (NOT the synthetic fixture backdrop)",
-  "colorProfile": "recorded-at-capture (heading/list-marker hue drifts warm vs stock #FBBF24; heading marker reads dimmer than stock resolved white — same non-blocking class as confirmCapture.stockThemeVsReferenceRaster)",
+  "colorProfile": "recorded-at-capture (heading/list-marker hue drifts warm vs stock #FBBF24; heading marker reads dimmer than stock resolved white \u2014 same non-blocking class as confirmCapture.stockThemeVsReferenceRaster)",
   "fixture": {
     "command": "openNotes + setInput (target kind=notes)",
     "markdown": "# Design Contract Notes\n\nTrack every painted value in\nthe Notes window.\n\n- Titlebar 36 px\n- Editor 16 px mono, 20 px line\n- Footer buttons hug",
     "state": "rest (window not hovered: title 0.7, footer 0.5), one note selected, caret at end, save flash elapsed (>1.6s settle)",
-    "footerButtons": "Notes ⌘P · Actions ⌘K · Agent ⌘↵ (in-window GPUI strip, 32px band)"
+    "footerButtons": "Notes \u2318P \u00b7 Actions \u2318K \u00b7 Agent \u2318\u21b5 (in-window GPUI strip, 32px band)"
   },
   "pixelReceipts": {
     "titleGlyphTopClipped": true,
@@ -38,5 +38,5 @@
     "softWrap": "'- Editor 16 px mono, 20 px line' wraps 'line' onto its own visual row (9 painted rows for 8 logical lines)",
     "note": "footer band paints 32pt at the window bottom while NotesLayoutMetrics reserves 28 - see notesFooter.layoutReservationVsIntrinsicPaint"
   },
-  "tokenBundleHash": "sha256:cb709721ef84ef9b2faa29828408fcd83422c5f5567bd1ce3fff695162487922"
+  "tokenBundleHash": "sha256:630bc4155e92ba7dd840c19763e300398f5885ea2db77314978c547a376336da"
 }

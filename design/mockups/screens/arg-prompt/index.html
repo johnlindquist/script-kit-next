@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="../../generated/tokens.css">
 <link rel="stylesheet" href="../../shared/components.css">
 <link rel="stylesheet" href="./screen.css">
+<link rel="stylesheet" href="../../shared/story-embed.css">
 </head>
 <body>
 <!--
@@ -20,10 +21,14 @@
   scripts/agentic/design-reference-capture.ts \-\-screen arg (proposed in
   ../../briefs/arg-prompt-brief.md).
 
-  Anatomy truth (render_prompts/arg/render.rs render_arg_prompt):
-  - No context zone: ArgPrompt is NOT in uses_shared_main_view_header().
-  - Header: 16px side padding, 8px vertical padding, gpui-component Input
-    at 22px tall / 20px font (font_size_xl = ui_size 16 x 1.25).
+  Anatomy truth (runtime capture 2026-07-12 + window_resize/mod.rs):
+  - Context zone IS painted above the input (shared main_view_chrome band):
+    4 + 22 + 4 = 30px with the same pill anatomy as the main menu. The right
+    pill text tracks the live AI model config (content divergence recorded
+    in known-divergence.json).
+  - Input band: 8px vertical padding + gpui-component Input line box
+    25px (1.25 x font_size_xl 20) = 41px painted (the CURSOR_HEIGHT_LG 22
+    model under-measures; recorded as argPrompt.headerHeight.modelVsPaint).
   - 1px divider with 16px side margins (render_header_divider).
   - Choice rows are the SHARED ListItem with NO metrics override, so they
     resolve MainMenuThemeVariant::default() = InfoBarBase: 44px rows,
@@ -34,9 +39,11 @@
     (current_main_menu_footer_height), NOT the main menu's 36px host.
     Buttons from standard_main_window_footer_buttons: Run ↵ + Actions ⌘K
     (no Agent chip — that is ScriptList-only).
-  - Window: 750 wide; height model = ARG_HEADER_HEIGHT(68) + 6x40 + 8 + 1
-    + 2 = 319px, which under-reserves the painted 44px rows: the 6th row
-    clips. See known-divergence.json + the brief's conflicts section.
+  - Window: 750 wide; the launcher opens MINI, so height resolves through
+    ViewType::MiniPrompt = ARG_HEADER_HEIGHT(68) + clamp(6→5)x40 + 8 + 1
+    + 2 = 279px. List budget 72..246 shows Apple/Banana/Cherry fully and
+    clips Dragonfruit under the footer band; Elderberry/Fig stay in DOM
+    but never paint. See argPrompt.windowHeight.miniVsFull conflict.
   Every visual value resolves through --sk-* custom properties; invented
   --sk-arg-* tokens fall back to equal-valued generated tokens until the
   exporter emits them (see brief "Tokens to generate").
@@ -48,6 +55,13 @@
     <canvas class="sk-window__effect" id="starfield" width="1500" height="640"></canvas>
 
     <div class="sk-window__content">
+      <div class="sk-arg-context-band" data-component="main_view_chrome::context_zone (shared band above the arg input)">
+        <div class="sk-context-zone">
+          <span class="sk-context-pill">~/.scriptkit <span class="sk-context-key">⇥</span></span>
+          <span class="sk-context-pill">Script Kit · gpt-5.5 <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+      </div>
+
       <header class="sk-arg-header" data-component="render_arg_prompt header (prompt_layout_shell scaffold)">
         <div class="sk-arg-input" data-placeholder="true" data-component="gpui-component Input (gpui_input_state)">
           <span class="sk-arg-caret"></span>
@@ -121,5 +135,6 @@
   </div>
 </main>
 <script src="../main-menu/starfield.js"></script>
+<script src="../../shared/story-embed.js"></script>
 </body>
 </html>

@@ -49,12 +49,12 @@ pub(crate) use tests::chat_tests;
 /// clipboard paste, file drop, screen capture, and image picker.
 pub(crate) const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
 
-pub(super) const CHAT_LAYOUT_PADDING_X: f32 = 12.0;
-pub(super) const CHAT_LAYOUT_SECTION_PADDING_Y: f32 = 8.0;
-pub(super) const CHAT_LAYOUT_MESSAGES_PADDING_Y: f32 = CHAT_LAYOUT_SECTION_PADDING_Y;
-pub(super) const CHAT_LAYOUT_CARD_PADDING_X: f32 = 12.0;
-pub(super) const CHAT_LAYOUT_CARD_PADDING_Y: f32 = 10.0;
-pub(super) const CHAT_LAYOUT_BORDER_ALPHA: u32 = 0x40;
+pub(crate) const CHAT_LAYOUT_PADDING_X: f32 = 12.0;
+pub(crate) const CHAT_LAYOUT_SECTION_PADDING_Y: f32 = 8.0;
+pub(crate) const CHAT_LAYOUT_MESSAGES_PADDING_Y: f32 = CHAT_LAYOUT_SECTION_PADDING_Y;
+pub(crate) const CHAT_LAYOUT_CARD_PADDING_X: f32 = 12.0;
+pub(crate) const CHAT_LAYOUT_CARD_PADDING_Y: f32 = 10.0;
+pub(crate) const CHAT_LAYOUT_BORDER_ALPHA: u32 = 0x40;
 
 use self::types::{
     build_conversation_turns, default_conversation_starters, next_reveal_boundary,

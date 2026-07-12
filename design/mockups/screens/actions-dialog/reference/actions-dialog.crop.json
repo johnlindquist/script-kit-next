@@ -1,6 +1,6 @@
 {
   "source": "scripts/agentic/design-reference-capture.ts --screen actions (protocol captureScreenshot, hiDpi, target kind=actionsDialog)",
-  "capturedAt": "2026-07-11",
+  "capturedAt": "2026-07-12",
   "logicalSize": [
     340,
     300
@@ -33,5 +33,5 @@
     "mainMenuVariantForRows": "infoBarBase",
     "actionsPopupTheme": "base"
   },
-  "tokenBundleHash": "sha256:cb709721ef84ef9b2faa29828408fcd83422c5f5567bd1ce3fff695162487922"
+  "tokenBundleHash": "sha256:630bc4155e92ba7dd840c19763e300398f5885ea2db77314978c547a376336da"
 }

@@ -26,12 +26,15 @@ const SLOW_RENDER_THRESHOLD_MS: u128 = 16; // 60fps threshold
 const BASE_FONT_SIZE: f32 = 14.0;
 /// Line height multiplier - 1.3 provides room for descenders (g, y, p, q, j)
 /// and ascenders while keeping text readable
-const LINE_HEIGHT_MULTIPLIER: f32 = 1.3;
+pub(crate) const LINE_HEIGHT_MULTIPLIER: f32 = 1.3;
 /// Terminal cell dimensions at base font size
 /// Cell width for FONT_MONO at 14pt is 8.4287px (measured). We use a slightly larger value
 /// to be conservative and prevent the last character from wrapping to the next line.
 /// Using 8.5px ensures we never tell the PTY we have more columns than can render.
 const BASE_CELL_WIDTH: f32 = 8.5; // Conservative value for FONT_MONO at 14pt (actual: 8.4287px)
+/// Measured mono advance rounded up to the next hundredth — the live
+/// `conservative_cell_width(8.4287)` result the design contract exports.
+pub(crate) const MEASURED_CELL_WIDTH_AT_14: f32 = 8.43;
 /// Default cell height at base font size (used for tests and static calculations)
 #[cfg(test)]
 const BASE_CELL_HEIGHT: f32 = BASE_FONT_SIZE * LINE_HEIGHT_MULTIPLIER; // 18.2px for 14pt

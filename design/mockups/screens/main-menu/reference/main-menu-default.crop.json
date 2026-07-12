@@ -1,6 +1,6 @@
 {
   "source": "scripts/agentic/design-reference-capture.ts (protocol captureScreenshot, hiDpi, target kind=main)",
-  "capturedAt": "2026-07-11",
+  "capturedAt": "2026-07-12",
   "logicalSize": [
     750,
     480
@@ -23,5 +23,5 @@
   "backdrop": "user's live desktop (NOT the synthetic fixture backdrop)",
   "colorProfile": "recorded-at-capture",
   "nativeFooter": "NOT captured \u2014 the AppKit footer overlay is a separate window; footer band in the reference is empty. Button truth from live probe: run='Converse \u21b5', actions='Actions \u2318K', ai='Agent \u2318\u21b5'",
-  "tokenBundleHash": "sha256:cb709721ef84ef9b2faa29828408fcd83422c5f5567bd1ce3fff695162487922"
+  "tokenBundleHash": "sha256:630bc4155e92ba7dd840c19763e300398f5885ea2db77314978c547a376336da"
 }

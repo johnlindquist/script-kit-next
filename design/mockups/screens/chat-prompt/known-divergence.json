@@ -13,12 +13,7 @@
       "blocking": false,
       "reason": "Canvas starfield approximation; particle phase uncontrolled at capture time. Colors are token-exact."
     },
-    {
-      "selector": ":root",
-      "kind": "contract",
-      "blocking": true,
-      "reason": "DRAFT: generated/tokens.css carries no --sk-chat-* records yet. All chat values are staged under --sk-emulator-staged-chat-* in screen.css (byte-exact from Rust source, citations in briefs/chat-prompt-brief.md) and aliased to the proposed --sk-chat-* names. Blocking until the proposed export_design_tokens section lands and the staged block is deleted."
-    },
+
     {
       "selector": ".sk-footer-host",
       "kind": "native",

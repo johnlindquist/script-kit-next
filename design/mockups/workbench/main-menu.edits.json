@@ -1,6 +1,6 @@
 {
   "$comment": "Design proposals live here \u2014 never hand-edit generated/tokens.css. Each change targets a writable source-stage token id from tokens.json; the reverse tool (planned) validates against baseBundleHash, applies the literal edit to the Rust origin, re-runs the exporter, and confirms the resolved value.",
   "schemaVersion": 1,
-  "baseBundleHash": "sha256:cb709721ef84ef9b2faa29828408fcd83422c5f5567bd1ce3fff695162487922",
+  "baseBundleHash": "sha256:630bc4155e92ba7dd840c19763e300398f5885ea2db77314978c547a376336da",
   "changes": {}
 }

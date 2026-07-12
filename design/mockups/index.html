@@ -28,6 +28,12 @@
   .links { margin-top: 12px; display: flex; gap: 12px; font-size: 13px; }
   .links a { color: #fbbf24; text-decoration: none; }
   .pending { opacity: 0.45; }
+  .progress {
+    margin-top: 18px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid rgba(251,191,36,0.28); background: rgba(251,191,36,0.06);
+    color: #e8d7a0; font-size: 13px; line-height: 1.55; max-width: 820px;
+  }
+  .progress strong { color: #fbbf24; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -40,12 +46,19 @@
     HTML, propose token changes via <code>workbench/*.edits.json</code>, and the
     change lands back in Rust with byte fidelity.
   </p>
+  <div class="progress">
+    <strong>2026-07-12 re-baseline.</strong>
+    Tokens re-exported (<code>sha256:40fb1c58…</code>) with generator sections for
+    main menu, actions, confirm, notes, settings, day page, agent chat, arg, chat, and terminal.
+    All 11 reference captures refreshed (agent-chat fidelity probe needs a follow-up paint-selector sync).
+    Clipboard still uses nearest-token aliases for preview surface colors. <a href="operate/index.html" style="color:#fbbf24">Operate the app</a> · <a href="stories/index.html" style="color:#fbbf24">Play 9 animated user stories →</a>
+  </div>
   <div class="grid">
     <div class="card">
       <h2>Main Menu (launcher)</h2>
       <div class="meta">
         750×480 · script-kit-dark · InfoBarBase · Starfield<br>
-        Fixture: Flows launcher, AGY Info selected (2026-07-11 devtools reference)
+        Fixture: re-captured 2026-07-12 via design-reference-capture (live launcher)
       </div>
       <div class="badges">
         <span class="badge ok">token-perfect</span>
@@ -63,7 +76,7 @@
       <h2>Actions Dialog (⌘K)</h2>
       <div class="meta">
         340×300 · base popup theme · rows seeded from InfoBarBase<br>
-        Fixture: AGY Info context, Converse selected (2026-07-11 devtools reference)
+        Fixture: re-captured 2026-07-12 via design-reference-capture
       </div>
       <div class="badges">
         <span class="badge ok">token-perfect</span>
@@ -81,7 +94,7 @@
       <h2>Confirm Prompt</h2>
       <div class="meta">
         750×500 · in-window danger confirm · openConfirmPrompt fixture<br>
-        Fixture: "Delete?" / Delete ↵ · Keep Esc (2026-07-11 devtools reference)
+        Fixture: re-captured 2026-07-12 · "Delete?" / Delete ↵ · Keep Esc
       </div>
       <div class="badges">
         <span class="badge ok">token-perfect</span>
@@ -99,7 +112,7 @@
       <h2>Notes</h2>
       <div class="meta">
         350×280 · standalone NSPanel · markdown editor<br>
-        Fixture: "Design Contract Notes" via sandbox DB (2026-07-11 devtools reference)
+        Fixture: re-captured 2026-07-12 via sandbox notes DB
       </div>
       <div class="badges">
         <span class="badge ok">token-perfect</span>
@@ -117,7 +130,7 @@
       <h2>Settings</h2>
       <div class="meta">
         750×480 · InfoBarBase hub · sandbox default census<br>
-        Fixture: 12 settings, Theme Designer selected (2026-07-11 devtools reference)
+        Fixture: re-captured 2026-07-12 · sandbox default settings census
       </div>
       <div class="badges">
         <span class="badge ok">token-perfect</span>
@@ -135,7 +148,7 @@
       <h2>Day Page</h2>
       <div class="meta">
         750×480 · Today spine editor · collapsed clipboard shelf<br>
-        Fixture: seeded day file, hold-gesture open (2026-07-11 devtools reference)
+        Fixture: re-captured 2026-07-12 · seeded day file, hold-gesture open
       </div>
       <div class="badges">
         <span class="badge ok">token-perfect</span>
@@ -149,11 +162,94 @@
         <a href="generated/tokens.json">tokens.json</a>
       </div>
     </div>
-    <div class="card pending"><h2>Agent Chat</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
-    <div class="card pending"><h2>Arg Prompt</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
-    <div class="card pending"><h2>Clipboard History</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
-    <div class="card pending"><h2>Chat Prompt</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
-    <div class="card pending"><h2>Terminal Prompt</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
+    <div class="card">
+      <h2>Agent Chat</h2>
+      <div class="meta">
+        750×480 · kitchen-sink fixture · generator-backed agentChat tokens<br>
+        Fixture: capture needs paint-selector sync (2026-07-12 probe drift)
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge">fidelity probe: follow-up</span>
+        <span class="badge">native footer: spacer-only</span>
+      </div>
+      <div class="links">
+        <a href="screens/agent-chat/index.html">View</a>
+        <a href="screens/agent-chat/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Arg Prompt</h2>
+      <div class="meta">
+        750×319 · 6 fruit choices · generator-backed argPrompt tokens<br>
+        Fixture: re-captured 2026-07-12 · Pick a fruit
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">row model vs paint 40/44</span>
+        <span class="badge">native footer: empty band</span>
+      </div>
+      <div class="links">
+        <a href="screens/arg-prompt/index.html">View</a>
+        <a href="screens/arg-prompt/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Clipboard History</h2>
+      <div class="meta">
+        750×480 · split list + preview · seeded fixture HOME<br>
+        Fixture: re-captured 2026-07-12 · 6 seeded rows
+      </div>
+      <div class="badges">
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">preview colors: nearest-token</span>
+        <span class="badge">privacy: sandbox HOME</span>
+      </div>
+      <div class="links">
+        <a href="screens/clipboard-history/index.html">View</a>
+        <a href="screens/clipboard-history/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Chat Prompt</h2>
+      <div class="meta">
+        750×500 · SDK chat · generator-backed chatPrompt tokens<br>
+        Fixture: re-captured 2026-07-12 · clipboard read/write sample
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">syntect spans: untokenized</span>
+        <span class="badge">native footer: empty band</span>
+      </div>
+      <div class="links">
+        <a href="screens/chat-prompt/index.html">View</a>
+        <a href="screens/chat-prompt/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Terminal Prompt</h2>
+      <div class="meta">
+        750×700 · SDK term · generator-backed terminalPrompt tokens<br>
+        Fixture: re-captured 2026-07-12 · ANSI palette sample
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">hint strip: clipped by contract</span>
+        <span class="badge">cell advance: ~0.03px/char</span>
+      </div>
+      <div class="links">
+        <a href="screens/terminal-prompt/index.html">View</a>
+        <a href="screens/terminal-prompt/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
   </div>
 </div>
 </body>
