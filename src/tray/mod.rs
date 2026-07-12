@@ -167,6 +167,10 @@ const ICON_NOTES_SVG: &str = include_str!("../../assets/icons/notes.svg");
 const ICON_AGENT_CHAT_SVG: &str = include_str!("../../assets/icons/agent_chat.svg");
 const ICON_SETTINGS_SVG: &str = include_str!("../../assets/icons/settings.svg");
 const ICON_INFO_SVG: &str = include_str!("../../assets/icons/info.svg");
+const ICON_BOOK_OPEN_SVG: &str = include_str!("../../assets/icons/book_open.svg");
+const ICON_SHARE_SVG: &str = include_str!("../../assets/icons/share.svg");
+const ICON_REFRESH_CW_SVG: &str = include_str!("../../assets/icons/refresh_cw.svg");
+const ICON_CIRCLE_ARROW_UP_SVG: &str = include_str!("../../assets/icons/circle_arrow_up.svg");
 
 /// Walk a muda `ContextMenu`'s underlying `NSMenu` and mark every menu-item
 /// image as a template, so AppKit auto-tints it for light/dark/highlighted/
@@ -454,13 +458,28 @@ impl TrayManager {
                 )
             }
         };
-        let open_current_app_commands_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::OpenCurrentAppCommands.id(),
-            current_app_commands_label(),
-            true,
-            Some(NativeIcon::Bookmarks),
-            None,
-        );
+        // Current App Commands — lucide book-open glyph; NativeIcon variants
+        // render at their own intrinsic size and look thin next to the
+        // menu_icon_from_svg rows, so only the fallback uses one.
+        let open_current_app_commands_item = match menu_icon_from_svg(ICON_BOOK_OPEN_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::OpenCurrentAppCommands.id(),
+                current_app_commands_label(),
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.current_app_commands_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::OpenCurrentAppCommands.id(),
+                    current_app_commands_label(),
+                    true,
+                    Some(NativeIcon::Bookmarks),
+                    None,
+                )
+            }
+        };
         // Open Notes — lucide notepad-text glyph, white-on-template via menu_icon_from_svg.
         let open_notes_item = match menu_icon_from_svg(ICON_NOTES_SVG) {
             Ok(icon) => IconMenuItem::with_id(
@@ -502,16 +521,26 @@ impl TrayManager {
             }
         };
 
-        // Note on icons for Settings / About: AppKit's NativeIcon variants
-        // (Info, PreferencesGeneral) are full-colour status images, not
-        // template glyphs. Ship icon-less, lining up with `Launch at Login`.
-        let feedback_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::SendFeedback.id(),
-            "Send Feedback…",
-            true,
-            Some(NativeIcon::Share),
-            None,
-        );
+        // Send Feedback — lucide share glyph, sized like the other SVG rows.
+        let feedback_item = match menu_icon_from_svg(ICON_SHARE_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::SendFeedback.id(),
+                "Send Feedback…",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.feedback_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::SendFeedback.id(),
+                    "Send Feedback…",
+                    true,
+                    Some(NativeIcon::Share),
+                    None,
+                )
+            }
+        };
 
         // Brand-correct social glyphs rendered from `assets/icons/`. Falling
         // back to `with_id_and_native_icon` keeps the row alive even if the
@@ -593,20 +622,46 @@ impl TrayManager {
                 )
             }
         };
-        let reload_scripts_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::ReloadScripts.id(),
-            "Reload Scripts",
-            true,
-            Some(NativeIcon::Refresh),
-            None,
-        );
-        let check_for_updates_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::CheckForUpdates.id(),
-            "Check for Updates…",
-            true,
-            Some(NativeIcon::RefreshFreestanding),
-            None,
-        );
+        // Reload Scripts — lucide refresh-cw glyph, sized like the other SVG rows.
+        let reload_scripts_item = match menu_icon_from_svg(ICON_REFRESH_CW_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::ReloadScripts.id(),
+                "Reload Scripts",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.reload_scripts_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::ReloadScripts.id(),
+                    "Reload Scripts",
+                    true,
+                    Some(NativeIcon::Refresh),
+                    None,
+                )
+            }
+        };
+        // Check for Updates — lucide circle-arrow-up glyph.
+        let check_for_updates_item = match menu_icon_from_svg(ICON_CIRCLE_ARROW_UP_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::CheckForUpdates.id(),
+                "Check for Updates…",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.check_for_updates_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::CheckForUpdates.id(),
+                    "Check for Updates…",
+                    true,
+                    Some(NativeIcon::RefreshFreestanding),
+                    None,
+                )
+            }
+        };
 
         // Version row — id matches OpenReleasePage so AppKit dispatches a click
         // to the release page when an update is available. Label/enabled flip
@@ -1176,6 +1231,32 @@ mod tests {
         assert_eq!(TrayMenuAction::from_id("unknown"), None);
         assert_eq!(TrayMenuAction::from_id(""), None);
         assert_eq!(TrayMenuAction::from_id("tray.nonexistent"), None);
+    }
+
+    /// Every menu row ships an SVG glyph rendered via `menu_icon_from_svg`;
+    /// a render failure silently falls back to an AppKit NativeIcon whose
+    /// intrinsic size doesn't match the 44px SVG rows (the 2026-07-11 tray
+    /// icon size mismatch). Keep every glyph renderable so the fallback
+    /// never fires.
+    #[test]
+    fn tray_menu_svg_glyphs_all_render() {
+        for (name, svg) in [
+            ("logo", LOGO_SVG),
+            ("book_open", ICON_BOOK_OPEN_SVG),
+            ("notes", ICON_NOTES_SVG),
+            ("agent_chat", ICON_AGENT_CHAT_SVG),
+            ("share", ICON_SHARE_SVG),
+            ("x_twitter", ICON_X_SVG),
+            ("github", ICON_GITHUB_SVG),
+            ("discord", ICON_DISCORD_SVG),
+            ("settings", ICON_SETTINGS_SVG),
+            ("refresh_cw", ICON_REFRESH_CW_SVG),
+            ("circle_arrow_up", ICON_CIRCLE_ARROW_UP_SVG),
+            ("info", ICON_INFO_SVG),
+        ] {
+            menu_icon_from_svg(svg)
+                .unwrap_or_else(|e| panic!("tray glyph '{name}' failed to render: {e}"));
+        }
     }
 
     #[test]
