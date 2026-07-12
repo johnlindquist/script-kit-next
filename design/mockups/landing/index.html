@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Script away the friction of your day</title>
+<meta name="description" content="A free, open-source launcher for macOS. Unified search, actions with confirmation, clipboard history, Day Page, and Notes — proven with DevTools and rendered as token-perfect HTML walkthroughs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lexend:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./landing.css">
+</head>
+<body>
+<div class="glow" aria-hidden="true"></div>
+
+<header class="hero wrap">
+  <div class="kicker"><span class="dot" aria-hidden="true"></span> Free &amp; open source · Rust + GPUI</div>
+  <h1>Script away the <span class="amber">friction</span> of your day</h1>
+  <p class="sub">
+    One launcher for scripts, clipboard, notes, and your day file — with an actions menu that
+    never silently fires destructive work. These walkthroughs are the same surfaces we prove
+    with Script Kit DevTools, rendered from the app’s design tokens.
+  </p>
+  <div class="cta-row">
+    <a class="cta" href="https://github.com/johnlindquist/script-kit-next/releases/latest/download/Script-Kit-macos.zip">Download for macOS</a>
+    <a class="cta-ghost" href="https://github.com/johnlindquist/script-kit-next">GitHub</a>
+  </div>
+  <p class="cta-note">Requires macOS · Free forever · Your scripts stay on disk as plain text</p>
+
+  <div class="hero-media" data-hero-story data-story-id="01-search">
+    <div class="story-frame">
+      <iframe
+        data-landing-story
+        title="Launcher search walkthrough"
+        src="./stories/01-search/index.html?marketing=1&amp;autoplay=0"
+        loading="eager"
+      ></iframe>
+    </div>
+    <div class="story-controls-bar">
+      <button type="button" data-replay>Replay search</button>
+    </div>
+  </div>
+
+  <div class="proof-strip" aria-label="Proof claims">
+    <span class="proof-chip"><b>DevTools</b> runtime receipts</span>
+    <span class="proof-chip"><b>Token-backed</b> HTML fixtures</span>
+    <span class="proof-chip"><b>5</b> proven walkthroughs</span>
+    <span class="proof-chip">No design-tool recreations</span>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="feature" data-feature data-story-id="02-actions-confirm">
+    <div class="feature-copy">
+      <h2>Every command is one ⌘K away</h2>
+      <p>
+        Focus any result and open Actions. Type to filter. Destructive paths stop on an explicit
+        confirmation prompt — we never market a silent delete.
+      </p>
+      <p class="meta">Surfaces: main menu · actions dialog · confirm · DevTools: openActions + openConfirmPrompt</p>
+    </div>
+    <div class="feature-media">
+      <div class="story-frame">
+        <iframe
+          data-landing-story
+          title="Actions and confirm walkthrough"
+          src="./stories/02-actions-confirm/index.html?marketing=1&amp;autoplay=0"
+          loading="lazy"
+        ></iframe>
+      </div>
+      <div class="story-controls-bar">
+        <button type="button" data-replay>Replay actions</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature flip" data-feature data-story-id="03-clipboard">
+    <div class="feature-copy">
+      <h2>Everything you copied, searchable and previewed</h2>
+      <p>
+        Clipboard History is a first-class library: walk entries, inspect the preview pane, stay
+        paste-ready. This walkthrough stops before a paste claim we don’t assert.
+      </p>
+      <p class="meta">Surface: clipboard-history · DevTools: clipboard capture + source filter proofs</p>
+    </div>
+    <div class="feature-media">
+      <div class="story-frame">
+        <iframe
+          data-landing-story
+          title="Clipboard history walkthrough"
+          src="./stories/03-clipboard/index.html?marketing=1&amp;autoplay=0"
+          loading="lazy"
+        ></iframe>
+      </div>
+      <div class="story-controls-bar">
+        <button type="button" data-replay>Replay clipboard</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature" data-feature data-story-id="04-day-page">
+    <div class="feature-copy">
+      <h2>Your day, as a living Markdown file</h2>
+      <p>
+        Day Page is a date-bound spine — type tasks and notes with a live caret. The marketing
+        rest state keeps the clipboard shelf collapsed, matching the shipped fixture.
+      </p>
+      <p class="meta">Surface: day-page · DevTools: day-page-markdown-reference-probe</p>
+    </div>
+    <div class="feature-media">
+      <div class="story-frame">
+        <iframe
+          data-landing-story
+          title="Day Page walkthrough"
+          src="./stories/04-day-page/index.html?marketing=1&amp;autoplay=0"
+          loading="lazy"
+        ></iframe>
+      </div>
+      <div class="story-controls-bar">
+        <button type="button" data-replay>Replay day page</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature flip" data-feature data-story-id="05-notes">
+    <div class="feature-copy">
+      <h2>Scratch notes that stay out of the way</h2>
+      <p>
+        A compact Notes panel for markdown capture — titlebar, mono editor, in-window footer.
+        Typed character-by-character against the same fixture DevTools captures.
+      </p>
+      <p class="meta">Surface: notes · DevTools: openNotes + notes selection probes</p>
+    </div>
+    <div class="feature-media">
+      <div class="story-frame is-notes">
+        <iframe
+          data-landing-story
+          title="Notes walkthrough"
+          src="./stories/05-notes/index.html?marketing=1&amp;autoplay=0"
+          loading="lazy"
+        ></iframe>
+      </div>
+      <div class="story-controls-bar">
+        <button type="button" data-replay>Replay notes</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing">
+    <h2>Built for people who script their Mac</h2>
+    <div class="foundations">
+      <span>Free and open source</span>
+      <span>Built in Rust on GPUI</span>
+      <span>Plain-text scripts &amp; Markdown</span>
+      <span>DevTools-proven walkthroughs</span>
+    </div>
+    <div class="cta-row">
+      <a class="cta" href="https://github.com/johnlindquist/script-kit-next/releases/latest/download/Script-Kit-macos.zip">Download for macOS</a>
+      <a class="cta-ghost" href="https://github.com/johnlindquist/script-kit-next">Star on GitHub</a>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer wrap">
+  <p>
+    Walkthroughs reuse token-perfect fixtures under <code>design/mockups/screens</code>.
+    Runtime proofs map to Script Kit DevTools driver probes — not design-tool mockups.
+  </p>
+  <p class="foot-links">
+    <a href="https://scriptkit.com/">scriptkit.com</a>
+    ·
+    <a href="https://github.com/johnlindquist/script-kit-next">repo</a>
+  </p>
+</footer>
+
+<script src="./landing.js"></script>
+</body>
+</html>

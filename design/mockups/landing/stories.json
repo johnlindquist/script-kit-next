@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "product": "scriptkit-landing",
+  "buildId": "scriptkit-landing-mockups-v1",
+  "count": 5,
+  "stories": [
+    {
+      "id": "01-search",
+      "title": "One search box. Everything on your Mac.",
+      "marketingClaim": "Type once. Script Kit searches scripts, files, built-ins, clipboard tools, and commands without choosing a mode first.",
+      "entry": "stories/01-search/index.html",
+      "screens": ["main-menu"],
+      "dimensions": { "logical": [750, 480], "physical": [1500, 960], "dpr": 2 },
+      "runtimeProof": "search",
+      "proofAtMs": [0, 900, 1800, 3200],
+      "chapters": [
+        { "id": "rest", "label": "Launcher rest", "at": 0 },
+        { "id": "type", "label": "Type clip", "at": 400 },
+        { "id": "filter", "label": "Results narrow", "at": 1800 },
+        { "id": "select", "label": "Select Clipboard History", "at": 2800 }
+      ],
+      "devtools": [
+        "Driver.setFilterAndWait",
+        "scripts/agentic/type-filter-editing-proof.ts",
+        "scripts/agentic/root-source-filter-clipboard.ts"
+      ],
+      "durationMs": 5000
+    },
+    {
+      "id": "02-actions-confirm",
+      "title": "Every command is one ⌘K away.",
+      "marketingClaim": "Every result has an action menu. Destructive work stops for an explicit confirmation step.",
+      "entry": "stories/02-actions-confirm/index.html",
+      "screens": ["main-menu", "actions-dialog", "confirm-popup"],
+      "dimensions": {
+        "main": { "logical": [750, 480], "physical": [1500, 960] },
+        "actions": { "logical": [340, 300], "physical": [680, 600] },
+        "confirm": { "logical": [750, 500], "physical": [1500, 1000] }
+      },
+      "runtimeProof": "actions-confirm",
+      "proofAtMs": [0, 900, 2200, 4000],
+      "chapters": [
+        { "id": "focus", "label": "Focus a row", "at": 0 },
+        { "id": "actions", "label": "Open Actions ⌘K", "at": 800 },
+        { "id": "filter", "label": "Type del", "at": 1600 },
+        { "id": "confirm", "label": "Confirm danger", "at": 3600 }
+      ],
+      "devtools": [
+        "openActions",
+        "openConfirmPrompt",
+        "scripts/agentic/design-reference-capture.ts --screen actions|confirm"
+      ],
+      "durationMs": 6000,
+      "stopCondition": "confirmation visible; no row-removed claim"
+    },
+    {
+      "id": "03-clipboard",
+      "title": "Everything you copied, searchable and previewed.",
+      "marketingClaim": "Clipboard History turns past copies into a searchable library with a live preview pane.",
+      "entry": "stories/03-clipboard/index.html",
+      "screens": ["clipboard-history"],
+      "dimensions": { "logical": [750, 480], "physical": [1500, 960], "dpr": 2 },
+      "runtimeProof": "clipboard",
+      "proofAtMs": [0, 800, 2800, 4000],
+      "chapters": [
+        { "id": "open", "label": "Open clipboard", "at": 0 },
+        { "id": "walk", "label": "Walk entries", "at": 600 },
+        { "id": "pin", "label": "Select pinned", "at": 2800 },
+        { "id": "preview", "label": "Preview ready", "at": 3800 }
+      ],
+      "devtools": [
+        "triggerBuiltin clipboard-history",
+        "scripts/agentic/root-source-filter-clipboard.ts",
+        "design-reference-capture --screen clipboard"
+      ],
+      "durationMs": 5500,
+      "stopCondition": "paste-ready selected pin; no Pasted claim"
+    },
+    {
+      "id": "04-day-page",
+      "title": "Your day, as a living Markdown file.",
+      "marketingClaim": "Day Page is a date-bound spine for notes and tasks — collapsed clipboard shelf at rest.",
+      "entry": "stories/04-day-page/index.html",
+      "screens": ["day-page"],
+      "dimensions": { "logical": [750, 480], "physical": [1500, 960], "dpr": 2 },
+      "runtimeProof": "day-page",
+      "proofAtMs": [0, 1200, 3600, 5200],
+      "chapters": [
+        { "id": "open", "label": "Day Page open", "at": 0 },
+        { "id": "type", "label": "Type spine line", "at": 500 },
+        { "id": "task", "label": "Task present", "at": 3200 },
+        { "id": "rest", "label": "Collapsed shelf rest", "at": 5200 }
+      ],
+      "devtools": [
+        "scripts/agentic/day-page-markdown-reference-probe.ts",
+        "design-reference-capture --screen day-page"
+      ],
+      "durationMs": 6500,
+      "stopCondition": "shelf collapsed only"
+    },
+    {
+      "id": "05-notes",
+      "title": "Scratch notes that stay out of the way.",
+      "marketingClaim": "A compact Notes panel for markdown capture with an in-window footer — not a full IDE.",
+      "entry": "stories/05-notes/index.html",
+      "screens": ["notes"],
+      "dimensions": { "logical": [350, 280], "physical": [700, 560], "dpr": 2 },
+      "runtimeProof": "notes",
+      "proofAtMs": [0, 800, 3200, 5600],
+      "chapters": [
+        { "id": "open", "label": "Open Notes", "at": 0 },
+        { "id": "type", "label": "Type body", "at": 400 },
+        { "id": "list", "label": "List complete", "at": 3400 },
+        { "id": "rest", "label": "Saved rest", "at": 5600 }
+      ],
+      "devtools": [
+        "openNotes",
+        "scripts/agentic/notes-selection-stability-probe.ts",
+        "design-reference-capture --screen notes"
+      ],
+      "durationMs": 7000,
+      "stopCondition": "rest after typing; no unverified save flash claim"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en" data-story="01-search">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One search box. Everything on your Mac. — Script Kit</title>
+<link rel="stylesheet" href="../../../generated/tokens.css">
+<link rel="stylesheet" href="../../../stories/shared/story-shell.css">
+<script>
+(function(){
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.get("marketing") === "1" || q.get("theater") === "1") {
+      document.documentElement.classList.add(q.get("marketing") === "1" ? "marketing-mode" : "theater-mode");
+    }
+  } catch (e) {}
+})();
+</script>
+</head>
+<body class="story-body" data-story-root>
+<div class="story-layout">
+  <aside class="story-sidebar">
+    <a class="story-sidebar__back" href="../../index.html">← Landing</a>
+    <h1 class="story-sidebar__title">One search box. Everything on your Mac.</h1>
+    <p class="story-sidebar__blurb">Type once. Script Kit searches scripts, files, built-ins, clipboard tools, and commands without choosing a mode first.</p>
+    <p class="story-step-label" data-story-step-label></p>
+    <div class="story-controls">
+      <button type="button" data-story-play>Play</button>
+      <button type="button" data-story-prev>Prev</button>
+      <button type="button" data-story-next>Next</button>
+    </div>
+    <nav class="story-rail" data-story-rail aria-label="Chapters"></nav>
+  </aside>
+  <main class="story-main">
+    <div class="story-surface-stack" data-story-surface-stack>
+      <iframe data-story-surface="main-menu" src="../../../screens/main-menu/index.html?embed=story" title="main-menu"></iframe>
+    </div>
+  </main>
+</div>
+<script src="../../../stories/shared/surface-adapters.js"></script>
+<script src="../../../stories/shared/story-player.js"></script>
+<script src="./story.js"></script>
+</body>
+</html>
