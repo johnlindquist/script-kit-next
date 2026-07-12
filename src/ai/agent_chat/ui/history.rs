@@ -2,6 +2,8 @@
 //!
 //! - `agent_chat-history.jsonl` — One-line summaries for Cmd+P browsing
 //! - `agent_chat-conversations/{session_id}.json` — Full message history for resume
+//! - `agent_chat-prompt-history.jsonl` — Flat list of submitted composer
+//!   prompts for shell-style Up/Down recall across sessions
 
 use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, OnceLock};
@@ -72,6 +74,9 @@ pub(crate) struct AgentChatHistorySearchHit {
     pub entry: AgentChatHistoryEntry,
     pub score: u32,
     pub matched_field: AgentChatHistorySearchField,
+    /// Word-level match evidence produced at qualification time; renderers
+    /// highlight exactly these ranges. `None` for empty-query recency rows.
+    pub evidence: Option<crate::scripts::search::sentence::LongTextMatchEvidence>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -233,7 +238,8 @@ pub(crate) fn build_history_entry(
 
 // ── Search / ranking ─────────────────────────────────────────────────
 
-/// Rank history entries against a query using field-weighted scoring.
+/// Rank history entries against a query using the shared long-text
+/// sentence contract (word-boundary matching, tiered relevance, evidence).
 ///
 /// Empty query returns up to `limit` entries in recency order (no filtering).
 fn rank_history_entries(
@@ -241,6 +247,11 @@ fn rank_history_entries(
     query: &str,
     limit: usize,
 ) -> Vec<AgentChatHistorySearchHit> {
+    use crate::scripts::search::sentence::{
+        compile_long_text_query, match_long_text_query, FieldClass, FieldVisibility, LongTextField,
+        LongTextFieldId, RenderSlot,
+    };
+
     let trimmed = query.trim();
     if trimmed.is_empty() {
         return entries
@@ -250,82 +261,72 @@ fn rank_history_entries(
                 entry,
                 score: 0,
                 matched_field: AgentChatHistorySearchField::Title,
+                evidence: None,
             })
             .collect();
     }
 
-    let tokens: Vec<String> = normalize_search_text(trimmed)
-        .split_whitespace()
-        .map(ToOwned::to_owned)
-        .collect();
+    let Some(compiled) = compile_long_text_query(trimmed) else {
+        return Vec::new();
+    };
 
     let mut hits = Vec::new();
 
     for entry in entries {
-        let title = normalize_search_text(entry.title_display());
-        let preview = normalize_search_text(entry.preview_display());
-        let full = entry.search_text.as_str();
-        let timestamp = normalize_search_text(&entry.timestamp);
-        let combined = format!("{title} {preview} {full} {timestamp}");
+        // Visible fields first so redundant hidden blobs (search_text
+        // repeats the title/preview) do not claim primary attribution.
+        let fields = [
+            LongTextField {
+                id: LongTextFieldId::Title,
+                text: entry.title_display(),
+                class: FieldClass::NaturalText,
+                visibility: FieldVisibility::Visible(RenderSlot::Title),
+                weight: 6,
+            },
+            LongTextField {
+                id: LongTextFieldId::Preview,
+                text: entry.preview_display(),
+                class: FieldClass::NaturalText,
+                visibility: FieldVisibility::Visible(RenderSlot::Subtitle),
+                weight: 4,
+            },
+            LongTextField {
+                id: LongTextFieldId::Transcript,
+                text: entry.search_text.as_str(),
+                class: FieldClass::NaturalText,
+                visibility: FieldVisibility::Hidden,
+                weight: 1,
+            },
+            LongTextField {
+                id: LongTextFieldId::Timestamp,
+                text: entry.timestamp.as_str(),
+                class: FieldClass::Metadata,
+                visibility: FieldVisibility::Hidden,
+                weight: 1,
+            },
+        ];
 
-        // All query tokens must appear somewhere.
-        if !tokens.iter().all(|token| combined.contains(token.as_str())) {
+        let Some(matched) = match_long_text_query(&compiled, &fields) else {
             continue;
-        }
+        };
 
-        let title_score = tokens.iter().fold(0u32, |acc, token| {
-            acc + if title.starts_with(token.as_str()) {
-                80
-            } else if title.contains(token.as_str()) {
-                40
-            } else {
-                0
-            }
-        });
-
-        let preview_score = tokens.iter().fold(0u32, |acc, token| {
-            acc + if preview.contains(token.as_str()) {
-                20
-            } else {
-                0
-            }
-        });
-
-        let full_score = tokens.iter().fold(0u32, |acc, token| {
-            acc + if full.contains(token.as_str()) { 8 } else { 0 }
-        });
-
-        let timestamp_score = tokens.iter().fold(0u32, |acc, token| {
-            acc + if timestamp.contains(token.as_str()) {
-                4
-            } else {
-                0
-            }
-        });
-
-        let total_score = title_score + preview_score + full_score + timestamp_score;
-
-        let matched_field = if title_score >= preview_score
-            && title_score >= full_score
-            && title_score >= timestamp_score
-        {
-            AgentChatHistorySearchField::Title
-        } else if preview_score >= full_score && preview_score >= timestamp_score {
-            AgentChatHistorySearchField::Preview
-        } else if full_score >= timestamp_score {
-            AgentChatHistorySearchField::SearchText
-        } else {
-            AgentChatHistorySearchField::Timestamp
+        let matched_field = match matched.evidence.primary_field {
+            LongTextFieldId::Title => AgentChatHistorySearchField::Title,
+            LongTextFieldId::Preview => AgentChatHistorySearchField::Preview,
+            LongTextFieldId::Timestamp => AgentChatHistorySearchField::Timestamp,
+            _ => AgentChatHistorySearchField::SearchText,
         };
 
         hits.push(AgentChatHistorySearchHit {
             entry,
-            score: total_score,
+            score: matched.rank_score(),
             matched_field,
+            evidence: Some(matched.evidence),
         });
     }
 
-    // Deterministic: highest score first, recency as tie-break.
+    // Deterministic: relevance tier + in-tier score first, recency breaks
+    // ties. A recent unrelated row must not beat an older phrase match.
     hits.sort_by(|a, b| {
         b.score
             .cmp(&a.score)
@@ -423,6 +424,83 @@ pub(crate) fn search_history_cached(query: &str, limit: usize) -> Vec<AgentChatH
 
 fn history_path() -> std::path::PathBuf {
     crate::setup::get_kit_path().join("agent_chat-history.jsonl")
+}
+
+fn prompt_history_path() -> std::path::PathBuf {
+    crate::setup::get_kit_path().join("agent_chat-prompt-history.jsonl")
+}
+
+/// One submitted composer prompt, for shell-style Up/Down recall.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PromptHistoryLine {
+    timestamp: String,
+    prompt: String,
+}
+
+const PROMPT_HISTORY_MAX_LINES: usize = 200;
+
+/// Append a submitted composer prompt to the flat recall store. Consecutive
+/// duplicates are skipped; the file compacts to the newest
+/// `PROMPT_HISTORY_MAX_LINES` entries once it doubles that size.
+pub(crate) fn append_prompt_history(prompt: &str) {
+    let prompt = prompt.trim();
+    if prompt.is_empty() {
+        return;
+    }
+    if load_prompt_history(1).last().map(String::as_str) == Some(prompt) {
+        return;
+    }
+
+    let path = prompt_history_path();
+    let line = PromptHistoryLine {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        prompt: prompt.to_string(),
+    };
+    let Ok(json) = serde_json::to_string(&line) else {
+        return;
+    };
+
+    use std::io::Write;
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    else {
+        tracing::debug!(path = %path.display(), "agent_chat_prompt_history_write_failed");
+        return;
+    };
+    let _ = writeln!(file, "{json}");
+
+    if let Ok(content) = std::fs::read_to_string(&path) {
+        if content.lines().count() > PROMPT_HISTORY_MAX_LINES * 2 {
+            let keep: Vec<&str> = content
+                .lines()
+                .rev()
+                .take(PROMPT_HISTORY_MAX_LINES)
+                .collect();
+            if let Ok(mut f) = std::fs::File::create(&path) {
+                for entry in keep.iter().rev() {
+                    let _ = writeln!(f, "{entry}");
+                }
+            }
+        }
+    }
+}
+
+/// Load the newest `limit` submitted prompts, oldest → newest.
+pub(crate) fn load_prompt_history(limit: usize) -> Vec<String> {
+    let Ok(content) = std::fs::read_to_string(prompt_history_path()) else {
+        return Vec::new();
+    };
+    let mut prompts: Vec<String> = content
+        .lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str::<PromptHistoryLine>(line).ok())
+        .map(|line| line.prompt)
+        .take(limit)
+        .collect();
+    prompts.reverse();
+    prompts
 }
 
 fn conversations_dir() -> std::path::PathBuf {
@@ -677,7 +755,7 @@ fn cleanup_old_conversations(keep: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::Mutex;
 
     // ── Helpers ──────────────────────────────────────────────────────
 
@@ -700,9 +778,11 @@ mod tests {
         }
     }
 
+    // SK_PATH is process-global, so these tests must share the repo-wide
+    // lock; a module-local mutex races against every other test suite that
+    // repoints SK_PATH (dictation history, config, scriptlets, ...).
     fn history_env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
+        crate::test_utils::SK_PATH_TEST_LOCK.get_or_init(|| Mutex::new(()))
     }
 
     // ── Serde roundtrip ─────────────────────────────────────────────
@@ -1032,5 +1112,85 @@ mod tests {
     fn search_whitespace_only_query_returns_all() {
         let hits = rank_history_entries(sample_entries(), "   ", 100);
         assert_eq!(hits.len(), 3);
+    }
+
+    /// Screenshot regression (2026-07-11): "what are the" must not surface
+    /// conversations whose only hits are stopwords scattered mid-word or
+    /// across distant transcript turns.
+    #[test]
+    fn sentence_query_rejects_scattered_stopword_noise() {
+        let noise = AgentChatHistoryEntry {
+            timestamp: "2026-07-11T10:00:00Z".to_string(),
+            first_message: "Explain keyboard-first macOS launchers".to_string(),
+            message_count: 5,
+            session_id: "noise".to_string(),
+            title: "Explain keyboard-first macOS launchers".to_string(),
+            custom_title: None,
+            preview: "Somewhat shared themes and other reports are generated".to_string(),
+            search_text: normalize_search_text(
+                "Explain keyboard-first macOS launchers\nuser: what happened\nassistant: many unrelated words separate everything here from anything useful and more filler keeps going until eventually are appears and then much later after so much more filler text the final token shows up: the",
+            ),
+        };
+        let phrase = AgentChatHistoryEntry {
+            timestamp: "2026-07-01T10:00:00Z".to_string(),
+            first_message: "What are the release criteria?".to_string(),
+            message_count: 2,
+            session_id: "phrase".to_string(),
+            title: "What are the release criteria?".to_string(),
+            custom_title: None,
+            preview: "Ship gates are green".to_string(),
+            search_text: normalize_search_text("What are the release criteria?"),
+        };
+
+        let hits = rank_history_entries(vec![noise, phrase], "what are the", 10);
+        assert_eq!(hits.len(), 1, "only the visible phrase row qualifies");
+        assert_eq!(hits[0].entry.session_id, "phrase");
+        let evidence = hits[0].evidence.as_ref().expect("evidence present");
+        assert!(
+            !evidence.title_indices.is_empty(),
+            "phrase match highlights the title words"
+        );
+    }
+
+    /// Hidden transcript matches still qualify, rank below visible phrase
+    /// rows, and carry an excerpt explaining why they matched.
+    #[test]
+    fn hidden_transcript_match_ranks_below_visible_and_carries_excerpt() {
+        let hidden = AgentChatHistoryEntry {
+            timestamp: "2026-07-11T10:00:00Z".to_string(),
+            first_message: "Planning session".to_string(),
+            message_count: 8,
+            session_id: "hidden".to_string(),
+            title: "Planning session".to_string(),
+            custom_title: None,
+            preview: "Sounds good, next steps agreed".to_string(),
+            search_text: normalize_search_text(
+                "Planning session\nuser: so what are the migration constraints for launch\nassistant: mostly disk budget",
+            ),
+        };
+        let visible = AgentChatHistoryEntry {
+            timestamp: "2026-06-01T10:00:00Z".to_string(),
+            first_message: "What are the migration constraints?".to_string(),
+            message_count: 2,
+            session_id: "visible".to_string(),
+            title: "What are the migration constraints?".to_string(),
+            custom_title: None,
+            preview: "Disk budget mostly".to_string(),
+            search_text: normalize_search_text("What are the migration constraints?"),
+        };
+
+        let hits = rank_history_entries(vec![hidden, visible], "what are the migration", 10);
+        assert_eq!(hits.len(), 2);
+        assert_eq!(
+            hits[0].entry.session_id, "visible",
+            "visible phrase must outrank hidden transcript despite being older"
+        );
+        let hidden_evidence = hits[1].evidence.as_ref().expect("evidence present");
+        assert!(hidden_evidence.title_indices.is_empty());
+        let excerpt = hidden_evidence
+            .hidden_excerpt
+            .as_ref()
+            .expect("hidden match explains itself");
+        assert!(excerpt.text.contains("migration"));
     }
 }

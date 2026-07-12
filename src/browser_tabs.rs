@@ -103,6 +103,46 @@ pub(crate) fn browser_tab_host(tab: &BrowserTabInfo) -> String {
     host_from_url(&tab.url).to_string()
 }
 
+/// Returns whether the query is a single hostname-like token, optionally
+/// wrapped in an HTTP(S) scheme and/or one trailing slash.
+pub(crate) fn query_is_bare_domain(query: &str) -> bool {
+    let mut candidate = query.trim();
+    if candidate.is_empty() || candidate.chars().any(char::is_whitespace) {
+        return false;
+    }
+
+    if candidate
+        .get(..8)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://"))
+    {
+        candidate = &candidate[8..];
+    } else if candidate
+        .get(..7)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("http://"))
+    {
+        candidate = &candidate[7..];
+    }
+    candidate = candidate.strip_suffix('/').unwrap_or(candidate);
+
+    let labels = candidate.split('.').collect::<Vec<_>>();
+    if labels.len() < 2 {
+        return false;
+    }
+    if !labels.iter().all(|label| {
+        !label.is_empty()
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    }) {
+        return false;
+    }
+
+    let tld = labels.last().expect("two or more labels");
+    tld.len() >= 2 && tld.bytes().all(|byte| byte.is_ascii_alphabetic())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowserTabMatch {
     pub tab: BrowserTabInfo,
@@ -1205,6 +1245,36 @@ found ? "ok" : "not-found";
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bare_domain_query_recognizes_hostname_intent() {
+        for query in [
+            "x.com",
+            "news.ycombinator.com",
+            "www.example.org",
+            "HTTPS://WWW.Example.COM/",
+            "http://x.com",
+        ] {
+            assert!(query_is_bare_domain(query), "expected domain: {query:?}");
+        }
+
+        for query in [
+            "deploy",
+            "x.com launcher",
+            "~/src",
+            "/tmp/x",
+            "1.2.3",
+            ":tabs x.com",
+            "tabs:x.com",
+            "@x.com",
+            "https://x.com/path",
+        ] {
+            assert!(
+                !query_is_bare_domain(query),
+                "expected rejection: {query:?}"
+            );
+        }
+    }
 
     #[test]
     fn parse_tab_rows_returns_empty_for_blank_output() {

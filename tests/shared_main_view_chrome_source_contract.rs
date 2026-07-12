@@ -54,6 +54,20 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(shared.contains("pub(crate) fn render_main_view_chrome"));
     assert!(shared.contains("pub(crate) struct MainViewInputChrome"));
     assert!(shared.contains("pub(crate) struct MainViewHeaderChrome"));
+    assert!(shared.contains("pub(crate) fn canonical("));
+    assert!(shared.contains("pub(crate) fn context_only("));
+    assert!(shared.contains("pub(crate) fn main_view_header_metrics("));
+    let header_contract = source_between(
+        &shared,
+        "pub(crate) struct MainViewHeaderChrome",
+        "impl MainViewHeaderChrome",
+    );
+    assert!(
+        !header_contract.contains("pub(crate) padding_x")
+            && !header_contract.contains("pub(crate) padding_y")
+            && !header_contract.contains("pub(crate) gap"),
+        "surface renderers must not bypass the canonical header constructors with local geometry"
+    );
     assert!(shared.contains("pub(crate) struct MainViewDividerChrome"));
     assert!(shared.contains("pub(crate) struct MainViewChrome"));
     assert!(shared.contains("pub(crate) struct MainViewColumnMetrics"));
@@ -74,10 +88,12 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(shared.contains("MAIN_VIEW_HEADER_DIVIDER_ID"));
     assert!(shared.contains("MAIN_VIEW_MAIN_ID"));
     assert!(shared.contains(".id(MAIN_VIEW_HEADER_ID)"));
+    assert!(shared.contains(".debug_selector(|| MAIN_VIEW_HEADER_ID.to_string())"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_ZONE_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_CWD_BUTTON_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_SHELL_ID)"));
+    assert!(shared.contains(".debug_selector(|| MAIN_VIEW_SHELL_ID.to_string())"));
     assert!(shared.contains(".id(MAIN_VIEW_INPUT_SHELL_ID)"));
     assert!(!shared.contains(".id(MAIN_VIEW_INPUT_STATE_ICON_ID)"));
     assert!(
@@ -91,6 +107,7 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     );
     assert!(shared.contains(".id(MAIN_VIEW_HEADER_DIVIDER_ID)"));
     assert!(shared.contains(".id(MAIN_VIEW_MAIN_ID)"));
+    assert!(shared.contains(".debug_selector(|| MAIN_VIEW_MAIN_ID.to_string())"));
     assert!(shared.contains("def.search"));
     assert!(shared.contains("search.text_inset_x"));
     assert!(shared.contains("def.icon.container_size"));
@@ -114,8 +131,9 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
         ),
         "header Tab text should use the footer key/button renderer instead of local styling"
     );
-    assert!(shared.contains("key: \"⇥\".into()"));
-    assert!(shared.contains("key: \"⇧⇥\".into()"));
+    assert!(shared.contains("key: if tab_key_active { \"⇥\" } else { \"\" }.into()"));
+    assert!(shared.contains("if labels.shift_tab_key_active"));
+    assert!(shared.contains("\"⇧⇥\""));
     assert!(!shared.contains("key: \"Tab\".into()"));
     assert!(!shared.contains("key: \"Shift+Tab\".into()"));
     assert!(shared.contains("slot_width_px: None"));
@@ -151,17 +169,20 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
         ui_window.contains("config.left_info = None;"),
         "Agent Chat footer enrichment must suppress old left-info model/cwd marker now owned by the header"
     );
-    assert!(app_view_state.contains("pub(crate) fn uses_shared_main_view_header"));
+    assert!(app_view_state.contains("pub(crate) enum MainViewHeaderInputPolicy"));
+    assert!(app_view_state.contains("pub(crate) fn main_view_header_input_policy"));
+    assert!(app_view_state.contains("pub(crate) fn uses_view_owned_main_window_shell"));
+    assert!(!app_view_state.contains("_ => MainViewHeaderInputPolicy"));
     assert!(app_view_state.contains("AppView::ScriptList"));
     assert!(app_view_state.contains("| AppView::FileSearchView { .. }"));
     assert!(app_view_state.contains("| AppView::ClipboardHistoryView { .. }"));
     assert!(app_view_state.contains("| AppView::ProfileSearchView { .. }"));
-    assert!(app_view_state.contains("| AppView::AgentChatView { .. }"));
-    assert!(render_impl.contains(
-        "let shared_header_owned_by_view = self.current_view.uses_shared_main_view_header();"
-    ));
+    assert!(app_view_state.contains("AppView::AgentChatView { .. } =>"));
+    assert!(render_impl.contains(".uses_view_owned_main_window_shell(&*cx)"));
     assert!(render_impl.contains("render_clickable_main_view_context_header"));
     assert!(render_impl.contains("main_content_container"));
+    assert!(render_impl.contains(".id(crate::components::main_view_chrome::MAIN_VIEW_SHELL_ID)"));
+    assert!(render_impl.contains(".id(crate::components::main_view_chrome::MAIN_VIEW_MAIN_ID)"));
 
     assert!(script_list.contains("render_main_view_input_shell"));
     assert!(script_list.contains("render_clickable_main_view_context_zone"));
@@ -170,8 +191,7 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(script_list.contains("render_main_view_shell()"));
     assert!(script_list.contains("render_main_view_chrome"));
     assert!(script_list.contains("MainViewInputChrome"));
-    assert!(script_list.contains("MainViewHeaderChrome"));
-    assert!(script_list.contains("context: Some("));
+    assert!(script_list.contains("MainViewHeaderChrome::canonical("));
     assert!(script_list.contains("trailing: Vec::new()"));
     assert!(!script_list.contains("leading:"));
     assert!(
@@ -182,8 +202,9 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(script_list.contains("visible: false"));
     assert!(script_list.contains("MainViewChrome"));
     assert!(
-        script_list.contains("let header_padding_x = shell.header_padding_x;"),
-        "ScriptList should source left/right main-view input padding from the active theme shell"
+        !script_list.contains("let header_padding_y = if")
+            && !script_list.contains("let header_gap = if"),
+        "ScriptList header geometry must stay owned by MainViewHeaderChrome::canonical across designs"
     );
     assert!(
         script_list.contains("margin_x: shell.divider_margin_x"),
@@ -193,19 +214,12 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(agent_chat.contains("render_main_view_shell()"));
     assert!(agent_chat.contains("render_main_view_chrome"));
     assert!(agent_chat.contains("MainViewInputChrome"));
-    assert!(agent_chat.contains("MainViewHeaderChrome"));
+    assert!(agent_chat.contains("MainViewHeaderChrome::canonical("));
     assert!(
         !agent_chat.contains("\"message-circle\""),
         "Agent Chat composer input must not inject an extra leading message icon"
     );
-    assert!(
-        !agent_chat.contains("leading:"),
-        "Agent Chat composer input should match main-menu input positioning without a leading slot"
-    );
-    assert!(
-        agent_chat.contains("footer_snapshot.profile_display"),
-        "Agent Chat shared header must show the active profile, not a model-only label"
-    );
+    assert!(agent_chat.contains("footer_snapshot.agent_model_header_label()"));
     assert!(
         !agent_chat.contains("action_label: Some(SharedString::from(\"Attach\"))"),
         "Agent Chat composer picker rows must not show per-row Attach accessories"
@@ -214,7 +228,6 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
         agent_chat.contains("FooterAction::Run if button.label == \"Attach\" => \"↵ Attach\""),
         "Agent Chat footer label must derive the Attach primary action from the button spec"
     );
-    assert!(agent_chat.contains("context: Some("));
     assert!(agent_chat.contains("MainViewDividerChrome"));
     assert!(agent_chat.contains("visible: false"));
     assert!(agent_chat.contains("MainViewChrome"));
@@ -224,8 +237,7 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(file_search.contains("render_main_view_shell()"));
     assert!(file_search.contains("render_main_view_chrome"));
     assert!(file_search.contains("MainViewInputChrome"));
-    assert!(file_search.contains("MainViewHeaderChrome"));
-    assert!(file_search.contains("context: Some("));
+    assert!(file_search.contains("MainViewHeaderChrome::canonical("));
     assert!(file_search.contains("trailing: Vec::new()"));
     assert!(!file_search.contains("leading:"));
     assert!(file_search.contains("MainViewDividerChrome"));
@@ -241,8 +253,7 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(clipboard.contains("render_main_view_shell()"));
     assert!(clipboard.contains("render_main_view_chrome"));
     assert!(clipboard.contains("MainViewInputChrome"));
-    assert!(clipboard.contains("MainViewHeaderChrome"));
-    assert!(clipboard.contains("context: Some("));
+    assert!(clipboard.contains("MainViewHeaderChrome::canonical("));
     assert!(clipboard.contains("trailing: Vec::new()"));
     assert!(!clipboard.contains("leading:"));
     assert!(clipboard.contains("MainViewDividerChrome"));
@@ -258,8 +269,7 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(profile_search.contains("render_main_view_shell()"));
     assert!(profile_search.contains("render_main_view_chrome"));
     assert!(profile_search.contains("MainViewInputChrome"));
-    assert!(profile_search.contains("MainViewHeaderChrome"));
-    assert!(profile_search.contains("context: Some("));
+    assert!(profile_search.contains("MainViewHeaderChrome::canonical("));
     assert!(profile_search.contains("trailing: Vec::new()"));
     assert!(!profile_search.contains("leading:"));
     assert!(profile_search.contains("MainViewDividerChrome"));
@@ -281,8 +291,9 @@ fn header_info_bar_reuses_footer_key_button_components() {
     assert!(shared.contains("render_footer_hint_button_like"));
     assert!(shared.contains("FooterHintButtonSpec"));
     assert!(shared.contains("label: cwd_label.clone().into()"));
-    assert!(shared.contains("key: \"⇥\".into()"));
-    assert!(shared.contains("key: \"⇧⇥\".into()"));
+    assert!(shared.contains("key: if tab_key_active { \"⇥\" } else { \"\" }.into()"));
+    assert!(shared.contains("if labels.shift_tab_key_active"));
+    assert!(shared.contains("\"⇧⇥\""));
     assert!(!shared.contains("key: \"Tab\".into()"));
     assert!(!shared.contains("key: \"Shift+Tab\".into()"));
     assert!(shared.contains("slot_width_px: None"));
@@ -309,7 +320,9 @@ fn shared_main_view_columns_own_text_column_math() {
         "row leading x should come from the same row padding used by list rows"
     );
     assert!(
-        shared.contains("main_view_row_leading_x(def) + def.icon.container_size + def.row.icon_text_gap"),
+        shared.contains(
+            "main_view_row_leading_x(def) + def.icon.container_size + def.row.icon_text_gap"
+        ),
         "text column math should stay available for rows without leaking icons into the input chrome"
     );
     assert!(
@@ -379,6 +392,15 @@ fn agent_chat_composer_shell_consumes_main_menu_header_geometry() {
     let ui_variant = read_source("src/ai/agent_chat/ui/ui_variant.rs");
 
     assert!(agent_chat.contains("crate::designs::current_main_menu_theme().def()"));
+    let canonical_text_style = source_between(
+        &agent_chat,
+        "fn current_main_menu() -> Self",
+        "fn font(self) -> gpui::Font",
+    );
+    assert!(canonical_text_style.contains("font_size: search.font_size"));
+    assert!(canonical_text_style.contains("font_weight: Some(search.font_weight)"));
+    assert!(canonical_text_style.contains("line_height: search.height"));
+    assert!(agent_chat.contains("AgentChatComposerTextStyle::for_main_window("));
     assert!(agent_chat.contains("fn render_composer_input_shell"));
     assert!(agent_chat.contains("render_main_view_input_shell"));
     assert!(agent_chat.contains("render_main_view_header"));
@@ -407,11 +429,11 @@ fn agent_chat_composer_shell_consumes_main_menu_header_geometry() {
     assert!(agent_chat.contains("render_main_view_chrome"));
     assert!(!agent_chat.contains("\"agent-chat-input-profile-icon\""));
     assert!(!agent_chat.contains("trailing: vec![profile_icon]"));
-    assert!(agent_chat.contains("trailing: Vec::new()"));
-    assert!(agent_chat.contains("padding_x: menu_def.shell.header_padding_x"));
+    assert!(agent_chat.contains("trailing: vec![Self::render_send_button_for_state("));
+    assert!(agent_chat.contains("MainViewHeaderChrome::canonical("));
     assert!(agent_chat.contains("margin_x: menu_def.shell.divider_margin_x"));
     assert!(agent_chat.contains("visible: false"));
-    assert!(agent_chat.contains("padding_y: menu_def.shell.header_padding_y"));
+    assert!(!agent_chat.contains("padding_y: menu_def.shell.header_padding_y"));
     assert!(
         !agent_chat.contains(".id(\"agent-chat-shell\")"),
         "standard Agent Chat must use the shared main-view root shell instead of local feature shell chrome"
@@ -469,20 +491,38 @@ fn layout_model_exposes_shared_main_view_chrome_names() {
 }
 
 #[test]
-fn file_search_layout_model_uses_main_view_context_chrome() {
+fn main_view_layout_models_use_shared_context_chrome() {
     let layout = read_source("src/app_layout/build_layout_info.rs");
     let bounds = read_source("src/app_layout/build_component_bounds.rs");
 
-    assert!(layout.contains("| AppView::FileSearchView { .. }"));
-    assert!(layout.contains("| AppView::ClipboardHistoryView { .. }"));
-    assert!(layout.contains("| AppView::ProfileSearchView { .. }"));
-    assert!(layout.contains("| AppView::AgentChatView { .. }"));
-    assert!(layout
-        .contains("| AppView::AgentChatView { .. } => crate::window_resize::ViewType::MainWindow"));
-    assert!(bounds.contains("| AppView::FileSearchView { .. }"));
-    assert!(bounds.contains("| AppView::ClipboardHistoryView { .. }"));
-    assert!(bounds.contains("| AppView::ProfileSearchView { .. }"));
-    assert!(bounds.contains("| AppView::AgentChatView { .. }"));
+    for model in [&layout, &bounds] {
+        assert!(model.contains("resolved_main_view_header_input_policy"));
+        assert!(model.contains("main_view_header_metrics(menu_def, input_height)"));
+        assert!(model.contains("self.current_view.native_footer_surface().is_some()"));
+        assert!(model.contains("\"MainViewHeader\""));
+        assert!(model.contains("\"MainViewContextZone\""));
+        assert!(model.contains("\"MainViewInput\""));
+        assert!(model.contains("\"MainViewMain\""));
+    }
+
+    let shared_footer = layout
+        .find("LayoutComponentInfo::new(\"MainViewFooter\"")
+        .expect("layout model must expose the shared native footer");
+    let first_detailed_early_return = layout
+        .find("if matches!(self.current_view, AppView::PermissionsWizardView")
+        .expect("permissions detailed receipt must remain present");
+    assert!(
+        shared_footer < first_detailed_early_return,
+        "MainViewFooter must be emitted before view-specific early returns"
+    );
+
+    let permissions = source_between(
+        &layout,
+        "if matches!(self.current_view, AppView::PermissionsWizardView",
+        "if matches!(self.current_view, AppView::About",
+    );
+    assert!(permissions.contains("let title_y = content_top + frame.inset_y;"));
+    assert!(permissions.contains(".with_parent(\"MainViewMain\")"));
 }
 
 #[test]
@@ -536,14 +576,12 @@ fn agent_chat_component_bounds_model_uses_main_view_chrome() {
     assert!(bounds.contains("\"AgentChatEmptyGuidanceShortcutSlot\""));
     assert!(bounds.contains("\"AgentChatEmptyGuidanceLabelColumn\""));
     assert!(bounds.contains("main_view_content_columns(menu_def)"));
-    assert!(
-        bounds.contains("AppView::ScriptList")
-            && bounds.contains("| AppView::FileSearchView { .. }")
-            && bounds.contains("| AppView::ClipboardHistoryView { .. }")
-            && bounds.contains("| AppView::ProfileSearchView { .. }")
-            && bounds.contains("| AppView::AgentChatView { .. }"),
-        "debug component bounds should emit shared input details for ScriptList, FileSearch, Clipboard History, ProfileSearch, and AgentChat"
-    );
+    assert!(bounds.contains("resolved_main_view_header_input_policy"));
+    assert!(bounds.contains("main_view_header_metrics(menu_def, input_height)"));
+    assert!(bounds.contains("agent_chat_baseline_input_height"));
+    assert!(bounds.contains("AppView::DayPage { .. } =>"));
+    assert!(bounds.contains("\"DayPageSurface\""));
+    assert!(!bounds.contains("AppView::AgentChatView { .. } | AppView::DayPage { .. }"));
 }
 
 #[test]

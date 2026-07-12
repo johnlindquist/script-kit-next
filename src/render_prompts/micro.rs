@@ -182,14 +182,17 @@ impl ScriptListApp {
                                         .flex()
                                         .flex_row()
                                         .items_center()
-                                        .child(
-                                            div()
-                                                .w(px(CURSOR_WIDTH))
-                                                .h(px(CURSOR_HEIGHT_LG))
-                                                .when(is_cursor_visible, |d: gpui::Div| {
-                                                    d.bg(rgb(text_primary))
-                                                }),
-                                        )
+                                        .when(is_cursor_visible, |d: gpui::Div| {
+                                            d.child(
+                                                crate::components::text_input::pulse_cursor_bar(
+                                                    div()
+                                                        .w(px(CURSOR_WIDTH))
+                                                        .h(px(CURSOR_HEIGHT_LG))
+                                                        .bg(rgb(text_primary)),
+                                                    "micro-input-cursor-pulse",
+                                                ),
+                                            )
+                                        })
                                         .child(
                                             div()
                                                 .ml(px(-(CURSOR_WIDTH)))

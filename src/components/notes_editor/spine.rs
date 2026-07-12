@@ -412,6 +412,16 @@ pub(crate) fn spine_projection_owns_editor_list(
         }
     }
 
+    // `-` (flow search) is an Agent Chat composer feature. In a note, a
+    // leading dash is a markdown bullet — never a flow trigger, so the
+    // editor overlay must not claim it.
+    if matches!(
+        projection.active_segment_kind,
+        crate::spine::SpineSegmentKind::Flow { .. }
+    ) {
+        return false;
+    }
+
     !matches!(
         projection.active_segment_kind,
         crate::spine::SpineSegmentKind::FreeText

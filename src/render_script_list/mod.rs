@@ -60,9 +60,9 @@ fn inline_calc_list_item_selected_overlay_rgba(
     list_tokens: crate::designs::MainMenuListTokens,
     color_resolver: crate::theme::ColorResolver,
 ) -> u32 {
-    let selected_overlay_alpha =
-        ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32)
-            .max(list_tokens.inline_calc_selected_overlay_min_alpha);
+    let selected_overlay_alpha = ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round()
+        as u32)
+        .max(list_tokens.inline_calc_selected_overlay_min_alpha);
     (color_resolver.primary_accent() << 8) | selected_overlay_alpha
 }
 
@@ -280,8 +280,7 @@ fn render_menu_syntax_fragment_preview_row(
                 .text_size(px(list_tokens.main_hint_fragment_value_font_size))
                 .line_height(px(list_tokens.main_hint_fragment_value_line_height))
                 .text_color(rgba(
-                    (theme.colors.text.primary << 8)
-                        | list_tokens.main_hint_fragment_value_alpha,
+                    (theme.colors.text.primary << 8) | list_tokens.main_hint_fragment_value_alpha,
                 ))
                 .child(preview_text),
         )
@@ -324,8 +323,10 @@ fn render_menu_syntax_form_field(
         .border_1()
         .border_color(border_color)
         .bg(if field.focused {
-            rgba((theme.colors.background.search_box << 8)
-                | list_tokens.main_hint_form_focused_bg_alpha)
+            rgba(
+                (theme.colors.background.search_box << 8)
+                    | list_tokens.main_hint_form_focused_bg_alpha,
+            )
         } else {
             rgba((theme.colors.background.search_box << 8) | list_tokens.main_hint_form_bg_alpha)
         })
@@ -342,8 +343,7 @@ fn render_menu_syntax_form_field(
                         .line_height(px(list_tokens.main_hint_form_label_line_height))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(rgba(
-                            (theme.colors.text.muted << 8)
-                                | list_tokens.main_hint_form_label_alpha,
+                            (theme.colors.text.muted << 8) | list_tokens.main_hint_form_label_alpha,
                         ))
                         .child(field.label.clone()),
                 ),
@@ -355,9 +355,9 @@ fn render_menu_syntax_form_field(
             .line_height(px(list_tokens.main_hint_form_input_line_height))
             .px(px(0.0))
             .py(px(0.0))
-            .with_size(gpui_component::Size::Size(
-                px(list_tokens.main_hint_form_input_font_size),
-            ))
+            .with_size(gpui_component::Size::Size(px(
+                list_tokens.main_hint_form_input_font_size
+            )))
             .appearance(false)
             .bordered(false)
             .focus_bordered(false);
@@ -385,10 +385,7 @@ fn render_menu_syntax_form_field(
                 .text_size(px(list_tokens.main_hint_form_value_font_size))
                 .line_height(px(list_tokens.main_hint_form_input_line_height))
                 .text_color(if has_value {
-                    rgba(
-                        (theme.colors.text.primary << 8)
-                            | list_tokens.main_hint_form_value_alpha,
-                    )
+                    rgba((theme.colors.text.primary << 8) | list_tokens.main_hint_form_value_alpha)
                 } else {
                     placeholder_color
                 })
@@ -528,12 +525,9 @@ fn render_menu_syntax_main_hint(
                         .when(!hint.status_chips.is_empty(), |d| {
                             let skip = if hint.mode_chip.is_some() { 1 } else { 0 };
                             d.children(
-                                hint.status_chips
-                                    .iter()
-                                    .skip(skip)
-                                    .map(|chip| {
-                                        render_menu_syntax_hint_chip(theme, list_tokens, chip)
-                                    }),
+                                hint.status_chips.iter().skip(skip).map(|chip| {
+                                    render_menu_syntax_hint_chip(theme, list_tokens, chip)
+                                }),
                             )
                         })
                         // Single-chip status (legacy non-capture path) — only render
@@ -591,11 +585,9 @@ fn render_menu_syntax_main_hint(
                         .flex()
                         .flex_col()
                         .gap(px(list_tokens.main_hint_fragment_rows_gap))
-                        .children(
-                            preview.rows.iter().map(|row| {
-                                render_menu_syntax_fragment_preview_row(theme, list_tokens, row)
-                            }),
-                        ),
+                        .children(preview.rows.iter().map(|row| {
+                            render_menu_syntax_fragment_preview_row(theme, list_tokens, row)
+                        })),
                 )
             })
         })
@@ -603,8 +595,7 @@ fn render_menu_syntax_main_hint(
             d.child(
                 crate::components::non_list_card("menu-syntax-main-hint-warning", palette, metrics)
                     .border_color(rgba(
-                        (theme.colors.ui.warning << 8)
-                            | list_tokens.main_hint_warning_border_alpha,
+                        (theme.colors.ui.warning << 8) | list_tokens.main_hint_warning_border_alpha,
                     ))
                     .bg(rgba(
                         (theme.colors.ui.warning << 8) | list_tokens.main_hint_warning_bg_alpha,
@@ -996,8 +987,8 @@ impl ScriptListApp {
         // Keep guide cards available for bare/partial `:` refine entry, but
         // let completed advanced queries render their filtered results first.
         // Empty-state hint cards are handled by the item-count branch below.
-        let advanced_query_guide_hint =
-            (!menu_syntax_owns_main_list && !active_filter_head_owns_main_list_for_render)
+        let advanced_query_guide_hint = (!menu_syntax_owns_main_list
+            && !active_filter_head_owns_main_list_for_render)
             .then(|| self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true))
             .flatten()
             .filter(|hint| {
@@ -1005,7 +996,7 @@ impl ScriptListApp {
                     hint.kind,
                     crate::menu_syntax::MenuSyntaxMainHintKind::AdvancedQueryGuide
                 )
-        });
+            });
 
         let main_hint_list_tokens = self.current_main_menu_theme.def().list;
         let active_filter_empty_copy = "There are no search results with this filter applied.";
@@ -1302,6 +1293,7 @@ impl ScriptListApp {
                                                 ),
                                             );
                                             this.arm_spine_empty_subsearch_selection();
+                                            this.mark_main_menu_selection_user_moved();
                                             // Always select the item on any click
                                             if !was_selected {
                                                 this.clear_menu_syntax_filter_accept_hint();
@@ -1493,9 +1485,8 @@ impl ScriptListApp {
                     crate::list_item::effective_source_status_row_height_for_theme(
                         current_main_menu_theme,
                     );
-                let list_item_height = crate::list_item::effective_list_item_height_for_theme(
-                    current_main_menu_theme,
-                );
+                let list_item_height =
+                    crate::list_item::effective_list_item_height_for_theme(current_main_menu_theme);
                 let content_height = px(grouped_items
                     .iter()
                     .enumerate()
@@ -1546,6 +1537,7 @@ impl ScriptListApp {
                         // cannot drift the viewport away from the active row.
                         cx.stop_propagation();
                         this.main_list_suppress_hover_until_mouse_move = true;
+                        this.mark_main_menu_selection_user_moved();
                         if this.hovered_index.take().is_some() {
                             cx.notify();
                         }
@@ -2175,18 +2167,6 @@ impl ScriptListApp {
             .on_key_down(handle_key)
             .on_key_up(handle_key_up);
 
-        let header_padding_x = shell.header_padding_x;
-        let header_padding_y = if is_default_design {
-            shell.header_padding_y
-        } else {
-            design_spacing.padding_sm
-        };
-        let header_gap = if is_default_design {
-            shell.header_gap
-        } else {
-            design_spacing.gap_md
-        };
-
         let input_body = if handler_form_owns_input_for_render
             && menu_syntax_text_contains_line_break(&filter_text_for_render)
         {
@@ -2218,13 +2198,11 @@ impl ScriptListApp {
             },
         );
 
-        let header = crate::components::main_view_chrome::MainViewHeaderChrome {
-            context: Some(self.render_clickable_main_view_context_zone(menu_def, cx)),
+        let header = crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
+            menu_def,
+            self.render_clickable_main_view_context_zone(menu_def, cx),
             input,
-            padding_x: header_padding_x,
-            padding_y: header_padding_y,
-            gap: header_gap,
-        };
+        );
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {
             margin_x: shell.divider_margin_x,
             height: if is_default_design {
@@ -2550,11 +2528,12 @@ mod render_script_list_footer_tests {
         let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
 
         let expected_alpha =
-            ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32)
-                .max(crate::designs::MainMenuThemeVariant::InfoBarBase
+            ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32).max(
+                crate::designs::MainMenuThemeVariant::InfoBarBase
                     .def()
                     .list
-                    .inline_calc_selected_overlay_min_alpha);
+                    .inline_calc_selected_overlay_min_alpha,
+            );
         let expected = (color_resolver.primary_accent() << 8) | expected_alpha;
 
         assert_eq!(

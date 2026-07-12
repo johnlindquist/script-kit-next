@@ -1,0 +1,219 @@
+/* Notes screen: stage layout and emulator calibration.
+ *
+ * Everything visual inside .sk-window--notes resolves through the generated
+ * --sk-* custom properties (design_contract notes section). The only
+ * declared literals live under --sk-emulator-*: BROWSER-ONLY calibration
+ * (blur, native traffic-light raster, native NSWindow radius/shadow) that
+ * never maps back to Rust. See ./known-divergence.json.
+ */
+
+:root {
+  /* ── True emulator calibration ─────────────────────────────────────── */
+  --sk-emulator-menu-blur: 32px;
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 28 31 / 0.42),
+    rgb(20 20 23 / 0.42)
+  );
+  --sk-emulator-desktop: radial-gradient(
+      1200px 700px at 20% 10%,
+      rgb(64 46 88 / 0.9),
+      transparent 60%
+    ),
+    radial-gradient(
+      1000px 800px at 85% 80%,
+      rgb(26 58 74 / 0.9),
+      transparent 55%
+    ),
+    linear-gradient(160deg, rgb(24 22 30), rgb(12 12 16));
+  /* Native NSWindow chrome: system-controlled corner radius + shadow — the
+   * Notes window is a standard titled NSPanel, NOT the liquid-glass main
+   * window (no LIQUID_GLASS_WINDOW_RADIUS_PX). Approximation only. */
+  --sk-emulator-notes-window-radius: 12px;
+  --sk-emulator-notes-window-shadow: 0 18px 50px rgb(0 0 0 / 0.5);
+  /* Native traffic-light raster (AppKit paints these). */
+  --sk-emulator-traffic-red: rgb(255 95 87);
+  --sk-emulator-traffic-yellow: rgb(255 189 46);
+  --sk-emulator-traffic-green: rgb(40 201 64);
+  --sk-emulator-traffic-diameter: 12px;
+  --sk-emulator-traffic-gap: 8px;
+}
+
+body {
+  margin: 0;
+}
+
+/* Synthetic desktop backdrop for the vibrancy material to sample. */
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-desktop);
+}
+
+/* ── Window shell overrides: Notes is its own 350×280 NSPanel ─────────── */
+/* The shared .sk-window sizes to the MAIN window; Notes overrides size and
+ * radius. Colors reuse generated tokens 1:1: the Root wrapper paints
+ * background.main @ opacity.vibrancy_background — the exact resolver behind
+ * --sk-window-vibrancy-tint. */
+.sk-window--notes {
+  width: var(--sk-notes-window-width);
+  height: var(--sk-notes-window-height);
+  border-radius: var(--sk-emulator-notes-window-radius);
+  box-shadow: var(--sk-emulator-notes-window-shadow);
+}
+
+/* ── Titlebar (notes::render_editor_titlebar) ─────────────────────────── */
+.sk-notes-titlebar {
+  position: relative;
+  height: var(--sk-notes-titlebar-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding-inline: var(--sk-notes-titlebar-padding-x);
+}
+
+.sk-notes-traffic {
+  position: absolute;
+  left: var(--sk-notes-traffic-x);
+  top: var(--sk-notes-traffic-y);
+  display: flex;
+  gap: var(--sk-emulator-traffic-gap);
+}
+
+.sk-notes-traffic__dot {
+  width: var(--sk-emulator-traffic-diameter);
+  height: var(--sk-emulator-traffic-diameter);
+  border-radius: var(--sk-emulator-traffic-diameter);
+}
+
+.sk-notes-traffic__dot[data-color="red"] {
+  background: var(--sk-emulator-traffic-red);
+}
+.sk-notes-traffic__dot[data-color="yellow"] {
+  background: var(--sk-emulator-traffic-yellow);
+}
+.sk-notes-traffic__dot[data-color="green"] {
+  background: var(--sk-emulator-traffic-green);
+}
+
+.sk-notes-titlebar__reserve {
+  flex: none;
+}
+.sk-notes-titlebar__reserve--traffic {
+  width: var(--sk-notes-titlebar-traffic-width);
+}
+.sk-notes-titlebar__reserve--icons {
+  width: var(--sk-notes-titlebar-icons-width);
+}
+
+/* Title: muted_foreground = text.primary @ opacity.text_placeholder (the
+ * gpui-component theme routes muted_foreground through the placeholder
+ * ladder), further dimmed by the rest-state element opacity. */
+.sk-notes-titlebar__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: var(--sk-notes-titlebar-title-font-size);
+  color: var(--sk-text-placeholder);
+  opacity: var(--sk-notes-titlebar-title-rest-opacity);
+}
+
+/* ── Editor body (components::notes_editor::render_input) ─────────────── */
+.sk-notes-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--sk-notes-editor-padding-y) var(--sk-notes-editor-padding-x);
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  font-size: var(--sk-notes-editor-font-size);
+  color: var(--sk-text-name);
+}
+
+/* The real Input paints every styled run inside a FIXED 20px line box
+ * (resolved.notes.editor.lineBoxHeight) and clips glyph extents that exceed
+ * it — the bold markdown title loses its upper glyph area exactly like the
+ * reference capture (notesMarkdown.titleGlyphExtentsVsLineBox). Each visual
+ * row is one wrapper; the observed soft-wrap of the long list line is
+ * encoded as two wrappers (see known-divergence.json). */
+.sk-notes-editor__line {
+  position: relative;
+  height: var(--sk-notes-editor-line-box-height);
+  line-height: var(--sk-notes-editor-line-box-height);
+  overflow: clip;
+  white-space: pre;
+}
+
+/* Markdown capture styles — resolved from the SAME gpui-component highlight
+ * theme the Input paints with (title / punctuation.special /
+ * punctuation.list_marker). Same nominal font size as body text: there is
+ * NO capture font-size in the contract; the weight + line-box clip make the
+ * heading read larger. */
+.sk-notes-markdown-title {
+  color: var(--sk-notes-markdown-title-color);
+  font-weight: var(--sk-notes-markdown-title-font-weight);
+}
+.sk-notes-markdown-heading-marker {
+  color: var(--sk-notes-markdown-heading-marker-color);
+}
+.sk-notes-markdown-list-marker {
+  color: var(--sk-notes-markdown-list-marker-color);
+  font-weight: var(--sk-notes-markdown-list-marker-font-weight);
+}
+
+/* Caret: GPUI paints an overlay quad at the glyph advance, vertically
+ * centered in the line box ((lineBox − caretHeight) / 2) — it never
+ * displaces text flow. `left` in ch mirrors the mono glyph advance after
+ * "- Footer buttons hug" (20 cells); exact x is raster-dependent
+ * (known-divergence). */
+.sk-notes-caret {
+  position: absolute;
+  left: 20ch;
+  top: calc(
+    (var(--sk-notes-editor-line-box-height) - var(--sk-notes-caret-height)) / 2
+  );
+  width: var(--sk-notes-caret-width);
+  height: var(--sk-notes-caret-height);
+  background: var(--sk-text-name);
+}
+
+/* ── Footer strip (notes::render_editor_footer) ───────────────────────── */
+/* GPUI-rendered inside the window (NOT the native AppKit overlay the main
+ * window uses). Painted band = resolved.notes.footer.intrinsicHeight (32px,
+ * the universal action-button row) — deliberately NOT the 28px layout
+ * reservation (notesFooter.layoutReservationVsIntrinsicPaint). Whole strip
+ * paints at rest opacity 0.5 when unhovered. */
+.sk-notes-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--sk-notes-footer-height);
+  padding-inline: var(--sk-notes-footer-content-inset-x);
+  opacity: var(--sk-notes-footer-rest-opacity);
+}
+
+.sk-notes-footer__status {
+  min-width: var(--sk-notes-footer-status-min-width);
+  display: flex;
+  align-items: center;
+  font-size: var(--sk-notes-footer-status-font-size);
+  color: var(--sk-color-accent);
+}
+
+.sk-notes-footer__lane {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Buttons reuse the shared .sk-footer-action / .sk-keycap frames — the Rust
+ * side shares footer_chrome::render_footer_hint_action_button_frame with the
+ * main window footer. Row gap is FOOTER_ACTION_ITEM_GAP_PX. */
+.sk-notes-footer__buttons {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sk-notes-footer-action-gap);
+}

@@ -1,0 +1,237 @@
+/* Clipboard-history screen: stage layout, emulator calibration, and the
+ * screen-owned split (list pane + preview pane) anatomy.
+ *
+ * Rust anatomy this mirrors (src/render_builtins/clipboard.rs render):
+ *   main window 750×480 (MainWindowMode::Full), shared main-view chrome:
+ *   header (padding-y 4 + context 22 + gap 2 + search 26 = 58), divider
+ *   hidden, main = flex row of two flex_1 panes, native footer host 36.
+ *   Left pane: py 4 → persistent leading section header ("Clipboard" /
+ *   "Results", 26px first-slot, POLISH.md §2) → uniform_list of 44px
+ *   ListItem rows (InfoBarBase metrics via MainMenuThemeVariant::default()).
+ *   Right pane: preview panel (clipboard_preview.rs) — content block +
+ *   "Information" table.
+ *
+ * Everything visual resolves through --sk-* custom properties. The
+ * --sk-clipboard-* properties below are PROPOSED generated tokens (see
+ * briefs/clipboard-history-brief.md "Tokens to generate"); until
+ * export_design_tokens ships the clipboard section each one aliases a
+ * numerically-matching existing generated token (literal-free var()/calc
+ * indirection only — the alias is a placeholder, the NAME is the contract).
+ * --sk-emulator-* values are browser-only calibration and never map to Rust.
+ */
+
+:root {
+  --sk-emulator-menu-blur: 32px;
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 28 31 / 0.42),
+    rgb(20 20 23 / 0.42)
+  );
+  --sk-emulator-desktop: radial-gradient(
+      1200px 700px at 20% 10%,
+      rgb(64 46 88 / 0.9),
+      transparent 60%
+    ),
+    radial-gradient(
+      1000px 800px at 85% 80%,
+      rgb(26 58 74 / 0.9),
+      transparent 55%
+    ),
+    linear-gradient(160deg, rgb(24 22 30), rgb(12 12 16));
+
+  /* ── Proposed clipboard tokens → placeholder aliases ─────────────────── */
+  /* List pane vertical padding: DesignSpacing.padding_xs = 4. */
+  --sk-clipboard-list-pane-padding-y: var(--sk-main-menu-header-padding-y);
+  /* Leading section header renders through resolved_list_item_metrics()
+   * (legacy default_main_menu), NOT the InfoBarBase 28px slot:
+   * first slot = 32 − 12/2 = 26, padding-top = 6. */
+  --sk-clipboard-first-section-slot-height: calc(
+    var(--sk-footer-rail-height) - var(--sk-main-menu-section-gap)
+  );
+  --sk-clipboard-first-section-padding-top: var(--sk-main-menu-section-gap);
+  /* Emoji icon glyph renders at .text_sm (14px). */
+  --sk-clipboard-row-emoji-font-size: var(--sk-main-menu-name-font-size);
+  /* Preview panel surface: bg = theme background.main at opacity.main×0.30
+   * (rgb(15 15 15 / 0.1490…)); alias is the same hue at 0.298. */
+  --sk-clipboard-preview-background: var(--sk-window-vibrancy-tint);
+  /* border-left: ui.border at ALPHA_BORDER_SUBTLE 0x30 (0.1882…); alias 0.247. */
+  --sk-clipboard-preview-border: var(--sk-chrome-border);
+  /* padding = DesignSpacing.padding_lg 16; gap = gap_sm 4. */
+  --sk-clipboard-preview-padding: var(--sk-main-menu-content-inset-x);
+  --sk-clipboard-preview-gap: var(--sk-footer-content-gap);
+  /* Content block: padding_md 12, radius_md 8,
+   * bg = search_box at opacity.main×0.40 (rgb(42 42 42 / 0.2)); the white
+   * hover alias reads as the same "slightly lighter block" on dark. */
+  --sk-clipboard-preview-content-padding: var(--sk-main-menu-section-padding-top);
+  --sk-clipboard-preview-content-radius: var(--sk-main-menu-context-edge-outset-x);
+  --sk-clipboard-preview-content-background: var(--sk-theme-hover-background);
+  /* Mono content text: .text_sm 14 with GPUI phi line height round(14×1.618)=23. */
+  --sk-clipboard-preview-content-font-size: var(--sk-main-menu-name-font-size);
+  --sk-clipboard-preview-content-line-height: var(--sk-confirm-body-line-height);
+  /* Information block: border-top ui.border at ALPHA_DIVIDER 0x60 (0.3765…);
+   * alias 0.247. padding-top = padding_md 12, gap = gap_sm 4, row gap = gap_md 8. */
+  --sk-clipboard-preview-info-divider: var(--sk-chrome-border);
+  --sk-clipboard-preview-info-padding-top: var(--sk-main-menu-section-padding-top);
+  --sk-clipboard-preview-info-gap: var(--sk-footer-content-gap);
+  --sk-clipboard-preview-info-row-gap: var(--sk-main-menu-context-edge-outset-x);
+  /* Info text: .text_xs 12; GPUI phi line height round(12×1.618034)=19
+   * (the calc yields 19.416px — sub-pixel raster divergence, non-blocking). */
+  --sk-clipboard-preview-info-font-size: var(--sk-main-menu-description-font-size);
+  --sk-clipboard-preview-info-line-height: calc(
+    var(--sk-main-menu-description-font-size) * 1.618034
+  );
+  /* Stock script-kit-dark paints ALL preview text pure white: the panel uses
+   * rgb(text_muted/secondary/primary) at full alpha and the preset sets every
+   * text color to #ffffff (ladder bypass — see brief conflicts). */
+  --sk-clipboard-preview-info-label-color: var(--sk-text-name);
+  --sk-clipboard-preview-info-value-color: var(--sk-text-name);
+  --sk-clipboard-preview-info-heading-color: var(--sk-text-name);
+  --sk-clipboard-preview-info-heading-font-weight: var(--sk-main-menu-section-font-weight);
+}
+
+body {
+  margin: 0;
+}
+
+/* Synthetic desktop backdrop — deterministic fixture for the material to
+ * sample; the reference capture samples the live desktop (non-blocking). */
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-desktop);
+}
+
+/* ── Split main region: list pane | preview pane (both flex_1) ─────────── */
+.sk-clipboard-split {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.sk-clipboard-list-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--sk-clipboard-list-pane-padding-y);
+  overflow: hidden;
+}
+
+/* Persistent leading section separator (POLISH.md §2): rendered by
+ * list_item::render_section_header(label, None, colors, true) with the
+ * LEGACY default_main_menu metrics — 26px first slot, padding 14/6/4,
+ * justify_start, 12px semibold, text-primary at the muted alpha. */
+.sk-clipboard-section-slot {
+  width: 100%;
+  height: var(--sk-clipboard-first-section-slot-height);
+  flex: none;
+  padding: var(--sk-clipboard-first-section-padding-top)
+    var(--sk-main-menu-section-padding-x)
+    var(--sk-main-menu-section-padding-bottom);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.sk-clipboard-section-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sk-main-menu-section-gap);
+  color: var(--sk-text-muted);
+  font-size: var(--sk-main-menu-section-font-size);
+  font-weight: var(--sk-main-menu-section-font-weight);
+  line-height: 1;
+  white-space: nowrap;
+  text-transform: none;
+}
+
+.sk-clipboard-rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Emoji icon glyph (ListItem IconKind::Emoji renders .text_sm inside the
+ * 20×20 container). */
+.sk-clipboard-emoji {
+  font-size: var(--sk-clipboard-row-emoji-font-size);
+  line-height: 1;
+}
+
+/* ── Preview pane (render_clipboard_preview_panel) ─────────────────────── */
+.sk-clipboard-preview {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sk-clipboard-preview-gap);
+  padding: var(--sk-clipboard-preview-padding);
+  background: var(--sk-clipboard-preview-background);
+  border-left: var(--sk-window-divider-height) solid
+    var(--sk-clipboard-preview-border);
+  overflow: hidden;
+  font-family: var(--sk-font-ui), -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.sk-clipboard-preview__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--sk-clipboard-preview-content-padding);
+  border-radius: var(--sk-clipboard-preview-content-radius);
+  background: var(--sk-clipboard-preview-content-background);
+  overflow: hidden;
+}
+
+.sk-clipboard-preview__content pre {
+  margin: 0;
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  font-size: var(--sk-clipboard-preview-content-font-size);
+  line-height: var(--sk-clipboard-preview-content-line-height);
+  color: var(--sk-text-name);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sk-clipboard-preview__info {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sk-clipboard-preview-info-gap);
+  padding-top: var(--sk-clipboard-preview-info-padding-top);
+  border-top: var(--sk-window-divider-height) solid
+    var(--sk-clipboard-preview-info-divider);
+  font-size: var(--sk-clipboard-preview-info-font-size);
+  line-height: var(--sk-clipboard-preview-info-line-height);
+}
+
+.sk-clipboard-preview__info-heading {
+  color: var(--sk-clipboard-preview-info-heading-color);
+  font-weight: var(--sk-clipboard-preview-info-heading-font-weight);
+}
+
+.sk-clipboard-preview__info-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sk-clipboard-preview-info-row-gap);
+}
+
+.sk-clipboard-preview__info-label {
+  color: var(--sk-clipboard-preview-info-label-color);
+}
+
+.sk-clipboard-preview__info-value {
+  color: var(--sk-clipboard-preview-info-value-color);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

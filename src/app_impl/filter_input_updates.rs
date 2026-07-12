@@ -67,9 +67,9 @@ pub(crate) fn menu_syntax_filter_only_escape_should_clear(
     }
 
     trimmed.split_whitespace().count() == 1
-        && mode.advanced_query_for(trimmed).is_some_and(|query| {
-            query.free_text.trim().is_empty() && query.has_predicates()
-        })
+        && mode
+            .advanced_query_for(trimmed)
+            .is_some_and(|query| query.free_text.trim().is_empty() && query.has_predicates())
 }
 
 impl ScriptListApp {
@@ -115,11 +115,8 @@ impl ScriptListApp {
         }
 
         // Filter changes intentionally restart from the first selectable row.
-        self.get_grouped_results_cached();
-        self.selected_index = self
-            .main_menu_result_caches
-            .first_selectable_index()
-            .unwrap_or(0);
+        self.reset_main_menu_selection_user_moved();
+        self.snap_main_menu_selection_to_first();
 
         // Keep GPUI's list model aligned with the newly computed grouped results.
         // Filter changes may replace every row while preserving the same count,
@@ -163,7 +160,22 @@ impl ScriptListApp {
         self.sync_list_state_for_filter_replacement();
         self.validate_selection_bounds(cx);
 
-        let restored = self.restore_main_menu_selection_from_snapshot(selection_before);
+        let restored = match main_menu_refresh_selection_policy(self.main_menu_selection_user_moved)
+        {
+            MainMenuRefreshSelectionPolicy::RestoreIdentity => {
+                self.restore_main_menu_selection_from_snapshot(selection_before)
+            }
+            MainMenuRefreshSelectionPolicy::SnapToFirst => {
+                self.snap_main_menu_selection_to_first();
+                tracing::debug!(
+                    target: "script_kit::selection",
+                    event = "main_menu_refresh_snap_to_first_untouched_selection",
+                    reason,
+                    selected_index = self.selected_index,
+                );
+                false
+            }
+        };
         if restored {
             tracing::debug!(
                 target: "script_kit::selection",
@@ -729,6 +741,14 @@ impl ScriptListApp {
             AppView::DictationHistoryView {
                 filter,
                 selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::TipsView {
+                filter,
+                selected_index,
+                ..
             } => {
                 Self::sync_builtin_query_state(filter, selected_index, text);
                 true

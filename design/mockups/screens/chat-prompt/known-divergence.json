@@ -1,0 +1,41 @@
+{
+  "screen": "chat-prompt",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView menu material; the reference samples the live desktop rather than the synthetic fixture backdrop."
+    },
+    {
+      "selector": ".sk-window__effect",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Canvas starfield approximation; particle phase uncontrolled at capture time. Colors are token-exact."
+    },
+    {
+      "selector": ":root",
+      "kind": "contract",
+      "blocking": true,
+      "reason": "DRAFT: generated/tokens.css carries no --sk-chat-* records yet. All chat values are staged under --sk-emulator-staged-chat-* in screen.css (byte-exact from Rust source, citations in briefs/chat-prompt-brief.md) and aliased to the proposed --sk-chat-* names. Blocking until the proposed export_design_tokens section lands and the staged block is deleted."
+    },
+    {
+      "selector": ".sk-footer-host",
+      "kind": "native",
+      "blocking": false,
+      "reason": "Footer buttons live in a separate AppKit overlay window that never appears in GPUI window captures — the reference band is empty. Button labels here (Run ↵ / Actions ⌘K) are derived from standard_main_window_footer_buttons (src/app_impl/ui_window.rs) for the chat_prompt surface but are RECEIPT-PENDING: verify with a live activeFooter probe before treating interiors as truth. The 36pt band boundary itself remains blocking."
+    },
+    {
+      "selector": ".sk-chat-code__line",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Code-block syntax span colors come from syntect highlighting (parse.rs) and are intentionally not tokenized; the mockup paints lines in the inherited text color. The code-block FRAME (margins, radius, fills, header strip, line boxes) remains blocking."
+    },
+    {
+      "selector": ".sk-chat-user, .sk-chat-md__p, .sk-chat-placeholder, .sk-chat-header__title",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI/CoreText vs browser glyph rasterization and capture hue drift under vibrancy. Line-box geometry stays blocking: 14pt text resolves to the GPUI phi default line height of exactly 23pt (round(14 × 1.618034), vendor/gpui/src/style.rs)."
+    }
+  ]
+}

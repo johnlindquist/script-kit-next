@@ -1,6 +1,7 @@
 //! Day Page document binding — substrate-backed file session for today's page.
 
 mod document;
+pub mod layout;
 mod render;
 mod sediment;
 pub(crate) mod telemetry;

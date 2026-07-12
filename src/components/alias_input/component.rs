@@ -4,9 +4,9 @@ use std::time::Instant;
 use gpui::{div, prelude::*, px, rgb, rgba, Context, FocusHandle, IntoElement};
 
 use crate::components::overlay_modal::OverlayAnimation;
-use crate::components::text_input::TextInputState;
+use crate::components::text_input::{pulse_cursor_bar, TextInputState};
 use crate::logging;
-use crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
+use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH, PROMPT_INPUT_FIELD_HEIGHT};
 use crate::theme::Theme;
 
 use super::types::{
@@ -239,14 +239,16 @@ impl AliasInput {
                     .text_base()
                     .text_color(rgb(colors.text_primary))
                     .child(before)
-                    .child(
-                        // Cursor - conditionally visible for blinking
-                        div()
-                            .w(px(2.))
-                            .h(px(18.))
-                            .rounded(px(1.))
-                            .when(self.cursor_visible, |d| d.bg(rgb(colors.accent))),
-                    )
+                    .when(self.cursor_visible, |d| {
+                        d.child(pulse_cursor_bar(
+                            div()
+                                .w(px(CURSOR_WIDTH))
+                                .h(px(CURSOR_HEIGHT_LG))
+                                .rounded(px(CURSOR_WIDTH / 2.0))
+                                .bg(rgb(colors.accent)),
+                            "alias-input-cursor-pulse",
+                        ))
+                    })
                     .child(after)
             }
         };

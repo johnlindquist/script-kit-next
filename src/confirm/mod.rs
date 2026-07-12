@@ -33,6 +33,14 @@ pub(crate) use parent_dialog::{
     open_parent_confirm_dialog_for_automation_parent, open_parent_confirm_dialog_for_entity,
     open_parent_confirm_dialog_with_lifecycle, ParentConfirmOptions,
 };
+// Design-contract resolvers shared by the in-window confirm renderer and the
+// token exporter (src/design_contract).
+#[allow(unused_imports)]
+pub(crate) use parent_dialog::{
+    confirm_prompt_line_height_px, resolved_confirm_prompt_colors, resolved_confirm_prompt_metrics,
+    ConfirmPromptMetrics, ResolvedConfirmPromptColors, CONFIRM_PROMPT_BODY_FONT_SIZE_PX,
+    CONFIRM_PROMPT_BODY_MAX_WIDTH_PX, CONFIRM_PROMPT_TITLE_FONT_SIZE_PX,
+};
 
 #[allow(unused_imports)]
 pub(crate) use window::consume_main_window_key_while_confirm_open;

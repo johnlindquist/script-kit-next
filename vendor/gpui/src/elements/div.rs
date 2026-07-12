@@ -2022,18 +2022,15 @@ impl Interactivity {
 
                 let style = self.compute_style_internal(hitbox, element_state.as_mut(), window, cx);
 
-                #[cfg(any(feature = "test-support", test))]
-                if let Some(debug_selector) = &self.debug_selector {
-                    window
-                        .next_frame
-                        .debug_bounds
-                        .insert(debug_selector.clone(), bounds);
-                }
-
                 self.paint_hover_group_handler(window, cx);
 
-                if style.visibility == Visibility::Hidden {
+                if style.visibility == Visibility::Hidden || style.display == Display::None {
                     return ((), element_state);
+                }
+
+                #[cfg(any(feature = "test-support", test))]
+                if let Some(debug_selector) = &self.debug_selector {
+                    window.record_debug_bounds(debug_selector.clone(), bounds);
                 }
 
                 let mut tab_group = None;

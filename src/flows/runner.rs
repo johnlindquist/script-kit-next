@@ -16,7 +16,9 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use super::catalog::mdflow_binary;
-use super::model::{parse_event_line, EngagementMode, FlowUxVariant, RunPhase};
+use super::model::{
+    parse_event_line, EngagementMode, EventStreamValidator, FlowUxVariant, RunPhase,
+};
 use super::run_registry::flow_run_registry;
 
 /// Bounded SIGTERM→SIGKILL escalation window (protocol §3).
@@ -25,7 +27,10 @@ const CANCEL_ESCALATION: Duration = Duration::from_secs(2);
 /// Launch a flow run. Returns the registry-local run id immediately; all
 /// process work happens on background threads. `input_overrides` are
 /// (name, value) pairs passed as `--_<name> <value>` (collected natively —
-/// `--events` runs never prompt).
+/// `--events` runs never prompt). `capture_conversation` turns on the
+/// append-only stdout accumulator for conversation turns (see
+/// `FlowRun::conversation_stdout`).
+#[allow(clippy::too_many_arguments)]
 pub fn launch_flow(
     flow_id: &str,
     flow_name: &str,
@@ -35,11 +40,15 @@ pub fn launch_flow(
     engagement: EngagementMode,
     input_overrides: Vec<(String, String)>,
     launch_requested: Instant,
+    capture_conversation: bool,
 ) -> u64 {
     let registry = flow_run_registry();
     let local_id =
         registry.insert_starting(flow_id, flow_name, flow_path, cwd, variant, engagement);
     registry.record_launch_ack(local_id, launch_requested.elapsed().as_millis() as u64);
+    if capture_conversation {
+        registry.enable_conversation_capture(local_id);
+    }
     registry.record_override_names(
         local_id,
         input_overrides
@@ -80,7 +89,10 @@ fn run_flow_process(local_id: u64, flow_path: &str, cwd: &str, overrides: &[(Str
         .current_dir(cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        // stderr is out-of-band diagnostics (protocol §3) — captured, never
+        // discarded: a flow crashing with only a stderr message must leave a
+        // visible trace (2026-07-11 audit).
+        .stderr(Stdio::piped());
     for (name, value) in overrides {
         command.arg(format!("--_{name}")).arg(value);
     }
@@ -118,102 +130,150 @@ fn run_flow_process(local_id: u64, flow_path: &str, cwd: &str, overrides: &[(Str
             return;
         }
     };
+    // Drain raw stderr on its own thread (out-of-band diagnostics; protocol
+    // stdout stays pure). Retained on the run's tails so failures have a
+    // visible trace.
+    if let Some(stderr) = child.stderr.take() {
+        let stderr_registry = registry.clone();
+        std::thread::Builder::new()
+            .name(format!("flow-run-{local_id}-stderr"))
+            .spawn(move || {
+                let reader = BufReader::new(stderr);
+                for line in reader.lines() {
+                    let Ok(line) = line else { break };
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    stderr_registry.push_raw_stderr(local_id, &line);
+                }
+            })
+            .ok();
+    }
 
-    let mut saw_terminal = false;
-    let mut expected_seq: u64 = 0;
+    // Strict protocol consumption (docs/ai/flow-ux-protocol.md §3): any
+    // parse error or ordering violation fails the run CLOSED — a stream
+    // that lies about identity or ordering cannot be trusted to report the
+    // outcome, so the process is also killed rather than left running
+    // unsupervised.
+    let mut validator = EventStreamValidator::default();
+    let mut protocol_failure: Option<String> = None;
     let reader = BufReader::new(stdout);
     for line in reader.lines() {
         let Ok(line) = line else { break };
         if line.trim().is_empty() {
             continue;
         }
-        match parse_event_line(&line) {
-            Some(envelope) => {
-                // Sequence gaps are protocol violations worth logging, but a
-                // run must degrade gracefully rather than abort playback.
-                if envelope.seq != expected_seq {
-                    crate::logging::log(
-                        "FLOWS",
-                        &format!(
-                            "run {local_id}: event seq gap (expected {expected_seq}, got {})",
-                            envelope.seq
-                        ),
-                    );
-                }
-                expected_seq = envelope.seq.saturating_add(1);
-                saw_terminal |= matches!(
-                    envelope.event,
-                    super::model::RunEvent::RunCompleted { .. }
-                        | super::model::RunEvent::RunError { .. }
-                        | super::model::RunEvent::RunCancelled { .. }
-                );
-                registry.apply_event(local_id, &envelope);
-            }
-            None => {
-                crate::logging::log(
-                    "FLOWS",
-                    &format!("run {local_id}: non-protocol stdout line dropped"),
-                );
+        let verdict = parse_event_line(&line)
+            .map_err(|err| err.to_string())
+            .and_then(|envelope| {
+                validator
+                    .validate(&envelope)
+                    .map(|()| envelope)
+                    .map_err(|violation| violation.to_string())
+            });
+        match verdict {
+            Ok(envelope) => registry.apply_event(local_id, &envelope),
+            Err(detail) => {
+                protocol_failure = Some(detail);
+                break;
             }
         }
     }
 
+    if let Some(detail) = &protocol_failure {
+        crate::logging::log(
+            "FLOWS",
+            &format!("run {local_id}: protocol violation — {detail}"),
+        );
+        // A cancel already in flight keeps its outcome; otherwise the run
+        // fails closed. Either way the untrustworthy process is killed.
+        if registry.get(local_id).map(|run| run.phase) == Some(RunPhase::Cancelling) {
+            registry.mark_cancelled(local_id);
+        } else {
+            registry.mark_failed(local_id, &format!("protocol violation: {detail}"));
+        }
+        unsafe {
+            libc::killpg(pid as libc::pid_t, libc::SIGTERM);
+        }
+        spawn_kill_escalation(local_id, pid);
+    }
+
     let status = child.wait();
     crate::process_manager::PROCESS_MANAGER.unregister_process(pid);
-    if !saw_terminal {
+    if !validator.saw_terminal() && protocol_failure.is_none() {
         // Process died without a terminal event (killed, crashed, legacy
-        // binary). Preserve cancellation if we initiated it.
+        // binary). Preserve cancellation if we initiated it, and surface
+        // the last stderr diagnostic when one exists.
         let phase = registry.get(local_id).map(|r| r.phase);
-        if phase == Some(RunPhase::Cancelled) {
-            // cancel_run already marked it.
-        } else {
-            match status {
-                Ok(status) if status.success() => {
-                    registry.mark_failed(local_id, "run ended without a terminal protocol event")
+        match phase {
+            Some(RunPhase::Cancelled) => {
+                // cancel_run already settled it.
+            }
+            Some(RunPhase::Cancelling) => {
+                // We initiated the kill and the process is now confirmed
+                // dead — the cancel receipt becomes truthful here.
+                registry.mark_cancelled(local_id);
+            }
+            _ => {
+                let stderr_note = registry
+                    .get(local_id)
+                    .and_then(|run| run.stderr_tail.last_line().map(str::to_string))
+                    .map(|line| format!(" — stderr: {line}"))
+                    .unwrap_or_default();
+                match status {
+                    Ok(status) if status.success() => registry.mark_failed(
+                        local_id,
+                        &format!("run ended without a terminal protocol event{stderr_note}"),
+                    ),
+                    Ok(status) => registry.mark_failed(
+                        local_id,
+                        &format!("process exited {status} without terminal event{stderr_note}"),
+                    ),
+                    Err(err) => {
+                        registry.mark_failed(local_id, &format!("wait failed: {err}{stderr_note}"))
+                    }
                 }
-                Ok(status) => registry.mark_failed(
-                    local_id,
-                    &format!("process exited {status} without terminal event"),
-                ),
-                Err(err) => registry.mark_failed(local_id, &format!("wait failed: {err}")),
             }
         }
     }
 }
 
 /// Cancel one run: SIGTERM its process group, escalate to SIGKILL after a
-/// bounded wait if the run has not reached a terminal phase. Never touches
-/// other runs.
+/// bounded wait if the group survives. Never touches other runs.
+///
+/// Truthful receipts: the run enters `Cancelling` when the signal is sent
+/// and only becomes `Cancelled` once the outcome is known — the process's
+/// own `run.cancelled` event, the reader-thread EOF fallback, or the
+/// escalation watcher confirming the group is dead.
 pub fn cancel_run(local_id: u64) {
     let registry = flow_run_registry();
     let Some(run) = registry.get(local_id) else {
         return;
     };
-    if run.phase.is_terminal() {
+    if run.phase.is_terminal() || run.phase == RunPhase::Cancelling {
         return;
     }
     let Some(pid) = run.pid else {
-        // Not spawned yet; mark cancelled so the runner thread's terminal
-        // fallback preserves it.
+        // Not spawned yet: nothing is running, so Cancelled is immediately
+        // truthful (the runner thread's cancel-before-spawn guard prevents
+        // a later spawn).
         registry.mark_cancelled(local_id);
         return;
     };
 
-    // Mark Cancelled BEFORE signalling: the reader thread may observe the
-    // dying process's terminal event/EOF first, and terminal phases never
-    // regress, so the mark must win the race.
-    registry.mark_cancelled(local_id);
+    registry.mark_cancelling(local_id);
     // `process_group(0)` made the child its own group leader → pgid == pid.
     let killpg_result = unsafe { libc::killpg(pid as libc::pid_t, libc::SIGTERM) };
     if killpg_result != 0 {
         let errno = std::io::Error::last_os_error();
         if errno.raw_os_error() == Some(libc::ESRCH) {
-            // Group already gone — the run's own terminal event (or the
-            // reader fallback) settles it; Cancelled stands as the outcome.
+            // Group already gone: dead is dead — settle as Cancelled unless
+            // a terminal event already recorded the real outcome.
+            registry.mark_cancelled(local_id);
             return;
         }
         // Signal actually failed (e.g. EPERM): the process may still be
-        // running, so claiming "Cancelled" would be a lie. Surface it.
+        // running — stay in Cancelling and let escalation resolve it.
         crate::logging::log(
             "FLOWS",
             &format!("run {local_id}: killpg({pid}, SIGTERM) failed: {errno} — escalating"),
@@ -222,16 +282,26 @@ pub fn cancel_run(local_id: u64) {
     spawn_kill_escalation(local_id, pid);
 }
 
-/// Bounded SIGTERM→SIGKILL escalation watcher for one process group.
+/// Bounded SIGTERM→SIGKILL escalation watcher for one process group. Once
+/// the group is confirmed dead it settles a still-`Cancelling` run as
+/// `Cancelled` (the reader thread usually does this first via EOF; this is
+/// the backstop for pathological pipes).
 fn spawn_kill_escalation(local_id: u64, pgid: u32) {
     std::thread::Builder::new()
         .name(format!("flow-cancel-{local_id}"))
         .spawn(move || {
+            let registry = flow_run_registry();
+            let finalize = |registry: &crate::flows::run_registry::FlowRunRegistry| {
+                if registry.get(local_id).map(|run| run.phase) == Some(RunPhase::Cancelling) {
+                    registry.mark_cancelled(local_id);
+                }
+            };
             // Poll the group (not just the leader) so descendants count,
             // with the protocol's 2s bound before SIGKILL.
             let deadline = Instant::now() + CANCEL_ESCALATION;
             while Instant::now() < deadline {
                 if !process_group_alive(pgid) {
+                    finalize(&registry);
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(50));
@@ -244,7 +314,15 @@ fn spawn_kill_escalation(local_id: u64, pgid: u32) {
                     "FLOWS",
                     &format!("run {local_id}: escalated cancel to SIGKILL for pgid {pgid}"),
                 );
+                // SIGKILL cannot be caught; give the kernel a beat to reap.
+                for _ in 0..20 {
+                    if !process_group_alive(pgid) {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
             }
+            finalize(&registry);
         })
         .ok();
 }

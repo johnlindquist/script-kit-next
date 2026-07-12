@@ -152,6 +152,14 @@ Cross-surface behavior must stay predictable:
 - Expanded/preview surfaces may differ in layout, but their list side, footer, and chrome should still use the shared anatomy and tokens.
 - Any intentional divergence must be documented in the code or PR summary with the owning surface, the reused alternatives considered, and why the shared component could not fit.
 
+## Agent Chat Entry Context Contract
+
+Launcher-sourced Agent Chat opens stage the currently selected launcher row as a context chip (and pre-fill the composer with its `@cmd:` mention) UNLESS the entry request suppresses the focused part. The default selection on a fresh launcher is a real, resolvable row (`first_selectable_index` — a Brain Inbox capture, a flow, a script), so any "just open a clean chat" affordance wired through the default entry silently inherits it. This bit us on 2026-07-10: main-hotkey double-tap opened Agent Chat with the first row attached as if deliberately chosen.
+
+- Quick/clean-chat affordances (double-tap of the main hotkey, and anything with the same "I just have a quick question" intent) MUST route through `AgentChatEntryRequest::quick_question()` / `open_agent_chat_for_quick_question`, or otherwise pass `suppress_focused_part: true`.
+- Only entries where the user deliberately targeted a row (Cmd+Enter on a selection, actions payloads, explicit handoffs) may stage the focused row — and Cmd+Enter already suppresses the *default auto-selected* row via its empty-input guard in `agent_handoff/mod.rs`. Mirror that guard's intent in any new launcher-sourced entry.
+- The contract is locked by `quick_question_entry_suppresses_all_implicit_context` in `src/app_impl/agent_handoff/agent_chat_entry.rs`; keep new entry points honest against it rather than weakening the test.
+
 # Agent Cargo Wrapper
 
 `./dev.sh` runs `cargo watch` on the shared `target/` dir continuously. Bare `cargo build/test/check/clippy` from an AI agent contends on `target/.cargo-lock` and stalls for minutes ("Blocking waiting for file lock on build directory").

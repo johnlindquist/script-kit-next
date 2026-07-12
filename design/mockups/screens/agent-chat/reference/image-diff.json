@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.image-diff",
+  "command": "image-diff.compare",
+  "classification": "ok",
+  "proofKind": "capture-stability",
+  "sameSizeRequired": true,
+  "label": "agent-chat-gpui-vs-html",
+  "redPath": "design/mockups/screens/agent-chat/reference/agent-chat@2x.png",
+  "greenPath": ".test-output/design-fidelity/agent-chat/html@2x.png",
+  "diffPath": ".test-output/design-fidelity/agent-chat/gpui-vs-html-diff@2x.png",
+  "fuzz": "0%",
+  "crop": {
+    "red": null,
+    "green": null,
+    "redSource": null,
+    "greenSource": null
+  },
+  "inputEvidence": {
+    "red": {
+      "receiptPath": "design/mockups/screens/agent-chat/reference/agent-chat-runtime-receipt.json",
+      "source": "os-window-capture",
+      "classification": "captured",
+      "captureKind": "resolver-targeted-window",
+      "countsAsOsScreenshotEvidence": true,
+      "countsAsCompositorEvidence": true,
+      "pixelAuditBlank": false,
+      "blockerCode": null,
+      "expectedSha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d"
+    },
+    "green": {
+      "receiptPath": "design/mockups/screens/agent-chat/reference/dom-layout.json",
+      "source": null,
+      "classification": null,
+      "captureKind": null,
+      "countsAsOsScreenshotEvidence": false,
+      "countsAsCompositorEvidence": false,
+      "pixelAuditBlank": null,
+      "blockerCode": null,
+      "expectedSha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816"
+    }
+  },
+  "inputHashes": {
+    "red": {
+      "sha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
+      "expectedSha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
+      "matchesReceipt": true
+    },
+    "green": {
+      "sha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816",
+      "expectedSha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816",
+      "matchesReceipt": true
+    }
+  },
+  "dimensions": {
+    "red": {
+      "width": 1500,
+      "height": 960
+    },
+    "green": {
+      "width": 1500,
+      "height": 960
+    },
+    "comparisonCanvas": {
+      "width": 1500,
+      "height": 960
+    },
+    "sameSize": true,
+    "widthDelta": 0,
+    "heightDelta": 0
+  },
+  "changedPixels": 587105,
+  "totalPixels": 1440000,
+  "changedPixelRatio": 0.40771180555555553,
+  "changedPixelPercent": 40.77118055555555,
+  "diffBoundingBox": {
+    "width": 1496,
+    "height": 894,
+    "x": 2,
+    "y": 2
+  },
+  "assertions": {
+    "redCountsAsOsScreenshotEvidence": true,
+    "greenCountsAsOsScreenshotEvidence": true,
+    "redNonBlank": true,
+    "greenNonBlank": true,
+    "cropResolvedFromReceipts": true,
+    "diffMaskWritten": true,
+    "changedPixelsMeasured": true,
+    "dimensionsMeasured": true,
+    "sameSizeWhenRequired": true
+  },
+  "warnings": [],
+  "errors": [],
+  "timestamp": "2026-07-12T03:01:36.718Z"
+}

@@ -31,6 +31,7 @@ pub mod computer_use;
 // Unified icon system - single API for all icon sources
 // Supports gpui_component IconName, embedded SVGs, SF Symbols, app bundles
 pub mod debug_grid;
+pub mod design_contract;
 pub mod designs;
 pub mod dev_marker;
 pub mod dev_style_tool;
@@ -43,6 +44,8 @@ pub mod executor;
 pub mod focus_coordinator;
 pub mod form_prompt;
 pub mod formatting;
+#[cfg(test)]
+mod gpui_debug_bounds_tests;
 pub mod hotkeys;
 pub mod icons;
 pub mod list_item;
@@ -70,6 +73,7 @@ pub mod terminal_history;
 #[doc(hidden)]
 pub mod test_support;
 pub mod theme;
+pub mod tips;
 pub mod toast_manager;
 
 pub mod tray;
@@ -189,6 +193,19 @@ pub mod menu_syntax_ai;
 // under `cargo test --lib`.
 #[path = "app_impl/menu_syntax_ai_apply.rs"]
 pub mod menu_syntax_ai_apply;
+
+// Pure design-contract resolvers for built-in browser surfaces. Same
+// `#[path]` re-export pattern as `path_action`: the binary pulls these files
+// into its crate root via the `render_builtins/mod.rs` include chain, while
+// the lib carries them so the design-token exporter (`src/design_contract`)
+// and `cargo test --lib` consume the SAME functions the renderers paint
+// with. `builtin_main_input_contract` owns the shared trailing count-label
+// style (ALL builtin browsers); `settings_hub_contract` owns the settings
+// hub census, labels, and layout.
+#[path = "render_builtins/builtin_main_input_contract.rs"]
+pub mod builtin_main_input_contract;
+#[path = "render_builtins/settings_contract.rs"]
+pub mod settings_hub_contract;
 
 // Fallback commands - Raycast-style fallback actions when no scripts match
 pub mod fallbacks;
@@ -446,6 +463,9 @@ pub fn install_main_window_visibility_transition_hook(hook: fn(bool)) {
 pub fn set_main_window_visible(visible: bool) {
     let previous = MAIN_WINDOW_VISIBLE.swap(visible, Ordering::SeqCst);
     if previous != visible {
+        if visible {
+            crate::tips::advance_footer_tip();
+        }
         MAIN_WINDOW_VISIBILITY_GENERATION.fetch_add(1, Ordering::SeqCst);
         if let Some(hook) = MAIN_WINDOW_VISIBILITY_TRANSITION_HOOK.get() {
             hook(visible);

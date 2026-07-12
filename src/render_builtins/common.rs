@@ -52,6 +52,8 @@ impl ScriptListApp {
             .w_full()
             .h(gpui::px(search.height))
             .line_height(gpui::px(search.height))
+            .font_family(self.theme_font_family())
+            .font_weight(search.font_weight)
             .px(gpui::px(0.))
             .py(gpui::px(0.))
             .with_size(gpui_component::Size::Size(gpui::px(input_font_size)))
@@ -69,12 +71,22 @@ impl ScriptListApp {
         label: impl Into<gpui::SharedString>,
     ) -> gpui::AnyElement {
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        // Shared with the design-token exporter
+        // (builtin_main_input_contract.rs): text_sm-sized, gpui default line
+        // height and NORMAL weight (never the search body's 430), right
+        // inset = search text_inset_x, color = chrome text hint.
+        let style = resolved_builtin_main_input_count_label_style(
+            self.current_main_menu_theme.def(),
+            &chrome,
+        );
         gpui::div()
             .flex_none()
             .whitespace_nowrap()
-            .pr(gpui::px(self.current_main_menu_theme.def().search.text_inset_x))
-            .text_sm()
-            .text_color(gpui::rgba(chrome.text_hint_rgba))
+            .pr(gpui::px(style.inset_right))
+            .text_size(gpui::px(style.font_size_px))
+            .line_height(gpui::px(style.line_height_px))
+            .font_weight(style.font_weight)
+            .text_color(gpui::rgba(style.text_rgba))
             .child(label.into())
             .into_any_element()
     }
@@ -100,14 +112,11 @@ impl ScriptListApp {
         cx: &mut gpui::Context<Self>,
     ) -> crate::components::main_view_chrome::MainViewHeaderChrome {
         let menu_def = self.current_main_menu_theme.def();
-        let shell = menu_def.shell;
-        crate::components::main_view_chrome::MainViewHeaderChrome {
-            context: Some(self.render_clickable_main_view_context_zone(menu_def, cx)),
-            input: self.render_builtin_main_input_shell(trailing),
-            padding_x: shell.header_padding_x,
-            padding_y: shell.header_padding_y,
-            gap: shell.header_gap,
-        }
+        crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
+            menu_def,
+            self.render_clickable_main_view_context_zone(menu_def, cx),
+            self.render_builtin_main_input_shell(trailing),
+        )
     }
 
     pub(crate) fn render_builtin_main_input_surface(
@@ -543,5 +552,144 @@ mod builtin_scroll_helpers_contract {
             SOURCE.contains(".scrollbar_show(gpui_component::scroll::ScrollbarShow::Always)"),
             "builtin uniform list scrollbars should stay visible for launcher-family surfaces"
         );
+    }
+}
+
+/// Corpus-wide consistency audit for every built-in browser renderer.
+///
+/// WHY (decision lock, 2026-07-11): the Tips browser shipped with two
+/// consistency regressions the shared component contract exists to prevent —
+/// a selectable list that never scrolled its keyboard selection into view,
+/// and a footer that bypassed the persistent main-window footer. These are
+/// architectural invariants of the builtin-browser family, not per-surface
+/// styling choices, and no higher enforcement rung can currently express
+/// them (renderers are `AnyElement` builders with no inspectable tree in
+/// unit tests). The audit asserts the ABSENCE of the dangerous pattern per
+/// file and enumerates the grandfathered offenders explicitly; both lists
+/// are shrink-only.
+#[cfg(test)]
+mod builtin_browser_consistency_audit {
+    /// Every builtin browser renderer, enumerated explicitly so a new file
+    /// cannot join the corpus unaudited (`include!` chain in `mod.rs` and
+    /// this table must move together).
+    const BUILTIN_BROWSER_SOURCES: &[(&str, &str)] = &[
+        ("actions.rs", include_str!("actions.rs")),
+        (
+            "agent_chat_history.rs",
+            include_str!("agent_chat_history.rs"),
+        ),
+        ("ai_presets.rs", include_str!("ai_presets.rs")),
+        ("app_launcher.rs", include_str!("app_launcher.rs")),
+        ("browser_history.rs", include_str!("browser_history.rs")),
+        ("browser_tabs.rs", include_str!("browser_tabs.rs")),
+        ("clipboard.rs", include_str!("clipboard.rs")),
+        ("clipboard_preview.rs", include_str!("clipboard_preview.rs")),
+        (
+            "current_app_commands.rs",
+            include_str!("current_app_commands.rs"),
+        ),
+        ("design_gallery.rs", include_str!("design_gallery.rs")),
+        ("design_picker.rs", include_str!("design_picker.rs")),
+        ("dictation_history.rs", include_str!("dictation_history.rs")),
+        ("emoji_picker.rs", include_str!("emoji_picker.rs")),
+        ("favorites.rs", include_str!("favorites.rs")),
+        ("file_search.rs", include_str!("file_search.rs")),
+        ("flow_ux.rs", include_str!("flow_ux.rs")),
+        ("footer_gallery.rs", include_str!("footer_gallery.rs")),
+        ("kit_store.rs", include_str!("kit_store.rs")),
+        ("migrate_v1.rs", include_str!("migrate_v1.rs")),
+        ("non_list_states.rs", include_str!("non_list_states.rs")),
+        ("notes_browse.rs", include_str!("notes_browse.rs")),
+        (
+            "permissions_wizard.rs",
+            include_str!("permissions_wizard.rs"),
+        ),
+        ("process_manager.rs", include_str!("process_manager.rs")),
+        ("profile_search.rs", include_str!("profile_search.rs")),
+        ("script_templates.rs", include_str!("script_templates.rs")),
+        ("sdk_reference.rs", include_str!("sdk_reference.rs")),
+        ("settings.rs", include_str!("settings.rs")),
+        ("theme_chooser.rs", include_str!("theme_chooser.rs")),
+        ("tips.rs", include_str!("tips.rs")),
+        ("window_actions.rs", include_str!("window_actions.rs")),
+        ("window_switcher.rs", include_str!("window_switcher.rs")),
+    ];
+
+    /// Shrink-only. These files render selectable rows but still never move
+    /// their scroll container when the selection moves (the Tips bug class).
+    /// Fixing one means DELETING it here — never add a new entry; new
+    /// browsers must scroll their selection into view from day one via a
+    /// tracked `uniform_list` + `scroll_to_item` (see `window_switcher.rs`)
+    /// or a `ListState`/`ScrollHandle` navigation scroll.
+    const GRANDFATHERED_NON_SCROLLING_SELECTABLE_LISTS: &[&str] = &[
+        "ai_presets.rs",
+        "favorites.rs",
+        "permissions_wizard.rs",
+        "script_templates.rs",
+        "sdk_reference.rs",
+    ];
+
+    fn renders_selectable_list(source: &str) -> bool {
+        source.contains("ListItem::new") && source.contains(".selected(")
+    }
+
+    fn scrolls_selection(source: &str) -> bool {
+        source.contains("scroll_to_item")
+            || source.contains(".track_scroll(")
+            || source.contains("_list_state")
+    }
+
+    #[test]
+    fn selectable_builtin_lists_scroll_selection_into_view() {
+        for (name, source) in BUILTIN_BROWSER_SOURCES {
+            if !renders_selectable_list(source) {
+                continue;
+            }
+            let grandfathered = GRANDFATHERED_NON_SCROLLING_SELECTABLE_LISTS.contains(name);
+            let scrolls = scrolls_selection(source);
+            if grandfathered {
+                assert!(
+                    !scrolls,
+                    "{name} now scrolls its selection — delete it from \
+                     GRANDFATHERED_NON_SCROLLING_SELECTABLE_LISTS (shrink-only)"
+                );
+                continue;
+            }
+            assert!(
+                scrolls,
+                "{name} renders a selectable list but never scrolls the selection into \
+                 view. Use a tracked uniform_list + scroll_to_item on every selection \
+                 move (keyboard, wheel, click) — see window_switcher.rs / tips.rs — \
+                 instead of a free-scrolling div. Do NOT add this file to the \
+                 grandfather list; it is shrink-only."
+            );
+        }
+    }
+
+    #[test]
+    fn builtin_footers_route_through_the_persistent_main_window_footer() {
+        for (name, source) in BUILTIN_BROWSER_SOURCES {
+            if source.contains("render_simple_hint_strip(") {
+                assert!(
+                    source.contains("main_window_footer_slot("),
+                    "{name} renders a GPUI hint strip without offering it to \
+                     main_window_footer_slot. Builtin browsers must reuse the \
+                     persistent native footer (native_footer_surface + \
+                     FooterButtonConfig) and pass the hint strip only as its \
+                     GPUI fallback — never render standalone footer chrome."
+                );
+            }
+            // The gallery browser legitimately renders PromptFooter previews
+            // as CONTENT; every other browser must not instantiate footer
+            // chrome directly.
+            if *name != "footer_gallery.rs" {
+                assert!(
+                    !source.contains("PromptFooter::new(") && !source.contains("HintStrip::new("),
+                    "{name} builds footer chrome directly. Route through \
+                     main_window_footer_slot(render_simple_hint_strip(...)) so the \
+                     surface inherits the shared footer components and native footer."
+                );
+            }
+        }
     }
 }

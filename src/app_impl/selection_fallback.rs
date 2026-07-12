@@ -589,8 +589,13 @@ impl ScriptListApp {
                         self.execute_root_browser_history_open(&browser_match.hit.url, cx);
                     }
                     scripts::SearchResult::Flow(flow_match) => {
-                        // Flows are the primary launcher rows: Enter always
-                        // starts a Threadline conversation with the flow.
+                        if let Some(session_id) = flow_match.session_id {
+                            self.open_flow_session(session_id, cx);
+                            return;
+                        }
+                        // Flow identity rows resume the flow's conversation
+                        // (live session, then persisted transcript) and only
+                        // start a blank Threadline when none exists.
                         tracing::info!(
                             event = "flow_session_launch_requested",
                             flow_id = %flow_match.flow.id,
@@ -598,7 +603,7 @@ impl ScriptListApp {
                             engine = %flow_match.flow.engine,
                             "Flow selected from main menu"
                         );
-                        self.start_flow_session(&flow_match.flow, None, cx);
+                        self.resume_or_start_flow_session(&flow_match.flow, None, cx);
                     }
                     scripts::SearchResult::Skill(skill_match) => {
                         // Skills always open Agent Chat with the selected skill staged
@@ -1394,7 +1399,7 @@ impl ScriptListApp {
         input: &str,
         cx: &mut Context<Self>,
     ) {
-        use crate::fallbacks::builtins::{FallbackResult, get_builtin_fallbacks};
+        use crate::fallbacks::builtins::{get_builtin_fallbacks, FallbackResult};
 
         logging::log(
             "FALLBACK",

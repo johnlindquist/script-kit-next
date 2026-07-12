@@ -2,6 +2,7 @@ impl ScriptListApp {
     fn build_component_bounds(
         &self,
         window_size: gpui::Size<gpui::Pixels>,
+        cx: &gpui::App,
     ) -> Vec<debug_grid::ComponentBounds> {
         use crate::list_item::LIST_ITEM_HEIGHT;
         use debug_grid::{BoxModel, ComponentBounds, ComponentType};
@@ -74,49 +75,85 @@ impl ScriptListApp {
             AppView::DayPage { .. } => "DayPage",
             AppView::ScriptIssuesView { .. } => "ScriptIssues",
             AppView::SdkReferenceView { .. } => "SdkReference",
+            AppView::TipsView { .. } => "Tips",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalog",
             AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         };
 
-        let main_view_has_context_zone = matches!(
-            self.current_view,
-            AppView::ScriptList
-                | AppView::FileSearchView { .. }
-                | AppView::ClipboardHistoryView { .. }
-                | AppView::ProfileSearchView { .. }
-                | AppView::ThemeChooserView { .. }
-                | AppView::AppLauncherView { .. }
-                | AppView::WindowSwitcherView { .. }
-                | AppView::BrowserTabsView { .. }
-                | AppView::DesignGalleryView { .. }
-                | AppView::FooterGalleryView { .. }
-                | AppView::EmojiPickerView { .. }
-                | AppView::BrowseKitsView { .. }
-                | AppView::MigrateV1View { .. }
-                | AppView::InstalledKitsView { .. }
-                | AppView::ProcessManagerView { .. }
-                | AppView::FlowUxView { .. }
-                | AppView::CurrentAppCommandsView { .. }
-                | AppView::SearchAiPresetsView { .. }
-                | AppView::SettingsView { .. }
-                | AppView::FavoritesBrowseView { .. }
-                | AppView::AgentChatHistoryView { .. }
-                | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
-                | AppView::NotesBrowseView { .. }
-                | AppView::SdkReferenceView { .. }
-                | AppView::ScriptTemplateCatalogView { .. }
-                | AppView::AgentChatView { .. }
-                | AppView::DayPage { .. }
-        );
-        let main_view_context_zone_height = menu_def.header_info_bar.height_px;
-        let main_view_header_content_height = if main_view_has_context_zone {
-            menu_def.search.height + menu_def.shell.header_gap + main_view_context_zone_height
-        } else {
-            menu_def.search.height
+        let header_policy = self.current_view.resolved_main_view_header_input_policy(cx);
+        if header_policy == MainViewHeaderInputPolicy::ViewOwnedIntentionalCompact {
+            let AppView::AgentChatView { entity } = &self.current_view else {
+                unreachable!("Focused Text Mini is the only intentional compact main-window view")
+            };
+            let target = protocol::AutomationWindowInfo {
+                id: "main".to_string(),
+                kind: protocol::AutomationWindowKind::Main,
+                title: None,
+                focused: true,
+                visible: true,
+                semantic_surface: Some("FocusedTextMini".to_string()),
+                bounds: Some(protocol::AutomationWindowBounds {
+                    x: 0.0,
+                    y: 0.0,
+                    width: f32::from(width) as f64,
+                    height: f32::from(height) as f64,
+                }),
+                parent_window_id: None,
+                parent_kind: None,
+                pid: None,
+            };
+            let layout = entity.read(cx).automation_layout_info(&target, cx);
+            for component in layout.components {
+                let component_type = match component.component_type {
+                    protocol::LayoutComponentType::Prompt => ComponentType::Prompt,
+                    protocol::LayoutComponentType::Input => ComponentType::Input,
+                    protocol::LayoutComponentType::Button => ComponentType::Button,
+                    protocol::LayoutComponentType::List => ComponentType::List,
+                    protocol::LayoutComponentType::ListItem => ComponentType::ListItem,
+                    protocol::LayoutComponentType::Header => ComponentType::Header,
+                    protocol::LayoutComponentType::Container
+                    | protocol::LayoutComponentType::Panel => ComponentType::Container,
+                    protocol::LayoutComponentType::Other
+                    | protocol::LayoutComponentType::Unknown => ComponentType::Other,
+                };
+                bounds.push(
+                    ComponentBounds::new(
+                        component.name,
+                        gpui::Bounds {
+                            origin: gpui::point(px(component.bounds.x), px(component.bounds.y)),
+                            size: gpui::size(
+                                px(component.bounds.width),
+                                px(component.bounds.height),
+                            ),
+                        },
+                    )
+                    .with_type(component_type)
+                    .with_padding(BoxModel::uniform(0.0)),
+                );
+            }
+            return bounds;
+        }
+        let input_height = match header_policy {
+            MainViewHeaderInputPolicy::ViewOwnedCanonicalInput => Some(menu_def.search.height),
+            MainViewHeaderInputPolicy::ViewOwnedCanonicalMultilineInput => {
+                // `build_component_bounds` has no GPUI `App` access, so it
+                // cannot measure the live wrapped Agent Chat composer. Keep
+                // this debug-grid model honest by reporting the canonical
+                // one-line baseline; `build_layout_info` is runtime-aware and
+                // measures `AgentChatComposerBar` from the entity when that
+                // nested receipt is available.
+                let agent_chat_baseline_input_height = menu_def.search.height;
+                Some(agent_chat_baseline_input_height)
+            }
+            MainViewHeaderInputPolicy::ViewOwnedContextOnly
+            | MainViewHeaderInputPolicy::RootContextOnly => None,
+            MainViewHeaderInputPolicy::ViewOwnedIntentionalCompact => {
+                unreachable!("compact main-window layout returns before canonical header metrics")
+            }
         };
-        let header_height =
-            px(menu_def.shell.header_padding_y * 2.0 + main_view_header_content_height);
+        let header_metrics =
+            crate::components::main_view_chrome::main_view_header_metrics(menu_def, input_height);
+        let header_height = px(header_metrics.header_height);
         let content_top = header_height;
         let content_height = height - header_height;
 
@@ -134,6 +171,18 @@ impl ScriptListApp {
                 menu_def.shell.header_padding_y,
                 content_padding,
             )),
+        );
+
+        bounds.push(
+            ComponentBounds::new(
+                "MainViewMain",
+                gpui::Bounds {
+                    origin: gpui::point(px(0.), content_top),
+                    size: gpui::size(width, content_height),
+                },
+            )
+            .with_type(ComponentType::Container)
+            .with_padding(BoxModel::uniform(0.0)),
         );
 
         // Build view-specific bounds
@@ -339,7 +388,7 @@ impl ScriptListApp {
                 }
             }
 
-            AppView::AgentChatView { .. } | AppView::DayPage { .. } => {
+            AppView::AgentChatView { .. } => {
                 let info_columns =
                     crate::components::main_view_chrome::main_view_content_columns(menu_def);
                 let info_metrics = crate::components::info_state::info_metrics(
@@ -361,17 +410,6 @@ impl ScriptListApp {
                     - px(crate::components::info_state::INFO_SPACING.sm))
                 .max(px(0.));
 
-                bounds.push(
-                    ComponentBounds::new(
-                        "MainViewMain",
-                        gpui::Bounds {
-                            origin: gpui::point(px(0.), content_top),
-                            size: gpui::size(width, content_height),
-                        },
-                    )
-                    .with_type(ComponentType::Container)
-                    .with_padding(BoxModel::uniform(0.0)),
-                );
                 bounds.push(
                     ComponentBounds::new(
                         "AgentChatConversation",
@@ -452,6 +490,22 @@ impl ScriptListApp {
                 );
             }
 
+            AppView::DayPage { .. } => {
+                let footer_height = px(menu_def.footer.metrics.height_px);
+                let body_height = (content_height - footer_height).max(px(0.));
+                bounds.push(
+                    ComponentBounds::new(
+                        "DayPageSurface",
+                        gpui::Bounds {
+                            origin: gpui::point(px(0.), content_top),
+                            size: gpui::size(width, body_height),
+                        },
+                    )
+                    .with_type(ComponentType::Container)
+                    .with_padding(BoxModel::uniform(0.0)),
+                );
+            }
+
             // Other prompts - generic full-width content
             _ => {
                 bounds.push(
@@ -468,73 +522,27 @@ impl ScriptListApp {
             }
         }
 
-        if matches!(
-            self.current_view,
-            AppView::ScriptList
-                | AppView::FileSearchView { .. }
-                | AppView::ClipboardHistoryView { .. }
-                | AppView::ProfileSearchView { .. }
-                | AppView::ThemeChooserView { .. }
-                | AppView::AppLauncherView { .. }
-                | AppView::WindowSwitcherView { .. }
-                | AppView::BrowserTabsView { .. }
-                | AppView::DesignGalleryView { .. }
-                | AppView::FooterGalleryView { .. }
-                | AppView::EmojiPickerView { .. }
-                | AppView::BrowseKitsView { .. }
-                | AppView::MigrateV1View { .. }
-                | AppView::InstalledKitsView { .. }
-                | AppView::ProcessManagerView { .. }
-                | AppView::FlowUxView { .. }
-                | AppView::CurrentAppCommandsView { .. }
-                | AppView::SearchAiPresetsView { .. }
-                | AppView::SettingsView { .. }
-                | AppView::FavoritesBrowseView { .. }
-                | AppView::AgentChatHistoryView { .. }
-                | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
-                | AppView::NotesBrowseView { .. }
-                | AppView::SdkReferenceView { .. }
-                | AppView::ScriptTemplateCatalogView { .. }
-                | AppView::AgentChatView { .. }
-                | AppView::DayPage { .. }
-        ) {
-            if main_view_has_context_zone {
-                let context_outset_x = px(menu_def.header_info_bar.context_edge_outset_x);
-                bounds.push(
-                    ComponentBounds::new(
-                        "MainViewContextZone",
-                        gpui::Bounds {
-                            origin: gpui::point(
-                                px(menu_def.shell.header_padding_x) - context_outset_x,
-                                px(menu_def.shell.header_padding_y),
-                            ),
-                            size: gpui::size(
-                                (width - px(menu_def.shell.header_padding_x * 2.0)
-                                    + context_outset_x * 2.0)
-                                    .max(px(0.)),
-                                px(main_view_context_zone_height),
-                            ),
-                        },
-                    )
-                    .with_type(ComponentType::Container),
-                );
-            }
-            // Input field in header
-            // Positioned from the same shared main-view theme inset used by
-            // the rendered chrome, so the input aligns with the app shell.
-            // The input is vertically centered in the header (which has 28px content height)
-            // Input height is ~22px (CURSOR_HEIGHT_LG=18 + CURSOR_MARGIN_Y*2=4)
-            let input_height = menu_def.search.height;
-            let input_x = px(menu_def.shell.header_padding_x);
-            let context_offset_y = if main_view_has_context_zone {
-                main_view_context_zone_height + menu_def.shell.header_gap
-            } else {
-                0.0
-            };
-            let input_y = px(menu_def.shell.header_padding_y + context_offset_y);
-            let input_width = (width - (input_x * 2.)).max(px(0.));
+        let context_outset_x = px(menu_def.header_info_bar.context_edge_outset_x);
+        bounds.push(
+            ComponentBounds::new(
+                "MainViewContextZone",
+                gpui::Bounds {
+                    origin: gpui::point(px(header_metrics.context_x), px(header_metrics.context_y)),
+                    size: gpui::size(
+                        (width - px(menu_def.shell.header_padding_x * 2.0)
+                            + context_outset_x * 2.0)
+                            .max(px(0.)),
+                        px(header_metrics.context_height),
+                    ),
+                },
+            )
+            .with_type(ComponentType::Container),
+        );
 
+        if let Some(input_height) = header_metrics.input_height {
+            let input_x = px(header_metrics.input_x);
+            let input_y = px(header_metrics.input_y);
+            let input_width = (width - (input_x * 2.)).max(px(0.));
             bounds.push(
                 ComponentBounds::new(
                     "MainViewInput",
@@ -668,7 +676,7 @@ impl ScriptListApp {
             }
         } // End of ScriptList-specific bounds
 
-        {
+        if self.current_view.native_footer_surface().is_some() {
             let footer_height = px(menu_def.footer.metrics.height_px);
             bounds.push(
                 ComponentBounds::new(

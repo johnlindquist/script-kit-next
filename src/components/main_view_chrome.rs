@@ -7,6 +7,7 @@ use crate::designs::MainMenuThemeDef;
 
 pub(crate) const MAIN_VIEW_SHELL_ID: &str = "main-view-shell";
 pub(crate) const MAIN_VIEW_INPUT_SHELL_ID: &str = "main-view-input-shell";
+pub(crate) const MAIN_VIEW_INPUT_BODY_ID: &str = "main-view-input-body";
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_CONTEXT_ZONE_ID: &str = "main-view-context-zone";
 #[allow(dead_code)]
@@ -35,16 +36,16 @@ pub(crate) const MAIN_VIEW_SCROLL_FLOW_ID: &str = "main-view-scroll-flow";
 pub(crate) enum MainViewTabChipAction {
     /// Tab opens the cwd picker — chip shows the cwd label with a ⇥ keycap.
     ChangeCwd,
-    /// Tab routes the typed query to a flow via the flow router — chip swaps
-    /// to a "Route to Flow" label with the ⇥ keycap.
+    /// Tab sends the typed query to the zero-context Quick AI — chip swaps to
+    /// a "Quick AI" label with the ⇥ keycap.
     #[allow(dead_code)] // Constructed only in the binary target (ui_window.rs).
-    FlowRoute,
+    QuickAi,
     /// Tab does something else (or nothing) here — keep the cwd label for
     /// orientation but hide the ⇥ keycap so the chip never lies.
     Inactive,
 }
 
-pub(crate) const MAIN_VIEW_FLOW_ROUTE_CHIP_LABEL: &str = "Route to Flow";
+pub(crate) const MAIN_VIEW_QUICK_AI_CHIP_LABEL: &str = "Quick AI";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MainViewContextLabels {
@@ -111,11 +112,96 @@ pub(crate) struct MainViewInputChrome {
 }
 
 pub(crate) struct MainViewHeaderChrome {
-    pub(crate) context: Option<AnyElement>,
-    pub(crate) input: AnyElement,
+    context: Option<AnyElement>,
+    input: Option<AnyElement>,
+    padding_x: f32,
+    padding_y: f32,
+    gap: f32,
+}
+
+impl MainViewHeaderChrome {
+    /// Canonical main-window context + input anatomy. Geometry always comes
+    /// from the active main-menu theme; surfaces only provide the two bodies.
+    pub(crate) fn canonical(def: MainMenuThemeDef, context: AnyElement, input: AnyElement) -> Self {
+        let metrics = main_view_header_metrics(def, Some(def.search.height));
+        Self {
+            context: Some(context),
+            input: Some(input),
+            padding_x: metrics.padding_x,
+            padding_y: metrics.padding_y,
+            gap: metrics.gap,
+        }
+    }
+
+    /// Intentional context-only anatomy for surfaces whose editable control
+    /// lives in the main body (for example Day Page and root-owned prompts).
+    pub(crate) fn context_only(def: MainMenuThemeDef, context: AnyElement) -> Self {
+        let metrics = main_view_header_metrics(def, None);
+        Self {
+            context: Some(context),
+            input: None,
+            padding_x: metrics.padding_x,
+            padding_y: metrics.padding_y,
+            gap: metrics.gap,
+        }
+    }
+
+    /// Placeholder accepted only by `render_main_view_chrome_without_header`;
+    /// the header is not mounted, so it reserves no geometry.
+    #[allow(dead_code)] // Binary-only Permissions renderer consumes this constructor.
+    pub(crate) fn hidden() -> Self {
+        Self {
+            context: None,
+            input: None,
+            padding_x: 0.0,
+            padding_y: 0.0,
+            gap: 0.0,
+        }
+    }
+}
+
+/// Theme-derived geometry shared by real rendering and DevTools layout
+/// receipts. `input_height = None` is the explicit context-only contract.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MainViewHeaderMetrics {
+    pub(crate) header_height: f32,
     pub(crate) padding_x: f32,
     pub(crate) padding_y: f32,
     pub(crate) gap: f32,
+    pub(crate) context_x: f32,
+    pub(crate) context_y: f32,
+    pub(crate) context_height: f32,
+    pub(crate) input_x: f32,
+    pub(crate) input_y: f32,
+    pub(crate) input_height: Option<f32>,
+}
+
+pub(crate) fn main_view_header_metrics(
+    def: MainMenuThemeDef,
+    input_height: Option<f32>,
+) -> MainViewHeaderMetrics {
+    let shell = def.shell;
+    let context = def.header_info_bar;
+    let input_height = input_height.map(|height| height.max(def.search.height));
+    let input_y = shell.header_padding_y + context.height_px + shell.header_gap;
+    let header_height = shell.header_padding_y * 2.0
+        + context.height_px
+        + input_height
+            .map(|height| shell.header_gap + height)
+            .unwrap_or(0.0);
+
+    MainViewHeaderMetrics {
+        header_height,
+        padding_x: shell.header_padding_x,
+        padding_y: shell.header_padding_y,
+        gap: shell.header_gap,
+        context_x: shell.header_padding_x - context.context_edge_outset_x,
+        context_y: shell.header_padding_y,
+        context_height: context.height_px,
+        input_x: shell.header_padding_x,
+        input_y,
+        input_height,
+    }
 }
 
 pub(crate) struct MainViewDividerChrome {
@@ -198,6 +284,7 @@ pub(crate) struct MainViewColumnMetrics {
 pub(crate) fn render_main_view_shell() -> gpui::Stateful<gpui::Div> {
     div()
         .id(MAIN_VIEW_SHELL_ID)
+        .debug_selector(|| MAIN_VIEW_SHELL_ID.to_string())
         .w_full()
         .h_full()
         .relative()
@@ -290,6 +377,7 @@ pub(crate) fn render_main_view_header_with_context_outset(
 ) -> AnyElement {
     let mut header = div()
         .id(MAIN_VIEW_HEADER_ID)
+        .debug_selector(|| MAIN_VIEW_HEADER_ID.to_string())
         .w_full()
         .px(px(chrome.padding_x))
         .py(px(chrome.padding_y))
@@ -303,22 +391,22 @@ pub(crate) fn render_main_view_header_with_context_outset(
         header = header.child(div().w_full().mx(px(-context_edge_outset_x)).child(context));
     }
 
-    header.child(chrome.input).into_any_element()
+    if let Some(input) = chrome.input {
+        header = header.child(input);
+    }
+
+    header.into_any_element()
 }
 
 #[allow(dead_code)] // Used by the binary target through include!-merged render code.
-pub(crate) fn render_main_view_context_header(context: AnyElement, padding_x: f32) -> AnyElement {
-    div()
-        .id(MAIN_VIEW_HEADER_ID)
-        .w_full()
-        .px(px(padding_x))
-        .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-        .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
-        .flex()
-        .flex_col()
-        .items_center()
-        .child(context)
-        .into_any_element()
+pub(crate) fn render_main_view_context_header(
+    def: MainMenuThemeDef,
+    context: AnyElement,
+) -> AnyElement {
+    render_main_view_header_with_context_outset(
+        MainViewHeaderChrome::context_only(def, context),
+        def.header_info_bar.context_edge_outset_x,
+    )
 }
 
 fn non_empty_label(label: String, fallback: &'static str) -> String {
@@ -355,6 +443,16 @@ pub(crate) fn render_main_view_context_zone(
     )
 }
 
+/// Context-zone keycap sizing, shared with the design-contract exporter so
+/// HTML mockups reproduce the exact derived values.
+pub(crate) fn context_zone_keycap_font_size(info: &crate::designs::HeaderInfoBarTokens) -> f32 {
+    (info.font_size * 0.88).max(8.0)
+}
+
+pub(crate) fn context_zone_keycap_height(info: &crate::designs::HeaderInfoBarTokens) -> f32 {
+    (info.font_size + 7.0).max(16.0)
+}
+
 pub(crate) fn render_main_view_context_zone_required(
     theme: &crate::theme::Theme,
     def: MainMenuThemeDef,
@@ -373,8 +471,8 @@ pub(crate) fn render_main_view_context_zone_required(
     let text_color = rgba((theme.colors.text.primary << 8) | text_alpha);
     let hover_text_color = rgba((theme.colors.text.primary << 8) | info.pill_hover_text_alpha);
     let show_pills = info.pill_padding_x > 0.0 || info.pill_border_alpha > 0;
-    let header_keycap_font_size = (info.font_size * 0.88).max(8.0);
-    let header_keycap_height = (info.font_size + 7.0).max(16.0);
+    let header_keycap_font_size = context_zone_keycap_font_size(&info);
+    let header_keycap_height = context_zone_keycap_height(&info);
 
     let agent_model_label = labels.agent_model_label;
 
@@ -382,7 +480,7 @@ pub(crate) fn render_main_view_context_zone_required(
     // when Tab opens the cwd picker, "Quick AI" when Tab submits the typed
     // query, and a keycap-less cwd label when Tab does neither here.
     let cwd_label = match labels.tab_action {
-        MainViewTabChipAction::FlowRoute => MAIN_VIEW_FLOW_ROUTE_CHIP_LABEL.to_string(),
+        MainViewTabChipAction::QuickAi => MAIN_VIEW_QUICK_AI_CHIP_LABEL.to_string(),
         MainViewTabChipAction::ChangeCwd | MainViewTabChipAction::Inactive => labels.cwd_label,
     };
     let tab_key_active = !matches!(labels.tab_action, MainViewTabChipAction::Inactive);
@@ -394,9 +492,12 @@ pub(crate) fn render_main_view_context_zone_required(
     // when Tab activates/deactivates (e.g. entering file navigation).
     let cwd_key = if info.show_keys {
         div()
+            .flex_1()
+            .min_w(px(0.0))
+            .overflow_hidden()
             .opacity(info.key_opacity.clamp(0.0, 1.0))
             .child(
-                crate::components::footer_chrome::render_footer_hint_button_like(
+                crate::components::footer_chrome::render_footer_hint_button_like_shrinkable(
                     crate::components::footer_chrome::FooterHintButtonSpec {
                         label: cwd_label.clone().into(),
                         key: if tab_key_active { "⇥" } else { "" }.into(),
@@ -425,9 +526,12 @@ pub(crate) fn render_main_view_context_zone_required(
 
     let model_key = if info.show_keys {
         div()
+            .flex_1()
+            .min_w(px(0.0))
+            .overflow_hidden()
             .opacity(info.key_opacity.clamp(0.0, 1.0))
             .child(
-                crate::components::footer_chrome::render_footer_hint_button_like(
+                crate::components::footer_chrome::render_footer_hint_button_like_shrinkable(
                     crate::components::footer_chrome::FooterHintButtonSpec {
                         label: agent_model_label.clone().into(),
                         key: if labels.shift_tab_key_active {
@@ -461,7 +565,10 @@ pub(crate) fn render_main_view_context_zone_required(
 
     let mut cwd_chip = div()
         .id(MAIN_VIEW_CONTEXT_CWD_BUTTON_ID)
+        .debug_selector(|| MAIN_VIEW_CONTEXT_CWD_BUTTON_ID.to_string())
         .min_w(px(0.0))
+        .flex_shrink()
+        .overflow_hidden()
         .flex()
         .flex_row()
         .items_center()
@@ -486,7 +593,10 @@ pub(crate) fn render_main_view_context_zone_required(
 
     let mut model_chip = div()
         .id(MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID)
+        .debug_selector(|| MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID.to_string())
         .min_w(px(0.0))
+        .flex_shrink()
+        .overflow_hidden()
         .flex()
         .flex_row()
         .items_center()
@@ -512,9 +622,12 @@ pub(crate) fn render_main_view_context_zone_required(
     let selection_chip = selection_hint.map(|hint| {
         let key_slot = if info.show_keys {
             div()
+                .flex_1()
+                .min_w(px(0.0))
+                .overflow_hidden()
                 .opacity(info.key_opacity.clamp(0.0, 1.0))
                 .child(
-                    crate::components::footer_chrome::render_footer_hint_button_like(
+                    crate::components::footer_chrome::render_footer_hint_button_like_shrinkable(
                         crate::components::footer_chrome::FooterHintButtonSpec {
                             label: hint.label.clone().into(),
                             key: ".".into(),
@@ -545,6 +658,8 @@ pub(crate) fn render_main_view_context_zone_required(
         let mut chip = div()
             .id(MAIN_VIEW_CONTEXT_SELECTION_BUTTON_ID)
             .min_w(px(0.0))
+            .flex_shrink()
+            .overflow_hidden()
             .flex()
             .flex_row()
             .items_center()
@@ -572,6 +687,7 @@ pub(crate) fn render_main_view_context_zone_required(
     let mut left_lane = div()
         .flex_1()
         .min_w(px(0.0))
+        .overflow_hidden()
         .flex()
         .flex_row()
         .items_center()
@@ -599,6 +715,7 @@ pub(crate) fn render_main_view_context_zone_required(
     let mut right_lane = div()
         .flex_1()
         .min_w(px(0.0))
+        .overflow_hidden()
         .flex()
         .flex_row()
         .items_center()
@@ -610,6 +727,7 @@ pub(crate) fn render_main_view_context_zone_required(
 
     div()
         .id(MAIN_VIEW_CONTEXT_ZONE_ID)
+        .debug_selector(|| MAIN_VIEW_CONTEXT_ZONE_ID.to_string())
         .w_full()
         .h(px(info.height_px))
         .flex()
@@ -667,6 +785,7 @@ fn render_main_view_main_slot_with_bottom_inset(
 ) -> AnyElement {
     div()
         .id(MAIN_VIEW_MAIN_ID)
+        .debug_selector(|| MAIN_VIEW_MAIN_ID.to_string())
         .flex_1()
         .min_h(px(0.))
         .w_full()
@@ -785,6 +904,16 @@ fn resolved_main_view_input_height(default_height: f32, requested_height: Option
         .max(default_height)
 }
 
+/// Preserve the main menu's exact one-line input geometry while allowing a
+/// multiline surface to grow by one text line at a time.
+pub(crate) fn main_view_multiline_input_height(
+    default_height: f32,
+    line_height: f32,
+    visible_lines: usize,
+) -> f32 {
+    default_height + line_height * visible_lines.saturating_sub(1) as f32
+}
+
 /// Render the shared main-view input chrome with an optional surface-owned
 /// height. Most search inputs use the theme height; multi-line composers can
 /// request a taller shell without rebuilding the shared border and insets.
@@ -800,6 +929,7 @@ pub(crate) fn render_main_view_input_shell_with_height(
 
     let mut input = div()
         .id(MAIN_VIEW_INPUT_SHELL_ID)
+        .debug_selector(|| MAIN_VIEW_INPUT_SHELL_ID.to_string())
         .w_full()
         .flex_1()
         .h(px(height))
@@ -815,6 +945,7 @@ pub(crate) fn render_main_view_input_shell_with_height(
 
     input = input.child(
         div()
+            .debug_selector(|| MAIN_VIEW_INPUT_BODY_ID.to_string())
             .flex_1()
             .pl(px(text_inset_left))
             .pr(px(search.text_inset_x * 0.5))
@@ -834,9 +965,27 @@ pub(crate) fn render_main_view_input_shell_with_height(
 #[cfg(test)]
 mod tests {
     use super::{
-        main_view_content_frame, main_view_flow_spacing, resolved_main_view_input_height,
+        main_view_content_frame, main_view_flow_spacing, main_view_header_metrics,
+        main_view_multiline_input_height, resolved_main_view_input_height,
         resolved_main_view_main_bottom_inset, selection_hint_snippet,
     };
+
+    #[test]
+    fn canonical_and_context_only_headers_share_one_theme_derived_geometry_model() {
+        let def = crate::designs::MainMenuThemeVariant::default().def();
+        let canonical = main_view_header_metrics(def, Some(def.search.height));
+        let context_only = main_view_header_metrics(def, None);
+
+        assert_eq!(canonical.header_height, 58.0);
+        assert_eq!(canonical.context_x, -6.0);
+        assert_eq!(canonical.context_y, 4.0);
+        assert_eq!(canonical.context_height, 22.0);
+        assert_eq!(canonical.input_x, 2.0);
+        assert_eq!(canonical.input_y, 28.0);
+        assert_eq!(canonical.input_height, Some(26.0));
+        assert_eq!(context_only.header_height, 30.0);
+        assert_eq!(context_only.input_height, None);
+    }
 
     #[test]
     fn footer_flush_list_chrome_has_exactly_one_footer_reservation() {
@@ -846,6 +995,25 @@ mod tests {
         assert_eq!(
             resolved_main_view_main_bottom_inset(def, true),
             def.shell.content_inset_bottom
+        );
+    }
+
+    #[test]
+    fn multiline_input_keeps_the_main_menu_height_until_a_second_line_is_visible() {
+        let def = crate::designs::MainMenuThemeVariant::default().def();
+        let line_height = def.search.height;
+
+        assert_eq!(
+            main_view_multiline_input_height(def.search.height, line_height, 0),
+            def.search.height
+        );
+        assert_eq!(
+            main_view_multiline_input_height(def.search.height, line_height, 1),
+            def.search.height
+        );
+        assert_eq!(
+            main_view_multiline_input_height(def.search.height, line_height, 3),
+            def.search.height + line_height * 2.0
         );
     }
 

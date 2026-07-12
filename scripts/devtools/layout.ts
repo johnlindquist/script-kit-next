@@ -306,20 +306,28 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
       children: component.children ?? [],
       explanation: component.explanation ?? null,
       visualStyle: component.visualStyle ?? null,
+      measurementProvenance: component.measurementProvenance ?? null,
+      coordinateSpace: component.coordinateSpace ?? null,
+      visibleBounds: component.visibleBounds ? rectFrom(component.visibleBounds) : null,
+      clipBounds: component.clipBounds ? rectFrom(component.clipBounds) : null,
+      measurementFrameGeneration: component.measurementFrameGeneration ?? null,
       hitMetrics: hitMetrics(component, bounds),
       clipped: clippedBy(bounds, viewportRect),
       raw: component,
     };
   });
+  const auditNodes = nodes.filter(
+    (node) => node.measurementProvenance !== "paint-time",
+  );
   const overlaps = [];
-  for (let left = 0; left < nodes.length; left += 1) {
+  for (let left = 0; left < auditNodes.length; left += 1) {
     for (
       let rightIndex = left + 1;
-      rightIndex < nodes.length;
+      rightIndex < auditNodes.length;
       rightIndex += 1
     ) {
-      const a = nodes[left];
-      const b = nodes[rightIndex];
+      const a = auditNodes[left];
+      const b = auditNodes[rightIndex];
       const sameSiblingBand = a.depth === b.depth && a.parent === b.parent;
       // A floating overlay (e.g. the hint-strip footer) intentionally floats over
       // content with safe-area/scroll-edge insets — the list viewport is reduced by
@@ -340,15 +348,15 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
       }
     }
   }
-  const maxBottom = nodes.reduce(
+  const maxBottom = auditNodes.reduce(
     (current, node) => Math.max(current, bottom(node.bounds)),
     0,
   );
-  const clippedNodeCount = nodes.filter((node) => node.clipped).length;
+  const clippedNodeCount = auditNodes.filter((node) => node.clipped).length;
   const overlapCount = overlaps.length;
   const overflowY = maxBottom > viewportRect.height;
-  const nodesWithVisualStyle = nodes.filter((node) => node.visualStyle != null);
-  const controlsWithHitFailures = nodes.filter((node) => {
+  const nodesWithVisualStyle = auditNodes.filter((node) => node.visualStyle != null);
+  const controlsWithHitFailures = auditNodes.filter((node) => {
     const type = String(node.type ?? "");
     return (
       ["button", "input"].includes(type) &&
@@ -374,7 +382,7 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
     chromeLayer: (node.visualStyle as JsonObject).chromeLayer ?? null,
     materialSource: (node.visualStyle as JsonObject).materialSource ?? null,
   }));
-  const buttonCenterDistance = buttonCenterDistanceAssertions(nodes);
+  const buttonCenterDistance = buttonCenterDistanceAssertions(auditNodes);
   const hardcodedColorNodes = nodesWithVisualStyle.filter((node) => {
     const style = node.visualStyle as JsonObject;
     return style.usesSemanticThemeToken === false || style.colorSource === "hardcoded";
@@ -391,7 +399,7 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
   const backingScaleFactor =
     typeof info.backingScaleFactor === "number" ? info.backingScaleFactor : null;
   const appleConformance = appleGuidelineConformance(
-    nodes as unknown as NodeLike[],
+    auditNodes as unknown as NodeLike[],
     backingScaleFactor,
   );
   return {
@@ -416,9 +424,10 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
       pressureScore: clippedNodeCount + overlapCount + (overflowY ? 1 : 0),
     },
     visualAudit: {
-      nodeCount: nodes.length,
+      nodeCount: auditNodes.length,
+      paintMeasurementNodeCount: nodes.length - auditNodes.length,
       styledNodeCount: nodesWithVisualStyle.length,
-      unstyledNodeCount: nodes.length - nodesWithVisualStyle.length,
+      unstyledNodeCount: auditNodes.length - nodesWithVisualStyle.length,
       controlsWithHitFailures: controlsWithHitFailures.map((node) => ({
         name: node.name,
         type: node.type,
@@ -427,7 +436,7 @@ function analyzeLayout(layout: JsonObject, targetReceipt: JsonObject) {
       contentGlassNodes: contentNativeMaterialNodes.map((node) => node.name),
       contentNativeMaterialNodes: contentNativeMaterialNodes.map((node) => node.name),
       glassLayerViolations,
-      missingStyleNodeNames: nodes
+      missingStyleNodeNames: auditNodes
         .filter((node) => node.visualStyle == null)
         .map((node) => node.name),
       chromeLayers: Object.fromEntries(

@@ -1,0 +1,36 @@
+{
+  "screen": "terminal-prompt",
+  "status": "draft — reference PNG not captured yet; --sk-terminal-* tokens not yet generator-backed",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView menu material; blur radius and material bias are emulator calibration (--sk-emulator-*), and any reference capture samples the live desktop rather than the synthetic backdrop."
+    },
+    {
+      "selector": ".sk-window__effect",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Canvas 2D approximation of fx_starfield; colors are token-exact, geometry/phase are not."
+    },
+    {
+      "selector": ":root",
+      "kind": "contract",
+      "blocking": true,
+      "reason": "export_design_tokens has no terminal section: every --sk-terminal-* token is a screen-local alias of an --sk-emulator-proposed-terminal-* value transcribed from Rust source (receipts in design/mockups/briefs/terminal-prompt-brief.md). Values are MEASURED-from-source but NOT generator-backed — blocking until the proposed src/design_contract section ships and the proposed block is deleted."
+    },
+    {
+      "selector": ".sk-term-hint-strip",
+      "kind": "conflict",
+      "blocking": false,
+      "reason": "Source math says the SDK terminal's GPUI HintStrip footer never paints: the 700pt shell (render_prompts/term.rs content_height = layout::MAX_HEIGHT) sits below the 38pt context header inside a clipped flex box (~662pt), so the strip band (shell y 664-700) starts past the clip line. Additionally the entity is sized with FOOTER_HEIGHT=30 (prompt_handler/mod.rs:2219-2221) while the strip is HINT_STRIP_HEIGHT=36. The mockup keeps the strip clipped at its source-true position. Needs runtime verification (devtools capture) before treating the invisible footer as intended design."
+    },
+    {
+      "selector": ".sk-term-entity, .sk-term-row",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI shapes JetBrains Mono runs inside fixed 8.43px-per-cell batch spans (measured em advance 8.4287 rounded up per term_prompt/mod.rs conservative_cell_width); the browser lays glyphs at the font's natural advance (~8.4px at 14px), accumulating ~0.03px/char drift on long runs. Row pitch (18.2px), text origin, and cursor cell geometry remain blocking once a reference exists."
+    }
+  ]
+}

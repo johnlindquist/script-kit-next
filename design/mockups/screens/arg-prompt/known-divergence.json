@@ -1,0 +1,41 @@
+{
+  "screen": "arg-prompt",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView menu material; blur radius and material bias are emulator calibration (--sk-emulator-*), and the reference capture samples the user's live desktop rather than the synthetic backdrop."
+    },
+    {
+      "selector": ".sk-window__effect",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Canvas 2D approximation of fx_starfield; particle phase uncontrolled at capture time. Colors are token-exact (--sk-starfield-color-*), geometry/phase are not."
+    },
+    {
+      "selector": "[data-native-footer]",
+      "kind": "native",
+      "blocking": false,
+      "reason": "The real footer is a native AppKit NSVisualEffectView overlay window — GPUI reserves only a 32px transparent spacer (render_native_main_window_footer_spacer -> current_main_menu_footer_height() = 32, components/footer_chrome.rs:178-180), so the reference PNG shows an empty band with no button pixels. Button truth (Run '↵' + Actions '⌘K' from standard_main_window_footer_buttons, app_impl/ui_window.rs:741-781) must be verified via an activeFooter protocol probe, not the reference. The 32px band BOUNDARY remains blocking."
+    },
+    {
+      "selector": ".sk-arg-caret",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "gpui-component paints the caret 2px wide (vendor/gpui-component/crates/ui/src/input/blink_cursor.rs:32) at 0.85 x the input line height (element.rs:283-287); the mockup falls back to the main-menu caret tokens (2.5 x 18) until --sk-arg-input-caret-width/-height are generated. Caret ORIGIN (input text origin, x=16) remains blocking; caret box size is not until the exporter emits the arg caret tokens."
+    },
+    {
+      "selector": ".sk-window--arg",
+      "kind": "pending-token",
+      "blocking": false,
+      "reason": "True window height is height_for_view(ArgPromptWithChoices, 6) = 319px (src/window_resize/mod.rs:623-629); no generated token carries it yet, so the mockup falls back to --sk-window-main-height (480px). Compare only the top 319px until --sk-arg-window-height ships. Related paint truth: the 319px model reserves 40px/row (list_item LIST_ITEM_HEIGHT) while rows paint 44px (InfoBarBase item_height), so the real app clips the 6th row to ~28px — the mockup's fallback height hides this clip."
+    },
+    {
+      "selector": ".sk-list-row__name, .sk-list-row__description, .sk-arg-placeholder, .sk-footer-label",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI/CoreText vs browser glyph rasterization; .AppleSystemUIFont weights 430/450 may rasterize differently than -apple-system, and glyph advances drift over long runs. Text origins, line boxes, and row baselines must still match."
+    }
+  ]
+}

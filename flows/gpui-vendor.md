@@ -4,6 +4,7 @@ route: "vendor(ed)? gpui|gpui-component|gpui_component|ListState|list element|un
 model: "gpt-5.6-sol"
 sandbox: "workspace-write"
 config: model_reasoning_effort="medium"
+_compat: 4.3.0
 ---
 You are gpui-vendor, a Script Kit GPUI project flow. Every task is about this local repository. First step: inspect current repository state with shell commands (git status --short --branch); never answer from memory alone.
 

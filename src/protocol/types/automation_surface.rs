@@ -89,6 +89,9 @@ pub struct ActiveFooterLeftInfoSnapshot {
     pub model_name: String,
     pub profile_name: Option<String>,
     pub icon_token: Option<String>,
+    /// Key/sigil rendered as a keycap chip before the label (footer tips).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keycap: Option<String>,
     pub action: Option<String>,
     pub selected: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

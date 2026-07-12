@@ -771,6 +771,7 @@ pub(crate) fn render_universal_prompt_hint_strip() -> AnyElement {
 pub(crate) fn render_native_main_window_footer_spacer() -> AnyElement {
     div()
         .id("native-main-window-footer-spacer")
+        .debug_selector(|| "native-main-window-footer-spacer".to_string())
         .w_full()
         .h(px(
             crate::components::footer_chrome::current_main_menu_footer_height(),

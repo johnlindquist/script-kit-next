@@ -64,6 +64,9 @@ pub enum SpineListRowKind {
     CaptureTarget {
         target: SharedString,
     },
+    Flow {
+        flow_id: SharedString,
+    },
     Hint,
     Empty,
 }
@@ -78,6 +81,7 @@ impl SpineListRowKind {
             Self::Profile { .. } => "Profile",
             Self::Style { .. } => "Style",
             Self::CaptureTarget { .. } => "Capture",
+            Self::Flow { .. } => "Flow",
             Self::Hint => "Hint",
             Self::Empty => "Empty",
         }
@@ -92,6 +96,7 @@ impl SpineListRowKind {
             Self::Profile { .. } => ("Profile", "user-round"),
             Self::Style { .. } => ("Style", "sparkles"),
             Self::CaptureTarget { .. } => ("Capture", "inbox"),
+            Self::Flow { .. } => ("Flow", "flow"),
             Self::Hint => ("Hint", "info"),
             Self::Empty => ("Empty", "circle"),
         }
@@ -204,7 +209,7 @@ pub(super) fn matches_query(value: &str, query: &str) -> bool {
     value_lower.contains(&query) || crate::scripts::search::is_fuzzy_match(&value_lower, &query)
 }
 
-fn section_with_empty(
+pub(super) fn section_with_empty(
     id: &'static str,
     title: impl Into<SharedString>,
     subtitle: Option<SharedString>,
@@ -310,6 +315,18 @@ pub(crate) fn build_spine_list_sections_full_with_resolved_tokens_and_context(
         }
         SpineSegmentKind::SlashCommand { .. } => {
             vec![build_slash_command_section(parse, projection)]
+        }
+        SpineSegmentKind::Flow { .. } => {
+            let range = active_segment_range(parse, projection);
+            vec![super::catalog_flows::build_flow_section(
+                &projection.active_query,
+                projection.active_segment_index,
+                range,
+                build_context
+                    .current_cwd
+                    .and_then(|path| path.to_str())
+                    .map(|path| path.to_string()),
+            )]
         }
         SpineSegmentKind::Profile { .. } => vec![build_profile_section(parse, projection)],
         SpineSegmentKind::Style { .. } => {
@@ -615,6 +632,7 @@ fn spine_segment_kind_cache_key(kind: &SpineSegmentKind) -> String {
             sub_query,
         } => format!("context:{context_type}:sub={sub_query:?}"),
         SpineSegmentKind::SlashCommand { command } => format!("slash:{command}"),
+        SpineSegmentKind::Flow { query } => format!("flow:{query}"),
         SpineSegmentKind::Profile { profile_id } => format!("profile:{profile_id}"),
         SpineSegmentKind::Style { style_id } => format!("style:{style_id}"),
         SpineSegmentKind::Capture { target, args } => {

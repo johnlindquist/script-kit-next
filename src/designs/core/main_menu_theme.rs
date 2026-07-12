@@ -237,12 +237,23 @@ pub struct FooterMetricsTokens {
     pub font_weight: FontWeight,
     pub keycap_padding_x: f32,
     pub keycap_padding_y: f32,
+    /// Horizontal padding for multi-char word keycaps ("Space", "Enter");
+    /// single glyphs keep the square min-width chip and `keycap_padding_x`.
+    pub word_keycap_padding_x: f32,
     pub keycap_radius: f32,
     pub keycap_font_size: f32,
     pub keycap_height: f32,
     pub key_glyph_nudge_y: f32,
     pub return_glyph_nudge_y: f32,
     pub semicolon_glyph_nudge_y: f32,
+    /// Optical corrections for the ⌘ glyph, whose ink sits low-left within
+    /// its advance box at footer keycap sizes.
+    pub cmd_glyph_nudge_x: f32,
+    pub cmd_glyph_nudge_y: f32,
+    /// Baseline correction for word keycaps: line-box centering leaves the
+    /// cap+descender ink sitting low, so words ride slightly high of the
+    /// single-glyph nudge.
+    pub word_glyph_nudge_y: f32,
     pub run_slot_min_width: f32,
     pub run_slot_max_width: f32,
     pub actions_slot_width: f32,
@@ -698,12 +709,16 @@ fn base_main_menu_theme_def(
             font_weight: FontWeight(400.0),
             keycap_padding_x: 0.0,
             keycap_padding_y: 0.0,
+            word_keycap_padding_x: 5.0,
             keycap_radius: 6.0,
             keycap_font_size: 11.0,
             keycap_height: 20.0,
             key_glyph_nudge_y: 1.0,
             return_glyph_nudge_y: 1.0,
             semicolon_glyph_nudge_y: -1.0,
+            cmd_glyph_nudge_x: 0.5,
+            cmd_glyph_nudge_y: 0.0,
+            word_glyph_nudge_y: -0.75,
             run_slot_min_width: 92.0,
             run_slot_max_width: 242.0,
             actions_slot_width: 92.0,

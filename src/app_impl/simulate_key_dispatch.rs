@@ -453,7 +453,7 @@ impl ScriptListApp {
                             "tab" => {
                                 // Mirrors the live Tab interceptor in
                                 // startup.rs: menu-syntax focus → empty-input
-                                // cwd pick → flow router (text) → root-dir
+                                // cwd pick → Quick AI (text) → root-dir
                                 // completion. Keep the two paths in lockstep
                                 // or the header Tab chip lies to automation.
                                 if view.menu_syntax_capture_form_owns_input() {
@@ -499,12 +499,12 @@ impl ScriptListApp {
                                     )
                                 {
                                     tracing::info!(
-                                        target: "script_kit::flows",
-                                        event = "flow_router_tab_entry",
-                                        "SimulateKey Tab → flow router"
+                                        target: "script_kit::tab_ai",
+                                        event = "quick_ai_tab_entry",
+                                        "SimulateKey Tab → Quick AI (zero-context spark)"
                                     );
                                     let query = view.filter_text.clone();
-                                    view.route_text_to_flow(query, window, ctx);
+                                    view.open_quick_ai_from_launcher(query, window, ctx);
                                 } else if view.try_navigate_root_file_directory_with_tab(
                                     has_shift, window, ctx,
                                 ) {
@@ -580,7 +580,7 @@ impl ScriptListApp {
                             "tab" => {
                                 // Mirrors the live Tab interceptor in
                                 // startup.rs: menu-syntax focus → empty-input
-                                // cwd pick → flow router (text) → root-dir
+                                // cwd pick → Quick AI (text) → root-dir
                                 // completion. Keep the two paths in lockstep
                                 // or the header Tab chip lies to automation.
                                 if view.menu_syntax_capture_form_owns_input() {
@@ -626,12 +626,12 @@ impl ScriptListApp {
                                     )
                                 {
                                     tracing::info!(
-                                        target: "script_kit::flows",
-                                        event = "flow_router_tab_entry",
-                                        "SimulateKey Tab → flow router"
+                                        target: "script_kit::tab_ai",
+                                        event = "quick_ai_tab_entry",
+                                        "SimulateKey Tab → Quick AI (zero-context spark)"
                                     );
                                     let query = view.filter_text.clone();
-                                    view.route_text_to_flow(query, window, ctx);
+                                    view.open_quick_ai_from_launcher(query, window, ctx);
                                 } else if view.try_navigate_root_file_directory_with_tab(
                                     has_shift, window, ctx,
                                 ) {
@@ -1913,10 +1913,7 @@ impl ScriptListApp {
                         && !_has_ctrl
                     {
                         if view.clear_builtin_view_filter(ctx) {
-                            logging::log(
-                                "STDIN",
-                                "SimulateKey: Escape - clear EmojiPicker filter",
-                            );
+                            logging::log("STDIN", "SimulateKey: Escape - clear EmojiPicker filter");
                         } else {
                             logging::log(
                                 "STDIN",
@@ -2298,12 +2295,19 @@ impl ScriptListApp {
                     }
                 }
                 AppView::FlowSessionView { .. } => {
-                    if has_cmd && has_shift && key_lower == "d" {
+                    if has_cmd && crate::ui_foundation::is_key_escape(&key_lower) {
+                        let session_id = match view.current_view {
+                            AppView::FlowSessionView { session_id } => session_id,
+                            _ => unreachable!(),
+                        };
+                        logging::log("STDIN", "SimulateKey: Cmd+Escape - terminate flow session");
+                        view.terminate_flow_session(session_id, window, ctx);
+                    } else if has_cmd && has_shift && key_lower == "d" {
                         logging::log(
                             "STDIN",
                             "SimulateKey: Cmd+Shift+D - background flow session",
                         );
-                        view.background_flow_session(ctx);
+                        view.background_flow_session(window, ctx);
                     } else {
                         // Flow sessions are ChatPrompt surfaces; real
                         // keystrokes go through simulateGpuiEvent only.

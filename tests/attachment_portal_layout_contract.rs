@@ -1,23 +1,41 @@
 use std::fs;
 
 #[test]
-fn attachment_portal_layout_uses_dedicated_split_nodes() {
+fn attachment_portal_layout_uses_shared_chrome_and_dedicated_split_content() {
     let source = fs::read_to_string("src/app_layout/build_layout_info.rs")
         .expect("build_layout_info source should be readable");
 
     for needle in [
-        "AttachmentPortalHeader",
-        "AttachmentPortalSearch",
+        "resolved_main_view_header_input_policy",
+        "main_view_header_metrics(menu_def, input_height)",
+        "MainViewHeader",
+        "MainViewContextZone",
+        "MainViewInput",
+        "MainViewMain",
+        "AttachmentPortalSurface",
         "AttachmentPortalContent",
         "AttachmentPortalList",
         "AttachmentPortalPreview",
         "AttachmentPortalRow",
-        "AttachmentPortalRunButton",
-        "AttachmentPortalActionsButton",
     ] {
         assert!(
             source.contains(needle),
             "Attachment Portal layout receipt is missing `{needle}`"
+        );
+    }
+
+    for forbidden in [
+        "AttachmentPortalHeader",
+        "AttachmentPortalSearch",
+        "AttachmentPortalLogoButton",
+        "AttachmentPortalRunButton",
+        "AttachmentPortalActionsButton",
+        "PORTAL_HEADER_HEIGHT",
+        "PORTAL_INPUT_VISUAL_HEIGHT",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "Attachment Portal must not keep stale custom header geometry: {forbidden}"
         );
     }
 }

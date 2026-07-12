@@ -1,0 +1,65 @@
+{
+  "screen": "clipboard-history",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView menu material; blur radius and material bias are emulator calibration (--sk-emulator-*), and the reference capture samples the live desktop rather than the synthetic backdrop."
+    },
+    {
+      "selector": ".sk-window__effect",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Canvas 2D approximation of fx_starfield; particle phase uncontrolled at capture time. Colors are token-exact, geometry/phase are not."
+    },
+    {
+      "selector": "[data-native-footer]",
+      "kind": "native",
+      "blocking": false,
+      "reason": "The footer is a native AppKit NSVisualEffectView overlay window — GPUI captureScreenshot shows an EMPTY 36px band. Labels here (Paste ↵ / Actions ⌘K / Agent ⌘↵) are derived from universal_prompt_hints_with_primary_label(\"Paste\") in src/prompt_layout_shell.rs and have NOT yet been receipt-verified with a live activeFooter probe for this surface; verify via protocol receipts, not the reference PNG."
+    },
+    {
+      "selector": ".sk-list-row__name, .sk-list-row__description, .sk-clipboard-section-header, .sk-placeholder, .sk-clipboard-preview__info, .sk-clipboard-preview__content",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI/CoreText vs browser glyph rasterization (.AppleSystemUIFont weight 450/500 and JetBrains Mono), plus Apple color-emoji raster for the 📄 icon glyph and the 📌 pin prefix. Text origins, row bounds, and block boundaries remain blocking."
+    },
+    {
+      "selector": ".sk-clipboard-preview__info-line-height",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "Placeholder alias computes 12px × 1.618034 = 19.416px while GPUI rounds its phi line height to exactly 19px (vendor/gpui/src/style.rs line_height_in_pixels). Sub-pixel drift accumulates ~2.5px over the six info rows until the exporter ships the rounded 19px token."
+    },
+    {
+      "selector": ".sk-clipboard-preview, .sk-clipboard-preview__content",
+      "kind": "token-pending",
+      "blocking": false,
+      "reason": "Preview-surface colors currently alias nearest existing tokens (--sk-window-vibrancy-tint for the 0.149-alpha panel, --sk-chrome-border for the 0.188/0.376 borders, --sk-theme-hover-background for the rgb(42 42 42 / 0.2) content block). Alphas diverge until export_design_tokens ships the proposed clipboard section (see briefs/clipboard-history-brief.md); geometry is exact and blocking."
+    },
+    {
+      "selector": ".sk-clipboard-preview__info-value",
+      "kind": "content",
+      "blocking": false,
+      "reason": "Relative/absolute timestamps and the selected row's description are time-dependent at capture. The 2026-07-11 reference even disagrees with itself — list row says '1 hour ago' while the preview Copied says 'just now' (startup pasteboard-capture refreshed the pinned entry's timestamp after the list snapshot). Compare structure and geometry, not the exact strings."
+    },
+    {
+      "selector": ".sk-placeholder",
+      "kind": "receipt-mismatch",
+      "blocking": false,
+      "reason": "Source configures the builtin placeholder 'Search clipboard history...' (src/app_execute/builtin_execution.rs:3557), but the 2026-07-11 reference paints the ROOT launcher placeholder. The mockup mirrors the capture; the discrepancy is recorded as clipboardPlaceholder.configuredVsPainted in the brief and needs a root-cause receipt before either string is contract."
+    },
+    {
+      "selector": ".sk-clipboard-preview__info-label",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "Stock-source resolution paints info labels pure white (rgb(text_muted) at full alpha; script-kit-dark sets text.muted #FFFFFF), but the 2026-07-11 capture shows visibly dimmed labels (live theme file, focus-aware unfocused blend, or vibrancy compositing). Label color is non-blocking until a capture under the stock preset with a focused window proves it; label geometry remains blocking."
+    },
+    {
+      "selector": ".sk-clipboard-rows",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "The live list mounts a transient scrollbar overlay (builtin_uniform_list_scrollbar) that auto-hides; the mockup omits it. With only 6 fixture rows in an 8-row viewport no thumb should paint in the reference."
+    }
+  ]
+}

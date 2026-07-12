@@ -101,6 +101,51 @@ fn unified_empty_flow_corpus_changes_nothing() {
 }
 
 #[test]
+fn multi_word_recall_bar_words_match_in_any_order() {
+    // Flows are the primary rows, so the launcher must recall a flow from
+    // the words the user remembers, not the order the filename chose.
+    // Two-sided: the flow carrying every query word must match; a flow
+    // carrying only one of the words must not ride along.
+    let flows = vec![
+        make_flow(
+            "flow-review-staged-changes",
+            Some("Look over the diff before commit."),
+        ),
+        make_flow("flow-review-inbox", Some("Morning inbox pass.")),
+    ];
+
+    // Reference anchors: the in-order phrase and the adjacent-word swap
+    // already match today (exact substring / compact fuzzy). If these fail,
+    // suspect the harness, not the word-order support.
+    for anchor in ["review staged", "staged review"] {
+        let hits = fuzzy_search_flows(&flows, anchor);
+        assert_eq!(hits.len(), 1, "anchor \"{anchor}\" must match");
+        assert_eq!(hits[0].flow.name, "flow-review-staged-changes");
+    }
+
+    // The bar: words that are NOT adjacent in the name still recall it in
+    // any order. Compact-fuzzy spans cannot carry this case — it rides on
+    // nucleo's AND-matched atoms plus the structured-abbreviation gate
+    // (word-boundary runs), so tightening either one busts this bar.
+    let out_of_order = fuzzy_search_flows(&flows, "changes review");
+    assert_eq!(
+        out_of_order.len(),
+        1,
+        "recall: non-adjacent out-of-order words must find the flow; \
+         precision: flow-review-inbox carries only one word and must not match"
+    );
+    assert_eq!(out_of_order[0].flow.name, "flow-review-staged-changes");
+
+    // Precision: a word that appears in no flow keeps the result empty even
+    // when the other word is common to both flows.
+    let miss = fuzzy_search_flows(&flows, "review deploy");
+    assert!(
+        miss.is_empty(),
+        "a missing word must not degrade to OR-matching"
+    );
+}
+
+#[test]
 fn flow_result_type_order_is_topmost() {
     let flows = vec![make_flow("flow-gmail", None)];
     let flow_result = {

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Arg Prompt mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: script-driven arg prompt (AppView::ArgPrompt), script-kit-dark,
+  InfoBarBase rows, Starfield. Deterministic open via the stdin protocol
+  Message fallback (StdinCommand::Protocol -> handle_stdin_protocol_message):
+    {"type":"arg","id":"design-arg-fixture","placeholder":"Pick a fruit",
+     "choices":[... 6 fruits, first selected ...],
+     "actions":[{"name":"Inspect Fruit","value":"inspect","hasAction":false}]}
+  Content will mirror reference/arg-prompt@2x.png once captured by
+  scripts/agentic/design-reference-capture.ts \-\-screen arg (proposed in
+  ../../briefs/arg-prompt-brief.md).
+
+  Anatomy truth (render_prompts/arg/render.rs render_arg_prompt):
+  - No context zone: ArgPrompt is NOT in uses_shared_main_view_header().
+  - Header: 16px side padding, 8px vertical padding, gpui-component Input
+    at 22px tall / 20px font (font_size_xl = ui_size 16 x 1.25).
+  - 1px divider with 16px side margins (render_header_divider).
+  - Choice rows are the SHARED ListItem with NO metrics override, so they
+    resolve MainMenuThemeVariant::default() = InfoBarBase: 44px rows,
+    radius 14, selected fill text-primary @ 0x20 — identical tokens to the
+    main menu. No icon slot is mounted (Choice has no icon field), and the
+    description paints only on the selected/hovered row.
+  - Footer: native AppKit overlay; GPUI reserves a 32px spacer
+    (current_main_menu_footer_height), NOT the main menu's 36px host.
+    Buttons from standard_main_window_footer_buttons: Run ↵ + Actions ⌘K
+    (no Agent chip — that is ScriptList-only).
+  - Window: 750 wide; height model = ARG_HEADER_HEIGHT(68) + 6x40 + 8 + 1
+    + 2 = 319px, which under-reserves the painted 44px rows: the 6th row
+    clips. See known-divergence.json + the brief's conflicts section.
+  Every visual value resolves through --sk-* custom properties; invented
+  --sk-arg-* tokens fall back to equal-valued generated tokens until the
+  exporter emits them (see brief "Tokens to generate").
+-->
+<main class="stage" id="stage">
+  <div class="sk-window sk-window--arg" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <canvas class="sk-window__effect" id="starfield" width="1500" height="640"></canvas>
+
+    <div class="sk-window__content">
+      <header class="sk-arg-header" data-component="render_arg_prompt header (prompt_layout_shell scaffold)">
+        <div class="sk-arg-input" data-placeholder="true" data-component="gpui-component Input (gpui_input_state)">
+          <span class="sk-arg-caret"></span>
+          <span class="sk-arg-placeholder">Pick a fruit</span>
+        </div>
+      </header>
+
+      <div class="sk-divider sk-arg-divider" data-component="render_header_divider"></div>
+
+      <section class="sk-arg-list" data-component="render_arg_prompt uniform_list('arg-choices')">
+        <!-- Shared ListItem rows, InfoBarBase metrics, iconless. Description
+             paints on the selected row only (progressive disclosure). -->
+        <div class="sk-list-row" data-state="selected" data-component="list_item (no metrics override)">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Apple</span>
+              <span class="sk-list-row__description">Crisp and sweet — the default pick</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item (no metrics override)">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Banana</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item (no metrics override)">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Cherry</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item (no metrics override)">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Dragonfruit</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item (no metrics override)">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Elderberry</span></span>
+          </div>
+        </div>
+
+        <!-- 6th row: clipped by the 319px height model (paints 28 of 44px). -->
+        <div class="sk-list-row" data-component="list_item (no metrics override)">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Fig</span></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Native AppKit footer overlay — GPUI paints only a 32px transparent
+           spacer (render_native_main_window_footer_spacer). Button truth must
+           come from a live activeFooter probe: Run ↵ + Actions ⌘K. -->
+      <footer class="sk-footer-host sk-footer-host--arg" data-component="native footer spacer + overlay" data-native-footer>
+        <div class="sk-footer-rail" data-component="footer_chrome">
+          <span class="sk-footer-spacer"></span>
+          <button class="sk-footer-action sk-footer-action--run">
+            <span class="sk-footer-label">Run</span>
+            <kbd class="sk-keycap">↵</kbd>
+          </button>
+          <button class="sk-footer-action sk-footer-action--actions">
+            <span class="sk-footer-label">Actions</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</main>
+<script src="../main-menu/starfield.js"></script>
+</body>
+</html>

@@ -55,8 +55,8 @@ impl ScriptListApp {
                     initial_input: Some("Fixture follow-up".to_string()),
                     initial_context_parts: Vec::new(),
                     display_name: "Agent Chat".into(),
-                    profile_id:
-                        crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID.to_string(),
+                    profile_id: crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID
+                        .to_string(),
                     profile_display_name: Some("Agent Chat".into()),
                     profile_icon_name: None,
                     selected_agent: None,
@@ -105,18 +105,27 @@ impl ScriptListApp {
         let (_broker, permission_rx) = crate::ai::agent_chat::ui::AgentChatPermissionBroker::new();
         let fixture =
             crate::ai::agent_chat::ui::kitchen_sink_fixture::agent_chat_kitchen_sink_fixture();
+        // Pinned, deliberately LONG fixture cwd: reference captures must be
+        // byte-reproducible across machines (the old temp_dir()-derived path
+        // carried a per-machine /var/folders/<hash>/ prefix) while still
+        // stress-testing header-lane truncation and non-overlap. The real
+        // PathBuf → cwd_display formatting path stays exercised.
+        let fixture_cwd = std::path::PathBuf::from(
+            crate::ai::agent_chat::ui::style_contract::AGENT_CHAT_KITCHEN_SINK_FIXTURE_CWD,
+        );
+        let _ = std::fs::create_dir_all(&fixture_cwd);
         let thread = cx.new(|cx| {
             crate::ai::agent_chat::ui::AgentChatThread::new(
                 std::sync::Arc::new(StandardAgentChatMockFixtureConnection),
                 permission_rx,
                 crate::ai::agent_chat::ui::AgentChatThreadInit {
                     ui_thread_id: fixture.id.to_string(),
-                    cwd: std::env::temp_dir().join("script-kit-agent-chat-kitchen-sink-fixture"),
+                    cwd: fixture_cwd,
                     initial_input: Some("Tweak this kitchen sink transcript.".to_string()),
                     initial_context_parts: Vec::new(),
                     display_name: fixture.title.into(),
-                    profile_id:
-                        crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID.to_string(),
+                    profile_id: crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID
+                        .to_string(),
                     profile_display_name: Some("Agent Chat Kitchen Sink".into()),
                     profile_icon_name: None,
                     selected_agent: None,
@@ -257,10 +266,7 @@ impl ScriptListApp {
                 &profile_ctx,
             )
         } else if quick_ai {
-            crate::ai::agent_chat::launch::resolve_quick_ai_pi_launch(
-                &ai_preferences,
-                &profile_ctx,
-            )
+            crate::ai::agent_chat::launch::resolve_quick_ai_pi_launch(&ai_preferences, &profile_ctx)
         } else {
             crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
                 &ai_preferences,
@@ -598,8 +604,7 @@ impl ScriptListApp {
         // Every persisted cwd change is also a flow-discovery boundary:
         // kick the roster fetch for the new effective cwd immediately so
         // the main-menu Flows section reflects it without waiting for TTL.
-        crate::flows::catalog::flow_catalog()
-            .refresh(&crate::flows::resolve_flow_cwd(cwd.clone()));
+        crate::flows::catalog::flow_catalog().refresh(&crate::flows::resolve_flow_cwd(cwd.clone()));
         std::thread::Builder::new()
             .name("persist-spine-cwd".into())
             .spawn(move || {

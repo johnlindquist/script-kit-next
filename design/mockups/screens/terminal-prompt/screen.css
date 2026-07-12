@@ -1,0 +1,248 @@
+/* Terminal-prompt screen: stage layout, browser-only emulator calibration,
+ * PROPOSED terminal tokens, and the screen-owned terminal anatomy.
+ *
+ * Rust anatomy this mirrors (all cited in
+ * design/mockups/briefs/terminal-prompt-brief.md):
+ *   window 750×700 (MAIN_WINDOW_WIDTH, ViewType::TermPrompt → MAX_HEIGHT 700)
+ *   context header: padding-x 16 (HEADER_PADDING_X) / padding-y 8, row 22 → 38
+ *   below it a clipped flex-1 box (662) holding a FIXED 700pt terminal shell:
+ *     terminal content child (flex-1 664, overflow hidden)
+ *       TermPrompt entity: explicit 670pt box, padding 8/12/12/8,
+ *       JetBrains Mono 14pt, cell 8.43×18.2 (1.3 line-height multiplier —
+ *       terminal OVERRIDES GPUI's φ default), transparent cell bg (vibrancy)
+ *     HintStrip footer 36pt — lands past the 662 clip line (never paints;
+ *       kept in DOM clipped, recorded in known-divergence.json)
+ *
+ * TOKEN STATUS: export_design_tokens has no terminal section yet. The
+ * --sk-terminal-* names below are the PROPOSED generated names; their
+ * provisional values live in --sk-emulator-proposed-terminal-* (emulator
+ * namespace = declared-literal by design, see lint header). When the Rust
+ * exporter ships the terminal section, delete the proposed block and the
+ * aliases resolve from generated/tokens.css unchanged.
+ */
+
+:root {
+  /* Browser-only vibrancy calibration (same emulator values as sibling screens). */
+  --sk-emulator-menu-blur: 32px;
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 28 31 / 0.42),
+    rgb(20 20 23 / 0.42)
+  );
+  --sk-emulator-desktop: radial-gradient(
+      1200px 700px at 20% 10%,
+      rgb(64 46 88 / 0.9),
+      transparent 60%
+    ),
+    radial-gradient(
+      1000px 800px at 85% 80%,
+      rgb(26 58 74 / 0.9),
+      transparent 55%
+    ),
+    linear-gradient(160deg, rgb(24 22 30), rgb(12 12 16));
+
+  /* ── PROPOSED terminal contract values (measured from Rust source; see
+   *    brief for file:line receipts). Emulator-namespaced until the
+   *    design_contract exporter emits them. ─────────────────────────── */
+  --sk-emulator-proposed-terminal-window-height: 700px; /* DEFAULT_LAYOUT_MAX_HEIGHT */
+  --sk-emulator-proposed-terminal-entity-height: 670px; /* MAX_HEIGHT − FOOTER_HEIGHT(30) */
+  --sk-emulator-proposed-terminal-font-size: 14px; /* DEFAULT_TERMINAL_FONT_SIZE */
+  --sk-emulator-proposed-terminal-cell-width: 8.43px; /* measured FONT_MONO advance 8.4287 → ceil to hundredth */
+  --sk-emulator-proposed-terminal-cell-height: 18.2px; /* 14 × 1.3 LINE_HEIGHT_MULTIPLIER */
+  --sk-emulator-proposed-terminal-padding-top: 8px; /* ContentPadding.top */
+  --sk-emulator-proposed-terminal-padding-bottom: 8px; /* effective_padding_bottom = top */
+  --sk-emulator-proposed-terminal-padding-left: 12px; /* ContentPadding.left */
+  --sk-emulator-proposed-terminal-padding-right: 12px; /* ContentPadding.right */
+  --sk-emulator-proposed-terminal-cursor-background: rgb(251 191 36); /* accent.selected */
+  --sk-emulator-proposed-terminal-selection-background: rgb(90 90 90 / 0.0588235294); /* selected_subtle @ 0x0f */
+  --sk-emulator-proposed-terminal-ansi-green: rgb(80 250 123); /* theme.colors.terminal.green 0x50fa7b */
+  --sk-emulator-proposed-terminal-hint-height: 36px; /* HINT_STRIP_HEIGHT */
+  --sk-emulator-proposed-terminal-hint-padding-x: 14px; /* HINT_STRIP_PADDING_X */
+  --sk-emulator-proposed-terminal-hint-padding-y: 8px; /* HINT_STRIP_PADDING_Y */
+  --sk-emulator-proposed-terminal-hint-gap: 8px; /* HINT_STRIP_CONTENT_GAP */
+  --sk-emulator-proposed-terminal-hint-text-size: 12.5px; /* FOOTER_HINT_TEXT_SIZE */
+  --sk-emulator-proposed-terminal-hint-icon-size: 14px; /* KEY_ICON_SIZE */
+  --sk-emulator-proposed-terminal-hint-icon-gap: 3px; /* KEY_ICON_LABEL_GAP */
+  --sk-emulator-proposed-terminal-hint-keycap-padding-x: 6px; /* KEYCAP_PADDING_X */
+  --sk-emulator-proposed-terminal-hint-keycap-padding-y: 1px; /* KEYCAP_PADDING_Y */
+  --sk-emulator-proposed-terminal-hint-keycap-radius: 5px; /* KEYCAP_RADIUS */
+  --sk-emulator-proposed-terminal-hint-keycap-background: rgb(255 255 255 / 0.12); /* text.primary @ KEYCAP_BG_OPACITY */
+
+  /* ── PROPOSED generated names (aliases; pure var() indirection — these are
+   *    the exact names the exporter should emit). ─────────────────────── */
+  --sk-terminal-window-height: var(--sk-emulator-proposed-terminal-window-height);
+  --sk-terminal-entity-height: var(--sk-emulator-proposed-terminal-entity-height);
+  --sk-terminal-font-size: var(--sk-emulator-proposed-terminal-font-size);
+  --sk-terminal-cell-width: var(--sk-emulator-proposed-terminal-cell-width);
+  --sk-terminal-cell-height: var(--sk-emulator-proposed-terminal-cell-height);
+  --sk-terminal-padding-top: var(--sk-emulator-proposed-terminal-padding-top);
+  --sk-terminal-padding-bottom: var(--sk-emulator-proposed-terminal-padding-bottom);
+  --sk-terminal-padding-left: var(--sk-emulator-proposed-terminal-padding-left);
+  --sk-terminal-padding-right: var(--sk-emulator-proposed-terminal-padding-right);
+  --sk-terminal-cursor-background: var(--sk-emulator-proposed-terminal-cursor-background);
+  --sk-terminal-selection-background: var(--sk-emulator-proposed-terminal-selection-background);
+  --sk-terminal-ansi-green: var(--sk-emulator-proposed-terminal-ansi-green);
+  --sk-terminal-hint-height: var(--sk-emulator-proposed-terminal-hint-height);
+  --sk-terminal-hint-padding-x: var(--sk-emulator-proposed-terminal-hint-padding-x);
+  --sk-terminal-hint-padding-y: var(--sk-emulator-proposed-terminal-hint-padding-y);
+  --sk-terminal-hint-gap: var(--sk-emulator-proposed-terminal-hint-gap);
+  --sk-terminal-hint-text-size: var(--sk-emulator-proposed-terminal-hint-text-size);
+  --sk-terminal-hint-icon-size: var(--sk-emulator-proposed-terminal-hint-icon-size);
+  --sk-terminal-hint-icon-gap: var(--sk-emulator-proposed-terminal-hint-icon-gap);
+  --sk-terminal-hint-keycap-padding-x: var(--sk-emulator-proposed-terminal-hint-keycap-padding-x);
+  --sk-terminal-hint-keycap-padding-y: var(--sk-emulator-proposed-terminal-hint-keycap-padding-y);
+  --sk-terminal-hint-keycap-radius: var(--sk-emulator-proposed-terminal-hint-keycap-radius);
+  --sk-terminal-hint-keycap-background: var(--sk-emulator-proposed-terminal-hint-keycap-background);
+
+  /* Aliases onto EXISTING generated tokens (no new values). */
+  --sk-terminal-header-padding-x: var(--sk-confirm-header-padding-x); /* HEADER_PADDING_X 16 — same panel header as confirm */
+  --sk-terminal-header-padding-y: var(--sk-confirm-header-padding-y); /* HEADER_PADDING_Y 8 */
+  --sk-terminal-text: var(--sk-color-text-primary); /* default fg = theme text.primary */
+  --sk-terminal-hint-text: var(--sk-footer-text); /* text.primary @ HINT_TEXT_OPACITY 0.80 */
+  --sk-terminal-font-family: var(--sk-font-mono); /* FONT_MONO "JetBrains Mono" */
+}
+
+body {
+  margin: 0;
+}
+
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-desktop);
+}
+
+/* Window shell: main-menu chrome at the terminal full-content height. */
+.sk-window--terminal {
+  height: var(--sk-terminal-window-height);
+}
+
+/* Non-list views use the panel header padding (16), not the InfoBarBase
+ * shell padding (2) — render_main_view_context_header(ctx, HEADER_PADDING_X). */
+.sk-window--terminal .sk-header {
+  padding-inline: var(--sk-terminal-header-padding-x);
+  padding-block: var(--sk-terminal-header-padding-y);
+}
+
+/* render_impl.rs main_content_container else-branch: header above a clipped
+ * flex-1 content box. The 700pt terminal shell overflows it, exactly like
+ * GPUI's overflow_hidden. */
+.sk-term-clip {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* render_prompts/term.rs: fixed wrapper at layout::MAX_HEIGHT holding the
+ * terminal content child and the hint-strip footer. No background —
+ * vibrancy shows through (vibrancy_bg is None when vibrancy is enabled). */
+.sk-term-shell {
+  height: var(--sk-terminal-window-height);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.sk-term-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* TermPrompt entity container: explicit height (entities don't inherit flex
+ * sizing), config padding, monospace grid metrics, no cell backgrounds. */
+.sk-term-entity {
+  height: var(--sk-terminal-entity-height);
+  padding-top: var(--sk-terminal-padding-top);
+  padding-bottom: var(--sk-terminal-padding-bottom);
+  padding-left: var(--sk-terminal-padding-left);
+  padding-right: var(--sk-terminal-padding-right);
+  overflow: hidden;
+  font-family: var(--sk-terminal-font-family), ui-monospace, monospace;
+  font-size: var(--sk-terminal-font-size);
+  line-height: var(--sk-terminal-cell-height);
+  color: var(--sk-terminal-text);
+}
+
+/* One grid row per terminal line (render_content builds h=cell_height rows). */
+.sk-term-row {
+  height: var(--sk-terminal-cell-height);
+  white-space: pre;
+  overflow: hidden;
+}
+
+/* ANSI runs: explicit fg color spans batched by render_content. Default
+ * cells stay transparent for vibrancy. */
+.sk-term-ansi-green {
+  color: var(--sk-terminal-ansi-green);
+}
+
+.sk-term-bold {
+  font-weight: 700; /* CellAttributes::BOLD → FontWeight::BOLD */
+}
+
+/* Cursor cell: one cell painted with accent.selected background; the glyph
+ * under it inverts to the cell background (space here → pure block). */
+.sk-term-cursor {
+  display: inline-block;
+  width: var(--sk-terminal-cell-width);
+  height: var(--sk-terminal-cell-height);
+  vertical-align: bottom;
+  background: var(--sk-terminal-cursor-background);
+}
+
+/* Selection cells (not exercised by this fixture; token kept for the
+ * contract): selected_subtle at ~6% alpha over the original fg. */
+.sk-term-selection {
+  background: var(--sk-terminal-selection-background);
+}
+
+/* HintStrip footer — source-true position at the shell bottom, which the
+ * clip box crops off-window (see known-divergence.json). */
+.sk-term-hint-strip {
+  height: var(--sk-terminal-hint-height);
+  flex: none;
+  padding-inline: var(--sk-terminal-hint-padding-x);
+  padding-block: var(--sk-terminal-hint-padding-y);
+  display: flex;
+  align-items: center;
+  gap: var(--sk-terminal-hint-gap);
+  font-family: var(--sk-font-ui), -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.sk-term-hint-spacer {
+  flex: 1 1 auto;
+}
+
+/* One hint element: label first, key glyphs last (hint_strip.rs paint order). */
+.sk-term-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--sk-terminal-hint-icon-gap);
+  color: var(--sk-terminal-hint-text);
+  font-size: var(--sk-terminal-hint-text-size);
+}
+
+.sk-term-hint__keys {
+  display: flex;
+  align-items: center;
+  gap: var(--sk-terminal-hint-icon-gap);
+}
+
+.sk-term-hint__icon {
+  width: var(--sk-terminal-hint-icon-size);
+  height: var(--sk-terminal-hint-icon-size);
+  flex: none;
+}
+
+.sk-term-keycap {
+  padding-inline: var(--sk-terminal-hint-keycap-padding-x);
+  padding-block: var(--sk-terminal-hint-keycap-padding-y);
+  border-radius: var(--sk-terminal-hint-keycap-radius);
+  background: var(--sk-terminal-hint-keycap-background);
+  font-size: var(--sk-terminal-hint-text-size);
+  font-family: inherit;
+  line-height: 1;
+}

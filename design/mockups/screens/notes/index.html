@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Notes mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: Notes window (separate NSPanel, WindowKind::PopUp,
+  src/notes/window/window_ops.rs), script-kit-dark, vibrancy on, window NOT
+  hovered (rest chrome), command bar closed, editor mode (no preview, no
+  search, no toolbar). One note selected: title line, two paragraphs, a
+  list. Caret after "hug" (editor focused on open). Reference:
+  ./reference/notes@2x.png + ./reference/notes.crop.json.
+
+  All --sk-notes-* values come from generated/tokens.css (design_contract
+  notes section; contracts in src/notes/window/contract.rs,
+  src/components/notes_editor/contract.rs, and the markdown resolver in
+  src/notes/markdown_highlighting.rs).
+
+  Editor anatomy mirrors the real Input paint model: each visual row is a
+  fixed 20px line box (resolved.notes.editor.lineBoxHeight) with
+  `overflow: clip` — bold markdown title glyphs CLIP at the top exactly like
+  the reference (notesMarkdown.titleGlyphExtentsVsLineBox). The heading is
+  NOT a larger font: same nominal 16px, heavier weight, clipped. The line
+  "- Editor 16 px mono, 20 px line" soft-wraps in the 350px window; the
+  wrap point observed in the reference is encoded as two line boxes.
+
+  Unlike the main window: NO Starfield/fx shader layer, NO context zone,
+  and the footer is a GPUI strip INSIDE the window at the resolved 32px
+  band (--sk-notes-footer-height) — notes.footer.presentation
+  "inWindowGpui", not a native AppKit overlay. The layout model still
+  reserves only 28px (notes.layout.footerReservationHeight) — recorded as
+  the notesFooter.layoutReservationVsIntrinsicPaint conflict, deliberately
+  not "fixed" here.
+-->
+<main class="stage" id="stage">
+  <div class="sk-window sk-window--notes" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+
+    <div class="sk-window__content">
+      <header class="sk-notes-titlebar" data-component="notes::render_editor_titlebar">
+        <!-- Native macOS traffic lights: group origin (8,7) is app-authored
+             (notes.titlebar.trafficLightOriginX/Y); dot raster/colors are
+             native. -->
+        <span class="sk-notes-traffic" aria-hidden="true" data-component="native traffic lights">
+          <i class="sk-notes-traffic__dot" data-color="red"></i>
+          <i class="sk-notes-traffic__dot" data-color="yellow"></i>
+          <i class="sk-notes-traffic__dot" data-color="green"></i>
+        </span>
+        <!-- 60px leading reserve / centered title / 100px trailing reserve
+             (notes.titlebar.leadingReserveWidth/trailingReserveWidth).
+             Icon cluster is hover-reveal; empty at rest. -->
+        <span class="sk-notes-titlebar__reserve sk-notes-titlebar__reserve--traffic"></span>
+        <span class="sk-notes-titlebar__title">Design Contract Notes</span>
+        <span class="sk-notes-titlebar__reserve sk-notes-titlebar__reserve--icons"></span>
+      </header>
+
+      <section class="sk-notes-editor" data-component="components::notes_editor::render_input">
+        <!-- Editable Input: resolved theme mono 16px, fixed 20px line boxes,
+             tree-sitter markdown captures styled from the resolved highlight
+             theme (title / punctuation.special / punctuation.list_marker). -->
+        <div class="sk-notes-editor__line" data-kind="heading"><span class="sk-notes-markdown-heading-marker">#</span><span> </span><span class="sk-notes-markdown-title">Design Contract Notes</span></div>
+        <div class="sk-notes-editor__line" data-kind="blank"></div>
+        <div class="sk-notes-editor__line">Track every painted value in</div>
+        <div class="sk-notes-editor__line">the Notes window.</div>
+        <div class="sk-notes-editor__line" data-kind="blank"></div>
+        <div class="sk-notes-editor__line" data-kind="list"><span class="sk-notes-markdown-list-marker">-</span><span> Titlebar 36 px</span></div>
+        <div class="sk-notes-editor__line" data-kind="list"><span class="sk-notes-markdown-list-marker">-</span><span> Editor 16 px mono, 20 px</span></div>
+        <div class="sk-notes-editor__line" data-kind="wrap">line</div>
+        <div class="sk-notes-editor__line" data-kind="list"><span class="sk-notes-markdown-list-marker">-</span><span> Footer buttons hug</span><span class="sk-notes-caret" data-component="gpui-component input caret (overlay quad)"></span></div>
+      </section>
+
+      <footer class="sk-notes-footer" data-component="notes::render_editor_footer (rest opacity)">
+        <!-- Save status slot: empty at rest (post-autosave, flash elapsed);
+             min-width keeps geometry stable. -->
+        <span class="sk-notes-footer__status" data-component="notes-footer-save-status"></span>
+        <span class="sk-notes-footer__lane" data-component="mention preview lane (empty)"></span>
+        <!-- Same footer_chrome frames as the main window footer
+             (render_universal_footer_action_buttons, id_prefix "notes"):
+             Notes ⌘P · Actions ⌘K · Agent ⌘↵, one keycap per key. Band =
+             resolved.notes.footer.intrinsicHeight (32px). -->
+        <span class="sk-notes-footer__buttons" data-component="footer_chrome button frames">
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Notes</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">P</kbd>
+          </button>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Actions</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+          </button>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Agent</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">↵</kbd>
+          </button>
+        </span>
+      </footer>
+    </div>
+  </div>
+</main>
+</body>
+</html>

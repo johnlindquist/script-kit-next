@@ -326,6 +326,69 @@ pub(crate) fn prepend_root_brain_inbox_section(
     grouped.splice(0..0, section);
 }
 
+/// Pin live flow conversations above every other launcher row, including the
+/// synthetic Brain Inbox section. Session rows reuse the flow row language,
+/// but carry a session id so Enter reattaches instead of starting over.
+pub(crate) fn prepend_root_flow_sessions_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    sessions: &[crate::flows::session::FlowSessionMeta],
+    flows: &[crate::flows::model::FlowDescriptor],
+) {
+    let query = filter_text.trim().to_lowercase();
+    let mut live: Vec<&crate::flows::session::FlowSessionMeta> = sessions
+        .iter()
+        .filter(|meta| meta.state.is_live())
+        .filter(|meta| {
+            query.is_empty()
+                || meta.friendly_name.to_lowercase().contains(&query)
+                || meta.flow_name.to_lowercase().contains(&query)
+                || meta.state.label().contains(&query)
+        })
+        .collect();
+    live.sort_by(|a, b| b.id.cmp(&a.id));
+
+    let rows: Vec<SearchResult> = live
+        .into_iter()
+        .filter_map(|meta| {
+            let flow = flows.iter().find(|flow| flow.id == meta.flow_id)?.clone();
+            Some(SearchResult::Flow(crate::scripts::FlowMatch {
+                flow,
+                session_id: Some(meta.id),
+                display_name: meta.friendly_name.clone(),
+                subtitle: format!(
+                    "{} · {} · active conversation",
+                    meta.state.label(),
+                    meta.engine
+                ),
+                score: i32::MAX,
+                match_indices: crate::scripts::MatchIndices::default(),
+            }))
+        })
+        .collect();
+    if rows.is_empty() {
+        return;
+    }
+
+    let shift = rows.len();
+    for entry in grouped.iter_mut() {
+        if let GroupedListItem::Item(idx) = entry {
+            *idx += shift;
+        }
+    }
+    for (offset, row) in rows.into_iter().enumerate() {
+        flat_results.insert(offset, row);
+    }
+    let mut section = Vec::with_capacity(shift + 1);
+    section.push(GroupedListItem::SectionHeader(
+        "Active Flows".to_string(),
+        Some("bot".to_string()),
+    ));
+    section.extend((0..shift).map(GroupedListItem::Item));
+    grouped.splice(0..0, section);
+}
+
 /// Moves the launcher row identified by `is_alias_target` to the very top of
 /// the grouped list so Enter runs it.
 ///
@@ -695,6 +758,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     }
     let mut passive_budget =
         RootPassiveResultBudget::for_results(&flat_results, root_passive_result_limits);
+    let browser_tabs_domain_intent =
+        !root_source_filters.active() && crate::browser_tabs::query_is_bare_domain(filter_text);
     for source in root_passive_source_order {
         match source {
             crate::config::UnifiedSearchPassiveSource::Todos => {
@@ -728,6 +793,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     &mut passive_budget,
                     root_source_filters
                         .includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs),
+                    browser_tabs_domain_intent,
                 );
             }
             crate::config::UnifiedSearchPassiveSource::Brain => {
@@ -1142,17 +1208,35 @@ fn append_root_agent_chat_history_section(
         .enumerate()
         .map(|(rank, hit)| {
             let entry = hit.entry.clone();
-            let subtitle = format!(
-                "{} · {} message{}",
-                entry.preview_display(),
-                entry.message_count,
-                if entry.message_count == 1 { "" } else { "s" }
-            );
+            // Hidden-led matches say why they qualified instead of showing
+            // an unrelated preview with no visible match.
+            let hidden_excerpt = hit
+                .evidence
+                .as_ref()
+                .filter(|evidence| {
+                    evidence.title_indices.is_empty() && evidence.subtitle_indices.is_empty()
+                })
+                .and_then(|evidence| evidence.hidden_excerpt.as_ref());
+            let subtitle = match hidden_excerpt {
+                Some(excerpt) => format!(
+                    "Transcript match · {} · {} message{}",
+                    excerpt.text,
+                    entry.message_count,
+                    if entry.message_count == 1 { "" } else { "s" }
+                ),
+                None => format!(
+                    "{} · {} message{}",
+                    entry.preview_display(),
+                    entry.message_count,
+                    if entry.message_count == 1 { "" } else { "s" }
+                ),
+            };
             SearchResult::AgentChatHistory(crate::scripts::AgentChatHistoryMatch {
                 entry,
                 score: root_passive_result_score(rank),
                 matched_field: hit.matched_field,
                 subtitle,
+                evidence: hit.evidence.clone(),
             })
         })
         .collect::<Vec<_>>();
@@ -1421,15 +1505,31 @@ fn append_root_dictation_history_section(
         .map(|(rank, hit)| {
             let time = crate::dictation::format_history_timestamp(&hit.timestamp);
             let duration = crate::dictation::format_history_duration_ms(hit.audio_duration_ms);
+            // Matches beyond the saved preview surface a transcript excerpt
+            // so the row shows why it qualified.
+            let hidden_excerpt = hit
+                .evidence
+                .as_ref()
+                .filter(|evidence| {
+                    evidence.title_indices.is_empty() && evidence.subtitle_indices.is_empty()
+                })
+                .and_then(|evidence| evidence.hidden_excerpt.as_ref());
+            let subtitle = match hidden_excerpt {
+                Some(excerpt) => {
+                    format!("Transcript match · {} · {}", excerpt.text, time)
+                }
+                None => format!("{} · {} · {}", hit.target, duration, time),
+            };
             SearchResult::DictationHistory(crate::scripts::DictationHistoryMatch {
                 id: hit.id.clone(),
                 preview: hit.preview.clone(),
                 target: hit.target.clone(),
                 timestamp: hit.timestamp.clone(),
                 audio_duration_ms: hit.audio_duration_ms,
-                subtitle: format!("{} · {} · {}", hit.target, duration, time),
+                subtitle,
                 score: root_passive_result_score(rank),
                 matched_field: hit.matched_field,
+                evidence: hit.evidence.clone(),
             })
         })
         .collect::<Vec<_>>();
@@ -1456,6 +1556,7 @@ fn append_root_browser_tabs_section(
     options: crate::browser_tabs::RootBrowserTabsSectionOptions,
     budget: &mut RootPassiveResultBudget,
     explicit_source_filter: bool,
+    domain_intent: bool,
 ) {
     if advanced_query.is_some()
         || !crate::browser_tabs::root_browser_tabs_query_is_eligible(filter_text, options.clone())
@@ -1463,7 +1564,14 @@ fn append_root_browser_tabs_section(
         return;
     }
 
-    let limit = budget.limit_for_source(options.max_results);
+    // A bare domain is strong navigation intent. Give tabs their configured
+    // source allowance even when earlier primary/passive rows exhausted the
+    // shared discovery budget.
+    let limit = if domain_intent {
+        options.max_results
+    } else {
+        budget.limit_for_source(options.max_results)
+    };
     if limit == 0 && !explicit_source_filter {
         return;
     }
@@ -1495,7 +1603,17 @@ fn append_root_browser_tabs_section(
             false,
         )
     });
-    append_root_passive_section(grouped, flat_results, "Browser Tabs", rows, status);
+    if domain_intent && !rows.is_empty() {
+        tracing::info!(
+            event = "root_browser_tabs_domain_intent_hoist",
+            query = filter_text,
+            row_count = rows.len(),
+            "hoisting browser tabs for bare-domain query"
+        );
+        append_root_passive_section_at(grouped, flat_results, "Browser Tabs", rows, status, 0);
+    } else {
+        append_root_passive_section(grouped, flat_results, "Browser Tabs", rows, status);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2727,6 +2845,7 @@ mod advanced_query_tests {
             },
             score: 100,
             matched_field: crate::ai::agent_chat::ui::history::AgentChatHistorySearchField::Title,
+            evidence: None,
         }
     }
 
@@ -2793,6 +2912,70 @@ mod advanced_query_tests {
             provider_label: "Safari".to_string(),
             score: 100.0,
         }
+    }
+
+    #[test]
+    fn bare_domain_hoists_browser_tabs_ahead_of_every_group() {
+        let hits = vec![root_browser_tab_hit("tab/x", "X")];
+        let options = crate::browser_tabs::RootBrowserTabsSectionOptions {
+            enabled: true,
+            ..Default::default()
+        };
+
+        let mut domain_grouped = vec![
+            GroupedListItem::SectionHeader("Files".to_string(), None),
+            GroupedListItem::Item(0),
+        ];
+        let mut domain_flat = vec![builtin_result("Existing result")];
+        let mut exhausted_budget = RootPassiveResultBudget {
+            remaining_total: 0,
+            max_per_source: 0,
+        };
+        append_root_browser_tabs_section(
+            &mut domain_grouped,
+            &mut domain_flat,
+            "x.com",
+            None,
+            &hits,
+            options.clone(),
+            &mut exhausted_budget,
+            false,
+            true,
+        );
+
+        assert!(matches!(
+            domain_grouped.first(),
+            Some(GroupedListItem::SectionHeader(label, None)) if label == "Browser Tabs"
+        ));
+        let first_item = domain_grouped
+            .iter()
+            .find_map(|item| match item {
+                GroupedListItem::Item(index) => domain_flat.get(*index),
+                _ => None,
+            })
+            .expect("first selectable row");
+        assert!(matches!(first_item, SearchResult::BrowserTab(_)));
+
+        let mut ordinary_grouped = vec![
+            GroupedListItem::SectionHeader("Files".to_string(), None),
+            GroupedListItem::Item(0),
+        ];
+        let mut ordinary_flat = vec![builtin_result("Existing result")];
+        append_root_browser_tabs_section(
+            &mut ordinary_grouped,
+            &mut ordinary_flat,
+            "design",
+            None,
+            &hits,
+            options,
+            &mut RootPassiveResultBudget::unbounded(),
+            false,
+            false,
+        );
+        assert!(matches!(
+            ordinary_grouped.first(),
+            Some(GroupedListItem::SectionHeader(label, None)) if label == "Files"
+        ));
     }
 
     #[test]
@@ -2869,6 +3052,7 @@ mod advanced_query_tests {
             audio_duration_ms: 1200,
             score: 100,
             matched_field: crate::dictation::DictationHistorySearchField::Transcript,
+            evidence: None,
         }
     }
 
@@ -6365,6 +6549,106 @@ mod capture_mode_tests {
                 other => panic!("expected Script, got {other:?}"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod active_flow_session_section_tests {
+    use super::*;
+    use crate::brain::{InboxItem, InboxKind, RootBrainInboxSectionOptions};
+    use crate::flows::model::{FlowDescriptor, FlowSource};
+    use crate::flows::session::{FlowSessionMeta, SessionState, SessionTransport};
+
+    fn flow() -> FlowDescriptor {
+        FlowDescriptor {
+            id: "project:test".into(),
+            path: "/tmp/flow-test.md".into(),
+            source: FlowSource::Project,
+            name: "flow-test".into(),
+            description: Some("Test helper".into()),
+            engine: "codex".into(),
+            engine_source: None,
+            inputs: vec![],
+            is_workflow: false,
+            interactive: true,
+            mtime_ms: 0,
+            origin: None,
+            wrapper_command: None,
+        }
+    }
+
+    fn session() -> FlowSessionMeta {
+        FlowSessionMeta {
+            id: 42,
+            flow_id: "project:test".into(),
+            flow_name: "flow-test".into(),
+            friendly_name: "Test".into(),
+            origin: "Project".into(),
+            engine: "codex".into(),
+            flow_path: "/tmp/flow-test.md".into(),
+            flow_mtime_ms: 0,
+            cwd: "/tmp".into(),
+            transport: SessionTransport::CodexThread,
+            state: SessionState::NeedsYou,
+            started_at: std::time::Instant::now(),
+            turns: vec![],
+            active_turn: None,
+            thread_ready: true,
+            needs_rethread: false,
+        }
+    }
+
+    #[test]
+    fn live_sessions_pin_above_brain_and_drop_out_after_termination() {
+        let inbox = InboxItem {
+            id: 1,
+            kind: InboxKind::Commitment,
+            title: "Brain row".into(),
+            detail: String::new(),
+            source: "test".into(),
+            source_id: "test-1".into(),
+            created_at: 1,
+            resolved_at: None,
+        };
+        let mut grouped = vec![];
+        let mut flat = vec![];
+        prepend_root_brain_inbox_section(
+            &mut grouped,
+            &mut flat,
+            "",
+            &[inbox],
+            RootBrainInboxSectionOptions::default(),
+            2,
+        );
+        prepend_root_flow_sessions_section(&mut grouped, &mut flat, "", &[session()], &[flow()]);
+        assert!(
+            matches!(&grouped[0], GroupedListItem::SectionHeader(label, _) if label == "Active Flows")
+        );
+        assert!(matches!(&flat[0], SearchResult::Flow(row) if row.session_id == Some(42)));
+        assert!(matches!(&flat[1], SearchResult::BrainInboxItem(_)));
+
+        let mut after_grouped = vec![];
+        let mut after_flat = vec![];
+        prepend_root_flow_sessions_section(&mut after_grouped, &mut after_flat, "", &[], &[flow()]);
+        assert!(
+            after_grouped.is_empty(),
+            "terminated sessions add no launcher row"
+        );
+        assert!(after_flat.is_empty());
+    }
+
+    #[test]
+    fn live_sessions_match_typed_state_query() {
+        let mut grouped = vec![];
+        let mut flat = vec![];
+        prepend_root_flow_sessions_section(
+            &mut grouped,
+            &mut flat,
+            "needs you",
+            &[session()],
+            &[flow()],
+        );
+        assert!(matches!(&flat[0], SearchResult::Flow(row) if row.session_id == Some(42)));
     }
 }
 

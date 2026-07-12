@@ -161,6 +161,18 @@ pub(crate) fn build_staged_skill_prompt(
     skill_path: &std::path::Path,
 ) -> String {
     let skill_content = std::fs::read_to_string(skill_path).unwrap_or_default();
+    if owner_label == FLOW_OWNER_LABEL {
+        // `-` flow-search staging: same shape as skills, flow-native wording.
+        return if skill_content.is_empty() {
+            format!("Follow the flow \"{skill_title}\" from the mdflow roster for this session.")
+        } else {
+            format!(
+                "Follow the attached flow \"{skill_title}\" from the mdflow roster for this session.\n\n<flow path=\"{}\">\n{}\n</flow>",
+                skill_path.display(),
+                skill_content
+            )
+        };
+    }
     let owner_phrase = if owner_label == "Claude Code" {
         format!("from {owner_label}")
     } else {
@@ -195,5 +207,27 @@ pub(crate) fn build_skill_context_part(
         skill_name: skill_title.to_string(),
         owner_label: owner_label.to_string(),
         slash_name: slash_name.to_string(),
+    }
+}
+
+/// Owner label marking a staged flow (the `-` flow search); switches the
+/// staged-prompt wording in `build_staged_skill_prompt` from skill to flow.
+pub(crate) const FLOW_OWNER_LABEL: &str = "Flow";
+
+/// Build the attached flow context part for the `-` flow search — skill
+/// parity: the composer keeps a compact `-name` token while the submitted
+/// prompt carries the full flow markdown.
+pub(crate) fn build_flow_context_part(
+    flow_title: &str,
+    flow_token: &str,
+    flow_path: &std::path::Path,
+) -> crate::ai::message_parts::AiContextPart {
+    let token = flow_token.trim();
+    crate::ai::message_parts::AiContextPart::SkillFile {
+        path: flow_path.to_string_lossy().to_string(),
+        label: token.to_string(),
+        skill_name: flow_title.to_string(),
+        owner_label: FLOW_OWNER_LABEL.to_string(),
+        slash_name: token.trim_start_matches('-').to_string(),
     }
 }

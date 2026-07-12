@@ -16,6 +16,7 @@ const EMBEDDED_SDK: &str = include_str!("../../scripts/kit-sdk.ts");
 const EMBEDDED_SCRIPTKIT_CLI: &str = include_str!("../../scripts/mcp-cli.ts");
 /// Optional theme example (included at compile time)
 const EMBEDDED_THEME_EXAMPLE: &str = include_str!("../../kit-init/theme.example.json");
+pub(crate) const EMBEDDED_TIPS: &str = include_str!("../../kit-init/tips.json");
 /// Embedded package.json template for user's kit directory
 /// The "type": "module" enables top-level await in all .ts scripts
 const EMBEDDED_PACKAGE_JSON: &str = r#"{
@@ -750,6 +751,14 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_THEME_EXAMPLE,
         &mut warnings,
         "theme.json",
+    );
+
+    // User-owned: local tips catalog (only create if missing).
+    write_string_if_missing(
+        &kit_dir.join("tips.json"),
+        EMBEDDED_TIPS,
+        &mut warnings,
+        "tips.json",
     );
 
     // App-managed: tsconfig.json path mappings in the workspace root (merge-safe)

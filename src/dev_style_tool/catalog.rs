@@ -1192,6 +1192,34 @@ f32_nested_knob!(
     footer.metrics.semicolon_glyph_nudge_y
 );
 f32_nested_knob!(
+    FOOTER_CMD_GLYPH_NUDGE_X_KNOB_ID,
+    get_footer_cmd_glyph_nudge_x,
+    apply_footer_cmd_glyph_nudge_x,
+    "footer.cmdGlyphNudgeX",
+    footer.metrics.cmd_glyph_nudge_x
+);
+f32_nested_knob!(
+    FOOTER_CMD_GLYPH_NUDGE_Y_KNOB_ID,
+    get_footer_cmd_glyph_nudge_y,
+    apply_footer_cmd_glyph_nudge_y,
+    "footer.cmdGlyphNudgeY",
+    footer.metrics.cmd_glyph_nudge_y
+);
+f32_nested_knob!(
+    FOOTER_WORD_GLYPH_NUDGE_Y_KNOB_ID,
+    get_footer_word_glyph_nudge_y,
+    apply_footer_word_glyph_nudge_y,
+    "footer.wordGlyphNudgeY",
+    footer.metrics.word_glyph_nudge_y
+);
+f32_nested_knob!(
+    FOOTER_WORD_KEYCAP_PADDING_X_KNOB_ID,
+    get_footer_word_keycap_padding_x,
+    apply_footer_word_keycap_padding_x,
+    "footer.wordKeycapPaddingX",
+    footer.metrics.word_keycap_padding_x
+);
+f32_nested_knob!(
     FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,
     get_footer_run_slot_min_width,
     apply_footer_run_slot_min_width,
@@ -2902,6 +2930,50 @@ pub const STYLE_KNOBS: &[StyleKnob] = &[
         step: 0.5,
         get: get_footer_semicolon_glyph_nudge_y,
         apply: apply_footer_semicolon_glyph_nudge_y,
+    },
+    StyleKnob {
+        id: FOOTER_CMD_GLYPH_NUDGE_X_KNOB_ID,
+        label: "Footer cmd glyph nudge X",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: -6.0,
+        max: 6.0,
+        step: 0.25,
+        get: get_footer_cmd_glyph_nudge_x,
+        apply: apply_footer_cmd_glyph_nudge_x,
+    },
+    StyleKnob {
+        id: FOOTER_CMD_GLYPH_NUDGE_Y_KNOB_ID,
+        label: "Footer cmd glyph nudge Y",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: -6.0,
+        max: 6.0,
+        step: 0.25,
+        get: get_footer_cmd_glyph_nudge_y,
+        apply: apply_footer_cmd_glyph_nudge_y,
+    },
+    StyleKnob {
+        id: FOOTER_WORD_GLYPH_NUDGE_Y_KNOB_ID,
+        label: "Footer word glyph nudge Y",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: -6.0,
+        max: 6.0,
+        step: 0.25,
+        get: get_footer_word_glyph_nudge_y,
+        apply: apply_footer_word_glyph_nudge_y,
+    },
+    StyleKnob {
+        id: FOOTER_WORD_KEYCAP_PADDING_X_KNOB_ID,
+        label: "Footer word keycap padding X",
+        group: StyleKnobGroup::Footer,
+        unit: StyleUnit::Px,
+        min: 0.0,
+        max: 12.0,
+        step: 0.5,
+        get: get_footer_word_keycap_padding_x,
+        apply: apply_footer_word_keycap_padding_x,
     },
     StyleKnob {
         id: FOOTER_RUN_SLOT_MIN_WIDTH_KNOB_ID,

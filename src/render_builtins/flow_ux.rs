@@ -22,8 +22,17 @@
 pub(crate) enum FlowDeskRow {
     /// Live or recently-ended conversation (index into `flow_sessions`).
     Session(u64),
+    /// A background registry run (run-once / workflow) by local id — runs
+    /// are supervised IN the desk: phase, elapsed, last output, ⌘K cancel.
+    Run(u64),
     /// A flow identity from the combined roster+package corpus.
     Flow(crate::flows::model::FlowDescriptor),
+    /// mdflow missing: the actionable install affordance (Enter runs the
+    /// install in the Quick Terminal).
+    InstallMdflow,
+    /// mdflow present but the roster is empty: offer the `md init` starter
+    /// scaffold.
+    InitFlows,
     /// The plain-English creation affordance (always last).
     CreateFlow,
 }
@@ -45,8 +54,80 @@ pub(crate) enum FlowDeskSubject {
     Flow(crate::flows::model::FlowDescriptor),
     /// A conversation session by id — selected row or the open session view.
     Session(u64),
+    /// A background registry run by local id.
+    Run(u64),
     /// The Create Flow affordance.
     Create,
+}
+
+/// Escape-origin capture for a flow session view, decided at open time from
+/// the view being left. A session escapes back to the surface the user
+/// actually came from:
+///
+/// - Conversation Desk (`FlowUxView`) → back to the desk.
+/// - Session→session switches keep the origin already captured.
+/// - Everything else (main launcher rows, actions payloads, protocol opens)
+///   → `go_back_or_close`, i.e. the main menu or window-hide.
+///
+/// Routing a main-menu-launched session through the desk inserts a surface
+/// the user never visited, which reads as a swallowed Escape on the way
+/// out. That is an escape-ladder violation; keep this function the single
+/// decision point.
+pub(crate) fn flow_session_returns_to_desk(
+    view_being_left: &AppView,
+    previously_captured: bool,
+) -> bool {
+    match view_being_left {
+        AppView::FlowUxView { .. } => true,
+        AppView::FlowSessionView { .. } => previously_captured,
+        _ => false,
+    }
+}
+
+fn run_phase_icon(phase: crate::flows::model::RunPhase) -> &'static str {
+    use crate::flows::model::RunPhase;
+    match phase {
+        RunPhase::Starting => "◌",
+        RunPhase::Running => "●",
+        RunPhase::Cancelling => "◍",
+        RunPhase::Succeeded => "✓",
+        RunPhase::Failed => "✕",
+        RunPhase::Cancelled => "⊘",
+    }
+}
+
+fn format_run_elapsed(ms: u64) -> String {
+    let secs = ms / 1000;
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m{:02}s", secs / 60, secs % 60)
+    } else {
+        format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60)
+    }
+}
+
+/// Single-quote a path for the Quick Terminal command line (paths with
+/// spaces are common under ~/Library and project dirs).
+fn shell_escape_path(path: &str) -> String {
+    if path
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '-' | '_'))
+    {
+        path.to_string()
+    } else {
+        format!("'{}'", path.replace('\'', r"'\''"))
+    }
+}
+
+fn remove_flow_session<T>(
+    sessions: &mut Vec<(crate::flows::session::FlowSessionMeta, T)>,
+    session_id: u64,
+) -> Option<(crate::flows::session::FlowSessionMeta, T)> {
+    let index = sessions
+        .iter()
+        .position(|(meta, _)| meta.id == session_id)?;
+    Some(sessions.remove(index))
 }
 
 impl ScriptListApp {
@@ -109,15 +190,38 @@ impl ScriptListApp {
                         }
 
                         // 1. Codex app-server events (native transport).
-                        for event in
-                            crate::flows::codex_client::codex_app_server().drain_events()
-                        {
+                        for event in crate::flows::codex_client::codex_app_server().drain_events() {
                             dirty = true;
                             app.apply_flow_thread_event(event, cx);
                         }
 
                         // 2. mdflow-turn runs: stream stdout, settle turns.
                         if app.sync_mdflow_turns(cx) {
+                            dirty = true;
+                        }
+
+                        // 3. Bare runs (run-once / workflows) that reached a
+                        // terminal phase get exactly one receipt toast —
+                        // silence must never look identical to success.
+                        for run in registry.take_unnotified_terminal() {
+                            use crate::flows::model::RunPhase;
+                            let friendly = crate::flows::model::friendly_flow_name(&run.flow_name);
+                            let elapsed = format_run_elapsed(run.elapsed_ms());
+                            let toast = match run.phase {
+                                RunPhase::Succeeded => crate::components::toast::Toast::success(
+                                    format!("{friendly} finished ({elapsed})"),
+                                    &app.theme,
+                                ),
+                                RunPhase::Cancelled => crate::components::toast::Toast::success(
+                                    format!("{friendly} cancelled ({elapsed})"),
+                                    &app.theme,
+                                ),
+                                _ => crate::components::toast::Toast::error(
+                                    format!("{friendly}: {}", run.display_status()),
+                                    &app.theme,
+                                ),
+                            };
+                            app.toast_manager.push(toast.duration_ms(Some(4000)));
                             dirty = true;
                         }
 
@@ -128,9 +232,16 @@ impl ScriptListApp {
                             app.current_view,
                             AppView::FlowUxView { .. } | AppView::FlowSessionView { .. }
                         );
-                        let keep = view_active
-                            || registry.active_count() > 0
-                            || !app.flow_sessions.is_empty();
+                        // Idle sessions must NOT pin this loop forever (an
+                        // 8 Hz wake-up for a backgrounded conversation is
+                        // pure battery drain — 2026-07-11 audit). Sessions
+                        // only keep the tick alive while a turn is in
+                        // flight; submitting restarts the tick.
+                        let any_turn_in_flight = app
+                            .flow_sessions
+                            .iter()
+                            .any(|(meta, _)| meta.active_turn.is_some());
+                        let keep = view_active || registry.active_count() > 0 || any_turn_in_flight;
                         if !keep {
                             app.flow_ux_tick_running = false;
                         }
@@ -159,7 +270,9 @@ impl ScriptListApp {
     }
 
     /// Build the selectable desk rows for a filter: Active/recent sessions
-    /// first (newest first), then matching flows, then Create Flow.
+    /// first (newest first), then background runs (active before finished —
+    /// run-once and workflows are supervised HERE, never invisible), then
+    /// matching flows, then onboarding affordances, then Create Flow.
     pub(crate) fn flow_desk_rows(&self, filter: &str) -> Vec<FlowDeskRow> {
         let mut rows: Vec<FlowDeskRow> = Vec::new();
         let query = filter.trim().to_lowercase();
@@ -176,9 +289,53 @@ impl ScriptListApp {
             }
         }
 
+        // Bare registry runs (conversation-turn runs settle inside their
+        // session transcript and never appear as rows). Active first, then
+        // finished, newest first within each group.
+        let registry = crate::flows::run_registry::flow_run_registry();
+        let mut runs: Vec<crate::flows::run_registry::RunSummary> = registry
+            .run_summaries()
+            .into_iter()
+            .filter(|run| !run.is_conversation)
+            .filter(|run| {
+                query.is_empty()
+                    || run.flow_name.to_lowercase().contains(&query)
+                    || crate::flows::model::friendly_flow_name(&run.flow_name)
+                        .to_lowercase()
+                        .contains(&query)
+            })
+            .collect();
+        runs.sort_by(|a, b| {
+            let a_active = !a.phase.is_terminal();
+            let b_active = !b.phase.is_terminal();
+            b_active
+                .cmp(&a_active)
+                .then_with(|| b.local_id.cmp(&a.local_id))
+        });
+        for run in runs {
+            rows.push(FlowDeskRow::Run(run.local_id));
+        }
+
         let corpus = self.flow_desk_corpus();
         for flow in crate::flows::catalog::filter_flows(&corpus, filter) {
             rows.push(FlowDeskRow::Flow(flow.clone()));
+        }
+
+        // Onboarding affordances only on the unfiltered desk: a search query
+        // must never grow setup rows.
+        if query.is_empty() {
+            if crate::flows::catalog::mdflow_binary().is_none() {
+                rows.push(FlowDeskRow::InstallMdflow);
+            } else {
+                let cwd = self.flow_ux_cwd();
+                let roster = crate::flows::catalog::flow_catalog().roster_for(&cwd);
+                let ready_and_empty =
+                    matches!(roster.status, crate::flows::catalog::RosterStatus::Ready)
+                        && roster.flows.is_empty();
+                if ready_and_empty {
+                    rows.push(FlowDeskRow::InitFlows);
+                }
+            }
         }
 
         rows.push(FlowDeskRow::CreateFlow);
@@ -194,7 +351,12 @@ impl ScriptListApp {
     /// Activate the desk's selected row — Enter (`run_once: false`) and ⇧↵
     /// (`run_once: true`) share this with the native footer buttons so
     /// keyboard and footer can never diverge.
-    pub(crate) fn flow_desk_activate_selected(&mut self, run_once: bool, cx: &mut Context<Self>) {
+    pub(crate) fn flow_desk_activate_selected(
+        &mut self,
+        run_once: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let AppView::FlowUxView {
             filter,
             selected_index,
@@ -213,8 +375,18 @@ impl ScriptListApp {
             FlowDeskRow::Session(session_id) => {
                 self.open_flow_session(session_id, cx);
             }
+            FlowDeskRow::Run(_) => {
+                // A run row's Enter opens its supervision actions (cancel,
+                // copy output, clear finished) — the same menu ⌘K shows.
+                self.toggle_flow_desk_actions(window, cx);
+            }
             FlowDeskRow::Flow(flow) => {
-                if run_once || flow.is_workflow {
+                if flow.interactive {
+                    // The frozen contract: `--events` implies non-interactive
+                    // and a TTY-only flow must get a REAL terminal, never a
+                    // faked chat (protocol §3 "Open in Terminal").
+                    self.open_flow_in_terminal(&flow, cx);
+                } else if run_once || flow.is_workflow {
                     // Workflows (DAGs) are run-once by nature; ⇧↵ is
                     // explicit run-once for anything.
                     self.flow_desk_run_once(&flow, cx);
@@ -229,8 +401,19 @@ impl ScriptListApp {
                         || flow.name.to_lowercase() == lowered
                         || flow.friendly_name().to_lowercase() == lowered;
                     let first_message = (!is_name_lookup).then(|| trimmed.to_string());
-                    self.start_flow_session(&flow, first_message, cx);
+                    self.resume_or_start_flow_session(&flow, first_message, cx);
                 }
+            }
+            FlowDeskRow::InstallMdflow => {
+                self.open_quick_terminal_with_command(None, "npm i -g mdflow".to_string(), cx);
+            }
+            FlowDeskRow::InitFlows => {
+                let cwd = self.flow_ux_cwd();
+                self.open_quick_terminal_with_command(
+                    Some(std::path::PathBuf::from(cwd)),
+                    "md init".to_string(),
+                    cx,
+                );
             }
             FlowDeskRow::CreateFlow => {
                 self.start_flow_create_session(cx);
@@ -239,9 +422,174 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Mouse contract for desk rows (matching the main list's conventions):
+    /// clicking an unselected row selects it; clicking the selected row
+    /// activates it with Enter semantics.
+    pub(crate) fn flow_desk_click_row(
+        &mut self,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let selected = match &self.current_view {
+            AppView::FlowUxView { selected_index, .. } => *selected_index,
+            _ => return,
+        };
+        if selected == ix {
+            self.flow_desk_activate_selected(false, window, cx);
+        } else if let AppView::FlowUxView { selected_index, .. } = &mut self.current_view {
+            *selected_index = ix;
+            self.flow_ux_scroll_handle
+                .scroll_to_item(ix, ScrollStrategy::Nearest);
+            cx.notify();
+        }
+    }
+
+    /// Honest transport for TTY-only flows: run in the shared Quick Terminal
+    /// (wrapper command when one exists, else `md <path>`).
+    fn open_flow_in_terminal(
+        &mut self,
+        flow: &crate::flows::model::FlowDescriptor,
+        cx: &mut Context<Self>,
+    ) {
+        let cwd = self.flow_ux_cwd();
+        let command = flow
+            .wrapper_command
+            .clone()
+            .unwrap_or_else(|| format!("md {}", shell_escape_path(&flow.path)));
+        tracing::info!(
+            target: "script_kit::flows",
+            event = "flow_open_in_terminal",
+            flow_id = %flow.id,
+            "Interactive flow — opening in Quick Terminal"
+        );
+        self.open_quick_terminal_with_command(Some(std::path::PathBuf::from(cwd)), command, cx);
+    }
+
     // ------------------------------------------------------------------
     // Conversation lifecycle
     // ------------------------------------------------------------------
+
+    /// Enter-on-a-flow contract: Enter means "converse with this flow" —
+    /// resume the conversation the user already has and only start a blank
+    /// Threadline when there is nothing to resume. Order: live in-memory
+    /// session first, then the persisted transcript from a previous app run
+    /// (2026-07-10: a dev restart stranded an active GOG Gmail conversation
+    /// and every launcher Enter landed in a blank composer).
+    pub(crate) fn resume_or_start_flow_session(
+        &mut self,
+        flow: &crate::flows::model::FlowDescriptor,
+        initial_message: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        // Identity is flow id + definition path: `project:review` exists in
+        // many projects, and matching by id alone reattached (or restored)
+        // the WRONG project's conversation (2026-07-11 audit P0).
+        if let Some(index) = self.flow_sessions.iter().rposition(|(meta, _)| {
+            meta.flow_id == flow.id && meta.flow_path == flow.path && meta.state.is_live()
+        }) {
+            let (session_id, went_stale) = {
+                let meta = &mut self.flow_sessions[index].0;
+                let current_mtime = crate::flows::session::flow_definition_mtime_ms(&flow.path);
+                let went_stale = current_mtime != meta.flow_mtime_ms;
+                if went_stale {
+                    // The definition changed since the engine contract was
+                    // resolved: drop the protocol thread so the next submit
+                    // re-threads with the fresh contract + transcript rollup
+                    // (same recovery path as engine death).
+                    meta.needs_rethread = true;
+                    meta.thread_ready = !matches!(
+                        meta.transport,
+                        crate::flows::session::SessionTransport::CodexThread
+                    );
+                    meta.flow_mtime_ms = current_mtime;
+                }
+                (meta.id, went_stale)
+            };
+            if went_stale
+                && matches!(
+                    self.flow_sessions[index].0.transport,
+                    crate::flows::session::SessionTransport::CodexThread
+                )
+            {
+                crate::flows::codex_client::codex_app_server().forget_session(session_id);
+            }
+            tracing::info!(
+                target: "script_kit::flows",
+                event = "flow_session_reattach",
+                session_id,
+                flow_id = %flow.id,
+                went_stale,
+                "Reattaching to the live flow conversation"
+            );
+            self.open_flow_session(session_id, cx);
+            if let Some(message) = initial_message {
+                self.submit_flow_chat_message(session_id, message, cx);
+            }
+            return;
+        }
+        if let Some(snapshot) =
+            crate::flows::session::load_persisted_conversation(&flow.id, &flow.path)
+        {
+            self.restore_flow_session(flow, snapshot, initial_message, cx);
+            return;
+        }
+        self.start_flow_session(flow, initial_message, cx);
+    }
+
+    /// Rebuild a conversation persisted by a previous app run: replay the
+    /// transcript into a fresh Threadline and mark the session for a
+    /// re-thread so the next submit carries the rolled-up history.
+    fn restore_flow_session(
+        &mut self,
+        flow: &crate::flows::model::FlowDescriptor,
+        snapshot: crate::flows::session::PersistedFlowConversation,
+        initial_message: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let session_id = self.create_flow_session(flow, cx);
+        let Some(index) = self.flow_session_index(session_id) else {
+            return;
+        };
+        let entity = self.flow_sessions[index].1.clone();
+        entity.update(cx, |chat, cx| {
+            for turn in &snapshot.turns {
+                chat.add_message(
+                    crate::protocol::ChatPromptMessage::user(turn.user.clone()),
+                    cx,
+                );
+                if !turn.assistant.is_empty() {
+                    chat.add_message(
+                        crate::protocol::ChatPromptMessage::assistant(turn.assistant.clone()),
+                        cx,
+                    );
+                }
+            }
+        });
+        let meta = &mut self.flow_sessions[index].0;
+        meta.turns = snapshot
+            .turns
+            .iter()
+            .map(|turn| crate::flows::session::SessionTurn {
+                user: turn.user.clone(),
+                assistant: turn.assistant.clone(),
+            })
+            .collect();
+        meta.needs_rethread = true;
+        tracing::info!(
+            target: "script_kit::flows",
+            event = "flow_session_restored",
+            session_id,
+            flow_id = %flow.id,
+            turns = meta.turns.len(),
+            "Restored persisted flow conversation"
+        );
+        self.open_flow_session(session_id, cx);
+        self.start_flow_ux_tick(cx);
+        if let Some(message) = initial_message {
+            self.submit_flow_chat_message(session_id, message, cx);
+        }
+    }
 
     /// Start a conversation with a flow: create its Threadline (ChatPrompt)
     /// session and show it. `initial_message` (Tab router / typed text)
@@ -252,20 +600,33 @@ impl ScriptListApp {
         initial_message: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        let session_id = self.create_flow_session(flow, cx);
+        self.open_flow_session(session_id, cx);
+        self.start_flow_ux_tick(cx);
+        if let Some(message) = initial_message {
+            self.submit_flow_chat_message(session_id, message, cx);
+        }
+    }
+
+    /// Create the session (Threadline entity + meta + engine warm-up)
+    /// without opening it — shared by fresh starts and restores.
+    fn create_flow_session(
+        &mut self,
+        flow: &crate::flows::model::FlowDescriptor,
+        cx: &mut Context<Self>,
+    ) -> u64 {
         let cwd = self.flow_ux_cwd();
         crate::flows::manager_window::remember_flow_cwd(&cwd);
         self.flow_session_counter += 1;
         let session_id = self.flow_session_counter;
         let transport = crate::flows::session::SessionTransport::for_engine(&flow.engine);
 
-        // Log length only — message text can carry anything.
         tracing::info!(
             target: "script_kit::flows",
             event = "flow_session_start",
             session_id,
             flow_id = %flow.id,
             transport = ?transport,
-            message_len = initial_message.as_deref().map(str::len).unwrap_or(0),
             "Starting flow conversation"
         );
 
@@ -273,16 +634,14 @@ impl ScriptListApp {
         let submit_sender = self.flow_chat_sender.clone();
         let submit_callback: crate::prompts::ChatSubmitCallback =
             std::sync::Arc::new(move |_id: String, text: String| {
-                let _ = submit_sender.try_send(
-                    crate::flows::session::FlowChatRequest::Submit { session_id, text },
-                );
+                let _ = submit_sender
+                    .try_send(crate::flows::session::FlowChatRequest::Submit { session_id, text });
             });
         let escape_sender = self.flow_chat_sender.clone();
         let escape_callback: crate::prompts::ChatEscapeCallback =
             std::sync::Arc::new(move |_id: String| {
-                let _ = escape_sender.try_send(
-                    crate::flows::session::FlowChatRequest::Background { session_id },
-                );
+                let _ = escape_sender
+                    .try_send(crate::flows::session::FlowChatRequest::Background { session_id });
             });
 
         let mut chat = crate::prompts::ChatPrompt::new(
@@ -310,9 +669,8 @@ impl ScriptListApp {
         .with_top_aligned_turns();
         let actions_sender = self.flow_chat_sender.clone();
         chat.set_on_show_actions(std::sync::Arc::new(move |_id: String| {
-            let _ = actions_sender.try_send(
-                crate::flows::session::FlowChatRequest::ShowActions { session_id },
-            );
+            let _ = actions_sender
+                .try_send(crate::flows::session::FlowChatRequest::ShowActions { session_id });
         }));
         let entity = cx.new(|_| chat);
 
@@ -324,6 +682,7 @@ impl ScriptListApp {
             origin: flow.origin_label().to_string(),
             engine: flow.engine.clone(),
             flow_path: flow.path.clone(),
+            flow_mtime_ms: crate::flows::session::flow_definition_mtime_ms(&flow.path),
             cwd,
             transport,
             state: crate::flows::session::SessionState::NeedsYou,
@@ -355,18 +714,13 @@ impl ScriptListApp {
                                 .profile
                         })
                         .unwrap_or_default();
-                    crate::flows::codex_client::codex_app_server().prepare_thread(
-                        session_id, &warm_cwd, profile,
-                    );
+                    crate::flows::codex_client::codex_app_server()
+                        .prepare_thread(session_id, &warm_cwd, profile);
                 })
                 .ok();
         }
         self.flow_sessions.push((meta, entity));
-        self.open_flow_session(session_id, cx);
-        self.start_flow_ux_tick(cx);
-        if let Some(message) = initial_message {
-            self.submit_flow_chat_message(session_id, message, cx);
-        }
+        session_id
     }
 
     /// Submit one user message on a session: echo it into the transcript,
@@ -419,10 +773,9 @@ impl ScriptListApp {
                                 } else {
                                     crate::flows::session::build_turn_task(&meta.turns, &text)
                                 };
-                                let contract =
-                                    crate::flows::session::resolve_flow_thread_contract(
-                                        &markdown, &task,
-                                    );
+                                let contract = crate::flows::session::resolve_flow_thread_contract(
+                                    &markdown, &task,
+                                );
                                 thread_profile = Some(contract.profile);
                                 contract.first_prompt
                             }
@@ -516,6 +869,9 @@ impl ScriptListApp {
                     crate::flows::model::EngagementMode::Background,
                     vec![("task".to_string(), prompt)],
                     std::time::Instant::now(),
+                    // Conversation turn: stream from the append-only capture,
+                    // never the bounded display tail (cursor corruption P0).
+                    true,
                 ))
             }
         };
@@ -620,6 +976,18 @@ impl ScriptListApp {
             assistant: active.assistant_acc,
         });
         meta.state = state;
+        // Snapshot the conversation off-thread so an app restart can restore
+        // it (resume_or_start_flow_session); in-memory sessions die with the
+        // process.
+        let flow_id = meta.flow_id.clone();
+        let flow_path = meta.flow_path.clone();
+        let turns = meta.turns.clone();
+        std::thread::Builder::new()
+            .name("flow-conversation-persist".into())
+            .spawn(move || {
+                crate::flows::session::persist_conversation(&flow_id, &flow_path, &turns)
+            })
+            .ok();
         tracing::info!(
             target: "script_kit::flows",
             event = "flow_turn_settled",
@@ -699,9 +1067,7 @@ impl ScriptListApp {
                     "interrupted" => (SessionState::NeedsYou, FlowTurnOutcome::Stopped),
                     _ => (
                         SessionState::Done(None),
-                        FlowTurnOutcome::Failed(
-                            error.unwrap_or_else(|| "Turn failed".to_string()),
-                        ),
+                        FlowTurnOutcome::Failed(error.unwrap_or_else(|| "Turn failed".to_string())),
                     ),
                 };
                 self.finish_flow_turn(session_id, state, outcome, cx);
@@ -757,17 +1123,28 @@ impl ScriptListApp {
                 dirty = true;
                 continue;
             };
-            let full: String = run
-                .stdout_tail
-                .lines()
-                .collect::<Vec<&str>>()
-                .join("\n");
+            // Stream from the append-only conversation capture. The bounded
+            // display tail front-evicts, which broke the byte cursor on long
+            // turns (silent stalls / garbled text — 2026-07-11 audit P0);
+            // the capture never evicts, so `acc_len` is always a valid char
+            // boundary within it.
+            let full = run.conversation_stdout.clone().unwrap_or_default();
             if full.len() > acc_len {
                 if let Some(delta) = full.get(acc_len..) {
                     let delta = delta.to_string();
                     self.append_flow_turn_text(session_id, &delta, cx);
                     dirty = true;
                 }
+            } else if run.conversation_truncated && acc_len == full.len() {
+                // The capture froze at its cap: say so once. Appending the
+                // caption makes acc_len exceed the frozen capture length, so
+                // this branch can never repeat.
+                self.append_flow_turn_text(
+                    session_id,
+                    "\n\n*Output truncated — this turn exceeded the 4 MB capture limit.*",
+                    cx,
+                );
+                dirty = true;
             }
             if run.phase.is_terminal() {
                 use crate::flows::model::RunPhase;
@@ -797,6 +1174,8 @@ impl ScriptListApp {
             return;
         };
         let friendly = self.flow_sessions[index].0.friendly_name.clone();
+        self.flow_session_return_to_desk =
+            flow_session_returns_to_desk(&self.current_view, self.flow_session_return_to_desk);
         self.current_view = AppView::FlowSessionView { session_id };
         // The MAIN input is the composer (with all its context-attachment
         // features) — clear any desk query and retitle the placeholder.
@@ -817,7 +1196,16 @@ impl ScriptListApp {
 
     /// Leave the session view without touching the process. The session
     /// stays in `flow_sessions` and reappears under Active.
-    pub(crate) fn background_flow_session(&mut self, cx: &mut Context<Self>) {
+    ///
+    /// ESCAPE LADDER CONTRACT: Escape returns exactly ONE step, to the
+    /// surface the session was actually entered from. Desk-entered sessions
+    /// return to the desk; main-menu-launched (and every other) session
+    /// routes through `go_back_or_close`, so the next Escape on an empty
+    /// main menu hides the window. Detouring through a surface the user
+    /// never visited reads as a swallowed Escape — locked by
+    /// `flow_session_escape_origin` tests and
+    /// `scripts/agentic/flow-session-escape-ladder-probe.ts`.
+    pub(crate) fn background_flow_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let AppView::FlowSessionView { session_id } = self.current_view else {
             return;
         };
@@ -825,8 +1213,19 @@ impl ScriptListApp {
             target: "script_kit::flows",
             event = "flow_session_backgrounded",
             session_id,
+            return_to_desk = self.flow_session_return_to_desk,
             "Backgrounding flow session (process stays alive)"
         );
+        if !self.flow_session_return_to_desk {
+            // Entered from the main launcher (or directly): go back the way
+            // the user came. `go_back_or_close` clears the shared input,
+            // resets `opened_from_main_menu`, and restores the launcher —
+            // or hides the window for direct opens.
+            self.filter_text.clear();
+            self.pending_filter_sync = true;
+            self.go_back_or_close(window, cx);
+            return;
+        }
         // Clear the shared filter INPUT too (pending_filter_sync flushes the
         // widget on next render) — the desk must never show a stale query
         // over an unfiltered list — and restore the desk placeholder.
@@ -867,22 +1266,50 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Remove a session row (⌘K "Dismiss"). Only idle sessions can be
-    /// dismissed — stop the in-flight turn first.
-    pub(crate) fn dismiss_flow_session(&mut self, session_id: u64, cx: &mut Context<Self>) {
-        if let Some(index) = self.flow_session_index(session_id) {
-            if self.flow_sessions[index].0.active_turn.is_none() {
-                crate::flows::codex_client::codex_app_server().forget_session(session_id);
-                self.flow_sessions.remove(index);
-                if matches!(
-                    self.current_view,
-                    AppView::FlowSessionView { session_id: current } if current == session_id
-                ) {
-                    self.background_flow_session(cx);
+    /// Explicitly end a conversation, even while a turn is in flight.
+    pub(crate) fn terminate_flow_session(
+        &mut self,
+        session_id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self.flow_session_index(session_id) else {
+            return;
+        };
+        if let Some(active) = self.flow_sessions[index].0.active_turn.clone() {
+            match self.flow_sessions[index].0.transport {
+                crate::flows::session::SessionTransport::CodexThread => {
+                    crate::flows::codex_client::codex_app_server().interrupt(session_id);
                 }
-                cx.notify();
+                crate::flows::session::SessionTransport::MdflowTurns => {
+                    if let Some(run_id) = active.run_id {
+                        crate::flows::runner::cancel_run(run_id);
+                    }
+                }
             }
         }
+        crate::flows::codex_client::codex_app_server().forget_session(session_id);
+        let viewing = matches!(
+            self.current_view,
+            AppView::FlowSessionView { session_id: current } if current == session_id
+        );
+        // "Terminate Flow" promises to PERMANENTLY end the conversation —
+        // erase the persisted transcript too, or the next activation would
+        // silently restore it (2026-07-11 audit P0: UI-contract violation).
+        if let Some(removed) = remove_flow_session(&mut self.flow_sessions, session_id) {
+            let flow_id = removed.0.flow_id.clone();
+            let flow_path = removed.0.flow_path.clone();
+            std::thread::Builder::new()
+                .name("flow-conversation-delete".into())
+                .spawn(move || {
+                    crate::flows::session::delete_persisted_conversation(&flow_id, &flow_path)
+                })
+                .ok();
+        }
+        if viewing {
+            self.background_flow_session(window, cx);
+        }
+        cx.notify();
     }
 
     /// Run once in the background via the run registry (`--events`).
@@ -902,11 +1329,15 @@ impl ScriptListApp {
             crate::flows::model::EngagementMode::Background,
             Vec::new(),
             std::time::Instant::now(),
+            false,
         );
         self.start_flow_ux_tick(cx);
         self.toast_manager.push(
             crate::components::toast::Toast::success(
-                format!("{} running once in background", flow.friendly_name()),
+                format!(
+                    "{} running in background — watch it in the desk list",
+                    flow.friendly_name()
+                ),
                 &self.theme,
             )
             .duration_ms(Some(1800)),
@@ -919,6 +1350,20 @@ impl ScriptListApp {
     /// interactive CLI wizard, so it runs in the shared Quick Terminal
     /// (honest transport) rather than being faked into a chat surface.
     pub(crate) fn start_flow_create_session(&mut self, cx: &mut Context<Self>) {
+        // Pre-check: opening a terminal that immediately fails with
+        // "command not found" is a dead end — point at the install
+        // affordance instead.
+        if crate::flows::catalog::mdflow_binary().is_none() {
+            self.toast_manager.push(
+                crate::components::toast::Toast::error(
+                    "mdflow isn't installed — use the Install mdflow row first".to_string(),
+                    &self.theme,
+                )
+                .duration_ms(Some(3000)),
+            );
+            cx.notify();
+            return;
+        }
         let cwd = self.flow_ux_cwd();
         tracing::info!(
             target: "script_kit::flows",
@@ -942,6 +1387,11 @@ impl ScriptListApp {
     /// (a lookup query like "githu" must never become the agent's task).
     /// Otherwise → open the desk with the text as the filter so the user
     /// picks (the Create Flow row is always present for the no-match case).
+    ///
+    /// 2026-07-10: no longer wired to Tab — Tab-with-text is Quick AI again
+    /// (`open_quick_ai_from_launcher`); flows stay reachable as main-menu rows.
+    /// Kept for a future explicit flow-routing entry point.
+    #[allow(dead_code)]
     pub(crate) fn route_text_to_flow(
         &mut self,
         text: String,
@@ -957,8 +1407,7 @@ impl ScriptListApp {
                 let is_name_lookup = !trimmed.contains(' ')
                     || flow.name.to_lowercase() == lowered
                     || flow.friendly_name().to_lowercase() == lowered;
-                let first_message =
-                    (!is_name_lookup).then(|| trimmed.to_string());
+                let first_message = (!is_name_lookup).then(|| trimmed.to_string());
                 tracing::info!(
                     target: "script_kit::flows",
                     event = "flow_router_auto_start",
@@ -967,7 +1416,7 @@ impl ScriptListApp {
                     carries_message = first_message.is_some(),
                     "Tab router: confident match, starting conversation"
                 );
-                self.start_flow_session(&flow, first_message, cx);
+                self.resume_or_start_flow_session(&flow, first_message, cx);
             }
             crate::flows::router::RouteDecision::Candidates { .. }
             | crate::flows::router::RouteDecision::NoMatch => {
@@ -1070,8 +1519,7 @@ impl ScriptListApp {
 
                 if is_key_up(key) {
                     if current_selected > 0 {
-                        if let AppView::FlowUxView { selected_index, .. } = &mut this.current_view
-                        {
+                        if let AppView::FlowUxView { selected_index, .. } = &mut this.current_view {
                             *selected_index = current_selected - 1;
                             this.flow_ux_scroll_handle
                                 .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
@@ -1083,8 +1531,7 @@ impl ScriptListApp {
                 }
                 if is_key_down(key) {
                     if current_selected < current_len.saturating_sub(1) {
-                        if let AppView::FlowUxView { selected_index, .. } = &mut this.current_view
-                        {
+                        if let AppView::FlowUxView { selected_index, .. } = &mut this.current_view {
                             *selected_index = current_selected + 1;
                             this.flow_ux_scroll_handle
                                 .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
@@ -1096,7 +1543,7 @@ impl ScriptListApp {
                 }
 
                 if is_key_enter(key) {
-                    this.flow_desk_activate_selected(has_shift, cx);
+                    this.flow_desk_activate_selected(has_shift, window, cx);
                     cx.stop_propagation();
                 }
             },
@@ -1128,12 +1575,17 @@ impl ScriptListApp {
                 .iter()
                 .map(|(meta, _)| meta.clone())
                 .collect();
-            uniform_list("flow-desk-list", row_count, move |visible_range, _window, _cx| {
-                visible_range
-                    .map(|ix| {
-                        let is_selected = ix == selected_index;
-                        let is_hovered = hovered == Some(ix);
-                        let (title, description, icon) = match &display_rows[ix] {
+            let run_meta: Vec<crate::flows::run_registry::RunSummary> = registry.run_summaries();
+            let click_entity = cx.entity();
+            uniform_list(
+                "flow-desk-list",
+                row_count,
+                move |visible_range, _window, _cx| {
+                    visible_range
+                        .map(|ix| {
+                            let is_selected = ix == selected_index;
+                            let is_hovered = hovered == Some(ix);
+                            let (title, description, icon) = match &display_rows[ix] {
                             FlowDeskRow::Session(session_id) => {
                                 let meta =
                                     session_meta.iter().find(|m| m.id == *session_id);
@@ -1155,6 +1607,24 @@ impl ScriptListApp {
                                     ),
                                 }
                             }
+                            FlowDeskRow::Run(run_id) => {
+                                let run = run_meta.iter().find(|r| r.local_id == *run_id);
+                                match run {
+                                    Some(run) => (
+                                        crate::flows::model::friendly_flow_name(
+                                            &run.flow_name,
+                                        ),
+                                        format!(
+                                            "{} · {} · {}",
+                                            run.display_status,
+                                            format_run_elapsed(run.elapsed_ms),
+                                            run.last_output_line.as_deref().unwrap_or("—"),
+                                        ),
+                                        run_phase_icon(run.phase),
+                                    ),
+                                    None => ("Run".to_string(), "gone".to_string(), "◽"),
+                                }
+                            }
                             FlowDeskRow::Flow(flow) => {
                                 let purpose = flow
                                     .description
@@ -1167,9 +1637,27 @@ impl ScriptListApp {
                                         flow.engine,
                                         flow.origin_label()
                                     ),
-                                    if flow.is_workflow { "🧩" } else { "⚡" },
+                                    if flow.interactive {
+                                        "🖥"
+                                    } else if flow.is_workflow {
+                                        "🧩"
+                                    } else {
+                                        "⚡"
+                                    },
                                 )
                             }
+                            FlowDeskRow::InstallMdflow => (
+                                "Install mdflow".to_string(),
+                                "The flow engine isn't on PATH — run npm i -g mdflow in Terminal"
+                                    .to_string(),
+                                "⬇",
+                            ),
+                            FlowDeskRow::InitFlows => (
+                                "Scaffold starter flows".to_string(),
+                                "md init creates a flows/ roster here (no engine calls)"
+                                    .to_string(),
+                                "🌱",
+                            ),
                             FlowDeskRow::CreateFlow => (
                                 "Create a flow…".to_string(),
                                 "Describe an agent in plain English (md create)"
@@ -1177,17 +1665,30 @@ impl ScriptListApp {
                                 "✚",
                             ),
                         };
-                        div().id(ix).cursor_pointer().child(
-                            ListItem::new(title, list_colors)
-                                .description_opt(Some(description))
-                                .icon(icon)
-                                .selected(is_selected)
-                                .hovered(is_hovered)
-                                .with_accent_bar(true),
-                        )
-                    })
-                    .collect()
-            })
+                            let row_entity = click_entity.clone();
+                            div()
+                                .id(ix)
+                                .cursor_pointer()
+                                .on_mouse_down(
+                                    gpui::MouseButton::Left,
+                                    move |_event, window, cx| {
+                                        row_entity.update(cx, |app, cx| {
+                                            app.flow_desk_click_row(ix, window, cx);
+                                        });
+                                    },
+                                )
+                                .child(
+                                    ListItem::new(title, list_colors)
+                                        .description_opt(Some(description))
+                                        .icon(icon)
+                                        .selected(is_selected)
+                                        .hovered(is_hovered)
+                                        .with_accent_bar(true),
+                                )
+                        })
+                        .collect()
+                },
+            )
             .h_full()
             .track_scroll(&self.flow_ux_scroll_handle)
             .into_any_element()
@@ -1263,9 +1764,8 @@ impl ScriptListApp {
             gpui::SharedString::from("⌘K Actions"),
             gpui::SharedString::from("Esc Back"),
         ];
-        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-            hints, None,
-        ));
+        let footer =
+            self.main_window_footer_slot(crate::components::render_simple_hint_strip(hints, None));
 
         let mut count_parts: Vec<String> = Vec::new();
         if live_sessions > 0 {
@@ -1274,7 +1774,14 @@ impl ScriptListApp {
         if active_runs > 0 {
             count_parts.push(format!("{active_runs} running"));
         }
-        count_parts.push(format!("{} flows", row_count.saturating_sub(1)));
+        // Count FLOW rows only — sessions, runs, and affordance rows are not
+        // flows (the old `row_count - 1` reported "7 flows" for 5 flows +
+        // 2 sessions).
+        let flow_row_count = rows
+            .iter()
+            .filter(|row| matches!(row, FlowDeskRow::Flow(_)))
+            .count();
+        count_parts.push(format!("{flow_row_count} flows"));
         let count_label = count_parts.join(" · ");
         // Trailing slot = the standard muted count label only. The flow cwd
         // already shows in the shared context zone (top-left chip) — never
@@ -1353,8 +1860,17 @@ impl ScriptListApp {
                 };
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let has_shift = event.keystroke.modifiers.shift;
+                // ⇧⌘⎋ terminates — exactly what the footer advertises. Plain
+                // ⌘⎋ must NOT destroy a conversation (2026-07-11 audit: the
+                // handler fired on ⌘⎋ while the hint said ⇧⌘⎋).
+                if has_cmd && has_shift && is_key_escape(key) && !this.show_actions_popup {
+                    this.terminate_flow_session(session_id, window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if is_key_escape(key) && !this.show_actions_popup {
-                    this.background_flow_session(cx);
+                    this.background_flow_session(window, cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -1386,6 +1902,7 @@ impl ScriptListApp {
         };
         let hints: Vec<gpui::SharedString> = vec![
             gpui::SharedString::from("↵ Send"),
+            gpui::SharedString::from("⇧⌘⎋ Terminate Flow"),
             gpui::SharedString::from("Esc Desk"),
             gpui::SharedString::from("⌘K Actions"),
         ];
@@ -1445,6 +1962,11 @@ impl ScriptListApp {
                         .iter()
                         .find(|(meta, _)| meta.id == *id)
                         .map(|(meta, _)| meta.flow_id.clone()),
+                    FlowDeskRow::Run(id) => crate::flows::run_registry::flow_run_registry()
+                        .get(*id)
+                        .map(|run| run.flow_id.clone()),
+                    FlowDeskRow::InstallMdflow => Some("builtin:install-mdflow".to_string()),
+                    FlowDeskRow::InitFlows => Some("builtin:init-flows".to_string()),
                     FlowDeskRow::CreateFlow => Some("builtin:create-flow".to_string()),
                 });
                 (true, selected)
@@ -1488,5 +2010,82 @@ impl ScriptListApp {
             manager_focused_run_id: None,
             sessions,
         })
+    }
+}
+
+#[cfg(test)]
+mod flow_session_escape_origin {
+    use super::{flow_session_returns_to_desk, remove_flow_session, AppView};
+
+    fn desk_view() -> AppView {
+        AppView::FlowUxView {
+            variant: crate::flows::model::FlowUxVariant::Flash,
+            filter: String::new(),
+            selected_index: 0,
+            inline_run: None,
+        }
+    }
+
+    /// Main-menu-launched flow sessions must escape straight back through
+    /// `go_back_or_close` (main menu → hide), never detour through the
+    /// Conversation Desk the user never visited. Regression lock for the
+    /// 2026-07-10 report: launcher → flow chat → Escape required an extra
+    /// Escape on the empty main menu because the session backgrounded to
+    /// the desk first.
+    #[test]
+    fn main_menu_launch_does_not_return_to_desk() {
+        assert!(!flow_session_returns_to_desk(&AppView::ScriptList, false));
+        // Even a stale previously-captured desk origin must not leak into a
+        // session entered from the launcher.
+        assert!(!flow_session_returns_to_desk(&AppView::ScriptList, true));
+    }
+
+    #[test]
+    fn desk_launch_returns_to_desk() {
+        assert!(flow_session_returns_to_desk(&desk_view(), false));
+    }
+
+    #[test]
+    fn session_to_session_switch_keeps_captured_origin() {
+        let session = AppView::FlowSessionView { session_id: 7 };
+        assert!(flow_session_returns_to_desk(&session, true));
+        assert!(!flow_session_returns_to_desk(&session, false));
+    }
+
+    #[test]
+    fn terminate_removes_session_even_with_turn_in_flight() {
+        use crate::flows::session::{ActiveTurn, FlowSessionMeta, SessionState, SessionTransport};
+        let meta = FlowSessionMeta {
+            id: 7,
+            flow_id: "project:test".into(),
+            flow_name: "flow-test".into(),
+            friendly_name: "Test".into(),
+            origin: "Project".into(),
+            engine: "codex".into(),
+            flow_path: "/tmp/flow-test.md".into(),
+            flow_mtime_ms: 0,
+            cwd: "/tmp".into(),
+            transport: SessionTransport::CodexThread,
+            state: SessionState::Working,
+            started_at: std::time::Instant::now(),
+            turns: vec![],
+            active_turn: Some(ActiveTurn {
+                run_id: None,
+                message_id: "message".into(),
+                assistant_acc: String::new(),
+                current_item_id: None,
+                item_acc: String::new(),
+                user_text: "hello".into(),
+            }),
+            thread_ready: true,
+            needs_rethread: false,
+        };
+        let mut sessions = vec![(meta, ())];
+        let removed = remove_flow_session(&mut sessions, 7).expect("live session removed");
+        assert!(
+            removed.0.active_turn.is_some(),
+            "mid-turn termination is allowed"
+        );
+        assert!(sessions.is_empty());
     }
 }

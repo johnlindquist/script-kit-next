@@ -92,6 +92,9 @@ struct SessionLink {
 struct Shared {
     stdin: Option<ChildStdin>,
     child: Option<Child>,
+    /// Keeps the live child registered with the global process manager so
+    /// quit paths and post-crash orphan cleanup can reap it (drop = unregister).
+    child_registration: Option<crate::process_manager::ChildRegistration>,
     child_generation: u64,
     next_id: u64,
     pending: HashMap<u64, PendingKind>,
@@ -260,6 +263,7 @@ fn ensure_child(shared: &mut Shared) -> Result<(), String> {
     // prompts so sessions re-thread transparently on their next turn.
     shared.stdin = None;
     shared.child = None;
+    shared.child_registration = None;
     shared.pending.clear();
     shared.threads.clear();
     for link in shared.sessions.values_mut() {
@@ -268,13 +272,23 @@ fn ensure_child(shared: &mut Shared) -> Result<(), String> {
     }
 
     let binary = codex_binary();
-    let mut child = Command::new(&binary)
+    let mut command = Command::new(&binary);
+    command
         .arg("app-server")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    // Own process group so orphan cleanup / kill_all can reap the server and
+    // any turn subprocesses it spawned.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command
         .spawn()
         .map_err(|err| format!("failed to spawn {binary} app-server: {err}"))?;
+    let registration = crate::process_manager::ChildRegistration::register(child.id(), &binary);
     let stdin = child
         .stdin
         .take()
@@ -288,6 +302,7 @@ fn ensure_child(shared: &mut Shared) -> Result<(), String> {
     let generation = shared.child_generation;
     shared.stdin = Some(stdin);
     shared.child = Some(child);
+    shared.child_registration = Some(registration);
     shared.next_id = 1;
 
     tracing::info!(

@@ -1,0 +1,365 @@
+/* Chat-prompt screen: stage layout + browser-only emulator calibration plus
+ * the screen-owned chat anatomy (SDK chat prompt, NOT Agent Chat).
+ *
+ * Rust anatomy this mirrors (src/prompts/chat/**, full main-window mode):
+ *   window 750×500 (ViewType::DivPrompt → layout STANDARD_HEIGHT)
+ *   header: px 12 / py 8, "←" + "Chat" 14/500, phi line 23, border-b
+ *     ui.border|0x40 → 8+23+8+1 = 40pt
+ *   input area: px 12 / py 8, field min-h 28 bg search_box@0.50, text 14,
+ *     caret 2.5×18 accent, border-b ui.border|0x40 → 45pt
+ *   messages: px 12 / py 8, bottom-anchored turns, each turn wrapper pb 8
+ *   turn card: px 12 / py 10, radius 8, fill text.primary|0x15, row gap 8,
+ *     content gap 6; user line 14/600; markdown blocks gap 6, text 14 phi 23;
+ *     code block radius 6 bg code_bg|0xE0 border quote|0x40 (header px 10 py 4,
+ *     body px 10 py 8 gap 2 mono 14); copy button 24×24 radius 4 opacity 0.7
+ *   native footer band 36pt (empty in GPUI captures)
+ *
+ * STAGED CONTRACT VALUES: generated/tokens.css does not carry --sk-chat-*
+ * yet (the design_contract section is proposed in
+ * ../../briefs/chat-prompt-brief.md). Byte-exact values measured from Rust
+ * source are staged under --sk-emulator-staged-chat-* (the only lint-legal
+ * literal namespace) and aliased to their proposed --sk-chat-* names, which
+ * is what every rule below consumes. DELETE the staged block when
+ * export_design_tokens emits the real --sk-chat-* records.
+ */
+
+:root {
+  --sk-emulator-menu-blur: 32px;
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 28 31 / 0.42),
+    rgb(20 20 23 / 0.42)
+  );
+  --sk-emulator-desktop: radial-gradient(
+      1200px 700px at 20% 10%,
+      rgb(64 46 88 / 0.9),
+      transparent 60%
+    ),
+    radial-gradient(
+      1000px 800px at 85% 80%,
+      rgb(26 58 74 / 0.9),
+      transparent 55%
+    ),
+    linear-gradient(160deg, rgb(24 22 30), rgb(12 12 16));
+
+  /* ── STAGED: proposed --sk-chat-* contract values (see file header) ──── */
+  --sk-emulator-staged-chat-window-height: 500px;
+  --sk-emulator-staged-chat-layout-padding-x: 12px;
+  --sk-emulator-staged-chat-section-padding-y: 8px;
+  --sk-emulator-staged-chat-header-gap: 8px;
+  --sk-emulator-staged-chat-title-font-size: 14px;
+  --sk-emulator-staged-chat-title-line-height: 23px;
+  --sk-emulator-staged-chat-title-font-weight: 500;
+  --sk-emulator-staged-chat-divider: rgb(52 52 52 / 0.2509803922);
+  --sk-emulator-staged-chat-text-secondary: rgb(255 255 255);
+  --sk-emulator-staged-chat-input-area-gap: 8px;
+  --sk-emulator-staged-chat-input-min-height: 28px;
+  --sk-emulator-staged-chat-input-font-size: 14px;
+  --sk-emulator-staged-chat-input-surface: rgb(42 42 42 / 0.5019607843);
+  --sk-emulator-staged-chat-placeholder-text: rgb(255 255 255);
+  --sk-emulator-staged-chat-turn-gap: 8px;
+  --sk-emulator-staged-chat-card-padding-x: 12px;
+  --sk-emulator-staged-chat-card-padding-y: 10px;
+  --sk-emulator-staged-chat-card-radius: 8px;
+  --sk-emulator-staged-chat-card-background: rgb(255 255 255 / 0.0823529412);
+  --sk-emulator-staged-chat-card-row-gap: 8px;
+  --sk-emulator-staged-chat-card-content-gap: 6px;
+  --sk-emulator-staged-chat-user-font-weight: 600;
+  --sk-emulator-staged-chat-md-block-gap: 6px;
+  --sk-emulator-staged-chat-md-font-size: 14px;
+  --sk-emulator-staged-chat-md-line-height: 23px;
+  --sk-emulator-staged-chat-copy-button-size: 24px;
+  --sk-emulator-staged-chat-copy-button-radius: 4px;
+  --sk-emulator-staged-chat-copy-icon-size: 16px;
+  --sk-emulator-staged-chat-copy-opacity: 0.7;
+  --sk-emulator-staged-chat-code-margin-y: 4px;
+  --sk-emulator-staged-chat-code-radius: 6px;
+  --sk-emulator-staged-chat-code-background: rgb(42 42 42 / 0.8784313725);
+  --sk-emulator-staged-chat-code-header-padding-x: 10px;
+  --sk-emulator-staged-chat-code-header-padding-y: 4px;
+  --sk-emulator-staged-chat-code-header-border: rgb(52 52 52 / 0.1882352941);
+  --sk-emulator-staged-chat-code-label-font-size: 12px;
+  --sk-emulator-staged-chat-code-body-padding-x: 10px;
+  --sk-emulator-staged-chat-code-body-padding-y: 8px;
+  --sk-emulator-staged-chat-code-line-gap: 2px;
+  --sk-emulator-staged-chat-code-line-min-height: 16px;
+  --sk-emulator-staged-chat-inline-code-padding-x: 4px;
+  --sk-emulator-staged-chat-inline-code-padding-y: 1px;
+  --sk-emulator-staged-chat-inline-code-radius: 3px;
+  --sk-emulator-staged-chat-inline-code-background: rgb(42 42 42 / 0.5019607843);
+
+  /* ── Proposed token names (what the rules below consume) ─────────────── */
+  --sk-chat-window-height: var(--sk-emulator-staged-chat-window-height);
+  --sk-chat-layout-padding-x: var(--sk-emulator-staged-chat-layout-padding-x);
+  --sk-chat-section-padding-y: var(--sk-emulator-staged-chat-section-padding-y);
+  --sk-chat-header-gap: var(--sk-emulator-staged-chat-header-gap);
+  --sk-chat-title-font-size: var(--sk-emulator-staged-chat-title-font-size);
+  --sk-chat-title-line-height: var(--sk-emulator-staged-chat-title-line-height);
+  --sk-chat-title-font-weight: var(--sk-emulator-staged-chat-title-font-weight);
+  --sk-chat-divider: var(--sk-emulator-staged-chat-divider);
+  --sk-chat-text-secondary: var(--sk-emulator-staged-chat-text-secondary);
+  --sk-chat-input-area-gap: var(--sk-emulator-staged-chat-input-area-gap);
+  --sk-chat-input-min-height: var(--sk-emulator-staged-chat-input-min-height);
+  --sk-chat-input-font-size: var(--sk-emulator-staged-chat-input-font-size);
+  --sk-chat-input-surface: var(--sk-emulator-staged-chat-input-surface);
+  --sk-chat-placeholder-text: var(--sk-emulator-staged-chat-placeholder-text);
+  --sk-chat-turn-gap: var(--sk-emulator-staged-chat-turn-gap);
+  --sk-chat-card-padding-x: var(--sk-emulator-staged-chat-card-padding-x);
+  --sk-chat-card-padding-y: var(--sk-emulator-staged-chat-card-padding-y);
+  --sk-chat-card-radius: var(--sk-emulator-staged-chat-card-radius);
+  --sk-chat-card-background: var(--sk-emulator-staged-chat-card-background);
+  --sk-chat-card-row-gap: var(--sk-emulator-staged-chat-card-row-gap);
+  --sk-chat-card-content-gap: var(--sk-emulator-staged-chat-card-content-gap);
+  --sk-chat-user-font-weight: var(--sk-emulator-staged-chat-user-font-weight);
+  --sk-chat-md-block-gap: var(--sk-emulator-staged-chat-md-block-gap);
+  --sk-chat-md-font-size: var(--sk-emulator-staged-chat-md-font-size);
+  --sk-chat-md-line-height: var(--sk-emulator-staged-chat-md-line-height);
+  --sk-chat-copy-button-size: var(--sk-emulator-staged-chat-copy-button-size);
+  --sk-chat-copy-button-radius: var(--sk-emulator-staged-chat-copy-button-radius);
+  --sk-chat-copy-icon-size: var(--sk-emulator-staged-chat-copy-icon-size);
+  --sk-chat-copy-opacity: var(--sk-emulator-staged-chat-copy-opacity);
+  --sk-chat-code-margin-y: var(--sk-emulator-staged-chat-code-margin-y);
+  --sk-chat-code-radius: var(--sk-emulator-staged-chat-code-radius);
+  --sk-chat-code-background: var(--sk-emulator-staged-chat-code-background);
+  --sk-chat-code-header-padding-x: var(--sk-emulator-staged-chat-code-header-padding-x);
+  --sk-chat-code-header-padding-y: var(--sk-emulator-staged-chat-code-header-padding-y);
+  --sk-chat-code-header-border: var(--sk-emulator-staged-chat-code-header-border);
+  --sk-chat-code-label-font-size: var(--sk-emulator-staged-chat-code-label-font-size);
+  --sk-chat-code-body-padding-x: var(--sk-emulator-staged-chat-code-body-padding-x);
+  --sk-chat-code-body-padding-y: var(--sk-emulator-staged-chat-code-body-padding-y);
+  --sk-chat-code-line-gap: var(--sk-emulator-staged-chat-code-line-gap);
+  --sk-chat-code-line-min-height: var(--sk-emulator-staged-chat-code-line-min-height);
+  --sk-chat-inline-code-padding-x: var(--sk-emulator-staged-chat-inline-code-padding-x);
+  --sk-chat-inline-code-padding-y: var(--sk-emulator-staged-chat-inline-code-padding-y);
+  --sk-chat-inline-code-radius: var(--sk-emulator-staged-chat-inline-code-radius);
+  --sk-chat-inline-code-background: var(--sk-emulator-staged-chat-inline-code-background);
+  /* Already-generated tokens covering the same Rust sources (no staging):
+   * caret → --sk-caret-width/--sk-caret-height (panel::CURSOR_WIDTH /
+   * CURSOR_HEIGHT_LG), caret color → --sk-color-accent (accent.selected),
+   * mono → --sk-font-mono, footer band → --sk-window-native-footer-host-height
+   * + --sk-footer-*, primary text → --sk-color-text-primary. */
+}
+
+body {
+  margin: 0;
+}
+
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-desktop);
+}
+
+/* Window shell: main-menu chrome at the DivPrompt STANDARD_HEIGHT. */
+.sk-window--chat {
+  height: var(--sk-chat-window-height);
+}
+
+/* ── Header: "←  Chat" (render_input.rs::render_header) ───────────────── */
+.sk-chat-header {
+  flex: none;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sk-chat-header-gap);
+  padding-inline: var(--sk-chat-layout-padding-x);
+  padding-block: var(--sk-chat-section-padding-y);
+  border-bottom: var(--sk-window-divider-height) solid var(--sk-chat-divider);
+  font-size: var(--sk-chat-title-font-size);
+  line-height: var(--sk-chat-title-line-height);
+}
+
+.sk-chat-header__back {
+  color: var(--sk-chat-text-secondary);
+}
+
+.sk-chat-header__title {
+  color: var(--sk-color-text-primary);
+  font-weight: var(--sk-chat-title-font-weight);
+}
+
+/* ── Input area at TOP (render_core.rs, full mode) ─────────────────────── */
+.sk-chat-input-area {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sk-chat-input-area-gap);
+  padding-inline: var(--sk-chat-layout-padding-x);
+  padding-block: var(--sk-chat-section-padding-y);
+  border-bottom: var(--sk-window-divider-height) solid var(--sk-chat-divider);
+}
+
+/* The field div carries NO horizontal padding in Rust — text origin sits at
+ * the input area's 12pt inset. Focused and idle fills resolve identically in
+ * stock script-kit-dark (search_box @ input_active 0.50 == search_box 0.50). */
+.sk-chat-input {
+  width: 100%;
+  min-height: var(--sk-chat-input-min-height);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: var(--sk-chat-input-surface);
+  font-size: var(--sk-chat-input-font-size);
+  color: var(--sk-color-text-primary);
+}
+
+/* Caret is an inline 2.5×18 bar at the text origin (shared text-input
+ * painter), accent-colored (render_input.rs cursor_color: accent.selected). */
+.sk-chat-caret {
+  flex: none;
+  width: var(--sk-caret-width);
+  height: var(--sk-caret-height);
+  background: var(--sk-color-accent);
+}
+
+/* Chat placeholder is rgb(text.muted) at FULL alpha (render_input.rs:9) —
+ * pure white in stock dark, unlike the main menu's 40% placeholder grading.
+ * Recorded as an expected contract conflict in the brief. */
+.sk-chat-placeholder {
+  color: var(--sk-chat-placeholder-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Messages area: bottom-anchored virtualized turns ──────────────────── */
+.sk-chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding-inline: var(--sk-chat-layout-padding-x);
+  padding-block: var(--sk-chat-section-padding-y);
+}
+
+.sk-chat-turn {
+  width: 100%;
+  padding-bottom: var(--sk-chat-turn-gap);
+}
+
+/* Full-width turn card: user prompt + assistant response share one
+ * container (render_turns.rs) with a trailing copy button. */
+.sk-chat-card {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--sk-chat-card-row-gap);
+  padding: var(--sk-chat-card-padding-y) var(--sk-chat-card-padding-x);
+  border-radius: var(--sk-chat-card-radius);
+  background: var(--sk-chat-card-background);
+}
+
+.sk-chat-card__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sk-chat-card-content-gap);
+}
+
+.sk-chat-user {
+  width: 100%;
+  min-width: 0;
+  font-size: var(--sk-chat-md-font-size);
+  line-height: var(--sk-chat-md-line-height);
+  font-weight: var(--sk-chat-user-font-weight);
+  color: var(--sk-chat-text-secondary);
+}
+
+/* Copy button: always painted at 0.7 opacity (hover raises to 1 + bg). */
+.sk-chat-copy {
+  flex: none;
+  width: var(--sk-chat-copy-button-size);
+  height: var(--sk-chat-copy-button-size);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--sk-chat-copy-button-radius);
+  background: transparent;
+  color: var(--sk-chat-text-secondary);
+  opacity: var(--sk-chat-copy-opacity);
+}
+
+.sk-chat-copy svg {
+  width: var(--sk-chat-copy-icon-size);
+  height: var(--sk-chat-copy-icon-size);
+  display: block;
+}
+
+/* ── Markdown (prompts/markdown): root gap 6, paragraphs 14/phi-23 ─────── */
+.sk-chat-md {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sk-chat-md-block-gap);
+}
+
+.sk-chat-md__p {
+  margin: 0;
+  font-size: var(--sk-chat-md-font-size);
+  line-height: var(--sk-chat-md-line-height);
+  color: var(--sk-color-text-primary);
+}
+
+/* Code block: header strip + body (code_table.rs::build_code_block_element).
+ * Syntax span colors come from syntect and are intentionally NOT tokenized
+ * (renderer divergence) — lines paint in the block's inherited color here. */
+.sk-chat-code {
+  width: 100%;
+  margin-block: var(--sk-chat-code-margin-y);
+  border-radius: var(--sk-chat-code-radius);
+  border: var(--sk-window-divider-height) solid var(--sk-chat-divider);
+  background: var(--sk-chat-code-background);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sk-chat-code__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: var(--sk-chat-code-header-padding-x);
+  padding-block: var(--sk-chat-code-header-padding-y);
+  border-bottom: var(--sk-window-divider-height) solid var(--sk-chat-code-header-border);
+}
+
+.sk-chat-code__label {
+  font-size: var(--sk-chat-code-label-font-size);
+  color: var(--sk-chat-text-secondary);
+}
+
+.sk-chat-code__body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sk-chat-code-line-gap);
+  padding-inline: var(--sk-chat-code-body-padding-x);
+  padding-block: var(--sk-chat-code-body-padding-y);
+  overflow-x: auto;
+}
+
+.sk-chat-code__line {
+  min-height: var(--sk-chat-code-line-min-height);
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  font-size: var(--sk-chat-md-font-size);
+  line-height: var(--sk-chat-md-line-height);
+  white-space: nowrap;
+}
+
+/* Inline code chip (inline_render.rs::style_span, style.code). */
+.sk-chat-inline-code {
+  padding-inline: var(--sk-chat-inline-code-padding-x);
+  padding-block: var(--sk-chat-inline-code-padding-y);
+  border-radius: var(--sk-chat-inline-code-radius);
+  background: var(--sk-chat-inline-code-background);
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  color: var(--sk-color-text-primary);
+}

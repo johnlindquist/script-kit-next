@@ -39,6 +39,50 @@ impl SearchHighlightMatchCtx {
             .get_or_insert_with(|| UnicodeHighlightCtx::new(&self.query_lower))
             .indices_for(haystack)
     }
+
+    /// Contiguous-substring-only indices: no character-subsequence fuzzy
+    /// fallback. Long-form text rows use this so a sentence query can never
+    /// paint scattered per-character highlights.
+    pub(crate) fn contiguous_indices_for(&mut self, haystack: &str) -> (bool, Vec<usize>) {
+        if self.query_lower.is_empty() {
+            return (false, Vec::new());
+        }
+
+        if is_ascii_pair(haystack, &self.query_lower) {
+            if let Some(start) = find_ignore_ascii_case(haystack, &self.query_lower) {
+                let end = start + self.query_lower.len();
+                return (true, (start..end).collect());
+            }
+            return (false, Vec::new());
+        }
+
+        let hay: Vec<char> = haystack.chars().flat_map(|ch| ch.to_lowercase()).collect();
+        let needle: Vec<char> = self.query_lower.chars().collect();
+        if needle.is_empty() || hay.len() < needle.len() {
+            return (false, Vec::new());
+        }
+        for start in 0..=(hay.len() - needle.len()) {
+            if hay[start..start + needle.len()] == needle[..] {
+                return (true, (start..start + needle.len()).collect());
+            }
+        }
+        (false, Vec::new())
+    }
+
+    /// Mode-aware indices for long-form passive rows: sentence queries only
+    /// highlight contiguous phrase occurrences, single tokens keep today's
+    /// behavior.
+    pub(crate) fn long_text_indices_for(
+        &mut self,
+        haystack: &str,
+        sentence_mode: bool,
+    ) -> (bool, Vec<usize>) {
+        if sentence_mode {
+            self.contiguous_indices_for(haystack)
+        } else {
+            self.indices_for(haystack)
+        }
+    }
 }
 
 /// Unicode-safe fuzzy index matcher backed by nucleo Pattern::indices.
@@ -141,6 +185,10 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
     }
 
     let mut highlight_ctx = SearchHighlightMatchCtx::new(query);
+    // Sentence queries (2+ words) must never fall back to nucleo
+    // char-subsequence highlighting on long-form rows.
+    let sentence_mode = super::sentence::compile_long_text_query(query)
+        .is_some_and(|compiled| compiled.is_sentence());
 
     match result {
         SearchResult::Script(sm) => {
@@ -382,14 +430,35 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::AgentChatHistory(am) => {
             let mut indices = MatchIndices::default();
 
-            let (name_matched, name_indices) = highlight_ctx.indices_for(am.entry.title_display());
+            // Evidence-first: highlight exactly the word ranges that made
+            // the row qualify. The stored source texts guard against
+            // composed subtitles that don't start with the matched field.
+            if let Some(evidence) = am.evidence.as_ref() {
+                let rendered_title = am.entry.title_display();
+                if !evidence.title_indices.is_empty()
+                    && rendered_title.starts_with(evidence.title_text.as_str())
+                {
+                    indices.name_indices = evidence.title_indices.clone();
+                }
+                if !evidence.subtitle_indices.is_empty()
+                    && am.subtitle.starts_with(evidence.subtitle_text.as_str())
+                {
+                    indices.description_indices = evidence.subtitle_indices.clone();
+                }
+                return indices;
+            }
+
+            // No evidence (e.g. empty-query recency rows): contiguous
+            // substring only — never scattered fuzzy characters.
+            let (name_matched, name_indices) =
+                highlight_ctx.contiguous_indices_for(am.entry.title_display());
             if name_matched {
                 indices.name_indices = name_indices;
             }
 
             if indices.name_indices.is_empty() {
                 let (preview_matched, preview_indices) =
-                    highlight_ctx.indices_for(am.entry.preview_display());
+                    highlight_ctx.contiguous_indices_for(am.entry.preview_display());
                 if preview_matched {
                     indices.description_indices = preview_indices;
                 }
@@ -417,13 +486,15 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::ClipboardHistory(cm) => {
             let mut indices = MatchIndices::default();
 
-            let (name_matched, name_indices) = highlight_ctx.indices_for(&cm.title);
+            let (name_matched, name_indices) =
+                highlight_ctx.long_text_indices_for(&cm.title, sentence_mode);
             if name_matched {
                 indices.name_indices = name_indices;
             }
 
             if indices.name_indices.is_empty() {
-                let (desc_matched, desc_indices) = highlight_ctx.indices_for(&cm.subtitle);
+                let (desc_matched, desc_indices) =
+                    highlight_ctx.long_text_indices_for(&cm.subtitle, sentence_mode);
                 if desc_matched {
                     indices.description_indices = desc_indices;
                 }
@@ -434,13 +505,28 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::DictationHistory(dm) => {
             let mut indices = MatchIndices::default();
 
-            let (name_matched, name_indices) = highlight_ctx.indices_for(&dm.preview);
+            if let Some(evidence) = dm.evidence.as_ref() {
+                if !evidence.title_indices.is_empty()
+                    && dm.preview.starts_with(evidence.title_text.as_str())
+                {
+                    indices.name_indices = evidence.title_indices.clone();
+                }
+                if !evidence.subtitle_indices.is_empty()
+                    && dm.subtitle.starts_with(evidence.subtitle_text.as_str())
+                {
+                    indices.description_indices = evidence.subtitle_indices.clone();
+                }
+                return indices;
+            }
+
+            let (name_matched, name_indices) = highlight_ctx.contiguous_indices_for(&dm.preview);
             if name_matched {
                 indices.name_indices = name_indices;
             }
 
             if indices.name_indices.is_empty() {
-                let (desc_matched, desc_indices) = highlight_ctx.indices_for(&dm.subtitle);
+                let (desc_matched, desc_indices) =
+                    highlight_ctx.contiguous_indices_for(&dm.subtitle);
                 if desc_matched {
                     indices.description_indices = desc_indices;
                 }
@@ -451,20 +537,23 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::BrowserHistory(bm) => {
             let mut indices = MatchIndices::default();
 
-            let (name_matched, name_indices) = highlight_ctx.indices_for(&bm.hit.title);
+            let (name_matched, name_indices) =
+                highlight_ctx.long_text_indices_for(&bm.hit.title, sentence_mode);
             if name_matched {
                 indices.name_indices = name_indices;
             }
 
             if indices.name_indices.is_empty() {
-                let (desc_matched, desc_indices) = highlight_ctx.indices_for(&bm.subtitle);
+                let (desc_matched, desc_indices) =
+                    highlight_ctx.long_text_indices_for(&bm.subtitle, sentence_mode);
                 if desc_matched {
                     indices.description_indices = desc_indices;
                 }
             }
 
             if indices.name_indices.is_empty() && indices.description_indices.is_empty() {
-                let (url_matched, url_indices) = highlight_ctx.indices_for(&bm.hit.url);
+                let (url_matched, url_indices) =
+                    highlight_ctx.long_text_indices_for(&bm.hit.url, sentence_mode);
                 if url_matched {
                     indices.filename_indices = url_indices;
                 }
@@ -475,20 +564,23 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         SearchResult::BrowserTab(bm) => {
             let mut indices = MatchIndices::default();
 
-            let (name_matched, name_indices) = highlight_ctx.indices_for(&bm.hit.title);
+            let (name_matched, name_indices) =
+                highlight_ctx.long_text_indices_for(&bm.hit.title, sentence_mode);
             if name_matched {
                 indices.name_indices = name_indices;
             }
 
             if indices.name_indices.is_empty() {
-                let (desc_matched, desc_indices) = highlight_ctx.indices_for(&bm.subtitle);
+                let (desc_matched, desc_indices) =
+                    highlight_ctx.long_text_indices_for(&bm.subtitle, sentence_mode);
                 if desc_matched {
                     indices.description_indices = desc_indices;
                 }
             }
 
             if indices.name_indices.is_empty() && indices.description_indices.is_empty() {
-                let (url_matched, url_indices) = highlight_ctx.indices_for(&bm.hit.url);
+                let (url_matched, url_indices) =
+                    highlight_ctx.long_text_indices_for(&bm.hit.url, sentence_mode);
                 if url_matched {
                     indices.filename_indices = url_indices;
                 }

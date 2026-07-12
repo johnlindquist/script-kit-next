@@ -87,6 +87,56 @@ pub(crate) struct CompactResourceRow {
     pub preview: SharedString,
 }
 
+/// What `render_compact_resource_row` actually paints — the shared owner the
+/// design-contract exporter reads so the Day Page shelf mockup consumes the
+/// row's real metrics instead of value-coincident aliases.
+///
+/// Framework values mirrored here (gpui `Styled` helpers are rem-relative
+/// against the default 16px window rem; there is no public accessor):
+/// - `.gap_2()` = 0.5rem → 8px between the mono meta and the preview text.
+/// - `.text_xs()` = 0.75rem → 12px row font size.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ResolvedCompactResourceRowStyle {
+    /// `INFO_SPACING.xs` — app-authored source leaf.
+    pub padding_x: f32,
+    /// `INFO_SPACING.xxs` — app-authored source leaf.
+    pub padding_y: f32,
+    /// Framework `.gap_2()` (see struct docs).
+    pub gap: f32,
+    /// Framework `.text_xs()` (see struct docs).
+    pub font_size: f32,
+    /// Rest text color: gpui-component `theme.muted_foreground` via the
+    /// Script Kit theme bridge.
+    pub rest_color: gpui::Hsla,
+    /// Hover text color: gpui-component `theme.foreground` via the bridge.
+    pub hover_color: gpui::Hsla,
+}
+
+/// Framework `.gap_2()` = 0.5rem × 16px rem (mirror; tripwire in tests).
+const COMPACT_ROW_GAP_PX: f32 = 8.0;
+/// Framework `.text_xs()` = 0.75rem × 16px rem (mirror; tripwire in tests).
+const COMPACT_ROW_FONT_SIZE_PX: f32 = 12.0;
+
+/// Resolve the compact row's painted style for a Script Kit theme through
+/// the SAME theme bridge (`map_scriptkit_to_gpui_theme`) the renderer's
+/// `cx.theme()` values come from. Pure: safe for the checked-in exporter.
+pub(crate) fn resolved_compact_resource_row_style(
+    sk_theme: &crate::theme::Theme,
+) -> ResolvedCompactResourceRowStyle {
+    let bridge = crate::theme::gpui_integration::map_scriptkit_to_gpui_theme(
+        sk_theme,
+        sk_theme.is_dark_mode(),
+    );
+    ResolvedCompactResourceRowStyle {
+        padding_x: crate::components::INFO_SPACING.xs,
+        padding_y: crate::components::INFO_SPACING.xxs,
+        gap: COMPACT_ROW_GAP_PX,
+        font_size: COMPACT_ROW_FONT_SIZE_PX,
+        rest_color: bridge.muted_foreground,
+        hover_color: bridge.foreground,
+    }
+}
+
 #[allow(dead_code)] // Used by the binary target's Day Page clipboard shelf.
 pub(crate) fn render_compact_resource_row(
     row: CompactResourceRow,
@@ -333,5 +383,25 @@ mod tests {
         let href = format!("https://example.com/{}", "é".repeat(60));
         let shown = truncate_href_for_hover_hint(&href);
         assert_eq!(shown.chars().count(), HOVER_HINT_HREF_MAX_CHARS);
+    }
+
+    #[test]
+    fn stock_theme_resolves_compact_row_paint_style() {
+        let theme = crate::theme::presets::all_presets()
+            .into_iter()
+            .find(|preset| preset.id == "script-kit-dark")
+            .expect("script-kit-dark preset")
+            .create_theme();
+        let style = resolved_compact_resource_row_style(&theme);
+
+        assert_eq!(style.padding_x, crate::components::INFO_SPACING.xs);
+        assert_eq!(style.padding_y, crate::components::INFO_SPACING.xxs);
+        // Framework mirror tripwires (.gap_2 / .text_xs at the 16px rem).
+        assert_eq!(style.gap, 8.0);
+        assert_eq!(style.font_size, 12.0);
+        // muted_foreground routes through the semantic placeholder ladder:
+        // text.primary at opacity.text_placeholder (0.40 in the stock theme).
+        assert_eq!(style.rest_color.a, theme.get_opacity().text_placeholder);
+        assert_eq!(style.hover_color.a, 1.0);
     }
 }

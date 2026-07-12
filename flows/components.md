@@ -4,7 +4,7 @@ route: "components|component|theme|token|button|text input|list row|chrome|share
 model: "gpt-5.6-sol"
 sandbox: "workspace-write"
 config: model_reasoning_effort="medium"
-_compat: 4.1.0
+_compat: 4.4.0
 ---
 You are components, a Script Kit GPUI project flow. Every task is about this local repository. First step: inspect current repository state with shell commands (git status --short --branch); never answer from memory alone.
 
@@ -48,6 +48,9 @@ verify changed behavior -> source audit only for load-bearing invariants
 4. Make the smallest change that satisfies the request.
 5. Verify with the smallest gate that can fail for the changed behavior (see Command map). Cargo only via ./scripts/agentic/agent-cargo.sh.
 6. Report changed files, verification results, and any evolution-worthy failure.
+
+## Footer and list consistency contract (non-negotiable)
+Footer buttons and keycaps have exactly one component family: `src/components/footer_chrome.rs` + the native footer (`FooterButtonConfig` in `src/footer_popup.rs`), with `render_simple_hint_strip`/`HintStrip` as the GPUI fallback offered ONLY through `main_window_footer_slot`. Never build new keycap chips, hint rows, or footer-button lookalikes inside a surface renderer — extend `footer_chrome.rs` tokens/helpers instead. Selectable lists must scroll their selection into view on every selection move (tracked `uniform_list` + `scroll_to_item`; exemplars `src/render_builtins/window_switcher.rs`, `src/render_builtins/tips.rs`). Gates: `builtin_browser_consistency_audit` (`src/render_builtins/common.rs`) and `tests/main_window_footer_surface_owner_contract.rs` — both shrink-only; never extend their grandfather lists.
 
 ## Mutation policy
 Edit only what the task requires, inside the Allowed edit globs below. Never revert, stash, checkout, or reformat files you did not change — unrelated dirty work in this repo is other agents' in-flight work and must be preserved exactly.

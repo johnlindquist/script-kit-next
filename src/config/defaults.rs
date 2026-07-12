@@ -29,6 +29,7 @@ pub const DEFAULT_LOGS_HOTKEY_ENABLED: bool = true;
 pub const DEFAULT_DICTATION_HOTKEY_ENABLED: bool = true;
 pub const DEFAULT_INLINE_AI_HOTKEY_ENABLED: bool = true;
 pub const DEFAULT_REWRITE_HOTKEY_ENABLED: bool = true;
+pub const DEFAULT_TIPS_ENABLED: bool = true;
 
 /// Default unified root-search feature flags.
 pub const DEFAULT_UNIFIED_SEARCH_ENABLED: bool = true;

@@ -67,6 +67,7 @@ pub enum IconName {
     MagnifyingGlass,
     Terminal,
     Code,
+    Flow,
     Pencil,
 
     // Status
@@ -117,6 +118,7 @@ impl IconName {
             Self::MagnifyingGlass,
             Self::Terminal,
             Self::Code,
+            Self::Flow,
             Self::Pencil,
             // Status
             Self::Check,
@@ -164,6 +166,7 @@ impl IconName {
             Self::MagnifyingGlass => "Search",
             Self::Terminal => "Terminal",
             Self::Code => "Code",
+            Self::Flow => "Flow",
             Self::Pencil => "Pencil",
             Self::Check => "Check",
             Self::Star => "Star",
@@ -200,6 +203,7 @@ impl IconName {
             Self::MagnifyingGlass => "Search/find",
             Self::Terminal => "Terminal/command line",
             Self::Code => "Code/development",
+            Self::Flow => "mdflow flow/agent (chevron-fade brand mark)",
             Self::Pencil => "Edit/rename action",
             Self::Check => "Complete/success",
             Self::Star => "Favorite (outline)",
@@ -237,6 +241,7 @@ impl IconName {
             Self::MagnifyingGlass => "magnifying_glass",
             Self::Terminal => "terminal",
             Self::Code => "code",
+            Self::Flow => "flow",
             Self::Pencil => "edit_3",
             Self::Check => "check",
             Self::Star => "star",
@@ -281,6 +286,7 @@ impl IconName {
             Self::MagnifyingGlass => "icons/magnifying_glass.svg",
             Self::Terminal => "icons/terminal.svg",
             Self::Code => "icons/code.svg",
+            Self::Flow => "icons/flow.svg",
             Self::Pencil => "icons/edit_3.svg",
             Self::Check => "icons/check.svg",
             Self::Star => "icons/star.svg",
@@ -314,6 +320,7 @@ impl IconName {
             | Self::MagnifyingGlass
             | Self::Terminal
             | Self::Code
+            | Self::Flow
             | Self::Pencil => IconCategory::Actions,
             Self::Check
             | Self::Star

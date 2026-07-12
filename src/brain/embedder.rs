@@ -138,6 +138,9 @@ pub struct BrainEmbedder {
     stdin: Mutex<Option<ChildStdin>>,
     pending: Arc<Mutex<HashMap<u64, mpsc::Sender<EmbedResponse>>>>,
     next_id: AtomicU64,
+    /// Tracks the helper with the global process manager for quit-time and
+    /// post-crash reaping; dropping this embedder unregisters it.
+    _registration: crate::process_manager::ChildRegistration,
 }
 
 impl BrainEmbedder {
@@ -150,12 +153,24 @@ impl BrainEmbedder {
     /// the wiring lets tests point the embedder at a fake helper without the
     /// real `script-kit-ghost-llm-helper` binary being installed.
     pub(crate) fn spawn_with_helper(helper_path: &Path, model: ResolvedEmbedModel) -> Result<Self> {
-        let mut child = Command::new(helper_path)
+        let mut command = Command::new(helper_path);
+        command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::null());
+        // Own process group so orphan cleanup / kill_all can reap the helper.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
+        let mut child = command
             .spawn()
             .with_context(|| format!("spawn brain embed helper {}", helper_path.display()))?;
+        let registration = crate::process_manager::ChildRegistration::register(
+            child.id(),
+            &helper_path.to_string_lossy(),
+        );
         let stdin = child.stdin.take().context("brain embed helper stdin")?;
         let stdout = child.stdout.take().context("brain embed helper stdout")?;
         let pending: Arc<Mutex<HashMap<u64, mpsc::Sender<EmbedResponse>>>> =
@@ -186,6 +201,7 @@ impl BrainEmbedder {
             stdin: Mutex::new(Some(stdin)),
             pending,
             next_id: AtomicU64::new(1),
+            _registration: registration,
         })
     }
 

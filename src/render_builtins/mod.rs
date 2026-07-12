@@ -1,4 +1,10 @@
 // Builtin render modules split by builtin type.
+// Pure design-contract resolvers shared with the lib-side token exporter —
+// the SAME files are re-exported from `src/lib.rs` via `#[path]` modules
+// (the `path_action` pattern) so `src/design_contract` and
+// `cargo test --lib` consume exactly what the renderers paint with.
+include!("builtin_main_input_contract.rs");
+include!("settings_contract.rs");
 include!("common.rs");
 include!("actions.rs");
 include!("clipboard.rs");
@@ -28,4 +34,5 @@ include!("browser_history.rs");
 include!("dictation_history.rs");
 include!("notes_browse.rs");
 include!("sdk_reference.rs");
+include!("tips.rs");
 include!("script_templates.rs");

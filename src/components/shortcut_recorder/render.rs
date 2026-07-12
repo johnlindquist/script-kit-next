@@ -258,6 +258,15 @@ impl Render for ShortcutRecorder {
             cx.stop_propagation();
         });
 
+        let mut modal_children = vec![
+            header.into_any_element(),
+            self.render_key_display().into_any_element(),
+            self.render_conflict_warning().into_any_element(),
+        ];
+        if !self.capture_only {
+            modal_children.push(buttons.into_any_element());
+        }
+
         // Modal content - with stop propagation to prevent backdrop dismiss
         let modal = confirm_modal_shell(
             ConfirmModalShellConfig {
@@ -272,12 +281,7 @@ impl Render for ShortcutRecorder {
                 offset_y: 0.0,
                 opacity: 1.0,
             },
-            vec![
-                header.into_any_element(),
-                self.render_key_display().into_any_element(),
-                self.render_conflict_warning().into_any_element(),
-                buttons.into_any_element(),
-            ],
+            modal_children,
         )
         // Stop propagation - clicks inside modal shouldn't dismiss it
         .on_mouse_down(gpui::MouseButton::Left, |_, _, _| {

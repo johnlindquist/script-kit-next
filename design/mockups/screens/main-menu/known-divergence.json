@@ -1,0 +1,29 @@
+{
+  "screen": "main-menu",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView menu material; blur radius and material bias are emulator calibration (--sk-emulator-*), and the reference capture sampled the user's live desktop rather than the synthetic backdrop."
+    },
+    {
+      "selector": ".sk-window__effect",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Canvas 2D approximation pending a WebGL2 port of fx_starfield (shader id 3); colors are token-exact, geometry/phase are not."
+    },
+    {
+      "selector": "[data-native-footer]",
+      "kind": "native",
+      "blocking": false,
+      "reason": "The real footer is a native AppKit NSVisualEffectView host painted as a SEPARATE overlay window — protocol captureScreenshot of the GPUI main window shows an empty 36px band, so the reference has no footer pixels to register against. Button truth comes from a live protocol probe (nativeFooterHostInstalled:true; run='Converse ↵', actions='Actions ⌘K', ai='Agent ⌘↵'). Verify footer content via protocol receipts, not the reference PNG."
+    },
+    {
+      "selector": ".sk-list-row__name, .sk-list-row__description, .sk-placeholder, .sk-section-header",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI/CoreText vs browser glyph rasterization; .AppleSystemUIFont weight 430/450 may rasterize differently than -apple-system. Glyph advances also differ slightly, so long runs (the search placeholder) accumulate horizontal drift left-to-right even when the text origin registers. Geometry (bounds/baselines/origins) must still match."
+    }
+  ]
+}

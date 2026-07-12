@@ -66,7 +66,9 @@ impl NotesApp {
             .flex()
             .items_center()
             .h(px(metrics.titlebar_height))
-            .px_3()
+            // Contract-owned horizontal padding (was an inline `.px_3()`);
+            // the design-contract exporter reads the same const.
+            .px(px(super::contract::NOTES_TITLEBAR_PADDING_X))
             .when(is_trash, |d| {
                 d.border_b_1()
                     .border_color(cx.theme().danger.opacity(OPACITY_ACCENT_BORDER))

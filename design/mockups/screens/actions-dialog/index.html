@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Actions Dialog mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: default Cmd+K actions dialog over the selected "AGY Info" flow row,
+  script-kit-dark, base actions-popup theme, rows seeded from InfoBarBase.
+  Content mirrors reference/actions-dialog@2x.png — a clean devtools capture
+  (scripts/agentic/design-reference-capture.ts \-\-screen actions) of the live
+  app on 2026-07-11: search context "AGY Info", Actions/Edit/Share sections,
+  "Converse" selected.
+  Footerless by contract: the bottom band is list padding (6) + shell border
+  reserve (2), sharing the shell material — NOT a footer.
+  Every visual value resolves through generated \-\-sk-* tokens.
+-->
+<main class="stage" id="stage">
+  <div class="sk-actions-dialog" id="dialog">
+    <div class="sk-actions-dialog__material"></div>
+    <div class="sk-actions-dialog__tint"></div>
+
+    <div class="sk-actions-dialog__content">
+      <div class="sk-actions-search" data-placeholder="true" data-component="text_input::render_compact_search_text">
+        <div class="sk-compact-search-text">
+          <span class="sk-compact-search-text__caret"></span>
+          <span class="sk-compact-search-text__label">AGY Info</span>
+        </div>
+      </div>
+
+      <div class="sk-actions-list" data-component="ActionsDialog list()">
+        <div class="sk-actions-section" data-component="section header">Actions</div>
+
+        <div class="sk-actions-row" data-state="selected" data-component="list_item (36px slot)">
+          <div class="sk-actions-row__list-item">
+            <div class="sk-actions-row__surface">
+              <span class="sk-actions-row__title">Converse</span>
+              <span class="sk-shortcut-cluster" data-component="footer_chrome keycaps">
+                <kbd class="sk-keycap">↵</kbd>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sk-actions-row" data-component="list_item (36px slot)">
+          <div class="sk-actions-row__list-item">
+            <div class="sk-actions-row__surface">
+              <span class="sk-actions-row__title">Show Info</span>
+              <span class="sk-shortcut-cluster" data-component="footer_chrome keycaps">
+                <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">I</kbd>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sk-actions-section" data-component="section header">Edit</div>
+
+        <div class="sk-actions-row" data-component="list_item (36px slot)">
+          <div class="sk-actions-row__list-item">
+            <div class="sk-actions-row__surface">
+              <span class="sk-actions-row__title">Add Keyboard Shortcut</span>
+              <span class="sk-shortcut-cluster" data-component="footer_chrome keycaps">
+                <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">⇧</kbd><kbd class="sk-keycap">K</kbd>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sk-actions-row" data-component="list_item (36px slot)">
+          <div class="sk-actions-row__list-item">
+            <div class="sk-actions-row__surface">
+              <span class="sk-actions-row__title">Add Alias</span>
+              <span class="sk-shortcut-cluster" data-component="footer_chrome keycaps">
+                <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">⇧</kbd><kbd class="sk-keycap">A</kbd>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sk-actions-section" data-component="section header">Share</div>
+
+        <div class="sk-actions-row" data-component="list_item (36px slot)">
+          <div class="sk-actions-row__list-item">
+            <div class="sk-actions-row__surface">
+              <span class="sk-actions-row__title">Copy Deep Link</span>
+              <span class="sk-shortcut-cluster" data-component="footer_chrome keycaps">
+                <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">⇧</kbd><kbd class="sk-keycap">D</kbd>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

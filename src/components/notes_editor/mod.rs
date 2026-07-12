@@ -5,6 +5,7 @@
 //! document content, wires save/change callbacks, and owns window chrome.
 
 mod component;
+pub(crate) mod contract;
 mod formatting;
 mod ops;
 mod render;

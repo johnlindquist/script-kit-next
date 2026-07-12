@@ -20,6 +20,12 @@ pub struct ChatPrompt {
     pub(super) conversation_turns_cache: Arc<Vec<ConversationTurn>>,
     pub(super) conversation_turns_dirty: bool,
     pub(super) streaming_message_id: Option<String>,
+    // Frame-rate coalescing for external streaming (`append_chunk`): text
+    // accumulates immediately, but the full turns-cache rebuild + notify runs
+    // at most once per STREAM_FLUSH_INTERVAL so token-rate deltas can't starve
+    // wheel-scroll frames.
+    pub(super) stream_flush_pending: bool,
+    pub(super) last_stream_flush_at: Option<std::time::Instant>,
     pub(super) last_copied_response: Option<String>,
     // Database persistence
     pub(super) save_history: bool,
@@ -128,11 +134,13 @@ impl ChatPrompt {
             on_continue: None,
             on_retry: None,
             theme,
-            turns_list_state: ListState::new(0, ListAlignment::Bottom, px(1024.0)),
+            turns_list_state: ListState::new(0, ListAlignment::Bottom, px(200.0)).measure_all(),
             prompt_colors,
             conversation_turns_cache: Arc::new(Vec::new()),
             conversation_turns_dirty: true,
             streaming_message_id: None,
+            stream_flush_pending: false,
+            last_stream_flush_at: None,
             last_copied_response: None,
             save_history: true, // Default to saving
             // Built-in AI fields (disabled by default)
@@ -228,38 +236,11 @@ impl ChatPrompt {
         self
     }
 
-    /// Start the cursor blink timer
-    pub fn start_cursor_blink(&mut self, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(530))
-                    .await;
-
-                // Skip cx.update() entirely when main window is hidden
-                // to avoid unnecessary GPUI context access at idle
-                if !crate::is_main_window_visible() {
-                    continue;
-                }
-
-                let result = cx.update(|cx| {
-                    this.update(cx, |chat, cx| {
-                        // Skip redundant re-renders while streaming —
-                        // the streaming reveal loop already drives repaints.
-                        if chat.is_streaming() {
-                            return;
-                        }
-                        chat.cursor_visible = !chat.cursor_visible;
-                        cx.notify();
-                    })
-                });
-                // Stop blinking if the entity was dropped
-                if result.is_err() {
-                    break;
-                }
-            }
-        })
-        .detach();
+    /// Keep the caret eligible; the fade itself is owned by the shared
+    /// pulse animation in the text-input painter (`pulse_cursor_bar`),
+    /// so no toggle timer may fight it by zeroing `cursor_visible`.
+    pub fn start_cursor_blink(&mut self, _cx: &mut Context<Self>) {
+        self.cursor_visible = true;
     }
 
     /// Reset cursor to visible (called on user input to keep cursor visible while typing)
@@ -403,7 +384,7 @@ impl ChatPrompt {
     /// composer at the top, a short conversation must read top-down right
     /// under it — bottom anchoring leaves a dead void between them.
     pub fn with_top_aligned_turns(mut self) -> Self {
-        self.turns_list_state = ListState::new(0, ListAlignment::Top, px(1024.0));
+        self.turns_list_state = ListState::new(0, ListAlignment::Top, px(200.0)).measure_all();
         self
     }
 

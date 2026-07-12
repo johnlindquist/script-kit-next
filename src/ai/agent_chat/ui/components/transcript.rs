@@ -10,6 +10,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::super::events::AgentChatForkPoint;
+use super::super::style_contract::{
+    self, resolved_agent_chat_transcript_colors, AgentChatStyleDef,
+};
 use super::super::thread::{
     AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
 };
@@ -17,10 +20,30 @@ use super::super::tool_card::{
     classify_diff_line, AgentChatToolCardMeta, AgentChatToolStatus, DiffLineKind,
 };
 use super::super::ui_variant::{AgentChatTranscriptPresentation, AgentChatUiVariant};
-use crate::dev_style_tool::agent_chat_catalog::AgentChatStyleDef;
 use crate::list_item::FONT_MONO;
 use crate::theme::{self, PromptColors};
 use crate::ui::chrome::AMBIENT_PULSE_CYCLE_MS;
+
+const AGENT_CHAT_TRANSCRIPT_VIEWPORT_FIDELITY_ID: &str = "agent-chat-transcript-viewport";
+
+fn transcript_row_role_slug(role: AgentChatThreadMessageRole) -> &'static str {
+    match role {
+        AgentChatThreadMessageRole::User => "user",
+        AgentChatThreadMessageRole::Assistant => "assistant",
+        AgentChatThreadMessageRole::Thought => "thought",
+        AgentChatThreadMessageRole::Tool => "tool",
+        AgentChatThreadMessageRole::System => "system",
+        AgentChatThreadMessageRole::Error => "error",
+    }
+}
+
+fn transcript_row_fidelity_id(message: &AgentChatThreadMessage) -> String {
+    format!(
+        "agent-chat-transcript-row-{}-{}",
+        transcript_row_role_slug(message.role),
+        message.id
+    )
+}
 
 /// Callback invoked when the user forks the thread by editing message `u64`.
 type ForkEditMessageHandler = Arc<dyn Fn(u64, &mut Window, &mut App) + 'static>;
@@ -586,17 +609,14 @@ impl AgentChatTranscript {
         colors: &PromptColors,
         style_def: &AgentChatStyleDef,
     ) -> TextViewStyle {
-        let code_bg =
-            rgba((colors.code_bg << 8) | style_def.markdown.code_block_bg_alpha.round() as u32);
-        let code_border = rgba(
-            (colors.quote_border << 8) | style_def.markdown.code_block_border_alpha.round() as u32,
-        );
-        let blockquote_bg = rgba(
-            (colors.quote_border << 8) | style_def.markdown.blockquote_bg_alpha.round() as u32,
-        );
-        let blockquote_border = rgba(
-            (colors.quote_border << 8) | style_def.markdown.blockquote_border_alpha.round() as u32,
-        );
+        // PromptColors.code_bg/quote_border are background.search_box and
+        // ui.border — the same theme authorities the shared resolver reads.
+        let _ = colors;
+        let resolved = resolved_agent_chat_transcript_colors(style_def, _theme);
+        let code_bg = rgba(resolved.code_bg_rgba);
+        let code_border = rgba(resolved.code_border_rgba);
+        let blockquote_bg = rgba(resolved.blockquote_bg_rgba);
+        let blockquote_border = rgba(resolved.blockquote_border_rgba);
         let heading_1_font_size = style_def.markdown.heading_1_font_size;
         let heading_2_font_size = style_def.markdown.heading_2_font_size;
         let heading_3_font_size = style_def.markdown.heading_3_font_size;
@@ -804,8 +824,9 @@ impl AgentChatTranscript {
         theme: &crate::theme::Theme,
         style_def: &AgentChatStyleDef,
     ) -> gpui::AnyElement {
+        let resolved = resolved_agent_chat_transcript_colors(style_def, theme);
         let dot = div()
-            .size(px(7.0))
+            .size(px(style_contract::AGENT_CHAT_ACTIVITY_DOT_SIZE))
             .rounded(px(999.0))
             .bg(rgb(theme.colors.accent.selected))
             .with_animation(
@@ -823,12 +844,17 @@ impl AgentChatTranscript {
             .pb(px(style_def.transcript.row_padding_bottom))
             .mt(px(style_def.transcript.response_start_margin_top))
             .child(
-                div().flex().items_center().gap(px(8.0)).child(dot).child(
-                    div()
-                        .text_size(px(style_def.markdown.body_font_size))
-                        .text_color(rgba((theme.colors.text.primary << 8) | 0xB0))
-                        .child("Thinking\u{2026}"),
-                ),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(style_contract::AGENT_CHAT_ACTIVITY_GAP))
+                    .child(dot)
+                    .child(
+                        div()
+                            .text_size(px(style_def.markdown.body_font_size))
+                            .text_color(rgba(resolved.activity_label_rgba))
+                            .child("Thinking\u{2026}"),
+                    ),
             )
             .into_any()
     }
@@ -946,7 +972,7 @@ impl AgentChatTranscript {
             )
             .rounded(px(user_style.radius))
             .bg(rgba(
-                (theme.colors.text.primary << 8) | user_style.bg_alpha.round() as u32,
+                resolved_agent_chat_transcript_colors(style_def, theme).user_bg_rgba,
             ))
             .when(
                 matches!(presentation, AgentChatTranscriptPresentation::UserBold),
@@ -995,9 +1021,10 @@ impl AgentChatTranscript {
             )
             .rounded(px(assistant_style.radius))
             .when(assistant_style.bg_alpha > 0.0, |d| {
-                d.bg(rgba(
-                    (_theme.colors.text.primary << 8) | assistant_style.bg_alpha.round() as u32,
-                ))
+                d.bg(rgba(style_contract::pack_rgb_alpha(
+                    _theme.colors.text.primary,
+                    assistant_style.bg_alpha,
+                )))
             })
             .child(Self::selectable_markdown_view(
                 text_view_state,
@@ -1034,6 +1061,7 @@ impl AgentChatTranscript {
         let block_style = style_def.collapsible;
         let code_font_size = style_def.markdown.code_block_font_size;
         let total_rows = diff.lines().count();
+        let resolved = resolved_agent_chat_transcript_colors(style_def, theme);
 
         let mut rows = div()
             .flex()
@@ -1041,10 +1069,7 @@ impl AgentChatTranscript {
             .w_full()
             .mt(px(block_style.body_padding_top))
             .rounded(px(style_def.markdown.code_block_radius))
-            .bg(rgba(
-                (theme.colors.background.search_box << 8)
-                    | style_def.markdown.code_block_bg_alpha.round() as u32,
-            ))
+            .bg(rgba(resolved.code_bg_rgba))
             .px(px(style_def.markdown.code_block_padding_x))
             .py(px(style_def.markdown.code_block_padding_y))
             .font_family(FONT_MONO)
@@ -1055,13 +1080,13 @@ impl AgentChatTranscript {
             let row = match classify_diff_line(line) {
                 DiffLineKind::Added => row
                     .text_color(rgb(theme.colors.ui.success))
-                    .bg(rgba((theme.colors.ui.success << 8) | 0x14)),
+                    .bg(rgba(resolved.diff_added_bg_rgba)),
                 DiffLineKind::Removed => row
                     .text_color(rgb(theme.colors.ui.error))
-                    .bg(rgba((theme.colors.ui.error << 8) | 0x14)),
-                DiffLineKind::Context => {
-                    row.text_color(rgb(theme.colors.text.primary)).opacity(0.55)
-                }
+                    .bg(rgba(resolved.diff_removed_bg_rgba)),
+                DiffLineKind::Context => row
+                    .text_color(rgb(theme.colors.text.primary))
+                    .opacity(style_contract::AGENT_CHAT_DIFF_CONTEXT_OPACITY),
             };
             rows = rows.child(row);
         }
@@ -1095,16 +1120,17 @@ impl AgentChatTranscript {
         entity: &gpui::WeakEntity<AgentChatTranscript>,
     ) -> gpui::AnyElement {
         let block_style = style_def.collapsible;
+        let resolved = resolved_agent_chat_transcript_colors(style_def, theme);
         let status_color = match meta.status {
-            AgentChatToolStatus::Pending => rgba((theme.colors.text.primary << 8) | 0x80),
+            AgentChatToolStatus::Pending => rgba(resolved.tool_status_pending_rgba),
             AgentChatToolStatus::Running => rgb(_colors.accent_color),
             AgentChatToolStatus::Complete => rgb(theme.colors.ui.success),
             AgentChatToolStatus::Failed => rgb(theme.colors.ui.error),
         };
         let left_border_color = if meta.is_error {
-            rgba((theme.colors.ui.error << 8) | block_style.tool_border_alpha.round() as u32)
+            rgba(resolved.tool_border_error_rgba)
         } else {
-            rgba((theme.colors.accent.selected << 8) | block_style.tool_border_alpha.round() as u32)
+            rgba(resolved.tool_border_rgba)
         };
         let chevron = if is_collapsed {
             "\u{25B8}" // ▸
@@ -1124,7 +1150,7 @@ impl AgentChatTranscript {
             .id(SharedString::from(format!("agent_chat-toggle-{}", msg.id)))
             .flex()
             .items_center()
-            .gap_1()
+            .gap(px(style_contract::AGENT_CHAT_BLOCK_HEADER_GAP))
             .cursor_pointer()
             .child(
                 div()
@@ -1191,7 +1217,7 @@ impl AgentChatTranscript {
             .pl(px(block_style.padding_x))
             .pr(px(block_style.padding_x))
             .py(px(block_style.padding_y))
-            .border_l_2()
+            .border_l(px(style_contract::AGENT_CHAT_BLOCK_BORDER_WIDTH))
             .border_color(left_border_color)
             .child(header);
 
@@ -1278,10 +1304,11 @@ impl AgentChatTranscript {
         } else {
             block_style.thought_header_opacity
         };
+        let resolved = resolved_agent_chat_transcript_colors(style_def, theme);
         let left_border_color = if is_tool {
-            rgba((theme.colors.accent.selected << 8) | block_style.tool_border_alpha.round() as u32)
+            rgba(resolved.tool_border_rgba)
         } else {
-            rgba((theme.colors.text.primary << 8) | block_style.thought_border_alpha.round() as u32)
+            rgba(resolved.thought_border_rgba)
         };
 
         let mut container = div()
@@ -1289,7 +1316,7 @@ impl AgentChatTranscript {
             .pl(px(block_style.padding_x))
             .pr(px(block_style.padding_x))
             .py(px(block_style.padding_y))
-            .border_l_2()
+            .border_l(px(style_contract::AGENT_CHAT_BLOCK_BORDER_WIDTH))
             .border_color(left_border_color);
 
         // Header row — clickable toggle uses element ID only (no cx.listener in static context).
@@ -1297,7 +1324,7 @@ impl AgentChatTranscript {
             .id(SharedString::from(format!("agent_chat-toggle-{}", msg.id)))
             .flex()
             .items_center()
-            .gap_1()
+            .gap(px(style_contract::AGENT_CHAT_BLOCK_HEADER_GAP))
             .cursor_pointer()
             .child(
                 div()
@@ -1372,14 +1399,15 @@ impl AgentChatTranscript {
         style_def: &AgentChatStyleDef,
     ) -> gpui::AnyElement {
         let error_style = style_def.error;
+        let resolved = resolved_agent_chat_transcript_colors(style_def, &theme::get_cached_theme());
         div()
             .w_full()
             .px(px(error_style.padding_x))
             .py(px(error_style.padding_y))
             .rounded(px(error_style.radius))
-            .bg(rgba(0xEF444400 | error_style.bg_alpha.round() as u32))
-            .border_l_2()
-            .border_color(rgba(0xEF444400 | error_style.border_alpha.round() as u32))
+            .bg(rgba(resolved.error_bg_rgba))
+            .border_l(px(style_contract::AGENT_CHAT_BLOCK_BORDER_WIDTH))
+            .border_color(rgba(resolved.error_border_rgba))
             .child(
                 div()
                     .flex()
@@ -1430,9 +1458,9 @@ impl AgentChatTranscript {
             .px(px(system_style.padding_x))
             .py(px(system_style.padding_y))
             .opacity(system_style.opacity)
-            .border_l_2()
+            .border_l(px(style_contract::AGENT_CHAT_BLOCK_BORDER_WIDTH))
             .border_color(rgba(
-                (theme.colors.ui.border << 8) | system_style.border_alpha.round() as u32,
+                resolved_agent_chat_transcript_colors(style_def, theme).system_border_rgba,
             ))
             .child(Self::selectable_markdown_view(
                 text_view_state,
@@ -1504,7 +1532,9 @@ impl Render for AgentChatTranscript {
                     .unwrap_or_default();
                 let use_heavy_preview = Self::should_use_heavy_markdown_preview(msg, stats)
                     && !expanded_heavy_markdown_ids.contains(&msg.id);
+                let row_fidelity_id = transcript_row_fidelity_id(msg);
                 let mut row = div()
+                    .debug_selector(move || row_fidelity_id)
                     .w_full()
                     .px(px(style_def.transcript.focused_preview_padding_x))
                     .pb(px(style_def.transcript.focused_preview_padding_bottom));
@@ -1583,7 +1613,9 @@ impl Render for AgentChatTranscript {
                 let use_heavy_preview = Self::should_use_heavy_markdown_preview(msg, stats)
                     && !expanded_heavy_markdown_ids.contains(&msg.id);
 
+                let row_fidelity_id = transcript_row_fidelity_id(msg);
                 let row = div()
+                    .debug_selector(move || row_fidelity_id)
                     .w_full()
                     .px(px(style_def.transcript.row_padding_x))
                     .pb(px(style_def.transcript.row_padding_bottom))
@@ -1595,8 +1627,8 @@ impl Render for AgentChatTranscript {
                             .pt(px(style_def.transcript.turn_padding_top))
                             .border_t_1()
                             .border_color(rgba(
-                                (theme.colors.ui.border << 8)
-                                    | style_def.transcript.turn_divider_alpha.round() as u32,
+                                resolved_agent_chat_transcript_colors(&style_def, &theme)
+                                    .turn_divider_rgba,
                             ))
                     })
                     .when(
@@ -1606,7 +1638,6 @@ impl Render for AgentChatTranscript {
                         ),
                         |d| d.pb(px(style_def.transcript.dense_row_padding_bottom)),
                     );
-
                 if use_heavy_preview {
                     let preview_text = message_previews_snapshot
                         .get(&msg.id)
@@ -1668,6 +1699,7 @@ impl Render for AgentChatTranscript {
         }
 
         div()
+            .debug_selector(|| AGENT_CHAT_TRANSCRIPT_VIEWPORT_FIDELITY_ID.to_string())
             .relative()
             .flex_1()
             .min_h(px(0.))
@@ -1693,6 +1725,29 @@ mod tests {
             tool_meta: None,
             attachments: Vec::new(),
         }
+    }
+
+    #[test]
+    fn transcript_fidelity_ids_are_unique_per_rendered_message() {
+        let mut assistant = message(AgentChatThreadMessageRole::Assistant, "assistant");
+        assistant.id = 17;
+        let mut system = message(AgentChatThreadMessageRole::System, "system");
+        system.id = 18;
+        let mut tool = message(AgentChatThreadMessageRole::Tool, "tool");
+        tool.id = 20;
+
+        assert_eq!(
+            transcript_row_fidelity_id(&assistant),
+            "agent-chat-transcript-row-assistant-17"
+        );
+        assert_eq!(
+            transcript_row_fidelity_id(&system),
+            "agent-chat-transcript-row-system-18"
+        );
+        assert_eq!(
+            transcript_row_fidelity_id(&tool),
+            "agent-chat-transcript-row-tool-20"
+        );
     }
 
     #[test]

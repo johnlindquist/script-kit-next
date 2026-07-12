@@ -1,0 +1,65 @@
+fn paint_measurement_component_type(stable_id: &str) -> protocol::LayoutComponentType {
+    use protocol::LayoutComponentType;
+
+    if stable_id.contains("transcript-row-") {
+        return LayoutComponentType::ListItem;
+    }
+
+    match stable_id {
+        "main-view-context-cwd-button"
+        | "main-view-context-model-button"
+        | "agent-chat-send-button" => LayoutComponentType::Button,
+        "main-view-input-shell" | "main-view-input-body" => LayoutComponentType::Input,
+        "agent-chat-transcript-viewport" => LayoutComponentType::List,
+        "native-main-window-footer-spacer" => LayoutComponentType::Panel,
+        "main-view-header" => LayoutComponentType::Header,
+        "main-view-shell" | "main-view-context-zone" | "main-view-main" => {
+            LayoutComponentType::Container
+        }
+        _ => LayoutComponentType::Other,
+    }
+}
+
+impl ScriptListApp {
+    /// Append bounds recorded by GPUI's current rendered frame.
+    ///
+    /// These nodes intentionally use their debug-selector IDs rather than the
+    /// formula component names above. Missing selectors remain missing so
+    /// fidelity comparisons fail closed instead of silently using estimates.
+    fn append_paint_measurements(layout: &mut protocol::LayoutInfo, window: &gpui::Window) {
+        use protocol::LayoutComponentInfo;
+
+        let mut measurements: Vec<_> = window.debug_bounds_entries().iter().collect();
+        measurements.sort_by(|left, right| left.selector.cmp(&right.selector));
+        let frame_generation = window.rendered_frame_generation();
+
+        for measurement in measurements {
+            let component_type = paint_measurement_component_type(measurement.selector.as_str());
+            let bounds = measurement.bounds;
+            let visible = measurement.visible_bounds;
+            let clip = measurement.clip_bounds;
+
+            layout.components.push(
+                LayoutComponentInfo::new(measurement.selector.clone(), component_type)
+                    .with_bounds(
+                        bounds.origin.x.as_f32(),
+                        bounds.origin.y.as_f32(),
+                        bounds.size.width.as_f32(),
+                        bounds.size.height.as_f32(),
+                    )
+                    .with_measurement("paint-time", "window")
+                    .with_paint_visibility(
+                        visible.origin.x.as_f32(),
+                        visible.origin.y.as_f32(),
+                        visible.size.width.as_f32(),
+                        visible.size.height.as_f32(),
+                        clip.origin.x.as_f32(),
+                        clip.origin.y.as_f32(),
+                        clip.size.width.as_f32(),
+                        clip.size.height.as_f32(),
+                    )
+                    .with_measurement_frame(frame_generation),
+            );
+        }
+    }
+}

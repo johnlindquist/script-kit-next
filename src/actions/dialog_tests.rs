@@ -5,9 +5,10 @@
 //! shortcut formatting, shortcut keycap parsing, fuzzy matching, and scoring.
 
 use super::dialog::{
-    GroupedActionItem, build_grouped_items_static, coerce_action_selection,
+    actions_refresh_selection_policy, build_grouped_items_static, coerce_action_selection,
     initial_selection_index, resolve_selected_protocol_action_index,
-    should_rebuild_grouped_items_for_config_change,
+    should_rebuild_grouped_items_for_config_change, ActionsRefreshSelectionPolicy,
+    GroupedActionItem,
 };
 use super::types::{
     Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
@@ -441,6 +442,18 @@ fn initial_selection_index_skips_header_row() {
 }
 
 #[test]
+fn actions_refresh_snaps_untouched_selection_and_restores_user_selection() {
+    assert_eq!(
+        actions_refresh_selection_policy(false),
+        ActionsRefreshSelectionPolicy::SnapToFirst
+    );
+    assert_eq!(
+        actions_refresh_selection_policy(true),
+        ActionsRefreshSelectionPolicy::RestoreIdentity
+    );
+}
+
+#[test]
 fn config_change_requires_rebuild_when_section_style_changes() {
     let previous = ActionsDialogConfig {
         section_style: SectionStyle::Separators,
@@ -643,7 +656,7 @@ fn route_state_back_stack_restore_preserves_search_and_selection() {
 fn agent_chat_root_route_initial_selection_is_change_profile() {
     // Verify the Agent Chat root route builder sets initial selection
     // to the "Change Profile" action.
-    use super::builders::{AGENT_CHAT_CHANGE_PROFILE_ACTION_ID, get_agent_chat_root_route};
+    use super::builders::{get_agent_chat_root_route, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID};
 
     let models = vec![];
     let route = get_agent_chat_root_route(&models, None);
@@ -656,7 +669,7 @@ fn agent_chat_root_route_initial_selection_is_change_profile() {
 
 #[test]
 fn note_switcher_titles_match_progressive_prefix_queries() {
-    use crate::actions::builders::{NoteSwitcherNoteInfo, get_note_switcher_actions};
+    use crate::actions::builders::{get_note_switcher_actions, NoteSwitcherNoteInfo};
 
     let actions = get_note_switcher_actions(&[
         NoteSwitcherNoteInfo {

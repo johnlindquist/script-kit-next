@@ -1,0 +1,156 @@
+/* Arg-prompt screen: stage layout, browser-only emulator calibration, and the
+ * arg surface anatomy (render_prompts/arg/render.rs render_arg_prompt via
+ * render_minimal_list_prompt_shell_with_footer).
+ *
+ * Everything visual resolves through --sk-* custom properties. Tokens the
+ * exporter does not emit yet are referenced as --sk-arg-* with a PURE VAR
+ * FALLBACK to an equal-valued generated token (lint-safe: no literals). Each
+ * fallback is annotated with the Rust source of truth; the brief's "Tokens to
+ * generate" section lists the real resolvers so the exporter can replace
+ * every fallback. --sk-emulator-* values are browser-only calibration and
+ * never map back to Rust. See ./known-divergence.json.
+ *
+ * Vertical model (fixture: 6 choices):
+ *   height_for_view(ArgPromptWithChoices, 6) = ARG_HEADER_HEIGHT 68
+ *     + 6*LIST_ITEM_HEIGHT(40) + ARG_LIST_PADDING_Y 8 + ARG_DIVIDER_HEIGHT 1
+ *     + WINDOW_BORDER_Y 2 = 319px  (src/window_resize/mod.rs:623-629)
+ *   Painted: header 38 + divider 1 + rows 6*44 + footer spacer 32 = 335px
+ *   -> the 6th 44px row clips (paints ~28px). Recorded as a contract
+ *   conflict, not smoothed over.
+ */
+
+:root {
+  --sk-emulator-menu-blur: 32px;
+  /* Non-linear menu-material response approximated with a faint neutral wash
+   * (same calibration as the main-menu screen). */
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 28 31 / 0.42),
+    rgb(20 20 23 / 0.42)
+  );
+  --sk-emulator-desktop: radial-gradient(
+      1100px 650px at 25% 15%,
+      rgb(56 48 84 / 0.9),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 700px at 80% 85%,
+      rgb(28 56 70 / 0.9),
+      transparent 55%
+    ),
+    linear-gradient(155deg, rgb(23 22 29), rgb(12 12 16));
+}
+
+body {
+  margin: 0;
+}
+
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-desktop);
+}
+
+/* ── Window override: arg prompt resizes to the choice-count model ───────
+ * TRUE value: height_for_view(ViewType::ArgPromptWithChoices, 6) = 319px
+ * (src/window_resize/mod.rs:623-629). No generated token carries 319 yet;
+ * fallback renders the 480px main-window height until --sk-arg-window-height
+ * is generated — compare.html crops to the captured reference instead. */
+.sk-window--arg {
+  height: var(--sk-arg-window-height, var(--sk-window-main-height));
+}
+
+/* ── Header: shared minimal-prompt scaffold, input only (no context zone) ─
+ * px = ui::chrome::HEADER_PADDING_X = 16 (window_resize/mod.rs:100),
+ * py = HEADER_PADDING_Y = 8 (:102), min-h = panel::HEADER_BUTTON_HEIGHT = 28
+ * (panel.rs:20). Painted band = 8 + 22 + 8 = 38px; the fallback token
+ * --sk-confirm-header-height carries the same resolved 38. */
+.sk-arg-header {
+  height: var(--sk-arg-header-height, var(--sk-confirm-header-height));
+  flex: none;
+  /* HEADER_PADDING_X 16 == main-menu content_inset_x 16 (equal-valued alias). */
+  padding-inline: var(--sk-arg-header-padding-x, var(--sk-main-menu-content-inset-x));
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+/* gpui-component Input host: h = CURSOR_HEIGHT_LG 18 + 2*CURSOR_MARGIN_Y 2
+ * = 22px (render_prompts/arg/render.rs:220), px(0)/py(0), no border,
+ * font_size_xl = 20px (theme/color_resolver.rs:261 with ui_size 16). */
+.sk-arg-input {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--sk-arg-input-height, auto);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  /* Equal-valued alias: main-menu search font size is the same resolved 20px. */
+  font-size: var(--sk-arg-input-font-size, var(--sk-main-menu-search-font-size));
+  color: var(--sk-text-name);
+}
+
+/* gpui-component paints the caret as an overlay quad at the text origin
+ * (vendor/gpui-component/crates/ui/src/input/element.rs:283-296): width 2px
+ * (blink_cursor.rs:32), height 0.85 x line_height, color cx.theme().caret =
+ * theme text.primary (src/theme/gpui_integration.rs:302-310). Fallbacks lean
+ * on the main-menu caret tokens (2.5 x 18) until --sk-arg-input-caret-* are
+ * generated — recorded as the argCaret geometry divergence. */
+.sk-arg-input .sk-arg-caret {
+  position: absolute;
+  left: 0;
+  top: calc(
+    (
+        var(--sk-arg-input-height, var(--sk-caret-height)) -
+          var(--sk-arg-input-caret-height, var(--sk-caret-height))
+      ) / 2
+  );
+  width: var(--sk-arg-input-caret-width, var(--sk-caret-width));
+  height: var(--sk-arg-input-caret-height, var(--sk-caret-height));
+  background: var(--sk-text-name);
+}
+
+/* Placeholder = gpui-component muted_foreground, mapped through the theme's
+ * text-placeholder ladder (src/theme/gpui_integration.rs:251-257) — the same
+ * resolved byte as --sk-text-placeholder. */
+.sk-arg-input .sk-arg-placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--sk-text-placeholder);
+}
+
+/* ── Divider: render_header_divider (prompt_layout_shell.rs:1304-1311) ────
+ * h = HEADER_DIVIDER_HEIGHT 1 (panel.rs:23), bg = chrome divider, and
+ * mx = HEADER_DIVIDER_MARGIN 16 (panel.rs:26) == content_inset_x 16. */
+.sk-arg-divider {
+  margin-inline: var(--sk-arg-divider-margin-x, var(--sk-main-menu-content-inset-x));
+}
+
+/* ── Choice list: uniform_list, no section headers, no list padding ──────
+ * (render_prompts/arg/render.rs:189-217 — the resize model's
+ * ARG_LIST_PADDING_Y 8 is never painted; recorded as a conflict). Rows are
+ * the shared .sk-list-row (components.css) resolving the same InfoBarBase
+ * --sk-main-menu-row-* tokens the launcher uses. */
+.sk-arg-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Arg rows never mount the icon slot (Choice has no icon field;
+ * list_item/mod.rs:2113-2115 only mounts icons when present), so the name
+ * starts at outer 4 + inner 14 = 18px — no icon gap correction needed
+ * because the flex gap collapses with a single child. */
+
+/* ── Footer: native overlay band, 32px GPUI spacer ───────────────────────
+ * render_native_main_window_footer_spacer sizes to
+ * current_main_menu_footer_height() = FooterMetricsTokens.height_px = 32
+ * (components/footer_chrome.rs:178-180) — NOT the main menu's 36px native
+ * host. Fallback --sk-footer-rail-height carries the same 32. */
+.sk-footer-host--arg {
+  height: var(--sk-arg-footer-spacer-height, var(--sk-footer-rail-height));
+}

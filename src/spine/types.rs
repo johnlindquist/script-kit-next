@@ -40,6 +40,9 @@ pub enum SpineSegmentKind {
         /// Sub-query after `:`, e.g. "dev" in `>:dev`
         sub_query: Option<String>,
     },
+    /// `-` flow search, e.g. `-gmail` — search/stage an mdflow flow. The
+    /// flow-roster twin of the `/` command search.
+    Flow { query: String },
     /// `~`, `?`, `!` — mode exit sigils
     ModeExit { sigil: char, rest: String },
 }

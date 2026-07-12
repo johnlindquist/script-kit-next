@@ -59,6 +59,9 @@ pub struct DictationHistorySearchHit {
     pub entry: DictationHistoryEntry,
     pub score: u32,
     pub matched_field: DictationHistorySearchField,
+    /// Word-level match evidence produced at qualification time; renderers
+    /// highlight exactly these ranges. `None` for empty-query recency rows.
+    pub evidence: Option<crate::scripts::search::sentence::LongTextMatchEvidence>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +73,7 @@ pub struct RootDictationHistorySearchHit {
     pub audio_duration_ms: u64,
     pub score: u32,
     pub matched_field: DictationHistorySearchField,
+    pub evidence: Option<crate::scripts::search::sentence::LongTextMatchEvidence>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,10 +109,6 @@ fn truncate_chars(value: &str, max_chars: usize) -> String {
         out.push('\u{2026}');
     }
     out
-}
-
-fn normalize_search_text(value: &str) -> String {
-    collapse_whitespace(value).to_lowercase()
 }
 
 fn target_label(target: DictationTarget) -> String {
@@ -297,6 +297,11 @@ fn rank_history_entries(
     query: &str,
     limit: usize,
 ) -> Vec<DictationHistorySearchHit> {
+    use crate::scripts::search::sentence::{
+        compile_long_text_query, match_long_text_query, FieldClass, FieldVisibility, LongTextField,
+        LongTextFieldId, RenderSlot,
+    };
+
     let trimmed = query.trim();
     if trimmed.is_empty() {
         return entries
@@ -306,70 +311,85 @@ fn rank_history_entries(
                 entry,
                 score: 0,
                 matched_field: DictationHistorySearchField::Transcript,
+                evidence: None,
             })
             .collect();
     }
 
-    let tokens: Vec<String> = normalize_search_text(trimmed)
-        .split_whitespace()
-        .map(ToOwned::to_owned)
-        .collect();
+    let Some(compiled) = compile_long_text_query(trimmed) else {
+        return Vec::new();
+    };
 
     let mut hits = Vec::new();
 
     for entry in entries {
-        let transcript = normalize_search_text(&entry.transcript);
-        let preview = normalize_search_text(&entry.preview);
-        let target = normalize_search_text(&entry.target);
-        let timestamp = normalize_search_text(&entry.timestamp);
-        let display_timestamp = normalize_search_text(&format_history_timestamp(&entry.timestamp));
-        let display_duration =
-            normalize_search_text(&format_history_duration_ms(entry.audio_duration_ms));
-        let combined = format!(
-            "{transcript}\n{preview}\n{target}\n{timestamp}\n{display_timestamp}\n{display_duration}"
+        // Raw and formatted forms of the same metadata belong to one field.
+        let timestamp_text = format!(
+            "{} {}",
+            entry.timestamp,
+            format_history_timestamp(&entry.timestamp)
         );
+        let duration_text = format_history_duration_ms(entry.audio_duration_ms);
 
-        if !tokens.iter().all(|token| combined.contains(token)) {
+        // The preview is the rendered row title; the full transcript stays a
+        // hidden recall field. Timestamp/duration render inside the composed
+        // subtitle, so they count as visible metadata but emit no highlight
+        // offsets.
+        let fields = [
+            LongTextField {
+                id: LongTextFieldId::Preview,
+                text: entry.preview.as_str(),
+                class: FieldClass::NaturalText,
+                visibility: FieldVisibility::Visible(RenderSlot::Title),
+                weight: 5,
+            },
+            LongTextField {
+                id: LongTextFieldId::Target,
+                text: entry.target.as_str(),
+                class: FieldClass::NaturalText,
+                visibility: FieldVisibility::Visible(RenderSlot::Subtitle),
+                weight: 3,
+            },
+            LongTextField {
+                id: LongTextFieldId::Transcript,
+                text: entry.transcript.as_str(),
+                class: FieldClass::NaturalText,
+                visibility: FieldVisibility::Hidden,
+                weight: 2,
+            },
+            LongTextField {
+                id: LongTextFieldId::Timestamp,
+                text: timestamp_text.as_str(),
+                class: FieldClass::Metadata,
+                visibility: FieldVisibility::Visible(RenderSlot::Subtitle),
+                weight: 1,
+            },
+            LongTextField {
+                id: LongTextFieldId::Duration,
+                text: duration_text.as_str(),
+                class: FieldClass::Metadata,
+                visibility: FieldVisibility::Visible(RenderSlot::Subtitle),
+                weight: 1,
+            },
+        ];
+
+        let Some(matched) = match_long_text_query(&compiled, &fields) else {
             continue;
-        }
+        };
 
-        let transcript_score = tokens.iter().fold(0u32, |acc, token| {
-            acc + if transcript.starts_with(token) {
-                80
-            } else if transcript.contains(token) || preview.contains(token) {
-                30
-            } else {
-                0
-            }
-        });
-        let target_score = tokens.iter().fold(0u32, |acc, token| {
-            acc + if target.contains(token) { 20 } else { 0 }
-        });
-        let timestamp_score = tokens.iter().fold(0u32, |acc, token| {
-            acc + if timestamp.contains(token)
-                || display_timestamp.contains(token)
-                || display_duration.contains(token)
-            {
-                5
-            } else {
-                0
-            }
-        });
-        let total_score = transcript_score + target_score + timestamp_score;
-
-        let matched_field =
-            if transcript_score >= target_score && transcript_score >= timestamp_score {
-                DictationHistorySearchField::Transcript
-            } else if target_score >= timestamp_score {
-                DictationHistorySearchField::Target
-            } else {
+        let matched_field = match matched.evidence.primary_field {
+            LongTextFieldId::Target => DictationHistorySearchField::Target,
+            LongTextFieldId::Timestamp | LongTextFieldId::Duration => {
                 DictationHistorySearchField::Timestamp
-            };
+            }
+            _ => DictationHistorySearchField::Transcript,
+        };
 
         hits.push(DictationHistorySearchHit {
             entry,
-            score: total_score,
+            score: matched.rank_score(),
             matched_field,
+            evidence: Some(matched.evidence),
         });
     }
 
@@ -457,6 +477,7 @@ pub fn search_root_dictation_history(
             audio_duration_ms: hit.entry.audio_duration_ms,
             score: hit.score,
             matched_field: hit.matched_field,
+            evidence: hit.evidence,
         })
         .collect::<Vec<_>>();
     tracing::info!(
@@ -515,6 +536,7 @@ pub fn search_root_dictation_history_cached(
         audio_duration_ms: hit.entry.audio_duration_ms,
         score: hit.score,
         matched_field: hit.matched_field,
+        evidence: hit.evidence,
     })
     .collect::<Vec<_>>();
     if crate::logging::filter_perf_trace_enabled() {
@@ -738,6 +760,75 @@ mod tests {
         let duration_hits = search_history("ai 2 sec", 10);
         assert_eq!(duration_hits.len(), 1);
         assert_eq!(duration_hits[0].entry.target, "AI Chat");
+    }
+
+    /// Screenshot regression (2026-07-11): sentence queries must not match
+    /// dictation rows whose only hits are stopword fragments inside words.
+    #[test]
+    fn sentence_query_rejects_mid_word_dictation_noise() {
+        let _env = TestEnv::new();
+        record_dictation_history(
+            "Somewhat shared themes and other generated reports",
+            Duration::from_secs(3),
+            DictationTarget::NotesEditor,
+        );
+        record_dictation_history(
+            "So what are the next steps for the launcher",
+            Duration::from_secs(2),
+            DictationTarget::AiChatComposer,
+        );
+
+        let hits = search_history("what are the", 10);
+        assert_eq!(hits.len(), 1, "mid-word fragments must not qualify");
+        assert!(hits[0].entry.transcript.starts_with("So what are the"));
+        let evidence = hits[0].evidence.as_ref().expect("evidence present");
+        assert!(
+            !evidence.title_indices.is_empty(),
+            "the matched words highlight in the visible preview"
+        );
+    }
+
+    /// Matches beyond the 120-char preview still qualify via the hidden
+    /// transcript and explain themselves with an excerpt.
+    #[test]
+    fn transcript_match_beyond_preview_carries_excerpt() {
+        let _env = TestEnv::new();
+        let filler = "unrelated filler words repeated over and over ".repeat(5);
+        let transcript = format!("{filler} the oauth redirect ticket needs attention");
+        record_dictation_history(
+            &transcript,
+            Duration::from_secs(4),
+            DictationTarget::NotesEditor,
+        );
+
+        let hits = search_history("oauth redirect ticket", 10);
+        assert_eq!(hits.len(), 1);
+        let evidence = hits[0].evidence.as_ref().expect("evidence present");
+        let excerpt = evidence
+            .hidden_excerpt
+            .as_ref()
+            .expect("beyond-preview match explains itself");
+        assert!(excerpt.text.contains("oauth redirect ticket"));
+    }
+
+    /// Ordinary language must never be satisfied by timestamp/duration
+    /// metadata ("are" must not match formatted dates).
+    #[test]
+    fn alphabetic_terms_cannot_match_metadata() {
+        let _env = TestEnv::new();
+        record_dictation_history(
+            "completely unrelated content",
+            Duration::from_secs(2),
+            DictationTarget::NotesEditor,
+        );
+
+        // "at" appears in every formatted timestamp ("Jul 11 at 4:50 pm");
+        // it must not qualify the row.
+        let hits = search_history("unrelated at", 10);
+        assert!(
+            hits.is_empty(),
+            "formatted metadata must not satisfy ordinary words"
+        );
     }
 
     #[test]

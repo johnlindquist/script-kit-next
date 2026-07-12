@@ -806,13 +806,11 @@ impl ScriptListApp {
                 trailing: Vec::new(),
             },
         );
-        let header = crate::components::main_view_chrome::MainViewHeaderChrome {
-            context: Some(self.render_clickable_main_view_context_zone(menu_def, cx)),
+        let header = crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
+            menu_def,
+            self.render_clickable_main_view_context_zone(menu_def, cx),
             input,
-            padding_x: shell.header_padding_x,
-            padding_y: shell.header_padding_y,
-            gap: shell.header_gap,
-        };
+        );
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {
             margin_x: shell.divider_margin_x,
             height: shell.divider_height,

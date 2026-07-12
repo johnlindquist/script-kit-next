@@ -1151,8 +1151,34 @@ pub(super) fn actions_window_dynamic_height(
     max_height: f32,
     row_height: f32,
 ) -> f32 {
-    const POPUP_FOOTER_HEIGHT: f32 = 32.0;
     let tokens = crate::designs::current_actions_popup_theme();
+    resolved_actions_popup_height(
+        &tokens,
+        num_actions,
+        section_header_count,
+        hide_search,
+        has_header,
+        show_footer,
+        max_height,
+        row_height,
+    )
+}
+
+/// Pure popup-height formula over an explicit token definition. Production
+/// passes `current_actions_popup_theme()` (runtime overrides apply); the
+/// design-contract exporter passes `base_actions_popup_theme()` so checked-in
+/// artifacts never depend on local dev-style state.
+pub(crate) fn resolved_actions_popup_height(
+    tokens: &crate::designs::ActionsPopupThemeDef,
+    num_actions: usize,
+    section_header_count: usize,
+    hide_search: bool,
+    has_header: bool,
+    show_footer: bool,
+    max_height: f32,
+    row_height: f32,
+) -> f32 {
+    const POPUP_FOOTER_HEIGHT: f32 = 32.0;
     let search_box_height = if hide_search {
         0.0
     } else {

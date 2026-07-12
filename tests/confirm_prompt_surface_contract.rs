@@ -28,15 +28,15 @@ fn open_confirm_prompt_stdin_fixture_is_registered() {
 }
 
 #[test]
-fn confirm_prompt_uses_standard_height_window_sizing() {
+fn confirm_prompt_uses_canonical_main_window_sizing() {
     let sizing_arm = source_between(
         UI_WINDOW_SOURCE,
         "AppView::ConfirmPrompt { .. } =>",
         "AppView::MiniPrompt",
     );
     assert!(
-        sizing_arm.contains("ViewType::DivPrompt"),
-        "ConfirmPrompt renders a STANDARD_HEIGHT shell and should size as a DivPrompt container"
+        sizing_arm.contains("ViewType::MainWindow"),
+        "ConfirmPrompt must keep the canonical fixed 480px main-window shell"
     );
 }
 
@@ -45,7 +45,7 @@ fn confirm_prompt_layout_exposes_content_stack_footer_and_buttons() {
     let branch = source_between(
         LAYOUT_SOURCE,
         "if matches!(self.current_view, AppView::ConfirmPrompt",
-        "// Header",
+        "if let AppView::BrowseKitsView",
     );
 
     for component in [
@@ -73,6 +73,12 @@ fn confirm_prompt_layout_exposes_content_stack_footer_and_buttons() {
             "ConfirmPrompt layout receipts must include {token}"
         );
     }
+    assert!(
+        branch.contains("let confirm_content_height = (content_height - CONFIRM_FOOTER_HEIGHT)")
+            && branch.contains("let stack_y = content_top")
+            && branch.contains(".with_parent(\"MainViewMain\")"),
+        "ConfirmPrompt detail receipts should live below and inside MainViewMain"
+    );
 }
 
 #[test]
@@ -80,7 +86,7 @@ fn confirm_prompt_content_nodes_use_panel_radius_tokens() {
     let branch = source_between(
         LAYOUT_SOURCE,
         "if matches!(self.current_view, AppView::ConfirmPrompt",
-        "// Header",
+        "if let AppView::BrowseKitsView",
     );
 
     for component in [

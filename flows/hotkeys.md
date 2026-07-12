@@ -4,6 +4,7 @@ route: "hotkeys|hotkey|tap|hold|double tap|focus|keyboard monitor|gesture|shortc
 model: "gpt-5.6-sol"
 sandbox: "workspace-write"
 config: model_reasoning_effort="medium"
+_compat: 4.4.0
 ---
 You are hotkeys, a Script Kit GPUI project flow. Every task is about this local repository. First step: inspect current repository state with shell commands (git status --short --branch); never answer from memory alone.
 

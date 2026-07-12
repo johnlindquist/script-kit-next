@@ -121,6 +121,10 @@ pub struct AgentChatStateSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transcript_scroll: Option<AgentChatTranscriptScrollMetrics>,
 
+    /// Runtime multiline composer scroll metrics (growth/clamp/cursor-follow).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composer_scroll: Option<AgentChatComposerScrollMetrics>,
+
     /// Redacted focused-text capture/apply state for the mini Agent Chat mode.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focused_text: Option<AgentChatFocusedTextState>,
@@ -162,6 +166,7 @@ impl Default for AgentChatStateSnapshot {
             has_pending_permission: false,
             input_layout: None,
             transcript_scroll: None,
+            composer_scroll: None,
             focused_text: None,
             setup: None,
             warnings: Vec::new(),
@@ -187,6 +192,22 @@ pub struct AgentChatTranscriptScrollMetrics {
     pub thumb_bottom_px: f32,
     pub thumb_position_ratio: f32,
     pub measurement_source: String,
+}
+
+/// Runtime scroll metrics for the multiline Agent Chat composer input,
+/// read from its GPUI scroll handle after layout.
+///
+/// Proves the composer growth contract at runtime without screen capture:
+/// `viewport_height_px` is the clamped visible text height (≤ 6 lines),
+/// `max_scroll_top_px` > 0 means the measured content genuinely exceeds the
+/// viewport (wrap-aware growth), and `scroll_top_px` tracks cursor-follow.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentChatComposerScrollMetrics {
+    pub scroll_top_px: f32,
+    pub max_scroll_top_px: f32,
+    pub viewport_height_px: f32,
+    pub can_scroll_y: bool,
 }
 
 /// Redacted focused-text mini Agent Chat state.
@@ -1075,6 +1096,7 @@ mod tests {
                 cursor_in_window: 14,
             }),
             transcript_scroll: None,
+            composer_scroll: None,
             focused_text: None,
             setup: None,
             warnings: Vec::new(),

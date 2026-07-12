@@ -398,7 +398,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 }];
 
                 for (index, (value, label)) in rows.iter().enumerate() {
@@ -420,7 +420,7 @@ impl ScriptListApp {
                             selectable: Some(false),
                             status_kind: None,
                             action_disabled: None,
-            style: None,
+                            style: None,
                         },
                     ) {
                         break;
@@ -532,11 +532,7 @@ impl ScriptListApp {
                             .iter()
                             .find(|(meta, _)| meta.id == *id)
                             .map(|(meta, _)| {
-                                format!(
-                                    "{} — {} session",
-                                    meta.friendly_name,
-                                    meta.state.label()
-                                )
+                                format!("{} — {} session", meta.friendly_name, meta.state.label())
                             })
                             .unwrap_or_else(|| format!("session:{id}")),
                         FlowDeskRow::Flow(flow) => {
@@ -548,6 +544,18 @@ impl ScriptListApp {
                             parts.push(flow.origin_label().to_string());
                             parts.join(" · ")
                         }
+                        FlowDeskRow::Run(id) => crate::flows::run_registry::flow_run_registry()
+                            .get(*id)
+                            .map(|run| {
+                                format!(
+                                    "{} — {}",
+                                    crate::flows::model::friendly_flow_name(&run.flow_name),
+                                    run.display_status()
+                                )
+                            })
+                            .unwrap_or_else(|| format!("run:{id}")),
+                        FlowDeskRow::InstallMdflow => "Install mdflow".to_string(),
+                        FlowDeskRow::InitFlows => "Scaffold starter flows".to_string(),
                         FlowDeskRow::CreateFlow => "Create a Flow".to_string(),
                     })
                     .collect();
@@ -640,6 +648,36 @@ impl ScriptListApp {
                     "sdk-reference-filter",
                     filter.clone(),
                     "sdk-functions",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+            AppView::TipsView {
+                filter,
+                selected_index,
+                entries,
+            } => {
+                let query = filter.trim().to_lowercase();
+                let rows: Vec<String> = entries
+                    .iter()
+                    .filter(|tip| {
+                        query.is_empty()
+                            || tip.title.to_lowercase().contains(&query)
+                            || tip.hint.to_lowercase().contains(&query)
+                            || tip.description.to_lowercase().contains(&query)
+                            || tip
+                                .keywords
+                                .iter()
+                                .any(|keyword| keyword.to_lowercase().contains(&query))
+                    })
+                    .map(|tip| tip.title.clone())
+                    .collect();
+                self.collect_named_rows(
+                    "tips-filter",
+                    filter.clone(),
+                    "tips",
                     &rows,
                     *selected_index,
                     limit,
@@ -780,7 +818,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 });
 
                 elements.push(protocol::ElementInfo {
@@ -798,7 +836,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: Some(management.status_kind.clone()),
                     action_disabled: None,
-            style: None,
+                    style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "control:theme-chooser:save-name".to_string(),
@@ -815,7 +853,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: management.duplicate_status_kind.clone(),
                     action_disabled: None,
-            style: None,
+                    style: None,
                 });
 
                 elements.push(protocol::ElementInfo {
@@ -833,7 +871,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-edit-theme-as-text".to_string(),
@@ -850,7 +888,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-update-user-theme".to_string(),
@@ -867,7 +905,7 @@ impl ScriptListApp {
                     selectable: Some(management.update_disabled.is_none()),
                     status_kind: None,
                     action_disabled: management.update_disabled.clone(),
-            style: None,
+                    style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-delete-user-theme".to_string(),
@@ -884,7 +922,7 @@ impl ScriptListApp {
                     selectable: Some(management.delete_disabled.is_none()),
                     status_kind: None,
                     action_disabled: management.delete_disabled.clone(),
-            style: None,
+                    style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-restore-deleted-user-theme".to_string(),
@@ -901,7 +939,7 @@ impl ScriptListApp {
                     selectable: Some(management.restore_disabled.is_none()),
                     status_kind: None,
                     action_disabled: management.restore_disabled.clone(),
-            style: None,
+                    style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-gradient-cycle".to_string(),
@@ -922,7 +960,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 });
                 let gradient_layer_count = self
                     .theme
@@ -945,7 +983,7 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-gradient-layer-remove".to_string(),
@@ -996,7 +1034,7 @@ impl ScriptListApp {
                             selectable: Some(true),
                             status_kind: None,
                             action_disabled: None,
-            style: None,
+                            style: None,
                         });
                     };
                 push_theme_control(
@@ -1202,7 +1240,7 @@ impl ScriptListApp {
                         selectable: Some(true),
                         status_kind: None,
                         action_disabled: None,
-            style: None,
+                        style: None,
                     });
                 }
 
@@ -1432,7 +1470,7 @@ impl ScriptListApp {
                         selectable: Some(false),
                         status_kind: status_kind.map(str::to_string),
                         action_disabled: action_disabled.map(str::to_string),
-            style: None,
+                        style: None,
                     });
                 };
 
@@ -1551,7 +1589,7 @@ impl ScriptListApp {
                         selectable: Some(disabled.is_none()),
                         status_kind: disabled.map(str::to_string),
                         action_disabled: disabled.map(str::to_string),
-            style: None,
+                        style: None,
                     });
                 }
 
@@ -1646,8 +1684,7 @@ impl ScriptListApp {
                     // real draft and real focus — instead of the hidden ones.
                     let removed = elements.len();
                     elements.retain(|el| {
-                        el.semantic_id != "input:chat-input"
-                            && el.semantic_id != "input:chat-model"
+                        el.semantic_id != "input:chat-input" && el.semantic_id != "input:chat-model"
                     });
                     total_count = total_count.saturating_sub(removed - elements.len());
                     let placeholder = chat
@@ -1772,7 +1809,7 @@ impl ScriptListApp {
                 selectable: Some(button.enabled),
                 status_kind: button.action_disabled.clone(),
                 action_disabled: button.action_disabled.clone(),
-            style: None,
+                style: None,
             });
         }
     }
@@ -1868,7 +1905,7 @@ impl ScriptListApp {
                 selectable: None,
                 status_kind: None,
                 action_disabled: None,
-            style: None,
+                style: None,
             });
         }
 
@@ -1918,7 +1955,7 @@ impl ScriptListApp {
                 selectable: Some(true),
                 status_kind: None,
                 action_disabled: None,
-            style: None,
+                style: None,
             },
         );
 
@@ -1940,7 +1977,7 @@ impl ScriptListApp {
                 selectable: Some(false),
                 status_kind: None,
                 action_disabled: None,
-            style: None,
+                style: None,
             },
         );
 
@@ -1963,7 +2000,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: Some("current".to_string()),
                     action_disabled: None,
-            style: None,
+                    style: None,
                 },
             );
         }
@@ -1994,7 +2031,7 @@ impl ScriptListApp {
                         (false, false) => None,
                     },
                     action_disabled: None,
-            style: None,
+                    style: None,
                 },
             );
         }
@@ -2128,7 +2165,7 @@ impl ScriptListApp {
                         selectable: Some(false),
                         status_kind,
                         action_disabled: None,
-            style: None,
+                        style: None,
                     },
                 );
             }
@@ -2155,7 +2192,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: Some("empty".to_string()),
                     action_disabled: None,
-            style: None,
+                    style: None,
                 },
             );
         }
@@ -2217,7 +2254,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 },
             );
             return (elements, total_count);
@@ -2242,7 +2279,7 @@ impl ScriptListApp {
                 selectable: Some(true),
                 status_kind: None,
                 action_disabled: None,
-            style: None,
+                style: None,
             });
         }
 
@@ -2418,7 +2455,7 @@ impl ScriptListApp {
                         selectable: None,
                         status_kind: None,
                         action_disabled: None,
-            style: None,
+                        style: None,
                     }
                 }
             };
@@ -2578,7 +2615,7 @@ impl ScriptListApp {
                 selectable: Some(false),
                 status_kind: Some(path_prompt.visible_status_kind().as_str().to_string()),
                 action_disabled: None,
-            style: None,
+                style: None,
             },
         );
 
@@ -2687,7 +2724,7 @@ impl ScriptListApp {
                     selectable: None,
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 },
             );
         }
@@ -2714,7 +2751,7 @@ impl ScriptListApp {
                     selectable: Some(false),
                     status_kind: Some(error.kind_str().to_string()),
                     action_disabled: None,
-            style: None,
+                    style: None,
                 },
             );
         }
@@ -2762,7 +2799,7 @@ impl ScriptListApp {
                 selectable: Some(false),
                 status_kind: None,
                 action_disabled: None,
-            style: None,
+                style: None,
             });
         }
 
@@ -2999,7 +3036,7 @@ impl ScriptListApp {
                     selectable: Some(row.enabled),
                     status_kind: None,
                     action_disabled: (!row.enabled).then(|| "disabled".to_string()),
-            style: None,
+                    style: None,
                 });
             }
 
@@ -3021,6 +3058,30 @@ impl ScriptListApp {
                 list.value = Some("menuSyntaxTriggerPicker".to_string());
                 list.kind = Some("menuSyntaxTriggerPicker".to_string());
                 list.source = Some("ScriptList".to_string());
+            }
+
+            // The rendered picker leads with a persistent section header
+            // (filtering_cache pushes it from the same mode mapping); report
+            // it so header-stability probes see what users see.
+            if include_headers && elements.len() < limit {
+                let (section_label, _icon) = snapshot.mode.main_list_section();
+                elements.push(protocol::ElementInfo {
+                    semantic_id: protocol::generate_semantic_id("section", 0, section_label),
+                    element_type: protocol::ElementType::Panel,
+                    text: Some(section_label.to_string()),
+                    value: None,
+                    selected: Some(false),
+                    focused: None,
+                    index: None,
+                    role: Some("sectionHeader".to_string()),
+                    kind: Some("sectionHeader".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(false),
+                    status_kind: None,
+                    action_disabled: None,
+                    style: None,
+                });
             }
 
             for (index, row) in snapshot.rows.iter().enumerate() {
@@ -3047,11 +3108,14 @@ impl ScriptListApp {
                     selectable: Some(row.enabled),
                     status_kind: None,
                     action_disabled: (!row.enabled).then(|| "disabled".to_string()),
-            style: None,
+                    style: None,
                 });
             }
 
-            return (elements, snapshot.rows.len() + 2);
+            return (
+                elements,
+                snapshot.rows.len() + 2 + usize::from(include_headers),
+            );
         }
 
         if let Some(form) = handler_form.as_ref() {
@@ -3090,7 +3154,7 @@ impl ScriptListApp {
                     selectable: Some(selectable),
                     status_kind: None,
                     action_disabled: None,
-            style: None,
+                    style: None,
                 });
             }
         }
@@ -3155,7 +3219,7 @@ impl ScriptListApp {
                         selectable: Some(true),
                         status_kind: None,
                         action_disabled: None,
-            style: None,
+                        style: None,
                     };
                     if matches!(result, scripts::SearchResult::File(_)) {
                         element.kind = Some("file".to_string());
@@ -3183,7 +3247,7 @@ impl ScriptListApp {
                         selectable: Some(false),
                         status_kind: Some(status.status_kind.as_str().to_string()),
                         action_disabled: None,
-            style: None,
+                        style: None,
                     });
                     row_index += 1;
                 }
@@ -3213,7 +3277,7 @@ impl ScriptListApp {
                 selectable: Some(false),
                 status_kind: Some(status.status_kind.as_str().to_string()),
                 action_disabled: None,
-            style: None,
+                style: None,
             });
             row_index += 1;
         }

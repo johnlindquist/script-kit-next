@@ -1,0 +1,1903 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.design-fidelity",
+  "command": "design-fidelity.compare",
+  "classification": "reproduced",
+  "screenId": "agent-chat",
+  "tolerance": 0.5,
+  "targetIdentity": {
+    "windowId": "main",
+    "windowKind": "main",
+    "title": "Script Kit",
+    "automationId": "main",
+    "targetKind": "Main",
+    "surfaceKind": "agentChatChat"
+  },
+  "viewport": {
+    "expected": {
+      "width": 750,
+      "height": 480
+    },
+    "dom": {
+      "height": 480,
+      "width": 750
+    },
+    "gpui": {
+      "width": 750,
+      "height": 480
+    }
+  },
+  "elements": [
+    {
+      "fidelityId": "agent-chat.header.context-zone",
+      "gpuiId": "main-view-context-zone",
+      "htmlRect": {
+        "x": -6,
+        "y": 4,
+        "width": 762,
+        "height": 22,
+        "right": 756,
+        "bottom": 26
+      },
+      "gpuiRect": {
+        "x": 3,
+        "y": 5,
+        "width": 744,
+        "height": 22,
+        "right": 747,
+        "bottom": 27
+      },
+      "deltas": {
+        "x": 9,
+        "y": 1,
+        "right": 9,
+        "bottom": 1,
+        "width": 18,
+        "height": 0
+      },
+      "iou": 0.8923920493488691,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 4,
+        "width": 750,
+        "height": 22,
+        "right": 750,
+        "bottom": 26
+      },
+      "gpuiVisibleRect": {
+        "x": 3,
+        "y": 5,
+        "width": 744,
+        "height": 22,
+        "right": 747,
+        "bottom": 27
+      },
+      "visibleDeltas": {
+        "x": 3,
+        "y": 1,
+        "right": 3,
+        "bottom": 1,
+        "width": 6,
+        "height": 0
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\"JetBrains Mono\", ui-monospace, monospace",
+        "fontSize": "10.5px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "1",
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.header.cwd-chip",
+      "gpuiId": "main-view-context-cwd-button",
+      "htmlRect": {
+        "x": -6,
+        "y": 8,
+        "width": 509.703125,
+        "height": 14,
+        "right": 503.703125,
+        "bottom": 22
+      },
+      "gpuiRect": {
+        "x": 3,
+        "y": 3,
+        "width": 368.5,
+        "height": 26,
+        "right": 371.5,
+        "bottom": 29
+      },
+      "deltas": {
+        "x": 9,
+        "y": 5,
+        "right": 132.203125,
+        "bottom": 7,
+        "width": 141.203125,
+        "height": 12
+      },
+      "iou": 0.44636353558595215,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 8,
+        "width": 503.703125,
+        "height": 14,
+        "right": 503.703125,
+        "bottom": 22
+      },
+      "gpuiVisibleRect": {
+        "x": 3,
+        "y": 3,
+        "width": 368.5,
+        "height": 26,
+        "right": 371.5,
+        "bottom": 29
+      },
+      "visibleDeltas": {
+        "x": 3,
+        "y": 5,
+        "right": 132.203125,
+        "bottom": 7,
+        "width": 135.203125,
+        "height": 12
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "14px",
+        "borderBottomRightRadius": "14px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "14px",
+        "borderTopRightRadius": "14px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\"JetBrains Mono\", ui-monospace, monospace",
+        "fontSize": "10.5px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "0.17",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "nowrap"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.header.trailing-chip",
+      "gpuiId": "main-view-context-model-button",
+      "htmlRect": {
+        "x": 386.296875,
+        "y": 4,
+        "width": 369.703125,
+        "height": 22,
+        "right": 756,
+        "bottom": 26
+      },
+      "gpuiRect": {
+        "x": 429,
+        "y": 3,
+        "width": 318,
+        "height": 26,
+        "right": 747,
+        "bottom": 29
+      },
+      "deltas": {
+        "x": 42.703125,
+        "y": 1,
+        "right": 9,
+        "bottom": 3,
+        "width": 51.703125,
+        "height": 4
+      },
+      "iou": 0.7438225766259656,
+      "htmlVisibleRect": {
+        "x": 386.296875,
+        "y": 4,
+        "width": 363.703125,
+        "height": 22,
+        "right": 750,
+        "bottom": 26
+      },
+      "gpuiVisibleRect": {
+        "x": 429,
+        "y": 3,
+        "width": 318,
+        "height": 26,
+        "right": 747,
+        "bottom": 29
+      },
+      "visibleDeltas": {
+        "x": 42.703125,
+        "y": 1,
+        "right": 3,
+        "bottom": 3,
+        "width": 45.703125,
+        "height": 4
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "14px",
+        "borderBottomRightRadius": "14px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "14px",
+        "borderTopRightRadius": "14px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\"JetBrains Mono\", ui-monospace, monospace",
+        "fontSize": "10.5px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "0.17",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "nowrap"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.composer.shell",
+      "gpuiId": "main-view-input-shell",
+      "htmlRect": {
+        "x": 2,
+        "y": 28,
+        "width": 746,
+        "height": 26,
+        "right": 748,
+        "bottom": 54
+      },
+      "gpuiRect": {
+        "x": 3,
+        "y": 29,
+        "width": 744,
+        "height": 26,
+        "right": 747,
+        "bottom": 55
+      },
+      "deltas": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 1,
+        "width": 2,
+        "height": 0
+      },
+      "iou": 0.9235352532274081,
+      "htmlVisibleRect": {
+        "x": 2,
+        "y": 28,
+        "width": 746,
+        "height": 26,
+        "right": 748,
+        "bottom": 54
+      },
+      "gpuiVisibleRect": {
+        "x": 3,
+        "y": 29,
+        "width": 744,
+        "height": 26,
+        "right": 747,
+        "bottom": 55
+      },
+      "visibleDeltas": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 1,
+        "width": 2,
+        "height": 0
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.composer.input",
+      "gpuiId": "main-view-input-body",
+      "htmlRect": {
+        "x": 2,
+        "y": 28,
+        "width": 722,
+        "height": 26,
+        "right": 724,
+        "bottom": 54
+      },
+      "gpuiRect": {
+        "x": 4,
+        "y": 29,
+        "width": 718,
+        "height": 26,
+        "right": 722,
+        "bottom": 55
+      },
+      "deltas": {
+        "x": 2,
+        "y": 1,
+        "right": 2,
+        "bottom": 1,
+        "width": 4,
+        "height": 0
+      },
+      "iou": 0.9209851205746536,
+      "htmlVisibleRect": {
+        "x": 2,
+        "y": 28,
+        "width": 722,
+        "height": 26,
+        "right": 724,
+        "bottom": 54
+      },
+      "gpuiVisibleRect": {
+        "x": 4,
+        "y": 29,
+        "width": 718,
+        "height": 26,
+        "right": 722,
+        "bottom": 55
+      },
+      "visibleDeltas": {
+        "x": 2,
+        "y": 1,
+        "right": 2,
+        "bottom": 1,
+        "width": 4,
+        "height": 0
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "430",
+        "lineHeight": "26px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.composer.send",
+      "gpuiId": "agent-chat-send-button",
+      "htmlRect": {
+        "x": 724,
+        "y": 29,
+        "width": 24,
+        "height": 24,
+        "right": 748,
+        "bottom": 53
+      },
+      "gpuiRect": {
+        "x": 722,
+        "y": 30,
+        "width": 24,
+        "height": 24,
+        "right": 746,
+        "bottom": 54
+      },
+      "deltas": {
+        "x": 2,
+        "y": 1,
+        "right": 2,
+        "bottom": 1,
+        "width": 0,
+        "height": 0
+      },
+      "iou": 0.7832817337461301,
+      "htmlVisibleRect": {
+        "x": 724,
+        "y": 29,
+        "width": 24,
+        "height": 24,
+        "right": 748,
+        "bottom": 53
+      },
+      "gpuiVisibleRect": {
+        "x": 722,
+        "y": 30,
+        "width": 24,
+        "height": 24,
+        "right": 746,
+        "bottom": 54
+      },
+      "visibleDeltas": {
+        "x": 2,
+        "y": 1,
+        "right": 2,
+        "bottom": 1,
+        "width": 0,
+        "height": 0
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(255, 255, 255, 0.024)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "6px",
+        "borderBottomRightRadius": "6px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "6px",
+        "borderTopRightRadius": "6px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "0.3",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.transcript.viewport",
+      "gpuiId": "agent-chat-transcript-viewport",
+      "htmlRect": {
+        "x": 0,
+        "y": 58,
+        "width": 750,
+        "height": 386,
+        "right": 750,
+        "bottom": 444
+      },
+      "gpuiRect": {
+        "x": 1,
+        "y": 59,
+        "width": 748,
+        "height": 382.5,
+        "right": 749,
+        "bottom": 441.5
+      },
+      "deltas": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 2.5,
+        "width": 2,
+        "height": 3.5
+      },
+      "iou": 0.9882901554404145,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 58,
+        "width": 750,
+        "height": 386,
+        "right": 750,
+        "bottom": 444
+      },
+      "gpuiVisibleRect": {
+        "x": 1,
+        "y": 59,
+        "width": 748,
+        "height": 382.5,
+        "right": 749,
+        "bottom": 441.5
+      },
+      "visibleDeltas": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 2.5,
+        "width": 2,
+        "height": 3.5
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.transcript.message.assistant-17",
+      "gpuiId": "agent-chat-transcript-row-assistant-17",
+      "htmlRect": {
+        "x": 0,
+        "y": 29.59375,
+        "width": 750,
+        "height": 99.9375,
+        "right": 750,
+        "bottom": 129.53125
+      },
+      "gpuiRect": {
+        "x": 1,
+        "y": 55.5,
+        "width": 748,
+        "height": 88.5,
+        "right": 749,
+        "bottom": 144
+      },
+      "deltas": {
+        "x": 1,
+        "y": 25.90625,
+        "right": 1,
+        "bottom": 14.46875,
+        "width": 2,
+        "height": 11.4375
+      },
+      "iou": 0.6455831047819459,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 58,
+        "width": 750,
+        "height": 71.53125,
+        "right": 750,
+        "bottom": 129.53125
+      },
+      "gpuiVisibleRect": {
+        "x": 1,
+        "y": 59,
+        "width": 748,
+        "height": 85,
+        "right": 749,
+        "bottom": 144
+      },
+      "visibleDeltas": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 14.46875,
+        "width": 2,
+        "height": 13.46875
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.transcript.message.system-18",
+      "gpuiId": "agent-chat-transcript-row-system-18",
+      "htmlRect": {
+        "x": 0,
+        "y": 129.53125,
+        "width": 750,
+        "height": 35,
+        "right": 750,
+        "bottom": 164.53125
+      },
+      "gpuiRect": {
+        "x": 1,
+        "y": 144,
+        "width": 748,
+        "height": 34.5,
+        "right": 749,
+        "bottom": 178.5
+      },
+      "deltas": {
+        "x": 1,
+        "y": 14.46875,
+        "right": 1,
+        "bottom": 13.96875,
+        "width": 2,
+        "height": 0.5
+      },
+      "iou": 0.41847276294411573,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 129.53125,
+        "width": 750,
+        "height": 35,
+        "right": 750,
+        "bottom": 164.53125
+      },
+      "gpuiVisibleRect": {
+        "x": 1,
+        "y": 144,
+        "width": 748,
+        "height": 34.5,
+        "right": 749,
+        "bottom": 178.5
+      },
+      "visibleDeltas": {
+        "x": 1,
+        "y": 14.46875,
+        "right": 1,
+        "bottom": 13.96875,
+        "width": 2,
+        "height": 0.5
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.transcript.tool.edit-diff",
+      "gpuiId": "agent-chat-transcript-row-tool-19",
+      "htmlRect": {
+        "x": 0,
+        "y": 164.53125,
+        "width": 750,
+        "height": 158,
+        "right": 750,
+        "bottom": 322.53125
+      },
+      "gpuiRect": {
+        "x": 1,
+        "y": 178.5,
+        "width": 748,
+        "height": 148,
+        "right": 749,
+        "bottom": 326.5
+      },
+      "deltas": {
+        "x": 1,
+        "y": 13.96875,
+        "right": 1,
+        "bottom": 3.96875,
+        "width": 2,
+        "height": 10
+      },
+      "iou": 0.886939940252061,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 164.53125,
+        "width": 750,
+        "height": 158,
+        "right": 750,
+        "bottom": 322.53125
+      },
+      "gpuiVisibleRect": {
+        "x": 1,
+        "y": 178.5,
+        "width": 748,
+        "height": 148,
+        "right": 749,
+        "bottom": 326.5
+      },
+      "visibleDeltas": {
+        "x": 1,
+        "y": 13.96875,
+        "right": 1,
+        "bottom": 3.96875,
+        "width": 2,
+        "height": 10
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.transcript.tool.bash-failed",
+      "gpuiId": "agent-chat-transcript-row-tool-20",
+      "htmlRect": {
+        "x": 0,
+        "y": 322.53125,
+        "width": 750,
+        "height": 59,
+        "right": 750,
+        "bottom": 381.53125
+      },
+      "gpuiRect": {
+        "x": 1,
+        "y": 326.5,
+        "width": 748,
+        "height": 57.5,
+        "right": 749,
+        "bottom": 384
+      },
+      "deltas": {
+        "x": 1,
+        "y": 3.96875,
+        "right": 1,
+        "bottom": 2.46875,
+        "width": 2,
+        "height": 1.5
+      },
+      "iou": 0.8929802344531731,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 322.53125,
+        "width": 750,
+        "height": 59,
+        "right": 750,
+        "bottom": 381.53125
+      },
+      "gpuiVisibleRect": {
+        "x": 1,
+        "y": 326.5,
+        "width": 748,
+        "height": 57.5,
+        "right": 749,
+        "bottom": 384
+      },
+      "visibleDeltas": {
+        "x": 1,
+        "y": 3.96875,
+        "right": 1,
+        "bottom": 2.46875,
+        "width": 2,
+        "height": 1.5
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.transcript.message.assistant-21",
+      "gpuiId": "agent-chat-transcript-row-assistant-21",
+      "htmlRect": {
+        "x": 0,
+        "y": 381.53125,
+        "width": 750,
+        "height": 62.46875,
+        "right": 750,
+        "bottom": 444
+      },
+      "gpuiRect": {
+        "x": 1,
+        "y": 384,
+        "width": 748,
+        "height": 57.5,
+        "right": 749,
+        "bottom": 441.5
+      },
+      "deltas": {
+        "x": 1,
+        "y": 2.46875,
+        "right": 1,
+        "bottom": 2.5,
+        "width": 2,
+        "height": 4.96875
+      },
+      "iou": 0.9180056695014174,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 381.53125,
+        "width": 750,
+        "height": 62.46875,
+        "right": 750,
+        "bottom": 444
+      },
+      "gpuiVisibleRect": {
+        "x": 1,
+        "y": 384,
+        "width": 748,
+        "height": 57.5,
+        "right": 749,
+        "bottom": 441.5
+      },
+      "visibleDeltas": {
+        "x": 1,
+        "y": 2.46875,
+        "right": 1,
+        "bottom": 2.5,
+        "width": 2,
+        "height": 4.96875
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    },
+    {
+      "fidelityId": "agent-chat.footer.host",
+      "gpuiId": "native-main-window-footer-spacer",
+      "htmlRect": {
+        "x": 0,
+        "y": 444,
+        "width": 750,
+        "height": 36,
+        "right": 750,
+        "bottom": 480
+      },
+      "gpuiRect": {
+        "x": 1,
+        "y": 447,
+        "width": 748,
+        "height": 32,
+        "right": 749,
+        "bottom": 479
+      },
+      "deltas": {
+        "x": 1,
+        "y": 3,
+        "right": 1,
+        "bottom": 1,
+        "width": 2,
+        "height": 4
+      },
+      "iou": 0.8865185185185185,
+      "htmlVisibleRect": {
+        "x": 0,
+        "y": 444,
+        "width": 750,
+        "height": 36,
+        "right": 750,
+        "bottom": 480
+      },
+      "gpuiVisibleRect": {
+        "x": 1,
+        "y": 447,
+        "width": 748,
+        "height": 32,
+        "right": 749,
+        "bottom": 479
+      },
+      "visibleDeltas": {
+        "x": 1,
+        "y": 3,
+        "right": 1,
+        "bottom": 1,
+        "width": 2,
+        "height": 4
+      },
+      "visibleWithinTolerance": false,
+      "tolerance": 0.5,
+      "withinTolerance": false,
+      "paintFrameGeneration": 189,
+      "domStyle": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "domOverflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      }
+    }
+  ],
+  "imageDiffEvidence": {
+    "valid": true,
+    "tool": "script-kit-devtools.image-diff",
+    "classification": "ok",
+    "changedPixelCount": 587105,
+    "changedPixelRatio": 0.40771180555555553,
+    "inputHashes": {
+      "red": {
+        "sha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
+        "expectedSha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
+        "matchesReceipt": true
+      },
+      "green": {
+        "sha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816",
+        "expectedSha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816",
+        "matchesReceipt": true
+      }
+    },
+    "inputEvidence": {
+      "red": {
+        "receiptPath": "design/mockups/screens/agent-chat/reference/agent-chat-runtime-receipt.json",
+        "source": "os-window-capture",
+        "classification": "captured",
+        "captureKind": "resolver-targeted-window",
+        "countsAsOsScreenshotEvidence": true,
+        "countsAsCompositorEvidence": true,
+        "pixelAuditBlank": false,
+        "blockerCode": null,
+        "expectedSha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d"
+      },
+      "green": {
+        "receiptPath": "design/mockups/screens/agent-chat/reference/dom-layout.json",
+        "source": null,
+        "classification": null,
+        "captureKind": null,
+        "countsAsOsScreenshotEvidence": false,
+        "countsAsCompositorEvidence": false,
+        "pixelAuditBlank": null,
+        "blockerCode": null,
+        "expectedSha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816"
+      }
+    }
+  },
+  "assertions": [
+    {
+      "name": "target.automationId",
+      "passed": true,
+      "details": {
+        "expected": "main",
+        "actual": "main"
+      }
+    },
+    {
+      "name": "target.targetKind",
+      "passed": true,
+      "details": {
+        "expected": "Main",
+        "actual": "Main"
+      }
+    },
+    {
+      "name": "screenIdentity",
+      "passed": true
+    },
+    {
+      "name": "domWindowRect",
+      "passed": true
+    },
+    {
+      "name": "gpuiWindowRect",
+      "passed": true
+    },
+    {
+      "name": "viewport.manifestVsDom",
+      "passed": true,
+      "details": {
+        "expected": {
+          "width": 750,
+          "height": 480
+        },
+        "actual": {
+          "height": 480,
+          "width": 750
+        }
+      }
+    },
+    {
+      "name": "viewport.manifestVsGpui",
+      "passed": true,
+      "details": {
+        "expected": {
+          "width": 750,
+          "height": 480
+        },
+        "actual": {
+          "width": 750,
+          "height": 480
+        }
+      }
+    },
+    {
+      "name": "mappingUnique",
+      "passed": true
+    },
+    {
+      "name": "domIdsUnique",
+      "passed": true
+    },
+    {
+      "name": "allDomNodesMapped",
+      "passed": true
+    },
+    {
+      "name": "element.agent-chat.header.context-zone.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.header.context-zone.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.header.context-zone.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 3,
+        "y": 1,
+        "right": 3,
+        "bottom": 1,
+        "width": 6,
+        "height": 0
+      }
+    },
+    {
+      "name": "element.agent-chat.header.context-zone.geometry",
+      "passed": false,
+      "details": {
+        "x": 9,
+        "y": 1,
+        "right": 9,
+        "bottom": 1,
+        "width": 18,
+        "height": 0
+      }
+    },
+    {
+      "name": "element.agent-chat.header.context-zone.text",
+      "passed": true,
+      "details": {
+        "html": "/var/tmp/script-kit-agent-chat-reference/agent-chat-kitchen-sink-long-workspace Agent Chat Kitchen Sink · Agent Chat Kitchen Sink ⇧ ⇥",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.header.cwd-chip.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.header.cwd-chip.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.header.cwd-chip.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 3,
+        "y": 5,
+        "right": 132.203125,
+        "bottom": 7,
+        "width": 135.203125,
+        "height": 12
+      }
+    },
+    {
+      "name": "element.agent-chat.header.cwd-chip.geometry",
+      "passed": false,
+      "details": {
+        "x": 9,
+        "y": 5,
+        "right": 132.203125,
+        "bottom": 7,
+        "width": 141.203125,
+        "height": 12
+      }
+    },
+    {
+      "name": "element.agent-chat.header.cwd-chip.text",
+      "passed": true,
+      "details": {
+        "html": "/var/tmp/script-kit-agent-chat-reference/agent-chat-kitchen-sink-long-workspace",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.header.trailing-chip.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.header.trailing-chip.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.header.trailing-chip.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 42.703125,
+        "y": 1,
+        "right": 3,
+        "bottom": 3,
+        "width": 45.703125,
+        "height": 4
+      }
+    },
+    {
+      "name": "element.agent-chat.header.trailing-chip.geometry",
+      "passed": false,
+      "details": {
+        "x": 42.703125,
+        "y": 1,
+        "right": 9,
+        "bottom": 3,
+        "width": 51.703125,
+        "height": 4
+      }
+    },
+    {
+      "name": "element.agent-chat.header.trailing-chip.text",
+      "passed": true,
+      "details": {
+        "html": "Agent Chat Kitchen Sink · Agent Chat Kitchen Sink ⇧ ⇥",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.shell.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.composer.shell.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.composer.shell.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 1,
+        "width": 2,
+        "height": 0
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.shell.geometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 1,
+        "width": 2,
+        "height": 0
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.shell.text",
+      "passed": true,
+      "details": {
+        "html": "Follow up… ↑",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.input.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.composer.input.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.composer.input.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 2,
+        "y": 1,
+        "right": 2,
+        "bottom": 1,
+        "width": 4,
+        "height": 0
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.input.geometry",
+      "passed": false,
+      "details": {
+        "x": 2,
+        "y": 1,
+        "right": 2,
+        "bottom": 1,
+        "width": 4,
+        "height": 0
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.input.text",
+      "passed": true,
+      "details": {
+        "html": "Follow up…",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.send.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.composer.send.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.composer.send.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 2,
+        "y": 1,
+        "right": 2,
+        "bottom": 1,
+        "width": 0,
+        "height": 0
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.send.geometry",
+      "passed": false,
+      "details": {
+        "x": 2,
+        "y": 1,
+        "right": 2,
+        "bottom": 1,
+        "width": 0,
+        "height": 0
+      }
+    },
+    {
+      "name": "element.agent-chat.composer.send.text",
+      "passed": true,
+      "details": {
+        "html": "↑",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.viewport.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.transcript.viewport.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.transcript.viewport.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 2.5,
+        "width": 2,
+        "height": 3.5
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.viewport.geometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 2.5,
+        "width": 2,
+        "height": 3.5
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.viewport.text",
+      "passed": true,
+      "details": {
+        "html": "Scroll sentinel 2 from the user side. Scroll sentinel 3: ./scripts/agentic/agent-cargo.sh test --test agent_chat_kitchen_sink_fixture_contract The command appears as markdown only; it is not executed by the fixture. System checkpoint: fixture transcript remains static, deterministic, and safe. ▾ ✓ ✎ edit src/ai/agent_chat/ui/components/transcript.rs 41 fn render_message( - 42 let label = \"Tool\"; + 42 let label = meta.tool_name.clone(); + 43 let subject = meta.subject.clone(); 44 // header renders status badge ▾ ✕ ❯ bash cargo test --workspace --quiet failed error: test failed, to rerun pass --lib Final visible sentinel: Agent Chat Kitchen Sink complete. The style dev tool should later expose Agent Chat controls while this transcript remains open.",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-17.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-17.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-17.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 1,
+        "right": 1,
+        "bottom": 14.46875,
+        "width": 2,
+        "height": 13.46875
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-17.geometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 25.90625,
+        "right": 1,
+        "bottom": 14.46875,
+        "width": 2,
+        "height": 11.4375
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-17.text",
+      "passed": true,
+      "details": {
+        "html": "Scroll sentinel 3: ./scripts/agentic/agent-cargo.sh test --test agent_chat_kitchen_sink_fixture_contract The command appears as markdown only; it is not executed by the fixture.",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.system-18.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.transcript.message.system-18.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.transcript.message.system-18.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 14.46875,
+        "right": 1,
+        "bottom": 13.96875,
+        "width": 2,
+        "height": 0.5
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.system-18.geometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 14.46875,
+        "right": 1,
+        "bottom": 13.96875,
+        "width": 2,
+        "height": 0.5
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.system-18.text",
+      "passed": true,
+      "details": {
+        "html": "System checkpoint: fixture transcript remains static, deterministic, and safe.",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.edit-diff.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.edit-diff.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.edit-diff.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 13.96875,
+        "right": 1,
+        "bottom": 3.96875,
+        "width": 2,
+        "height": 10
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.edit-diff.geometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 13.96875,
+        "right": 1,
+        "bottom": 3.96875,
+        "width": 2,
+        "height": 10
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.edit-diff.text",
+      "passed": true,
+      "details": {
+        "html": "▾ ✓ ✎ edit src/ai/agent_chat/ui/components/transcript.rs 41 fn render_message( - 42 let label = \"Tool\"; + 42 let label = meta.tool_name.clone(); + 43 let subject = meta.subject.clone(); 44 // header renders status badge",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.bash-failed.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.bash-failed.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.bash-failed.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 3.96875,
+        "right": 1,
+        "bottom": 2.46875,
+        "width": 2,
+        "height": 1.5
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.bash-failed.geometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 3.96875,
+        "right": 1,
+        "bottom": 2.46875,
+        "width": 2,
+        "height": 1.5
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.tool.bash-failed.text",
+      "passed": true,
+      "details": {
+        "html": "▾ ✕ ❯ bash cargo test --workspace --quiet failed error: test failed, to rerun pass --lib",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-21.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-21.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-21.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 2.46875,
+        "right": 1,
+        "bottom": 2.5,
+        "width": 2,
+        "height": 4.96875
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-21.geometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 2.46875,
+        "right": 1,
+        "bottom": 2.5,
+        "width": 2,
+        "height": 4.96875
+      }
+    },
+    {
+      "name": "element.agent-chat.transcript.message.assistant-21.text",
+      "passed": true,
+      "details": {
+        "html": "Final visible sentinel: Agent Chat Kitchen Sink complete. The style dev tool should later expose Agent Chat controls while this transcript remains open.",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "element.agent-chat.footer.host.paintProvenance",
+      "passed": true,
+      "details": "paint-time"
+    },
+    {
+      "name": "element.agent-chat.footer.host.paintFrame",
+      "passed": true,
+      "details": 189
+    },
+    {
+      "name": "element.agent-chat.footer.host.visibleGeometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 3,
+        "right": 1,
+        "bottom": 1,
+        "width": 2,
+        "height": 4
+      }
+    },
+    {
+      "name": "element.agent-chat.footer.host.geometry",
+      "passed": false,
+      "details": {
+        "x": 1,
+        "y": 3,
+        "right": 1,
+        "bottom": 1,
+        "width": 2,
+        "height": 4
+      }
+    },
+    {
+      "name": "element.agent-chat.footer.host.text",
+      "passed": true,
+      "details": {
+        "html": "",
+        "gpui": ""
+      }
+    },
+    {
+      "name": "paintFrameCoherent",
+      "passed": true,
+      "details": {
+        "frameGeneration": 189,
+        "elementCount": 13
+      }
+    },
+    {
+      "name": "imageDiff.changedPixelRatio",
+      "passed": false,
+      "details": {
+        "actual": 0.40771180555555553,
+        "maximum": 0
+      }
+    },
+    {
+      "name": "imageDiff.sameSize",
+      "passed": true
+    },
+    {
+      "name": "imageDiff.inputHashes",
+      "passed": true,
+      "details": {
+        "red": {
+          "sha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
+          "expectedSha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
+          "matchesReceipt": true
+        },
+        "green": {
+          "sha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816",
+          "expectedSha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816",
+          "matchesReceipt": true
+        }
+      }
+    },
+    {
+      "name": "imageDiff.redOsEvidence",
+      "passed": true,
+      "details": {
+        "receiptPath": "design/mockups/screens/agent-chat/reference/agent-chat-runtime-receipt.json",
+        "source": "os-window-capture",
+        "classification": "captured",
+        "captureKind": "resolver-targeted-window",
+        "countsAsOsScreenshotEvidence": true,
+        "countsAsCompositorEvidence": true,
+        "pixelAuditBlank": false,
+        "blockerCode": null,
+        "expectedSha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d"
+      }
+    }
+  ],
+  "warnings": [],
+  "errors": [
+    "Visible geometry exceeds tolerance for agent-chat.header.context-zone",
+    "Geometry exceeds tolerance for agent-chat.header.context-zone",
+    "Visible geometry exceeds tolerance for agent-chat.header.cwd-chip",
+    "Geometry exceeds tolerance for agent-chat.header.cwd-chip",
+    "Visible geometry exceeds tolerance for agent-chat.header.trailing-chip",
+    "Geometry exceeds tolerance for agent-chat.header.trailing-chip",
+    "Visible geometry exceeds tolerance for agent-chat.composer.shell",
+    "Geometry exceeds tolerance for agent-chat.composer.shell",
+    "Visible geometry exceeds tolerance for agent-chat.composer.input",
+    "Geometry exceeds tolerance for agent-chat.composer.input",
+    "Visible geometry exceeds tolerance for agent-chat.composer.send",
+    "Geometry exceeds tolerance for agent-chat.composer.send",
+    "Visible geometry exceeds tolerance for agent-chat.transcript.viewport",
+    "Geometry exceeds tolerance for agent-chat.transcript.viewport",
+    "Visible geometry exceeds tolerance for agent-chat.transcript.message.assistant-17",
+    "Geometry exceeds tolerance for agent-chat.transcript.message.assistant-17",
+    "Visible geometry exceeds tolerance for agent-chat.transcript.message.system-18",
+    "Geometry exceeds tolerance for agent-chat.transcript.message.system-18",
+    "Visible geometry exceeds tolerance for agent-chat.transcript.tool.edit-diff",
+    "Geometry exceeds tolerance for agent-chat.transcript.tool.edit-diff",
+    "Visible geometry exceeds tolerance for agent-chat.transcript.tool.bash-failed",
+    "Geometry exceeds tolerance for agent-chat.transcript.tool.bash-failed",
+    "Visible geometry exceeds tolerance for agent-chat.transcript.message.assistant-21",
+    "Geometry exceeds tolerance for agent-chat.transcript.message.assistant-21",
+    "Visible geometry exceeds tolerance for agent-chat.footer.host",
+    "Geometry exceeds tolerance for agent-chat.footer.host",
+    "Changed-pixel ratio exceeds the manifest limit"
+  ]
+}

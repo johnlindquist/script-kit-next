@@ -1,9 +1,13 @@
 #!/usr/bin/env bun
 
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+
 type Args = {
   red: string;
   green: string;
   out: string;
+  receiptOut: string;
   label: string;
   fuzz: string;
   redCrop: string;
@@ -16,6 +20,7 @@ type Args = {
   greenReferenceWidth: number | null;
   requireSameSize: boolean;
   requireOsEvidence: boolean;
+  requireInputHashes: boolean;
 };
 
 type Dimensions = {
@@ -26,9 +31,9 @@ type Dimensions = {
 function usage() {
   return [
     "Usage:",
-    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> [--label <name>] [--fuzz <percent>] [--red-crop <WxH+X+Y>] [--green-crop <WxH+X+Y>]",
+    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> [--receipt-out <receipt.json>] [--label <name>] [--fuzz <percent>] [--red-crop <WxH+X+Y>] [--green-crop <WxH+X+Y>]",
     "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> --red-crop-from-receipt <inspect.json> --green-crop-from-receipt <inspect.json> --red-reference-width <logical px> --green-reference-width <logical px>",
-    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> --red-receipt <verify-shot.json> --green-receipt <verify-shot.json> --require-os-evidence",
+    "  bun scripts/devtools/image-diff.ts compare --red <before.png> --green <after.png> --out <diff.png> --red-receipt <verify-shot.json> --green-receipt <verify-shot.json> [--require-os-evidence] [--require-input-hashes]",
     "",
     "Creates an ImageMagick compare mask and emits a JSON receipt with dimensions, changed-pixel count, ratio, and diff bounding box.",
   ].join("\n");
@@ -48,6 +53,7 @@ function parseArgs(argv: string[]): Args {
     red: "",
     green: "",
     out: "",
+    receiptOut: "",
     label: "image-diff",
     fuzz: "0%",
     redCrop: "",
@@ -60,6 +66,7 @@ function parseArgs(argv: string[]): Args {
     greenReferenceWidth: null,
     requireSameSize: false,
     requireOsEvidence: false,
+    requireInputHashes: false,
   };
 
   for (let index = 1; index < argv.length; index += 1) {
@@ -70,6 +77,8 @@ function parseArgs(argv: string[]): Args {
       args.green = argv[++index] ?? "";
     } else if (arg === "--out") {
       args.out = argv[++index] ?? "";
+    } else if (arg === "--receipt-out") {
+      args.receiptOut = argv[++index] ?? "";
     } else if (arg === "--label") {
       args.label = argv[++index] ?? args.label;
     } else if (arg === "--fuzz") {
@@ -94,6 +103,8 @@ function parseArgs(argv: string[]): Args {
       args.requireSameSize = true;
     } else if (arg === "--require-os-evidence") {
       args.requireOsEvidence = true;
+    } else if (arg === "--require-input-hashes") {
+      args.requireInputHashes = true;
     }
   }
 
@@ -124,6 +135,10 @@ function identify(path: string): Dimensions {
     throw new Error(`Could not identify dimensions for ${path}: ${stdout}`);
   }
   return { width, height };
+}
+
+function sha256File(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
 function parseChangedPixels(metric: string): number {
@@ -200,6 +215,8 @@ async function osEvidenceFromReceipt(path: string) {
   const receipt = JSON.parse(await Bun.file(path).text()) as Record<string, unknown>;
   const visualEvidence = asObject(receipt.visualEvidence);
   const pixelAudit = asObject(visualEvidence.pixelAudit);
+  const screenshotEvidence = asObject(receipt.screenshotEvidence);
+  const captureIdentity = asObject(visualEvidence.captureIdentity);
   return {
     receiptPath: path,
     source: visualEvidence.source ?? null,
@@ -209,6 +226,8 @@ async function osEvidenceFromReceipt(path: string) {
     countsAsCompositorEvidence: visualEvidence.countsAsCompositorEvidence === true,
     pixelAuditBlank: typeof pixelAudit.blank === "boolean" ? pixelAudit.blank : null,
     blockerCode: visualEvidence.blockerCode ?? null,
+    expectedSha256:
+      screenshotEvidence.sha256 ?? captureIdentity.sha256 ?? visualEvidence.sha256 ?? null,
   };
 }
 
@@ -241,7 +260,9 @@ async function emitBlockedReceipt(args: Args, blockerCode: string, inputEvidence
     errors: [blockerCode],
     timestamp: new Date().toISOString(),
   };
-  console.log(JSON.stringify(receipt, null, 2));
+  const serialized = `${JSON.stringify(receipt, null, 2)}\n`;
+  if (args.receiptOut) await Bun.write(args.receiptOut, serialized);
+  console.log(serialized.trimEnd());
   process.exit(2);
 }
 
@@ -271,16 +292,48 @@ async function main() {
     const redOk = redEvidence?.countsAsOsScreenshotEvidence === true &&
       redEvidence.countsAsCompositorEvidence === true &&
       redEvidence.classification === "captured" &&
-      redEvidence.pixelAuditBlank !== true;
+      redEvidence.pixelAuditBlank === false;
     const greenOk = greenEvidence?.countsAsOsScreenshotEvidence === true &&
       greenEvidence.countsAsCompositorEvidence === true &&
       greenEvidence.classification === "captured" &&
-      greenEvidence.pixelAuditBlank !== true;
+      greenEvidence.pixelAuditBlank === false;
     if (!redOk) {
       await emitBlockedReceipt(args, "red-os-evidence-missing", inputEvidence);
     }
     if (!greenOk) {
       await emitBlockedReceipt(args, "green-os-evidence-missing", inputEvidence);
+    }
+  }
+
+  const sourceHashes = {
+    red: sha256File(args.red),
+    green: sha256File(args.green),
+  };
+  const inputHashes = {
+    red: {
+      sha256: sourceHashes.red,
+      expectedSha256: redEvidence?.expectedSha256 ?? null,
+      matchesReceipt: redEvidence?.expectedSha256 === sourceHashes.red,
+    },
+    green: {
+      sha256: sourceHashes.green,
+      expectedSha256: greenEvidence?.expectedSha256 ?? null,
+      matchesReceipt: greenEvidence?.expectedSha256 === sourceHashes.green,
+    },
+  };
+  if (args.requireInputHashes) {
+    const inputEvidence = { red: redEvidence, green: greenEvidence, inputHashes };
+    if (typeof redEvidence?.expectedSha256 !== "string") {
+      await emitBlockedReceipt(args, "red-receipt-hash-missing", inputEvidence);
+    }
+    if (!inputHashes.red.matchesReceipt) {
+      await emitBlockedReceipt(args, "red-receipt-hash-mismatch", inputEvidence);
+    }
+    if (typeof greenEvidence?.expectedSha256 !== "string") {
+      await emitBlockedReceipt(args, "green-receipt-hash-missing", inputEvidence);
+    }
+    if (!inputHashes.green.matchesReceipt) {
+      await emitBlockedReceipt(args, "green-receipt-hash-mismatch", inputEvidence);
     }
   }
 
@@ -319,7 +372,15 @@ async function main() {
   const changedPixels = parseChangedPixels(compare.stderr || compare.stdout);
   const totalPixels = canvas.width * canvas.height;
   const changedPixelRatio = totalPixels > 0 ? changedPixels / totalPixels : null;
-  const trim = runMagick([args.out, "-fuzz", "1%", "-trim", "-format", "%@", "info:"]);
+  const trim = runMagick([
+    args.out,
+    "-fuzz",
+    "1%",
+    "-trim",
+    "-format",
+    "%wx%h%X%Y",
+    "info:",
+  ]);
   const diffBoundingBox = changedPixels > 0 ? parseBoundingBox(trim.stdout) : null;
   const sameSize =
     redDimensions.width === greenDimensions.width &&
@@ -349,6 +410,7 @@ async function main() {
       red: redEvidence,
       green: greenEvidence,
     },
+    inputHashes,
     dimensions: {
       red: redDimensions,
       green: greenDimensions,
@@ -389,7 +451,9 @@ async function main() {
   };
 
   await Bun.$`rm -rf ${tmpDir}`;
-  console.log(JSON.stringify(receipt, null, 2));
+  const serialized = `${JSON.stringify(receipt, null, 2)}\n`;
+  if (args.receiptOut) await Bun.write(args.receiptOut, serialized);
+  console.log(serialized.trimEnd());
   if (classification === "error") {
     process.exit(2);
   }

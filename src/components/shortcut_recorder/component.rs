@@ -50,6 +50,9 @@ pub struct ShortcutRecorder {
     pub pending_action: Option<RecorderAction>,
     /// Render as a native popup window surface instead of an in-window overlay.
     pub detached_window: bool,
+    /// SDK `hotkey()` capture auto-submits as soon as a chord completes, so
+    /// its embedded modal omits the persistent Save/Clear/Cancel action row.
+    pub capture_only: bool,
     /// Which modal action receives Tab focus.
     pub focused_action: ShortcutRecorderFocusedAction,
 }
@@ -78,6 +81,7 @@ impl ShortcutRecorder {
             is_recording: true,
             pending_action: None,
             detached_window: false,
+            capture_only: false,
             focused_action: ShortcutRecorderFocusedAction::Save,
         }
     }
@@ -86,6 +90,11 @@ impl ShortcutRecorder {
     /// the parent launcher surface.
     pub fn with_detached_window(mut self, detached: bool) -> Self {
         self.detached_window = detached;
+        self
+    }
+
+    pub fn with_capture_only(mut self, capture_only: bool) -> Self {
+        self.capture_only = capture_only;
         self
     }
 

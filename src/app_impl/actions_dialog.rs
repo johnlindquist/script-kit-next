@@ -377,9 +377,8 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         use crate::menu_syntax::{
-            MenuSyntaxActionState,
-            action_effects::{ActionEffect, apply_safe_effect},
-            builtin_schema, current_menu_syntax_actions,
+            action_effects::{apply_safe_effect, ActionEffect},
+            builtin_schema, current_menu_syntax_actions, MenuSyntaxActionState,
         };
 
         let raw = self.filter_text().to_string();
@@ -1278,9 +1277,27 @@ impl ScriptListApp {
     }
 
     pub(crate) fn request_focus_restore_for_actions_host(&mut self, host: ActionsDialogHost) {
+        let request =
+            Self::focus_restore_request_for_actions_host(host, self.current_view.surface_kind());
+
+        self.focus_coordinator.request(request);
+        self.sync_coordinator_to_legacy();
+    }
+
+    /// Pure mapping from (actions host, current surface) to the focus target
+    /// restored when the shared actions dialog closes.
+    ///
+    /// This is the single owner of the "Escape from Cmd+K returns focus to the
+    /// host's input" contract; keep every host mapped here and unit-tested in
+    /// `actions_host_focus_restore_tests` rather than special-casing at call
+    /// sites.
+    fn focus_restore_request_for_actions_host(
+        host: ActionsDialogHost,
+        surface: SurfaceKind,
+    ) -> crate::focus_coordinator::FocusRequest {
         use crate::focus_coordinator::FocusRequest;
 
-        let request = match host {
+        match host {
             ActionsDialogHost::ArgPrompt => FocusRequest::arg_prompt(),
             ActionsDialogHost::ChatPrompt => FocusRequest::chat_prompt(),
             ActionsDialogHost::EditorPrompt => FocusRequest::editor_prompt(),
@@ -1290,16 +1307,13 @@ impl ScriptListApp {
             ActionsDialogHost::TermPrompt => FocusRequest::term_prompt(),
             ActionsDialogHost::WebcamPrompt => FocusRequest::div_prompt(),
             ActionsDialogHost::AgentChat => FocusRequest::agent_chat(),
-            ActionsDialogHost::MainList if matches!(self.current_view, AppView::DayPage { .. }) => {
+            ActionsDialogHost::MainList if surface == SurfaceKind::DayPage => {
                 FocusRequest::editor_prompt()
             }
-            // Flow Desk dialog opened from an open conversation returns focus
-            // to the session PTY; from the desk list it returns to the filter.
-            ActionsDialogHost::FlowDesk
-                if matches!(self.current_view, AppView::FlowSessionView { .. }) =>
-            {
-                FocusRequest::term_prompt()
-            }
+            // FlowDesk covers both the desk list and an open flow session.
+            // Flow sessions compose in the shared MAIN input (see
+            // `current_view_uses_shared_filter_input`), so both restore to the
+            // main filter — there is no session PTY to hand focus to anymore.
             ActionsDialogHost::MainList
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory
@@ -1312,10 +1326,7 @@ impl ScriptListApp {
             | ActionsDialogHost::FlowDesk
             | ActionsDialogHost::AgentChatHistory
             | ActionsDialogHost::AgentChatDetached => FocusRequest::main_filter(),
-        };
-
-        self.focus_coordinator.request(request);
-        self.sync_coordinator_to_legacy();
+        }
     }
 
     /// Check if the actions popup was closed very recently (within 300ms).
@@ -1540,7 +1551,7 @@ mod close_actions_popup_regression_tests {
         let close_fn = &source[close_fn_start..];
 
         let clear_dialog_pos = close_fn
-            .find("self.actions_dialog = None;")
+            .find("self.mark_actions_popup_closed();")
             .expect("close_actions_popup must clear actions_dialog state");
         let resync_pos = close_fn
             .find("self.resync_filter_input_after_actions_if_needed(window, cx);")
@@ -1614,8 +1625,12 @@ mod close_actions_popup_regression_tests {
         let host_restore_pos = close_fn
             .find("self.request_focus_restore_for_actions_host(host);")
             .expect("host focus restore request missing");
-        let deferred_branch_pos = close_fn
+        // The first `if closing_from_actions_window` is the early main-window
+        // activation guard; the deferred-apply branch is the one after the
+        // host focus restore, so search from there.
+        let deferred_branch_pos = close_fn[host_restore_pos..]
             .find("if closing_from_actions_window")
+            .map(|pos| host_restore_pos + pos)
             .expect("actions-window-originated close must skip child-window focus apply");
         let apply_pending_pos = close_fn
             .find("self.apply_pending_focus(window, cx)")
@@ -1629,40 +1644,6 @@ mod close_actions_popup_regression_tests {
             host_restore_pos < deferred_branch_pos && deferred_branch_pos < apply_pending_pos,
             "actions-window closes must defer focus application instead of focusing the popup window"
         );
-    }
-
-    #[test]
-    fn test_actions_host_focus_restore_maps_prompt_hosts() {
-        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
-            .expect("Failed to read src/app_impl/actions_dialog.rs");
-        let helper_start = source
-            .find("fn request_focus_restore_for_actions_host")
-            .expect("request_focus_restore_for_actions_host function not found");
-        let helper_fn = &source[helper_start..];
-
-        for expected in [
-            "ActionsDialogHost::ArgPrompt => FocusRequest::arg_prompt()",
-            "ActionsDialogHost::ChatPrompt => FocusRequest::chat_prompt()",
-            "ActionsDialogHost::AgentChat => FocusRequest::agent_chat()",
-            "ActionsDialogHost::EditorPrompt => FocusRequest::editor_prompt()",
-            "ActionsDialogHost::TemplatePrompt => FocusRequest::template_prompt()",
-            "ActionsDialogHost::FormPrompt => FocusRequest::form_prompt()",
-            "ActionsDialogHost::DivPrompt => FocusRequest::div_prompt()",
-            "ActionsDialogHost::TermPrompt => FocusRequest::term_prompt()",
-            "ActionsDialogHost::WebcamPrompt => FocusRequest::div_prompt()",
-            "ActionsDialogHost::MainList",
-            "ActionsDialogHost::FileSearch",
-            "ActionsDialogHost::ClipboardHistory",
-            "ActionsDialogHost::EmojiPicker",
-            "ActionsDialogHost::AppLauncher",
-            "FocusRequest::main_filter()",
-        ] {
-            assert!(
-                helper_fn.contains(expected),
-                "request_focus_restore_for_actions_host should include mapping fragment: {}",
-                expected
-            );
-        }
     }
 
     #[test]
@@ -1680,22 +1661,84 @@ mod close_actions_popup_regression_tests {
             "route_key_to_actions_dialog must not swallow keys when a child CommandBar owns the detached actions window"
         );
     }
+}
 
+#[cfg(test)]
+mod actions_host_focus_restore_tests {
+    use super::*;
+    use crate::focus_coordinator::FocusRequest;
+
+    fn restore(host: ActionsDialogHost, surface: SurfaceKind) -> FocusRequest {
+        ScriptListApp::focus_restore_request_for_actions_host(host, surface)
+    }
+
+    /// Closing Cmd+K over a flow session must hand focus back to the shared
+    /// MAIN input — the flow composer IS the main filter input
+    /// (`current_view_uses_shared_filter_input`). A `term_prompt()` restore
+    /// here silently no-ops (FlowSessionView has no terminal entity) and
+    /// strands focus, which is exactly the regression this locks out.
+    #[test]
+    fn flow_session_actions_restore_main_input_focus() {
+        assert_eq!(
+            restore(ActionsDialogHost::FlowDesk, SurfaceKind::FlowSession),
+            FocusRequest::main_filter(),
+        );
+        assert_eq!(
+            restore(ActionsDialogHost::FlowDesk, SurfaceKind::FlowUx),
+            FocusRequest::main_filter(),
+        );
+    }
+
+    /// Day Page Cmd+K close must restore focus to the Day editor, not the
+    /// main filter.
     #[test]
     fn day_page_mainlist_actions_restore_editor_focus() {
-        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
-            .expect("Failed to read src/app_impl/actions_dialog.rs");
-        let helper_start = source
-            .find("fn request_focus_restore_for_actions_host")
-            .expect("request_focus_restore_for_actions_host function not found");
-        let helper_fn = &source[helper_start..];
-
-        assert!(
-            helper_fn.contains(
-                "ActionsDialogHost::MainList if matches!(self.current_view, AppView::DayPage { .. })"
-            ) && helper_fn.contains("FocusRequest::editor_prompt()"),
-            "Day Page Cmd+K close must restore focus to the Day editor, not the main filter"
+        assert_eq!(
+            restore(ActionsDialogHost::MainList, SurfaceKind::DayPage),
+            FocusRequest::editor_prompt(),
         );
+        assert_eq!(
+            restore(ActionsDialogHost::MainList, SurfaceKind::ScriptList),
+            FocusRequest::main_filter(),
+        );
+    }
+
+    /// Every prompt host restores focus to its own input when the dialog
+    /// closes; list-like hosts restore the shared main filter.
+    #[test]
+    fn prompt_hosts_restore_their_own_inputs() {
+        let cases = [
+            (ActionsDialogHost::ArgPrompt, FocusRequest::arg_prompt()),
+            (ActionsDialogHost::ChatPrompt, FocusRequest::chat_prompt()),
+            (ActionsDialogHost::AgentChat, FocusRequest::agent_chat()),
+            (
+                ActionsDialogHost::EditorPrompt,
+                FocusRequest::editor_prompt(),
+            ),
+            (
+                ActionsDialogHost::TemplatePrompt,
+                FocusRequest::template_prompt(),
+            ),
+            (ActionsDialogHost::FormPrompt, FocusRequest::form_prompt()),
+            (ActionsDialogHost::DivPrompt, FocusRequest::div_prompt()),
+            (ActionsDialogHost::TermPrompt, FocusRequest::term_prompt()),
+            (ActionsDialogHost::WebcamPrompt, FocusRequest::div_prompt()),
+            (ActionsDialogHost::FileSearch, FocusRequest::main_filter()),
+            (
+                ActionsDialogHost::ClipboardHistory,
+                FocusRequest::main_filter(),
+            ),
+            (ActionsDialogHost::EmojiPicker, FocusRequest::main_filter()),
+            (ActionsDialogHost::AppLauncher, FocusRequest::main_filter()),
+        ];
+
+        for (host, expected) in cases {
+            assert_eq!(
+                restore(host, SurfaceKind::ScriptList),
+                expected,
+                "host {host:?} must restore its own input focus",
+            );
+        }
     }
 }
 

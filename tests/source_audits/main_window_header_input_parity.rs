@@ -8,9 +8,9 @@ fn app_view_variants() -> BTreeSet<String> {
         .find("enum AppView {")
         .expect("AppView enum should exist");
     let enum_body = source[enum_start..]
-        .split("/// Which button has Tab focus")
+        .split("/// Exhaustive host-level header/input ownership")
         .next()
-        .expect("AppView enum should precede ConfirmFocusedButton docs");
+        .expect("AppView enum should precede the header/input policy docs");
 
     enum_body
         .lines()
@@ -41,76 +41,22 @@ fn app_view_variants() -> BTreeSet<String> {
 #[test]
 fn every_app_view_is_classified_for_main_window_header_input_policy() {
     let actual = app_view_variants();
-    let classified: BTreeSet<&str> = [
-        // Canonical searchable/filterable main-window surfaces.
-        "ScriptList",
-        "ClipboardHistoryView",
-        "AppLauncherView",
-        "WindowSwitcherView",
-        "BrowserTabsView",
-        "DesignGalleryView",
-        "FooterGalleryView",
-        "FileSearchView",
-        "ProfileSearchView",
-        "ThemeChooserView",
-        "EmojiPickerView",
-        "SdkReferenceView",
-        "ScriptTemplateCatalogView",
-        "BrowseKitsView",
-        "InstalledKitsView",
-        "ProcessManagerView",
-        "SearchAiPresetsView",
-        "SettingsView",
-        "FavoritesBrowseView",
-        "CurrentAppCommandsView",
-        "AgentChatHistoryView",
-        "BrowserHistoryView",
-        "DictationHistoryView",
-        "NotesBrowseView",
-        // Shared main-window chrome, but child/content input ownership.
-        "AgentChatView",
-        // Explicit non-search/content or prompt exceptions.
-        "About",
-        "ActionsDialog",
-        "ArgPrompt",
-        "DivPrompt",
-        "FormPrompt",
-        "TermPrompt",
-        "EditorPrompt",
-        "SelectPrompt",
-        "PathPrompt",
-        "EnvPrompt",
-        "DropPrompt",
-        "TemplatePrompt",
-        "HotkeyPrompt",
-        "ChatPrompt",
-        "MiniPrompt",
-        "MicroPrompt",
-        "NonListStatesView",
-        "DesignExplorerView",
-        "WebcamView",
-        "ScratchPadView",
-        "QuickTerminalView",
-        "NamingPrompt",
-        "CreationFeedback",
-        "ScriptIssuesView",
-        "CreateAiPresetView",
-        "ConfirmPrompt",
-    ]
-    .into_iter()
-    .collect();
+    let source = read_source("src/main_sections/app_view_state.rs");
+    let policy = source
+        .split("pub(crate) fn main_view_header_input_policy(&self)")
+        .nth(1)
+        .and_then(|body| body.split("/// Resolve stateful sub-variants").next())
+        .expect("AppView must expose the exhaustive main-window header/input policy");
 
-    let actual_refs: BTreeSet<&str> = actual.iter().map(String::as_str).collect();
-    let missing: Vec<_> = actual_refs.difference(&classified).copied().collect();
-    let stale: Vec<_> = classified.difference(&actual_refs).copied().collect();
-
+    for variant in actual {
+        assert!(
+            policy.contains(&format!("AppView::{variant}")),
+            "new AppView variant {variant} must be classified by main_view_header_input_policy"
+        );
+    }
     assert!(
-        missing.is_empty(),
-        "new AppView variants must be classified for shared main-window header/input policy: {missing:?}"
-    );
-    assert!(
-        stale.is_empty(),
-        "main-window header/input policy has stale AppView classifications: {stale:?}"
+        !policy.contains("_ =>"),
+        "main_view_header_input_policy must stay exhaustive so rustc catches new views"
     );
 }
 
@@ -178,6 +124,11 @@ fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
             "render_builtin_main_input_header(",
         ),
         (
+            "TipsView",
+            "src/render_builtins/tips.rs",
+            "render_builtin_main_input_header(",
+        ),
+        (
             "ScriptTemplateCatalogView",
             "src/render_builtins/script_templates.rs",
             "render_builtin_main_input_header(",
@@ -188,6 +139,11 @@ fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
             "render_builtin_main_input_header(",
         ),
         (
+            "MigrateV1View",
+            "src/render_builtins/migrate_v1.rs",
+            "render_builtin_main_input_header(",
+        ),
+        (
             "InstalledKitsView",
             "src/render_builtins/kit_store.rs",
             "render_builtin_main_input_header(",
@@ -195,6 +151,16 @@ fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
         (
             "ProcessManagerView",
             "src/render_builtins/process_manager.rs",
+            "render_builtin_main_input_header(",
+        ),
+        (
+            "FlowUxView",
+            "src/render_builtins/flow_ux.rs",
+            "render_builtin_main_input_header(",
+        ),
+        (
+            "FlowSessionView",
+            "src/render_builtins/flow_ux.rs",
             "render_builtin_main_input_header(",
         ),
         (
@@ -259,43 +225,41 @@ fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
 fn searchable_main_window_surfaces_have_shared_runtime_layout_context_zone() {
     let layout_info = read_source("src/app_layout/build_layout_info.rs");
     let component_bounds = read_source("src/app_layout/build_component_bounds.rs");
-    let app_view_state = read_source("src/main_sections/app_view_state.rs");
-    let variants = searchable_shared_header_variants();
 
-    for variant in variants {
+    for (name, model) in [
+        ("layout info", layout_info),
+        ("component bounds", component_bounds),
+    ] {
+        assert!(model.contains("resolved_main_view_header_input_policy"));
+        assert!(model.contains("main_view_header_metrics(menu_def, input_height)"));
+        for component in [
+            "MainViewHeader",
+            "MainViewContextZone",
+            "MainViewInput",
+            "MainViewMain",
+        ] {
+            assert!(model.contains(component), "{name} must emit {component}");
+        }
         assert!(
-            layout_info.contains(variant),
-            "{variant} must be modeled with the shared main-window context-zone header in layout info"
-        );
-        assert!(
-            component_bounds.contains(variant),
-            "{variant} must be modeled with the shared main-window context-zone header in component bounds"
-        );
-        assert!(
-            app_view_state.contains(variant),
-            "{variant} must declare shared header ownership so the root renderer does not prepend a second context header"
+            !model.contains("let main_view_has_context_zone = matches!"),
+            "{name} must not duplicate the exhaustive AppView policy"
         );
     }
 }
 
 #[test]
-fn searchable_shared_header_inventory_stays_in_sync_across_root_and_layout_models() {
-    let layout_info = read_source("src/app_layout/build_layout_info.rs");
-    let component_bounds = read_source("src/app_layout/build_component_bounds.rs");
+fn searchable_shared_header_inventory_is_owned_by_the_exhaustive_app_view_policy() {
     let app_view_state = read_source("src/main_sections/app_view_state.rs");
+    let policy = app_view_state
+        .split("pub(crate) fn main_view_header_input_policy(&self)")
+        .nth(1)
+        .and_then(|body| body.split("/// Resolve stateful sub-variants").next())
+        .expect("exhaustive AppView main-window policy should exist");
 
     for variant in searchable_shared_header_variants() {
         assert!(
-            layout_info.contains(variant),
-            "{variant} must be present in layout info's main-view context-zone model"
-        );
-        assert!(
-            component_bounds.contains(variant),
-            "{variant} must be present in component bounds' main-view context-zone model"
-        );
-        assert!(
-            app_view_state.contains(variant),
-            "{variant} must be present in AppView shared-header ownership"
+            policy.contains(variant),
+            "{variant} must be present in the exhaustive AppView shared-header policy"
         );
     }
 }
@@ -305,15 +269,13 @@ fn prompt_and_child_content_surfaces_use_root_shared_context_header_fallback() {
     let render_impl = read_source("src/main_sections/render_impl.rs");
     let app_view_state = read_source("src/main_sections/app_view_state.rs");
     let ownership_body = app_view_state
-        .split("pub(crate) fn uses_shared_main_view_header(&self) -> bool")
+        .split("pub(crate) fn main_view_header_input_policy(&self)")
         .nth(1)
-        .and_then(|body| body.split("/// Dismiss policy").next())
-        .expect("shared-header ownership method should be followed by dismiss policy docs");
+        .and_then(|body| body.split("/// Resolve stateful sub-variants").next())
+        .expect("exhaustive main-window header/input policy should exist");
 
     assert!(
-        render_impl.contains(
-            "let shared_header_owned_by_view = self.current_view.uses_shared_main_view_header();"
-        ),
+        render_impl.contains(".uses_view_owned_main_window_shell(&*cx)"),
         "root renderer must ask the AppView ownership policy before wrapping content"
     );
     assert!(
@@ -342,10 +304,11 @@ fn prompt_and_child_content_surfaces_use_root_shared_context_header_fallback() {
         "AppView::ScratchPadView { .. }",
     ] {
         assert!(
-            !ownership_body.contains(variant),
-            "{variant} should not claim view-owned main-view input chrome; it should receive the root shared context header fallback"
+            ownership_body.contains(variant),
+            "{variant} must be explicitly classified by the root shared context-header fallback"
         );
     }
+    assert!(ownership_body.contains("MainViewHeaderInputPolicy::RootContextOnly"));
 }
 
 fn searchable_shared_header_variants() -> &'static [&'static str] {

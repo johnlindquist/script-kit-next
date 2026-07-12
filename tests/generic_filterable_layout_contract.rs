@@ -33,13 +33,16 @@ fn generic_filterable_list_uses_liquid_glass_panel_radius() {
 }
 
 #[test]
-fn generic_filterable_layout_uses_dedicated_full_width_nodes() {
+fn generic_filterable_layout_uses_shared_chrome_and_dedicated_content_nodes() {
     for needle in [
+        "resolved_main_view_header_input_policy",
+        "main_view_header_metrics(menu_def, input_height)",
+        "MainViewHeader",
+        "MainViewContextZone",
+        "MainViewInput",
+        "MainViewMain",
         "GenericFilterableSurface",
-        "GenericFilterableHeader",
-        "GenericFilterableSearch",
         "GenericFilterableCount",
-        "GenericFilterableDivider",
         "GenericFilterableList",
         "GenericFilterableRow",
         "GenericFilterableEmptyState",
@@ -50,6 +53,20 @@ fn generic_filterable_layout_uses_dedicated_full_width_nodes() {
         assert!(
             LAYOUT_SOURCE.contains(needle),
             "GenericFilterable layout receipt is missing `{needle}`"
+        );
+    }
+
+    for forbidden in [
+        "GenericFilterableHeader",
+        "GenericFilterableSearch",
+        "GenericFilterableDivider",
+        "GENERIC_HEADER_HEIGHT",
+        "GENERIC_INPUT_HEIGHT",
+        "GENERIC_INPUT_VISUAL_HEIGHT",
+    ] {
+        assert!(
+            !LAYOUT_SOURCE.contains(forbidden),
+            "GenericFilterable must not keep stale custom header geometry: {forbidden}"
         );
     }
 }

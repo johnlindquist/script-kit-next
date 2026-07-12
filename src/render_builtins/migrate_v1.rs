@@ -374,7 +374,11 @@ impl ScriptListApp {
                 (
                     engine,
                     board.v1_dir.clone(),
-                    board.rows.iter().map(|row| row.file.clone()).collect::<Vec<_>>(),
+                    board
+                        .rows
+                        .iter()
+                        .map(|row| row.file.clone())
+                        .collect::<Vec<_>>(),
                 )
             }
             _ => return,
@@ -382,16 +386,25 @@ impl ScriptListApp {
 
         let (tx, rx) = async_channel::unbounded::<MigrateProgressEvent>();
         std::thread::spawn(move || {
-            let child = std::process::Command::new("bun")
+            let mut command = std::process::Command::new("bun");
+            command
                 .arg(engine)
                 .arg("port")
                 .arg(v1_dir)
                 .arg("--progress-jsonl")
-                .stdout(std::process::Stdio::piped())
-                .spawn();
-            let Ok(mut child) = child else {
+                .stdout(std::process::Stdio::piped());
+            // Own process group + registration so an app quit or crash during
+            // a migration cannot orphan the porting run.
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                command.process_group(0);
+            }
+            let Ok(mut child) = command.spawn() else {
                 return;
             };
+            let _registration =
+                crate::process_manager::ChildRegistration::register(child.id(), "bun");
             if let Some(stdout) = child.stdout.take() {
                 let reader = std::io::BufReader::new(stdout);
                 for line in std::io::BufRead::lines(reader).map_while(Result::ok) {
@@ -423,7 +436,11 @@ impl ScriptListApp {
     ) {
         match event {
             MigrateProgressEvent::Start { files: event_files } => {
-                let files = if event_files.is_empty() { files } else { &event_files };
+                let files = if event_files.is_empty() {
+                    files
+                } else {
+                    &event_files
+                };
                 for file in files {
                     if let Some(row) = board.rows.iter_mut().find(|row| row.file == *file) {
                         row.phase = "queued".to_string();
@@ -600,7 +617,12 @@ impl ScriptListApp {
                     MigrateBoardPhase::Scanning => "Scanning v1 scripts…",
                     _ => "No matching scripts",
                 })
-                .child(div().text_xs().text_color(text_hint).child("~/.kenv/scripts"))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(text_hint)
+                        .child("~/.kenv/scripts"),
+                )
                 .into_any_element()
         } else {
             let rows = board.rows.clone();
@@ -611,94 +633,110 @@ impl ScriptListApp {
             let list_colors = ListItemColors::from_theme(&self.theme);
             let main_menu_theme = self.current_main_menu_theme;
             let hovered = self.hovered_index;
-            uniform_list("migrate-v1-list", indices.len(), move |visible, _window, _cx| {
-                visible
-                    .map(|visible_ix| {
-                        let Some(row_ix) = indices.get(visible_ix).copied() else {
-                            return div().id(visible_ix).h(px(LIST_ITEM_HEIGHT)).into_any_element();
-                        };
-                        let Some(row) = rows.get(row_ix) else {
-                            return div().id(visible_ix).h(px(LIST_ITEM_HEIGHT)).into_any_element();
-                        };
-                        let row_entity = click_entity.clone();
-                        let hover_entity = hover_entity.clone();
-                        let is_selected = visible_ix == selected_index;
-                        let is_hovered = hovered == Some(visible_ix);
-                        let click_handler = move |_event: &gpui::ClickEvent,
-                                                  _window: &mut Window,
-                                                  cx: &mut gpui::App| {
-                            if let Some(entity) = row_entity.upgrade() {
-                                entity.update(cx, |this, cx| {
-                                    if let AppView::MigrateV1View { selected_index, .. } =
-                                        &mut this.current_view
-                                    {
-                                        *selected_index = visible_ix;
-                                    }
-                                    cx.notify();
-                                });
-                            }
-                            cx.stop_propagation();
-                        };
-                        let hover_handler =
-                            move |is_hovered: &bool, _window: &mut Window, cx: &mut gpui::App| {
-                                if let Some(entity) = hover_entity.upgrade() {
-                                    entity.update(cx, |this, cx| {
-                                        if *is_hovered {
-                                            this.input_mode = InputMode::Mouse;
-                                            this.hovered_index = Some(visible_ix);
-                                        } else if this.hovered_index == Some(visible_ix) {
-                                            this.hovered_index = None;
-                                        }
-                                        cx.notify();
-                                    });
-                                }
+            uniform_list(
+                "migrate-v1-list",
+                indices.len(),
+                move |visible, _window, _cx| {
+                    visible
+                        .map(|visible_ix| {
+                            let Some(row_ix) = indices.get(visible_ix).copied() else {
+                                return div()
+                                    .id(visible_ix)
+                                    .h(px(LIST_ITEM_HEIGHT))
+                                    .into_any_element();
                             };
-                        let glyph = match &phase_for_list {
-                            MigrateBoardPhase::Report => match row.bucket.as_str() {
-                                "ready" => "✓",
-                                "needs-changes" => "~",
-                                "needs-rewrite" => "✗",
-                                _ => "?",
-                            },
-                            MigrateBoardPhase::Done => match row.status.as_deref() {
-                                Some("verified") => "✓",
-                                Some("verified-with-warnings") => "⚠",
-                                Some("needs-review") => "!",
-                                Some("error") => "✗",
+                            let Some(row) = rows.get(row_ix) else {
+                                return div()
+                                    .id(visible_ix)
+                                    .h(px(LIST_ITEM_HEIGHT))
+                                    .into_any_element();
+                            };
+                            let row_entity = click_entity.clone();
+                            let hover_entity = hover_entity.clone();
+                            let is_selected = visible_ix == selected_index;
+                            let is_hovered = hovered == Some(visible_ix);
+                            let click_handler =
+                                move |_event: &gpui::ClickEvent,
+                                      _window: &mut Window,
+                                      cx: &mut gpui::App| {
+                                    if let Some(entity) = row_entity.upgrade() {
+                                        entity.update(cx, |this, cx| {
+                                            if let AppView::MigrateV1View {
+                                                selected_index, ..
+                                            } = &mut this.current_view
+                                            {
+                                                *selected_index = visible_ix;
+                                            }
+                                            cx.notify();
+                                        });
+                                    }
+                                    cx.stop_propagation();
+                                };
+                            let hover_handler =
+                                move |is_hovered: &bool,
+                                      _window: &mut Window,
+                                      cx: &mut gpui::App| {
+                                    if let Some(entity) = hover_entity.upgrade() {
+                                        entity.update(cx, |this, cx| {
+                                            if *is_hovered {
+                                                this.input_mode = InputMode::Mouse;
+                                                this.hovered_index = Some(visible_ix);
+                                            } else if this.hovered_index == Some(visible_ix) {
+                                                this.hovered_index = None;
+                                            }
+                                            cx.notify();
+                                        });
+                                    }
+                                };
+                            let glyph = match &phase_for_list {
+                                MigrateBoardPhase::Report => match row.bucket.as_str() {
+                                    "ready" => "✓",
+                                    "needs-changes" => "~",
+                                    "needs-rewrite" => "✗",
+                                    _ => "?",
+                                },
+                                MigrateBoardPhase::Done => match row.status.as_deref() {
+                                    Some("verified") => "✓",
+                                    Some("verified-with-warnings") => "⚠",
+                                    Some("needs-review") => "!",
+                                    Some("error") => "✗",
+                                    _ => "·",
+                                },
                                 _ => "·",
-                            },
-                            _ => "·",
-                        };
-                        let title = format!("{glyph} {}", row.file);
-                        let description = match &phase_for_list {
-                            MigrateBoardPhase::Report => row.incompatible_apis.join(", "),
-                            MigrateBoardPhase::Porting => row.phase.clone(),
-                            MigrateBoardPhase::Done => row
-                                .note_summary
-                                .clone()
-                                .or_else(|| row.failure.clone())
-                                .unwrap_or_else(|| row.phase.clone()),
-                            _ => row.phase.clone(),
-                        };
-                        div()
-                            .id(visible_ix)
-                            .cursor_pointer()
-                            .on_click(click_handler)
-                            .on_hover(hover_handler)
-                            .child(
-                                ListItem::new(title, list_colors)
-                                    .description_opt((!description.is_empty()).then_some(description))
-                                    .source_hint_opt(Some(row.bucket.clone()))
-                                    .selected(is_selected)
-                                    .hovered(is_hovered)
-                                    .main_menu_theme(main_menu_theme)
-                                    .semantic_id(format!("migrate-v1-row-{visible_ix}"))
-                                    .with_accent_bar(true),
-                            )
-                            .into_any_element()
-                    })
-                    .collect()
-            })
+                            };
+                            let title = format!("{glyph} {}", row.file);
+                            let description = match &phase_for_list {
+                                MigrateBoardPhase::Report => row.incompatible_apis.join(", "),
+                                MigrateBoardPhase::Porting => row.phase.clone(),
+                                MigrateBoardPhase::Done => row
+                                    .note_summary
+                                    .clone()
+                                    .or_else(|| row.failure.clone())
+                                    .unwrap_or_else(|| row.phase.clone()),
+                                _ => row.phase.clone(),
+                            };
+                            div()
+                                .id(visible_ix)
+                                .cursor_pointer()
+                                .on_click(click_handler)
+                                .on_hover(hover_handler)
+                                .child(
+                                    ListItem::new(title, list_colors)
+                                        .description_opt(
+                                            (!description.is_empty()).then_some(description),
+                                        )
+                                        .source_hint_opt(Some(row.bucket.clone()))
+                                        .selected(is_selected)
+                                        .hovered(is_hovered)
+                                        .main_menu_theme(main_menu_theme)
+                                        .semantic_id(format!("migrate-v1-row-{visible_ix}"))
+                                        .with_accent_bar(true),
+                                )
+                                .into_any_element()
+                        })
+                        .collect()
+                },
+            )
             .h_full()
             .track_scroll(&self.list_scroll_handle)
             .into_any_element()
@@ -708,9 +746,14 @@ impl ScriptListApp {
             self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, total_results, 8);
         let footer_hints: Vec<gpui::SharedString> = match board.phase {
             MigrateBoardPhase::Report => vec!["↵ Port all".into(), "Esc Back".into()],
-            MigrateBoardPhase::Porting => vec!["Porting…".into(), "Esc Hide (keeps running)".into()],
+            MigrateBoardPhase::Porting => {
+                vec!["Porting…".into(), "Esc Hide (keeps running)".into()]
+            }
             MigrateBoardPhase::Done => {
-                vec!["↵ Port with AI (needs-review row)".into(), "Esc Back".into()]
+                vec![
+                    "↵ Port with AI (needs-review row)".into(),
+                    "Esc Back".into(),
+                ]
             }
             _ => vec!["Esc Back".into()],
         };
@@ -751,12 +794,13 @@ impl ScriptListApp {
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewChrome {
-                header: self.render_builtin_main_input_header(vec![
-                    self.render_builtin_main_input_count_label(format!(
+                header: self.render_builtin_main_input_header(
+                    vec![self.render_builtin_main_input_count_label(format!(
                         "{} scripts",
                         total_results
-                    )),
-                ], cx),
+                    ))],
+                    cx,
+                ),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: menu_def.shell.divider_margin_x,
                     height: menu_def.shell.divider_height,
@@ -772,12 +816,9 @@ impl ScriptListApp {
 
 #[cfg(test)]
 mod migrate_v1_engine_tests {
-    use super::{
-        bundled_migrate_v1_engine, resolve_migrate_v1_engine, MigrateV1EngineUnavailable,
-    };
+    use super::{bundled_migrate_v1_engine, resolve_migrate_v1_engine, MigrateV1EngineUnavailable};
 
-    static NEXT_FIXTURE: std::sync::atomic::AtomicUsize =
-        std::sync::atomic::AtomicUsize::new(0);
+    static NEXT_FIXTURE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
     fn temp_root(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
@@ -794,9 +835,8 @@ mod migrate_v1_engine_tests {
 
     #[test]
     fn derives_engine_from_a_macos_app_executable_only() {
-        let app_executable = std::path::Path::new(
-            "/Applications/Script Kit.app/Contents/MacOS/script-kit-gpui",
-        );
+        let app_executable =
+            std::path::Path::new("/Applications/Script Kit.app/Contents/MacOS/script-kit-gpui");
         assert_eq!(
             bundled_migrate_v1_engine(app_executable),
             Some(std::path::PathBuf::from(
@@ -871,11 +911,7 @@ mod migrate_v1_engine_tests {
         touch(&development_engine);
 
         assert_eq!(
-            resolve_migrate_v1_engine(
-                None,
-                Some(&executable),
-                Some(development_engine.clone()),
-            ),
+            resolve_migrate_v1_engine(None, Some(&executable), Some(development_engine.clone()),),
             Ok(bundle_engine.clone())
         );
         std::fs::remove_file(&bundle_engine).expect("remove bundled fixture");

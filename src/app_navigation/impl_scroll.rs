@@ -36,8 +36,9 @@ impl ScriptListRowHeights {
     #[inline]
     fn for_theme(theme: crate::designs::MainMenuThemeVariant) -> Self {
         Self {
-            first_section_header:
-                crate::list_item::effective_first_section_header_height_for_theme(theme),
+            first_section_header: crate::list_item::effective_first_section_header_height_for_theme(
+                theme,
+            ),
             section_header: crate::list_item::effective_section_header_height_for_theme(theme),
             status: crate::list_item::effective_source_status_row_height_for_theme(theme),
             item: crate::list_item::effective_list_item_height_for_theme(theme),
@@ -156,7 +157,11 @@ fn footer_safe_scroll_offset_for_item(
     }
 
     let safe_scroll_top = (current_scroll_top + (target_bottom - safe_bottom)).min(max_scroll_top);
-    Some(script_list_offset_for_pixel_top(items, safe_scroll_top, heights))
+    Some(script_list_offset_for_pixel_top(
+        items,
+        safe_scroll_top,
+        heights,
+    ))
 }
 
 #[inline]
@@ -304,6 +309,7 @@ impl ScriptListApp {
             scroll_top_item_ix = scroll_top.item_ix,
         );
         self.clear_menu_syntax_filter_accept_hint();
+        self.mark_main_menu_selection_user_moved();
         self.selected_index = target;
         self.last_scrolled_index = Some(target);
     }
@@ -474,6 +480,9 @@ impl ScriptListApp {
     /// can land on headers causing navigation to feel "stuck".
     fn move_selection_by(&mut self, delta: i32, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
+        if delta != 0 {
+            self.mark_main_menu_selection_user_moved();
+        }
 
         let selection_update = {
             let (grouped_items, _) = self.get_grouped_results_cached();

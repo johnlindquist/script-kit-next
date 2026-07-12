@@ -1,27 +1,7 @@
-/// Settings item definition for the hub view.
-struct SettingsItem {
-    name: &'static str,
-    description: &'static str,
-    icon: &'static str,
-    action: SettingsAction,
-}
-
-/// Action to execute when a settings item is selected.
-#[derive(Clone)]
-enum SettingsAction {
-    ChooseTheme,
-    DictationSetup,
-    SelectMicrophone,
-    ClearSuggested,
-    CheckPermissions,
-    SetupPermissions,
-    AllowAccessibility,
-    AllowScreenRecording,
-    RequestAccessibilityPermission,
-    OpenAccessibilitySettings,
-    ConfigureSnapMode,
-    ResetWindowPositions,
-}
+// `SettingsItem`, `SettingsAction`, the pure item census
+// (`get_settings_items_for`), the filter helpers, the count-label formatter,
+// and the layout resolver live in `settings_contract.rs` (same include
+// chain), shared verbatim with the lib-side design-token exporter.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SettingsEmptyState {
@@ -46,104 +26,12 @@ impl SettingsEmptyState {
     }
 }
 
-fn settings_item_matches_filter(item: &SettingsItem, filter: &str) -> bool {
-    if filter.is_empty() {
-        return true;
-    }
-
-    let filter_lower = filter.to_lowercase();
-    item.name.to_lowercase().contains(&filter_lower)
-        || item.description.to_lowercase().contains(&filter_lower)
-}
-
-fn filtered_settings_items<'a>(items: &'a [SettingsItem], filter: &str) -> Vec<&'a SettingsItem> {
-    items
-        .iter()
-        .filter(|item| settings_item_matches_filter(item, filter))
-        .collect()
-}
-
+/// Runtime wrapper: the ONLY place the live window-state config feeds the
+/// settings census. Everything downstream (renderer, exporter, tests) goes
+/// through the pure `get_settings_items_for(has_custom_positions)` in
+/// `settings_contract.rs`.
 fn get_settings_items() -> Vec<SettingsItem> {
-    let mut items = vec![
-        SettingsItem {
-            name: "Theme Designer",
-            description: "Design your color theme with live preview",
-            icon: "palette",
-            action: SettingsAction::ChooseTheme,
-        },
-        SettingsItem {
-            name: "Dictation Setup",
-            description: "Check model, microphone, and hotkey readiness",
-            icon: "sliders-horizontal",
-            action: SettingsAction::DictationSetup,
-        },
-        SettingsItem {
-            name: "Select Microphone",
-            description: "Choose which microphone to use for dictation",
-            icon: "mic",
-            action: SettingsAction::SelectMicrophone,
-        },
-        SettingsItem {
-            name: "Clear Suggested Items",
-            description: "Reset Suggested and Recently Used launcher history",
-            icon: "eraser",
-            action: SettingsAction::ClearSuggested,
-        },
-        SettingsItem {
-            name: "Check Permissions",
-            description: "Run a check for the macOS permissions Script Kit needs",
-            icon: "circle-check",
-            action: SettingsAction::CheckPermissions,
-        },
-        SettingsItem {
-            name: "Set Up Permissions",
-            description: "Open the guided wizard for granting macOS permissions",
-            icon: "shield-check",
-            action: SettingsAction::SetupPermissions,
-        },
-        SettingsItem {
-            name: "Accessibility Permission Assistant",
-            description: "Open the Permission Assistant for Accessibility",
-            icon: "accessibility",
-            action: SettingsAction::AllowAccessibility,
-        },
-        SettingsItem {
-            name: "Screen Recording Permission Assistant",
-            description: "Open the Permission Assistant for Screen Recording",
-            icon: "monitor-check",
-            action: SettingsAction::AllowScreenRecording,
-        },
-        SettingsItem {
-            name: "Request Accessibility Permission",
-            description: "Prompt macOS to grant Script Kit accessibility access",
-            icon: "key-round",
-            action: SettingsAction::RequestAccessibilityPermission,
-        },
-        SettingsItem {
-            name: "Open Accessibility Settings",
-            description: "Open the Accessibility pane in macOS System Settings",
-            icon: "accessibility",
-            action: SettingsAction::OpenAccessibilitySettings,
-        },
-    ];
-
-    items.push(SettingsItem {
-        name: "Configure Snap Mode",
-        description: "Choose a snapping grid density or disable drag snapping",
-        icon: "square-split-horizontal",
-        action: SettingsAction::ConfigureSnapMode,
-    });
-
-    if crate::window_state::has_custom_positions() {
-        items.push(SettingsItem {
-            name: "Reset Window Positions",
-            description: "Restore all windows to default positions",
-            icon: "rotate-ccw",
-            action: SettingsAction::ResetWindowPositions,
-        });
-    }
-
-    items
+    get_settings_items_for(crate::window_state::has_custom_positions())
 }
 
 impl ScriptListApp {
@@ -151,7 +39,11 @@ impl ScriptListApp {
         self.settings_visible_row_labels(filter)
     }
 
-    fn settings_filtered_rows<'a>(&self, items: &'a [SettingsItem], filter: &str) -> Vec<&'a SettingsItem> {
+    fn settings_filtered_rows<'a>(
+        &self,
+        items: &'a [SettingsItem],
+        filter: &str,
+    ) -> Vec<&'a SettingsItem> {
         filtered_settings_items(items, filter)
     }
 
@@ -169,11 +61,7 @@ impl ScriptListApp {
         (items.len(), visible_count)
     }
 
-    fn settings_selected_visible_row(
-        &self,
-        filter: &str,
-        selected_index: usize,
-    ) -> Option<String> {
+    fn settings_selected_visible_row(&self, filter: &str, selected_index: usize) -> Option<String> {
         let items = get_settings_items();
         self.settings_filtered_rows(&items, filter)
             .get(selected_index)
@@ -313,9 +201,7 @@ impl ScriptListApp {
             }
             SettingsAction::AllowAccessibility => {
                 let entry = crate::builtins::BuiltInEntry {
-                    id: crate::config::canonical_builtin_command_id(
-                        "builtin/allow-accessibility",
-                    ),
+                    id: crate::config::canonical_builtin_command_id("builtin/allow-accessibility"),
                     name: "Accessibility Permission Assistant".to_string(),
                     description: "Open the Permission Assistant for Accessibility".to_string(),
                     keywords: vec![
@@ -387,8 +273,7 @@ impl ScriptListApp {
                         "builtin/accessibility-settings",
                     ),
                     name: "Open Accessibility Settings".to_string(),
-                    description: "Open Accessibility settings in macOS System Settings"
-                        .to_string(),
+                    description: "Open Accessibility settings in macOS System Settings".to_string(),
                     keywords: vec![
                         "accessibility".to_string(),
                         "settings".to_string(),
@@ -439,6 +324,8 @@ impl ScriptListApp {
 
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
+        // Shared with the design-token exporter (settings_contract.rs).
+        let hub_layout = resolved_settings_hub_layout(design_spacing);
         let _design_typography = tokens.typography();
         let color_resolver =
             crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
@@ -661,7 +548,7 @@ impl ScriptListApp {
             .min_h(px(0.))
             .w_full()
             .overflow_hidden()
-            .py(px(design_spacing.padding_xs))
+            .py(px(hub_layout.list_padding_y))
             .child(
                 // Every list leads with a persistent section separator
                 // (POLISH.md layout-stability bar; same rule as the main
@@ -670,9 +557,9 @@ impl ScriptListApp {
                 // shift the rows below it.
                 crate::list_item::render_section_header(
                     if filter.trim().is_empty() {
-                        "Settings"
+                        SETTINGS_HUB_EMPTY_FILTER_SECTION_LABEL
                     } else {
-                        "Results"
+                        SETTINGS_HUB_FILTERED_SECTION_LABEL
                     },
                     None,
                     list_colors,
@@ -702,13 +589,14 @@ impl ScriptListApp {
             &self.theme,
             menu_def,
             crate::components::main_view_chrome::MainViewChrome {
-                header: self.render_builtin_main_input_header(vec![
-                    self.render_builtin_main_input_count_label(format!(
-                        "{} setting{}",
-                        item_count,
-                        if item_count == 1 { "" } else { "s" }
-                    )),
-                ], cx),
+                header: self.render_builtin_main_input_header(
+                    vec![
+                        self.render_builtin_main_input_count_label(format_settings_count_label(
+                            item_count,
+                        )),
+                    ],
+                    cx,
+                ),
                 divider: crate::components::main_view_chrome::MainViewDividerChrome {
                     margin_x: shell.divider_margin_x,
                     height: shell.divider_height,

@@ -520,6 +520,7 @@ fn composer_subsearch_results(
                         subtitle: hit.target.clone(),
                         score: 0,
                         matched_field: hit.matched_field,
+                        evidence: hit.evidence.clone(),
                     })
                 })
                 .collect()
@@ -534,6 +535,7 @@ fn composer_subsearch_results(
                         score: 0,
                         matched_field: hit.matched_field,
                         subtitle,
+                        evidence: hit.evidence,
                     })
                 })
                 .collect()

@@ -437,6 +437,13 @@ impl InputState {
                             blink_cursor.start(cx);
                         });
                     }
+                } else {
+                    // Stop the pulse frame loop while the window is inactive
+                    // (Script Kit hides the main window with the input still
+                    // focused); the active branch above restarts it.
+                    input.blink_cursor.update(cx, |blink_cursor, cx| {
+                        blink_cursor.stop(cx);
+                    });
                 }
             }),
             cx.on_focus(&focus_handle, window, Self::on_focus),
@@ -2011,11 +2018,14 @@ impl InputState {
         offset
     }
 
-    /// Returns the true to let InputElement to render cursor, when Input is focused and current BlinkCursor is visible.
+    /// Returns true when the InputElement may render the cursor.
     pub(crate) fn show_cursor(&self, window: &Window, cx: &App) -> bool {
         (self.focus_handle.is_focused(window) || self.is_context_menu_open(cx))
-            && self.blink_cursor.read(cx).visible()
             && window.is_window_active()
+    }
+
+    pub(crate) fn cursor_opacity(&self, cx: &App) -> f32 {
+        self.blink_cursor.read(cx).opacity()
     }
 
     fn on_focus(&mut self, _: &mut Window, cx: &mut Context<Self>) {

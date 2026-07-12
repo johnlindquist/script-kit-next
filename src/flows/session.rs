@@ -96,6 +96,11 @@ pub struct FlowSessionMeta {
     pub engine: String,
     /// Definition path (the flow's markdown file).
     pub flow_path: String,
+    /// Definition mtime when the session's engine contract was resolved.
+    /// Reattach compares against the file's current mtime: a drifted value
+    /// marks the session `needs_rethread` so an edited flow never keeps a
+    /// thread built from the old contract.
+    pub flow_mtime_ms: u64,
     /// Cwd every turn runs in (pinned at session start).
     pub cwd: String,
     pub transport: SessionTransport,
@@ -304,6 +309,200 @@ fn strip_frontmatter(markdown: &str) -> &str {
     }
 }
 
+// ---------------------------------------------------------------------
+// Conversation persistence (survives app restarts)
+// ---------------------------------------------------------------------
+
+/// One most-recent conversation snapshot per flow, rewritten after every
+/// committed turn. `flow_sessions` is in-memory only, so a dev rebuild or
+/// app restart used to strand the user's conversation: Enter on the flow's
+/// launcher row landed in a blank composer (2026-07-10 report). A restored
+/// session sets `needs_rethread`, so the next submit rolls this transcript
+/// back into the engine prompt via `build_turn_task`.
+///
+/// Identity is `flow_id` + `flow_path`: protocol flow ids are only
+/// `<source>:<slug>` (`project:review`), so two different projects can carry
+/// the same id — keying by id alone restored the WRONG project's transcript
+/// into the wrong agent (2026-07-11 audit P0, correctness + privacy).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PersistedFlowConversation {
+    pub flow_id: String,
+    /// Definition path this conversation belongs to (empty on legacy
+    /// snapshots persisted before identity was path-qualified).
+    #[serde(default)]
+    pub flow_path: String,
+    pub saved_at: String,
+    pub turns: Vec<PersistedFlowTurn>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PersistedFlowTurn {
+    pub user: String,
+    pub assistant: String,
+}
+
+/// Newest persisted turns kept per flow — comfortably above what
+/// `build_turn_task`'s `HISTORY_CHAR_BUDGET` can roll up, without letting
+/// the snapshot grow unbounded.
+const PERSISTED_TURN_CAP: usize = 12;
+
+fn conversation_store_dir() -> std::path::PathBuf {
+    crate::setup::get_kit_path()
+        .join("flows")
+        .join("conversations")
+}
+
+/// Filesystem-safe slug of one identity component. Output is pure ASCII, so
+/// byte-slicing the result is always char-boundary-safe.
+fn sanitize_component(raw: &str) -> String {
+    raw.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
+}
+
+/// Conversation file name: flow id PLUS definition path, so two projects
+/// with the same `project:review` id can never share (or steal) a
+/// transcript. The path portion keeps its most distinctive tail when it
+/// would push the file name over conservative filesystem limits.
+fn conversation_file_name(flow_id: &str, flow_path: &str) -> String {
+    let id = sanitize_component(flow_id);
+    let mut path = sanitize_component(flow_path.trim_start_matches('/'));
+    const PATH_PORTION_MAX: usize = 160;
+    if path.len() > PATH_PORTION_MAX {
+        path = path[path.len() - PATH_PORTION_MAX..].to_string();
+    }
+    format!("{id}--{path}.json")
+}
+
+/// Legacy (pre path-qualified identity) file name, keyed by flow id alone.
+fn legacy_conversation_file_name(flow_id: &str) -> String {
+    format!("{}.json", sanitize_component(flow_id))
+}
+
+pub fn persist_conversation_to(
+    dir: &std::path::Path,
+    flow_id: &str,
+    flow_path: &str,
+    turns: &[SessionTurn],
+) -> std::io::Result<()> {
+    let kept: Vec<PersistedFlowTurn> = turns
+        .iter()
+        .rev()
+        .take(PERSISTED_TURN_CAP)
+        .rev()
+        .map(|turn| PersistedFlowTurn {
+            user: turn.user.clone(),
+            assistant: turn.assistant.clone(),
+        })
+        .collect();
+    let snapshot = PersistedFlowConversation {
+        flow_id: flow_id.to_string(),
+        flow_path: flow_path.to_string(),
+        saved_at: chrono::Utc::now().to_rfc3339(),
+        turns: kept,
+    };
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(conversation_file_name(flow_id, flow_path));
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(
+        &tmp,
+        serde_json::to_vec_pretty(&snapshot).map_err(std::io::Error::other)?,
+    )?;
+    std::fs::rename(&tmp, &path)
+}
+
+pub fn load_persisted_conversation_from(
+    dir: &std::path::Path,
+    flow_id: &str,
+    flow_path: &str,
+) -> Option<PersistedFlowConversation> {
+    let path = dir.join(conversation_file_name(flow_id, flow_path));
+    if let Ok(raw) = std::fs::read_to_string(&path) {
+        let snapshot: PersistedFlowConversation = serde_json::from_str(&raw).ok()?;
+        return (!snapshot.turns.is_empty()).then_some(snapshot);
+    }
+    // Legacy adoption (one-shot): a pre-identity snapshot keyed by id alone
+    // is claimed by the FIRST flow that opens it, re-persisted under the
+    // path-qualified name, and the legacy file removed — so it can never
+    // silently leak into another project again.
+    let legacy = dir.join(legacy_conversation_file_name(flow_id));
+    let raw = std::fs::read_to_string(&legacy).ok()?;
+    let snapshot: PersistedFlowConversation = serde_json::from_str(&raw).ok()?;
+    if snapshot.turns.is_empty() {
+        return None;
+    }
+    let turns: Vec<SessionTurn> = snapshot
+        .turns
+        .iter()
+        .map(|turn| SessionTurn {
+            user: turn.user.clone(),
+            assistant: turn.assistant.clone(),
+        })
+        .collect();
+    if persist_conversation_to(dir, flow_id, flow_path, &turns).is_ok() {
+        let _ = std::fs::remove_file(&legacy);
+    }
+    Some(PersistedFlowConversation {
+        flow_path: flow_path.to_string(),
+        ..snapshot
+    })
+}
+
+/// Erase a conversation's persisted history (both the path-qualified file
+/// and any legacy id-only file). "Terminate Flow" promises permanent
+/// removal — before this existed, the next activation silently restored the
+/// supposedly terminated conversation (2026-07-11 audit P0).
+pub fn delete_persisted_conversation_from(dir: &std::path::Path, flow_id: &str, flow_path: &str) {
+    let _ = std::fs::remove_file(dir.join(conversation_file_name(flow_id, flow_path)));
+    let _ = std::fs::remove_file(dir.join(legacy_conversation_file_name(flow_id)));
+}
+
+/// Persist under the active workspace (`~/.scriptkit`, `SK_PATH` override).
+pub fn persist_conversation(flow_id: &str, flow_path: &str, turns: &[SessionTurn]) {
+    if turns.is_empty() {
+        return;
+    }
+    if let Err(err) = persist_conversation_to(&conversation_store_dir(), flow_id, flow_path, turns)
+    {
+        tracing::warn!(
+            target: "script_kit::flows",
+            event = "flow_conversation_persist_failed",
+            flow_id = %flow_id,
+            error = %err,
+            "Failed to persist flow conversation"
+        );
+    }
+}
+
+pub fn load_persisted_conversation(
+    flow_id: &str,
+    flow_path: &str,
+) -> Option<PersistedFlowConversation> {
+    load_persisted_conversation_from(&conversation_store_dir(), flow_id, flow_path)
+}
+
+pub fn delete_persisted_conversation(flow_id: &str, flow_path: &str) {
+    delete_persisted_conversation_from(&conversation_store_dir(), flow_id, flow_path);
+}
+
+/// Definition-file mtime in ms (0 when unreadable) — the cheap staleness
+/// signal for reattaching live sessions: an edited flow must not silently
+/// keep a thread built from the old contract.
+pub fn flow_definition_mtime_ms(path: &str) -> u64 {
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,6 +548,156 @@ mod tests {
             build_turn_task(&[], "what did vercel email me?"),
             "what did vercel email me?"
         );
+    }
+
+    const GMAIL_PATH: &str = "/pkg/flows/flow-gog-gmail.codex.md";
+
+    #[test]
+    fn conversation_persistence_round_trips_and_caps_turns() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let turns: Vec<SessionTurn> = (0..20)
+            .map(|i| SessionTurn {
+                user: format!("question {i}"),
+                assistant: format!("answer {i}"),
+            })
+            .collect();
+        persist_conversation_to(dir.path(), "package:flow-gog-gmail", GMAIL_PATH, &turns)
+            .expect("persist");
+
+        let restored =
+            load_persisted_conversation_from(dir.path(), "package:flow-gog-gmail", GMAIL_PATH)
+                .expect("snapshot must load");
+        assert_eq!(restored.flow_id, "package:flow-gog-gmail");
+        assert_eq!(restored.flow_path, GMAIL_PATH);
+        // Newest PERSISTED_TURN_CAP turns survive, oldest fall off.
+        assert_eq!(restored.turns.len(), 12);
+        assert_eq!(restored.turns.first().unwrap().user, "question 8");
+        assert_eq!(restored.turns.last().unwrap().assistant, "answer 19");
+    }
+
+    #[test]
+    fn persisted_conversation_missing_or_empty_is_none() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        assert!(
+            load_persisted_conversation_from(dir.path(), "project:scout", "/a/flows/scout.md")
+                .is_none()
+        );
+        persist_conversation_to(dir.path(), "project:scout", "/a/flows/scout.md", &[])
+            .expect("persist empty");
+        assert!(
+            load_persisted_conversation_from(dir.path(), "project:scout", "/a/flows/scout.md")
+                .is_none(),
+            "an empty snapshot must never restore a blank conversation"
+        );
+    }
+
+    /// Two projects with the same `project:review` id must never share a
+    /// transcript (2026-07-11 audit P0: cross-project restore was both a
+    /// correctness and privacy failure).
+    #[test]
+    fn same_flow_id_in_different_projects_gets_separate_transcripts() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let turn = |text: &str| {
+            vec![SessionTurn {
+                user: text.to_string(),
+                assistant: format!("re: {text}"),
+            }]
+        };
+        persist_conversation_to(
+            dir.path(),
+            "project:review",
+            "/work/alpha/flows/review.md",
+            &turn("alpha secrets"),
+        )
+        .expect("persist alpha");
+        persist_conversation_to(
+            dir.path(),
+            "project:review",
+            "/work/beta/flows/review.md",
+            &turn("beta question"),
+        )
+        .expect("persist beta");
+
+        let alpha = load_persisted_conversation_from(
+            dir.path(),
+            "project:review",
+            "/work/alpha/flows/review.md",
+        )
+        .expect("alpha loads");
+        let beta = load_persisted_conversation_from(
+            dir.path(),
+            "project:review",
+            "/work/beta/flows/review.md",
+        )
+        .expect("beta loads");
+        assert_eq!(alpha.turns[0].user, "alpha secrets");
+        assert_eq!(beta.turns[0].user, "beta question");
+    }
+
+    /// Legacy id-only snapshots are adopted once (re-keyed under the
+    /// path-qualified name, legacy file removed) so they can never leak
+    /// into a second project later.
+    #[test]
+    fn legacy_snapshot_is_adopted_once_and_removed() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let legacy = dir
+            .path()
+            .join(legacy_conversation_file_name("project:review"));
+        let snapshot = PersistedFlowConversation {
+            flow_id: "project:review".into(),
+            flow_path: String::new(),
+            saved_at: "2026-07-10T00:00:00Z".into(),
+            turns: vec![PersistedFlowTurn {
+                user: "old question".into(),
+                assistant: "old answer".into(),
+            }],
+        };
+        std::fs::write(&legacy, serde_json::to_vec_pretty(&snapshot).unwrap()).unwrap();
+
+        let adopted = load_persisted_conversation_from(
+            dir.path(),
+            "project:review",
+            "/work/alpha/flows/review.md",
+        )
+        .expect("legacy snapshot adopted");
+        assert_eq!(adopted.turns[0].user, "old question");
+        assert_eq!(adopted.flow_path, "/work/alpha/flows/review.md");
+        assert!(!legacy.exists(), "legacy file must be consumed");
+        assert!(
+            load_persisted_conversation_from(
+                dir.path(),
+                "project:review",
+                "/work/beta/flows/review.md",
+            )
+            .is_none(),
+            "a second project must not inherit the adopted transcript"
+        );
+    }
+
+    /// Terminate promises "permanently end this conversation" — deletion
+    /// must actually remove the persisted history (2026-07-11 audit P0).
+    #[test]
+    fn delete_erases_persisted_history_including_legacy() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let turns = vec![SessionTurn {
+            user: "q".into(),
+            assistant: "a".into(),
+        }];
+        persist_conversation_to(dir.path(), "project:review", "/w/flows/review.md", &turns)
+            .expect("persist");
+        let legacy = dir
+            .path()
+            .join(legacy_conversation_file_name("project:review"));
+        std::fs::write(&legacy, b"{}").unwrap();
+
+        delete_persisted_conversation_from(dir.path(), "project:review", "/w/flows/review.md");
+        assert!(load_persisted_conversation_from(
+            dir.path(),
+            "project:review",
+            "/w/flows/review.md"
+        )
+        .is_none());
+        assert!(!legacy.exists());
     }
 
     #[test]

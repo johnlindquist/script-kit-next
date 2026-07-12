@@ -1,0 +1,48 @@
+{
+  "screen": "day-page",
+  "status": "reference/day-page@2x.png captured 2026-07-11 (sandbox HOME, seeded day file, SCRIPT_KIT_BRAIN_TZ America/Denver, shelf COLLAPSED — the shipped rest state); expanded-shelf raster state is PENDING a second reference (no driver element-click primitive yet)",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView menu material; blur radius and material bias are emulator calibration (--sk-emulator-*). The sandbox-home capture still samples the machine's live desktop behind the window."
+    },
+    {
+      "selector": ".sk-window__effect",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Canvas 2D approximation of fx_starfield (shared with the main-menu screen); colors are token-exact, geometry/phase are not."
+    },
+    {
+      "selector": "[data-native-footer], .sk-day-page-footer-spacer",
+      "kind": "native",
+      "blocking": false,
+      "reason": "The real footer is a native AppKit overlay window whose plain-Day-Page content is a single 'Actions ⌘K' button (day_page_footer_buttons) — verified via activeFooter probes, never via this PNG. The mockup paints ONLY the empty rail band (edge at y=448 must register); the missing native button is deliberately not painted into the compare layer. The GPUI spacer is 32pt while the native HOST band is modeled at 36pt — recorded as the dayPageFooter.spacerVsNativeHostBand contract conflict; the 2026-07-11 capture's darker bottom band starts at y=448 (the 32px rail edge)."
+    },
+    {
+      "selector": ".sk-day-page-caret",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "The Input caret blinks; the capture may land on any phase. Geometry must still register when visible: 2×17 quad centered in the 20pt line box on the trailing BLANK line (pixel receipt: caret bar at x≈31, y≈134.5–151 logical in the 2026-07-11 capture)."
+    },
+    {
+      "selector": ".sk-day-page-line, .sk-day-page-shelf__toggle, .sk-context-pill",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI/CoreText vs browser glyph rasterization for JetBrains Mono and .AppleSystemUIFont. Monospace advances should match, so horizontal drift is bounded per line; text origins (x=30, first line-box top y=52), the 20pt line pitch, the clipped bold heading, and the toggle band must register."
+    },
+    {
+      "selector": ".sk-context-pill",
+      "kind": "fixture",
+      "blocking": false,
+      "reason": "Context-zone labels are fixture-variable capture state: the 2026-07-11 reference read '~/.scriptkit' and 'Brain · GPT-5.6 SOL' (model pill follows the machine's configured agent/model). Inert state = markup/behavior (no keycaps, no-op handlers), never a token override."
+    },
+    {
+      "selector": ".sk-day-page-link-destination",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Destination tinting is selection-range-dependent (compactUnlessSelectionOverlapsOrTouchesFullRange). The fixture is deterministic: the seeded file ends with a newline and the caret sits on the following blank line, so the destination paints the resolved REST color (--sk-notes-editor-link-destination-rest). If a retake shows a full-accent destination, the caret moved — fix the fixture, never the token."
+    }
+  ]
+}

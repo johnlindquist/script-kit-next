@@ -1127,6 +1127,7 @@ mod tests {
             },
             score: 0,
             matched_field: AgentChatHistorySearchField::Title,
+            evidence: None,
         })
     }
 
@@ -1179,6 +1180,7 @@ mod tests {
             },
             score: 42,
             matched_field: AgentChatHistorySearchField::SearchText,
+            evidence: None,
         };
 
         let entry = AgentChatHistoryPopupEntry::from_hit(hit);

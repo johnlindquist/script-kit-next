@@ -51,7 +51,17 @@ impl ChatPrompt {
         // For bottom-aligned lists, GPUI reports `item_ix == item_count` when the
         // viewport is at the real bottom (logical_scroll_top == None internally).
         let scroll_top = self.turns_list_state.logical_scroll_top();
-        scroll_top.item_ix >= item_count
+        if scroll_top.item_ix >= item_count {
+            return true;
+        }
+
+        // A wheel/momentum scroll can stop a fraction of a pixel short of the
+        // exact bottom, which never resets `logical_scroll_top` to None. Treat
+        // "within a line of the max offset" as bottom so the jump pill hides
+        // and auto-follow resumes where the user visually is at the bottom.
+        let current = -f32::from(self.turns_list_state.scroll_px_offset_for_scrollbar().y);
+        let max = f32::from(self.turns_list_state.max_offset_for_scrollbar().y);
+        scroll_offset_is_at_bottom(current, max, CHAT_SCROLL_BOTTOM_TOLERANCE_PX)
     }
 
     pub(super) fn apply_scroll_follow_decision(
@@ -175,11 +185,49 @@ impl ChatPrompt {
                 .find(|m| m.id.as_deref() == Some(message_id))
             {
                 msg.append_content(chunk);
-                self.mark_conversation_turns_dirty();
-                self.scroll_turns_to_bottom();
-                cx.notify();
+                self.schedule_stream_flush(cx);
             }
         }
+    }
+
+    /// Coalesce external streaming deltas to frame cadence. Rebuilding the
+    /// conversation-turns cache costs O(total transcript) per call; codex
+    /// threads deliver token-level deltas fast enough that per-delta rebuilds
+    /// visibly hitch wheel scrolling. Text accumulates immediately (see
+    /// `append_chunk`); the visible flush runs at most once per interval, and
+    /// `complete_streaming`/`stop_streaming` flush the tail synchronously.
+    pub(super) fn schedule_stream_flush(&mut self, cx: &mut Context<Self>) {
+        const STREAM_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+
+        let elapsed = self.last_stream_flush_at.map(|t| t.elapsed());
+        if elapsed.is_none_or(|e| e >= STREAM_FLUSH_INTERVAL) {
+            self.flush_stream_updates(cx);
+            return;
+        }
+        if self.stream_flush_pending {
+            return;
+        }
+        self.stream_flush_pending = true;
+        let delay = STREAM_FLUSH_INTERVAL.saturating_sub(elapsed.unwrap_or_default());
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(delay).await;
+            this.update(cx, |this, cx| {
+                this.stream_flush_pending = false;
+                // A completed/stopped stream already flushed its final state.
+                if this.streaming_message_id.is_some() {
+                    this.flush_stream_updates(cx);
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn flush_stream_updates(&mut self, cx: &mut Context<Self>) {
+        self.last_stream_flush_at = Some(std::time::Instant::now());
+        self.mark_conversation_turns_dirty();
+        self.scroll_turns_to_bottom();
+        cx.notify();
     }
 
     pub fn complete_streaming(&mut self, message_id: &str, cx: &mut Context<Self>) {

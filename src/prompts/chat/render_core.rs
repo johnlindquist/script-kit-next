@@ -382,7 +382,7 @@ impl Render for ChatPrompt {
                     }
                 })
             })
-            .with_sizing_behavior(ListSizingBehavior::Infer)
+            .with_sizing_behavior(ListSizingBehavior::Auto)
             .size_full()
             .px(px(CHAT_LAYOUT_PADDING_X))
             .py(px(CHAT_LAYOUT_MESSAGES_PADDING_Y));
@@ -394,11 +394,8 @@ impl Render for ChatPrompt {
                 .min_h(px(0.))
                 .on_scroll_wheel(
                     cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
-                        let at_bottom_before = this.turns_list_is_at_bottom();
-                        let delta_y = crate::scrolling::free_scroll::apply_vertical_wheel_scroll(
-                            &this.turns_list_state,
-                            event,
-                        );
+                        let delta_y =
+                            crate::scrolling::free_scroll::normalized_vertical_delta_px(event);
                         let direction = if delta_y > 0.0 {
                             ChatScrollDirection::Up
                         } else if delta_y < 0.0 {
@@ -408,26 +405,21 @@ impl Render for ChatPrompt {
                         };
 
                         let previous_manual_mode = this.user_has_scrolled_up;
-                        let at_bottom_after = this.turns_list_is_at_bottom();
+                        let at_bottom = this.turns_list_is_at_bottom();
 
                         tracing::debug!(
                             target: "script_kit::chat_scroll",
-                            event = "wheel_applied",
+                            event = "wheel_observed",
                             direction = ?direction,
                             delta_y_px = delta_y,
-                            at_bottom_before,
-                            at_bottom_after,
+                            at_bottom,
                             previous_manual_mode,
                             turn_count = this.conversation_turns_cache.len(),
                             scroll_top_item_ix = this.turns_list_state.logical_scroll_top().item_ix,
                         );
 
                         this.apply_scroll_follow_decision(
-                            "wheel",
-                            direction,
-                            at_bottom_before,
-                            at_bottom_after,
-                            cx,
+                            "wheel", direction, at_bottom, at_bottom, cx,
                         );
 
                         let has_turns = !this.conversation_turns_cache.is_empty();

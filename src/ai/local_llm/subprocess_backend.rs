@@ -125,17 +125,32 @@ struct HelperClient {
     stdin: Mutex<Option<ChildStdin>>,
     pending: Arc<Mutex<HashMap<u64, mpsc::Sender<HelperResponse>>>>,
     next_id: AtomicU64,
+    /// Tracks the helper with the global process manager for quit-time and
+    /// post-crash reaping; dropping this client unregisters it.
+    _registration: crate::process_manager::ChildRegistration,
 }
 
 impl HelperClient {
     fn spawn() -> Result<Self> {
         let helper_path = resolve_helper_path()?;
-        let mut child = Command::new(&helper_path)
+        let mut command = Command::new(&helper_path);
+        command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::inherit());
+        // Own process group so orphan cleanup / kill_all can reap the helper.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
+        let mut child = command
             .spawn()
             .with_context(|| format!("spawn ghost llm helper {}", helper_path.display()))?;
+        let registration = crate::process_manager::ChildRegistration::register(
+            child.id(),
+            &helper_path.to_string_lossy(),
+        );
         let stdin = child
             .stdin
             .take()
@@ -167,6 +182,7 @@ impl HelperClient {
             stdin: Mutex::new(Some(stdin)),
             pending,
             next_id: AtomicU64::new(1),
+            _registration: registration,
         })
     }
 

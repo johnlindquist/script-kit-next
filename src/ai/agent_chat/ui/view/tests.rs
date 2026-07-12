@@ -7,6 +7,72 @@ use crate::ai::context_selector::types::{ContextSelectorRow, ContextSelectorRowK
 use gpui::{Modifiers, SharedString};
 use std::collections::HashMap;
 
+fn attached_flow(label: &str) -> crate::ai::message_parts::AiContextPart {
+    crate::ai::message_parts::AiContextPart::SkillFile {
+        path: format!("/tmp/{}.md", label.trim_start_matches('-')),
+        label: label.to_string(),
+        skill_name: label.trim_start_matches('-').to_string(),
+        owner_label: super::slash_and_skills::FLOW_OWNER_LABEL.to_string(),
+        slash_name: label.trim_start_matches('-').to_string(),
+    }
+}
+
+#[test]
+fn attached_flow_token_highlights_with_passed_accent() {
+    let accent = 0x12_34_56;
+    let ranges = AgentChatView::attached_flow_token_highlight_ranges(
+        "-agent-chat",
+        &[attached_flow(" -agent-chat ")],
+        accent,
+    );
+
+    assert_eq!(ranges.len(), 1);
+    assert_eq!((ranges[0].start, ranges[0].end), (0, 11));
+    assert_eq!(ranges[0].color, accent);
+}
+
+#[test]
+fn attached_flow_token_without_attached_part_stays_plain() {
+    assert!(AgentChatView::attached_flow_token_highlight_ranges("-agent-chat", &[], 7).is_empty());
+}
+
+#[test]
+fn attached_flow_token_requires_whitespace_boundaries() {
+    let attached = [attached_flow("-agent-chat")];
+
+    assert!(AgentChatView::attached_flow_token_highlight_ranges(
+        "prefix-agent-chat suffix",
+        &attached,
+        7,
+    )
+    .is_empty());
+    assert!(
+        AgentChatView::attached_flow_token_highlight_ranges("re-agent-chat", &attached, 7,)
+            .is_empty()
+    );
+    assert!(
+        AgentChatView::attached_flow_token_highlight_ranges("buy milk - urgent", &attached, 7,)
+            .is_empty()
+    );
+}
+
+#[test]
+fn attached_flow_token_highlights_two_staged_flows() {
+    let ranges = AgentChatView::attached_flow_token_highlight_ranges(
+        "-agent-chat then -launcher",
+        &[attached_flow("-agent-chat"), attached_flow("-launcher")],
+        9,
+    );
+
+    assert_eq!(
+        ranges
+            .iter()
+            .map(|range| (range.start, range.end, range.color))
+            .collect::<Vec<_>>(),
+        vec![(0, 11, 9), (17, 26, 9)]
+    );
+}
+
 #[test]
 fn inactive_transient_lanes_consume_zero_height() {
     assert_eq!(super::agent_chat_transient_lane_height(156.0, false), 0.0);
@@ -425,6 +491,33 @@ fn mini_phase_state_ids_are_distinct() {
             assert_ne!(ids[i], ids[j], "phase state_ids must be unique");
         }
     }
+}
+
+#[test]
+fn focused_text_mini_layout_budget_reserves_native_footer_without_overlap() {
+    let footer_height = crate::components::footer_chrome::current_main_menu_footer_height();
+    let budget = super::focused_text_mini_layout_budget(152.0, false, footer_height);
+
+    assert_eq!(budget.content_height + budget.footer_height, 152.0);
+    assert_eq!(
+        budget.input_height,
+        crate::window_resize::focused_text_mini_input_height()
+    );
+    assert_eq!(
+        budget.result_y + budget.result_height,
+        budget.content_height
+    );
+    assert!(budget.result_height > 0.0);
+}
+
+#[test]
+fn focused_text_mini_input_only_budget_never_invents_canonical_header_space() {
+    let input_height = crate::window_resize::focused_text_mini_input_height();
+    let budget = super::focused_text_mini_layout_budget(input_height, false, 0.0);
+
+    assert_eq!(budget.input_height, input_height);
+    assert_eq!(budget.scope_height, 0.0);
+    assert_eq!(budget.result_height, 0.0);
 }
 
 #[test]

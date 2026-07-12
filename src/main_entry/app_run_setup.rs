@@ -83,14 +83,9 @@
         );
     }
 
-    // Write main PID file for orphan detection on crash
-    if let Err(e) = PROCESS_MANAGER.write_main_pid() {
-        logging::log("APP", &format!("Failed to write main PID file: {}", e));
-    } else {
-        logging::log("APP", "Main PID file written");
-    }
-
-    // Clean up any orphaned processes from a previous crash
+    // Clean up orphans from previous crashes. The sweep scans per-instance
+    // registry files and skips any whose owning instance is still alive, so
+    // it is safe to run alongside parallel dev instances.
     let orphans_killed = PROCESS_MANAGER.cleanup_orphans();
     if orphans_killed > 0 {
         logging::log(
@@ -100,6 +95,13 @@
                 orphans_killed
             ),
         );
+    }
+
+    // Write main PID file for orphan detection on crash
+    if let Err(e) = PROCESS_MANAGER.write_main_pid() {
+        logging::log("APP", &format!("Failed to write main PID file: {}", e));
+    } else {
+        logging::log("APP", "Main PID file written");
     }
 
     // Register signal handlers for graceful shutdown
@@ -432,6 +434,11 @@ app.run(move |cx: &mut App| {
         // no local model was ever loaded. Runs on every quit path.
         cx.on_app_quit(|_cx| {
             crate::ai::local_llm::shutdown_local_ghost_llm();
+            // Reap every registered child (scripts, flow runs, AI sidecars) on
+            // ANY quit path, not just the tray/builtin/signal paths that call
+            // kill_all_processes explicitly. Idempotent when they already ran.
+            PROCESS_MANAGER.kill_all_processes();
+            PROCESS_MANAGER.remove_main_pid();
             async {}
         })
         .detach();
@@ -2711,7 +2718,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         size: gpui::size(
                                             gpui::px(750.),
                                             crate::window_resize::height_for_view(
-                                                crate::window_resize::ViewType::DivPrompt,
+                                                crate::window_resize::ViewType::MainWindow,
                                                 0,
                                             ),
                                         ),
@@ -3629,7 +3636,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                         },
                         StdinCommand::Protocol(message) => {
                             logging::log("STDIN", "Routing stdin protocol message");
-                            view.handle_stdin_protocol_message(*message, ctx);
+                            view.handle_stdin_protocol_message(*message, window, ctx);
                         }
                     }
                     view.sync_main_footer_popup(window, ctx);

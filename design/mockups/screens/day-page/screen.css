@@ -1,0 +1,215 @@
+/* Day-page screen: stage layout, browser-only emulator calibration, and the
+ * screen-owned Day Page anatomy.
+ *
+ * Rust anatomy this mirrors (src/main_sections/day_page_view.rs Render impl):
+ *   main window 750×480; shared main-view chrome
+ *   header: shell padding 2/4, gap 2; context row 22; EMPTY input slot → 32
+ *   editor body: pl/pr = columns.content_right_inset_x
+ *     (--sk-main-view-content-right-inset-x, resolved from shell padding-x)
+ *   NotesEditor input wrapper: --sk-notes-editor-padding-x/-y (adopted 16/12)
+ *     gpui-component Input (Size::Medium): --sk-notes-editor-input-padding-x/-y
+ *       (REAL vendored accessors), --sk-notes-editor-font-family @
+ *       --sk-notes-editor-font-size in the --sk-notes-editor-line-box-height box
+ *   ⇒ text origin x = 2 + 16 + 12 = 30, first line-box top = 32 + 12 + 8 = 52
+ *   clipboard shelf accessory: wrapper px 16 / pb 12; pt 6 + toggle 20
+ *     (--sk-day-page-shelf-* — the ONLY Day-owned tokens); COLLAPSED in the
+ *     canonical fixture (shipped rest state; expanded raster state pending)
+ *   GPUI footer band: EMPTY 32pt rail spacer (--sk-footer-rail-height); the
+ *     native AppKit overlay owns the buttons and is NOT part of the capture.
+ *
+ * Per the 2026-07-11 Oracle review there are NO Day-prefixed duplicates of
+ * editor/link/caret/footer tokens and NO value-coincident root aliases:
+ * every declaration below consumes its true shared owner directly.
+ */
+
+:root {
+  --sk-emulator-menu-blur: 32px;
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 28 31 / 0.42),
+    rgb(20 20 23 / 0.42)
+  );
+  --sk-emulator-desktop: radial-gradient(
+      1200px 700px at 20% 10%,
+      rgb(64 46 88 / 0.9),
+      transparent 60%
+    ),
+    radial-gradient(
+      1000px 800px at 85% 80%,
+      rgb(26 58 74 / 0.9),
+      transparent 55%
+    ),
+    linear-gradient(160deg, rgb(24 22 30), rgb(12 12 16));
+}
+
+body {
+  margin: 0;
+}
+
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-desktop);
+}
+
+/* Empty header input slot: the real render passes `input: div()` — zero
+ * height, so the header lands at padding 4 + row 22 + gap 2 + 0 + 4 = 32. */
+.sk-day-page-header-input-slot {
+  height: 0;
+}
+
+/* ── Editor body column ───────────────────────────────────────────────── */
+.sk-day-page-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-inline: var(--sk-main-view-content-right-inset-x);
+  overflow: hidden;
+}
+
+.sk-day-page-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-inline: var(--sk-notes-editor-padding-x);
+  padding-block: var(--sk-notes-editor-padding-y);
+}
+
+/* Raw markdown in the shared NotesEditor Input. The mono family is the
+ * theme bridge's --sk-notes-editor-font-family (NOT list_item's
+ * --sk-font-mono — same string today, different authority). */
+.sk-day-page-editor__input {
+  height: 100%;
+  padding-inline: var(--sk-notes-editor-input-padding-x);
+  padding-block: var(--sk-notes-editor-input-padding-y);
+  font-family: var(--sk-notes-editor-font-family), ui-monospace, monospace;
+  font-size: var(--sk-notes-editor-font-size);
+  line-height: var(--sk-notes-editor-line-box-height);
+  color: var(--sk-notes-editor-text-color);
+  overflow: hidden;
+}
+
+.sk-day-page-line {
+  height: var(--sk-notes-editor-line-box-height);
+  white-space: pre;
+  overflow: hidden;
+}
+
+/* Markdown heading in EDIT mode: marker + title spans styled by the SHARED
+ * notes markdown highlight tokens. Same nominal font size as body text —
+ * the heavier weight clips inside the fixed line box (never inflate the
+ * font; see notesMarkdown.titleGlyphExtentsVsLineBox). */
+.sk-day-page-md-marker {
+  color: var(--sk-notes-markdown-heading-marker-color);
+}
+
+.sk-day-page-md-title {
+  color: var(--sk-notes-markdown-title-color);
+  font-weight: var(--sk-notes-markdown-title-font-weight);
+}
+
+/* Markdown link spans: label inside [ ] = shared link-label accent; the
+ * destination inside ( ) consumes the RESOLVED rest-state color (accent at
+ * the authored compact opacity) — never a browser opacity layer. The
+ * brackets/parens themselves stay body-colored. Rest state is deterministic:
+ * the caret sits on the trailing blank line, away from every link range. */
+.sk-day-page-link-label {
+  color: var(--sk-notes-editor-link-label);
+}
+
+.sk-day-page-link-destination {
+  color: var(--sk-notes-editor-link-destination-rest);
+}
+
+/* Blink cursor: painted quad, vertically centered within the line box. */
+.sk-day-page-line--caret {
+  display: flex;
+  align-items: center;
+}
+
+.sk-day-page-caret {
+  flex: none;
+  width: var(--sk-notes-caret-width);
+  height: var(--sk-notes-caret-height);
+  background: var(--sk-notes-caret-color);
+}
+
+/* ── Clipboard shelf accessory (COLLAPSED canonical state) ────────────── */
+/* render_content_accessory: same horizontal plane as editor text. */
+.sk-day-page-shelf-wrapper {
+  flex: none;
+  padding-inline: var(--sk-notes-editor-padding-x);
+  padding-bottom: var(--sk-notes-editor-padding-y);
+}
+
+.sk-day-page-shelf {
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--sk-day-page-shelf-top-padding);
+}
+
+/* Toggle row: the inline glyph/label gap is the framework .gap_1 — a
+ * DIFFERENT authority than the Day-owned toggle↔list gap
+ * (--sk-day-page-shelf-expanded-list-gap), even though both are 4 today. */
+.sk-day-page-shelf__toggle {
+  height: var(--sk-day-page-shelf-toggle-height);
+  display: flex;
+  align-items: center;
+  gap: var(--sk-framework-gap-1);
+  font-size: var(--sk-framework-text-xs-font-size);
+  color: var(--sk-component-theme-muted-foreground);
+}
+
+/* Expanded shelf list — NOT rendered in the canonical collapsed fixture.
+ * Geometry is exported (list gap 4, row slot 24, compact-row insets) but the
+ * expanded raster state is PENDING a second reference capture (no driver
+ * click primitive yet); these rules exist so that capture can reuse them. */
+.sk-day-page-shelf__list {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--sk-day-page-shelf-expanded-list-gap);
+}
+
+.sk-day-page-shelf__row {
+  box-sizing: border-box;
+  height: var(--sk-day-page-shelf-row-slot-height);
+  display: flex;
+  align-items: center;
+  gap: var(--sk-compact-resource-row-gap);
+  padding-inline: var(--sk-compact-resource-row-padding-x);
+  padding-block: var(--sk-compact-resource-row-padding-y);
+  font-size: var(--sk-framework-text-xs-font-size);
+  color: var(--sk-component-theme-muted-foreground);
+}
+
+/* The compact row's mono meta IS list_item FONT_MONO (--sk-font-mono) — the
+ * one place the list-item mono family is the true authority here. */
+.sk-day-page-shelf__meta {
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+}
+
+.sk-day-page-shelf__preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Footer band ──────────────────────────────────────────────────────── */
+/* GPUI reserves the EMPTY 32px rail spacer; the native AppKit overlay owns
+ * the buttons as a SEPARATE window. The raster fixture paints the empty
+ * band only — never the missing native Actions button (compare layer). */
+.sk-day-page-footer-spacer {
+  height: var(--sk-footer-rail-height);
+  flex: none;
+}
+
+.sk-day-page-native-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--sk-footer-rail-height);
+  z-index: 4;
+}

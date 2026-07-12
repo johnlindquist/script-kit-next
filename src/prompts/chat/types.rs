@@ -251,6 +251,25 @@ pub(crate) enum ChatScrollDirection {
     None,
 }
 
+/// How close (in px) to the maximum scroll offset still counts as "at the
+/// bottom" of the conversation. GPUI's bottom-aligned list only reports the
+/// exact bottom (`logical_scroll_top == None`) when a scroll lands precisely
+/// on `scroll_max`; trackpad momentum regularly stops a fraction of a pixel
+/// short, which kept the "Jump to latest" pill visible at the visual bottom.
+/// One text line of slack matches what the user perceives as "at the bottom".
+pub(crate) const CHAT_SCROLL_BOTTOM_TOLERANCE_PX: f32 = 24.0;
+
+/// Tolerant bottom test on raw scroll offsets. `current_offset_px` may exceed
+/// `max_offset_px` near the real bottom (the list's max ignores the element's
+/// vertical padding), so this is a signed comparison, not an equality.
+pub(crate) fn scroll_offset_is_at_bottom(
+    current_offset_px: f32,
+    max_offset_px: f32,
+    tolerance_px: f32,
+) -> bool {
+    max_offset_px - current_offset_px <= tolerance_px
+}
+
 pub(crate) fn next_chat_scroll_follow_state(
     user_has_scrolled_up: bool,
     direction: ChatScrollDirection,

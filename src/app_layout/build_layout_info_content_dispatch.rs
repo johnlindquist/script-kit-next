@@ -6,22 +6,8 @@
             } else {
                 0
             };
-            let day_page_tokens = crate::designs::get_tokens(self.current_design);
-            let day_page_header_padding_y = if self.current_design.is_default() {
-                shell.header_padding_y
-            } else {
-                day_page_tokens.spacing().padding_sm
-            };
-            let day_page_header_gap = if self.current_design.is_default() {
-                shell.header_gap
-            } else {
-                day_page_tokens.spacing().gap_md
-            };
-            // Day Page's shared header owns only the context row; its input
-            // slot is empty, so the generic search height is not rendered.
-            let day_page_content_top = day_page_header_padding_y * 2.0
-                + menu_def.header_info_bar.height_px
-                + day_page_header_gap;
+            // Day Page is context-only, so shared metrics omit MainViewInput.
+            let day_page_content_top = header_height;
             let footer_height = footer_metrics.height_px;
             let budget = day_page_layout_budget(
                 window_height,

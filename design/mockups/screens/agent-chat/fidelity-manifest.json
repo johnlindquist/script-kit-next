@@ -1,0 +1,77 @@
+{
+  "screen": {
+    "id": "agent-chat",
+    "target": {
+      "automationId": "main",
+      "targetKind": "Main"
+    },
+    "viewport": {
+      "width": 750,
+      "height": 480
+    }
+  },
+  "tolerance": 0.5,
+  "requirePaintMeasurement": true,
+  "requireVisibleMeasurement": true,
+  "imageDiff": {
+    "required": true,
+    "maxChangedPixelRatio": 0,
+    "requireSameSize": true,
+    "requireInputHashes": true,
+    "requireRedOsEvidence": true
+  },
+  "elements": [
+    {
+      "fidelityId": "agent-chat.header.context-zone",
+      "gpuiId": "main-view-context-zone"
+    },
+    {
+      "fidelityId": "agent-chat.header.cwd-chip",
+      "gpuiId": "main-view-context-cwd-button"
+    },
+    {
+      "fidelityId": "agent-chat.header.trailing-chip",
+      "gpuiId": "main-view-context-model-button"
+    },
+    {
+      "fidelityId": "agent-chat.composer.shell",
+      "gpuiId": "main-view-input-shell"
+    },
+    {
+      "fidelityId": "agent-chat.composer.input",
+      "gpuiId": "main-view-input-body"
+    },
+    {
+      "fidelityId": "agent-chat.composer.send",
+      "gpuiId": "agent-chat-send-button"
+    },
+    {
+      "fidelityId": "agent-chat.transcript.viewport",
+      "gpuiId": "agent-chat-transcript-viewport"
+    },
+    {
+      "fidelityId": "agent-chat.transcript.message.assistant-17",
+      "gpuiId": "agent-chat-transcript-row-assistant-17"
+    },
+    {
+      "fidelityId": "agent-chat.transcript.message.system-18",
+      "gpuiId": "agent-chat-transcript-row-system-18"
+    },
+    {
+      "fidelityId": "agent-chat.transcript.tool.edit-diff",
+      "gpuiId": "agent-chat-transcript-row-tool-19"
+    },
+    {
+      "fidelityId": "agent-chat.transcript.tool.bash-failed",
+      "gpuiId": "agent-chat-transcript-row-tool-20"
+    },
+    {
+      "fidelityId": "agent-chat.transcript.message.assistant-21",
+      "gpuiId": "agent-chat-transcript-row-assistant-21"
+    },
+    {
+      "fidelityId": "agent-chat.footer.host",
+      "gpuiId": "native-main-window-footer-spacer"
+    }
+  ]
+}

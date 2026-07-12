@@ -44,20 +44,16 @@ fn hide_main_window_for_notes(cx: &mut App) {
     crate::platform::defer_hide_main_window(cx);
 }
 
-/// Calculate window bounds positioned in the top-right corner of the display containing the mouse.
-/// Default Notes window geometry, shared by first-open placement and the
-/// "Reset Window Position" action.
-const NOTES_DEFAULT_WIDTH: f32 = 350.0;
-const NOTES_DEFAULT_HEIGHT: f32 = 280.0;
-const NOTES_DEFAULT_EDGE_PADDING: f32 = 20.0;
-
 /// Default Notes window bounds: top-right corner of the display the mouse
-/// cursor is on (falling back to the primary display).
+/// cursor is on (falling back to the primary display). Geometry is owned by
+/// the app-authored contract (`notes::window::contract`), shared by
+/// first-open placement, "Reset Window Position", and the design-contract
+/// exporter.
 pub(crate) fn default_notes_window_bounds() -> gpui::Bounds<gpui::Pixels> {
     calculate_top_right_bounds(
-        NOTES_DEFAULT_WIDTH,
-        NOTES_DEFAULT_HEIGHT,
-        NOTES_DEFAULT_EDGE_PADDING,
+        super::contract::NOTES_DEFAULT_WIDTH,
+        super::contract::NOTES_DEFAULT_HEIGHT,
+        super::contract::NOTES_DEFAULT_EDGE_PADDING,
     )
 }
 
@@ -692,9 +688,13 @@ fn open_notes_window_with_close_behavior(
         titlebar: Some(gpui::TitlebarOptions {
             title: Some("Notes".into()),
             appears_transparent: true,
+            // App-authored group origin, shared with the design-contract
+            // exporter. (NOTE: the y comment used to claim "centered in a
+            // 26px header" while the painted titlebar is 36px — the origin
+            // value itself is the contract, not that stale rationale.)
             traffic_light_position: Some(gpui::Point {
-                x: px(8.),
-                y: px(7.), // Centered vertically in 26px header
+                x: px(super::contract::NOTES_TRAFFIC_LIGHT_ORIGIN_X),
+                y: px(super::contract::NOTES_TRAFFIC_LIGHT_ORIGIN_Y),
             }),
         }),
         window_background,

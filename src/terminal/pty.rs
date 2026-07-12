@@ -34,6 +34,11 @@ pub struct PtyManager {
     writer: Box<dyn Write + Send>,
     /// Current terminal dimensions
     size: PtySize,
+    /// Tracks the PTY child with the global process manager. A PTY has no
+    /// stdin-EOF pact and `Drop` never runs on SIGKILL/crash, so quit-time
+    /// kill_all and the post-crash orphan sweep are the only reapers for a
+    /// shell (or its SIGHUP-ignoring descendants) that outlives the app.
+    _registration: Option<crate::process_manager::ChildRegistration>,
 }
 
 impl std::fmt::Debug for PtyManager {

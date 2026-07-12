@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Terminal Prompt mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: SDK terminal prompt (protocol `term` message → AppView::TermPrompt),
+  script-kit-dark, Starfield. Window 750×700 (ViewType::TermPrompt →
+  layout MAX_HEIGHT, window_resize/mod.rs:640 + config/defaults.rs:20).
+
+  Content is the proposed deterministic capture (see
+  design/mockups/briefs/terminal-prompt-brief.md):
+    term({ command: "clear; exec env PS1='$ ' /bin/sh" })
+    then one typed command through the real key path:
+      printf '\033[1;32m%s\033[0m %s\n' 'Script Kit' 'terminal ready'
+  yielding: echoed command line, one output line (ANSI bold green run),
+  and a fresh "$ " prompt with the block cursor.
+
+  DRAFT STATUS: --sk-terminal-* tokens are screen-local aliases of
+  --sk-emulator-proposed-terminal-* values (measured from Rust source, not
+  yet emitted by export_design_tokens) — see known-divergence.json and the
+  brief's "Tokens to generate" list. reference/terminal-prompt@2x.png does
+  not exist yet; compare.html is wired for it.
+
+  SOURCE-MATH QUIRK (recorded as a conflict, not hidden): the SDK terminal
+  wrapper is a fixed 700pt shell placed below the 38pt context header inside
+  a clipped flex region, so its GPUI hint-strip footer (36pt, y 664–700 in
+  shell coordinates) starts 2pt past the 662pt clip line and never paints.
+  The mockup keeps the strip in the DOM at its source-true position, clipped
+  off-window, exactly like the confirm screen's off-window footer spacer.
+-->
+<main class="stage" id="stage">
+  <div class="sk-window sk-window--terminal" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <canvas class="sk-window__effect" id="starfield" width="1500" height="1400"></canvas>
+
+    <div class="sk-window__content">
+      <header class="sk-header" data-component="render_clickable_main_view_context_header (ui_window.rs:1776, main_view_chrome.rs:310)">
+        <div class="sk-context-zone" data-component="main_view_chrome::context_zone">
+          <span class="sk-context-pill">~/.scriptkit <span class="sk-context-key">⇥</span></span>
+          <span class="sk-context-pill">Script Kit · gpt-5.5 <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+      </header>
+
+      <!-- render_impl.rs:899-918: non-shared-header views get header + clipped flex-1 content box -->
+      <div class="sk-term-clip" data-component="render_impl.rs main_content_container (flex-1, overflow_hidden)">
+        <!-- render_prompts/term.rs:392-429: fixed-height wrapper = layout::MAX_HEIGHT (700) -->
+        <div class="sk-term-shell" data-component="render_prompts::term::render_term_prompt">
+          <div class="sk-term-content" data-component="terminal content child (flex-1, min_h 0, overflow_hidden)">
+            <!-- TermPrompt entity container: explicit h = MAX_HEIGHT − FOOTER_HEIGHT = 670
+                 (prompt_handler/mod.rs:2219-2221), padding from config (8 top/bottom, 12 sides) -->
+            <div class="sk-term-entity" data-component="term_prompt::TermPrompt::render (mod.rs:1572-1583)">
+              <div class="sk-term-row">$ printf '\033[1;32m%s\033[0m %s\n' 'Script Kit' 'terminal ready'</div>
+              <div class="sk-term-row"><span class="sk-term-ansi-green sk-term-bold">Script Kit</span> terminal ready</div>
+              <div class="sk-term-row">$ <span class="sk-term-cursor" data-component="cursor cell (mod.rs:1262-1264, bg = accent.selected)"></span></div>
+            </div>
+          </div>
+
+          <!-- HintStrip footer (hint_strip.rs:676-736). SDK terminal footer text from
+               render_terminal_prompt_hint_strip(None, None, true) → items joined " · "
+               (render_prompts/term.rs:109-145). parse_hint consumes only the LEADING
+               "⌘K" (hint_strip.rs:526-604) and render paints label FIRST, keys LAST
+               (hint_strip.rs:624-663) — painted truth is
+               "Actions · Esc Cancel · ⌘W Close [⌘][K]".
+               Source math places this strip past the clip line (never visible). -->
+          <footer class="sk-term-hint-strip" data-component="components::HintStrip (clipped off-window — see known-divergence.json)">
+            <span class="sk-term-hint-spacer"></span>
+            <span class="sk-term-hint">
+              <span class="sk-term-hint__label">Actions · Esc Cancel · ⌘W Close</span>
+              <span class="sk-term-hint__keys">
+                <svg class="sk-term-hint__icon" viewBox="0 0 16 16" fill="none" aria-label="command"><path d="M5 5H4a2 2 0 1 1 2-2v1m5 1h1a2 2 0 1 0-2-2v1M5 11H4a2 2 0 1 0 2 2v-1m5-1h1a2 2 0 1 1-2 2v-1M5.5 5.5h5v5h-5z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <kbd class="sk-term-keycap">K</kbd>
+              </span>
+            </span>
+          </footer>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="../main-menu/starfield.js"></script>
+</body>
+</html>

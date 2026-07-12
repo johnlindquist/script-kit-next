@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_icon_count() {
-    assert_eq!(IconName::count(), 30); // 29 + MessageCircle
+    assert_eq!(IconName::count(), 31); // 30 + Flow (chevron-fade flows brand)
 }
 
 #[test]

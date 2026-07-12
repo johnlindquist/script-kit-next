@@ -461,6 +461,7 @@ impl ScriptListApp {
             AppView::ScriptTemplateCatalogView { filter, .. } if !filter.is_empty() => {
                 Some("ScriptTemplateCatalog filter")
             }
+            AppView::TipsView { filter, .. } if !filter.is_empty() => Some("Tips filter"),
             AppView::FileSearchView { query, .. } if !query.is_empty() => Some("FileSearch query"),
             _ => None,
         };
@@ -627,6 +628,15 @@ impl ScriptListApp {
                 ..
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
+            }
+            AppView::TipsView {
+                filter,
+                selected_index,
+                ..
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.tips_list_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
             }
             AppView::FileSearchView {
                 query,

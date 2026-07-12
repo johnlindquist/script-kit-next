@@ -99,26 +99,24 @@ impl ScriptListApp {
     /// The loop exits as soon as the view changes, so reopening the wizard
     /// (which spawns a fresh loop) never accumulates pollers.
     fn spawn_permissions_wizard_poll(&mut self, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_secs(2))
-                    .await;
+        cx.spawn(async move |this, cx| loop {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(2))
+                .await;
 
-                let mut keep_polling = false;
-                let _ = cx.update(|cx| {
-                    let _ = this.update(cx, |app, cx| {
-                        keep_polling =
-                            matches!(app.current_view, AppView::PermissionsWizardView { .. });
-                        if keep_polling && script_kit_gpui::is_main_window_visible() {
-                            cx.notify();
-                        }
-                    });
+            let mut keep_polling = false;
+            let _ = cx.update(|cx| {
+                let _ = this.update(cx, |app, cx| {
+                    keep_polling =
+                        matches!(app.current_view, AppView::PermissionsWizardView { .. });
+                    if keep_polling && script_kit_gpui::is_main_window_visible() {
+                        cx.notify();
+                    }
                 });
+            });
 
-                if !keep_polling {
-                    break;
-                }
+            if !keep_polling {
+                break;
             }
         })
         .detach();
@@ -142,11 +140,7 @@ impl ScriptListApp {
         }
 
         if crate::permissions_wizard::request_permission(kind) == PermissionStatus::Authorized {
-            self.show_hud(
-                format!("{} granted", kind.name()),
-                Some(HUD_SHORT_MS),
-                cx,
-            );
+            self.show_hud(format!("{} granted", kind.name()), Some(HUD_SHORT_MS), cx);
             cx.notify();
             return;
         }
@@ -263,13 +257,12 @@ impl ScriptListApp {
                     return;
                 }
 
-                let current_selected = if let AppView::PermissionsWizardView { selected_index } =
-                    &this.current_view
-                {
-                    *selected_index
-                } else {
-                    return;
-                };
+                let current_selected =
+                    if let AppView::PermissionsWizardView { selected_index } = &this.current_view {
+                        *selected_index
+                    } else {
+                        return;
+                    };
 
                 let row_count = crate::permissions_wizard::PermissionKind::all().len();
 
@@ -396,20 +389,20 @@ impl ScriptListApp {
             .collect();
 
         let menu_def = self.current_main_menu_theme.def();
-        let frame = crate::components::main_view_chrome::main_view_content_frame(
-            menu_def,
-            design_spacing,
-        );
-        let intro = div().w_full().child(crate::components::render_info_state_full_width_panel(
-            crate::components::permission_onboarding_intro_spec(
-                granted_count,
-                row_count,
-                all_required_granted,
-            ),
-            &self.theme,
-            frame.text_inset_x(),
-            cx,
-        ));
+        let frame =
+            crate::components::main_view_chrome::main_view_content_frame(menu_def, design_spacing);
+        let intro = div()
+            .w_full()
+            .child(crate::components::render_info_state_full_width_panel(
+                crate::components::permission_onboarding_intro_spec(
+                    granted_count,
+                    row_count,
+                    all_required_granted,
+                ),
+                &self.theme,
+                frame.text_inset_x(),
+                cx,
+            ));
 
         let title = crate::components::main_view_chrome::render_main_view_text_plane(
             frame,
@@ -437,44 +430,35 @@ impl ScriptListApp {
 
         let footer_hints: Vec<gpui::SharedString> =
             crate::permissions_wizard::PermissionsWizardActions::ALL
-            .iter()
-            .map(|action| gpui::SharedString::from(format!("{} {}", action.key, action.label)))
-            .collect();
+                .iter()
+                .map(|action| gpui::SharedString::from(format!("{} {}", action.key, action.label)))
+                .collect();
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
             footer_hints,
             None,
         ));
 
-        let shell = menu_def.shell;
-
-        let header_spacer = div().into_any_element();
-
-        crate::components::main_view_chrome::render_main_view_chrome_without_header(
-            crate::components::main_view_chrome::render_main_view_shell()
-                .text_color(rgb(chrome.text_primary_hex))
-                .font_family(self.theme_font_family())
-                .key_context("permissions_wizard")
-                .track_focus(&self.focus_handle)
-                .on_key_down(handle_key),
-            &self.theme,
-            menu_def,
-            crate::components::main_view_chrome::MainViewChrome {
-                header: crate::components::main_view_chrome::MainViewHeaderChrome {
-                    context: None,
-                    input: header_spacer,
-                    padding_x: 0.0,
-                    padding_y: 0.0,
-                    gap: 0.0,
-                },
-                divider: crate::components::main_view_chrome::MainViewDividerChrome {
-                    margin_x: shell.divider_margin_x,
-                    height: shell.divider_height,
-                    visible: false,
-                },
-                main: content,
-                footer,
-                overlays: Vec::new(),
-            },
-        )
+        // `PermissionsWizardView` is RootContextOnly: render_impl owns the
+        // one MainViewShell/Header/Main stack. This renderer contributes only
+        // the body and footer safe area, avoiding nested shared stable IDs.
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .text_color(rgb(chrome.text_primary_hex))
+            .font_family(self.theme_font_family())
+            .key_context("permissions_wizard")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .w_full()
+                    .overflow_hidden()
+                    .child(content),
+            )
+            .when_some(footer, |surface, footer| surface.child(footer))
+            .into_any_element()
     }
 }

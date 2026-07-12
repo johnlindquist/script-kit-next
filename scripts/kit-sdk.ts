@@ -597,6 +597,16 @@ export interface LayoutComponentInfo {
   parent?: string;
   /** Child component names */
   children?: string[];
+  /** How bounds were obtained; `paint-time` identifies real rendered-frame geometry. */
+  measurementProvenance?: string;
+  /** Coordinate system for bounds; fidelity measurements use window logical pixels. */
+  coordinateSpace?: "window" | "screen" | string;
+  /** Portion of bounds that survives the paint-time ancestor clip chain. */
+  visibleBounds?: LayoutBounds;
+  /** Paint-time ancestor content mask used to derive visibleBounds. */
+  clipBounds?: LayoutBounds;
+  /** Monotonic identity of the completed rendered frame supplying these bounds. */
+  measurementFrameGeneration?: number;
   /**
    * Human-readable explanation of why this component has its current size/position.
    * Example: "Height is 45px = padding(8) + content(28) + padding(8) + divider(1)"

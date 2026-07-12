@@ -1,0 +1,136 @@
+/* Settings screen: stage layout, browser-only emulator calibration, and the
+ * settings-hub-specific anatomy on top of the shared main-menu chrome.
+ *
+ * Rust anatomy this mirrors (src/render_builtins/settings.rs::render_settings
+ * + src/render_builtins/settings_contract.rs):
+ *   InfoBarBase shell: header (padding 2/4, gap 2) = context zone 22
+ *     + search shell 26. The shell itself carries NO padding: the flex-1
+ *     body region owns pl text_inset_x / pr text_inset_x·0.5, and trailing
+ *     children (the count label) sit OUTSIDE it with their own right inset
+ *     (render_main_view_input_shell).
+ *   Count label ("12 settings"): shared render_builtin_main_input_count_label
+ *     — text_sm 14px, gpui default line height 23px, NORMAL 400 weight
+ *     (must NOT inherit the search body's 430), right inset =
+ *     search.text_inset_x, color = chrome text hint. Owned by the shared
+ *     builtin main-input contract (--sk-builtin-main-input-count-*).
+ *   divider: visible false (divider_height 0)
+ *   content column padded by DesignSpacing.padding_xs (--sk-spacing-padding-xs)
+ *     top+bottom, then one persistent first section header ("Settings" /
+ *     "Results") in the LEGACY 26px slot with 6px top padding
+ *     (render_section_header uses default_main_menu(), NOT the themed 28/4 —
+ *     conflict settingsSection.firstSlotLegacyVsThemed), then 44px ListItem
+ *     rows in a tracked scroll column.
+ *   Rows paint ICONLESS: the authored lucide hints never resolve through
+ *     IconKind::from_icon_hint → icon_name_from_str, and ListItem does not
+ *     mount the icon slot for icon: None — names start at the 18px inner
+ *     row padding origin (conflict settingsRows.authoredIconHintsVsResolvedNone).
+ *   Footer: GPUI reserves the 32px footer RAIL (native-footer spacer); the
+ *     36px AppKit host is a SEPARATE overlay window. The flex reservation
+ *     stays 32 so the list viewport matches the GPUI-only capture.
+ *
+ * Every visual value resolves through generated --sk-* tokens; settings has
+ * NO local alias hooks (2026-07-11 Oracle correction).
+ */
+
+:root {
+  --sk-emulator-menu-blur: 32px;
+  /* Non-linear menu-material response approximated with a faint neutral wash. */
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 28 31 / 0.42),
+    rgb(20 20 23 / 0.42)
+  );
+  --sk-emulator-desktop: radial-gradient(
+      1200px 700px at 20% 10%,
+      rgb(64 46 88 / 0.9),
+      transparent 60%
+    ),
+    radial-gradient(
+      1000px 800px at 85% 80%,
+      rgb(26 58 74 / 0.9),
+      transparent 55%
+    ),
+    linear-gradient(160deg, rgb(24 22 30), rgb(12 12 16));
+}
+
+body {
+  margin: 0;
+}
+
+/* Synthetic desktop backdrop — deterministic fixture for the material to
+ * sample. The reference capture samples the live desktop; the material
+ * region is non-blocking in comparisons. */
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-desktop);
+}
+
+/* The Rust input shell has no padding of its own: the flex-1 body carries
+ * pl text_inset_x / pr text_inset_x·0.5, and trailing children (the count
+ * label) sit outside it with their own right inset. The shared
+ * .sk-search-shell bakes the body insets into the shell, so zero them here
+ * and restore them on the explicit body element — this preserves the real
+ * clipping boundary for long filter text. */
+.sk-window--settings .sk-search-shell {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sk-window--settings .sk-search-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding-left: var(--sk-main-menu-search-text-inset-x);
+  padding-right: calc(var(--sk-main-menu-search-text-inset-x) / 2);
+}
+
+/* Shared builtin main-input count label: own resolved typography — it must
+ * not inherit the search shell's font-size 20 / weight 430. */
+.sk-settings-count {
+  flex: none;
+  white-space: nowrap;
+  padding-right: var(--sk-main-menu-search-text-inset-x);
+  color: var(--sk-text-hint);
+  font-size: var(--sk-builtin-main-input-count-font-size);
+  line-height: var(--sk-builtin-main-input-count-line-height);
+  font-weight: var(--sk-builtin-main-input-count-font-weight);
+}
+
+/* render_settings wraps the section header + row stack in a column padded
+ * by DesignSpacing.padding_xs top and bottom (canonical spacing token, not
+ * a settings alias). */
+.sk-settings-list {
+  padding-block: var(--sk-spacing-padding-xs);
+}
+
+/* render_section_header paints the LEGACY default_main_menu() first-section
+ * branch — 26px slot / 6px top padding — NOT the themed InfoBarBase 28/4
+ * the shared rule uses (settingsSection.firstSlotLegacyVsThemed). */
+.sk-window--settings .sk-section-slot[data-first="true"] {
+  height: var(--sk-list-item-default-first-section-slot-height);
+}
+
+.sk-window--settings .sk-section-slot[data-first="true"] .sk-section-header {
+  padding-top: var(--sk-list-item-default-first-section-padding-top);
+}
+
+/* GPUI reserves the 32px footer RAIL in its own layout
+ * (render_native_main_window_footer_spacer); the 36px AppKit host is a
+ * separate overlay window. Keep the flex reservation at 32 so the list
+ * viewport matches the GPUI-only capture, and draw the native host as a
+ * bottom-anchored overlay that cannot steal viewport height. */
+.sk-settings-footer-reservation {
+  position: relative;
+  width: 100%;
+  height: var(--sk-footer-rail-height);
+  flex: none;
+}
+
+.sk-settings-footer-reservation .sk-footer-host {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}

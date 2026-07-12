@@ -1361,10 +1361,11 @@ impl ScriptListApp {
     pub(crate) fn handle_stdin_protocol_message(
         &mut self,
         message: crate::protocol::Message,
+        window: &gpui::Window,
         cx: &mut Context<Self>,
     ) {
         if let Some(prompt_message) = prompt_message_from_protocol_message(message.clone()) {
-            self.handle_prompt_message(prompt_message, cx);
+            self.handle_prompt_message_in_window(prompt_message, window, cx);
             return;
         }
 
@@ -1944,7 +1945,6 @@ impl ScriptListApp {
         }
     }
 
-
     fn show_prompt_coming_soon_toast(&mut self, prompt_name: &str, cx: &mut Context<Self>) {
         let toast = Toast::warning(prompt_coming_soon_warning(prompt_name), &self.theme)
             .duration_ms(Some(TOAST_WARNING_MS));
@@ -1952,9 +1952,33 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Handle a prompt message from the script
-    #[tracing::instrument(skip(self, cx), fields(msg_type = ?msg))]
+    /// Handle a prompt message from the script.
     fn handle_prompt_message(&mut self, msg: PromptMessage, cx: &mut Context<Self>) {
+        self.handle_prompt_message_with_window(msg, None, cx);
+    }
+
+    /// Handle a prompt message while the caller already owns the main window update.
+    ///
+    /// Stdin protocol requests run inside `window_for_stdin.update`, so attempting
+    /// to re-enter that window through its global handle fails. Carrying the live
+    /// window reference lets layout receipts read the completed paint frame without
+    /// a nested update or an asynchronous response race.
+    fn handle_prompt_message_in_window(
+        &mut self,
+        msg: PromptMessage,
+        window: &gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.handle_prompt_message_with_window(msg, Some(window), cx);
+    }
+
+    #[tracing::instrument(skip(self, current_window, cx), fields(msg_type = ?msg))]
+    fn handle_prompt_message_with_window(
+        &mut self,
+        msg: PromptMessage,
+        current_window: Option<&gpui::Window>,
+        cx: &mut Context<Self>,
+    ) {
         let route = classify_prompt_message_route(&msg);
         tracing::debug!(target: "prompt_handler", ?route, "Routing prompt message");
 
@@ -3010,13 +3034,14 @@ impl ScriptListApp {
                                 None,
                                 self.filter_text.clone(),
                                 // choiceCount MUST sum every collection
-                                // passed to fuzzy_search_unified_all_with_skills
+                                // passed to fuzzy_search_unified_all_with_skills_and_flows
                                 // (see tests/scriptlist_choicecount_includes_skills_contract.rs).
                                 self.scripts.len()
                                     + self.scriptlets.len()
                                     + self.builtin_entries.len()
                                     + self.apps.len()
-                                    + self.skills.len(),
+                                    + self.skills.len()
+                                    + self.flow_desk_corpus().len(),
                                 filtered_len,
                                 self.selected_index as i32,
                                 selected_value,
@@ -3891,6 +3916,35 @@ impl ScriptListApp {
                             visible_count,
                             *selected_index as i32,
                             selected_value,
+                        )
+                    }
+                    AppView::TipsView {
+                        filter,
+                        selected_index,
+                        entries,
+                    } => {
+                        let query = filter.trim().to_lowercase();
+                        let visible: Vec<_> = entries
+                            .iter()
+                            .filter(|tip| {
+                                query.is_empty()
+                                    || tip.title.to_lowercase().contains(&query)
+                                    || tip.hint.to_lowercase().contains(&query)
+                                    || tip
+                                        .keywords
+                                        .iter()
+                                        .any(|keyword| keyword.to_lowercase().contains(&query))
+                            })
+                            .collect();
+                        (
+                            "tips".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            entries.len(),
+                            visible.len(),
+                            *selected_index as i32,
+                            visible.get(*selected_index).map(|tip| tip.title.clone()),
                         )
                     }
                     AppView::ScriptTemplateCatalogView {
@@ -4962,7 +5016,39 @@ impl ScriptListApp {
                 }
 
                 // Build layout info from current window state
-                let layout_info = self.build_layout_info(cx);
+                let actual_window_size = current_window
+                    .map(|window| {
+                        let size = window.viewport_size();
+                        (f32::from(size.width), f32::from(size.height))
+                    })
+                    .or_else(|| {
+                        crate::windows::list_automation_windows()
+                            .into_iter()
+                            .find(|window| window.id == "main")
+                            .and_then(|window| window.bounds)
+                            .map(|bounds| (bounds.width as f32, bounds.height as f32))
+                    });
+                let mut layout_info = self.build_layout_info(actual_window_size, cx);
+                if let Some(window) = current_window {
+                    Self::append_paint_measurements(&mut layout_info, window);
+                } else if let Some(main_window) = crate::get_main_window_handle() {
+                    if let Err(error) = main_window.update(cx, |_root, window, _cx| {
+                        Self::append_paint_measurements(&mut layout_info, window);
+                    }) {
+                        tracing::warn!(
+                            target: "script_kit::automation",
+                            request_id = %request_id,
+                            error = %error,
+                            "getLayoutInfo: paint measurement window update failed"
+                        );
+                    }
+                } else {
+                    tracing::warn!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        "getLayoutInfo: main window unavailable for paint measurements"
+                    );
+                }
 
                 // Create the response
                 let response = Message::layout_info_result(request_id.clone(), layout_info);
@@ -8848,7 +8934,8 @@ impl ScriptListApp {
                     .unwrap_or_else(|| "Press keys".to_string());
                 let entity = cx.new(move |cx| {
                     let mut recorder =
-                        crate::components::shortcut_recorder::ShortcutRecorder::new(cx, theme);
+                        crate::components::shortcut_recorder::ShortcutRecorder::new(cx, theme)
+                            .with_capture_only(true);
                     recorder.set_command_name(Some(title));
                     recorder.set_command_description(Some(
                         "Transient capture for SDK hotkey(); does not save or register."
@@ -9480,6 +9567,7 @@ impl ScriptListApp {
             crate::footer_popup::FooterAction::PasteResponse => "pasteResponse",
             crate::footer_popup::FooterAction::Cwd => "cwd",
             crate::footer_popup::FooterAction::AgentModel => "agentModel",
+            crate::footer_popup::FooterAction::Tips => "tips",
         }
         .to_string()
     }
@@ -9536,6 +9624,7 @@ impl ScriptListApp {
                     model_name: info.model_name.clone(),
                     profile_name: info.profile_name.clone(),
                     icon_token: info.icon_token.clone(),
+                    keycap: info.keycap.clone(),
                     action: info.action.map(Self::footer_action_name),
                     selected: info.selected,
                     cwd_chip: info.cwd_chip.as_ref().map(|chip| {

@@ -280,6 +280,11 @@ enum AppView {
         selected_index: usize,
         entries: std::sync::Arc<[crate::mcp_resources::SdkFunctionRef]>,
     },
+    TipsView {
+        filter: String,
+        selected_index: usize,
+        entries: Vec<script_kit_gpui::tips::Tip>,
+    },
     /// Browseable starter-template catalog sourced from the same data that
     /// powers `kit://script-templates`. Enter transitions into the naming
     /// prompt with the selected template threaded through so
@@ -396,9 +401,7 @@ enum AppView {
         entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
     },
     /// Today's brain day page in the main launcher window (same frame as ScriptList).
-    DayPage {
-        entity: Entity<DayPageView>,
-    },
+    DayPage { entity: Entity<DayPageView> },
     /// In-window confirm state — replaces the popup dialog when the main window
     /// is the active context. Restored to `previous` when the user confirms or
     /// cancels via Esc / Enter / Tab + ↵ / footer Apply / Close.
@@ -408,6 +411,55 @@ enum AppView {
         focused_button: ConfirmFocusedButton,
         previous: Box<AppView>,
     },
+}
+
+/// Exhaustive host-level header/input ownership for every main-window view.
+///
+/// This is deliberately an enum instead of independent booleans: a new
+/// `AppView` must choose one valid chrome anatomy before it can compile.
+/// Surface renderers may own their body input, but only the canonical input
+/// variants may reserve the shared `MainViewInput` lane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MainViewHeaderInputPolicy {
+    /// The view renders the shared context zone and one-line main input.
+    ViewOwnedCanonicalInput,
+    /// The view renders the shared context zone and a multiline input whose
+    /// first line exactly matches the canonical one-line input geometry.
+    /// Agent Chat may add its trailing Send action inside that shared shell;
+    /// the action never changes the shell, leading inset, or text baseline.
+    ViewOwnedCanonicalMultilineInput,
+    /// The view renders only the shared context zone. Day Page intentionally
+    /// keeps its editor in the main slot instead of pretending it is a search
+    /// input.
+    ViewOwnedContextOnly,
+    /// The view deliberately owns a compact, non-canonical full-window shell.
+    /// Focused Text Mini's input row is only 44px tall, so it cannot
+    /// contain the canonical 58px header anatomy without defeating its purpose.
+    /// It must expose its own honest layout receipt and reserve any native
+    /// footer safe area instead of emitting fake MainViewHeader/Input nodes.
+    ViewOwnedIntentionalCompact,
+    /// The root renders only the shared context zone above a legacy, prompt,
+    /// or child surface whose editable controls belong to its body.
+    RootContextOnly,
+}
+
+impl MainViewHeaderInputPolicy {
+    pub(crate) const fn view_owns_main_window_shell(self) -> bool {
+        matches!(
+            self,
+            Self::ViewOwnedCanonicalInput
+                | Self::ViewOwnedCanonicalMultilineInput
+                | Self::ViewOwnedContextOnly
+                | Self::ViewOwnedIntentionalCompact
+        )
+    }
+
+    pub(crate) const fn has_main_input(self) -> bool {
+        matches!(
+            self,
+            Self::ViewOwnedCanonicalInput | Self::ViewOwnedCanonicalMultilineInput
+        )
+    }
 }
 
 /// Which button has Tab focus inside an in-window [`AppView::ConfirmPrompt`].
@@ -481,6 +533,7 @@ pub(crate) enum SurfaceKind {
     EmojiPicker,
     Feedback,
     SdkReference,
+    Tips,
     ScriptTemplateCatalog,
     AgentChatHistory,
     AttachmentPortalBrowser,
@@ -880,6 +933,7 @@ impl AppView {
             AppView::CreationFeedback { .. } => "CreationFeedback",
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView",
             AppView::SdkReferenceView { .. } => "SdkReferenceView",
+            AppView::TipsView { .. } => "TipsView",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
             AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
@@ -960,6 +1014,7 @@ impl AppView {
                 SurfaceKind::Feedback
             }
             AppView::SdkReferenceView { .. } => SurfaceKind::SdkReference,
+            AppView::TipsView { .. } => SurfaceKind::Tips,
             AppView::ScriptTemplateCatalogView { .. } => SurfaceKind::ScriptTemplateCatalog,
             AppView::AgentChatHistoryView { .. } => SurfaceKind::AgentChatHistory,
             AppView::BrowserHistoryView { .. }
@@ -976,44 +1031,96 @@ impl AppView {
         self.surface_kind().surface_contract()
     }
 
-    /// True when the view renderer already owns the shared main-view header.
+    /// Exhaustive main-window header/input contract for this view.
     ///
-    /// Root-level wrapping uses this to add the shared cwd/model header to
-    /// legacy surfaces without duplicating it on renderers that already use
-    /// `main_view_chrome`.
-    pub(crate) fn uses_shared_main_view_header(&self) -> bool {
-        matches!(
-            self,
+    /// Do not add a wildcard arm: new views must declare whether they own a
+    /// canonical input, the canonical multiline composer, or a context-only
+    /// exception. This compiler-enforced inventory replaces drift-prone lists
+    /// in render and automation layout code.
+    pub(crate) fn main_view_header_input_policy(&self) -> MainViewHeaderInputPolicy {
+        match self {
             AppView::ScriptList
-                | AppView::FileSearchView { .. }
-                | AppView::ClipboardHistoryView { .. }
-                | AppView::ProfileSearchView { .. }
-                | AppView::ThemeChooserView { .. }
-                | AppView::AppLauncherView { .. }
-                | AppView::WindowSwitcherView { .. }
-                | AppView::BrowserTabsView { .. }
-                | AppView::DesignGalleryView { .. }
-                | AppView::FooterGalleryView { .. }
-                | AppView::EmojiPickerView { .. }
-                | AppView::BrowseKitsView { .. }
-                | AppView::MigrateV1View { .. }
-                | AppView::InstalledKitsView { .. }
-                | AppView::ProcessManagerView { .. }
-                | AppView::FlowUxView { .. }
-                | AppView::FlowSessionView { .. }
-                | AppView::CurrentAppCommandsView { .. }
-                | AppView::SearchAiPresetsView { .. }
-                | AppView::SettingsView { .. }
-                | AppView::FavoritesBrowseView { .. }
-                | AppView::AgentChatHistoryView { .. }
-                | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
-                | AppView::NotesBrowseView { .. }
-                | AppView::SdkReferenceView { .. }
-                | AppView::ScriptTemplateCatalogView { .. }
-                | AppView::AgentChatView { .. }
-                | AppView::DayPage { .. }
-        )
+            | AppView::ClipboardHistoryView { .. }
+            | AppView::AppLauncherView { .. }
+            | AppView::WindowSwitcherView { .. }
+            | AppView::BrowserTabsView { .. }
+            | AppView::DesignGalleryView { .. }
+            | AppView::FooterGalleryView { .. }
+            | AppView::FileSearchView { .. }
+            | AppView::ProfileSearchView { .. }
+            | AppView::ThemeChooserView { .. }
+            | AppView::EmojiPickerView { .. }
+            | AppView::SdkReferenceView { .. }
+            | AppView::TipsView { .. }
+            | AppView::ScriptTemplateCatalogView { .. }
+            | AppView::BrowseKitsView { .. }
+            | AppView::MigrateV1View { .. }
+            | AppView::InstalledKitsView { .. }
+            | AppView::ProcessManagerView { .. }
+            | AppView::FlowUxView { .. }
+            | AppView::FlowSessionView { .. }
+            | AppView::SearchAiPresetsView { .. }
+            | AppView::SettingsView { .. }
+            | AppView::FavoritesBrowseView { .. }
+            | AppView::CurrentAppCommandsView { .. }
+            | AppView::AgentChatHistoryView { .. }
+            | AppView::BrowserHistoryView { .. }
+            | AppView::DictationHistoryView { .. }
+            | AppView::NotesBrowseView { .. } => MainViewHeaderInputPolicy::ViewOwnedCanonicalInput,
+            AppView::AgentChatView { .. } => {
+                MainViewHeaderInputPolicy::ViewOwnedCanonicalMultilineInput
+            }
+            AppView::DayPage { .. } => MainViewHeaderInputPolicy::ViewOwnedContextOnly,
+            AppView::About { .. }
+            | AppView::ActionsDialog
+            | AppView::ArgPrompt { .. }
+            | AppView::DivPrompt { .. }
+            | AppView::FormPrompt { .. }
+            | AppView::TermPrompt { .. }
+            | AppView::EditorPrompt { .. }
+            | AppView::SelectPrompt { .. }
+            | AppView::PathPrompt { .. }
+            | AppView::EnvPrompt { .. }
+            | AppView::DropPrompt { .. }
+            | AppView::TemplatePrompt { .. }
+            | AppView::HotkeyPrompt { .. }
+            | AppView::ChatPrompt { .. }
+            | AppView::MiniPrompt { .. }
+            | AppView::MicroPrompt { .. }
+            | AppView::NamingPrompt { .. }
+            | AppView::CreateAiPresetView { .. }
+            | AppView::WebcamView { .. }
+            | AppView::NonListStatesView { .. }
+            | AppView::ScratchPadView { .. }
+            | AppView::QuickTerminalView { .. }
+            | AppView::CreationFeedback { .. }
+            | AppView::ScriptIssuesView { .. }
+            | AppView::PermissionsWizardView { .. }
+            | AppView::ConfirmPrompt { .. } => MainViewHeaderInputPolicy::RootContextOnly,
+            #[cfg(feature = "storybook")]
+            AppView::DesignExplorerView { .. } => MainViewHeaderInputPolicy::RootContextOnly,
+        }
+    }
+
+    /// Resolve stateful sub-variants that cannot be classified from the
+    /// `AppView` discriminant alone. Standard Agent Chat owns the canonical
+    /// multiline header; Focused Text Mini intentionally owns compact chrome.
+    pub(crate) fn resolved_main_view_header_input_policy(
+        &self,
+        cx: &gpui::App,
+    ) -> MainViewHeaderInputPolicy {
+        match self {
+            AppView::AgentChatView { entity } if entity.read(cx).is_focused_text_mini() => {
+                MainViewHeaderInputPolicy::ViewOwnedIntentionalCompact
+            }
+            _ => self.main_view_header_input_policy(),
+        }
+    }
+
+    /// True when the active view renderer owns the entire main-window shell.
+    pub(crate) fn uses_view_owned_main_window_shell(&self, cx: &gpui::App) -> bool {
+        self.resolved_main_view_header_input_policy(cx)
+            .view_owns_main_window_shell()
     }
 
     /// Dismiss policy for the active top-level launcher view.
@@ -1078,6 +1185,12 @@ impl AppView {
             AppView::InstalledKitsView { .. } => Some("kit_store_installed"),
             AppView::FavoritesBrowseView { .. } => Some("favorites"),
             AppView::ConfirmPrompt { .. } => Some("confirm_prompt"),
+            AppView::TipsView { .. } => Some("tips"),
+            // Legacy GPUI-footer surfaces. Every NEW main-window view must
+            // return Some(surface) so it renders the shared native footer
+            // buttons instead of a hand-rolled hint strip;
+            // `main_window_views_without_native_footer_are_ratcheted`
+            // (ui_window_tests.rs) shrink-locks this list.
             AppView::About { .. }
             | AppView::ActionsDialog
             | AppView::TermPrompt { .. }
@@ -1585,6 +1698,20 @@ impl SurfaceKind {
                 "scriptList",
             ),
             SurfaceKind::SdkReference => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    RequiredSplitPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
+                explicit,
+                "scriptList",
+            ),
+            SurfaceKind::Tips => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,

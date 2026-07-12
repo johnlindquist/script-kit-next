@@ -330,6 +330,7 @@ impl FlowManagerApp {
                             EngagementMode::ManagerFocused,
                             Vec::new(),
                             std::time::Instant::now(),
+                            false,
                         );
                         self.zone = ManagerZone::Runs;
                         cx.notify();
@@ -374,6 +375,7 @@ impl FlowManagerApp {
         let phase_icon = match run.phase {
             RunPhase::Starting => "◌",
             RunPhase::Running => "●",
+            RunPhase::Cancelling => "◍",
             RunPhase::Succeeded => "✓",
             RunPhase::Failed => "✕",
             RunPhase::Cancelled => "⊘",

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings — mockup vs. real app</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #111; color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 24px; gap: 12px;
+  }
+  .comparison { display: grid; gap: 12px; }
+  .stage { position: relative; width: 750px; height: 480px; }
+  .stage iframe, .stage img {
+    position: absolute; inset: 0; width: 750px; height: 480px; border: 0;
+  }
+  .reference { opacity: var(--reference-opacity, 0.5); pointer-events: none; }
+  .stage[data-mode="difference"] .reference { opacity: 1; mix-blend-mode: difference; }
+  .controls { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  input[type="range"] { flex: 1; }
+  button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; }
+  .hint { color: #888; font-size: 12px; max-width: 750px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="comparison">
+  <div class="stage" id="stage" data-mode="overlay">
+    <iframe title="HTML mockup" src="./index.html"></iframe>
+    <img class="reference" id="reference" src="./reference/settings@2x.png" alt="">
+  </div>
+  <div class="controls">
+    <label for="opacity">Reference opacity</label>
+    <input id="opacity" type="range" min="0" max="1" step="0.01" value="0.5">
+    <button id="mode" type="button">Difference</button>
+  </div>
+  <p class="hint">
+    <b>D</b> toggles difference blend, <b>Space</b> blinks the reference.
+    Vibrancy, starfield phase, glyph rasterization, the context-zone pill
+    content (fixture-variable capture state), and the native footer overlay
+    (the GPUI capture shows only the empty 32px rail reservation) are
+    known-divergence. The fixture matches the 2026-07-11 capture receipt
+    exactly: 12 rows / "12 settings" (customPositionsAtCensus=true; "Reset
+    Window Positions" sits below the fold). Header block, the 26px legacy
+    "Settings" separator slot (6px top padding — NOT the themed 28/4),
+    44px row boxes, iconless 18px name origins, selected-row fill, and the
+    count label (14px / 23px line / weight 400, right inset 16) must
+    register within ±1pt.
+  </p>
+</div>
+<script>
+  const stage = document.querySelector("#stage");
+  const opacity = document.querySelector("#opacity");
+  const mode = document.querySelector("#mode");
+  const reference = document.querySelector("#reference");
+  opacity.addEventListener("input", () => {
+    stage.style.setProperty("--reference-opacity", opacity.value);
+  });
+  mode.addEventListener("click", () => {
+    const difference = stage.dataset.mode === "difference";
+    stage.dataset.mode = difference ? "overlay" : "difference";
+    mode.textContent = difference ? "Difference" : "Overlay";
+  });
+  addEventListener("keydown", (event) => {
+    if (event.key.toLowerCase() === "d") mode.click();
+    if (event.key === " ") {
+      event.preventDefault();
+      reference.style.visibility =
+        reference.style.visibility === "hidden" ? "visible" : "hidden";
+    }
+  });
+</script>
+</body>
+</html>

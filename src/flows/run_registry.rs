@@ -62,6 +62,16 @@ pub struct FlowRun {
     /// Chronologically interleaved stdout+stderr (stderr lines prefixed
     /// "stderr· ") so late errors cannot disappear behind stdout.
     pub merged_tail: OutputTail,
+    /// Append-only stdout capture for conversation turns. The bounded tails
+    /// front-evict, which breaks byte cursors (2026-07-11 audit P0); this
+    /// buffer never evicts — it FREEZES at
+    /// `model::CONVERSATION_CAPTURE_MAX_BYTES` and sets
+    /// `conversation_truncated` instead. `None` for bare runs.
+    pub conversation_stdout: Option<String>,
+    pub conversation_truncated: bool,
+    /// True once a terminal-phase toast has been surfaced for this run
+    /// (`take_unnotified_terminal`), so the UI tick can never double-notify.
+    pub notified: bool,
     pub steps: Vec<(String, StepState)>,
     pub timings: RunTimings,
     pub launched_at: Instant,
@@ -93,6 +103,19 @@ impl FlowRun {
             .or_else(|| self.stdout_tail.last_line())
             .or_else(|| self.stderr_tail.last_line())
     }
+}
+
+/// Lightweight row-facing view of one run (see `run_summaries`).
+#[derive(Debug, Clone)]
+pub struct RunSummary {
+    pub local_id: u64,
+    pub flow_id: String,
+    pub flow_name: String,
+    pub phase: RunPhase,
+    pub display_status: String,
+    pub elapsed_ms: u64,
+    pub last_output_line: Option<String>,
+    pub is_conversation: bool,
 }
 
 #[derive(Default)]
@@ -163,6 +186,9 @@ impl FlowRunRegistry {
             stdout_tail: OutputTail::default(),
             stderr_tail: OutputTail::default(),
             merged_tail: OutputTail::default(),
+            conversation_stdout: None,
+            conversation_truncated: false,
+            notified: false,
             steps: Vec::new(),
             timings: RunTimings::default(),
             launched_at: Instant::now(),
@@ -248,6 +274,20 @@ impl FlowRunRegistry {
                     super::model::OutputChannel::Stdout => {
                         run.stdout_tail.push_text(text);
                         run.merged_tail.push_text(text);
+                        // Conversation capture is append-only and freezes at
+                        // its cap (no partial appends — cursor math must
+                        // never land inside a multibyte character).
+                        if !run.conversation_truncated {
+                            if let Some(capture) = run.conversation_stdout.as_mut() {
+                                if capture.len() + text.len()
+                                    <= super::model::CONVERSATION_CAPTURE_MAX_BYTES
+                                {
+                                    capture.push_str(text);
+                                } else {
+                                    run.conversation_truncated = true;
+                                }
+                            }
+                        }
                     }
                     super::model::OutputChannel::Stderr => {
                         run.stderr_tail.push_text(text);
@@ -284,11 +324,13 @@ impl FlowRunRegistry {
                 exit_code,
                 duration_ms,
             } => {
-                // An app-side cancel marks Cancelled before the process dies;
-                // the SIGTERM'd engine then surfaces as run.error/run.completed.
-                // Terminal phases never regress (a cancelled run must not
-                // flip to Failed because its engine exited 143).
-                if !run.phase.is_terminal() {
+                // A cancel in flight resolves to Cancelled regardless of how
+                // the SIGTERM'd process reports its death (an engine dying
+                // 143 is the cancel outcome, not a new failure). Exit code
+                // and duration are still recorded for transparency.
+                if run.phase == RunPhase::Cancelling {
+                    run.phase = RunPhase::Cancelled;
+                } else if !run.phase.is_terminal() {
                     run.phase = if *exit_code == 0 {
                         RunPhase::Succeeded
                     } else {
@@ -296,14 +338,16 @@ impl FlowRunRegistry {
                     };
                 }
                 run.exit_code = Some(*exit_code);
-                run.duration_ms = Some(*duration_ms);
+                run.duration_ms = *duration_ms;
             }
             RunEvent::RunError {
                 exit_code,
                 message,
                 duration_ms,
             } => {
-                if !run.phase.is_terminal() {
+                if run.phase == RunPhase::Cancelling {
+                    run.phase = RunPhase::Cancelled;
+                } else if !run.phase.is_terminal() {
                     run.phase = RunPhase::Failed;
                     run.error_message = Some(message.clone());
                 }
@@ -346,6 +390,66 @@ impl FlowRunRegistry {
         self.bump_and_notify(&mut state);
     }
 
+    /// Cancel was REQUESTED: the run enters the non-terminal `Cancelling`
+    /// phase. `Cancelled` is only claimed once the outcome is known — via
+    /// the authoritative `run.cancelled` event, the reader-thread EOF
+    /// fallback, or the kill-escalation watcher (2026-07-11 audit: the old
+    /// mark-Cancelled-before-SIGTERM made the receipt a lie and locked out
+    /// later corrective events).
+    pub fn mark_cancelling(&self, local_id: u64) {
+        let mut state = self.state.lock();
+        if let Some(run) = state.runs.get_mut(&local_id) {
+            if !run.phase.is_terminal() {
+                run.phase = RunPhase::Cancelling;
+            }
+        }
+        self.bump_and_notify(&mut state);
+    }
+
+    /// Turn on the append-only stdout capture for a conversation-turn run.
+    /// Must be called before the run's process spawns (launch_flow does).
+    pub fn enable_conversation_capture(&self, local_id: u64) {
+        let mut state = self.state.lock();
+        if let Some(run) = state.runs.get_mut(&local_id) {
+            if run.conversation_stdout.is_none() {
+                run.conversation_stdout = Some(String::new());
+            }
+        }
+    }
+
+    /// Raw (non-protocol) stderr from the `md` child itself — out-of-band
+    /// diagnostics the protocol allows on stderr. Retained on the tails so a
+    /// crashing flow leaves a visible trace instead of vanishing.
+    pub fn push_raw_stderr(&self, local_id: u64, line: &str) {
+        let mut state = self.state.lock();
+        let Some(run) = state.runs.get_mut(&local_id) else {
+            return;
+        };
+        if run.phase.is_terminal() {
+            return;
+        }
+        run.stderr_tail.push_text(&format!("{line}\n"));
+        run.merged_tail.push_text(&format!("stderr· {line}\n"));
+        self.bump_and_notify(&mut state);
+    }
+
+    /// Terminal runs that have not yet been surfaced to the user, marking
+    /// them notified under the lock (exactly-once). Conversation-turn runs
+    /// are excluded — their outcome settles inside the session transcript.
+    pub fn take_unnotified_terminal(&self) -> Vec<FlowRun> {
+        let mut state = self.state.lock();
+        let mut ready: Vec<FlowRun> = Vec::new();
+        for id in state.order.clone() {
+            if let Some(run) = state.runs.get_mut(&id) {
+                if run.phase.is_terminal() && !run.notified && run.conversation_stdout.is_none() {
+                    run.notified = true;
+                    ready.push(run.clone());
+                }
+            }
+        }
+        ready
+    }
+
     pub fn record_launch_ack(&self, local_id: u64, ack_ms: u64) {
         let mut state = self.state.lock();
         if let Some(run) = state.runs.get_mut(&local_id) {
@@ -366,10 +470,12 @@ impl FlowRunRegistry {
         self.bump_and_notify(&mut state);
     }
 
-    /// Record the app-spawned process-group leader. Immutable once set, and
-    /// never flips a terminal phase back to Running (cancel can land between
-    /// spawn and this call). Returns the phase observed under the lock so
-    /// the runner can atomically detect cancel-during-spawn.
+    /// Record the app-spawned process-group leader. Immutable once set.
+    /// Deliberately does NOT touch phase: `Running` is claimed only on the
+    /// protocol's `run.started` event — a spawned pid is not a started run
+    /// (2026-07-11 audit: flipping here made "Running" optimistic). Returns
+    /// the phase observed under the lock so the runner can atomically detect
+    /// cancel-during-spawn.
     pub fn set_pid(&self, local_id: u64, pid: u32) -> Option<RunPhase> {
         let mut state = self.state.lock();
         let mut observed = None;
@@ -379,9 +485,6 @@ impl FlowRunRegistry {
             }
             if run.timings.spawn_ms.is_none() {
                 run.timings.spawn_ms = Some(run.launched_at.elapsed().as_millis() as u64);
-            }
-            if run.phase == RunPhase::Starting {
-                run.phase = RunPhase::Running;
             }
             observed = Some(run.phase);
         }
@@ -425,6 +528,28 @@ impl FlowRunRegistry {
             .order
             .iter()
             .filter_map(|id| state.runs.get(id).cloned())
+            .collect()
+    }
+
+    /// Cheap per-frame view of every run (no tail clones — a full
+    /// `snapshot()` copies up to 64 KiB of output per run, which is far too
+    /// heavy for row building on every render).
+    pub fn run_summaries(&self) -> Vec<RunSummary> {
+        let state = self.state.lock();
+        state
+            .order
+            .iter()
+            .filter_map(|id| state.runs.get(id))
+            .map(|run| RunSummary {
+                local_id: run.local_id,
+                flow_id: run.flow_id.clone(),
+                flow_name: run.flow_name.clone(),
+                phase: run.phase,
+                display_status: run.display_status(),
+                elapsed_ms: run.elapsed_ms(),
+                last_output_line: run.last_output_line().map(str::to_string),
+                is_conversation: run.conversation_stdout.is_some(),
+            })
             .collect()
     }
 
@@ -608,6 +733,13 @@ mod tests {
         let c = insert(&registry);
         for id in [a, b, c] {
             registry.set_pid(id, 100 + id as u32);
+            registry.apply_event(
+                id,
+                &parse_event_line(
+                    r#"{"protocolVersion":1,"seq":0,"runId":"r-m","ts":1,"event":"run.started","flowId":"f","pid":7}"#,
+                )
+                .unwrap(),
+            );
         }
         registry.mark_cancelled(b);
         assert_eq!(registry.get(a).unwrap().phase, RunPhase::Running);
@@ -687,12 +819,14 @@ mod tests {
 
     /// `run.started`'s pid is the engine, NOT a killpg target: the
     /// app-spawned group leader recorded via set_pid must stay immutable.
+    /// A spawned pid is also not a started run — phase stays Starting until
+    /// the protocol says otherwise.
     #[test]
     fn protocol_pid_never_overwrites_spawned_pgid() {
         let registry = fresh();
         let id = insert(&registry);
         let observed = registry.set_pid(id, 1111);
-        assert_eq!(observed, Some(RunPhase::Running));
+        assert_eq!(observed, Some(RunPhase::Starting));
         let started = parse_event_line(
             r#"{"protocolVersion":1,"seq":1,"runId":"r-x","ts":1,"event":"run.started","flowId":"project:demo","pid":2222}"#,
         )
@@ -743,6 +877,161 @@ mod tests {
             "finished retention cap exceeded: {finished}"
         );
         assert!(snapshot.iter().any(|r| r.local_id == active));
+        registry.reset_for_test();
+    }
+
+    // ---- Cancelling truth (2026-07-11 audit) ----
+
+    /// Cancel request → Cancelling (non-terminal). The SIGTERM'd process's
+    /// own terminal event resolves it to Cancelled, never Failed — an engine
+    /// dying 143 during cancel is the cancel outcome, not a new failure.
+    #[test]
+    fn cancelling_resolves_to_cancelled_on_any_terminal_event() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.mark_cancelling(id);
+        assert_eq!(registry.get(id).unwrap().phase, RunPhase::Cancelling);
+        assert!(!RunPhase::Cancelling.is_terminal());
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-c","ts":1,"event":"run.error","exitCode":143,"message":"terminated","durationMs":5}"#,
+            )
+            .unwrap(),
+        );
+        let run = registry.get(id).unwrap();
+        assert_eq!(run.phase, RunPhase::Cancelled);
+        assert_eq!(run.exit_code, Some(143), "exit code stays for transparency");
+
+        let id2 = insert(&registry);
+        registry.mark_cancelling(id2);
+        registry.apply_event(
+            id2,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-c2","ts":1,"event":"run.completed","exitCode":0,"durationMs":5}"#,
+            )
+            .unwrap(),
+        );
+        assert_eq!(registry.get(id2).unwrap().phase, RunPhase::Cancelled);
+    }
+
+    /// Cancelling still accepts output (the dying process may flush) and the
+    /// authoritative run.cancelled event settles it.
+    #[test]
+    fn cancelling_accepts_output_and_authoritative_cancelled() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-c3","ts":1,"event":"run.started","flowId":"f","pid":7}"#,
+            )
+            .unwrap(),
+        );
+        registry.mark_cancelling(id);
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":1,"runId":"r-c3","ts":2,"event":"output.delta","channel":"stdout","text":"flush\n"}"#,
+            )
+            .unwrap(),
+        );
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":2,"runId":"r-c3","ts":3,"event":"run.cancelled","signal":"SIGTERM","durationMs":9}"#,
+            )
+            .unwrap(),
+        );
+        let run = registry.get(id).unwrap();
+        assert_eq!(run.phase, RunPhase::Cancelled);
+        assert_eq!(run.stdout_tail.last_line(), Some("flush"));
+    }
+
+    // ---- Conversation capture (2026-07-11 audit P0: cursor corruption) ----
+
+    /// The conversation accumulator is append-only: it never front-evicts
+    /// (byte cursors into it stay valid), and at its cap it freezes and
+    /// flags truncation instead of shifting earlier bytes.
+    #[test]
+    fn conversation_capture_is_append_only_and_freezes_at_cap() {
+        let registry = fresh();
+        let id = insert(&registry);
+        registry.enable_conversation_capture(id);
+        registry.apply_event(
+            id,
+            &parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-v","ts":1,"event":"run.started","flowId":"f","pid":7}"#,
+            )
+            .unwrap(),
+        );
+        // Push far more than the display tail can hold; the capture keeps
+        // every byte while the tail front-evicts.
+        let chunk = "x".repeat(8 * 1024);
+        for i in 0..12 {
+            let text = format!("{i}:{chunk}\n");
+            let event = crate::flows::model::RunEventEnvelope {
+                seq: 1 + i,
+                run_id: "r-v".into(),
+                ts: 2,
+                event: RunEvent::OutputDelta {
+                    channel: crate::flows::model::OutputChannel::Stdout,
+                    text,
+                },
+            };
+            registry.apply_event(id, &event);
+        }
+        let run = registry.get(id).unwrap();
+        let capture = run.conversation_stdout.as_ref().unwrap();
+        assert!(capture.starts_with("0:"), "capture never evicts the front");
+        assert!(capture.len() > crate::flows::model::OUTPUT_TAIL_MAX_BYTES);
+        assert!(!run.conversation_truncated);
+
+        // Exceed the capture cap: the buffer freezes (no partial append).
+        let len_before = capture.len();
+        let giant = "y".repeat(crate::flows::model::CONVERSATION_CAPTURE_MAX_BYTES);
+        let event = crate::flows::model::RunEventEnvelope {
+            seq: 13,
+            run_id: "r-v".into(),
+            ts: 3,
+            event: RunEvent::OutputDelta {
+                channel: crate::flows::model::OutputChannel::Stdout,
+                text: giant,
+            },
+        };
+        registry.apply_event(id, &event);
+        let run = registry.get(id).unwrap();
+        assert!(run.conversation_truncated);
+        assert_eq!(
+            run.conversation_stdout.as_ref().unwrap().len(),
+            len_before,
+            "capture freezes at the cap — cursors stay valid"
+        );
+    }
+
+    // ---- Terminal notifications (exactly-once) ----
+
+    #[test]
+    fn unnotified_terminal_runs_surface_exactly_once_and_skip_conversations() {
+        let registry = fresh();
+        let bare = insert(&registry);
+        let convo = insert(&registry);
+        registry.enable_conversation_capture(convo);
+        registry.mark_failed(bare, "boom");
+        registry.mark_failed(convo, "boom");
+
+        let first = registry.take_unnotified_terminal();
+        assert_eq!(first.len(), 1, "conversation runs settle in-transcript");
+        assert_eq!(first[0].local_id, bare);
+        assert!(
+            registry.take_unnotified_terminal().is_empty(),
+            "second take must be empty — exactly-once"
+        );
+
+        let active = insert(&registry);
+        assert!(registry.take_unnotified_terminal().is_empty());
+        registry.mark_cancelled(active);
+        assert_eq!(registry.take_unnotified_terminal().len(), 1);
         registry.reset_for_test();
     }
 }

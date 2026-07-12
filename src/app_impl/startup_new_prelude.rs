@@ -172,51 +172,6 @@
         }
         logging::log("UI", "Script Kit logo SVG loaded for header rendering");
 
-        // Start cursor blink timer - updates all inputs that track cursor visibility
-        cx.spawn(async move |this, cx| {
-            loop {
-                Timer::after(std::time::Duration::from_millis(530)).await;
-
-                // CRITICAL: Check window visibility BEFORE cx.update() to avoid
-                // unnecessary GPUI context access when window is hidden.
-                // This reduces CPU usage at idle significantly.
-                if !script_kit_gpui::is_main_window_visible() {
-                    continue;
-                }
-
-                let _ = cx.update(|cx| {
-                    this.update(cx, |app, cx| {
-                        // Additional checks for focused state
-                        // (window visibility already checked above)
-                        let actions_popup_open = is_actions_window_open();
-                        let any_window_focused =
-                            platform::is_main_window_focused() || actions_popup_open;
-                        if !any_window_focused || app.focused_input == FocusedInput::None {
-                            return;
-                        }
-
-                        app.cursor_visible = !app.cursor_visible;
-                        // Also update ActionsDialog cursor if it exists
-                        if let Some(ref dialog) = app.actions_dialog {
-                            dialog.update(cx, |d, _cx| {
-                                d.set_cursor_visible(app.cursor_visible);
-                            });
-                            // Notify the actions window to repaint with new cursor state
-                            notify_actions_window(cx);
-                        }
-                        // Also update AliasInput cursor if it exists
-                        if let Some(ref alias_input) = app.alias_input_entity {
-                            alias_input.update(cx, |input, _cx| {
-                                input.set_cursor_visible(app.cursor_visible);
-                            });
-                        }
-                        cx.notify();
-                    })
-                });
-            }
-        })
-        .detach();
-
         let gpui_input_state = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(crate::dev_style_tool::runtime_overrides::effective_main_input_placeholder())

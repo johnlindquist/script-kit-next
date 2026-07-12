@@ -132,6 +132,9 @@ fn completed_segment_role(kind: &SpineSegmentKind) -> Option<&'static str> {
         SpineSegmentKind::Style { .. } => Some("spine.style.completed"),
         SpineSegmentKind::Capture { .. } => Some("spine.capture.completed"),
         SpineSegmentKind::ProjectCwd { .. } => Some("spine.cwd.completed"),
+        // Flow tokens reuse the command role: same "resolved command word"
+        // visual language as `/rewrite`.
+        SpineSegmentKind::Flow { .. } => Some("spine.command.completed"),
         _ => None,
     }
 }
@@ -189,6 +192,7 @@ fn decorates_segment_kind(kind: &SpineSegmentKind) -> bool {
             | SpineSegmentKind::Capture { .. }
             | SpineSegmentKind::ListFilter { .. }
             | SpineSegmentKind::ProjectCwd { .. }
+            | SpineSegmentKind::Flow { .. }
             | SpineSegmentKind::ModeExit { .. }
     )
 }
@@ -215,6 +219,7 @@ fn unresolved_segment_tone(
         SpineSegmentKind::Capture { .. }
         | SpineSegmentKind::ListFilter { .. }
         | SpineSegmentKind::ProjectCwd { .. }
+        | SpineSegmentKind::Flow { .. }
         | SpineSegmentKind::ModeExit { .. } => Some(SpineInputSpanTone::Hint),
         SpineSegmentKind::FreeText => None,
     }
@@ -288,6 +293,7 @@ fn segment_query(segment: &SpineSegment) -> &str {
             ..
         } => sub_query.as_str(),
         SpineSegmentKind::SlashCommand { command } => command.as_str(),
+        SpineSegmentKind::Flow { query } => query.as_str(),
         SpineSegmentKind::Profile { profile_id } => profile_id.as_str(),
         SpineSegmentKind::Style { style_id } => style_id.as_str(),
         SpineSegmentKind::Capture { target, .. } => target.as_str(),

@@ -63,6 +63,7 @@ impl ScriptListApp {
                 | AppView::BrowserHistoryView { .. }
                 | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
+                | AppView::TipsView { .. }
         )
     }
 
@@ -240,6 +241,16 @@ impl ScriptListApp {
                     if !raw.starts_with(';') {
                         return false;
                     }
+                }
+                // `-` flow search is an Agent Chat composer feature. The
+                // main menu already lists flows as primary rows, so a
+                // leading dash stays plain query text here instead of
+                // swapping the list for the spine Flows section.
+                if matches!(
+                    proj.active_segment_kind,
+                    crate::spine::SpineSegmentKind::Flow { .. }
+                ) {
+                    return false;
                 }
                 if let crate::spine::SpineSegmentKind::ListFilter { query } =
                     &proj.active_segment_kind

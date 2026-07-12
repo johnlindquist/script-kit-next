@@ -3,7 +3,45 @@ use crate::{
     panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH},
     ui_foundation::ALPHA_SELECTION,
 };
-use gpui::{div, px, rgb, rgba, Div, Hsla, IntoElement, ParentElement, Rgba, SharedString, Styled};
+use gpui::{
+    div, px, rgb, rgba, Animation, AnimationExt, Div, ElementId, Hsla, IntoElement, ParentElement,
+    Rgba, SharedString, Styled,
+};
+use std::time::Duration;
+
+const CURSOR_PULSE_DURATION: Duration = Duration::from_millis(1100);
+/// Fraction of each pulse cycle spent holding at an extreme: fully visible
+/// at the start of the cycle, fully invisible at the midpoint.
+const CURSOR_PULSE_DWELL: f32 = 0.12;
+
+/// Ease-in-out caret pulse with a brief dwell at both extremes.
+///
+/// Keep in sync with the vendored copy for the gpui-component input caret in
+/// vendor/gpui-component/crates/ui/src/input/blink_cursor.rs.
+fn caret_pulse_alpha(phase: f32) -> f32 {
+    let fade = 0.5 - CURSOR_PULSE_DWELL;
+    let smooth = |t: f32| t * t * (3.0 - 2.0 * t);
+    if phase < CURSOR_PULSE_DWELL {
+        1.0
+    } else if phase < 0.5 {
+        1.0 - smooth((phase - CURSOR_PULSE_DWELL) / fade)
+    } else if phase < 0.5 + CURSOR_PULSE_DWELL {
+        0.0
+    } else {
+        smooth((phase - 0.5 - CURSOR_PULSE_DWELL) / fade)
+    }
+}
+
+/// Applies the app-wide breathing animation to an eligible text caret.
+pub(crate) fn pulse_cursor_bar(cursor_bar: Div, id: impl Into<ElementId>) -> impl IntoElement {
+    cursor_bar.with_animation(
+        id,
+        Animation::new(CURSOR_PULSE_DURATION)
+            .repeat()
+            .with_easing(caret_pulse_alpha),
+        |cursor_bar, opacity| cursor_bar.opacity(opacity),
+    )
+}
 
 /// A character range to render with a specific text color.
 #[derive(Clone, Copy, Debug)]
@@ -129,22 +167,22 @@ pub(crate) fn render_compact_search_text(config: CompactSearchTextConfig<'_>) ->
 }
 
 fn render_compact_search_cursor(config: &CompactSearchTextConfig<'_>) -> Div {
-    let mut cursor_bar = div()
+    let cursor_bar = div()
         .absolute()
         .left(px(-(config.cursor_width / 2.0)))
         .top(px(0.0))
         .w(px(config.cursor_width))
         .h(px(config.cursor_height))
         .rounded(px(config.cursor_width / 2.0));
+    let cursor = div().relative().w(px(0.0)).h(px(config.cursor_height));
     if config.cursor_visible {
-        cursor_bar = cursor_bar.bg(config.cursor_color);
+        cursor.child(pulse_cursor_bar(
+            cursor_bar.bg(config.cursor_color),
+            "compact-search-cursor-pulse",
+        ))
+    } else {
+        cursor.child(cursor_bar)
     }
-
-    div()
-        .relative()
-        .w(px(0.0))
-        .h(px(config.cursor_height))
-        .child(cursor_bar)
 }
 
 impl<'a> TextInputRenderConfig<'a> {
@@ -728,16 +766,21 @@ fn render_cursor(config: &TextInputRenderConfig<'_>) -> Div {
     if let Some(hidden_color) = config.cursor_hidden_color {
         cursor_bar = cursor_bar.bg(hidden_color);
     }
-    if config.cursor_visible {
+    let cursor_is_visible = config.cursor_visible;
+    if cursor_is_visible {
         cursor_bar = cursor_bar.bg(rgb(config.cursor_color));
     }
     // The caret is where the app's attention is while typing: report its
     // painted position so the background shader effect can react to it
-    // (main-window only; blink re-paints dedupe to no-ops).
+    // (main-window only; animation re-paints dedupe to no-ops).
     cursor_bar = cursor_bar.child(crate::effects::effect_focus_probe(
         crate::effects::EffectFocusSource::TextCursor,
     ));
-    cursor.child(cursor_bar)
+    if cursor_is_visible {
+        cursor.child(pulse_cursor_bar(cursor_bar, "text-input-cursor-pulse"))
+    } else {
+        cursor.child(cursor_bar)
+    }
 }
 
 fn format_segment(segment: &str, transform: Option<fn(&str) -> String>) -> String {

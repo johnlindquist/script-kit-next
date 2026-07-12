@@ -381,7 +381,20 @@ fn spawn_capture_handler_detached(
 
     command
         .spawn()
-        .map(|child| child.id())
+        .map(|mut child| {
+            let pid = child.id();
+            // The handler stays detached (own group, null stdio), but it must
+            // be registered so quit/crash reaping can find it, and reaped by
+            // a wait thread so it never lingers as a zombie (nothing else
+            // waits on it) and its registry entry clears when it exits.
+            let registration =
+                crate::process_manager::ChildRegistration::register(pid, &executable);
+            std::thread::spawn(move || {
+                let _registration = registration;
+                let _ = child.wait();
+            });
+            pid
+        })
         .map_err(|e| MenuSyntaxCaptureSpawnAction::DetachedHandler.failure_message(&executable, e))
 }
 

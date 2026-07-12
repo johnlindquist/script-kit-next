@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Day Page mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: Day Page (Today), plain Day binding, script-kit-dark, InfoBarBase,
+  Starfield. Reference captured 2026-07-11 via
+  scripts/agentic/design-reference-capture.ts (screen: day-page;
+  sandboxHome, SCRIPT_KIT_BRAIN_TZ=America/Denver, seeded day file).
+
+  Anatomy mirrored from src/main_sections/day_page_view.rs (Render impl):
+  - Shared main-view chrome; header = INERT context zone (same chips, no-op
+    handlers, NO keycaps) + EMPTY input slot; divider visible:false.
+    Context labels are fixture-variable capture state (the capture read
+    "~/.scriptkit" and "Brain · GPT-5.6 SOL") — non-blocking content.
+  - Edit mode shows RAW markdown in the shared NotesEditor Input. The
+    heading paints through the SHARED markdown highlight styles (marker +
+    bold amber title at the SAME 16px size, clipped by the 20px line box).
+  - The markdown link label paints the shared link accent; the destination
+    paints the RESOLVED rest-state color (accent @ compact opacity 0.45) —
+    deterministic here because the seeded file ends with a newline and the
+    caret sits on the trailing BLANK line, touching no link range.
+  - The raw `09:47 [Clipboard entry](kit://…)` line is lifted OUT of the
+    editor into the clipboard shelf (day_page sediment split/join); the
+    shelf renders COLLAPSED — the shipped rest state and the canonical
+    fixture. Expanded-state raster is PENDING (no driver click primitive).
+  - GPUI paints only the empty 32px footer rail spacer; the native AppKit
+    overlay (a single "Actions ⌘K" on the plain Day Page) is a SEPARATE
+    window and is deliberately NOT painted into the compare layer.
+  Every visual value resolves through generated --sk-* custom properties;
+  Day Page owns ONLY the --sk-day-page-* shelf/editor-min geometry tokens.
+-->
+<main class="stage" id="stage">
+  <div class="sk-window" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <canvas class="sk-window__effect" id="starfield" width="1500" height="960"></canvas>
+
+    <div class="sk-window__content">
+      <header class="sk-header" data-component="MainViewHeaderChrome (day_page_view.rs Render)">
+        <div class="sk-context-zone" data-component="render_inert_main_view_context_zone (inert: no keycaps)">
+          <span class="sk-context-pill">~/.scriptkit</span>
+          <span class="sk-context-pill">Brain · GPT-5.6 SOL</span>
+        </div>
+        <!-- Day Page passes an EMPTY input slot — no search shell, no phantom height -->
+        <div class="sk-day-page-header-input-slot" data-component="empty input slot"></div>
+      </header>
+
+      <!-- MainViewDividerChrome renders with visible: false on the Day Page -->
+
+      <section class="sk-day-page-body" data-component="day_page editor_body (DAY_PAGE_EDITOR_ID)">
+        <div class="sk-day-page-editor" data-component="NotesEditor::render_input (markdown edit mode)">
+          <div class="sk-day-page-editor__input" data-component="gpui-component Input (appearance:false, multi-line)">
+            <div class="sk-day-page-line"><span class="sk-day-page-md-marker">#</span> <span class="sk-day-page-md-title">Friday · ship the Day Page mockup</span></div>
+            <div class="sk-day-page-line">09:12 sketched the Day Page fixture and token list</div>
+            <div class="sk-day-page-line">09:31 - [ ] wire day-page tokens into export_design_tokens #design</div>
+            <div class="sk-day-page-line">10:02 [<span class="sk-day-page-link-label">Script Kit</span>](<span class="sk-day-page-link-destination">https://scriptkit.com</span>) landing refresh notes</div>
+            <div class="sk-day-page-line sk-day-page-line--caret"><span class="sk-day-page-caret" data-component="Input blink cursor (trailing blank line)"></span></div>
+          </div>
+        </div>
+
+        <div class="sk-day-page-shelf-wrapper" data-component="NotesEditor::render_content_accessory">
+          <div class="sk-day-page-shelf" data-component="render_clipboard_shelf (collapsed rest state)">
+            <div class="sk-day-page-shelf__toggle" data-component="day-page-clipboard-shelf-toggle">
+              <span>▸</span>
+              <span>Clipboard · 1 kept entry</span>
+            </div>
+            <!-- Expanded list (day-page-clipboard-shelf-list + compact rows)
+                 intentionally NOT rendered: collapsed is the canonical
+                 fixture; the expanded raster state is pending its own
+                 reference + receipt. -->
+          </div>
+        </div>
+      </section>
+
+      <!-- GPUI reserves the EMPTY rail-height band (render_native_main_window_
+           footer_spacer → current_main_menu_footer_height = 32). -->
+      <footer class="sk-day-page-footer-spacer" data-component="native footer spacer"></footer>
+    </div>
+
+    <!-- Native AppKit footer overlay — SEPARATE window in reality; the plain
+         Day Page footer is a single "Actions ⌘K" button (day_page_footer_buttons).
+         GPUI captures show this band EMPTY, so the mockup paints only the
+         empty rail (divider edge at y=448) and never the missing button. -->
+    <footer class="sk-day-page-native-footer" data-component="native footer overlay (empty in captures)" data-native-footer>
+      <div class="sk-footer-rail" data-component="footer_chrome (empty rail)"></div>
+    </footer>
+  </div>
+</main>
+<script src="../main-menu/starfield.js"></script>
+</body>
+</html>

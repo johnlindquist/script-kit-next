@@ -1606,18 +1606,35 @@ impl HotkeyConfig {
         }
 
         // Normalize key for display
-        let key_display = if self.key.starts_with("Key") {
-            // "KeyA" -> "A"
-            self.key[3..].to_uppercase()
-        } else if self.key.starts_with("Digit") {
-            // "Digit0" -> "0"
-            self.key[5..].to_string()
-        } else {
-            // Keep as-is but uppercase first char for consistency
-            let mut chars = self.key.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        let key_display = match self.key.as_str() {
+            // Punctuation key codes render as their character, matching how
+            // macOS shows them in menus ("⌘;" not "⌘Semicolon").
+            "Semicolon" => ";".to_string(),
+            "Comma" => ",".to_string(),
+            "Period" => ".".to_string(),
+            "Slash" => "/".to_string(),
+            "Backslash" => "\\".to_string(),
+            "Quote" => "'".to_string(),
+            "Backquote" => "`".to_string(),
+            "BracketLeft" => "[".to_string(),
+            "BracketRight" => "]".to_string(),
+            "Minus" => "-".to_string(),
+            "Equal" => "=".to_string(),
+            key if key.starts_with("Key") => {
+                // "KeyA" -> "A"
+                key[3..].to_uppercase()
+            }
+            key if key.starts_with("Digit") => {
+                // "Digit0" -> "0"
+                key[5..].to_string()
+            }
+            key => {
+                // Keep as-is but uppercase first char for consistency
+                let mut chars = key.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                }
             }
         };
         result.push_str(&key_display);
@@ -1834,6 +1851,20 @@ impl BrainRemoteConfig {
                 .as_deref()
                 .is_some_and(|token| !token.trim().is_empty())
             && !self.telegram_allowed_user_ids.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TipsConfig {
+    pub enabled: bool,
+}
+
+impl Default for TipsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: crate::config::defaults::DEFAULT_TIPS_ENABLED,
+        }
     }
 }
 
@@ -2062,6 +2093,9 @@ pub struct Config {
         rename = "brainRemote"
     )]
     pub brain_remote: Option<BrainRemoteConfig>,
+    /// Controls the rotating discoverability tip in the root main-menu footer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tips: Option<TipsConfig>,
 }
 
 // --- merged from part_03.rs ---
@@ -2069,6 +2103,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             hotkey: default_main_hotkey(),
+            tips: None,
             bun_path: None,           // Will use system PATH if not specified
             editor: None,             // Will use $EDITOR or fallback to "code"
             padding: None,            // Will use ContentPadding::default() via getter
@@ -2128,6 +2163,12 @@ fn sanitize_process_limits(mut limits: ProcessLimits) -> ProcessLimits {
 }
 
 impl Config {
+    pub fn is_tips_enabled(&self) -> bool {
+        self.tips
+            .as_ref()
+            .map(|tips| tips.enabled)
+            .unwrap_or(crate::config::defaults::DEFAULT_TIPS_ENABLED)
+    }
     /// Returns the configured editor, falling back to $EDITOR env var or "code" (VS Code)
     /// Used by ActionsDialog "Open in Editor" action
     #[allow(dead_code)] // Will be used by ActionsDialog worker
@@ -2441,6 +2482,25 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hotkey_config_to_display_string_maps_punctuation_key_codes() {
+        let semicolon = HotkeyConfig {
+            modifiers: vec!["meta".to_string()],
+            key: "Semicolon".to_string(),
+        };
+        assert_eq!(semicolon.to_display_string(), "⌘;");
+        let letter = HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "shift".to_string()],
+            key: "KeyK".to_string(),
+        };
+        assert_eq!(letter.to_display_string(), "⇧⌘K");
+        let word = HotkeyConfig {
+            modifiers: vec!["meta".to_string()],
+            key: "Space".to_string(),
+        };
+        assert_eq!(word.to_display_string(), "⌘Space");
+    }
 
     #[test]
     fn hotkey_config_to_shortcut_string_basic() {

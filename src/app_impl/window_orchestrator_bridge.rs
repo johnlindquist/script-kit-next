@@ -36,6 +36,7 @@ impl ScriptListApp {
                 | AppView::CreationFeedback { .. }
                 | AppView::ScriptIssuesView { .. }
                 | AppView::SdkReferenceView { .. }
+                | AppView::TipsView { .. }
                 | AppView::ScriptTemplateCatalogView { .. }
                 | AppView::ActionsDialog => FocusTarget::MainFilter,
                 AppView::About { .. } => FocusTarget::AppRoot,

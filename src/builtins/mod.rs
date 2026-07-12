@@ -310,6 +310,8 @@ pub enum BuiltInFeature {
     AiVault,
     /// SDK reference browser — in-product view over `kit://sdk-reference`
     SdkReference,
+    /// Discoverability browser for Script Kit gestures, sigils, and shortcuts.
+    Tips,
     /// Script template catalog — launcher view that picks a starter template
     /// then opens the naming prompt. Kept distinct from
     /// [`ScriptCommandType::NewScript`] so the fast `New Script` path stays
@@ -329,6 +331,9 @@ pub enum BuiltInFeature {
     FlowUxVariant(crate::flows::model::FlowUxVariant),
     /// Detached Flow Manager window (runs supervision + Mission Control).
     FlowManager,
+    /// Create a new mdflow flow: opens `md create` in the Quick Terminal
+    /// (the same path as the Flow Desk's "Create a flow…" row).
+    NewFlow,
 }
 /// A built-in feature entry that appears in the main search
 #[derive(Debug, Clone)]
@@ -559,6 +564,7 @@ impl BuiltInEntry {
             BuiltInFeature::AgentChatHistory => "Open Agent Chat History",
             BuiltInFeature::AiVault => "Open AI Vault",
             BuiltInFeature::SdkReference => "Open SDK Reference",
+            BuiltInFeature::Tips => "Browse Tips",
             BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate v1 Scripts",
             BuiltInFeature::BackgroundEffectNext | BuiltInFeature::BackgroundEffectPrevious => {
@@ -567,6 +573,7 @@ impl BuiltInEntry {
             BuiltInFeature::BackgroundEffectOff => "Turn Off Background Effect",
             BuiltInFeature::FlowUxVariant(_) => "Open Flow Launcher",
             BuiltInFeature::FlowManager => "Open Flow Manager",
+            BuiltInFeature::NewFlow => "Create Flow",
         }
     }
 
@@ -683,6 +690,7 @@ impl BuiltInEntry {
             BuiltInFeature::AgentChatHistory => "History",
             BuiltInFeature::AiVault => "Vault",
             BuiltInFeature::SdkReference => "SDK Docs",
+            BuiltInFeature::Tips => "Tips",
             BuiltInFeature::NewScriptFromTemplate => "Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate",
             BuiltInFeature::BackgroundEffectNext => "Next Effect",
@@ -690,6 +698,7 @@ impl BuiltInEntry {
             BuiltInFeature::BackgroundEffectOff => "Effect Off",
             BuiltInFeature::FlowUxVariant(_) => "Flows",
             BuiltInFeature::FlowManager => "Runs",
+            BuiltInFeature::NewFlow => "New Flow",
         }
     }
 }
@@ -871,6 +880,25 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "book-open",
         ));
         debug!("Added SDK Reference built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/tips",
+            "Tips",
+            "Learn Script Kit's hidden powers — sigils, gestures, and shortcuts",
+            vec![
+                "tips",
+                "help",
+                "learn",
+                "hints",
+                "shortcuts",
+                "sigils",
+                "discover",
+                "onboarding",
+            ],
+            BuiltInFeature::Tips,
+            "lightbulb",
+        ));
+        debug!("Added Tips built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/migrate-v1-scripts",

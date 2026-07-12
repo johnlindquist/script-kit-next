@@ -57,8 +57,28 @@ impl ProcessManager {
         Self {
             active_processes: RwLock::new(HashMap::new()),
             main_pid_path: kit_dir.join("script-kit.pid"),
-            active_pids_path: kit_dir.join("active-bun-pids.json"),
+            // Per-instance file: parallel dev instances must not clobber each
+            // other's registrations (a dying instance's cleanup would delete a
+            // shared file AFTER its successor wrote to it). The startup sweep
+            // scans every active-pids-*.json whose owner pid is dead.
+            active_pids_path: kit_dir.join(format!("active-pids-{}.json", std::process::id())),
         }
+    }
+
+    /// Parse the owning instance pid out of an `active-pids-<pid>.json`
+    /// filename. The legacy shared `active-bun-pids.json` has no owner.
+    fn registry_file_owner(file_name: &str) -> Option<u32> {
+        file_name
+            .strip_prefix("active-pids-")?
+            .strip_suffix(".json")?
+            .parse()
+            .ok()
+    }
+
+    /// True when `file_name` is a child-pid registry file the startup sweep
+    /// should consider (per-instance or legacy shared).
+    fn is_registry_file(file_name: &str) -> bool {
+        file_name == "active-bun-pids.json" || Self::registry_file_owner(file_name).is_some()
     }
 
     /// Write the main application PID to disk
@@ -268,7 +288,29 @@ impl ProcessManager {
             "process_manager.kill_all_processes.start"
         );
 
+        // Verify each entry still IS the process we registered before
+        // signalling: a tracked pid can go stale between child exit and
+        // unregistration, and the single-pid kill fallback must never hit a
+        // recycled pid.
+        let mut system = System::new();
+        system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::All,
+            true,
+            sysinfo::ProcessRefreshKind::nothing().with_cmd(sysinfo::UpdateKind::Always),
+        );
         for info in &processes {
+            let Some(process) = system.process(Pid::from_u32(info.pid)) else {
+                debug!(pid = info.pid, "process_manager.kill_all.already_exited");
+                continue;
+            };
+            if !cmdline_matches_recorded(process.cmd(), &info.script_path) {
+                warn!(
+                    pid = info.pid,
+                    script_path = info.script_path.as_str(),
+                    "process_manager.kill_all.pid_recycled_skip"
+                );
+                continue;
+            }
             self.kill_process(info.pid);
         }
 
@@ -293,7 +335,9 @@ impl ProcessManager {
 
     /// Kill a single process by PID
     ///
-    /// Sends SIGKILL to the process group on Unix.
+    /// Sends SIGKILL to the process group on Unix. Children spawned without
+    /// `process_group(0)` share the app's group, so when no group with id ==
+    /// pid exists, fall back to signalling the bare pid.
     pub fn kill_process(&self, pid: u32) {
         debug!(pid, "process_manager.kill_process.start");
 
@@ -308,8 +352,14 @@ impl ProcessManager {
                 info!(pid, "killed process group");
             } else if ret == -1 {
                 let err = std::io::Error::last_os_error();
-                if err.kind() == ErrorKind::NotFound {
-                    debug!(pid, "process already exited");
+                if err.raw_os_error() == Some(libc::ESRCH) {
+                    // SAFETY: same contract as above, targeting the single pid.
+                    let single = unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+                    if single == 0 {
+                        info!(pid, "killed process (no dedicated group)");
+                    } else {
+                        debug!(pid, "process already exited");
+                    }
                 } else {
                     warn!(pid, %err, "failed to kill process group");
                 }
@@ -405,28 +455,105 @@ impl ProcessManager {
 
     /// Detect and clean up orphaned processes from a previous crash
     ///
-    /// This should be called at startup. It reads the persisted PID file,
-    /// checks which processes are still running, kills them, and clears the file.
+    /// This should be called at startup. It scans every registry file in the
+    /// tracking directory (per-instance `active-pids-<pid>.json` plus the
+    /// legacy shared file), skips registries whose owning instance is still
+    /// alive, kills the orphans recorded in dead-owner registries, and removes
+    /// those files.
+    ///
+    /// A recorded pid may have been recycled by the OS for an unrelated
+    /// process since the crash, so a candidate is only killed when its live
+    /// command line still matches what was recorded at registration time AND
+    /// its parent is gone (true orphans are reparented to launchd/init).
     ///
     /// Returns the number of orphans killed.
     pub fn cleanup_orphans(&self) -> usize {
         debug!("process_manager.cleanup_orphans.start");
 
-        let orphans = self.load_persisted_pids();
-        if orphans.is_empty() {
+        let Some(dir) = self.active_pids_path.parent() else {
+            return 0;
+        };
+        let mut registry_files: Vec<(PathBuf, Option<u32>)> = Vec::new();
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if Self::is_registry_file(&name) {
+                    registry_files.push((entry.path(), Self::registry_file_owner(&name)));
+                }
+            }
+        }
+        if registry_files.is_empty() {
             debug!("process_manager.cleanup_orphans.none_found");
             return 0;
         }
 
-        info!(
-            orphan_count = orphans.len(),
-            "process_manager.cleanup_orphans.found_candidates"
+        let mut killed_count = 0;
+        let self_pid = std::process::id();
+        let mut system = System::new();
+        // The default process refresh does not load command lines at all,
+        // which would make the identity check below reject every candidate;
+        // request cmd explicitly.
+        system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::All,
+            true,
+            sysinfo::ProcessRefreshKind::nothing().with_cmd(sysinfo::UpdateKind::Always),
         );
 
-        let mut killed_count = 0;
+        for (path, owner) in registry_files {
+            if let Some(owner) = owner {
+                if owner == self_pid {
+                    continue;
+                }
+                if system.process(Pid::from_u32(owner)).is_some() {
+                    debug!(
+                        owner,
+                        registry = ?path,
+                        "process_manager.cleanup_orphans.live_owner_skip"
+                    );
+                    continue;
+                }
+            }
 
-        for info in &orphans {
-            if self.is_process_running(info.pid) {
+            let orphans = load_pids_from(&path);
+            if !orphans.is_empty() {
+                info!(
+                    orphan_count = orphans.len(),
+                    registry = ?path,
+                    "process_manager.cleanup_orphans.found_candidates"
+                );
+            }
+
+            for info in &orphans {
+                let Some(process) = system.process(Pid::from_u32(info.pid)) else {
+                    debug!(
+                        pid = info.pid,
+                        "process_manager.cleanup_orphans.orphan_already_exited"
+                    );
+                    continue;
+                };
+                if !cmdline_matches_recorded(process.cmd(), &info.script_path) {
+                    warn!(
+                        pid = info.pid,
+                        script_path = info.script_path.as_str(),
+                        "process_manager.cleanup_orphans.pid_recycled_skip"
+                    );
+                    continue;
+                }
+                // A true orphan was reparented to launchd/init when its
+                // spawning instance died. A candidate whose parent is still
+                // alive belongs to a live sibling instance (legacy shared
+                // registries carry no owner) and must not be killed.
+                let parent_alive = process
+                    .parent()
+                    .is_some_and(|parent| parent.as_u32() > 1 && system.process(parent).is_some());
+                if parent_alive {
+                    info!(
+                        pid = info.pid,
+                        script_path = info.script_path.as_str(),
+                        "process_manager.cleanup_orphans.parent_alive_skip"
+                    );
+                    continue;
+                }
                 info!(
                     pid = info.pid,
                     script_path = info.script_path.as_str(),
@@ -434,20 +561,12 @@ impl ProcessManager {
                 );
                 self.kill_process(info.pid);
                 killed_count += 1;
-            } else {
-                debug!(
-                    pid = info.pid,
-                    "process_manager.cleanup_orphans.orphan_already_exited"
-                );
             }
-        }
 
-        // Clear the persisted file
-        if self.active_pids_path.exists() {
-            if let Err(e) = fs::remove_file(&self.active_pids_path) {
+            if let Err(e) = fs::remove_file(&path) {
                 warn!(
                     error = %e,
-                    path = ?self.active_pids_path,
+                    path = ?path,
                     "process_manager.cleanup_orphans.remove_file_failed"
                 );
             }
@@ -492,37 +611,88 @@ impl ProcessManager {
         Ok(())
     }
 
-    /// Load persisted PIDs from disk
+    /// Load persisted PIDs from this manager's own registry file
     fn load_persisted_pids(&self) -> Vec<ProcessInfo> {
-        if !self.active_pids_path.exists() {
+        load_pids_from(&self.active_pids_path)
+    }
+}
+
+/// Load persisted PIDs from an arbitrary registry file
+fn load_pids_from(path: &std::path::Path) -> Vec<ProcessInfo> {
+    if !path.exists() {
+        return Vec::new();
+    }
+
+    let contents = match fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(
+                error = %e,
+                path = ?path,
+                "process_manager.load_persisted_pids.read_failed"
+            );
             return Vec::new();
         }
+    };
 
-        let contents = match fs::read_to_string(&self.active_pids_path) {
-            Ok(c) => c,
-            Err(e) => {
-                warn!(
-                    error = %e,
-                    path = ?self.active_pids_path,
-                    "process_manager.load_persisted_pids.read_failed"
-                );
-                return Vec::new();
-            }
-        };
-
-        match serde_json::from_str(&contents) {
-            Ok(pids) => pids,
-            Err(e) => {
-                warn!(
-                    error = %e,
-                    path = ?self.active_pids_path,
-                    "process_manager.load_persisted_pids.parse_failed"
-                );
-                Vec::new()
-            }
+    match serde_json::from_str(&contents) {
+        Ok(pids) => pids,
+        Err(e) => {
+            warn!(
+                error = %e,
+                path = ?path,
+                "process_manager.load_persisted_pids.parse_failed"
+            );
+            Vec::new()
         }
     }
 }
+/// RAII registration for a tracked child: unregisters on drop so callers with
+/// multiple exit paths (or `?` propagation) cannot leak a stale pid entry.
+/// The caller remains responsible for actually killing/reaping the child.
+pub struct ChildRegistration {
+    pid: u32,
+}
+
+impl ChildRegistration {
+    /// Register `pid` with the global manager for the lifetime of the guard.
+    ///
+    /// No-op under `cfg(test)`: test binaries must not write pid entries into
+    /// the user's real ~/.scriptkit tracking files (a live app instance shares
+    /// them).
+    pub fn register(pid: u32, command_path: &str) -> Self {
+        #[cfg(not(test))]
+        PROCESS_MANAGER.register_process(pid, command_path);
+        #[cfg(test)]
+        let _ = command_path;
+        Self { pid }
+    }
+}
+
+impl Drop for ChildRegistration {
+    fn drop(&mut self) {
+        #[cfg(not(test))]
+        PROCESS_MANAGER.unregister_process(self.pid);
+        #[cfg(test)]
+        let _ = self.pid;
+    }
+}
+
+/// True when a live process command line still matches the path recorded at
+/// registration time — the guard that keeps orphan cleanup from killing an
+/// unrelated process that recycled the pid.
+///
+/// Matches when any argv segment contains the recorded string (bun scripts
+/// record the script path, sidecars record the binary path, so both appear
+/// verbatim in their own argv).
+fn cmdline_matches_recorded(cmd: &[std::ffi::OsString], recorded: &str) -> bool {
+    if recorded.is_empty() {
+        return false;
+    }
+    cmd.iter()
+        .any(|segment| segment.to_string_lossy().contains(recorded))
+}
+
 impl Default for ProcessManager {
     fn default() -> Self {
         Self::new()
@@ -720,6 +890,166 @@ mod tests {
     }
 
     #[test]
+    fn cmdline_match_accepts_recorded_path_in_any_argv_segment() {
+        let cmd: Vec<std::ffi::OsString> = vec![
+            "/opt/homebrew/bin/bun".into(),
+            "/Users/me/.scriptkit/scripts/hello.ts".into(),
+        ];
+        assert!(cmdline_matches_recorded(
+            &cmd,
+            "/Users/me/.scriptkit/scripts/hello.ts"
+        ));
+        assert!(cmdline_matches_recorded(&cmd, "/opt/homebrew/bin/bun"));
+    }
+
+    #[test]
+    fn cmdline_match_rejects_recycled_pid_and_empty_recording() {
+        let cmd: Vec<std::ffi::OsString> = vec!["/usr/bin/ssh".into(), "example.com".into()];
+        assert!(!cmdline_matches_recorded(
+            &cmd,
+            "/Users/me/.scriptkit/scripts/hello.ts"
+        ));
+        assert!(!cmdline_matches_recorded(&cmd, ""));
+        assert!(!cmdline_matches_recorded(&[], "/anything"));
+    }
+
+    #[test]
+    fn cleanup_orphans_skips_live_process_whose_cmdline_no_longer_matches() {
+        let (manager, _temp_dir) = create_test_manager();
+
+        // Record the CURRENT test process pid under a bogus script path. The
+        // pid is alive, but its cmdline cannot contain the bogus path, so
+        // cleanup must treat it as recycled and refuse to kill it (killing it
+        // would take down this test run).
+        manager.register_process(std::process::id(), "/definitely/not/this/test/binary.ts");
+        // Simulate a fresh start: tracking survives only on disk.
+        manager.active_processes.write().unwrap().clear();
+
+        let killed = manager.cleanup_orphans();
+        assert_eq!(killed, 0);
+        assert!(
+            !manager.active_pids_path.exists(),
+            "cleanup must still clear the persisted pid file"
+        );
+    }
+
+    #[test]
+    fn cleanup_orphans_skips_child_whose_parent_is_still_alive() {
+        let (manager, _temp_dir) = create_test_manager();
+
+        // Our own child: cmdline matches the recorded path, but the parent
+        // (this test process) is alive, so it is a sibling's child, not an
+        // orphan — cleanup must leave it running.
+        let mut child = std::process::Command::new("/bin/sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn sleep");
+        manager.register_process(child.id(), "/bin/sleep");
+        manager.active_processes.write().unwrap().clear();
+
+        let killed = manager.cleanup_orphans();
+
+        let still_running = matches!(child.try_wait(), Ok(None));
+        let _ = child.kill();
+        let _ = child.wait();
+        assert_eq!(killed, 0);
+        assert!(still_running, "live-parent child must not be killed");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn cleanup_orphans_kills_true_orphan_with_matching_cmdline() {
+        let (manager, _temp_dir) = create_test_manager();
+
+        // Double-fork: sh backgrounds a sleep and exits, orphaning the sleep
+        // to launchd — the real post-crash shape. The sleep keeps the dead
+        // shell's pgid, so this also exercises the single-pid kill fallback.
+        // (No `set -m`: a job-control sh kills its job group on exit. Stdout
+        // must be detached or .output() blocks on the inherited pipe.)
+        let output = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg("/bin/sleep 300 >/dev/null 2>&1 & echo $!")
+            .output()
+            .expect("spawn orphaned sleep");
+        let orphan_pid: u32 = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse()
+            .expect("orphan pid");
+        manager.register_process(orphan_pid, "/bin/sleep");
+        manager.active_processes.write().unwrap().clear();
+
+        // Give the shell a moment to exit so the sleep is reparented.
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        let killed = manager.cleanup_orphans();
+        assert_eq!(killed, 1, "orphaned sleep must be reaped");
+
+        // SIGKILL delivery is asynchronous; poll briefly.
+        let mut gone = false;
+        for _ in 0..20 {
+            // SAFETY: signal 0 only checks liveness.
+            if unsafe { libc::kill(orphan_pid as i32, 0) } != 0 {
+                gone = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert!(gone, "orphan {orphan_pid} still alive after cleanup");
+    }
+
+    #[test]
+    fn cleanup_orphans_respects_registry_owner_liveness() {
+        let (manager, temp_dir) = create_test_manager();
+        let dir = temp_dir.path();
+
+        // Registry owned by a LIVE instance (this test process) must be left
+        // untouched; registry owned by a dead pid must be swept and removed.
+        let live_registry = dir.join(format!("active-pids-{}.json", std::process::id()));
+        let dead_owner = {
+            let mut probe = std::process::Command::new("/usr/bin/true")
+                .spawn()
+                .expect("spawn true");
+            let pid = probe.id();
+            probe.wait().expect("wait true");
+            pid
+        };
+        let dead_registry = dir.join(format!("active-pids-{dead_owner}.json"));
+        fs::write(&live_registry, "[]").unwrap();
+        fs::write(&dead_registry, "[]").unwrap();
+
+        let killed = manager.cleanup_orphans();
+
+        assert_eq!(killed, 0);
+        assert!(
+            live_registry.exists(),
+            "live-owner registry must not be deleted"
+        );
+        assert!(
+            !dead_registry.exists(),
+            "dead-owner registry must be swept away"
+        );
+    }
+
+    #[test]
+    fn registry_file_owner_parses_only_per_instance_names() {
+        assert_eq!(
+            ProcessManager::registry_file_owner("active-pids-12345.json"),
+            Some(12345)
+        );
+        assert_eq!(
+            ProcessManager::registry_file_owner("active-pids-.json"),
+            None
+        );
+        assert_eq!(
+            ProcessManager::registry_file_owner("active-bun-pids.json"),
+            None
+        );
+        assert!(ProcessManager::is_registry_file("active-bun-pids.json"));
+        assert!(ProcessManager::is_registry_file("active-pids-1.json"));
+        assert!(!ProcessManager::is_registry_file("script-kit.pid"));
+    }
+
+    #[test]
     fn test_main_pid_stale_detection() {
         let (manager, _temp_dir) = create_test_manager();
 
@@ -748,7 +1078,10 @@ mod tests {
         );
         assert_eq!(
             manager.active_pids_path,
-            home.join(".scriptkit/active-bun-pids.json")
+            home.join(format!(
+                ".scriptkit/active-pids-{}.json",
+                std::process::id()
+            ))
         );
     }
 }

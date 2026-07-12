@@ -3,7 +3,7 @@
 //! attacker-mode probe).
 //!
 //! Pins the invariant that `getState.choiceCount` in the `ScriptList`
-//! view sums EVERY collection that `fuzzy_search_unified_all_with_skills`
+//! view sums EVERY collection that `fuzzy_search_unified_all_with_skills_and_flows`
 //! searches over — so that `visibleChoiceCount` (= `filtered_results().len()`)
 //! can never exceed `choiceCount`. Without this, any non-empty `skills`
 //! (or future 6th collection) causes automation that relies on the
@@ -15,8 +15,8 @@
 //! (a) `src/prompt_handler/mod.rs` — the `choiceCount` sum in the
 //!     `ScriptList` arm must include `self.skills.len()`.
 //! (b) `src/app_impl/filtering_cache.rs` — the
-//!     `fuzzy_search_unified_all_with_skills` call must pass exactly
-//!     those 5 collections. If a contributor adds a 6th collection to
+//!     `fuzzy_search_unified_all_with_skills_and_flows` call must pass
+//!     exactly those 6 collections. If a contributor adds a 7th collection to
 //!     the search (e.g. `agents`, `cached_windows`, fallback items),
 //!     test (a) will still pass but this test (b) flags the drift so
 //!     the contributor knows to also update the `choiceCount` sum.
@@ -43,13 +43,14 @@ fn scriptlist_choice_count_includes_skills() {
     let prompt_handler = normalized(PROMPT_HANDLER);
     assert!(
         prompt_handler.contains(
-            "self.scripts.len() + self.scriptlets.len() + self.builtin_entries.len() + self.apps.len() + self.skills.len(),"
+            "self.scripts.len() + self.scriptlets.len() + self.builtin_entries.len() + self.apps.len() + self.skills.len() + self.flow_desk_corpus().len(),"
         ),
         "src/prompt_handler/mod.rs: the `choiceCount` sum in the \
          ScriptList arm of `state_for_script_list` (around line 1953) \
          must include `self.scripts.len() + self.scriptlets.len() + \
          self.builtin_entries.len() + self.apps.len() + \
-         self.skills.len()` in that exact order. Dropping `self.skills.len()` \
+         self.skills.len() + self.flow_desk_corpus().len()` in that exact \
+         order. Dropping `self.skills.len()` \
          was the Run 5 Pass #4 attacker anomaly \
          `stateresult-visible-exceeds-total-count`: automation saw \
          `visibleChoiceCount > choiceCount` whenever any skill was \
@@ -59,11 +60,11 @@ fn scriptlist_choice_count_includes_skills() {
 }
 
 #[test]
-fn search_entry_point_takes_exactly_five_collections() {
-    // If the fuzzy-search entry point grows a 6th collection, the
+fn search_entry_point_takes_exactly_six_collections() {
+    // If the fuzzy-search entry point grows a 7th collection, the
     // `choiceCount` sum in `state_for_script_list` must grow to match
     // or the Pass #4 anomaly returns. This test flags the drift in the
-    // commit that adds the 6th arg.
+    // commit that adds the 7th arg.
     //
     // Refactor threat: A contributor adding `agents: &[Agent]` (or
     // windows, fallbacks) as a search input would naturally update this
@@ -72,13 +73,13 @@ fn search_entry_point_takes_exactly_five_collections() {
     let filtering_cache = normalized(FILTERING_CACHE);
     assert!(
         filtering_cache.contains(
-            "scripts::fuzzy_search_unified_all_with_skills( &self.scripts, &self.scriptlets, &self.builtin_entries, &self.apps, &self.skills, search_text, )"
+            "scripts::fuzzy_search_unified_all_with_skills_and_flows( &self.scripts, &self.scriptlets, &self.builtin_entries, &self.apps, &self.skills, &flows, search_text, )"
         ),
         "src/app_impl/filtering_cache.rs: `recompute_filtered_results` \
-         must call `fuzzy_search_unified_all_with_skills` with exactly \
-         the 5 collections `&self.scripts, &self.scriptlets, \
-         &self.builtin_entries, &self.apps, &self.skills`, followed by \
-         normalized search text. If a 6th collection is added here, also update \
+         must call `fuzzy_search_unified_all_with_skills_and_flows` with \
+         exactly the 6 collections `&self.scripts, &self.scriptlets, \
+         &self.builtin_entries, &self.apps, &self.skills, &flows`, followed \
+         by normalized search text. If a 7th collection is added here, also update \
          the `choiceCount` sum in `src/prompt_handler/mod.rs` (around \
          line 1953, in the `ScriptList` arm of the `match &self.current_view` \
          block) to include it — otherwise the \

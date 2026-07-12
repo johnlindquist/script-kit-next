@@ -720,9 +720,11 @@ impl PlatformInput {
 #[cfg(test)]
 mod test {
 
+    use crate::util::FluentBuilder;
     use crate::{
-        self as gpui, AppContext as _, Context, FocusHandle, InteractiveElement, IntoElement,
-        KeyBinding, Keystroke, ParentElement, Render, TestAppContext, Window, div,
+        self as gpui, AnyView, AppContext as _, Context, FocusHandle, InteractiveElement,
+        IntoElement, KeyBinding, Keystroke, ParentElement, Render, StyleRefinement, Styled,
+        TestAppContext, Window, div,
     };
 
     struct TestView {
@@ -731,27 +733,60 @@ mod test {
         focus_handle: FocusHandle,
     }
 
+    struct CachedDebugChild;
+
+    impl Render for CachedDebugChild {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().debug_selector(|| "cached-debug-child".to_string())
+        }
+    }
+
+    struct CachedDebugParent {
+        child: crate::Entity<CachedDebugChild>,
+        show_child: bool,
+        revision: usize,
+    }
+
+    impl Render for CachedDebugParent {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .child(self.revision.to_string())
+                .when(self.show_child, |parent| {
+                    parent
+                        .child(AnyView::from(self.child.clone()).cached(StyleRefinement::default()))
+                })
+        }
+    }
+
     actions!(test_only, [TestAction]);
 
     impl Render for TestView {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            div().id("testview").child(
-                div()
-                    .key_context("parent")
-                    .on_key_down(cx.listener(|this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.saw_key_down = true
-                    }))
-                    .on_action(cx.listener(|this: &mut TestView, _: &TestAction, _, _| {
-                        this.saw_action = true
-                    }))
-                    .child(
-                        div()
-                            .key_context("nested")
-                            .track_focus(&self.focus_handle)
-                            .into_element(),
-                    ),
-            )
+            div()
+                .id("testview")
+                .debug_selector(|| "testview".into())
+                .child(
+                    div()
+                        .key_context("parent")
+                        .on_key_down(cx.listener(|this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.saw_key_down = true
+                        }))
+                        .on_action(cx.listener(|this: &mut TestView, _: &TestAction, _, _| {
+                            this.saw_action = true
+                        }))
+                        .child(
+                            div()
+                                .key_context("nested")
+                                .track_focus(&self.focus_handle)
+                                .into_element(),
+                        ),
+                )
+                .child(
+                    div()
+                        .hidden()
+                        .debug_selector(|| "display-none-debug-child".into()),
+                )
         }
     }
 
@@ -767,6 +802,17 @@ mod test {
             })
             .unwrap()
         });
+
+        window
+            .update(cx, |_, window, _| {
+                assert!(window.debug_bounds().contains_key("testview"));
+                assert!(
+                    !window
+                        .debug_bounds()
+                        .contains_key("display-none-debug-child")
+                );
+            })
+            .unwrap();
 
         cx.update(|cx| {
             cx.bind_keys(vec![KeyBinding::new("ctrl-g", TestAction, Some("parent"))]);
@@ -786,6 +832,71 @@ mod test {
                 assert!(test_view.saw_key_down || test_view.saw_action);
                 assert!(test_view.saw_key_down);
                 assert!(test_view.saw_action);
+            })
+            .unwrap();
+    }
+
+    #[gpui::test]
+    fn debug_bounds_replay_with_cached_paint_and_clear_when_removed(cx: &mut TestAppContext) {
+        let window = cx.update(|cx| {
+            let child = cx.new(|_| CachedDebugChild);
+            cx.open_window(Default::default(), |_, cx| {
+                cx.new(|_| CachedDebugParent {
+                    child,
+                    show_child: true,
+                    revision: 0,
+                })
+            })
+            .unwrap()
+        });
+
+        let initial_generation = window
+            .update(cx, |_, window, _| {
+                assert!(window.debug_bounds().contains_key("cached-debug-child"));
+                assert_eq!(
+                    window
+                        .debug_bounds_entries()
+                        .iter()
+                        .filter(|entry| entry.selector == "cached-debug-child")
+                        .count(),
+                    1,
+                );
+                window.rendered_frame_generation()
+            })
+            .unwrap();
+
+        window
+            .update(cx, |parent, _, cx| {
+                parent.revision += 1;
+                cx.notify();
+            })
+            .unwrap();
+        cx.run_until_parked();
+        window
+            .update(cx, |_, window, _| {
+                assert!(window.debug_bounds().contains_key("cached-debug-child"));
+                assert_eq!(
+                    window
+                        .debug_bounds_entries()
+                        .iter()
+                        .filter(|entry| entry.selector == "cached-debug-child")
+                        .count(),
+                    1,
+                );
+                assert!(window.rendered_frame_generation() > initial_generation);
+            })
+            .unwrap();
+
+        window
+            .update(cx, |parent, _, cx| {
+                parent.show_child = false;
+                cx.notify();
+            })
+            .unwrap();
+        cx.run_until_parked();
+        window
+            .update(cx, |_, window, _| {
+                assert!(!window.debug_bounds().contains_key("cached-debug-child"));
             })
             .unwrap();
     }

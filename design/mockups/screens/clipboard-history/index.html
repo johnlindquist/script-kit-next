@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Clipboard History mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: builtin/clipboard-history browser (src/render_builtins/clipboard.rs),
+  script-kit-dark, InfoBarBase chrome, MainWindowMode::Full 750×480,
+  6 deterministic seeded entries. Content mirrors
+  reference/clipboard-history@2x.png (devtools capture, 2026-07-11):
+  pinned "npm install -g mdflow@next" selected with accent icon tile +
+  relative-time description; link (#4) and color (#6) rows mount NO icon slot
+  (ListItem only mounts icons for Text rows / cached image thumbnails).
+  Sort = pinned DESC, timestamp DESC (database.rs:528). Right pane = preview
+  panel (clipboard_preview.rs): mono content block + Information table.
+  Placeholder shows the ROOT launcher placeholder as captured — source
+  configures "Search clipboard history..." (builtin_execution.rs:3557);
+  recorded as a contract conflict in the brief.
+  Footer labels come from universal_prompt_hints_with_primary_label("Paste");
+  the native AppKit overlay never appears in GPUI captures — see
+  ./known-divergence.json.
+  Every visual value resolves through generated --sk-* tokens; the
+  clipboard-specific names are proposed generated tokens aliased in
+  ./screen.css until the exporter ships them.
+-->
+<main class="stage" id="stage">
+  <div class="sk-window" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <canvas class="sk-window__effect" id="starfield" width="1500" height="960"></canvas>
+
+    <div class="sk-window__content">
+      <header class="sk-header">
+        <div class="sk-context-zone" data-component="main_view_chrome::context_zone">
+          <span class="sk-context-pill">~/.scriptkit <span class="sk-context-key">⇥</span></span>
+          <span class="sk-context-pill">Brain · GPT-5.6 SOL <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+        <div class="sk-search-shell" data-component="shared main filter input (render_search_input)">
+          <span class="sk-caret"></span>
+          <span class="sk-placeholder">Search • @ context • / commands • ; capture • : filters</span>
+        </div>
+      </header>
+
+      <!-- MainViewDividerChrome renders with visible: false on this surface -->
+
+      <div class="sk-clipboard-split" data-component="clipboard-history-root (list | preview)">
+        <section class="sk-clipboard-list-pane" data-component="list pane (uniform_list)">
+          <div class="sk-clipboard-section-slot" data-first="true" data-component="render_section_header (persistent leading separator)">
+            <div class="sk-clipboard-section-header">Clipboard</div>
+          </div>
+
+          <div class="sk-clipboard-rows">
+            <!-- Pinned entries sort first; row 0 selected by default. -->
+            <div class="sk-list-row" data-state="selected" data-component="list_item (44px InfoBarBase)">
+              <div class="sk-list-row__surface">
+                <span class="sk-list-row__icon-tile" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+                <span class="sk-list-row__copy">
+                  <span class="sk-list-row__name">📌 npm install -g mdflow@next</span>
+                  <span class="sk-list-row__description">1 hour ago</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="sk-list-row" data-component="list_item">
+              <div class="sk-list-row__surface">
+                <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+                <span class="sk-list-row__copy"><span class="sk-list-row__name">Design tokens stay in sync with the Rust ren…</span></span>
+              </div>
+            </div>
+
+            <div class="sk-list-row" data-component="list_item">
+              <div class="sk-list-row__surface">
+                <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+                <span class="sk-list-row__copy"><span class="sk-list-row__name">Meeting notes — Q3 launch</span></span>
+              </div>
+            </div>
+
+            <!-- Link content type: NO icon slot mounted. -->
+            <div class="sk-list-row" data-component="list_item (link — no icon)">
+              <div class="sk-list-row__surface">
+                <span class="sk-list-row__copy"><span class="sk-list-row__name">https://scriptkit.com/downloads</span></span>
+              </div>
+            </div>
+
+            <div class="sk-list-row" data-component="list_item">
+              <div class="sk-list-row__surface">
+                <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+                <span class="sk-list-row__copy"><span class="sk-list-row__name">const answer = 42;</span></span>
+              </div>
+            </div>
+
+            <!-- Color content type: NO icon slot mounted. -->
+            <div class="sk-list-row" data-component="list_item (color — no icon)">
+              <div class="sk-list-row__surface">
+                <span class="sk-list-row__copy"><span class="sk-list-row__name">#FBBF24</span></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="sk-clipboard-preview" data-component="render_clipboard_preview_panel">
+          <div class="sk-clipboard-preview__content" data-component="content area (mono block)">
+<pre>npm install -g mdflow@next</pre>
+          </div>
+          <div class="sk-clipboard-preview__info" data-component="Information block">
+            <div class="sk-clipboard-preview__info-heading">Information</div>
+            <div class="sk-clipboard-preview__info-row">
+              <span class="sk-clipboard-preview__info-label">Type</span>
+              <span class="sk-clipboard-preview__info-value">Text</span>
+            </div>
+            <div class="sk-clipboard-preview__info-row">
+              <span class="sk-clipboard-preview__info-label">Copied</span>
+              <span class="sk-clipboard-preview__info-value">just now · Jul 11, 2026 at 2:46 PM</span>
+            </div>
+            <div class="sk-clipboard-preview__info-row">
+              <span class="sk-clipboard-preview__info-label">Size</span>
+              <span class="sk-clipboard-preview__info-value">26 bytes</span>
+            </div>
+            <div class="sk-clipboard-preview__info-row">
+              <span class="sk-clipboard-preview__info-label">Pinned</span>
+              <span class="sk-clipboard-preview__info-value">Yes</span>
+            </div>
+            <div class="sk-clipboard-preview__info-row">
+              <span class="sk-clipboard-preview__info-label">Characters</span>
+              <span class="sk-clipboard-preview__info-value">26</span>
+            </div>
+            <div class="sk-clipboard-preview__info-row">
+              <span class="sk-clipboard-preview__info-label">Lines</span>
+              <span class="sk-clipboard-preview__info-value">1</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Native AppKit footer overlay — labels derived from
+           universal_prompt_hints_with_primary_label("Paste"); GPUI window
+           captures show this band EMPTY (verify via activeFooter probe). -->
+      <footer class="sk-footer-host" data-component="native footer host" data-native-footer>
+        <div class="sk-footer-rail" data-component="footer_chrome">
+          <span class="sk-footer-spacer"></span>
+          <button class="sk-footer-action sk-footer-action--run">
+            <span class="sk-footer-label">Paste</span>
+            <kbd class="sk-keycap">↵</kbd>
+          </button>
+          <button class="sk-footer-action sk-footer-action--actions">
+            <span class="sk-footer-label">Actions</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+          </button>
+          <button class="sk-footer-action sk-footer-action--agent">
+            <span class="sk-footer-label">Agent</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">↵</kbd>
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</main>
+<script src="../main-menu/starfield.js"></script>
+</body>
+</html>

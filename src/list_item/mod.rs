@@ -212,7 +212,14 @@ impl ListItemMetricsOverride {
     }
 
     pub fn from_main_menu_theme(theme: crate::designs::MainMenuThemeVariant) -> Self {
-        let def = theme.def();
+        Self::from_main_menu_def(theme.def())
+    }
+
+    /// Metrics from an explicit main-menu def. The design-contract exporter
+    /// passes `base_def()` here so checked-in artifacts ignore dev-style
+    /// runtime overrides; production rendering keeps using
+    /// [`Self::from_main_menu_theme`] (which resolves overrides via `def()`).
+    pub fn from_main_menu_def(def: crate::designs::MainMenuThemeDef) -> Self {
         Self {
             item_height: def.list.item_height,
             section_header_height: def.list.section_header_height,
@@ -263,6 +270,80 @@ impl ListItemMetricsOverride {
             section_weight: def.typography.section_weight,
             desc_quiet_alpha: def.metadata.metadata_alpha,
         }
+    }
+}
+
+/// Which base color a main-menu row's selection/hover fill derives from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MainMenuRowFillBase {
+    TextPrimary,
+    Accent,
+}
+
+/// Fill bytes a main-menu row actually paints. Shared by `ListItem::render`
+/// and the design-contract exporter (`design/mockups`) so the HTML mockups
+/// consume the exact alphas the renderer uses — do not duplicate this
+/// row-kind match anywhere else.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ResolvedMainMenuRowFill {
+    pub base: MainMenuRowFillBase,
+    pub selected_alpha: u8,
+    pub hover_alpha: u8,
+    pub icon_tile_alpha: u32,
+    pub icon_tile_radius: f32,
+}
+
+pub fn resolved_main_menu_row_fill(
+    row_kind: crate::designs::MainMenuRowKind,
+    metrics: &ListItemMetricsOverride,
+    theme_hover_opacity: f32,
+) -> ResolvedMainMenuRowFill {
+    use crate::designs::MainMenuRowKind as K;
+    let base = match row_kind {
+        K::IconTile
+        | K::GraphitePill
+        | K::Smoke
+        | K::BlueGlass
+        | K::LiquidPrism
+        | K::MilkGlass
+        | K::SpotlightLuxe => MainMenuRowFillBase::TextPrimary,
+        K::WarmGold
+        | K::FrostedCommand
+        | K::AuroraSlate
+        | K::OceanGlass
+        | K::StudioPaperGlass
+        | K::OperatorMonoGlass
+        | K::ProConsole
+        | K::CarbonNeon => MainMenuRowFillBase::Accent,
+    };
+    // IconTile lets the theme's hover opacity win when it is stronger than
+    // the component token; every other kind paints the component token as-is.
+    let hover_alpha = match row_kind {
+        K::IconTile => ((theme_hover_opacity * 255.0) as u32).max(metrics.row_hover_fill_alpha),
+        _ => metrics.row_hover_fill_alpha,
+    } as u8;
+    let icon_tile_alpha_floor: u32 = match row_kind {
+        K::MilkGlass => 0xB8,
+        K::ProConsole => 0xC8,
+        K::LiquidPrism | K::StudioPaperGlass => 0xCC,
+        K::FrostedCommand => 0xD0,
+        K::AuroraSlate | K::OceanGlass => 0xD8,
+        K::SpotlightLuxe => 0xE0,
+        K::WarmGold | K::BlueGlass => 0xE6,
+        K::CarbonNeon => 0xF0,
+        _ => 0xF2,
+    };
+    let icon_tile_radius_floor: f32 = match row_kind {
+        K::ProConsole | K::CarbonNeon | K::OperatorMonoGlass => 6.0,
+        K::SpotlightLuxe => 10.0,
+        _ => 7.0,
+    };
+    ResolvedMainMenuRowFill {
+        base,
+        selected_alpha: metrics.row_selected_fill_alpha as u8,
+        hover_alpha,
+        icon_tile_alpha: metrics.icon_tile_fill_alpha.max(icon_tile_alpha_floor),
+        icon_tile_radius: metrics.icon_tile_radius.max(icon_tile_radius_floor),
     }
 }
 
@@ -1638,54 +1719,18 @@ impl RenderOnce for ListItem {
                 | MainMenuRowKind::CarbonNeon
         );
 
-        // Both hover and selected use text_primary at different opacities by default.
-        let hover_alpha = ((colors.hover_opacity * 255.0) as u32).max(metrics.row_hover_fill_alpha);
-        let (selected_bg, hover_bg): (Hsla, Hsla) = match row_kind {
-            MainMenuRowKind::IconTile => (
-                colors
-                    .text_primary
-                    .rgba8(metrics.row_selected_fill_alpha as u8),
-                colors.text_primary.rgba8(hover_alpha as u8),
+        // Both hover and selected use text_primary at different opacities by
+        // default. The byte resolution is shared with the design-contract
+        // exporter — change resolved_main_menu_row_fill, not this call site.
+        let row_fill = resolved_main_menu_row_fill(row_kind, &metrics, colors.hover_opacity);
+        let (selected_bg, hover_bg): (Hsla, Hsla) = match row_fill.base {
+            MainMenuRowFillBase::TextPrimary => (
+                colors.text_primary.rgba8(row_fill.selected_alpha),
+                colors.text_primary.rgba8(row_fill.hover_alpha),
             ),
-            MainMenuRowKind::GraphitePill => (
-                colors
-                    .text_primary
-                    .rgba8(metrics.row_selected_fill_alpha as u8),
-                colors
-                    .text_primary
-                    .rgba8(metrics.row_hover_fill_alpha as u8),
-            ),
-            MainMenuRowKind::Smoke => (
-                colors
-                    .text_primary
-                    .rgba8(metrics.row_selected_fill_alpha as u8),
-                colors
-                    .text_primary
-                    .rgba8(metrics.row_hover_fill_alpha as u8),
-            ),
-            MainMenuRowKind::BlueGlass
-            | MainMenuRowKind::LiquidPrism
-            | MainMenuRowKind::MilkGlass
-            | MainMenuRowKind::SpotlightLuxe => (
-                colors
-                    .text_primary
-                    .rgba8(metrics.row_selected_fill_alpha as u8),
-                colors
-                    .text_primary
-                    .rgba8(metrics.row_hover_fill_alpha as u8),
-            ),
-            MainMenuRowKind::WarmGold
-            | MainMenuRowKind::FrostedCommand
-            | MainMenuRowKind::AuroraSlate
-            | MainMenuRowKind::OceanGlass
-            | MainMenuRowKind::StudioPaperGlass
-            | MainMenuRowKind::OperatorMonoGlass => (
-                accent_at(metrics.row_selected_fill_alpha).into(),
-                accent_at(metrics.row_hover_fill_alpha).into(),
-            ),
-            MainMenuRowKind::ProConsole | MainMenuRowKind::CarbonNeon => (
-                accent_at(metrics.row_selected_fill_alpha).into(),
-                accent_at(metrics.row_hover_fill_alpha).into(),
+            MainMenuRowFillBase::Accent => (
+                accent_at(row_fill.selected_alpha as u32).into(),
+                accent_at(row_fill.hover_alpha as u32).into(),
             ),
         };
 
@@ -1760,24 +1805,10 @@ impl RenderOnce for ListItem {
         };
 
         // Icon Tile: seat the selected icon inside a solid filled accent tile.
-        let icon_tile_alpha = match row_kind {
-            MainMenuRowKind::MilkGlass => 0xB8,
-            MainMenuRowKind::ProConsole => 0xC8,
-            MainMenuRowKind::LiquidPrism | MainMenuRowKind::StudioPaperGlass => 0xCC,
-            MainMenuRowKind::FrostedCommand => 0xD0,
-            MainMenuRowKind::AuroraSlate | MainMenuRowKind::OceanGlass => 0xD8,
-            MainMenuRowKind::SpotlightLuxe => 0xE0,
-            MainMenuRowKind::WarmGold | MainMenuRowKind::BlueGlass => 0xE6,
-            MainMenuRowKind::CarbonNeon => 0xF0,
-            _ => 0xF2,
-        };
-        let icon_tile_radius = match row_kind {
-            MainMenuRowKind::ProConsole
-            | MainMenuRowKind::CarbonNeon
-            | MainMenuRowKind::OperatorMonoGlass => 6.0,
-            MainMenuRowKind::SpotlightLuxe => 10.0,
-            _ => 7.0,
-        };
+        // Alphas/radius resolve through the shared row-fill resolver so the
+        // design-contract exporter stays byte-identical to this paint.
+        let icon_tile_alpha = row_fill.icon_tile_alpha;
+        let icon_tile_radius = row_fill.icon_tile_radius;
         let icon_element = if icon_tile && self.icon.is_some() {
             div()
                 .w(px(metrics.icon_tile_size))
@@ -1785,8 +1816,8 @@ impl RenderOnce for ListItem {
                 .flex()
                 .items_center()
                 .justify_center()
-                .rounded(px(metrics.icon_tile_radius.max(icon_tile_radius)))
-                .bg(accent_at(metrics.icon_tile_fill_alpha.max(icon_tile_alpha)))
+                .rounded(px(icon_tile_radius))
+                .bg(accent_at(icon_tile_alpha))
                 .flex_shrink_0()
                 .child(icon_element)
         } else {
@@ -2364,19 +2395,15 @@ pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
 /// * `colors` - ListItemColors for theme-aware styling
 /// * `_is_first` - Reserved for existing call sites; unused because headers no longer draw separators
 ///
+/// Section headers are single-line by contract: exactly one separator row per
+/// group, matching the main-menu list language everywhere (launcher, Agent
+/// Chat composer pickers, notes spine). A two-line title+subtitle header reads
+/// as a doubled separator (2026-07-10 "@" context picker bug), so no subtitle
+/// variant exists — section subtitles stay data-only (tooltips/protocol), not
+/// list chrome.
 pub fn render_section_header(
     label: &str,
     icon: Option<&str>,
-    colors: ListItemColors,
-    is_first: bool,
-) -> impl IntoElement {
-    render_section_header_with_subtitle(label, icon, None, colors, is_first)
-}
-
-pub fn render_section_header_with_subtitle(
-    label: &str,
-    icon: Option<&str>,
-    subtitle: Option<&str>,
     colors: ListItemColors,
     is_first: bool,
 ) -> impl IntoElement {
@@ -2433,9 +2460,6 @@ pub fn render_section_header_with_subtitle(
         );
     }
 
-    let has_subtitle = subtitle.is_some_and(|value| !value.trim().is_empty());
-    let subtitle_text = subtitle.filter(|value| !value.trim().is_empty());
-
     let (header_height, padding_top) = if is_first {
         // First section headers align their top breathing room with the shared
         // main-view header bottom padding, so the query/header block and the
@@ -2446,14 +2470,6 @@ pub fn render_section_header_with_subtitle(
         )
     } else {
         (metrics.section_header_height, metrics.section_padding_top)
-    };
-    let header_height = if has_subtitle {
-        header_height
-            + metrics.section_header_font_size
-            + metrics.section_gap
-            + metrics.section_padding_bottom
-    } else {
-        header_height
     };
 
     // Clean section headers — no background tint for a calmer list appearance
@@ -2472,21 +2488,7 @@ pub fn render_section_header_with_subtitle(
     }; // Later headers stay bottom-anchored between rows.
 
     // No separator lines — spacing alone defines groups per whisper-chrome spec
-    let mut stack = div()
-        .flex()
-        .flex_col()
-        .gap(px(metrics.section_gap))
-        .child(content);
-    if let Some(subtitle) = subtitle_text {
-        stack = stack.child(
-            div()
-                .text_size(px(metrics.section_header_font_size))
-                .font_weight(metrics.section_weight)
-                .text_color(rgba((colors.text_primary << 8) | colors.alpha_hint))
-                .child(subtitle.to_string()),
-        );
-    }
-    header.child(stack)
+    header.child(content)
 }
 // Note: GPUI rendering tests omitted due to GPUI macro recursion limit issues.
 // The LIST_ITEM_HEIGHT constant is 40.0 and the component is integration-tested

@@ -50,7 +50,7 @@
                                         size: gpui::size(
                                             gpui::px(750.),
                                             crate::window_resize::height_for_view(
-                                                crate::window_resize::ViewType::DivPrompt,
+                                                crate::window_resize::ViewType::MainWindow,
                                                 0,
                                             ),
                                         ),

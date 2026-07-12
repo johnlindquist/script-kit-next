@@ -1,0 +1,44 @@
+{
+  "source": "scripts/agentic/design-reference-capture.ts --screen settings (protocol captureScreenshot, hiDpi, target kind=main; sandboxHome:true, triggerBuiltin builtin/settings)",
+  "capturedAt": "2026-07-11",
+  "logicalSize": [
+    750,
+    480
+  ],
+  "physicalSize": [
+    1500,
+    960
+  ],
+  "scaleFactor": 2,
+  "appearance": "dark",
+  "material": "menu",
+  "backdropSaturation": 2.6,
+  "motion": "starfield phase is capture-time state (fx shader id 3)",
+  "referenceCrop": [
+    0,
+    0,
+    1500,
+    960
+  ],
+  "backdrop": "user's live desktop (NOT the synthetic fixture backdrop)",
+  "colorProfile": "recorded-at-capture (same non-blocking class as confirmCapture.stockThemeVsReferenceRaster)",
+  "fixture": {
+    "command": "triggerBuiltin builtin/settings (direct-open path — opened_from_main_menu unset, Escape closes the window)",
+    "filter": "",
+    "selectedIndex": 0,
+    "selectedRow": "Theme Designer (description revealed)",
+    "sandboxHome": true,
+    "customPositionsAtCensus": true,
+    "datasetCount": 12,
+    "visibleCount": 12,
+    "countLabel": "12 settings",
+    "contextZone": "fixture-variable capture state (model pill read 'Brain · GPT-5.6 SOL')",
+    "rows": "iconless (settingsRows.authoredIconHintsVsResolvedNone); 'Reset Window Positions' present but below the fold",
+    "activeFooter": "receipt PENDING — source-likely Run ↵ / Actions ⌘K (settingsFooter.nativeRunVsGpuiOpenHint); the GPUI capture band is the empty 32px rail reservation, the 36px native host is a separate overlay window"
+  },
+  "pixelReceipts": {
+    "firstSectionSlot": "26px legacy slot / 6px top padding (selected surface starts ~89pt: header 58 + list padding 4 + first slot 26 + window edge) — NOT the themed 28/4",
+    "note": "sandboxHome:true did NOT pin the 11-row base census: windowState.hasCustomPositions was already true by first settings render (driver show/position writes a window-state entry, or the sandbox dir was reused). Record customPositionsAtCensus on every retake; never assume sandboxHome implies a fresh window-state store."
+  },
+  "tokenBundleHash": "sha256:cb709721ef84ef9b2faa29828408fcd83422c5f5567bd1ce3fff695162487922"
+}

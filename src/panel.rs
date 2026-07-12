@@ -66,7 +66,7 @@ pub const DEFAULT_PLACEHOLDER: &str = crate::ROOT_LAUNCHER_PLACEHOLDER;
 ///
 /// This matches the standard cursor width used in editor.rs and provides
 /// visual consistency across all input fields.
-pub const CURSOR_WIDTH: f32 = 2.0;
+pub const CURSOR_WIDTH: f32 = 2.5;
 
 /// Cursor height for large text (.text_lg() / 18px font)
 ///
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_cursor_width_constant() {
-        assert_eq!(CURSOR_WIDTH, 2.0);
+        assert_eq!(CURSOR_WIDTH, 2.5);
     }
 
     #[test]

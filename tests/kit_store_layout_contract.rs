@@ -31,38 +31,58 @@ fn kit_store_custom_lists_use_liquid_glass_panel_radius() {
 }
 
 #[test]
-fn kit_store_browse_layout_receipt_uses_custom_surface_nodes() {
+fn kit_store_browse_layout_receipt_uses_shared_chrome_and_content_nodes() {
     for needle in [
-        "KitStoreBrowseHeader",
-        "KitStoreBrowseSearch",
+        "resolved_main_view_header_input_policy",
+        "main_view_header_metrics(menu_def, input_height)",
+        "MainViewHeader",
+        "MainViewContextZone",
+        "MainViewInput",
+        "MainViewMain",
+        "KitStoreBrowseSurface",
         "KitStoreBrowseCount",
         "KitStoreBrowseList",
         "KitStoreBrowseRow",
         "KitStoreBrowseInstallButton",
         "KitStoreBrowseFooter",
         "KIT_STORE_ROW_HEIGHT: f32 = 72.0",
-        "instead of the generic launcher split shell",
+        "canonical MainViewInput trailing slot",
     ] {
         assert!(
             LAYOUT_SOURCE.contains(needle),
             "KitStoreBrowse layout receipt is missing `{needle}`"
         );
     }
+
+    for forbidden in [
+        "KitStoreBrowseHeader",
+        "KitStoreBrowseSearch",
+        "KitStoreBrowseDivider",
+        "KIT_STORE_HEADER_HEIGHT",
+        "KIT_STORE_INPUT_HEIGHT",
+    ] {
+        assert!(
+            !LAYOUT_SOURCE.contains(forbidden),
+            "KitStoreBrowse must not keep stale custom header geometry: {forbidden}"
+        );
+    }
 }
 
 #[test]
-fn kit_store_installed_layout_receipt_uses_custom_surface_nodes() {
+fn kit_store_installed_layout_receipt_uses_shared_chrome_and_content_nodes() {
     for needle in [
-        "KitStoreInstalledHeader",
-        "KitStoreInstalledSearch",
+        "MainViewHeader",
+        "MainViewContextZone",
+        "MainViewInput",
+        "MainViewMain",
+        "KitStoreInstalledSurface",
         "KitStoreInstalledCount",
         "KitStoreInstalledList",
         "KitStoreInstalledRow",
         "KitStoreInstalledFooter",
         "crate::list_item::LIST_ITEM_HEIGHT",
-        "shared MainViewInput search lane",
+        "canonical MainViewInput trailing slot",
         "shared ListItem chrome",
-        "instead of the generic launcher split shell",
     ] {
         assert!(
             LAYOUT_SOURCE.contains(needle),
@@ -71,11 +91,16 @@ fn kit_store_installed_layout_receipt_uses_custom_surface_nodes() {
     }
 
     for forbidden in [
+        "KitStoreInstalledHeader",
+        "KitStoreInstalledSearch",
+        "KitStoreInstalledDivider",
         "KitStoreInstalledTitle",
         "KitStoreInstalledUpdateButton",
         "KitStoreInstalledRemoveButton",
         "kitStoreInstalled.actionButton",
         "Installed kit rows are 72px tall",
+        "KIT_STORE_HEADER_HEIGHT",
+        "KIT_STORE_INPUT_HEIGHT",
     ] {
         assert!(
             !LAYOUT_SOURCE.contains(forbidden),

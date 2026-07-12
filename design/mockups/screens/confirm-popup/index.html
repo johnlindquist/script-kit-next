@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Confirm Prompt mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: in-window confirm prompt (openConfirmPrompt), danger variant,
+  script-kit-dark, Starfield. Content mirrors reference/confirm-popup@2x.png,
+  a clean devtools capture (scripts/agentic/design-reference-capture.ts
+  \-\-screen confirm) of the live app on 2026-07-11: title "Delete?",
+  body "This cannot be undone.".
+  Footer buttons (Delete/Keep) come from a live activeFooter probe — the
+  native AppKit overlay never appears in GPUI window captures.
+-->
+<main class="stage" id="stage">
+  <div class="sk-window sk-window--confirm" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <canvas class="sk-window__effect" id="starfield" width="1500" height="1000"></canvas>
+
+    <div class="sk-window__content">
+      <header class="sk-header" data-component="render_main_view_context_header">
+        <div class="sk-context-zone" data-component="main_view_chrome::context_zone">
+          <span class="sk-context-pill">~/.scriptkit <span class="sk-context-key">⇥</span></span>
+          <span class="sk-context-pill">Script Kit · gpt-5.5 <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+      </header>
+
+      <div class="sk-confirm-shell" data-component="render_confirm_prompt (fixed STANDARD_HEIGHT shell)">
+        <div class="sk-confirm-content">
+          <div class="sk-confirm-title" data-variant="danger">Delete?</div>
+          <div class="sk-confirm-body">This cannot be undone.</div>
+        </div>
+        <div class="sk-confirm-footer-spacer" data-component="native footer spacer (clipped off-window)"></div>
+      </div>
+    </div>
+
+    <!-- Native AppKit footer overlay — labels/selection from live protocol
+         probe (activeFooter: apply='Delete ↵' selected, close='Keep Esc'). -->
+    <footer class="sk-confirm-native-footer" data-component="native footer overlay" data-native-footer>
+      <div class="sk-footer-rail" data-component="footer_chrome">
+        <span class="sk-footer-spacer"></span>
+        <button class="sk-footer-action" data-selected="true">
+          <span class="sk-footer-label">Delete</span>
+          <kbd class="sk-keycap">↵</kbd>
+        </button>
+        <button class="sk-footer-action">
+          <span class="sk-footer-label">Keep</span>
+          <kbd class="sk-keycap">Esc</kbd>
+        </button>
+      </div>
+    </footer>
+  </div>
+</main>
+<script src="../main-menu/starfield.js"></script>
+</body>
+</html>

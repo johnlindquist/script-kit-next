@@ -5,13 +5,13 @@ use chrono::Utc;
 use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
 use crate::notes::deeplink_activation::{
-    Activation, ActivationErrorReason, ActivationSurface, resolve_activation,
-    run_deeplink_confirm_options,
+    resolve_activation, run_deeplink_confirm_options, Activation, ActivationErrorReason,
+    ActivationSurface,
 };
 use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
 use script_kit_gpui::day_page::normalize_day_page_markdown_references;
 use script_kit_gpui::day_page::{
-    DayPageBinding, DayPageSegment, parse_day_page_segments, resolve_fragment_path,
+    parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -178,7 +178,7 @@ impl DayPageView {
     /// refresh the shelf. Only the plain Day binding carries a shelf; notes
     /// and fragments show their content verbatim.
     fn adopt_clipboard_shelf_from(&mut self, full: &str) -> String {
-        use script_kit_gpui::day_page::{DayPageBinding, split_day_page_clipboard_shelf};
+        use script_kit_gpui::day_page::{split_day_page_clipboard_shelf, DayPageBinding};
         if !matches!(self.session.binding(), DayPageBinding::Day) {
             self.clipboard_shelf.clear();
             return full.to_string();
@@ -214,7 +214,7 @@ impl DayPageView {
     /// out on the Day binding, verbatim otherwise). Read-only counterpart of
     /// `adopt_clipboard_shelf_from` for diffing against editor text.
     fn visible_content_of(&self, full: &str) -> String {
-        use script_kit_gpui::day_page::{DayPageBinding, split_day_page_clipboard_shelf};
+        use script_kit_gpui::day_page::{split_day_page_clipboard_shelf, DayPageBinding};
         if !matches!(self.session.binding(), DayPageBinding::Day) {
             return full.to_string();
         }
@@ -792,29 +792,18 @@ impl Render for DayPageView {
         let tokens = get_tokens(app_state.current_design);
         let design_visual = tokens.visual();
         let is_default_design = app_state.current_design.is_default();
-        let design_spacing = tokens.spacing();
         let text_primary = app_state.theme.colors.text.primary;
         let font_family = app_state.theme_font_family();
-
-        let header_padding_x = shell.header_padding_x;
-        let header_padding_y = if is_default_design {
-            shell.header_padding_y
-        } else {
-            design_spacing.padding_sm
-        };
-        let header_gap = if is_default_design {
-            shell.header_gap
-        } else {
-            design_spacing.gap_md
-        };
 
         let columns = crate::components::main_view_chrome::main_view_content_columns(menu_def);
         let editor_layout = self.notes_editor.read(cx).layout();
         let viewport_height = window.viewport_size().height.as_f32();
-        // Day Page renders the shared context row with an intentionally empty
-        // input slot. Do not reserve a phantom search-input height here.
+        // Day Page is the explicit view-owned context-only policy: its editor
+        // belongs to MainViewMain, so no phantom input lane or input gap is
+        // reserved above it.
         let header_height =
-            header_padding_y * 2.0 + menu_def.header_info_bar.height_px + header_gap;
+            crate::components::main_view_chrome::main_view_header_metrics(menu_def, None)
+                .header_height;
         let footer_height = crate::components::footer_chrome::current_main_menu_footer_height();
         let shelf_count = if self.kit_resource_preview.is_none() {
             self.clipboard_shelf.len()
@@ -964,6 +953,11 @@ impl Render for DayPageView {
             .when_some(back_bar, |parent, bar| parent.child(bar))
             .child(
                 div()
+                    // GPUI divs are display:block by default; without .flex()
+                    // the editor's flex_1/h_full chain resolves against an
+                    // auto height and collapses to a single line.
+                    .flex()
+                    .flex_col()
                     .flex_1()
                     .min_h(px(DAY_PAGE_MIN_EDITOR_HEIGHT_PX))
                     .child(editor_content),
@@ -993,13 +987,10 @@ impl Render for DayPageView {
             )
             .into_any_element();
 
-        let header = crate::components::main_view_chrome::MainViewHeaderChrome {
-            context: Some(context_zone),
-            input: div().into_any_element(),
-            padding_x: header_padding_x,
-            padding_y: header_padding_y,
-            gap: header_gap,
-        };
+        let header = crate::components::main_view_chrome::MainViewHeaderChrome::context_only(
+            menu_def,
+            context_zone,
+        );
 
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {
             margin_x: shell.divider_margin_x,
@@ -1057,7 +1048,7 @@ impl DayPageView {
 
     fn render_kit_resource_preview(&self, cx: &mut Context<Self>) -> AnyElement {
         use crate::components::resource_preview::{
-            ResourcePreviewSurface, render_resource_preview,
+            render_resource_preview, ResourcePreviewSurface,
         };
 
         let Some(preview) = self.kit_resource_preview.as_ref() else {

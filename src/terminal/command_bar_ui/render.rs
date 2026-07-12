@@ -190,25 +190,37 @@ impl Render for TerminalCommandBar {
                                 input_text_color
                             })
                             .when(self.search_text.is_empty(), |d| {
-                                d.child(
-                                    div()
-                                        .w(px(2.))
-                                        .h(px(16.))
-                                        .mr(px(2.))
-                                        .rounded(px(1.))
-                                        .when(self.cursor_visible, |d| d.bg(accent_color)),
-                                )
+                                let bar = div()
+                                    .w(px(crate::panel::CURSOR_WIDTH))
+                                    .h(px(16.))
+                                    .mr(px(2.))
+                                    .rounded(px(crate::panel::CURSOR_WIDTH / 2.0));
+                                d.child(if self.cursor_visible {
+                                    crate::components::text_input::pulse_cursor_bar(
+                                        bar.bg(accent_color),
+                                        "terminal-command-bar-cursor-leading",
+                                    )
+                                    .into_any_element()
+                                } else {
+                                    bar.into_any_element()
+                                })
                             })
                             .child(search_display)
                             .when(!self.search_text.is_empty(), |d| {
-                                d.child(
-                                    div()
-                                        .w(px(2.))
-                                        .h(px(16.))
-                                        .ml(px(2.))
-                                        .rounded(px(1.))
-                                        .when(self.cursor_visible, |d| d.bg(accent_color)),
-                                )
+                                let bar = div()
+                                    .w(px(crate::panel::CURSOR_WIDTH))
+                                    .h(px(16.))
+                                    .ml(px(2.))
+                                    .rounded(px(crate::panel::CURSOR_WIDTH / 2.0));
+                                d.child(if self.cursor_visible {
+                                    crate::components::text_input::pulse_cursor_bar(
+                                        bar.bg(accent_color),
+                                        "terminal-command-bar-cursor-trailing",
+                                    )
+                                    .into_any_element()
+                                } else {
+                                    bar.into_any_element()
+                                })
                             }),
                     ),
             )

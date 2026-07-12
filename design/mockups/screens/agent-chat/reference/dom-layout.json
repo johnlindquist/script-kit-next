@@ -1,0 +1,789 @@
+{
+  "devicePixelRatio": 2,
+  "elements": [
+    {
+      "clipRect": {
+        "bottom": 480,
+        "height": 480,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 0
+      },
+      "fidelityId": "agent-chat.header.context-zone",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 26,
+        "height": 22,
+        "right": 756,
+        "width": 762,
+        "x": -6,
+        "y": 4
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\"JetBrains Mono\", ui-monospace, monospace",
+        "fontSize": "10.5px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "1",
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "/var/tmp/script-kit-agent-chat-reference/agent-chat-kitchen-sink-long-workspace\nAgent Chat Kitchen Sink · Agent Chat Kitchen Sink\n⇧\n⇥",
+      "visibleRect": {
+        "bottom": 26,
+        "height": 22,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 26,
+        "height": 22,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 4
+      },
+      "fidelityId": "agent-chat.header.cwd-chip",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 22,
+        "height": 14,
+        "right": 503.703125,
+        "width": 509.703125,
+        "x": -6,
+        "y": 8
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "14px",
+        "borderBottomRightRadius": "14px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "14px",
+        "borderTopRightRadius": "14px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\"JetBrains Mono\", ui-monospace, monospace",
+        "fontSize": "10.5px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "0.17",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "nowrap"
+      },
+      "text": "/var/tmp/script-kit-agent-chat-reference/agent-chat-kitchen-sink-long-workspace",
+      "visibleRect": {
+        "bottom": 22,
+        "height": 14,
+        "right": 503.703125,
+        "width": 503.703125,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 26,
+        "height": 22,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 4
+      },
+      "fidelityId": "agent-chat.header.trailing-chip",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 26,
+        "height": 22,
+        "right": 756,
+        "width": 369.703125,
+        "x": 386.296875,
+        "y": 4
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "14px",
+        "borderBottomRightRadius": "14px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "14px",
+        "borderTopRightRadius": "14px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\"JetBrains Mono\", ui-monospace, monospace",
+        "fontSize": "10.5px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "0.17",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "nowrap"
+      },
+      "text": "Agent Chat Kitchen Sink · Agent Chat Kitchen Sink\n⇧\n⇥",
+      "visibleRect": {
+        "bottom": 26,
+        "height": 22,
+        "right": 750,
+        "width": 363.703125,
+        "x": 386.296875,
+        "y": 4
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 480,
+        "height": 480,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 0
+      },
+      "fidelityId": "agent-chat.composer.shell",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 54,
+        "height": 26,
+        "right": 748,
+        "width": 746,
+        "x": 2,
+        "y": 28
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "Follow up…\n↑",
+      "visibleRect": {
+        "bottom": 54,
+        "height": 26,
+        "right": 748,
+        "width": 746,
+        "x": 2,
+        "y": 28
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 480,
+        "height": 480,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 0
+      },
+      "fidelityId": "agent-chat.composer.input",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 54,
+        "height": 26,
+        "right": 724,
+        "width": 722,
+        "x": 2,
+        "y": 28
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "20px",
+        "fontWeight": "430",
+        "lineHeight": "26px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "Follow up…",
+      "visibleRect": {
+        "bottom": 54,
+        "height": 26,
+        "right": 724,
+        "width": 722,
+        "x": 2,
+        "y": 28
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 480,
+        "height": 480,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 0
+      },
+      "fidelityId": "agent-chat.composer.send",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 53,
+        "height": 24,
+        "right": 748,
+        "width": 24,
+        "x": 724,
+        "y": 29
+      },
+      "style": {
+        "backgroundColor": "rgba(255, 255, 255, 0.024)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "6px",
+        "borderBottomRightRadius": "6px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "6px",
+        "borderTopRightRadius": "6px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "0.3",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "↑",
+      "visibleRect": {
+        "bottom": 53,
+        "height": 24,
+        "right": 748,
+        "width": 24,
+        "x": 724,
+        "y": 29
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 480,
+        "height": 480,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 0
+      },
+      "fidelityId": "agent-chat.transcript.viewport",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 444,
+        "height": 386,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 58
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "Scroll sentinel 2 from the user side.\n\nScroll sentinel 3:\n\n./scripts/agentic/agent-cargo.sh test --test agent_chat_kitchen_sink_fixture_contract\n\nThe command appears as markdown only; it is not executed by the fixture.\n\nSystem checkpoint: fixture transcript remains static, deterministic, and safe.\n\n▾\n✓\n✎ edit\nsrc/ai/agent_chat/ui/components/transcript.rs\n  41 fn render_message(\n- 42     let label = \"Tool\";\n+ 42     let label = meta.tool_name.clone();\n+ 43     let subject = meta.subject.clone();\n  44     // header renders status badge\n▾\n✕\n❯ bash\ncargo test --workspace --quiet\nfailed\n\nerror: test failed, to rerun pass --lib\n\nFinal visible sentinel: Agent Chat Kitchen Sink complete.\n\nThe style dev tool should later expose Agent Chat controls while this transcript remains open.",
+      "visibleRect": {
+        "bottom": 444,
+        "height": 386,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 58
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 444,
+        "height": 386,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 58
+      },
+      "fidelityId": "agent-chat.transcript.message.assistant-17",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 129.53125,
+        "height": 99.9375,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 29.59375
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "Scroll sentinel 3:\n\n./scripts/agentic/agent-cargo.sh test --test agent_chat_kitchen_sink_fixture_contract\n\nThe command appears as markdown only; it is not executed by the fixture.",
+      "visibleRect": {
+        "bottom": 129.53125,
+        "height": 71.53125,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 58
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 444,
+        "height": 386,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 58
+      },
+      "fidelityId": "agent-chat.transcript.message.system-18",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 164.53125,
+        "height": 35,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 129.53125
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "System checkpoint: fixture transcript remains static, deterministic, and safe.",
+      "visibleRect": {
+        "bottom": 164.53125,
+        "height": 35,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 129.53125
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 444,
+        "height": 386,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 58
+      },
+      "fidelityId": "agent-chat.transcript.tool.edit-diff",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 322.53125,
+        "height": 158,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 164.53125
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "▾\n✓\n✎ edit\nsrc/ai/agent_chat/ui/components/transcript.rs\n  41 fn render_message(\n- 42     let label = \"Tool\";\n+ 42     let label = meta.tool_name.clone();\n+ 43     let subject = meta.subject.clone();\n  44     // header renders status badge",
+      "visibleRect": {
+        "bottom": 322.53125,
+        "height": 158,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 164.53125
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 444,
+        "height": 386,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 58
+      },
+      "fidelityId": "agent-chat.transcript.tool.bash-failed",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 381.53125,
+        "height": 59,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 322.53125
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "▾\n✕\n❯ bash\ncargo test --workspace --quiet\nfailed\n\nerror: test failed, to rerun pass --lib",
+      "visibleRect": {
+        "bottom": 381.53125,
+        "height": 59,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 322.53125
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 444,
+        "height": 386,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 58
+      },
+      "fidelityId": "agent-chat.transcript.message.assistant-21",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 444,
+        "height": 62.46875,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 381.53125
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "14px",
+        "fontWeight": "400",
+        "lineHeight": "23px",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "Final visible sentinel: Agent Chat Kitchen Sink complete.\n\nThe style dev tool should later expose Agent Chat controls while this transcript remains open.",
+      "visibleRect": {
+        "bottom": 444,
+        "height": 62.46875,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 381.53125
+      }
+    },
+    {
+      "clipRect": {
+        "bottom": 480,
+        "height": 480,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 0
+      },
+      "fidelityId": "agent-chat.footer.host",
+      "overflow": {
+        "truncated": false,
+        "x": false,
+        "y": false
+      },
+      "rect": {
+        "bottom": 480,
+        "height": 36,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 444
+      },
+      "style": {
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderBottomColor": "rgb(255, 255, 255)",
+        "borderBottomLeftRadius": "0px",
+        "borderBottomRightRadius": "0px",
+        "borderBottomWidth": "0px",
+        "borderLeftColor": "rgb(255, 255, 255)",
+        "borderLeftWidth": "0px",
+        "borderRightColor": "rgb(255, 255, 255)",
+        "borderRightWidth": "0px",
+        "borderTopColor": "rgb(255, 255, 255)",
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderTopWidth": "0px",
+        "color": "rgb(255, 255, 255)",
+        "fontFamily": "\".AppleSystemUIFont\", -apple-system, \"system-ui\", sans-serif",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "lineHeight": "normal",
+        "opacity": "1",
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textOverflow": "clip",
+        "whiteSpace": "normal"
+      },
+      "text": "",
+      "visibleRect": {
+        "bottom": 480,
+        "height": 36,
+        "right": 750,
+        "width": 750,
+        "x": 0,
+        "y": 444
+      }
+    }
+  ],
+  "screenId": "agent-chat",
+  "viewport": {
+    "height": 480,
+    "width": 750
+  },
+  "windowRect": {
+    "bottom": 480,
+    "height": 480,
+    "right": 750,
+    "width": 750,
+    "x": 0,
+    "y": 0
+  },
+  "captureBracket": {
+    "valid": true,
+    "attempt": 1,
+    "domStable": true,
+    "capturesIdentical": true,
+    "bracket": "DOM0-shotA-DOM1-shotB-DOM2"
+  },
+  "screenshotEvidence": {
+    "path": ".test-output/design-fidelity/agent-chat/html@2x.png",
+    "sha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816",
+    "duplicateCaptureSha256": "01452d75f2cbe706c5b837545407c99c731622c1309e95cf78fd93e4794d8816",
+    "capturesIdentical": true,
+    "width": 1500,
+    "height": 960,
+    "devicePixelRatio": 2,
+    "source": "agent-browser element screenshot"
+  }
+}

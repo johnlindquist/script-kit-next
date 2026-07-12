@@ -45,7 +45,7 @@ fn creation_feedback_layout_exposes_window_panel_path_and_action_geometry() {
     let branch = source_between(
         LAYOUT_SOURCE,
         "if matches!(self.current_view, AppView::CreationFeedback",
-        "// Header",
+        "if matches!(self.current_view, AppView::ConfirmPrompt",
     );
 
     for component in [
@@ -83,6 +83,11 @@ fn creation_feedback_layout_exposes_window_panel_path_and_action_geometry() {
             "Feedback layout receipts must include {token}"
         );
     }
+    assert!(
+        branch.contains("let panel_y = content_top + FEEDBACK_PADDING_Y;")
+            && branch.contains(".with_parent(\"MainViewMain\")"),
+        "CreationFeedback detail receipts should live below and inside MainViewMain"
+    );
 }
 
 #[test]

@@ -434,7 +434,9 @@ pub fn render_design_item(
                     fm.display_name.clone(),
                     Some(fm.subtitle.clone()),
                     None,
-                    Some(IconKind::Svg("Bot".to_string())),
+                    // Chevron-fade is the flows brand mark (icon brainstorm
+                    // 2026-07-11); resolves via IconName::Flow.
+                    Some(IconKind::Svg("flow".to_string())),
                 ),
             };
 

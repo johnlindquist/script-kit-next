@@ -162,7 +162,12 @@ fn dispatch_main_gesture_event(
             }
             app_entity.update(cx, |view, cx| {
                 view.mark_opened_directly("gesture_double_tap");
-                view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                // Double-tap is the quick-question entry: a CLEAN composer,
+                // never the launcher's auto-selected row as a context chip.
+                // Routing through the chip-staging entry here caused the
+                // 2026-07-10 "double-tap attaches the first selected item"
+                // regression.
+                view.open_agent_chat_for_quick_question(cx);
             });
         }
         GestureEvent::HoldStart => {
@@ -226,9 +231,7 @@ impl ScriptListApp {
     /// in that state means "get me back to my chat" — reclaim key + composer
     /// focus instead of destroying the live session.
     pub(crate) fn handle_main_hotkey_tap(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if !self.was_window_focused
-            && matches!(self.current_view, AppView::AgentChatView { .. })
-        {
+        if !self.was_window_focused && matches!(self.current_view, AppView::AgentChatView { .. }) {
             logging::log(
                 "GESTURE",
                 "Tap with unfocused Agent Chat — reclaiming focus instead of closing",

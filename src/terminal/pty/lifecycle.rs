@@ -97,12 +97,17 @@ impl PtyManager {
             rows,
         );
 
+        let registration = child
+            .process_id()
+            .map(|pid| crate::process_manager::ChildRegistration::register(pid, cmd));
+
         Ok(Self {
             master: pair.master,
             child,
             reader: Some(reader),
             writer,
             size,
+            _registration: registration,
         })
     }
 

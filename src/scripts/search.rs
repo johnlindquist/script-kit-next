@@ -14,6 +14,7 @@ mod paths;
 mod prefix_filters;
 mod scriptlets;
 mod scripts;
+pub(crate) mod sentence;
 mod skills;
 mod unified;
 mod windows;

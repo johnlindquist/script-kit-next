@@ -427,6 +427,21 @@ pub struct LayoutComponentInfo {
     /// Optional visual/style receipt for Liquid Glass and accessibility audits.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visual_style: Option<LayoutVisualStyle>,
+    /// How the bounds were obtained. Fidelity probes require `paint-time`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub measurement_provenance: Option<String>,
+    /// Coordinate system for `bounds`; paint receipts use window logical pixels.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coordinate_space: Option<String>,
+    /// Rectangular portion of `bounds` that survives the ancestor clip chain.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub visible_bounds: Option<LayoutBounds>,
+    /// Active ancestor content mask used to derive `visible_bounds`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clip_bounds: Option<LayoutBounds>,
+    /// Monotonic identity of the completed GPUI frame that supplied these bounds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub measurement_frame_generation: Option<u64>,
 }
 
 impl LayoutComponentInfo {
@@ -442,7 +457,54 @@ impl LayoutComponentInfo {
             children: Vec::new(),
             explanation: None,
             visual_style: None,
+            measurement_provenance: None,
+            coordinate_space: None,
+            visible_bounds: None,
+            clip_bounds: None,
+            measurement_frame_generation: None,
         }
+    }
+
+    pub fn with_measurement(
+        mut self,
+        provenance: impl Into<String>,
+        coordinate_space: impl Into<String>,
+    ) -> Self {
+        self.measurement_provenance = Some(provenance.into());
+        self.coordinate_space = Some(coordinate_space.into());
+        self
+    }
+
+    pub fn with_measurement_frame(mut self, generation: u64) -> Self {
+        self.measurement_frame_generation = Some(generation);
+        self
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_paint_visibility(
+        mut self,
+        visible_x: f32,
+        visible_y: f32,
+        visible_width: f32,
+        visible_height: f32,
+        clip_x: f32,
+        clip_y: f32,
+        clip_width: f32,
+        clip_height: f32,
+    ) -> Self {
+        self.visible_bounds = Some(LayoutBounds {
+            x: visible_x,
+            y: visible_y,
+            width: visible_width,
+            height: visible_height,
+        });
+        self.clip_bounds = Some(LayoutBounds {
+            x: clip_x,
+            y: clip_y,
+            width: clip_width,
+            height: clip_height,
+        });
+        self
     }
 
     pub fn with_bounds(mut self, x: f32, y: f32, width: f32, height: f32) -> Self {
@@ -670,5 +732,22 @@ mod tests {
         let json = serde_json::to_value(component).expect("serialize visual exception");
         assert_eq!(json["visualStyle"]["exception"], "compactIconButton");
         assert_eq!(json["visualStyle"]["hitBounds"]["width"], 28.0);
+    }
+
+    #[test]
+    fn paint_measurement_metadata_serializes_explicitly() {
+        let component =
+            LayoutComponentInfo::new("agent-chat-composer-input", LayoutComponentType::Input)
+                .with_bounds(12.0, 34.0, 400.0, 28.0)
+                .with_measurement("paint-time", "window")
+                .with_paint_visibility(12.0, 40.0, 400.0, 22.0, 0.0, 40.0, 750.0, 404.0)
+                .with_measurement_frame(42);
+
+        let json = serde_json::to_value(component).expect("serialize paint measurement");
+        assert_eq!(json["measurementProvenance"], "paint-time");
+        assert_eq!(json["coordinateSpace"], "window");
+        assert_eq!(json["measurementFrameGeneration"], 42);
+        assert_eq!(json["visibleBounds"]["y"], 40.0);
+        assert_eq!(json["clipBounds"]["height"], 404.0);
     }
 }

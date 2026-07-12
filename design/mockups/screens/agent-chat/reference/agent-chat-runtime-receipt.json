@@ -1,0 +1,2077 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.agent-chat-design-reference",
+  "command": "capture-exact-state",
+  "screenId": "agent-chat",
+  "classification": "ok",
+  "pass": true,
+  "binary": {
+    "path": "target-agent/artifacts/design-agent-chat/script-kit-gpui",
+    "sha256": "899689039b5edf6a9edf41a5a1b9b10e3c5836d30393284d25d5a2d7d2ccc0d2"
+  },
+  "fixture": {
+    "command": "openAgentChatKitchenSinkFixture",
+    "presentation": "standard-idle-collapsed-at-transcript-bottom",
+    "preReadyNormalizationCommands": [
+      "setAgentChatInput(empty)"
+    ],
+    "mutationCommandsAfterReady": 0
+  },
+  "safety": {
+    "preparedFixtureHome": true,
+    "providerRequired": false,
+    "liveThreadRequired": false,
+    "fixtureOnly": true,
+    "environmentOverrides": {
+      "SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH": "1",
+      "SCRIPT_KIT_DEBUG_NO_GLASS": "1"
+    }
+  },
+  "settling": {
+    "observation": "sanitized getLayoutInfo + getAgentChatState + getLayoutInfo atomic bracket",
+    "consecutiveIdenticalSamplesRequired": 3,
+    "intervalMs": 100,
+    "timeoutMs": 10000,
+    "volatileKeysRemoved": [
+      "requestId",
+      "timestamp",
+      "generatedAt",
+      "capturedAt",
+      "sessionId",
+      "sessionDir",
+      "pid"
+    ],
+    "preReadyObservationSettled": true,
+    "settled": true
+  },
+  "assertions": [
+    {
+      "name": "fixture.open.command",
+      "passed": true,
+      "expected": "openAgentChatKitchenSinkFixture",
+      "actual": "openAgentChatKitchenSinkFixture"
+    },
+    {
+      "name": "fixture.open.ok",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "fixture.preReadyObservationSettled",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "fixture.normalize.command",
+      "passed": true,
+      "expected": "setAgentChatInput",
+      "actual": "setAgentChatInput"
+    },
+    {
+      "name": "fixture.normalize.ok",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "fixture.ready",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "fixture.ready.atomic",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "captureIdentity.windowId",
+      "passed": true,
+      "expected": "main",
+      "actual": "main"
+    },
+    {
+      "name": "captureIdentity.windowKind",
+      "passed": true,
+      "expected": "Main",
+      "actual": "Main"
+    },
+    {
+      "name": "captureIdentity.osWindowId",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "captureIdentity.pid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "captureIdentity.bounds.width",
+      "passed": true,
+      "expected": 750,
+      "actual": 750,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "captureIdentity.bounds.height",
+      "passed": true,
+      "expected": 480,
+      "actual": 480,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "captureBracket.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "target.windowId",
+      "passed": true,
+      "expected": "main",
+      "actual": "main"
+    },
+    {
+      "name": "target.windowKind",
+      "passed": true,
+      "expected": "main",
+      "actual": "main"
+    },
+    {
+      "name": "state.schemaVersion",
+      "passed": true,
+      "expected": 4,
+      "actual": 4
+    },
+    {
+      "name": "state.status",
+      "passed": true,
+      "expected": "idle",
+      "actual": "idle"
+    },
+    {
+      "name": "state.uiVariant",
+      "passed": true,
+      "expected": "standard",
+      "actual": "standard"
+    },
+    {
+      "name": "state.inputText",
+      "passed": true,
+      "expected": "",
+      "actual": ""
+    },
+    {
+      "name": "state.cursorIndex",
+      "passed": true,
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "state.hasSelection",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "name": "state.messageCount",
+      "passed": true,
+      "expected": 21,
+      "actual": 21
+    },
+    {
+      "name": "state.contextChipCount",
+      "passed": true,
+      "expected": 0,
+      "actual": 0
+    },
+    {
+      "name": "state.contextReady",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "state.hasPendingPermission",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "name": "state.transcriptScroll.rowCount",
+      "passed": true,
+      "expected": 22,
+      "actual": 22
+    },
+    {
+      "name": "state.transcriptScroll.scrollTopItem",
+      "passed": true,
+      "expected": 22,
+      "actual": 22
+    },
+    {
+      "name": "state.transcriptScroll.scrollTopOffsetPx",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "state.transcriptScroll.atBottom",
+      "passed": true,
+      "expected": 416,
+      "actual": 416,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "state.transcriptScroll.measurementSource",
+      "passed": true,
+      "expected": "listState",
+      "actual": "listState"
+    },
+    {
+      "name": "state.composerScroll.viewportHeightPx",
+      "passed": true,
+      "expected": 26,
+      "actual": 26,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "state.composerScroll.canScrollY",
+      "passed": true,
+      "expected": false,
+      "actual": false
+    },
+    {
+      "name": "layout.windowWidth",
+      "passed": true,
+      "expected": 750,
+      "actual": 750,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.windowHeight",
+      "passed": true,
+      "expected": 480,
+      "actual": 480,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.promptType",
+      "passed": true,
+      "expected": "agentChatChat",
+      "actual": "agentChatChat"
+    },
+    {
+      "name": "layout.componentNameSet",
+      "passed": true,
+      "expected": "[\"AgentChatConversation\",\"AgentChatTranscript\",\"MainViewContextZone\",\"MainViewFooter\",\"MainViewHeader\",\"MainViewInput\",\"MainViewMain\",\"Window\"]",
+      "actual": "[\"AgentChatConversation\",\"AgentChatTranscript\",\"MainViewContextZone\",\"MainViewFooter\",\"MainViewHeader\",\"MainViewInput\",\"MainViewMain\",\"Window\"]"
+    },
+    {
+      "name": "layout.Window.x",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.Window.y",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.Window.width",
+      "passed": true,
+      "expected": 750,
+      "actual": 750,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.Window.height",
+      "passed": true,
+      "expected": 480,
+      "actual": 480,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewHeader.x",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewHeader.y",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewHeader.width",
+      "passed": true,
+      "expected": 750,
+      "actual": 750,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewHeader.height",
+      "passed": true,
+      "expected": 58,
+      "actual": 58,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewContextZone.x",
+      "passed": true,
+      "expected": -6,
+      "actual": -6,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewContextZone.y",
+      "passed": true,
+      "expected": 4,
+      "actual": 4,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewContextZone.width",
+      "passed": true,
+      "expected": 762,
+      "actual": 762,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewContextZone.height",
+      "passed": true,
+      "expected": 22,
+      "actual": 22,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewInput.x",
+      "passed": true,
+      "expected": 2,
+      "actual": 2,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewInput.y",
+      "passed": true,
+      "expected": 28,
+      "actual": 28,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewInput.width",
+      "passed": true,
+      "expected": 746,
+      "actual": 746,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewInput.height",
+      "passed": true,
+      "expected": 26,
+      "actual": 26,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewMain.x",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewMain.y",
+      "passed": true,
+      "expected": 58,
+      "actual": 58,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewMain.width",
+      "passed": true,
+      "expected": 750,
+      "actual": 750,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewMain.height",
+      "passed": true,
+      "expected": 422,
+      "actual": 422,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.AgentChatConversation.x",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.AgentChatConversation.y",
+      "passed": true,
+      "expected": 58,
+      "actual": 58,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.AgentChatConversation.width",
+      "passed": true,
+      "expected": 750,
+      "actual": 750,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.AgentChatConversation.height",
+      "passed": true,
+      "expected": 416.4,
+      "actual": 416.4,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.AgentChatTranscript.x",
+      "passed": true,
+      "expected": 1,
+      "actual": 1,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.AgentChatTranscript.y",
+      "passed": true,
+      "expected": 59,
+      "actual": 59,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.AgentChatTranscript.width",
+      "passed": true,
+      "expected": 748,
+      "actual": 748,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.AgentChatTranscript.height",
+      "passed": true,
+      "expected": 382.5,
+      "actual": 382.5,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewFooter.x",
+      "passed": true,
+      "expected": 0,
+      "actual": 0,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewFooter.y",
+      "passed": true,
+      "expected": 448,
+      "actual": 448,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewFooter.width",
+      "passed": true,
+      "expected": 750,
+      "actual": 750,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "layout.MainViewFooter.height",
+      "passed": true,
+      "expected": 32,
+      "actual": 32,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "crossCheck.transcriptViewportHeight",
+      "passed": true,
+      "expected": 382.5,
+      "actual": 382.5,
+      "delta": 0,
+      "tolerance": 0.01
+    },
+    {
+      "name": "manifest.paintSelectorCount",
+      "passed": true,
+      "expected": 13,
+      "actual": 13
+    },
+    {
+      "name": "manifest.paintSelectorIds.valid",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "manifest.paintSelectorIds.unique",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-zone.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-zone.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-zone.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-zone.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-zone.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-zone.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-cwd-button.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-cwd-button.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-cwd-button.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-cwd-button.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-cwd-button.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-cwd-button.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-model-button.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-model-button.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-model-button.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-model-button.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-model-button.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-context-model-button.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-shell.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-shell.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-shell.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-shell.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-shell.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-shell.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-body.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-body.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-body.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-body.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-body.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.main-view-input-body.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-send-button.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-send-button.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-send-button.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-send-button.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-send-button.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-send-button.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-viewport.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-viewport.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-viewport.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-viewport.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-viewport.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-viewport.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-17.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-17.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-17.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-17.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-17.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-17.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-system-18.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-system-18.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-system-18.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-system-18.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-system-18.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-system-18.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-19.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-20.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-20.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-20.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-20.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-20.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-tool-20.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.agent-chat-transcript-row-assistant-21.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.native-main-window-footer-spacer.matchCount",
+      "passed": true,
+      "expected": 1,
+      "actual": 1
+    },
+    {
+      "name": "layout.paintSelector.native-main-window-footer-spacer.measurementProvenance",
+      "passed": true,
+      "expected": "paint-time",
+      "actual": "paint-time"
+    },
+    {
+      "name": "layout.paintSelector.native-main-window-footer-spacer.coordinateSpace",
+      "passed": true,
+      "expected": "window",
+      "actual": "window"
+    },
+    {
+      "name": "layout.paintSelector.native-main-window-footer-spacer.measurementFrameGeneration.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.native-main-window-footer-spacer.visibleBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelector.native-main-window-footer-spacer.clipBounds.valid",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "name": "layout.paintSelectors.missingIds",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "layout.paintSelectors.duplicateIds",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "layout.paintSelectors.invalidProvenanceIds",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "layout.paintSelectors.invalidCoordinateSpaceIds",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "layout.paintSelectors.invalidFrameGenerationIds",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "layout.paintSelectors.invalidVisibleBoundsIds",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "layout.paintSelectors.invalidClipBoundsIds",
+      "passed": true,
+      "expected": [],
+      "actual": []
+    },
+    {
+      "name": "layout.paintSelectors.frameCoherent",
+      "passed": true,
+      "expected": true,
+      "actual": true
+    }
+  ],
+  "failures": [],
+  "opened": {
+    "type": "externalCommandResult",
+    "command": "openAgentChatKitchenSinkFixture",
+    "ok": true
+  },
+  "normalized": {
+    "type": "externalCommandResult",
+    "command": "setAgentChatInput",
+    "ok": true
+  },
+  "resolvedTarget": {
+    "windowId": "main",
+    "windowKind": "main",
+    "title": "Script Kit",
+    "automationId": "main",
+    "targetKind": "Main",
+    "surfaceKind": "agentChatChat"
+  },
+  "target": {
+    "windowId": "main",
+    "windowKind": "main",
+    "title": "Script Kit",
+    "automationId": "main",
+    "targetKind": "Main",
+    "surfaceKind": "agentChatChat"
+  },
+  "viewport": {
+    "width": 750,
+    "height": 480
+  },
+  "windowRect": {
+    "x": 0,
+    "y": 0,
+    "width": 750,
+    "height": 480
+  },
+  "measurementCoordinateSpace": "window",
+  "measurementEvidence": {
+    "source": "getLayoutInfo",
+    "transcriptViewportSource": "listState",
+    "selectorManifest": "design/mockups/screens/agent-chat/fidelity-manifest.json",
+    "requiredPaintSelectorCount": 13,
+    "paintTimeElementBoundsAvailable": true,
+    "requiredSelectorIds": [
+      "main-view-context-zone",
+      "main-view-context-cwd-button",
+      "main-view-context-model-button",
+      "main-view-input-shell",
+      "main-view-input-body",
+      "agent-chat-send-button",
+      "agent-chat-transcript-viewport",
+      "agent-chat-transcript-row-assistant-17",
+      "agent-chat-transcript-row-system-18",
+      "agent-chat-transcript-row-tool-19",
+      "agent-chat-transcript-row-tool-20",
+      "agent-chat-transcript-row-assistant-21",
+      "native-main-window-footer-spacer"
+    ],
+    "observedSelectorIds": [
+      "main-view-context-zone",
+      "main-view-context-cwd-button",
+      "main-view-context-model-button",
+      "main-view-input-shell",
+      "main-view-input-body",
+      "agent-chat-send-button",
+      "agent-chat-transcript-viewport",
+      "agent-chat-transcript-row-assistant-17",
+      "agent-chat-transcript-row-system-18",
+      "agent-chat-transcript-row-tool-19",
+      "agent-chat-transcript-row-tool-20",
+      "agent-chat-transcript-row-assistant-21",
+      "native-main-window-footer-spacer"
+    ],
+    "missingSelectorIds": [],
+    "duplicateSelectorIds": [],
+    "invalidProvenanceSelectorIds": [],
+    "invalidCoordinateSpaceSelectorIds": [],
+    "invalidVisibleBoundsSelectorIds": [],
+    "invalidClipBoundsSelectorIds": [],
+    "invalidFrameGenerationSelectorIds": [],
+    "uniqueFrameGenerations": [
+      189
+    ],
+    "frameGeneration": 189,
+    "frameCoherent": true
+  },
+  "frameEvidence": {
+    "generation": 189,
+    "layoutGenerations": [
+      181,
+      183,
+      185,
+      187,
+      189
+    ],
+    "stateStable": true,
+    "layoutStable": true,
+    "frameCoherent": true,
+    "bracket": "L0-S0-L1-shotA-L2-shotB-L3-S1-L4"
+  },
+  "screenshotEvidence": {
+    "path": "design/mockups/screens/agent-chat/reference/agent-chat@2x.png",
+    "sha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
+    "duplicateCaptureSha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d",
+    "capturesIdentical": true,
+    "pixelAudit": {
+      "blank": false,
+      "standardDeviation": 0.107333
+    },
+    "width": 1500,
+    "height": 960,
+    "scaleFactor": 2,
+    "target": {
+      "type": "kind",
+      "kind": "main",
+      "index": 0
+    },
+    "source": "captureScreenshot resolver-driven OS window capture",
+    "driverCaptureError": null,
+    "captureIdentity": {
+      "windowId": "main",
+      "windowKind": "Main",
+      "osWindowId": 31040,
+      "pid": 38813,
+      "resolvedBounds": {
+        "x": 100,
+        "y": 100,
+        "width": 750,
+        "height": 480
+      }
+    }
+  },
+  "visualEvidence": {
+    "source": "os-window-capture",
+    "classification": "captured",
+    "captureKind": "resolver-targeted-window",
+    "countsAsOsScreenshotEvidence": true,
+    "countsAsCompositorEvidence": true,
+    "pixelAudit": {
+      "blank": false,
+      "standardDeviation": 0.107333
+    },
+    "captureIdentity": {
+      "target": {
+        "type": "kind",
+        "kind": "main",
+        "index": 0
+      },
+      "width": 1500,
+      "height": 960,
+      "sha256": "6b9bb4589479f1c830d2ba6e6a3dd267466cf457a9875ced27694287532b584d"
+    }
+  },
+  "captureIdentity": {
+    "windowId": "main",
+    "windowKind": "Main",
+    "osWindowId": 31040,
+    "pid": 38813,
+    "resolvedBounds": {
+      "x": 100,
+      "y": 100,
+      "width": 750,
+      "height": 480
+    },
+    "screenshotWidth": 750,
+    "screenshotHeight": 480,
+    "warnings": []
+  },
+  "screenCaptureEnvironment": {
+    "platform": "darwin",
+    "screenLocked": null,
+    "source": "ioreg.IOConsoleUsers"
+  },
+  "state": {
+    "type": "agent_chatStateResult",
+    "schemaVersion": 4,
+    "resolvedTarget": {
+      "windowId": "main",
+      "windowKind": "main",
+      "title": "Script Kit"
+    },
+    "status": "idle",
+    "uiVariant": "standard",
+    "inputText": "",
+    "cursorIndex": 0,
+    "hasSelection": false,
+    "messageCount": 21,
+    "retainedThreadCount": 0,
+    "forkPointCount": 0,
+    "awaitingFirstAssistantText": false,
+    "contextChipCount": 0,
+    "contextReady": true,
+    "hasPendingPermission": false,
+    "inputLayout": {
+      "charCount": 0,
+      "visibleStart": 0,
+      "visibleEnd": 0,
+      "cursorInWindow": 0
+    },
+    "transcriptScroll": {
+      "rowCount": 22,
+      "scrollTopItem": 22,
+      "scrollTopOffsetPx": 0,
+      "viewportHeightPx": 382.5,
+      "contentHeightPx": 798.5,
+      "scrollTopPx": 416,
+      "maxScrollTopPx": 416,
+      "canScrollY": true,
+      "thumbTrackHeightPx": 382.5,
+      "thumbHeightPx": 183.22636,
+      "thumbTopPx": 199.27364,
+      "thumbBottomPx": 382.5,
+      "thumbPositionRatio": 1,
+      "measurementSource": "listState"
+    },
+    "composerScroll": {
+      "scrollTopPx": 0,
+      "maxScrollTopPx": 0,
+      "viewportHeightPx": 26,
+      "canScrollY": false
+    }
+  },
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "windowWidth": 750,
+    "windowHeight": 480,
+    "promptType": "agentChatChat",
+    "components": [
+      {
+        "name": "Window",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 480
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Root native window backdrop. Not a content layer or Liquid Glass content surface.",
+        "visualStyle": {
+          "chromeLayer": "windowBackdrop",
+          "materialSource": "nativeWindowBackdrop",
+          "tokenSource": "window.backdrop",
+          "cornerRadius": {
+            "topLeft": 22,
+            "topRight": 22,
+            "bottomRight": 22,
+            "bottomLeft": 22
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 480
+          }
+        }
+      },
+      {
+        "name": "MainViewHeader",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 750,
+          "height": 58
+        },
+        "boxModel": {
+          "padding": {
+            "top": 4,
+            "right": 2,
+            "bottom": 4,
+            "left": 2
+          }
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Height = padding(4) + content(50) + padding(4) = 58px. Uses shared no-divider main-view header chrome.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.mainViewHeader",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 58
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 0,
+            "width": 750,
+            "height": 58
+          }
+        }
+      },
+      {
+        "name": "MainViewContextZone",
+        "type": "container",
+        "bounds": {
+          "x": -6,
+          "y": 4,
+          "width": 762,
+          "height": 22
+        },
+        "boxModel": {
+          "gap": 2
+        },
+        "flex": {
+          "direction": "row"
+        },
+        "depth": 2,
+        "parent": "MainViewHeader",
+        "explanation": "Three-zone launcher context row: cwd/Tab and agent-model/Shift+Tab live above the query input.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.mainViewContext",
+          "cornerRadius": {
+            "topLeft": 6.75,
+            "topRight": 6.75,
+            "bottomRight": 6.75,
+            "bottomLeft": 6.75
+          },
+          "visualBounds": {
+            "x": -6,
+            "y": 4,
+            "width": 762,
+            "height": 22
+          },
+          "hitBounds": {
+            "x": -6,
+            "y": 4,
+            "width": 762,
+            "height": 22
+          }
+        }
+      },
+      {
+        "name": "MainViewInput",
+        "type": "input",
+        "bounds": {
+          "x": 2,
+          "y": 28,
+          "width": 746,
+          "height": 26
+        },
+        "flex": {
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "MainViewHeader",
+        "explanation": "Shared main-view input fills the header width. Width = window(750) - horizontal padding(2 * 2) = 746px.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.mainViewInput",
+          "cornerRadius": {
+            "topLeft": 9,
+            "topRight": 9,
+            "bottomRight": 9,
+            "bottomLeft": 9
+          },
+          "visualBounds": {
+            "x": 2,
+            "y": 28,
+            "width": 746,
+            "height": 26
+          },
+          "hitBounds": {
+            "x": 2,
+            "y": 28,
+            "width": 746,
+            "height": 26
+          },
+          "contentInsets": {
+            "top": 0,
+            "right": 16,
+            "bottom": 0,
+            "left": 16
+          },
+          "typography": {
+            "role": "searchInput",
+            "fontFamily": ".SystemUIFont",
+            "fontSizePt": 20,
+            "fontWeight": "regular",
+            "fontWeightNumeric": 430,
+            "lineHeightPt": 26,
+            "textAlign": "left"
+          }
+        }
+      },
+      {
+        "name": "MainViewMain",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 58,
+          "width": 750,
+          "height": 422
+        },
+        "flex": {
+          "direction": "row",
+          "grow": 1
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "flex-grow:1 fills remaining height after header. Uses flex-row to create side-by-side panels.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.mainViewMain",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 58,
+            "width": 750,
+            "height": 422
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 58,
+            "width": 750,
+            "height": 422
+          }
+        }
+      },
+      {
+        "name": "MainViewFooter",
+        "type": "panel",
+        "bounds": {
+          "x": 0,
+          "y": 448,
+          "width": 750,
+          "height": 32
+        },
+        "boxModel": {
+          "gap": 2
+        },
+        "depth": 1,
+        "parent": "Window",
+        "explanation": "Floating hint-strip footer overlay for Base Info Bar. Side inset 14px; inter-item gap 2px; button radius 6px.",
+        "visualStyle": {
+          "chromeLayer": "functionalChrome",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "chrome.mainViewFooter",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 448,
+            "width": 750,
+            "height": 32
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 448,
+            "width": 750,
+            "height": 32
+          },
+          "contentInsets": {
+            "top": 2,
+            "right": 14,
+            "bottom": 2,
+            "left": 14
+          },
+          "exception": "floatingFooterOverlay"
+        }
+      },
+      {
+        "name": "AgentChatConversation",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 58,
+          "width": 750,
+          "height": 416.4
+        },
+        "flex": {
+          "direction": "column",
+          "grow": 1
+        },
+        "depth": 2,
+        "parent": "MainViewMain",
+        "explanation": "AgentChat conversation region. message_count=21, awaiting_first_assistant_text=false.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.agent_chatConversation",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 0,
+            "y": 58,
+            "width": 750,
+            "height": 416.4
+          },
+          "hitBounds": {
+            "x": 0,
+            "y": 58,
+            "width": 750,
+            "height": 416.4
+          }
+        }
+      },
+      {
+        "name": "AgentChatTranscript",
+        "type": "list",
+        "bounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "flex": {
+          "direction": "column",
+          "grow": 1
+        },
+        "depth": 3,
+        "parent": "AgentChatConversation",
+        "explanation": "Agent Chat transcript viewport for 21 live thread messages; bounds come from the transcript ListState viewport.",
+        "visualStyle": {
+          "chromeLayer": "content",
+          "materialSource": "solidThemeToken",
+          "tokenSource": "content.agent_chatTranscript",
+          "cornerRadius": {
+            "topLeft": 16,
+            "topRight": 16,
+            "bottomRight": 16,
+            "bottomLeft": 16
+          },
+          "visualBounds": {
+            "x": 1,
+            "y": 59,
+            "width": 748,
+            "height": 382.5
+          },
+          "hitBounds": {
+            "x": 1,
+            "y": 59,
+            "width": 748,
+            "height": 382.5
+          }
+        }
+      },
+      {
+        "name": "agent-chat-send-button",
+        "type": "button",
+        "bounds": {
+          "x": 722,
+          "y": 30,
+          "width": 24,
+          "height": 24
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 722,
+          "y": 30,
+          "width": 24,
+          "height": 24
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "agent-chat-transcript-row-assistant-17",
+        "type": "listItem",
+        "bounds": {
+          "x": 1,
+          "y": 55.5,
+          "width": 748,
+          "height": 88.5
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 85
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "agent-chat-transcript-row-assistant-21",
+        "type": "listItem",
+        "bounds": {
+          "x": 1,
+          "y": 384,
+          "width": 748,
+          "height": 57.5
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 384,
+          "width": 748,
+          "height": 57.5
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "agent-chat-transcript-row-system-18",
+        "type": "listItem",
+        "bounds": {
+          "x": 1,
+          "y": 144,
+          "width": 748,
+          "height": 34.5
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 144,
+          "width": 748,
+          "height": 34.5
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "agent-chat-transcript-row-tool-19",
+        "type": "listItem",
+        "bounds": {
+          "x": 1,
+          "y": 178.5,
+          "width": 748,
+          "height": 148
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 178.5,
+          "width": 748,
+          "height": 148
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "agent-chat-transcript-row-tool-20",
+        "type": "listItem",
+        "bounds": {
+          "x": 1,
+          "y": 326.5,
+          "width": 748,
+          "height": 57.5
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 326.5,
+          "width": 748,
+          "height": 57.5
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "agent-chat-transcript-viewport",
+        "type": "list",
+        "bounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 382.5
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "main-view-context-cwd-button",
+        "type": "button",
+        "bounds": {
+          "x": 3,
+          "y": 3,
+          "width": 368.5,
+          "height": 26
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 3,
+          "y": 3,
+          "width": 368.5,
+          "height": 26
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "main-view-context-model-button",
+        "type": "button",
+        "bounds": {
+          "x": 429,
+          "y": 3,
+          "width": 318,
+          "height": 26
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 429,
+          "y": 3,
+          "width": 318,
+          "height": 26
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "main-view-context-zone",
+        "type": "container",
+        "bounds": {
+          "x": 3,
+          "y": 5,
+          "width": 744,
+          "height": 22
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 3,
+          "y": 5,
+          "width": 744,
+          "height": 22
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "main-view-header",
+        "type": "header",
+        "bounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 58
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 58
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "main-view-input-body",
+        "type": "input",
+        "bounds": {
+          "x": 4,
+          "y": 29,
+          "width": 718,
+          "height": 26
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 4,
+          "y": 29,
+          "width": 718,
+          "height": 26
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "main-view-input-shell",
+        "type": "input",
+        "bounds": {
+          "x": 3,
+          "y": 29,
+          "width": 744,
+          "height": 26
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 3,
+          "y": 29,
+          "width": 744,
+          "height": 26
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "main-view-main",
+        "type": "container",
+        "bounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 388
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 59,
+          "width": 748,
+          "height": 388
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "main-view-shell",
+        "type": "container",
+        "bounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      },
+      {
+        "name": "native-main-window-footer-spacer",
+        "type": "panel",
+        "bounds": {
+          "x": 1,
+          "y": 447,
+          "width": 748,
+          "height": 32
+        },
+        "depth": 0,
+        "measurementProvenance": "paint-time",
+        "coordinateSpace": "window",
+        "visibleBounds": {
+          "x": 1,
+          "y": 447,
+          "width": 748,
+          "height": 32
+        },
+        "clipBounds": {
+          "x": 1,
+          "y": 1,
+          "width": 748,
+          "height": 478
+        },
+        "measurementFrameGeneration": 189
+      }
+    ]
+  }
+}

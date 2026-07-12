@@ -57,6 +57,102 @@ fn app_view_owns_native_footer_surface_map() {
     );
 }
 
+/// Shrink-only ratchet: main-window views that still opt OUT of the native
+/// footer. The Tips browser shipped 2026-07-11 with a hand-rolled hint-strip
+/// footer because `TipsView` silently joined this `None` group; every NEW
+/// view must own a native footer surface (shared FooterButtonConfig buttons)
+/// and may only appear here after an explicit, documented decision. Fixing a
+/// legacy view means DELETING its entry — never add one.
+#[test]
+fn main_window_views_without_native_footer_are_ratcheted() {
+    const LEGACY_GPUI_FOOTER_VIEWS: &[&str] = &[
+        "About",
+        "ActionsDialog",
+        "TermPrompt",
+        "MicroPrompt",
+        "SdkReferenceView",
+        "ScriptTemplateCatalogView",
+        "CreateAiPresetView",
+        "NotesBrowseView",
+        // storybook-only surface
+        "DesignExplorerView",
+    ];
+
+    let body = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
+    let segments: Vec<&str> = body.split("=>").collect();
+    let mut none_views: Vec<String> = Vec::new();
+    for index in 1..segments.len() {
+        if !segments[index].trim_start().starts_with("None") {
+            continue;
+        }
+        let mut pattern = segments[index - 1];
+        while let Some(position) = pattern.find("AppView::") {
+            let after = &pattern[position + "AppView::".len()..];
+            let name: String = after
+                .chars()
+                .take_while(|ch| ch.is_alphanumeric() || *ch == '_')
+                .collect();
+            if !name.is_empty() {
+                none_views.push(name);
+            }
+            pattern = after;
+        }
+    }
+
+    assert!(
+        !none_views.is_empty(),
+        "expected to parse the legacy `=> None` arms of native_footer_surface"
+    );
+    for view in &none_views {
+        assert!(
+            LEGACY_GPUI_FOOTER_VIEWS.contains(&view.as_str()),
+            "AppView::{view} maps to None in native_footer_surface but is not a \
+             grandfathered legacy surface. New main-window views MUST return \
+             Some(surface) and declare native footer buttons in \
+             main_window_footer_buttons_for_current_view — do not extend the \
+             legacy list; it is shrink-only."
+        );
+    }
+    for legacy in LEGACY_GPUI_FOOTER_VIEWS {
+        assert!(
+            none_views.iter().any(|view| view == legacy),
+            "AppView::{legacy} no longer opts out of the native footer — delete it \
+             from LEGACY_GPUI_FOOTER_VIEWS (shrink-only ratchet)"
+        );
+    }
+}
+
+#[test]
+fn tips_view_keeps_native_footer_with_copy_example_primary_action() {
+    let footer_map = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
+    assert!(
+        footer_map.contains("AppView::TipsView { .. } => Some(\"tips\")"),
+        "TipsView must keep the main-window native footer active"
+    );
+
+    let footer_buttons = function_body(
+        UI_WINDOW_SOURCE,
+        "fn main_window_footer_buttons_for_current_view",
+    );
+    assert!(
+        footer_buttons.contains("AppView::TipsView")
+            && footer_buttons
+                .contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Copy Example\")")
+            && footer_buttons.contains("FooterButtonConfig::new(FooterAction::Close, \"Esc\", secondary_label)"),
+        "TipsView footer must expose Copy Example and Back/Clear Search through the shared FooterButtonConfig components"
+    );
+
+    let footer_dispatch = function_body(
+        UI_WINDOW_SOURCE,
+        "pub(crate) fn dispatch_main_window_footer_action",
+    );
+    assert!(
+        footer_dispatch.contains("AppView::TipsView { .. }")
+            && footer_dispatch.contains("self.tips_copy_selected_example(cx);"),
+        "TipsView footer Run must copy the selected example via the shared action authority"
+    );
+}
+
 #[test]
 fn script_issues_view_keeps_native_footer_and_fix_in_agent_primary_action() {
     let footer_map = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");

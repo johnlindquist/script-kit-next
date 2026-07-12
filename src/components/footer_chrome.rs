@@ -371,14 +371,45 @@ pub(crate) fn is_footer_return_key_glyph(key: &str) -> bool {
     matches!(key, "↵")
 }
 
+/// Multi-char word keycaps ("Space", "Enter") render with word padding and
+/// the word baseline nudge; single glyphs keep the square min-width chip.
+pub(crate) fn is_footer_word_key_token(key: &str) -> bool {
+    key.chars().count() > 1
+}
+
 pub(crate) fn footer_key_glyph_nudge_y(key: &str) -> f32 {
     let metrics = current_main_menu_footer_metrics();
     if is_footer_return_key_glyph(key) {
         metrics.key_glyph_nudge_y + metrics.return_glyph_nudge_y
     } else if key == ";" {
         metrics.semicolon_glyph_nudge_y
+    } else if key == "⌘" {
+        metrics.cmd_glyph_nudge_y
+    } else if is_footer_word_key_token(key) {
+        metrics.word_glyph_nudge_y
     } else {
         metrics.key_glyph_nudge_y
+    }
+}
+
+/// Optical horizontal correction; only ⌘ needs one today (its ink sits left
+/// of its advance-box center at keycap sizes).
+pub(crate) fn footer_key_glyph_nudge_x(key: &str) -> f32 {
+    if key == "⌘" {
+        current_main_menu_footer_metrics().cmd_glyph_nudge_x
+    } else {
+        0.0
+    }
+}
+
+fn footer_keycap_padding_x_for_token(
+    token: &str,
+    metrics: &crate::designs::FooterMetricsTokens,
+) -> f32 {
+    if is_footer_word_key_token(token) && !is_footer_icon_token(token) {
+        metrics.word_keycap_padding_x
+    } else {
+        metrics.keycap_padding_x
     }
 }
 
@@ -387,9 +418,17 @@ pub(crate) fn footer_appkit_glyph_y(key: &str, chip_height: f64, glyph_height: f
     centered_y - footer_key_glyph_nudge_y(key) as f64
 }
 
+/// Single formula owner for footer action-button height: host band minus
+/// vertical button padding. Explicit-padding variant so deterministic
+/// resolvers (e.g. the design-contract exporter) can pass base footer
+/// metrics instead of the runtime-override-sensitive current metrics.
+pub(crate) fn footer_button_height_in(footer_height: f32, button_padding_y: f32) -> f32 {
+    (footer_height - (button_padding_y * 2.0)).max(0.0)
+}
+
 pub(crate) fn footer_button_height(footer_height: f32) -> f32 {
     let metrics = current_main_menu_footer_metrics();
-    (footer_height - (metrics.button_padding_y * 2.0)).max(0.0)
+    footer_button_height_in(footer_height, metrics.button_padding_y)
 }
 
 pub(crate) fn footer_centered_action_edge_padding_x() -> f32 {
@@ -430,6 +469,7 @@ pub(crate) fn render_footer_hint_content(
         None,
         None,
         None,
+        false,
         FooterHintButtonLayoutOverrides::default(),
     )
 }
@@ -558,6 +598,30 @@ pub(crate) fn render_footer_hint_button_like_with_layout(
     layout: FooterHintButtonLayoutOverrides,
     theme: &Theme,
 ) -> AnyElement {
+    render_footer_hint_button_like_with_layout_and_shrinkable_label(spec, layout, false, theme)
+}
+
+/// Footer-language hint content whose label yields to its keycaps under real
+/// flex pressure. Header context chips use this so long cwd/profile labels
+/// ellipsize inside their lane instead of painting across the opposite lane.
+pub(crate) fn render_footer_hint_button_like_shrinkable(
+    spec: FooterHintButtonSpec,
+    theme: &Theme,
+) -> AnyElement {
+    render_footer_hint_button_like_with_layout_and_shrinkable_label(
+        spec,
+        FooterHintButtonLayoutOverrides::default(),
+        true,
+        theme,
+    )
+}
+
+fn render_footer_hint_button_like_with_layout_and_shrinkable_label(
+    spec: FooterHintButtonSpec,
+    layout: FooterHintButtonLayoutOverrides,
+    shrinkable_label: bool,
+    theme: &Theme,
+) -> AnyElement {
     render_footer_hint_content_impl(
         spec.label,
         spec.key,
@@ -572,6 +636,7 @@ pub(crate) fn render_footer_hint_button_like_with_layout(
         spec.hover_text_alpha,
         spec.hover_glyph_alpha,
         spec.hover_keycap_border_alpha,
+        shrinkable_label,
         layout,
     )
 }
@@ -719,6 +784,7 @@ fn render_footer_hint_content_impl(
     hover_text_alpha: Option<u32>,
     hover_glyph_alpha: Option<u32>,
     hover_keycap_border_alpha: Option<u32>,
+    shrinkable_label: bool,
     layout: FooterHintButtonLayoutOverrides,
 ) -> AnyElement {
     let footer_text = footer_hint_text_color(theme);
@@ -739,7 +805,7 @@ fn render_footer_hint_content_impl(
     // Flexbox-native slot layout: the keycaps keep their intrinsic flex_none
     // width and the label is a shrinkable flex item, so the label's budget is
     // whatever the slot leaves over — no estimated keycap text widths.
-    let labelcap = if slot_width_px.is_some() {
+    let labelcap = if slot_width_px.is_some() || shrinkable_label {
         let shrinkable_labelcap = render_footer_labelcap_constrained(
             label,
             theme,
@@ -750,7 +816,7 @@ fn render_footer_hint_content_impl(
             label_font_size_px,
             true,
         );
-        if matches!(justify, FooterHintContentJustify::KeyAnchored) {
+        if slot_width_px.is_some() && matches!(justify, FooterHintContentJustify::KeyAnchored) {
             // Key-anchored: the label claims all leftover slot width so the
             // keycaps sit pinned at the slot's trailing edge.
             div()
@@ -781,6 +847,11 @@ fn render_footer_hint_content_impl(
             }),
         ),
     };
+    let keycaps = if shrinkable_label {
+        div().flex_none().child(keycaps).into_any_element()
+    } else {
+        keycaps
+    };
 
     let mut row = div()
         .pl(px(edge_padding_x))
@@ -794,6 +865,10 @@ fn render_footer_hint_content_impl(
         .group("footer-action-button")
         .min_w(px(0.0))
         .overflow_hidden();
+
+    if shrinkable_label {
+        row = row.w_full();
+    }
 
     if let Some(slot_width_px) = slot_width_px {
         row = row.w_full().max_w(px(slot_width_px));
@@ -847,7 +922,7 @@ pub(crate) fn footer_keycap_measured_width_px(token: &str, cx: &gpui::App) -> f3
         .chars()
         .map(|ch| f32::from(text_system.layout_width(font_id, font_size, ch)))
         .sum();
-    (glyphs_width + metrics.keycap_padding_x * 2.0)
+    (glyphs_width + footer_keycap_padding_x_for_token(token, &metrics) * 2.0)
         .max(metrics.keycap_height)
         .ceil()
 }
@@ -995,7 +1070,7 @@ fn render_footer_labelcap_constrained(
 }
 
 #[derive(Clone, Copy)]
-struct FooterKeycapHoverStyle {
+pub(crate) struct FooterKeycapHoverStyle {
     text: gpui::Hsla,
     glyph: gpui::Hsla,
     border_alpha: Option<u32>,
@@ -1005,7 +1080,7 @@ pub(crate) fn render_footer_shortcut_keycaps(shortcut: String, theme: &Theme) ->
     render_footer_shortcut_keycaps_with_metrics(shortcut, theme, None, None, None, None)
 }
 
-fn render_footer_shortcut_keycaps_with_metrics(
+pub(crate) fn render_footer_shortcut_keycaps_with_metrics(
     shortcut: String,
     theme: &Theme,
     keycap_font_size_px: Option<f32>,
@@ -1104,9 +1179,10 @@ pub(crate) fn footer_shortcut_keycap_layout_model_measured<'a>(
             "widthSource": "text-system-glyph-measure",
             "heightSource": "footer-metrics-keycap-height",
             "glyphNudgeY": footer_key_glyph_nudge_y(token),
+            "glyphNudgeX": footer_key_glyph_nudge_x(token),
             "borderWidth": 1.0,
             "radius": metrics.keycap_radius,
-            "paddingX": metrics.keycap_padding_x,
+            "paddingX": footer_keycap_padding_x_for_token(token, &metrics),
             "fontSize": metrics.keycap_font_size,
         }));
         x += width + metrics.content_gap;
@@ -1177,12 +1253,15 @@ fn render_footer_keycap_with_metrics(
             .group_hover("footer-action-button", move |s| s.text_color(hover_glyph))
             .into_any_element()
     } else {
-        div()
+        let nudge_x = footer_key_glyph_nudge_x(&token);
+        let mut glyph = div()
             .h(px(keycap_height))
             .line_height(px(keycap_height))
-            .mt(px(footer_key_glyph_nudge_y(&token)))
-            .child(token)
-            .into_any_element()
+            .mt(px(footer_key_glyph_nudge_y(&token)));
+        if nudge_x != 0.0 {
+            glyph = glyph.relative().left(px(nudge_x));
+        }
+        glyph.child(token.clone()).into_any_element()
     };
 
     let mut keycap = div()
@@ -1191,7 +1270,7 @@ fn render_footer_keycap_with_metrics(
         .min_h(px(keycap_height))
         .h(px(keycap_height))
         .line_height(px(keycap_height))
-        .px(px(metrics.keycap_padding_x))
+        .px(px(footer_keycap_padding_x_for_token(&token, &metrics)))
         .py(px(metrics.keycap_padding_y))
         .rounded(px(metrics.keycap_radius))
         .border_1()
@@ -1222,6 +1301,56 @@ fn render_footer_keycap_with_metrics(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Optical keycap corrections (user report 2026-07-11): the ⌘ ink sat
+    /// low-left of chip center, and word keycaps ("Space") rendered with zero
+    /// horizontal padding and the single-glyph down-nudge crowding the
+    /// descender against the bottom border. Lock the per-token resolution so
+    /// the corrections can't silently regress to the uniform values.
+    #[test]
+    fn keycap_glyph_nudges_and_padding_resolve_per_token() {
+        let metrics = crate::designs::MainMenuThemeVariant::InfoBarBase
+            .base_def()
+            .footer
+            .metrics;
+
+        // ⌘ gets its own optical x/y correction.
+        assert_eq!(footer_key_glyph_nudge_x("⌘"), metrics.cmd_glyph_nudge_x);
+        assert_eq!(footer_key_glyph_nudge_y("⌘"), metrics.cmd_glyph_nudge_y);
+        assert!(metrics.cmd_glyph_nudge_x > 0.0, "⌘ ink sits left of center");
+        assert!(
+            metrics.cmd_glyph_nudge_y < metrics.key_glyph_nudge_y,
+            "⌘ must not inherit the full single-glyph down-nudge"
+        );
+
+        // Word tokens ride high of the single-glyph nudge and gain padding.
+        assert!(is_footer_word_key_token("Space"));
+        assert!(!is_footer_word_key_token("⌘"));
+        assert_eq!(
+            footer_key_glyph_nudge_y("Space"),
+            metrics.word_glyph_nudge_y
+        );
+        assert!(
+            metrics.word_glyph_nudge_y < metrics.key_glyph_nudge_y,
+            "descender words sat low in the chip"
+        );
+        assert!(
+            metrics.word_keycap_padding_x > metrics.keycap_padding_x,
+            "word keycaps need horizontal breathing room"
+        );
+
+        // Single glyphs keep the uniform treatment.
+        assert_eq!(footer_key_glyph_nudge_x("K"), 0.0);
+        assert_eq!(footer_key_glyph_nudge_y("K"), metrics.key_glyph_nudge_y);
+        assert_eq!(
+            footer_key_glyph_nudge_y(";"),
+            metrics.semicolon_glyph_nudge_y
+        );
+        assert_eq!(
+            footer_key_glyph_nudge_y("↵"),
+            metrics.key_glyph_nudge_y + metrics.return_glyph_nudge_y
+        );
+    }
 
     #[test]
     fn split_footer_shortcut_parses_simple_and_complex_keys() {

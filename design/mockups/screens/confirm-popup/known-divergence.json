@@ -1,0 +1,29 @@
+{
+  "screen": "confirm-popup",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView menu material; the reference sampled the user's live desktop rather than the synthetic fixture backdrop."
+    },
+    {
+      "selector": ".sk-window__effect",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Canvas starfield approximation; particle phase uncontrolled at capture time. Colors are token-exact."
+    },
+    {
+      "selector": ".sk-confirm-native-footer",
+      "kind": "native",
+      "blocking": false,
+      "reason": "The footer buttons live in a separate AppKit overlay window that never appears in GPUI window captures — the reference band is empty. Button truth from a live activeFooter probe: apply='Delete ↵' (selected), close='Keep Esc'. The band BOUNDARY (bottom 32pt rail) remains blocking; button interiors are receipt-verified, not pixel-verified."
+    },
+    {
+      "selector": ".sk-confirm-title, .sk-confirm-body, .sk-context-pill",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI/CoreText vs browser glyph rasterization and capture hue drift (title samples ~#E85841 vs stock #EF4444; body warms toward #D2C5A5 under vibrancy — see confirmCapture.stockThemeVsReferenceRaster). Line-box geometry and text origins remain blocking: body line spacing measured at exactly 23.0pt and the stack center at ~272pt match the resolved tokens."
+    }
+  ]
+}

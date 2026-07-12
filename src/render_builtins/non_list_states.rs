@@ -68,7 +68,8 @@ const NON_LIST_SHOWCASE_STATES: &[NonListShowcaseState] = &[
 impl ScriptListApp {
     fn render_non_list_states_showcase(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let palette = crate::components::non_list_palette(&self.theme);
-        let metrics = crate::components::non_list_metrics(crate::components::NonListDensity::Comfortable);
+        let metrics =
+            crate::components::non_list_metrics(crate::components::NonListDensity::Comfortable);
         let selected_index = self.non_list_showcase_selected_index();
         let state = &NON_LIST_SHOWCASE_STATES[selected_index];
 
@@ -152,11 +153,26 @@ impl ScriptListApp {
                     .child("Left and Right switch examples. Escape returns to the main menu."),
             );
 
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            vec!["←/→ Switch".into(), "Esc Back".into()],
+            None,
+        ));
+
         div()
             .id("non-list-states-main-window")
             .size_full()
             .bg(palette.surface)
-            .child(content)
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .w_full()
+                    .overflow_hidden()
+                    .child(content),
+            )
+            .when_some(footer, |surface, footer| surface.child(footer))
             .capture_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
@@ -200,14 +216,23 @@ impl ScriptListApp {
             .flex()
             .items_center()
             .gap(px(6.0))
-            .children(NON_LIST_SHOWCASE_STATES.iter().enumerate().map(|(index, _state)| {
-                let is_selected = index == selected_index;
-                div()
-                    .w(px(if is_selected { 28.0 } else { 7.0 }))
-                    .h(px(7.0))
-                    .rounded(px(999.0))
-                    .bg(if is_selected { palette.selected } else { palette.border })
-            }))
+            .children(
+                NON_LIST_SHOWCASE_STATES
+                    .iter()
+                    .enumerate()
+                    .map(|(index, _state)| {
+                        let is_selected = index == selected_index;
+                        div()
+                            .w(px(if is_selected { 28.0 } else { 7.0 }))
+                            .h(px(7.0))
+                            .rounded(px(999.0))
+                            .bg(if is_selected {
+                                palette.selected
+                            } else {
+                                palette.border
+                            })
+                    }),
+            )
     }
 
     fn render_non_list_help_hint(
@@ -229,11 +254,10 @@ impl ScriptListApp {
             .justify_between()
             .gap(px(14.0))
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(5.0))
-                    .children(keys.split(' ').map(|key| self.render_non_list_keycap(key, palette))),
+                div().flex().items_center().gap(px(5.0)).children(
+                    keys.split(' ')
+                        .map(|key| self.render_non_list_keycap(key, palette)),
+                ),
             )
             .child(
                 div()

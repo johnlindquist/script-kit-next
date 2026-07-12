@@ -3,6 +3,7 @@ mod catalog_capture;
 mod catalog_context;
 mod catalog_cwd;
 mod catalog_filter;
+mod catalog_flows;
 mod catalog_profile;
 mod catalog_slash;
 pub(crate) mod catalog_style;

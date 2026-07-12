@@ -232,6 +232,7 @@ impl ScriptListApp {
             AppView::DayPage { .. } => "DayPage",
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView",
             AppView::SdkReferenceView { .. } => "SdkReferenceView",
+            AppView::TipsView { .. } => "TipsView",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
             AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         };
@@ -294,6 +295,7 @@ impl ScriptListApp {
         // Reset view
         self.editor_escape_armed_at = None;
         self.current_view = AppView::ScriptList;
+        self.reset_main_menu_selection_user_moved();
         self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "reset_to_script_list");
         // A full reset lands on the launcher root, so there is nowhere left to
         // "go back" to. A stale `opened_from_main_menu` here makes the next
@@ -468,7 +470,8 @@ mod registry_conflict_hud_tests {
     #[test]
     fn new_conflict_announces_alongside_existing() {
         let announced: HashSet<String> = conflicts(&["old"]).into_iter().collect();
-        let (fresh, _) = split_unannounced_registry_conflicts(&announced, conflicts(&["old", "new"]));
+        let (fresh, _) =
+            split_unannounced_registry_conflicts(&announced, conflicts(&["old", "new"]));
         assert_eq!(fresh, conflicts(&["new"]));
     }
 

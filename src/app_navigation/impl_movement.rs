@@ -128,6 +128,7 @@ impl ScriptListApp {
         if self.spine_empty_subsearch_selection_suppressed() {
             return;
         }
+        self.mark_main_menu_selection_user_moved();
 
         let (target_index, reason) = {
             let (grouped_items, _) = self.get_grouped_results_cached();
@@ -176,6 +177,7 @@ impl ScriptListApp {
 
     fn move_selection_down(&mut self, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
+        self.mark_main_menu_selection_user_moved();
 
         // Empty `@source:` colon mode renders unarmed: the first Down is the
         // explicit choose gesture and lands on the FIRST recent row (which
@@ -241,6 +243,7 @@ impl ScriptListApp {
     /// Jump to the first selectable (non-header) item in the list
     fn move_selection_to_first(&mut self, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
+        self.mark_main_menu_selection_user_moved();
 
         let (target_index, reason) = {
             let (grouped_items, _) = self.get_grouped_results_cached();
@@ -267,6 +270,7 @@ impl ScriptListApp {
     /// Skips section headers and clamps to the first selectable item
     fn move_selection_page_up(&mut self, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
+        self.mark_main_menu_selection_user_moved();
 
         let (target_index, reason) = {
             let (grouped_items, _) = self.get_grouped_results_cached();
@@ -314,6 +318,7 @@ impl ScriptListApp {
     /// Skips section headers and clamps to the last selectable item
     fn move_selection_page_down(&mut self, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
+        self.mark_main_menu_selection_user_moved();
 
         let (target_index, reason) = {
             let (grouped_items, _) = self.get_grouped_results_cached();
@@ -354,6 +359,7 @@ impl ScriptListApp {
     /// Jump to the last selectable (non-header) item in the list
     fn move_selection_to_last(&mut self, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
+        self.mark_main_menu_selection_user_moved();
 
         let (target_index, reason) = {
             let (grouped_items, _) = self.get_grouped_results_cached();

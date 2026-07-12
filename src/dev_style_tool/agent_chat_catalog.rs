@@ -1,165 +1,19 @@
 use super::catalog::{StyleUnit, StyleValue};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AgentChatStyleDef {
-    pub transcript: AgentChatTranscriptStyle,
-    pub markdown: AgentChatMarkdownStyle,
-    pub user_message: AgentChatMessageStyle,
-    pub assistant_message: AgentChatMessageStyle,
-    pub collapsible: AgentChatCollapsibleStyle,
-    pub error: AgentChatErrorStyle,
-    pub system: AgentChatSystemStyle,
-}
+// The PRODUCTION style contract owns the type definitions and base values
+// (2026-07-11 Oracle review, agent-chat slice): this dev-tool catalog is a
+// consumer — knob metadata, ranges, labels, getters, and setters only. The
+// re-exports below keep existing `agent_chat_catalog::*` import paths alive.
+pub use crate::ai::agent_chat::ui::style_contract::{
+    production_agent_chat_style, AgentChatCollapsibleStyle, AgentChatErrorStyle,
+    AgentChatMarkdownStyle, AgentChatMessageStyle, AgentChatStyleDef, AgentChatSystemStyle,
+    AgentChatTranscriptStyle,
+};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AgentChatTranscriptStyle {
-    pub row_padding_x: f32,
-    pub row_padding_bottom: f32,
-    pub dense_row_padding_bottom: f32,
-    pub response_start_margin_top: f32,
-    pub turn_margin_top: f32,
-    pub turn_padding_top: f32,
-    pub turn_divider_alpha: f32,
-    pub focused_preview_padding_x: f32,
-    pub focused_preview_padding_bottom: f32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AgentChatMarkdownStyle {
-    pub body_font_size: f32,
-    pub paragraph_gap: f32,
-    pub heading_1_font_size: f32,
-    pub heading_2_font_size: f32,
-    pub heading_3_font_size: f32,
-    pub code_block_font_size: f32,
-    pub code_block_padding_x: f32,
-    pub code_block_padding_y: f32,
-    pub code_block_radius: f32,
-    pub code_block_bg_alpha: f32,
-    pub code_block_border_alpha: f32,
-    pub blockquote_padding_x: f32,
-    pub blockquote_padding_y: f32,
-    pub blockquote_radius: f32,
-    pub blockquote_bg_alpha: f32,
-    pub blockquote_border_alpha: f32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AgentChatMessageStyle {
-    pub padding_x: f32,
-    pub padding_y: f32,
-    pub dense_padding_y: f32,
-    pub radius: f32,
-    pub bg_alpha: f32,
-    pub max_width: f32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AgentChatCollapsibleStyle {
-    pub padding_x: f32,
-    pub padding_y: f32,
-    pub body_padding_top: f32,
-    pub max_body_height: f32,
-    pub thought_header_opacity: f32,
-    pub tool_header_opacity: f32,
-    pub status_opacity: f32,
-    pub thought_border_alpha: f32,
-    pub tool_border_alpha: f32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AgentChatErrorStyle {
-    pub padding_x: f32,
-    pub padding_y: f32,
-    pub radius: f32,
-    pub bg_alpha: f32,
-    pub border_alpha: f32,
-    pub label_opacity: f32,
-    pub hint_opacity: f32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AgentChatSystemStyle {
-    pub padding_x: f32,
-    pub padding_y: f32,
-    pub opacity: f32,
-    pub border_alpha: f32,
-}
-
+/// Back-compat alias for the production base; prefer
+/// `style_contract::production_agent_chat_style()` in new code.
 pub fn base_agent_chat_style() -> AgentChatStyleDef {
-    AgentChatStyleDef {
-        transcript: AgentChatTranscriptStyle {
-            row_padding_x: 16.0,
-            row_padding_bottom: 4.0,
-            dense_row_padding_bottom: 1.0,
-            response_start_margin_top: 4.0,
-            turn_margin_top: 8.0,
-            turn_padding_top: 8.0,
-            turn_divider_alpha: 0x18 as f32,
-            focused_preview_padding_x: 8.0,
-            focused_preview_padding_bottom: 4.0,
-        },
-        markdown: AgentChatMarkdownStyle {
-            body_font_size: 14.0,
-            paragraph_gap: 0.28,
-            heading_1_font_size: 17.0,
-            heading_2_font_size: 16.0,
-            heading_3_font_size: 15.0,
-            code_block_font_size: 13.0,
-            code_block_padding_x: 7.0,
-            code_block_padding_y: 4.0,
-            code_block_radius: 5.0,
-            code_block_bg_alpha: 0xA0 as f32,
-            code_block_border_alpha: 0x40 as f32,
-            blockquote_padding_x: 12.0,
-            blockquote_padding_y: 6.0,
-            blockquote_radius: 5.0,
-            blockquote_bg_alpha: 0x10 as f32,
-            blockquote_border_alpha: 0x40 as f32,
-        },
-        user_message: AgentChatMessageStyle {
-            padding_x: 12.0,
-            padding_y: 8.0,
-            dense_padding_y: 3.0,
-            radius: 8.0,
-            bg_alpha: 0x06 as f32,
-            max_width: 520.0,
-        },
-        assistant_message: AgentChatMessageStyle {
-            padding_x: 12.0,
-            padding_y: 4.0,
-            dense_padding_y: 2.0,
-            radius: 0.0,
-            bg_alpha: 0.0,
-            max_width: 620.0,
-        },
-        collapsible: AgentChatCollapsibleStyle {
-            padding_x: 12.0,
-            padding_y: 2.0,
-            body_padding_top: 4.0,
-            max_body_height: 200.0,
-            thought_header_opacity: 0.75,
-            tool_header_opacity: 0.75,
-            status_opacity: 0.50,
-            thought_border_alpha: 0x7f as f32,
-            tool_border_alpha: 0x7f as f32,
-        },
-        error: AgentChatErrorStyle {
-            padding_x: 12.0,
-            padding_y: 8.0,
-            radius: 8.0,
-            bg_alpha: 50.0,
-            border_alpha: 0x80 as f32,
-            label_opacity: 0.75,
-            hint_opacity: 0.40,
-        },
-        system: AgentChatSystemStyle {
-            padding_x: 12.0,
-            padding_y: 4.0,
-            opacity: 0.60,
-            border_alpha: 0x30 as f32,
-        },
-    }
+    production_agent_chat_style()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

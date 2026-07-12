@@ -1145,6 +1145,11 @@ impl AgentChatThread {
             return Ok(());
         }
 
+        // Feed the shell-style Up/Down prompt recall (view-level cycling
+        // reads this store lazily). Queued submits count too — the user
+        // typed and sent them.
+        super::history::append_prompt_history(trimmed);
+
         self.resume_queue_for_manual_submit();
 
         if matches!(

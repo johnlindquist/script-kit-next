@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Arg Prompt — mockup vs. real app</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #111; color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 24px; gap: 12px;
+  }
+  .comparison { display: grid; gap: 12px; }
+  /* height_for_view(ArgPromptWithChoices, 6) = 319 logical px
+     (src/window_resize/mod.rs:623-629); width = MAIN_WINDOW_WIDTH 750. */
+  .stage { position: relative; width: 750px; height: 319px; }
+  .stage iframe, .stage img {
+    position: absolute; inset: 0; width: 750px; height: 319px; border: 0;
+  }
+  .reference { opacity: var(--reference-opacity, 0.5); pointer-events: none; }
+  .stage[data-mode="difference"] .reference { opacity: 1; mix-blend-mode: difference; }
+  .controls { display: flex; align-items: center; gap: 10px; font-size: 13px; width: 750px; }
+  input[type="range"] { flex: 1; }
+  button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; }
+  .hint { color: #888; font-size: 12px; max-width: 750px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="comparison">
+  <div class="stage" id="stage" data-mode="overlay">
+    <iframe title="HTML mockup" src="./index.html"></iframe>
+    <img class="reference" id="reference" src="./reference/arg-prompt@2x.png" alt="">
+  </div>
+  <div class="controls">
+    <label for="opacity">Reference opacity</label>
+    <input id="opacity" type="range" min="0" max="1" step="0.01" value="0.5">
+    <button id="mode" type="button">Difference</button>
+  </div>
+  <p class="hint">
+    <b>D</b> toggles difference blend, <b>Space</b> blinks the reference.
+    Material, starfield phase, native footer interiors, caret geometry, and
+    glyph rasterization are known-divergence (non-blocking) — see
+    known-divergence.json. Header band (y 0–38), divider, row slots (44px
+    each), selected-surface bounds/radius, and the 32px footer band boundary
+    must register within ±1pt. NOTE: until the exporter emits
+    --sk-arg-window-height (319px), the mockup window falls back to 480px —
+    compare against the top 319px only.
+  </p>
+</div>
+<script>
+  const stage = document.querySelector("#stage");
+  const opacity = document.querySelector("#opacity");
+  const mode = document.querySelector("#mode");
+  const reference = document.querySelector("#reference");
+  opacity.addEventListener("input", () => {
+    stage.style.setProperty("--reference-opacity", opacity.value);
+  });
+  mode.addEventListener("click", () => {
+    const difference = stage.dataset.mode === "difference";
+    stage.dataset.mode = difference ? "overlay" : "difference";
+    mode.textContent = difference ? "Difference" : "Overlay";
+  });
+  addEventListener("keydown", (event) => {
+    if (event.key.toLowerCase() === "d") mode.click();
+    if (event.key === " ") {
+      event.preventDefault();
+      reference.style.visibility =
+        reference.style.visibility === "hidden" ? "visible" : "hidden";
+    }
+  });
+</script>
+</body>
+</html>

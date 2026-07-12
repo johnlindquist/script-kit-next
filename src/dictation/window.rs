@@ -974,7 +974,8 @@ impl DictationOverlay {
             | FooterAction::Expand
             | FooterAction::Retry
             | FooterAction::Cwd
-            | FooterAction::AgentModel => {}
+            | FooterAction::AgentModel
+            | FooterAction::Tips => {}
         }
     }
 

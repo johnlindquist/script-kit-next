@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Chat Prompt mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: script-driven SDK chat prompt (protocol {"type":"chat"}), full
+  main-window mode, script-kit-dark, Starfield. One completed conversation
+  turn (user prompt + assistant markdown reply with a ts code block), idle
+  (not streaming), composer empty with placeholder.
+  Reference will be reference/chat-prompt@2x.png via
+  scripts/agentic/design-reference-capture.ts \-\-screen chat (proposed block
+  in ../../briefs/chat-prompt-brief.md).
+  Footer: the chat prompt installs native footer surface "chat_prompt"
+  (app_view_state.rs native_footer_surface), so the GPUI capture shows an
+  EMPTY 36pt band; the buttons below (Run ↵ / Actions ⌘K from
+  standard_main_window_footer_buttons) are source-derived and still
+  receipt-pending against a live activeFooter probe.
+-->
+<main class="stage" id="stage">
+  <div class="sk-window sk-window--chat" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <canvas class="sk-window__effect" id="starfield" width="1500" height="1000"></canvas>
+
+    <div class="sk-window__content">
+      <!-- prompts/chat/render_input.rs::render_header — back arrow + title,
+           NOT the main-menu context-zone header. -->
+      <header class="sk-chat-header" data-component="prompts::chat::render_header">
+        <span class="sk-chat-header__back" aria-hidden="true">←</span>
+        <span class="sk-chat-header__title">Chat</span>
+      </header>
+
+      <!-- Input at TOP (render_core.rs input_area, full mode: gap 8 +
+           border-b at ui.border|0x40). Composer empty → caret + placeholder. -->
+      <div class="sk-chat-input-area" data-component="render_core::input_area">
+        <div class="sk-chat-input" data-component="render_input (chat-input-field)" data-focused="true">
+          <span class="sk-chat-caret" aria-hidden="true"></span>
+          <span class="sk-chat-placeholder">Ask follow-up...</span>
+        </div>
+      </div>
+
+      <!-- Virtualized turns list (ListAlignment::Bottom) — content anchors to
+           the bottom edge of the messages area. -->
+      <section class="sk-chat-messages" data-component="chat-messages list (ListAlignment::Bottom)">
+        <article class="sk-chat-turn" data-component="render_turn wrapper (pb 8)">
+          <div class="sk-chat-card" data-component="render_turns::render_turn">
+            <div class="sk-chat-card__content">
+              <div class="sk-chat-user">How do I read the clipboard in a script?</div>
+              <div class="sk-chat-md" data-component="prompts::markdown::render_markdown">
+                <p class="sk-chat-md__p">Use the SDK clipboard helper, then show it in a prompt:</p>
+                <div class="sk-chat-code" data-component="markdown::code_table::build_code_block_element">
+                  <div class="sk-chat-code__header">
+                    <span class="sk-chat-code__label">ts · 2 lines</span>
+                    <!-- Copy control is opacity-0 until group hover — omitted
+                         from the idle fixture on purpose. -->
+                  </div>
+                  <div class="sk-chat-code__body">
+                    <div class="sk-chat-code__line">const text = await clipboard.readText();</div>
+                    <div class="sk-chat-code__line">await div(md(text));</div>
+                  </div>
+                </div>
+                <p class="sk-chat-md__p">Call <code class="sk-chat-inline-code">clipboard.writeText(...)</code> to write back.</p>
+              </div>
+            </div>
+            <button class="sk-chat-copy" data-component="render_turn copy button" aria-label="Copy response">
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></g></svg>
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <!-- Native AppKit footer band: GPUI renders only a 36pt spacer
+           (render_native_main_window_footer_spacer); buttons live in the
+           separate overlay window. Labels source-derived (see comment at top),
+           receipt-pending. -->
+      <footer class="sk-footer-host" data-component="native footer host" data-native-footer>
+        <div class="sk-footer-rail" data-component="footer_chrome">
+          <span class="sk-footer-spacer"></span>
+          <button class="sk-footer-action sk-footer-action--run">
+            <span class="sk-footer-label">Run</span>
+            <kbd class="sk-keycap">↵</kbd>
+          </button>
+          <button class="sk-footer-action sk-footer-action--actions">
+            <span class="sk-footer-label">Actions</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</main>
+<script src="../main-menu/starfield.js"></script>
+</body>
+</html>

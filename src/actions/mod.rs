@@ -89,6 +89,18 @@ pub use window::{
 pub(crate) use window::{emit_actions_popup_event, ActionsPopupEvent};
 // get_actions_window_handle available but not re-exported (use window:: directly if needed)
 
+// Design-contract resolvers: shared between the dialog renderer and the token
+// exporter (src/design_contract) so the two can never drift.
+#[allow(unused_imports)]
+pub(crate) use dialog::{
+    resolved_actions_dialog_row_chrome, resolved_actions_dialog_row_metrics,
+    resolved_actions_dialog_search_chrome, resolved_actions_dialog_section_chrome,
+    ResolvedActionsDialogRowChrome, ResolvedActionsDialogSearchChrome,
+    ResolvedActionsDialogSectionChrome,
+};
+#[allow(unused_imports)]
+pub(crate) use window::resolved_actions_popup_height;
+
 pub mod prelude;
 
 #[cfg(test)]

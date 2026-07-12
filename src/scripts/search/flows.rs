@@ -24,6 +24,7 @@ pub fn fuzzy_search_flows(flows: &[FlowDescriptor], query: &str) -> Vec<FlowMatc
             .iter()
             .map(|flow| FlowMatch {
                 flow: flow.clone(),
+                session_id: None,
                 display_name: flow.friendly_name(),
                 subtitle: flow_subtitle(flow),
                 score: 0,
@@ -70,6 +71,7 @@ pub fn fuzzy_search_flows(flows: &[FlowDescriptor], query: &str) -> Vec<FlowMatc
         if best_score > 0 {
             matches.push(FlowMatch {
                 flow: flow.clone(),
+                session_id: None,
                 subtitle: flow_subtitle(flow),
                 display_name,
                 score: best_score,

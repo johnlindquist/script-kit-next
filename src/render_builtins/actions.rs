@@ -907,9 +907,7 @@ impl ScriptListApp {
     /// no stale copy is captured while the popup is open.
     fn flow_desk_actions_subject(&self) -> Option<FlowDeskSubject> {
         match &self.current_view {
-            AppView::FlowSessionView { session_id } => {
-                Some(FlowDeskSubject::Session(*session_id))
-            }
+            AppView::FlowSessionView { session_id } => Some(FlowDeskSubject::Session(*session_id)),
             AppView::FlowUxView {
                 filter,
                 selected_index,
@@ -917,25 +915,22 @@ impl ScriptListApp {
             } => {
                 let rows = self.flow_desk_rows(filter);
                 match rows.get(*selected_index)? {
-                    FlowDeskRow::Session(id) => {
-                        Some(FlowDeskSubject::Session(*id))
-                    }
-                    FlowDeskRow::Flow(flow) => {
-                        Some(FlowDeskSubject::Flow(flow.clone()))
-                    }
-                    FlowDeskRow::CreateFlow => {
-                        Some(FlowDeskSubject::Create)
-                    }
+                    FlowDeskRow::Session(id) => Some(FlowDeskSubject::Session(*id)),
+                    FlowDeskRow::Run(id) => Some(FlowDeskSubject::Run(*id)),
+                    FlowDeskRow::Flow(flow) => Some(FlowDeskSubject::Flow(flow.clone())),
+                    // Setup affordance rows carry exactly one verb — Enter
+                    // already is that verb, so ⌘K has nothing to add.
+                    FlowDeskRow::InstallMdflow | FlowDeskRow::InitFlows => None,
+                    FlowDeskRow::CreateFlow => Some(FlowDeskSubject::Create),
                 }
             }
             _ => None,
         }
     }
 
-    fn flow_desk_actions_for_dialog(
-        &self,
-        subject: &FlowDeskSubject,
-    ) -> Vec<crate::actions::Action> {
+    /// Pure: the ⌘K verb list is a function of the subject alone, so the
+    /// discoverability tests below can hold it to the bar without an app.
+    fn flow_desk_actions_for_dialog(subject: &FlowDeskSubject) -> Vec<crate::actions::Action> {
         use crate::actions::{Action, ActionCategory};
         use crate::designs::icon_variations::IconName;
 
@@ -960,6 +955,17 @@ impl ScriptListApp {
                     .with_shortcut("⇧↵")
                     .with_section("Flow")
                     .with_icon(IconName::PlayFilled),
+                    Action::new(
+                        "flow_desk_view",
+                        "View Flow",
+                        Some(
+                            "Render the resolved prompt + full config to a page (md render)"
+                                .to_string(),
+                        ),
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_section("Flow")
+                    .with_icon(IconName::MagnifyingGlass),
                     Action::new(
                         "flow_desk_edit",
                         "Edit Definition",
@@ -997,6 +1003,16 @@ impl ScriptListApp {
                         .with_icon(IconName::Copy),
                     );
                 }
+                actions.push(
+                    Action::new(
+                        "flow_desk_create",
+                        "New Flow",
+                        Some("Describe an agent in plain English (md create)".to_string()),
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_section("Create")
+                    .with_icon(IconName::Plus),
+                );
                 actions
             }
             FlowDeskSubject::Session(_) => vec![
@@ -1027,6 +1043,14 @@ impl ScriptListApp {
                 .with_section("Session")
                 .with_icon(IconName::Copy),
                 Action::new(
+                    "flow_desk_create",
+                    "New Flow",
+                    Some("Describe an agent in plain English (md create)".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_section("Create")
+                .with_icon(IconName::Plus),
+                Action::new(
                     "flow_desk_session_stop",
                     "Stop Current Turn",
                     Some("Cancel the in-flight turn — the conversation survives".to_string()),
@@ -1035,14 +1059,55 @@ impl ScriptListApp {
                 .with_section("Danger")
                 .with_icon(IconName::Close),
                 Action::new(
-                    "flow_desk_session_dismiss",
-                    "Dismiss Session",
-                    Some("Remove the conversation (idle sessions only)".to_string()),
+                    "flow_desk_session_terminate",
+                    "Terminate Flow",
+                    Some(
+                        "Cancel any active turn and permanently end this conversation".to_string(),
+                    ),
                     ActionCategory::ScriptContext,
                 )
+                .with_shortcut("⇧⌘⎋")
                 .with_section("Danger")
                 .with_icon(IconName::Trash),
             ],
+            FlowDeskSubject::Run(id) => {
+                let run = crate::flows::run_registry::flow_run_registry().get(*id);
+                let mut actions = Vec::new();
+                let active = run.as_ref().is_some_and(|run| !run.phase.is_terminal());
+                if active {
+                    actions.push(
+                        Action::new(
+                            "flow_desk_run_cancel",
+                            "Cancel Run",
+                            Some("SIGTERM the run's process group (SIGKILL after 2s)".to_string()),
+                            ActionCategory::ScriptContext,
+                        )
+                        .with_section("Run")
+                        .with_icon(IconName::Close),
+                    );
+                }
+                actions.push(
+                    Action::new(
+                        "flow_desk_run_copy_output",
+                        "Copy Output",
+                        Some("Interleaved stdout + stderr tail".to_string()),
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_section("Run")
+                    .with_icon(IconName::Copy),
+                );
+                actions.push(
+                    Action::new(
+                        "flow_desk_runs_clear_finished",
+                        "Clear Finished Runs",
+                        Some("Remove completed/failed/cancelled runs from the desk".to_string()),
+                        ActionCategory::ScriptContext,
+                    )
+                    .with_section("Run")
+                    .with_icon(IconName::Trash),
+                );
+                actions
+            }
             FlowDeskSubject::Create => vec![Action::new(
                 "flow_desk_create",
                 "Create a Flow",
@@ -1075,10 +1140,19 @@ impl ScriptListApp {
         self.focused_input = FocusedInput::ActionsSearch;
 
         let theme_arc = std::sync::Arc::clone(&self.theme);
-        let actions = self.flow_desk_actions_for_dialog(&subject);
+        let actions = Self::flow_desk_actions_for_dialog(&subject);
         let placeholder = match &subject {
             FlowDeskSubject::Flow(flow) => flow.friendly_name(),
             FlowDeskSubject::Session(_) => "Session actions".to_string(),
+            FlowDeskSubject::Run(id) => crate::flows::run_registry::flow_run_registry()
+                .get(*id)
+                .map(|run| {
+                    format!(
+                        "{} run",
+                        crate::flows::model::friendly_flow_name(&run.flow_name)
+                    )
+                })
+                .unwrap_or_else(|| "Run actions".to_string()),
             FlowDeskSubject::Create => "Create a flow".to_string(),
         };
         let dialog = cx.new(move |cx| {
@@ -1152,10 +1226,13 @@ impl ScriptListApp {
 
         match (action_id, subject) {
             ("flow_desk_converse", Some(FlowDeskSubject::Flow(flow))) => {
-                self.start_flow_session(&flow, None, cx);
+                self.resume_or_start_flow_session(&flow, None, cx);
             }
             ("flow_desk_run_once", Some(FlowDeskSubject::Flow(flow))) => {
                 self.flow_desk_run_once(&flow, cx);
+            }
+            ("flow_desk_view", Some(FlowDeskSubject::Flow(flow))) => {
+                self.flow_desk_view_flow(&flow);
             }
             ("flow_desk_edit", Some(FlowDeskSubject::Flow(flow))) => {
                 let _ = std::process::Command::new("open")
@@ -1172,52 +1249,52 @@ impl ScriptListApp {
             ("flow_desk_copy_path", Some(FlowDeskSubject::Flow(flow))) => {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(flow.path.clone()));
             }
-            (
-                "flow_desk_copy_command",
-                Some(FlowDeskSubject::Flow(flow)),
-            ) => {
+            ("flow_desk_copy_command", Some(FlowDeskSubject::Flow(flow))) => {
                 if let Some(wrapper) = flow.wrapper_command {
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(wrapper));
                 }
             }
-            (
-                "flow_desk_session_open",
-                Some(FlowDeskSubject::Session(id)),
-            ) => {
+            ("flow_desk_session_open", Some(FlowDeskSubject::Session(id))) => {
                 self.open_flow_session(id, cx);
             }
             ("flow_desk_session_background", _) => {
-                self.background_flow_session(cx);
+                self.background_flow_session(window, cx);
             }
-            (
-                "flow_desk_session_copy_transcript",
-                Some(FlowDeskSubject::Session(id)),
-            ) => {
-                if let Some((meta, _)) =
-                    self.flow_sessions.iter().find(|(meta, _)| meta.id == id)
-                {
+            ("flow_desk_session_copy_transcript", Some(FlowDeskSubject::Session(id))) => {
+                if let Some((meta, _)) = self.flow_sessions.iter().find(|(meta, _)| meta.id == id) {
                     let transcript = meta
                         .turns
                         .iter()
-                        .map(|turn| {
-                            format!("**You:** {}\n\n{}", turn.user, turn.assistant)
-                        })
+                        .map(|turn| format!("**You:** {}\n\n{}", turn.user, turn.assistant))
                         .collect::<Vec<_>>()
                         .join("\n\n---\n\n");
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(transcript));
                 }
             }
-            (
-                "flow_desk_session_stop",
-                Some(FlowDeskSubject::Session(id)),
-            ) => {
+            ("flow_desk_session_stop", Some(FlowDeskSubject::Session(id))) => {
                 self.stop_flow_session(id, cx);
             }
-            (
-                "flow_desk_session_dismiss",
-                Some(FlowDeskSubject::Session(id)),
-            ) => {
-                self.dismiss_flow_session(id, cx);
+            ("flow_desk_session_terminate", Some(FlowDeskSubject::Session(id))) => {
+                self.terminate_flow_session(id, window, cx);
+            }
+            ("flow_desk_run_cancel", Some(FlowDeskSubject::Run(id))) => {
+                crate::flows::runner::cancel_run(id);
+                self.toast_manager.push(
+                    crate::components::toast::Toast::success(
+                        "Cancelling run…".to_string(),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(1500)),
+                );
+            }
+            ("flow_desk_run_copy_output", Some(FlowDeskSubject::Run(id))) => {
+                if let Some(run) = crate::flows::run_registry::flow_run_registry().get(id) {
+                    let output = run.merged_tail.lines().collect::<Vec<&str>>().join("\n");
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(output));
+                }
+            }
+            ("flow_desk_runs_clear_finished", _) => {
+                crate::flows::run_registry::flow_run_registry().clear_finished();
             }
             ("flow_desk_create", _) => {
                 self.start_flow_create_session(cx);
@@ -1231,6 +1308,69 @@ impl ScriptListApp {
                 );
             }
         }
+    }
+
+    /// "View Flow": render the flow's resolved prompt + full config to a
+    /// self-contained HTML page via `md render <flow> --open` (FREE — no
+    /// engine call; mdflow opens the page in the default browser). Runs off
+    /// the main thread; the outcome is logged so devtools receipts can
+    /// assert on it.
+    fn flow_desk_view_flow(&self, flow: &crate::flows::model::FlowDescriptor) {
+        let path = flow.path.clone();
+        let cwd = self.flow_ux_cwd();
+        std::thread::Builder::new()
+            .name("flow-desk-view".into())
+            .spawn(move || {
+                let Some(binary) = crate::flows::catalog::mdflow_binary() else {
+                    tracing::warn!(
+                        target: "script_kit::flows",
+                        event = "flow_desk_view_failed",
+                        path = %path,
+                        error = "mdflow CLI not found on PATH",
+                        "View Flow could not run md render"
+                    );
+                    return;
+                };
+                match std::process::Command::new(binary)
+                    .arg("render")
+                    .arg(&path)
+                    .arg("--open")
+                    .current_dir(&cwd)
+                    .output()
+                {
+                    Ok(output) if output.status.success() => {
+                        let page = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        tracing::info!(
+                            target: "script_kit::flows",
+                            event = "flow_desk_view_rendered",
+                            path = %path,
+                            page = %page,
+                            "Rendered flow view page"
+                        );
+                    }
+                    Ok(output) => {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        let first = stderr.lines().next().unwrap_or("md render failed");
+                        tracing::warn!(
+                            target: "script_kit::flows",
+                            event = "flow_desk_view_failed",
+                            path = %path,
+                            error = %first,
+                            "md render failed"
+                        );
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            target: "script_kit::flows",
+                            event = "flow_desk_view_failed",
+                            path = %path,
+                            error = %err,
+                            "md render failed to spawn"
+                        );
+                    }
+                }
+            })
+            .ok();
     }
 }
 
@@ -1307,6 +1447,85 @@ mod on_close_reentrancy_tests {
         assert!(
             !clipboard_fn.contains("crate::actions::WindowPosition::BottomRight"),
             "clipboard actions should not open in the bottom-right position"
+        );
+    }
+}
+
+#[cfg(test)]
+mod flow_desk_create_discoverability_tests {
+    //! Actions-menu leg of the discoverability bar (paired with
+    //! tests/launcher_discoverability_contract.rs): every Flow Desk ⌘K
+    //! subject must surface the create-flow affordance, and surfacing it
+    //! must not degrade the menu (ids stay unique, Danger stays last).
+
+    use super::{FlowDeskSubject, ScriptListApp};
+    use crate::flows::model::{FlowDescriptor, FlowSource};
+
+    fn sample_flow() -> FlowDescriptor {
+        FlowDescriptor {
+            id: "project:flow-gmail".to_string(),
+            path: "/test/flows/flow-gmail.md".to_string(),
+            source: FlowSource::Project,
+            name: "flow-gmail".to_string(),
+            description: Some("Triage email".to_string()),
+            engine: "codex".to_string(),
+            engine_source: None,
+            inputs: Vec::new(),
+            is_workflow: false,
+            interactive: false,
+            mtime_ms: 0,
+            origin: Some("repo flows/".to_string()),
+            wrapper_command: None,
+        }
+    }
+
+    fn subjects() -> Vec<(&'static str, FlowDeskSubject)> {
+        vec![
+            ("flow", FlowDeskSubject::Flow(sample_flow())),
+            ("session", FlowDeskSubject::Session(7)),
+            ("create", FlowDeskSubject::Create),
+        ]
+    }
+
+    #[test]
+    fn every_flow_desk_subject_surfaces_the_create_affordance() {
+        for (label, subject) in subjects() {
+            let actions = ScriptListApp::flow_desk_actions_for_dialog(&subject);
+            assert!(
+                actions.iter().any(|action| action.id == "flow_desk_create"),
+                "the {label} subject must surface the flow_desk_create action"
+            );
+        }
+    }
+
+    #[test]
+    fn action_ids_stay_unique_per_subject() {
+        for (label, subject) in subjects() {
+            let actions = ScriptListApp::flow_desk_actions_for_dialog(&subject);
+            let mut ids: Vec<&str> = actions.iter().map(|action| action.id.as_str()).collect();
+            let before = ids.len();
+            ids.sort_unstable();
+            ids.dedup();
+            assert_eq!(
+                before,
+                ids.len(),
+                "the {label} subject repeats an action id"
+            );
+        }
+    }
+
+    #[test]
+    fn danger_actions_stay_last_for_sessions() {
+        let actions = ScriptListApp::flow_desk_actions_for_dialog(&FlowDeskSubject::Session(7));
+        let first_danger = actions
+            .iter()
+            .position(|action| action.section.as_deref() == Some("Danger"))
+            .expect("session subject must keep its Danger section");
+        assert!(
+            actions[first_danger..]
+                .iter()
+                .all(|action| action.section.as_deref() == Some("Danger")),
+            "Danger must remain the trailing section — new verbs go before it"
         );
     }
 }

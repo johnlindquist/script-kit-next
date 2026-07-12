@@ -208,6 +208,81 @@ fn test_search_handlers_do_update_results_when_typing_and_backspacing() {
 
 #[test]
 #[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
+fn typing_snaps_to_first_scored_action_even_when_previous_identity_still_matches() {
+    run_headless_dialog_test(|cx| {
+        let dialog = build_dialog_entity(
+            cx,
+            vec![
+                sample_action("delete_script", "Delete Script?", Some("Destructive")),
+                sample_action("open_finder", "Open in Finder", Some("Share")),
+                sample_action(
+                    "save_filter",
+                    "Save del filter as named search",
+                    Some("Power Syntax"),
+                ),
+            ],
+            ActionsDialogConfig::default(),
+            Arc::new(Mutex::new(Vec::new())),
+        );
+
+        cx.update_entity(&dialog, |dialog, entity_cx| {
+            dialog
+                .select_action_by_id("save_filter", entity_cx)
+                .expect("fixture action should be selectable");
+            dialog.handle_char('d', entity_cx);
+            dialog.handle_char('e', entity_cx);
+            dialog.handle_char('l', entity_cx);
+
+            assert_eq!(
+                dialog.get_selected_action_id().as_deref(),
+                Some("delete_script"),
+                "typing must select the first scored selectable row"
+            );
+        });
+    });
+}
+
+#[test]
+#[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
+fn navigated_selection_survives_config_driven_grouped_row_refresh() {
+    run_headless_dialog_test(|cx| {
+        let dialog = build_dialog_entity(
+            cx,
+            vec![
+                sample_action("delete_script", "Delete Script?", Some("Destructive")),
+                sample_action(
+                    "delete_ranking",
+                    "Delete Ranking Entry",
+                    Some("Destructive"),
+                ),
+            ],
+            ActionsDialogConfig::default(),
+            Arc::new(Mutex::new(Vec::new())),
+        );
+
+        cx.update_entity(&dialog, |dialog, entity_cx| {
+            dialog.move_down(entity_cx);
+            assert_eq!(
+                dialog.get_selected_action_id().as_deref(),
+                Some("delete_ranking")
+            );
+
+            dialog.set_config(ActionsDialogConfig {
+                section_style: SectionStyle::Separators,
+                ..ActionsDialogConfig::default()
+            });
+
+            assert_eq!(
+                dialog.get_selected_action_id().as_deref(),
+                Some("delete_ranking"),
+                "host/config refresh must preserve an explicitly navigated identity"
+            );
+        });
+    });
+}
+
+#[test]
+#[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
 fn test_actions_dialog_defaults_to_matching_main_window_background() {
     run_headless_dialog_test(|cx| {
         let dialog = build_dialog_entity(

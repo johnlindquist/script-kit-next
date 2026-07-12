@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-fidelity-screen="agent-chat">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Agent Chat mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: openAgentChatKitchenSinkFixture — the deterministic, provider-free
+  Agent Chat transcript (src/ai/agent_chat/ui/kitchen_sink_fixture.rs) loaded
+  into the EMBEDDED Agent Chat surface of the MAIN window
+  (open_agent_chat_kitchen_sink_fixture, src/app_impl/agent_handoff/
+  agent_chat_launch.rs). Standard UI variant, script-kit-dark, InfoBarBase.
+
+  The fixture cwd is PINNED (style_contract::AGENT_CHAT_KITCHEN_SINK_FIXTURE_CWD):
+  /var/tmp/script-kit-agent-chat-reference/agent-chat-kitchen-sink-long-workspace
+  — deliberately long and environment-independent, so the header bytes are
+  reproducible and the cwd-lane ellipsis contract stays under stress.
+
+  The transcript list is bottom-aligned (ListAlignment::Bottom + follow_tail),
+  so this mockup shows the TAIL of the fixture:
+  messages 16 → 17 → 18 → tool-edit-diff (19) → tool-bash-failed (20) → 21.
+
+  Composer: load_kitchen_sink_fixture clears the input, and the transcript is
+  non-empty, so the placeholder is "Follow up…"
+  (agentChat.composer.placeholderFollowUp) with the caret at the text origin.
+  Send button renders the idle+empty disabled state.
+
+  Header context zone: shared main-view chrome. The equal-width lanes protect
+  each other under flex pressure: the pinned long cwd ellipsizes, keycaps stay
+  visible, and identical profile/model fallback text is rendered once.
+
+  Footer: native AppKit overlay. The GPUI window paints ONLY
+  render_native_main_window_footer_spacer, so the reference capture shows an
+  EMPTY 36px band — and this mockup mirrors that: the host band is empty.
+  Native button/left-info truth (Paste Response ↵ / Actions ⌘K, profile ·
+  model · cwd) is receipt-only via an activeFooter protocol probe
+  (agentChat.footer.presentation = gpuiSpacerPlusNativeOverlay).
+
+  Every visual value resolves through generated --sk-* tokens
+  (export_design_tokens now emits the full agent-chat manifest); the only
+  literals are --sk-emulator-* calibration in ./screen.css.
+-->
+<main class="stage" id="stage">
+  <div class="sk-window" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+
+    <div class="sk-window__content">
+      <header class="sk-header">
+        <div class="sk-context-zone sk-agent-chat-header-zone"
+             data-component="main_view_chrome::context_zone"
+             data-fidelity-id="agent-chat.header.context-zone">
+          <span class="sk-context-pill sk-context-pill--cwd"
+                data-fidelity-id="agent-chat.header.cwd-chip"
+                data-component="cwd chip (Tab inactive — no keycap; pinned fixture cwd)"><span class="sk-context-label">/var/tmp/script-kit-agent-chat-reference/agent-chat-kitchen-sink-long-workspace</span></span>
+          <span class="sk-context-pill sk-context-pill--trailing"
+                data-component="agent·model chip"
+                data-fidelity-id="agent-chat.header.trailing-chip"><span class="sk-context-label">Agent Chat Kitchen Sink</span> <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+
+        <div class="sk-agent-chat-composer"
+             data-component="render_composer_input_shell (single line = shared search height)"
+             data-fidelity-id="agent-chat.composer.shell">
+          <div class="sk-agent-chat-composer__body" data-fidelity-id="agent-chat.composer.input">
+            <span class="sk-agent-chat-composer__caret"></span>
+            <span class="sk-agent-chat-composer__placeholder">Follow up…</span>
+          </div>
+          <button class="sk-agent-chat-send"
+                  data-state="disabled"
+                  data-component="render_send_button_for_state"
+                  data-fidelity-id="agent-chat.composer.send"
+                  aria-label="Type a message first">↑</button>
+        </div>
+      </header>
+
+      <!-- MainViewDividerChrome renders with visible: false on Agent Chat -->
+
+      <section class="sk-agent-chat-transcript"
+               data-component="AgentChatTranscript (bottom-aligned list)"
+               data-fidelity-id="agent-chat.transcript.viewport">
+        <!-- fixture message 16 — user, new turn -->
+        <div class="sk-agent-chat-row" data-new-turn="true" data-component="transcript row">
+          <div class="sk-agent-chat-user sk-agent-chat-md" data-component="render_user_message">
+            <p>Scroll sentinel 2 from the user side.</p>
+          </div>
+        </div>
+
+        <!-- fixture message 17 — assistant, response start -->
+        <div class="sk-agent-chat-row" data-response-start="true" data-component="transcript row"
+             data-fidelity-id="agent-chat.transcript.message.assistant-17">
+          <div class="sk-agent-chat-assistant sk-agent-chat-md"
+               data-component="render_assistant_message">
+            <p>Scroll sentinel 3:</p>
+            <pre>./scripts/agentic/agent-cargo.sh test --test agent_chat_kitchen_sink_fixture_contract</pre>
+            <p>The command appears as markdown only; it is not executed by the fixture.</p>
+          </div>
+        </div>
+
+        <!-- fixture message 18 — system checkpoint -->
+        <div class="sk-agent-chat-row" data-component="transcript row"
+             data-fidelity-id="agent-chat.transcript.message.system-18">
+          <div class="sk-agent-chat-system sk-agent-chat-md"
+               data-component="render_system_message">
+            <p>System checkpoint: fixture transcript remains static, deterministic, and safe.</p>
+          </div>
+        </div>
+
+        <!-- fixture tool-edit-diff — tool card, complete, default-expanded diff -->
+        <div class="sk-agent-chat-row" data-component="transcript row"
+             data-fidelity-id="agent-chat.transcript.tool.edit-diff">
+          <div class="sk-agent-chat-tool"
+               data-component="render_tool_card">
+            <div class="sk-agent-chat-tool__header">
+              <span class="sk-agent-chat-tool__chevron">▾</span>
+              <span class="sk-agent-chat-tool__status" data-status="complete">✓ </span>
+              <span class="sk-agent-chat-tool__name">✎ edit</span>
+              <span class="sk-agent-chat-tool__subject">src/ai/agent_chat/ui/components/transcript.rs</span>
+            </div>
+            <div class="sk-agent-chat-diff" data-component="render_diff_body">
+              <div class="sk-agent-chat-diff__row" data-kind="context">  41 fn render_message(</div>
+              <div class="sk-agent-chat-diff__row" data-kind="removed">- 42     let label = "Tool";</div>
+              <div class="sk-agent-chat-diff__row" data-kind="added">+ 42     let label = meta.tool_name.clone();</div>
+              <div class="sk-agent-chat-diff__row" data-kind="added">+ 43     let subject = meta.subject.clone();</div>
+              <div class="sk-agent-chat-diff__row" data-kind="context">  44     // header renders status badge</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- fixture tool-bash-failed — tool card, failed, default-expanded body -->
+        <div class="sk-agent-chat-row" data-component="transcript row"
+             data-fidelity-id="agent-chat.transcript.tool.bash-failed">
+          <div class="sk-agent-chat-tool"
+               data-error="true"
+               data-component="render_tool_card">
+            <div class="sk-agent-chat-tool__header">
+              <span class="sk-agent-chat-tool__chevron">▾</span>
+              <span class="sk-agent-chat-tool__status" data-status="failed">✕ </span>
+              <span class="sk-agent-chat-tool__name">❯ bash</span>
+              <span class="sk-agent-chat-tool__subject">cargo test --workspace --quiet</span>
+              <span class="sk-agent-chat-tool__failed-label">failed</span>
+            </div>
+            <div class="sk-agent-chat-tool__body sk-agent-chat-md">
+              <p>error: test failed, to rerun pass <code>--lib</code></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- fixture message 21 — final assistant sentinel -->
+        <div class="sk-agent-chat-row" data-component="transcript row"
+             data-fidelity-id="agent-chat.transcript.message.assistant-21">
+          <div class="sk-agent-chat-assistant sk-agent-chat-md"
+               data-component="render_assistant_message">
+            <p>Final visible sentinel: <strong>Agent Chat Kitchen Sink complete</strong>.</p>
+            <p>The style dev tool should later expose Agent Chat controls while this transcript remains open.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Native AppKit footer overlay — the GPUI window paints only
+           render_native_main_window_footer_spacer, so BOTH the reference
+           capture and this mockup show an EMPTY 36px band. Native content
+           (Paste Response ↵ / Actions ⌘K + profile·model·cwd left info) is
+           receipt-only via an activeFooter protocol probe. -->
+      <footer class="sk-footer-host"
+              data-component="native footer host (empty GPUI spacer band)"
+              data-fidelity-id="agent-chat.footer.host"
+              data-native-footer>
+        <div class="sk-footer-rail" data-component="footer_chrome divider only — native content lives in the overlay window"></div>
+      </footer>
+    </div>
+  </div>
+</main>
+</body>
+</html>

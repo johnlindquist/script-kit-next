@@ -26,9 +26,9 @@ pub mod simulated_gpui_event;
 mod system;
 
 pub use agent_chat_state::{
-    AgentChatAcceptedItem, AgentChatFocusedTextActionReceipt, AgentChatFocusedTextState,
-    AgentChatInputLayoutMetrics, AgentChatInputLayoutTelemetry, AgentChatKeyRoute,
-    AgentChatKeyRouteTelemetry, AgentChatLastInteractionTrace,
+    AgentChatAcceptedItem, AgentChatComposerScrollMetrics, AgentChatFocusedTextActionReceipt,
+    AgentChatFocusedTextState, AgentChatInputLayoutMetrics, AgentChatInputLayoutTelemetry,
+    AgentChatKeyRoute, AgentChatKeyRouteTelemetry, AgentChatLastInteractionTrace,
     AgentChatPickerItemAcceptedTelemetry, AgentChatPickerState, AgentChatResolvedTarget,
     AgentChatSetupActionKind, AgentChatSetupSnapshot, AgentChatSpineSnapshot,
     AgentChatStateSnapshot, AgentChatTestProbeSnapshot, AgentChatTranscriptScrollMetrics,

@@ -39,6 +39,13 @@ const MAIN_WINDOW_DIVIDER_HEIGHT: f32 = crate::panel::HEADER_DIVIDER_HEIGHT;
 const MAIN_WINDOW_SECTION_HEADER_HEIGHT: f32 = 32.0;
 pub(crate) const MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 9;
 
+/// The fixed full-view main-window height. Exposed for the design-contract
+/// exporter (`design/mockups`); the private min/max constants stay the
+/// resize-logic authority.
+pub(crate) fn main_window_full_height() -> f32 {
+    MAIN_WINDOW_MAX_HEIGHT
+}
+
 /// Available pixel budget for list content in the main window.
 ///
 /// Subtracts the fixed chrome (header + divider + hint strip) from `MAX_HEIGHT`.
@@ -283,7 +290,6 @@ pub(crate) fn resize_to_file_search_window_sync(result_count: usize) {
 /// Width for the main window (standard launcher)
 pub(crate) const MAIN_WINDOW_WIDTH: f32 = 750.0;
 const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
-const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;
 const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
 /// Window height when the mini shows the three stacked variation cards.
 /// Mirrors `focused_text_variation_area_height(3)` in the Agent Chat view:
@@ -301,6 +307,10 @@ pub(crate) fn focused_text_mini_result_height() -> f32 {
 
 pub(crate) fn focused_text_mini_preview_height() -> f32 {
     (FOCUSED_TEXT_MINI_RESULT_HEIGHT - FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT).max(0.0)
+}
+
+pub(crate) fn focused_text_mini_inner_height(window_height: f32) -> f32 {
+    (window_height - WINDOW_BORDER_Y).max(0.0)
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct FrameGeometry {
@@ -604,10 +614,14 @@ fn height_for_view_with_layout(
         }
         ViewType::FocusedTextMini => match item_count {
             0 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + WINDOW_BORDER_Y),
-            1 => px(FOCUSED_TEXT_MINI_STREAMING_HEIGHT + WINDOW_BORDER_Y),
-            // `focused_text_mini_sizing_count`: 2 = single result, 5 = the
-            // three variation cards, +1 when the scope row is visible.
-            2..=4 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y),
+            // `focused_text_mini_sizing_count` adds one when the optional
+            // scope row is visible. The extra 44px must be represented in the
+            // native window height instead of being clipped inside the root.
+            1 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT * 2.0 + WINDOW_BORDER_Y),
+            2 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y),
+            3..=4 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT
+                + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
+                + WINDOW_BORDER_Y),
             5 => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + WINDOW_BORDER_Y),
             _ => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT
                 + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
@@ -1270,6 +1284,39 @@ mod resize_tests {
     #[test]
     fn test_main_window_width_constant() {
         assert_eq!(MAIN_WINDOW_WIDTH, 750.0);
+    }
+
+    #[test]
+    fn focused_text_mini_scope_row_is_included_in_every_phase_height() {
+        let height = |item_count| f32::from(height_for_view(ViewType::FocusedTextMini, item_count));
+
+        assert_eq!(
+            height(0),
+            FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + WINDOW_BORDER_Y
+        );
+        assert_eq!(
+            height(1),
+            FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT * 2.0 + WINDOW_BORDER_Y
+        );
+        assert_eq!(height(2), FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y);
+        assert_eq!(
+            height(3),
+            FOCUSED_TEXT_MINI_RESULT_HEIGHT + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + WINDOW_BORDER_Y
+        );
+        assert_eq!(
+            height(5),
+            FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + WINDOW_BORDER_Y
+        );
+        assert_eq!(
+            height(6),
+            FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT
+                + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
+                + WINDOW_BORDER_Y
+        );
+        assert_eq!(
+            focused_text_mini_inner_height(height(3)),
+            FOCUSED_TEXT_MINI_RESULT_HEIGHT + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
+        );
     }
 
     #[test]

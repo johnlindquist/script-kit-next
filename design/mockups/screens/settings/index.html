@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Settings mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: the Settings hub built-in (builtin/settings → AppView::SettingsView,
+  render_settings in src/render_builtins/settings.rs), script-kit-dark,
+  InfoBarBase chrome, Starfield. 12-row fixture matching the 2026-07-11
+  reference capture: has_custom_positions() was already TRUE at census
+  (customPositionsAtCensus=true in settings.crop.json — sandboxHome does not
+  imply a fresh window-state store), so "Reset Window Positions" is present
+  as the final below-the-fold row and the count reads "12 settings". A truly
+  fresh HOME shows 11 (settingsHub.census.baseCount). Empty filter
+  ("Settings" section label), row 0 "Theme Designer" selected.
+
+  The first "Settings" separator paints the LEGACY first-section path: 26px
+  slot / 6px top padding (render_section_header → default_main_menu()), NOT
+  the themed 28/4 — conflict settingsSection.firstSlotLegacyVsThemed.
+
+  Rows are ICONLESS by painted truth: get_settings_items_for authors lucide
+  hints (palette, mic, eraser, …) but IconKind::from_icon_hint only accepts
+  names known to icon_name_from_str, which matches none of them, and
+  ListItem does not mount the icon slot when icon is None — names start at
+  the 18px origin. Recorded as the
+  settingsRows.authoredIconHintsVsResolvedNone contract conflict (present
+  tense: a parser fix must update this mockup).
+
+  Context zone content is FIXTURE-VARIABLE capture state (the capture's
+  model pill read "Brain · GPT-5.6 SOL"), not a design token.
+
+  Footer: the GPUI layout reserves the 32px footer RAIL; the 36px native
+  AppKit host (Run ↵ / Actions ⌘K per source — activeFooter receipt pending;
+  conflict settingsFooter.nativeRunVsGpuiOpenHint) is a separate overlay
+  window, drawn here as a bottom-anchored overlay so it never steals list
+  viewport height from the GPUI-only comparison.
+
+  Every visual value resolves through generated --sk-* tokens; the four
+  --sk-settings-* alias hooks were removed per the 2026-07-11 Oracle review.
+-->
+<main class="stage" id="stage">
+  <div class="sk-window sk-window--settings" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <canvas class="sk-window__effect" id="starfield" width="1500" height="960"></canvas>
+
+    <div class="sk-window__content">
+      <header class="sk-header" data-component="render_builtin_main_input_header">
+        <div class="sk-context-zone" data-component="main_view_chrome::context_zone (fixture-variable capture state)">
+          <span class="sk-context-pill">~/.scriptkit <span class="sk-context-key">⇥</span></span>
+          <span class="sk-context-pill">Brain · GPT-5.6 SOL <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+        <div class="sk-search-shell" data-component="render_main_view_input_shell (border/surface alpha 0x00; shell carries no padding)">
+          <div class="sk-search-body" data-component="input body (pl text_inset_x, pr text_inset_x/2)">
+            <span class="sk-caret"></span>
+            <span class="sk-placeholder">Search settings...</span>
+          </div>
+          <span class="sk-settings-count" data-component="render_builtin_main_input_count_label (shared builtin main-input owner)">12 settings</span>
+        </div>
+      </header>
+
+      <!-- MainViewDividerChrome renders with visible: false (divider_height 0) -->
+
+      <section class="sk-list sk-settings-list" data-component="render_settings content (py = DesignSpacing.padding_xs)">
+        <div class="sk-section-slot" data-first="true" data-component="render_section_header('Settings', None, is_first=true)">
+          <div class="sk-section-header">Settings</div>
+        </div>
+
+        <div class="sk-list-row" data-state="selected" data-component="list_item (iconless — from_icon_hint miss)">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Theme Designer</span>
+              <span class="sk-list-row__description">Design your color theme with live preview</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Dictation Setup</span>
+              <span class="sk-list-row__description">Check model, microphone, and hotkey readiness</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Select Microphone</span>
+              <span class="sk-list-row__description">Choose which microphone to use for dictation</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Clear Suggested Items</span>
+              <span class="sk-list-row__description">Reset Suggested and Recently Used launcher history</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Check Permissions</span>
+              <span class="sk-list-row__description">Run a check for the macOS permissions Script Kit needs</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Set Up Permissions</span>
+              <span class="sk-list-row__description">Open the guided wizard for granting macOS permissions</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Accessibility Permission Assistant</span>
+              <span class="sk-list-row__description">Open the Permission Assistant for Accessibility</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Screen Recording Permission Assistant</span>
+              <span class="sk-list-row__description">Open the Permission Assistant for Screen Recording</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Request Accessibility Permission</span>
+              <span class="sk-list-row__description">Prompt macOS to grant Script Kit accessibility access</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Open Accessibility Settings</span>
+              <span class="sk-list-row__description">Open the Accessibility pane in macOS System Settings</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Configure Snap Mode</span>
+              <span class="sk-list-row__description">Choose a snapping grid density or disable drag snapping</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Config-dependent 12th row (windowState.hasCustomPositions was
+             true at census — below the fold in the 480px window). -->
+        <div class="sk-list-row" data-component="list_item (settingsHub.census.optionalRow)">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Reset Window Positions</span>
+              <span class="sk-list-row__description">Restore all windows to default positions</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- GPUI reserves the 32px footer RAIL in its own layout
+           (render_native_main_window_footer_spacer) — that reservation is
+           the flex participant. The 36px native AppKit host is a SEPARATE
+           overlay window, drawn bottom-anchored so it never steals list
+           viewport height. Labels derived from
+           standard_main_window_footer_buttons; activeFooter receipt pending. -->
+      <footer class="sk-settings-footer-reservation" data-component="render_native_main_window_footer_spacer (32px GPUI rail reservation)">
+        <div class="sk-footer-host" data-component="native footer host (separate AppKit overlay window)" data-native-footer>
+          <div class="sk-footer-rail" data-component="footer_chrome">
+            <span class="sk-footer-spacer"></span>
+            <button class="sk-footer-action sk-footer-action--run">
+              <span class="sk-footer-label">Run</span>
+              <kbd class="sk-keycap">↵</kbd>
+            </button>
+            <button class="sk-footer-action sk-footer-action--actions">
+              <span class="sk-footer-label">Actions</span>
+              <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+            </button>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </div>
+</main>
+<script src="../main-menu/starfield.js"></script>
+</body>
+</html>

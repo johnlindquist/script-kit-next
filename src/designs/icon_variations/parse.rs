@@ -29,6 +29,7 @@ pub fn icon_name_from_str(name: &str) -> Option<IconName> {
         "magnifyingglass" | "search" | "find" => Some(IconName::MagnifyingGlass),
         "terminal" | "console" | "shell" | "cli" => Some(IconName::Terminal),
         "code" | "script" | "dev" => Some(IconName::Code),
+        "flow" | "flows" | "mdflow" => Some(IconName::Flow),
         "pencil" | "edit" | "rename" => Some(IconName::Pencil),
 
         // Status

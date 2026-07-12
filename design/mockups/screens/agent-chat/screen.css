@@ -1,0 +1,335 @@
+/* Agent Chat screen: stage layout, browser-only emulator calibration, and
+ * the Agent Chat surface anatomy (embedded in the main window shell).
+ *
+ * TOKEN STATUS: `export_design_tokens` emits the full agent-chat section
+ * (src/design_contract/mod.rs, backed by the production contract module
+ * src/ai/agent_chat/ui/style_contract.rs). Every visual value below consumes
+ * a generated `--sk-agent-chat-*` / shared `--sk-*` variable directly; the
+ * only literals live in the `--sk-emulator-*` calibration block.
+ *
+ * Primary Rust sources:
+ *   src/ai/agent_chat/ui/style_contract.rs (production style + resolvers)
+ *   src/ai/agent_chat/ui/components/transcript.rs (row/message renderers)
+ *   src/ai/agent_chat/ui/view.rs (composer shell + send button)
+ *   src/theme/presets.rs theme_script_kit_dark()
+ */
+
+:root {
+  /* Browser rem conversion of the exported rems scalar
+   * agentChat.markdown.paragraphGapRems (0.28 — JSON-only fact; the mockup
+   * root is untouched, so 1rem = 16px). */
+  --sk-emulator-agent-chat-md-paragraph-gap: 0.28rem;
+
+}
+
+body {
+  margin: 0;
+}
+
+/* The paired GPUI capture uses a prepared theme with vibrancy disabled and
+ * effects.background="off". Paint the same opaque exported surface so no
+ * desktop pixels or animated shader frames enter the fidelity comparison. */
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-color-background-main);
+}
+
+.sk-window {
+  background: var(--sk-color-background-main);
+}
+
+.sk-window__material,
+.sk-window__tint,
+.sk-window__effect {
+  display: none;
+}
+
+/* ── Header context zone: two protected shrinkable lanes ────────────────── */
+.sk-agent-chat-header-zone {
+  overflow: hidden;
+  gap: var(--sk-main-menu-context-gap);
+}
+
+.sk-agent-chat-header-zone .sk-context-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sk-agent-chat-header-zone .sk-context-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sk-agent-chat-header-zone .sk-context-key {
+  flex: none;
+}
+
+.sk-agent-chat-header-zone .sk-context-pill--trailing {
+  justify-content: flex-end;
+}
+
+/* ── Composer (header input slot of the shared main-view chrome) ────────── */
+/* render_composer_input_shell → the shared main_view_multiline_input_height
+ * formula: one visible line resolves to the main-menu search height
+ * (resolved.agentChat.composer.singleLineHeight); each extra line adds
+ * --sk-agent-chat-composer-line-height. InfoBarBase search surface/border
+ * alphas are 0x00 — the shell paints no box, only geometry. */
+.sk-agent-chat-composer {
+  position: relative;
+  width: 100%;
+  height: var(--sk-agent-chat-composer-single-line-height);
+  display: flex;
+  align-items: center;
+}
+
+.sk-agent-chat-composer__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: var(--sk-main-menu-search-text-inset-x);
+  padding-right: calc(var(--sk-main-menu-search-text-inset-x) / 2);
+  display: flex;
+  align-items: center;
+  /* Embedded Agent Chat aliases the canonical main-menu input typography. */
+  font-size: var(--sk-agent-chat-composer-font-size);
+  font-weight: var(--sk-agent-chat-composer-font-weight);
+  line-height: var(--sk-agent-chat-composer-line-height);
+}
+
+/* Empty-input state: pulsing caret bar then the placeholder, which is pulled
+ * left by -CURSOR_WIDTH so its origin matches the caret origin
+ * (render_composer_input_text). */
+.sk-agent-chat-composer__caret {
+  flex: none;
+  width: var(--sk-caret-width);
+  height: var(--sk-caret-height);
+  background: var(--sk-text-name);
+}
+
+.sk-agent-chat-composer__placeholder {
+  margin-left: calc(-1 * var(--sk-caret-width));
+  color: var(--sk-text-placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Send button trails the input shell (24×24, radius 6). The kitchen-sink
+ * fixture is idle with an empty composer → disabled state. Glyph typography
+ * is gpui text_sm (a framework authority), NOT the markdown body size. */
+.sk-agent-chat-send {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  flex: none;
+  width: var(--sk-agent-chat-send-size);
+  height: var(--sk-agent-chat-send-size);
+  border-radius: var(--sk-agent-chat-send-radius);
+  display: grid;
+  place-items: center;
+  font-size: var(--sk-framework-text-sm-font-size);
+  font-family: inherit;
+  line-height: normal;
+  color: var(--sk-text-name);
+}
+
+.sk-agent-chat-send[data-state="disabled"] {
+  background: var(--sk-agent-chat-send-disabled-bg);
+  opacity: var(--sk-agent-chat-send-disabled-opacity);
+}
+
+/* ── Transcript ─────────────────────────────────────────────────────────── */
+/* ListAlignment::Bottom with follow_tail — the viewport pins to the end of
+ * the conversation, clipping older rows at the top. */
+.sk-agent-chat-transcript {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  color: var(--sk-text-name);
+  font-size: var(--sk-agent-chat-md-body-font-size);
+  line-height: var(--sk-agent-chat-md-body-line-height);
+}
+
+.sk-agent-chat-row {
+  width: 100%;
+  padding-inline: var(--sk-agent-chat-row-padding-x);
+  padding-bottom: var(--sk-agent-chat-row-padding-bottom);
+}
+
+/* User row starting a new turn: top margin + padding + hairline divider. */
+.sk-agent-chat-row[data-new-turn="true"] {
+  margin-top: var(--sk-agent-chat-turn-margin-top);
+  padding-top: var(--sk-agent-chat-turn-padding-top);
+  border-top: var(--sk-window-divider-height) solid var(--sk-agent-chat-turn-divider);
+}
+
+/* First non-user row after a user row. */
+.sk-agent-chat-row[data-response-start="true"] {
+  margin-top: var(--sk-agent-chat-response-start-margin-top);
+}
+
+.sk-agent-chat-user {
+  width: 100%;
+  padding: var(--sk-agent-chat-user-padding-y) var(--sk-agent-chat-user-padding-x);
+  border-radius: var(--sk-agent-chat-user-radius);
+  background: var(--sk-agent-chat-user-bg);
+}
+
+.sk-agent-chat-assistant {
+  width: 100%;
+  padding: var(--sk-agent-chat-assistant-padding-y) var(--sk-agent-chat-assistant-padding-x);
+  /* assistant radius 0 / bg_alpha 0 — no surface painted
+   * (JSON facts agentChat.assistant.radius / agentChat.assistant.bgAlpha) */
+}
+
+.sk-agent-chat-system {
+  width: 100%;
+  padding: var(--sk-agent-chat-system-padding-y) var(--sk-agent-chat-system-padding-x);
+  opacity: var(--sk-agent-chat-system-opacity);
+  border-left: var(--sk-agent-chat-block-border-width) solid var(--sk-agent-chat-system-border);
+}
+
+/* ── Markdown primitives inside message bodies ──────────────────────────── */
+.sk-agent-chat-md p {
+  margin: 0;
+}
+
+.sk-agent-chat-md p + p,
+.sk-agent-chat-md pre + p,
+.sk-agent-chat-md p + pre,
+.sk-agent-chat-md ul + p,
+.sk-agent-chat-md p + ul {
+  margin-top: var(--sk-emulator-agent-chat-md-paragraph-gap);
+}
+
+.sk-agent-chat-md h2 {
+  margin: 0 0 var(--sk-emulator-agent-chat-md-paragraph-gap);
+  font-size: var(--sk-agent-chat-md-h2-font-size);
+  font-weight: var(--sk-main-menu-section-font-weight);
+  line-height: var(--sk-agent-chat-md-body-line-height);
+}
+
+.sk-agent-chat-md ul {
+  margin: 0;
+  padding-left: var(--sk-agent-chat-row-padding-x);
+}
+
+.sk-agent-chat-md code {
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  font-size: var(--sk-agent-chat-md-code-font-size);
+}
+
+.sk-agent-chat-md pre {
+  margin: var(--sk-emulator-agent-chat-md-paragraph-gap) 0 0;
+  padding: var(--sk-agent-chat-md-code-padding-y) var(--sk-agent-chat-md-code-padding-x);
+  border: var(--sk-window-divider-height) solid var(--sk-agent-chat-md-code-border);
+  border-radius: var(--sk-agent-chat-md-code-radius);
+  background: var(--sk-agent-chat-md-code-bg);
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  font-size: var(--sk-agent-chat-md-code-font-size);
+  overflow-x: auto;
+}
+
+/* ── Tool card (structured meta path) ───────────────────────────────────── */
+.sk-agent-chat-tool {
+  width: 100%;
+  padding: var(--sk-agent-chat-block-padding-y) var(--sk-agent-chat-block-padding-x);
+  border-left: var(--sk-agent-chat-block-border-width) solid var(--sk-agent-chat-tool-border);
+}
+
+.sk-agent-chat-tool[data-error="true"] {
+  border-left-color: var(--sk-agent-chat-tool-border-error);
+}
+
+.sk-agent-chat-tool__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sk-agent-chat-block-header-gap);
+  min-width: 0;
+}
+
+/* Tool headers use the TOOL header opacity token — a separate authority
+ * from the thought-block header opacity even while both equal 0.75. */
+.sk-agent-chat-tool__chevron,
+.sk-agent-chat-tool__name {
+  color: var(--sk-color-accent);
+  opacity: var(--sk-agent-chat-tool-header-opacity);
+  white-space: nowrap;
+}
+
+.sk-agent-chat-tool__status {
+  white-space: nowrap;
+}
+
+.sk-agent-chat-tool__status[data-status="complete"] {
+  color: var(--sk-agent-chat-tool-status-complete);
+}
+
+.sk-agent-chat-tool__status[data-status="failed"] {
+  color: var(--sk-agent-chat-tool-status-failed);
+}
+
+/* Mono subject tracks the code-block size, one step under body. */
+.sk-agent-chat-tool__subject {
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  font-size: var(--sk-agent-chat-md-code-font-size);
+  opacity: var(--sk-agent-chat-block-status-opacity);
+  color: var(--sk-text-name);
+}
+
+.sk-agent-chat-tool__failed-label {
+  color: var(--sk-agent-chat-tool-status-failed);
+  white-space: nowrap;
+}
+
+.sk-agent-chat-tool__body {
+  padding-top: var(--sk-agent-chat-block-body-padding-top);
+  max-height: var(--sk-agent-chat-block-max-body-height);
+  overflow: hidden;
+  /* Non-diff tool bodies render markdown in the accent color. */
+  color: var(--sk-color-accent);
+}
+
+/* ── Diff body (edit/write tools) ───────────────────────────────────────── */
+.sk-agent-chat-diff {
+  margin-top: var(--sk-agent-chat-block-body-padding-top);
+  max-height: var(--sk-agent-chat-block-max-body-height);
+  overflow: hidden;
+  padding: var(--sk-agent-chat-md-code-padding-y) var(--sk-agent-chat-md-code-padding-x);
+  border-radius: var(--sk-agent-chat-md-code-radius);
+  background: var(--sk-agent-chat-md-code-bg);
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  font-size: var(--sk-agent-chat-md-code-font-size);
+}
+
+.sk-agent-chat-diff__row {
+  width: 100%;
+  white-space: pre;
+}
+
+.sk-agent-chat-diff__row[data-kind="added"] {
+  color: var(--sk-agent-chat-tool-status-complete);
+  background: var(--sk-agent-chat-diff-added-bg);
+}
+
+.sk-agent-chat-diff__row[data-kind="removed"] {
+  color: var(--sk-agent-chat-tool-status-failed);
+  background: var(--sk-agent-chat-diff-removed-bg);
+}
+
+.sk-agent-chat-diff__row[data-kind="context"] {
+  color: var(--sk-text-name);
+  opacity: var(--sk-agent-chat-diff-context-opacity);
+}

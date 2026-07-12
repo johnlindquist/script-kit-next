@@ -60,6 +60,21 @@ impl AgentChatEntryRequest {
         )
     }
 
+    /// Quick-question entry: double-tap of the main hotkey (and any future
+    /// "just open a clean chat" affordance).
+    ///
+    /// CONTRACT: this request must open Agent Chat with an EMPTY composer and
+    /// NO context chips. In particular it must never inherit the launcher's
+    /// auto-selected default row — the user double-tapped from anywhere, they
+    /// did not pick that row. Regression reference (2026-07-10): double-tap
+    /// routed through the chip-staging entry, so whatever happened to sit at
+    /// `first_selectable_index` (a Brain Inbox capture, a flow row) was staged
+    /// as an `@cmd:` chip and pre-filled into the composer. The unit tests
+    /// below lock the suppression fields; do not weaken them.
+    pub(crate) fn quick_question() -> Self {
+        Self::main_launcher(None, true)
+    }
+
     pub(crate) fn main_launcher_with_variant(
         seed_text: Option<String>,
         suppress_focused_part: bool,
@@ -139,5 +154,38 @@ impl ScriptListApp {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod quick_question_contract {
+    // Deliberately no `use super::*`: the parent glob-imports gpui, whose
+    // `test` macro would shadow the builtin `#[test]` attribute.
+    use super::{AgentChatContextStaging, AgentChatEntryRequest, AgentChatSeedPolicy};
+
+    /// Double-tap of the main hotkey means "fastest path to a clean chat for
+    /// a quick question". It must never carry the launcher's auto-selected
+    /// row (or any other implicit context) into Agent Chat.
+    #[test]
+    fn quick_question_entry_suppresses_all_implicit_context() {
+        let req = AgentChatEntryRequest::quick_question();
+        assert!(
+            req.suppress_focused_part,
+            "quick-question entry must suppress the focused launcher row"
+        );
+        assert_eq!(
+            req.context_staging,
+            AgentChatContextStaging::SuppressFocused,
+            "quick-question entry must stage no context chips"
+        );
+        assert!(
+            req.seed_text.is_none(),
+            "quick-question entry must open with an empty composer"
+        );
+        assert_eq!(
+            req.seed_policy,
+            AgentChatSeedPolicy::ComposerOnly,
+            "quick-question entry must never auto-submit"
+        );
     }
 }

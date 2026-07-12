@@ -40,7 +40,11 @@ impl ScriptListApp {
 
         // Global shortcuts (Cmd+W, ESC for dismissable prompts)
         // Other keys are handled by each prompt entity's own key handler.
-        let _ = self.handle_global_shortcut_with_options(event, GlobalShortcutEscape::FromDismissPolicy, cx);
+        let _ = self.handle_global_shortcut_with_options(
+            event,
+            GlobalShortcutEscape::FromDismissPolicy,
+            cx,
+        );
     }
 
     #[inline]
@@ -96,7 +100,11 @@ impl ScriptListApp {
 
         // Global shortcuts (Cmd+W, ESC for dismissable prompts)
         // Other keys are handled by the ChatPrompt entity's own key handler.
-        let _ = self.handle_global_shortcut_with_options(event, GlobalShortcutEscape::FromDismissPolicy, cx);
+        let _ = self.handle_global_shortcut_with_options(
+            event,
+            GlobalShortcutEscape::FromDismissPolicy,
+            cx,
+        );
     }
 
     #[inline]
@@ -112,7 +120,11 @@ impl ScriptListApp {
         // Global shortcuts (Cmd+W, ESC for dismissable prompts)
         // Note: Escape when actions popup is open is handled by central interceptor
         if !self.show_actions_popup {
-            let _ = self.handle_global_shortcut_with_options(event, GlobalShortcutEscape::FromDismissPolicy, cx);
+            let _ = self.handle_global_shortcut_with_options(
+                event,
+                GlobalShortcutEscape::FromDismissPolicy,
+                cx,
+            );
         }
     }
 
@@ -162,9 +174,10 @@ impl ScriptListApp {
                 "gpui_footer",
             );
         });
-        let on_next_field = move |_: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
-            entity.update(cx, |prompt, cx| prompt.next_input(cx));
-        };
+        let on_next_field =
+            move |_: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                entity.update(cx, |prompt, cx| prompt.next_input(cx));
+            };
         let on_actions = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
             this.dispatch_main_window_footer_action(
                 crate::footer_popup::FooterAction::Actions,
@@ -461,12 +474,27 @@ impl ScriptListApp {
             }
         }
 
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            vec!["Esc Cancel".into()],
+            None,
+        ));
+
         div()
             .id("hotkey-prompt-wrapper")
             .relative()
             .w_full()
             .h_full()
-            .child(entity.clone())
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex_1()
+                    .min_h(px(0.0))
+                    .w_full()
+                    .relative()
+                    .child(entity.clone()),
+            )
+            .when_some(footer, |surface, footer| surface.child(footer))
             .into_any_element()
     }
 
@@ -1007,15 +1035,13 @@ impl ScriptListApp {
         let vibrancy_bg = get_vibrancy_background(render_context.theme);
 
         let is_danger = matches!(options.confirm_variant, ButtonVariant::Danger);
-        let title_color = rgba(
-            ((if is_danger {
-                theme.colors.ui.error
-            } else {
-                theme.colors.text.primary
-            }) << 8)
-                | 0xFF,
+        let colors = crate::confirm::resolved_confirm_prompt_colors(theme.as_ref(), is_danger);
+        let metrics = crate::confirm::resolved_confirm_prompt_metrics(
+            design_spacing,
+            crate::components::footer_chrome::current_main_menu_footer_height(),
         );
-        let body_color = rgba((theme.colors.text.secondary << 8) | 0xFF);
+        let title_color = rgba(colors.title_rgba);
+        let body_color = rgba(colors.body_rgba);
 
         let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
             let key = event.keystroke.key.as_str();
@@ -1052,20 +1078,20 @@ impl ScriptListApp {
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .gap(px(design_spacing.padding_md))
-                    .p(px(design_spacing.padding_xl))
+                    .gap(px(metrics.stack_gap))
+                    .p(px(metrics.content_padding))
                     .child(
                         div()
                             .text_color(title_color)
-                            .text_size(px(20.))
+                            .text_size(px(metrics.title_font_size))
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .child(options.title.clone()),
                     )
                     .child(
                         div()
-                            .max_w(px(560.))
+                            .max_w(px(metrics.body_max_width))
                             .text_color(body_color)
-                            .text_size(px(14.))
+                            .text_size(px(metrics.body_font_size))
                             .text_center()
                             .child(options.body.clone()),
                     ),
@@ -1097,7 +1123,11 @@ mod other_prompt_render_wrapper_tests {
         // Chat is excluded: it uses render_simple_prompt_shell directly (no wrapper footer)
         // because it renders its own footer (mini hint strip or rich interactive footer).
         // Select is excluded: its entity owns the footer-aware minimal list shell.
-        for fn_name in ["render_env_prompt", "render_drop_prompt", "render_naming_prompt"] {
+        for fn_name in [
+            "render_env_prompt",
+            "render_drop_prompt",
+            "render_naming_prompt",
+        ] {
             let body = fn_source(fn_name);
             assert!(
                 body.contains("render_wrapped_prompt_entity"),

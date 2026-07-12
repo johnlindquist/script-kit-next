@@ -15,6 +15,32 @@ pub(super) fn push_flow_entries(entries: &mut Vec<BuiltInEntry>) {
             "converse", "sessions",
         ],
         BuiltInFeature::FlowUxVariant(crate::flows::model::FlowUxVariant::Flash),
-        "zap",
+        "flow",
+    ));
+
+    // Creation must be discoverable from the words a user actually types
+    // ("new flow", "create a flow"), not only from the desk's trailing row.
+    // Locked by tests/launcher_discoverability_contract.rs — keep the name,
+    // description, and keyword phrases in step with that bar.
+    entries.push(BuiltInEntry::new_with_icon(
+        "builtin/new-flow",
+        "New Flow",
+        "Describe an agent in plain English (md create)",
+        vec![
+            "new",
+            "flow",
+            "flows",
+            "create",
+            "create flow",
+            "create a flow",
+            "make a flow",
+            "add flow",
+            "agent",
+            "mdflow",
+            "md create",
+            "wizard",
+        ],
+        BuiltInFeature::NewFlow,
+        "plus",
     ));
 }

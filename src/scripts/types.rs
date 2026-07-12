@@ -266,6 +266,9 @@ pub struct SkillMatch {
 #[derive(Clone, Debug)]
 pub struct FlowMatch {
     pub flow: crate::flows::model::FlowDescriptor,
+    /// Existing live conversation to reattach. `None` means this is the
+    /// flow identity row and Enter starts a new conversation.
+    pub session_id: Option<u64>,
     /// Precomputed `friendly_name()` so `name()` can return a borrow.
     pub display_name: String,
     /// Precomputed "purpose · engine · origin" row subtitle.
@@ -412,6 +415,9 @@ pub struct AgentChatHistoryMatch {
     pub(crate) score: i32,
     pub(crate) matched_field: crate::ai::agent_chat::ui::history::AgentChatHistorySearchField,
     pub(crate) subtitle: String,
+    /// Qualification-time match evidence; highlights come from here, never
+    /// from render-time fuzzy re-derivation.
+    pub(crate) evidence: Option<crate::scripts::search::sentence::LongTextMatchEvidence>,
 }
 
 /// Represents a passive root-search match for cmux AI Vault metadata.
@@ -442,6 +448,9 @@ pub struct DictationHistoryMatch {
     pub(crate) subtitle: String,
     pub(crate) score: i32,
     pub(crate) matched_field: crate::dictation::DictationHistorySearchField,
+    /// Qualification-time match evidence; highlights come from here, never
+    /// from render-time fuzzy re-derivation.
+    pub(crate) evidence: Option<crate::scripts::search::sentence::LongTextMatchEvidence>,
 }
 
 /// Represents a passive root-search match for local browser history metadata.
@@ -733,7 +742,10 @@ impl SearchResult {
     /// needs to remember non-bindable items like skills and windows.
     pub fn history_result_key(&self) -> Option<String> {
         match self {
-            SearchResult::Flow(fm) => Some(format!("flow:{}", fm.flow.id)),
+            SearchResult::Flow(fm) => Some(match fm.session_id {
+                Some(session_id) => format!("flow-session:{session_id}"),
+                None => format!("flow:{}", fm.flow.id),
+            }),
             SearchResult::Skill(sm) => Some(format!(
                 "skill:{}:{}",
                 sm.skill.plugin_id, sm.skill.skill_id
@@ -1131,6 +1143,7 @@ mod tests {
             score: 80,
             matched_field: AgentChatHistorySearchField::Title,
             subtitle: "Use the root launcher · 4 messages".to_string(),
+            evidence: None,
         });
 
         assert_eq!(result.name(), "How do I search files?");

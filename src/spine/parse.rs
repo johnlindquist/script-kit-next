@@ -1,6 +1,13 @@
 use super::types::*;
 
 const PROMPT_BUILDER_SIGILS: &[char] = &['@', '/', '|', '.', '>'];
+/// `-` opens the flow search, but ONLY where the scanner is already at a
+/// segment start (input start, or after another segment's boundary). Unlike
+/// the prompt-builder sigils it is deliberately NOT a free-text/greedy break
+/// character: hyphens and dashes are everyday prose (`buy milk - urgent`,
+/// `;todo dry-cleaning - asap`), so a `-` mid-sentence must never split a
+/// capture or free-text segment into a flow search.
+const FLOW_SIGIL: char = '-';
 const CAPTURE_SIGIL: char = ';';
 const FILTER_SIGIL: char = ':';
 const MODE_EXIT_SIGILS: &[char] = &['~', '?', '!'];
@@ -130,6 +137,7 @@ fn is_prompt_builder_segment(seg: &SpineSegment) -> bool {
             | SpineSegmentKind::Profile { .. }
             | SpineSegmentKind::Style { .. }
             | SpineSegmentKind::ProjectCwd { .. }
+            | SpineSegmentKind::Flow { .. }
     )
 }
 
@@ -158,7 +166,8 @@ fn split_segments(input: &str) -> Vec<SpineSegment> {
         let ch_len = ch.len_utf8();
         let at_boundary = pos == 0 || bytes[pos - 1] == b' ';
 
-        let is_prompt_sigil = PROMPT_BUILDER_SIGILS.contains(&ch) && at_boundary;
+        let is_prompt_sigil =
+            (PROMPT_BUILDER_SIGILS.contains(&ch) || ch == FLOW_SIGIL) && at_boundary;
         let is_greedy_sigil = (ch == CAPTURE_SIGIL || ch == FILTER_SIGIL) && at_boundary;
 
         if is_prompt_sigil {
@@ -280,6 +289,9 @@ fn classify_sigil_segment(sigil: char, rest: &str) -> SpineSegmentKind {
         '/' => SpineSegmentKind::SlashCommand {
             command: rest.to_string(),
         },
+        '-' => SpineSegmentKind::Flow {
+            query: rest.to_string(),
+        },
         '|' => SpineSegmentKind::Profile {
             profile_id: rest.to_string(),
         },
@@ -340,6 +352,7 @@ fn extract_active_query(seg: &SpineSegment, cursor_byte: usize) -> String {
             sub_query: None,
         } => context_type.clone(),
         SpineSegmentKind::SlashCommand { command } => command.clone(),
+        SpineSegmentKind::Flow { query } => query.clone(),
         SpineSegmentKind::Profile { profile_id } => profile_id.clone(),
         SpineSegmentKind::Style { style_id } => style_id.clone(),
         SpineSegmentKind::Capture { target, .. } => target.clone(),
@@ -508,6 +521,54 @@ mod tests {
             &parse.segments[0].kind,
             SpineSegmentKind::ListFilter { query }
             if query == "type:script"
+        ));
+    }
+
+    #[test]
+    fn flow_sigil_at_input_start() {
+        let parse = parse_spine("-gmail");
+        assert_eq!(parse.segments.len(), 1);
+        assert!(matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::Flow { query } if query == "gmail"
+        ));
+
+        let parse = parse_spine("-");
+        assert!(matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::Flow { query } if query.is_empty()
+        ));
+    }
+
+    #[test]
+    fn flow_sigil_after_another_segment() {
+        let parse = parse_spine("@selection -gmail");
+        assert_eq!(parse.segments.len(), 2);
+        assert!(matches!(
+            &parse.segments[1].kind,
+            SpineSegmentKind::Flow { query } if query == "gmail"
+        ));
+    }
+
+    /// `-` must NOT split prose or captures: hyphens/dashes are everyday
+    /// text. Only a `-` where the scanner is already at a segment start
+    /// (input start / after another segment) opens the flow search.
+    #[test]
+    fn dash_inside_free_text_stays_free_text() {
+        let parse = parse_spine("buy milk - urgent");
+        assert_eq!(parse.segments.len(), 1);
+        assert!(matches!(parse.segments[0].kind, SpineSegmentKind::FreeText));
+        assert_eq!(parse.segments[0].raw, "buy milk - urgent");
+    }
+
+    #[test]
+    fn dash_inside_capture_args_stays_in_capture() {
+        let parse = parse_spine(";todo dry-cleaning - asap");
+        assert_eq!(parse.segments.len(), 1);
+        assert!(matches!(
+            &parse.segments[0].kind,
+            SpineSegmentKind::Capture { target, args }
+            if target == "todo" && args == "dry-cleaning - asap"
         ));
     }
 

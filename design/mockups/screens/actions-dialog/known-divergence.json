@@ -1,0 +1,29 @@
+{
+  "screen": "actions-dialog",
+  "regions": [
+    {
+      "selector": ".sk-actions-dialog__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce the popup NSPanel's NSVisualEffectView material; the reference capture sampled the user's live desktop behind the native child window rather than the synthetic fixture backdrop."
+    },
+    {
+      "selector": ".sk-actions-dialog",
+      "kind": "native",
+      "blocking": false,
+      "reason": "Native child-window edge antialiasing and shadow around the 18pt-radius shell differ from browser clipping. The 8pt bottom band's material darkening at the shell edge is also native; its geometry (y 292–300) remains blocking."
+    },
+    {
+      "selector": ".sk-compact-search-text__caret",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "The 2026-07-11 capture's caret hue leans orange versus the stock amber accent #FBBF24 (color-profile or live-theme drift; recorded as the actionsCaret.stockProfileVsReferenceCapture contract conflict). Caret origin and nominal 2×14 geometry remain blocking; hue is not, until a capture under the stock profile proves it."
+    },
+    {
+      "selector": ".sk-actions-row__title, .sk-actions-section, .sk-compact-search-text__label, .sk-keycap",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI/CoreText vs browser glyph rasterization and slightly different glyph advances in titles and shortcut symbols. Text origins, keycap box bounds and right alignment must still match."
+    }
+  ]
+}

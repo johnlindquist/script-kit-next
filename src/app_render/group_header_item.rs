@@ -43,6 +43,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::AiCommand(_) => "Agent Chat Command".to_string(),
         builtins::BuiltInFeature::ScriptCommand(_) => "Script Creation".to_string(),
         builtins::BuiltInFeature::NewScriptFromTemplate => "Script Creation".to_string(),
+        builtins::BuiltInFeature::NewFlow => "Flow Creation".to_string(),
         builtins::BuiltInFeature::PermissionCommand(_) => "Permission Management".to_string(),
         builtins::BuiltInFeature::FrecencyCommand(_) => "Suggested Items".to_string(),
         builtins::BuiltInFeature::UtilityCommand(_) => "Quick Utility".to_string(),
@@ -50,7 +51,9 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
         builtins::BuiltInFeature::Webcam => "Webcam Capture".to_string(),
         builtins::BuiltInFeature::Dictation => "Dictate to Current App".to_string(),
-        builtins::BuiltInFeature::DictationToAiHarness => "Voice Dictation to Agent Chat".to_string(),
+        builtins::BuiltInFeature::DictationToAiHarness => {
+            "Voice Dictation to Agent Chat".to_string()
+        }
         builtins::BuiltInFeature::DictationToFrontmostApp => "Voice Dictation to App".to_string(),
         builtins::BuiltInFeature::DictationToNotes => "Voice Dictation to Notes".to_string(),
         builtins::BuiltInFeature::AgentChatHistory => "Agent Chat History".to_string(),
@@ -58,6 +61,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::DictationHistory => "Dictation History".to_string(),
         builtins::BuiltInFeature::Settings => "Script Kit Settings".to_string(),
         builtins::BuiltInFeature::SdkReference => "SDK Reference".to_string(),
+        builtins::BuiltInFeature::Tips => "Tips".to_string(),
         builtins::BuiltInFeature::MigrateV1Scripts => "Migration".to_string(),
         builtins::BuiltInFeature::FlowUxVariant(_) => "Flow Launcher".to_string(),
         builtins::BuiltInFeature::FlowManager => "Flow Manager".to_string(),
@@ -85,9 +89,9 @@ fn render_group_header_item(
     _visual: &designs::DesignVisual,
     colors: &designs::DesignColors,
 ) -> AnyElement {
+    use crate::list_item::{ALPHA_SEPARATOR, SECTION_HEADER_HEIGHT, SECTION_PADDING_TOP};
     #[allow(unused_imports)]
     use designs::group_header_variations::GroupHeaderStyle;
-    use crate::list_item::{ALPHA_SEPARATOR, SECTION_HEADER_HEIGHT, SECTION_PADDING_TOP};
 
     let name_owned = group_header_section_name(style.name());
     let divider_color = rgba((colors.text_secondary << 8) | ALPHA_SEPARATOR);

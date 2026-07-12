@@ -16,6 +16,8 @@
 //!   live `ChatPrompt` entities live on `ScriptListApp`).
 //! - [`router`] — Tab flow router: free text → best flow.
 //! - [`automation`] — the `flowUx` getState payload for devtools receipts.
+//! - [`eval_ledger`] — fail-closed verification-freshness verdicts over
+//!   mdflow's eval trust ledger (`~/.mdflow/eval-results.json`).
 //!
 //! Design rule: the desk is a thin renderer over the registry/catalog.
 //! UI changes must not touch the run lifecycle.
@@ -23,6 +25,7 @@
 pub mod automation;
 pub mod catalog;
 pub mod codex_client;
+pub mod eval_ledger;
 pub mod explain_cache;
 pub mod manager_window;
 pub mod model;

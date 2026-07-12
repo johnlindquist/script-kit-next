@@ -726,6 +726,17 @@ impl ScriptListApp {
         );
     }
 
+    /// Quick-question entry: double-tap of the main hotkey. Opens Agent Chat
+    /// with an empty composer and no context chips — see
+    /// [`agent_chat_entry::AgentChatEntryRequest::quick_question`] for the
+    /// contract and the 2026-07-10 regression it guards against.
+    pub(crate) fn open_agent_chat_for_quick_question(&mut self, cx: &mut Context<Self>) {
+        self.open_agent_chat_from_entry_request(
+            agent_chat_entry::AgentChatEntryRequest::quick_question(),
+            cx,
+        );
+    }
+
     /// Entry point for direct prompt handoffs that should not inherit the
     /// currently selected launcher row as Agent Chat context.
     pub(crate) fn open_tab_ai_agent_chat_with_entry_intent_suppressing_focused_part(
@@ -3660,6 +3671,7 @@ impl ScriptListApp {
         self.tab_ai_harness_return_focus_target = None;
 
         self.current_view = AppView::ScriptList;
+        self.reset_main_menu_selection_user_moved();
         // Same launcher-root landing rule as the close-to-origin path above:
         // clear the origin flag so the next Escape hides the window instead of
         // burning a press on a no-op go_back_or_close.
@@ -3892,6 +3904,7 @@ impl ScriptListApp {
             | AppView::CreationFeedback { .. }
             | AppView::ScriptIssuesView { .. }
             | AppView::SdkReferenceView { .. }
+            | AppView::TipsView { .. }
             | AppView::ScriptTemplateCatalogView { .. }
             | AppView::ActionsDialog => FocusTarget::MainFilter,
 
@@ -4763,6 +4776,7 @@ impl ScriptListApp {
                 .collect();
                 (focused_target, visible_targets)
             }
+            AppView::TipsView { .. } => (None, Vec::new()),
             AppView::ScriptTemplateCatalogView {
                 filter,
                 selected_index,
@@ -5242,6 +5256,7 @@ impl ScriptListApp {
             AppView::DayPage { .. } => "DayPage".to_string(),
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView".to_string(),
             AppView::SdkReferenceView { .. } => "SdkReferenceView".to_string(),
+            AppView::TipsView { .. } => "TipsView".to_string(),
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView".to_string(),
             AppView::ConfirmPrompt { .. } => "ConfirmPrompt".to_string(),
         }
@@ -5287,6 +5302,7 @@ impl ScriptListApp {
             | AppView::DictationHistoryView { filter, .. }
             | AppView::NotesBrowseView { filter, .. }
             | AppView::SdkReferenceView { filter, .. }
+            | AppView::TipsView { filter, .. }
             | AppView::ScriptTemplateCatalogView { filter, .. }
             | AppView::MigrateV1View { filter, .. } => non_empty(filter.clone()),
 
@@ -6123,8 +6139,7 @@ mod tests {
         let day_page_aliases = std::collections::HashMap::new();
 
         let stale_app_plan = ScriptListApp::spine_prompt_plan_for_aliases(&parse, &app_aliases);
-        let day_page_plan =
-            ScriptListApp::spine_prompt_plan_for_aliases(&parse, &day_page_aliases);
+        let day_page_plan = ScriptListApp::spine_prompt_plan_for_aliases(&parse, &day_page_aliases);
 
         assert_eq!(
             stale_app_plan.context_parts.len(),

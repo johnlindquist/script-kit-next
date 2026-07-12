@@ -182,9 +182,16 @@ async fn run_pi_rpc_event_loop(
         .current_dir(&spec.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        // Own process group so orphan cleanup / kill_all can reap the sidecar
+        // and any tools it spawned; kill_on_drop covers `?` early returns.
+        .process_group(0)
+        .kill_on_drop(true);
 
     let mut child = cmd.spawn().context("Failed to spawn Pi RPC process")?;
+    let _registration = child.id().map(|pid| {
+        crate::process_manager::ChildRegistration::register(pid, &spec.command.to_string_lossy())
+    });
     let mut stdin = child.stdin.take().context("Pi RPC stdin unavailable")?;
     let stdout = child.stdout.take().context("Pi RPC stdout unavailable")?;
     let stderr = child.stderr.take().context("Pi RPC stderr unavailable")?;
@@ -399,11 +406,17 @@ async fn run_pi_rpc_single_turn(
         .current_dir(&spec.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        // Same reaping contract as the persistent runtime above.
+        .process_group(0)
+        .kill_on_drop(true);
 
     let mut child = cmd
         .spawn()
         .context("Failed to spawn isolated Pi RPC process")?;
+    let _registration = child.id().map(|pid| {
+        crate::process_manager::ChildRegistration::register(pid, &spec.command.to_string_lossy())
+    });
     let mut stdin = child
         .stdin
         .take()

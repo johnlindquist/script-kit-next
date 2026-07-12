@@ -96,23 +96,49 @@ pub fn scan_package_flows() -> Vec<FlowDescriptor> {
     by_name.into_values().collect()
 }
 
-/// Parse one `<name>.<engine>.md` package flow file into a descriptor.
+/// Parse one `<name>[.i].<engine>.md` package flow file into a descriptor.
+///
+/// Metadata is derived from what the file actually declares (filename engine
+/// segment / `.i.` marker, frontmatter keys) mirroring mdflow's own ladder —
+/// never invented. The old scanner marked EVERY package flow
+/// `interactive: true` with a `codex` default engine, which disagreed with
+/// mdflow's resolution and broke the desk's interactive-flow terminal
+/// fallback (2026-07-11 audit).
 fn parse_package_flow(path: &Path, origin: &str, bin_dir: Option<&Path>) -> Option<FlowDescriptor> {
     let file_name = path.file_name()?.to_str()?;
     if !file_name.ends_with(".md") || file_name.starts_with('.') {
         return None;
     }
     let stem = file_name.strip_suffix(".md")?;
-    // `<name>.<engine>` — engine is the last dot segment when present.
-    let (name, engine) = match stem.rsplit_once('.') {
+    // `<name>[.i][.<engine>]` — engine is the last dot segment when present;
+    // a trailing/penultimate `i` segment is the interactive marker.
+    let (mut name, engine_from_filename) = match stem.rsplit_once('.') {
+        Some((name, segment)) if segment == "i" && !name.is_empty() => (format!("{name}.i"), None),
         Some((name, engine)) if !engine.is_empty() && !name.is_empty() => {
-            (name.to_string(), engine.to_string())
+            (name.to_string(), Some(engine.to_string()))
         }
-        _ => (stem.to_string(), "codex".to_string()),
+        _ => (stem.to_string(), None),
     };
+    let mut interactive = false;
+    if let Some(stripped) = name.strip_suffix(".i") {
+        name = stripped.to_string();
+        interactive = true;
+    }
 
     let source = std::fs::read_to_string(path).ok()?;
-    let description = frontmatter_value(&source, "description");
+    let block = frontmatter_block(&source).unwrap_or("");
+    let description = frontmatter_value(block, "description");
+    interactive =
+        interactive || frontmatter_flag(block, "_interactive") || frontmatter_flag(block, "_i");
+    // Engine ladder mirrors mdflow: filename segment > frontmatter > the
+    // CLI's own default (`pi`).
+    let engine = engine_from_filename
+        .or_else(|| frontmatter_value(block, "engine"))
+        .or_else(|| frontmatter_value(block, "tool"))
+        .unwrap_or_else(|| "pi".to_string());
+    let is_workflow = block
+        .lines()
+        .any(|line| line.trim_start().starts_with("_steps:"));
     let mtime_ms = std::fs::metadata(path)
         .and_then(|meta| meta.modified())
         .ok()
@@ -134,21 +160,33 @@ fn parse_package_flow(path: &Path, origin: &str, bin_dir: Option<&Path>) -> Opti
         engine,
         engine_source: None,
         inputs: Vec::new(),
-        is_workflow: false,
-        // Package flows are agent identities; the desk's Enter means
-        // "converse", implemented via `--_interactive`.
-        interactive: true,
+        is_workflow,
+        interactive,
         mtime_ms,
         origin: Some(origin.to_string()),
         wrapper_command,
     })
 }
 
-/// Extract a simple single-line frontmatter value (`key: value`), stripping
-/// surrounding quotes. Package flows keep `description:` on one line.
-fn frontmatter_value(source: &str, key: &str) -> Option<String> {
+/// The YAML frontmatter block between the first `---` pair, skipping an
+/// optional shebang line. `None` when the file has no frontmatter.
+fn frontmatter_block(source: &str) -> Option<&str> {
+    let body = if source.starts_with("#!") {
+        source.split_once('\n').map(|(_, rest)| rest).unwrap_or("")
+    } else {
+        source
+    };
+    let rest = body.trim_start_matches('\u{feff}').strip_prefix("---")?;
+    let end = rest.find("\n---")?;
+    Some(&rest[..end])
+}
+
+/// Extract a simple single-line frontmatter value (`key: value`) from the
+/// frontmatter block, stripping surrounding quotes. Multi-line scalars are
+/// honestly reported as absent rather than mis-parsed.
+fn frontmatter_value(block: &str, key: &str) -> Option<String> {
     let prefix = format!("{key}:");
-    for line in source.lines().take(60) {
+    for line in block.lines() {
         let Some(rest) = line.strip_prefix(&prefix) else {
             continue;
         };
@@ -161,9 +199,17 @@ fn frontmatter_value(source: &str, key: &str) -> Option<String> {
     None
 }
 
+fn frontmatter_flag(block: &str, key: &str) -> bool {
+    frontmatter_value(block, key).is_some_and(|value| value.eq_ignore_ascii_case("true"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `SCRIPT_KIT_FLOWS_PACKAGE_DIR`/`_BIN_DIR` are process-global: tests
+    /// that set them must run serially or they race each other's scans.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn write_flow(dir: &Path, file: &str, description: &str) {
         std::fs::create_dir_all(dir).unwrap();
@@ -176,6 +222,9 @@ mod tests {
 
     #[test]
     fn scans_package_flows_with_provenance_and_wrapper() {
+        let _env = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let root = std::env::temp_dir().join(format!("sk-flows-pkg-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let pkg = root.join("pkg");
@@ -206,7 +255,10 @@ mod tests {
         assert_eq!(gmail.engine, "codex");
         assert_eq!(gmail.origin.as_deref(), Some("@johnlindquist/flows"));
         assert_eq!(gmail.wrapper_command.as_deref(), Some("flow-gmail"));
-        assert!(gmail.interactive);
+        assert!(
+            !gmail.interactive,
+            "interactivity is declared, never invented — no `.i.` marker and no `_interactive:` key"
+        );
         assert_eq!(gmail.friendly_name(), "Gmail");
 
         let scratch = flows
@@ -219,6 +271,79 @@ mod tests {
         );
         // No bun bin for it → no wrapper; conversations fall back to `md <path>`.
         assert_eq!(scratch.wrapper_command, None);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Metadata comes from the file, mirroring mdflow's ladder: `.i.`
+    /// marker / `_interactive:` for interactivity, filename > frontmatter >
+    /// `pi` for engine, `_steps:` for workflows (2026-07-11 audit: the
+    /// scanner used to invent `interactive: true` + `codex` for everything).
+    #[test]
+    fn package_metadata_is_declared_not_invented() {
+        let _env = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let root = std::env::temp_dir().join(format!("sk-flows-meta-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let pkg = root.join("pkg");
+        let flows_dir = pkg.join("flows");
+        std::fs::create_dir_all(&flows_dir).unwrap();
+        std::fs::write(
+            flows_dir.join("flow-tui.i.claude.md"),
+            "---\ndescription: needs a terminal\n---\nbody\n",
+        )
+        .unwrap();
+        std::fs::write(
+            flows_dir.join("flow-marked.md"),
+            "---\ndescription: marked interactive\n_interactive: true\nengine: droid\n---\nbody\n",
+        )
+        .unwrap();
+        std::fs::write(
+            flows_dir.join("flow-plain.md"),
+            "#!/usr/bin/env md\n---\ndescription: defaults\n---\nbody with description: not-this\n",
+        )
+        .unwrap();
+        std::fs::write(
+            flows_dir.join("flow-dag.codex.md"),
+            "---\ndescription: pipeline\n_steps:\n  - id: a\n---\nbody\n",
+        )
+        .unwrap();
+
+        std::env::set_var("SCRIPT_KIT_FLOWS_PACKAGE_DIR", &pkg);
+        std::env::set_var("SCRIPT_KIT_FLOWS_BIN_DIR", root.join("nobin"));
+        let flows = scan_package_flows();
+        std::env::remove_var("SCRIPT_KIT_FLOWS_PACKAGE_DIR");
+        std::env::remove_var("SCRIPT_KIT_FLOWS_BIN_DIR");
+
+        let tui = flows.iter().find(|f| f.name == "flow-tui").expect("tui");
+        assert!(tui.interactive, "`.i.` filename marker");
+        assert_eq!(tui.engine, "claude");
+
+        let marked = flows
+            .iter()
+            .find(|f| f.name == "flow-marked")
+            .expect("marked");
+        assert!(marked.interactive, "`_interactive: true` frontmatter");
+        assert_eq!(
+            marked.engine, "droid",
+            "frontmatter engine when no filename segment"
+        );
+
+        let plain = flows
+            .iter()
+            .find(|f| f.name == "flow-plain")
+            .expect("plain");
+        assert!(!plain.interactive);
+        assert_eq!(plain.engine, "pi", "mdflow's own default engine");
+        assert_eq!(
+            plain.description.as_deref(),
+            Some("defaults"),
+            "description reads the frontmatter block only, never the body"
+        );
+
+        let dag = flows.iter().find(|f| f.name == "flow-dag").expect("dag");
+        assert!(dag.is_workflow, "`_steps:` marks a workflow");
 
         let _ = std::fs::remove_dir_all(&root);
     }

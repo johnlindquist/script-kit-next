@@ -464,6 +464,7 @@ fn agent_chat_state_result_round_trips() {
         has_pending_permission: false,
         input_layout: None,
         transcript_scroll: None,
+        composer_scroll: None,
         focused_text: None,
         setup: None,
         warnings: Vec::new(),

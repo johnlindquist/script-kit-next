@@ -510,7 +510,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         size: gpui::size(
                                             gpui::px(750.),
                                             crate::window_resize::height_for_view(
-                                                crate::window_resize::ViewType::DivPrompt,
+                                                crate::window_resize::ViewType::MainWindow,
                                                 0,
                                             ),
                                         ),
@@ -1466,7 +1466,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                         },
                         StdinCommand::Protocol(message) => {
                             logging::log("STDIN", "Routing stdin protocol message");
-                            view.handle_stdin_protocol_message(*message, ctx);
+                            view.handle_stdin_protocol_message(*message, window, ctx);
                         }
 
                     }

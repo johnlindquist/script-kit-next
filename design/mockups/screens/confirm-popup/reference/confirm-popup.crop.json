@@ -1,0 +1,48 @@
+{
+  "source": "scripts/agentic/design-reference-capture.ts --screen confirm (protocol captureScreenshot, hiDpi, target kind=main; openConfirmPrompt fixture)",
+  "capturedAt": "2026-07-11",
+  "logicalSize": [
+    750,
+    500
+  ],
+  "physicalSize": [
+    1500,
+    1000
+  ],
+  "scaleFactor": 2,
+  "appearance": "dark",
+  "material": "menu",
+  "backdropSaturation": 2.6,
+  "motion": "live (starfield phase uncontrolled)",
+  "referenceCrop": [
+    0,
+    0,
+    1500,
+    1000
+  ],
+  "backdrop": "user's live desktop (NOT the synthetic fixture backdrop)",
+  "colorProfile": "recorded-at-capture (title ~#E85841 vs stock #EF4444; body warmed \u2014 see confirmCapture.stockThemeVsReferenceRaster)",
+  "fixture": {
+    "command": "openConfirmPrompt",
+    "title": "Delete?",
+    "body": "This cannot be undone.",
+    "confirmText": "Delete",
+    "cancelText": "Keep",
+    "variant": "danger",
+    "footerButtons": "apply='Delete \u21b5' (selected), close='Keep Esc' \u2014 from live activeFooter probe; native overlay absent from capture"
+  },
+  "pixelReceipts": {
+    "titleGlyphBand": [
+      249.0,
+      263.0
+    ],
+    "bodyGlyphBand": [
+      290.5,
+      300.0
+    ],
+    "bodyLineSpacingMeasured": 23.0,
+    "footerBandTopEdge": 469,
+    "note": "cross-checked with a second wrapped-body capture: title band shifted up exactly 11.5pt (half an added 23pt line), proving flex centering + phi line heights + gap 12"
+  },
+  "tokenBundleHash": "sha256:cb709721ef84ef9b2faa29828408fcd83422c5f5567bd1ce3fff695162487922"
+}

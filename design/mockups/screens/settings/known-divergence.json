@@ -1,0 +1,41 @@
+{
+  "screen": "settings",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView menu material; blur radius and material bias are emulator calibration (--sk-emulator-*), and the reference capture samples the live desktop rather than the synthetic backdrop."
+    },
+    {
+      "selector": ".sk-window__effect",
+      "kind": "renderer",
+      "blocking": false,
+      "reason": "Canvas 2D approximation pending a WebGL2 port of fx_starfield (shader id 3); colors are token-exact, geometry/phase are not."
+    },
+    {
+      "selector": "[data-native-footer]",
+      "kind": "native",
+      "blocking": false,
+      "reason": "The real footer is a native AppKit NSVisualEffectView host painted as a SEPARATE 36px overlay window; the GPUI layout itself only reserves the empty 32px footer rail (render_native_main_window_footer_spacer), which is what a protocol captureScreenshot of the main window shows. The mockup keeps the 32px rail as the flex participant and bottom-anchors the 36px host as an overlay so it cannot steal list viewport height. Button labels (Run ↵, Actions ⌘K) are derived from source (standard_main_window_footer_buttons with the default 'Run' primary label); the settingsFooter.nativeRunVsGpuiOpenHint conflict records the disagreeing GPUI fallback hint strip, and no live activeFooter probe has confirmed the composed surface yet. Verify footer content via protocol receipts, not the reference PNG."
+    },
+    {
+      "selector": ".sk-context-zone",
+      "kind": "fixture",
+      "blocking": false,
+      "reason": "Context-zone pill content (cwd chip, model chip) is capture-time state, not a design token: the 2026-07-11 reference recorded 'Brain · GPT-5.6 SOL'. Compare pill geometry/typography, not text content."
+    },
+    {
+      "selector": ".sk-list, .sk-settings-count",
+      "kind": "fixture",
+      "blocking": false,
+      "reason": "The settings census is config-dependent (settingsHub.census.*): the checked-in fixture pins the 12-row state matching the 2026-07-11 capture, where windowState.hasCustomPositions was already true at census (customPositionsAtCensus=true in settings.crop.json — sandboxHome:true does NOT guarantee a fresh window-state store). A truly fresh HOME yields 11 rows / '11 settings' with 'Reset Window Positions' absent. Retakes must re-record customPositionsAtCensus and keep the fixture in lockstep."
+    },
+    {
+      "selector": ".sk-list-row__name, .sk-list-row__description, .sk-placeholder, .sk-section-header, .sk-settings-count",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "GPUI/CoreText vs browser glyph rasterization; .AppleSystemUIFont weights 430/450/500 may rasterize differently than -apple-system, and glyph advances drift over long runs (the search placeholder, long permission-assistant names). Geometry (bounds/baselines/origins) must still match."
+    }
+  ]
+}

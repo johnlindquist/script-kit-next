@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Main Menu mockup</title>
+<link rel="stylesheet" href="../../generated/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<link rel="stylesheet" href="./screen.css">
+</head>
+<body>
+<!--
+  Fixture: default main menu, script-kit-dark, InfoBarBase, Starfield.
+  Content mirrors reference/main-menu-default@2x.png — a clean devtools
+  capture (scripts/agentic/design-reference-capture.ts) of the live app on
+  2026-07-11: Flows section leads, "AGY Info" selected. Footer labels come
+  from a live protocol probe (run="Converse ↵", actions="Actions ⌘K",
+  ai="Agent ⌘↵") because the native AppKit footer overlay is not part of
+  the GPUI window capture — see ./known-divergence.json.
+  Every visual value resolves through generated --sk-* tokens
+  (../../generated/tokens.json, bundle hash in tokens.css).
+-->
+<main class="stage" id="stage">
+  <div class="sk-window" id="window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <canvas class="sk-window__effect" id="starfield" width="1500" height="960"></canvas>
+
+    <div class="sk-window__content">
+      <header class="sk-header">
+        <div class="sk-context-zone" data-component="main_view_chrome::context_zone">
+          <span class="sk-context-pill">~/.scriptkit <span class="sk-context-key">⇥</span></span>
+          <span class="sk-context-pill">Script Kit · gpt-5.5 <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+        <div class="sk-search-shell" data-component="main filter input">
+          <span class="sk-caret"></span>
+          <span class="sk-placeholder">Search • @ context • / commands • ; capture • : filters</span>
+        </div>
+      </header>
+
+      <!-- MainViewDividerChrome renders with visible: false on the main menu -->
+
+      <section class="sk-list" data-component="render_script_list">
+        <div class="sk-section-slot" data-first="true" data-component="render_section_header">
+          <div class="sk-section-header">
+            <span class="sk-section-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            Flows
+          </div>
+        </div>
+
+        <!-- Flow rows use assets/icons/flow.svg (chevron fade), the current brand mark -->
+        <div class="sk-list-row" data-state="selected" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon-tile" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">AGY Info</span>
+              <span class="sk-list-row__description">agy-info/nanobanana infographic workflow · codex · @johnlindquist/flows</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Article.claude</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">AWS</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Bird</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Brew</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Browser</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Browser Automate</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-component="list_item">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3"><path d="m2.5 4.5 3.5 3.5-3.5 3.5" opacity=".3"/><path d="m6.5 4.5 3.5 3.5-3.5 3.5" opacity=".6"/><path d="m10.5 4.5 3.5 3.5-3.5 3.5"/></g></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Capture.copilot</span></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Native AppKit footer overlay — labels verified via live protocol probe
+           (nativeFooterHostInstalled:true; buttons run/actions/ai). The GPUI
+           reference capture shows this band empty. -->
+      <footer class="sk-footer-host" data-component="native footer host" data-native-footer>
+        <div class="sk-footer-rail" data-component="footer_chrome">
+          <span class="sk-footer-spacer"></span>
+          <button class="sk-footer-action sk-footer-action--run">
+            <span class="sk-footer-label">Converse</span>
+            <kbd class="sk-keycap">↵</kbd>
+          </button>
+          <button class="sk-footer-action sk-footer-action--actions">
+            <span class="sk-footer-label">Actions</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+          </button>
+          <button class="sk-footer-action sk-footer-action--agent">
+            <span class="sk-footer-label">Agent</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">↵</kbd>
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</main>
+<script src="./starfield.js"></script>
+</body>
+</html>

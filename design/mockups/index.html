@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Design Mockup Gallery</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #0c0c0e; color: #ececee; padding: 40px 28px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 24px; letter-spacing: -0.02em; }
+  .sub { color: #8b8b92; font-size: 14px; line-height: 1.6; max-width: 720px; margin-top: 8px; }
+  .sub code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 28px; }
+  .card {
+    background: #131316; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+    padding: 16px; text-decoration: none; color: inherit; display: block;
+  }
+  .card:hover { border-color: rgba(255,255,255,0.2); }
+  .card h2 { font-size: 16px; margin: 0; }
+  .meta { color: #8b8b92; font-size: 12px; margin-top: 6px; line-height: 1.6; }
+  .badges { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .badge { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); color: #a7a7ae; }
+  .badge.ok { border-color: rgba(120,200,120,0.4); color: #9fd89f; }
+  .links { margin-top: 12px; display: flex; gap: 12px; font-size: 13px; }
+  .links a { color: #fbbf24; text-decoration: none; }
+  .pending { opacity: 0.45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Script Kit — Design Mockup Gallery</h1>
+  <p class="sub">
+    Every screen consumes <code>--sk-*</code> tokens generated from the Rust
+    implementation (<code>export_design_tokens</code>), so what you see here is
+    the app's actual design contract — not a transcription. Iterate designs in
+    HTML, propose token changes via <code>workbench/*.edits.json</code>, and the
+    change lands back in Rust with byte fidelity.
+  </p>
+  <div class="grid">
+    <div class="card">
+      <h2>Main Menu (launcher)</h2>
+      <div class="meta">
+        750×480 · script-kit-dark · InfoBarBase · Starfield<br>
+        Fixture: Flows launcher, AGY Info selected (2026-07-11 devtools reference)
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">vibrancy: emulated</span>
+        <span class="badge">starfield: canvas approx</span>
+      </div>
+      <div class="links">
+        <a href="screens/main-menu/index.html">View</a>
+        <a href="screens/main-menu/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Actions Dialog (⌘K)</h2>
+      <div class="meta">
+        340×300 · base popup theme · rows seeded from InfoBarBase<br>
+        Fixture: AGY Info context, Converse selected (2026-07-11 devtools reference)
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">vibrancy: emulated</span>
+        <span class="badge">footerless by contract</span>
+      </div>
+      <div class="links">
+        <a href="screens/actions-dialog/index.html">View</a>
+        <a href="screens/actions-dialog/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Confirm Prompt</h2>
+      <div class="meta">
+        750×500 · in-window danger confirm · openConfirmPrompt fixture<br>
+        Fixture: "Delete?" / Delete ↵ · Keep Esc (2026-07-11 devtools reference)
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">vibrancy: emulated</span>
+        <span class="badge">native footer: receipt-verified</span>
+      </div>
+      <div class="links">
+        <a href="screens/confirm-popup/index.html">View</a>
+        <a href="screens/confirm-popup/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Notes</h2>
+      <div class="meta">
+        350×280 · standalone NSPanel · markdown editor<br>
+        Fixture: "Design Contract Notes" via sandbox DB (2026-07-11 devtools reference)
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">heading clip: mirrored conflict</span>
+        <span class="badge">footer: in-window GPUI</span>
+      </div>
+      <div class="links">
+        <a href="screens/notes/index.html">View</a>
+        <a href="screens/notes/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="meta">
+        750×480 · InfoBarBase hub · sandbox default census<br>
+        Fixture: 12 settings, Theme Designer selected (2026-07-11 devtools reference)
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">rows: iconless truth</span>
+        <span class="badge">legacy 26px separator</span>
+      </div>
+      <div class="links">
+        <a href="screens/settings/index.html">View</a>
+        <a href="screens/settings/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Day Page</h2>
+      <div class="meta">
+        750×480 · Today spine editor · collapsed clipboard shelf<br>
+        Fixture: seeded day file, hold-gesture open (2026-07-11 devtools reference)
+      </div>
+      <div class="badges">
+        <span class="badge ok">token-perfect</span>
+        <span class="badge ok">geometry-locked</span>
+        <span class="badge">shelf: collapsed rest state</span>
+        <span class="badge">kit:// lines hidden</span>
+      </div>
+      <div class="links">
+        <a href="screens/day-page/index.html">View</a>
+        <a href="screens/day-page/compare.html">Compare vs. real app</a>
+        <a href="generated/tokens.json">tokens.json</a>
+      </div>
+    </div>
+    <div class="card pending"><h2>Agent Chat</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
+    <div class="card pending"><h2>Arg Prompt</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
+    <div class="card pending"><h2>Clipboard History</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
+    <div class="card pending"><h2>Chat Prompt</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
+    <div class="card pending"><h2>Terminal Prompt</h2><div class="meta">integrating — Oracle-reviewed, capture done</div></div>
+  </div>
+</div>
+</body>
+</html>

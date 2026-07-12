@@ -525,6 +525,7 @@ pub struct NotesApp {
 
 mod agent_chat_host;
 mod clipboard_ops;
+pub(crate) mod contract;
 mod editor_formatting;
 mod editor_ops_a;
 mod editor_ops_b;

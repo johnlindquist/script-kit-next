@@ -1,0 +1,115 @@
+/* Confirm-prompt screen: stage layout + browser-only emulator calibration
+ * plus the screen-owned confirm anatomy.
+ *
+ * Rust anatomy this mirrors (render_prompts/other.rs::render_confirm_prompt,
+ * pixel-validated 2026-07-11):
+ *   window 750×500 (STANDARD_HEIGHT)
+ *   context header (padding-y 8, context row 22 → 38) with padding-x 16
+ *   below it a FIXED 500pt shell that overflows the window (clipped):
+ *     flex-1 centered stack: title (20/600, phi line height 32)
+ *       + gap 12 + body (14, phi line height 23, max-width 560, centered)
+ *     footer spacer 32 (clipped off-window — intentional Rust quirk: the
+ *     stack centers ~10.5pt below naive between-chrome centering)
+ *   native footer overlay paints the bottom 32pt band: Delete ↵ (selected)
+ *     / Keep Esc — hug buttons, right-aligned (footerless GPUI capture).
+ */
+
+:root {
+  --sk-emulator-menu-blur: 32px;
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 28 31 / 0.42),
+    rgb(20 20 23 / 0.42)
+  );
+  --sk-emulator-desktop: radial-gradient(
+      1200px 700px at 20% 10%,
+      rgb(64 46 88 / 0.9),
+      transparent 60%
+    ),
+    radial-gradient(
+      1000px 800px at 85% 80%,
+      rgb(26 58 74 / 0.9),
+      transparent 55%
+    ),
+    linear-gradient(160deg, rgb(24 22 30), rgb(12 12 16));
+}
+
+body {
+  margin: 0;
+}
+
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-desktop);
+}
+
+/* Window shell: main-menu chrome at the confirm STANDARD_HEIGHT. */
+.sk-window--confirm {
+  height: var(--sk-confirm-window-height);
+}
+
+/* Non-list views use the panel header padding (16), not the InfoBarBase
+ * shell padding (2). */
+.sk-window--confirm .sk-header {
+  padding-inline: var(--sk-confirm-header-padding-x);
+  padding-block: var(--sk-confirm-header-padding-y);
+}
+
+/* The confirm shell is a fixed-height column that overflows the window
+ * (the window's overflow: clip crops it, exactly like GPUI). */
+.sk-confirm-shell {
+  height: var(--sk-confirm-window-height);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.sk-confirm-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sk-confirm-stack-gap);
+  padding: var(--sk-confirm-content-padding);
+}
+
+.sk-confirm-title {
+  font-size: var(--sk-confirm-title-font-size);
+  line-height: var(--sk-confirm-title-line-height);
+  font-weight: var(--sk-confirm-title-font-weight);
+}
+
+.sk-confirm-title[data-variant="danger"] {
+  color: var(--sk-confirm-title-danger);
+}
+
+.sk-confirm-title[data-variant="default"] {
+  color: var(--sk-confirm-title-default);
+}
+
+.sk-confirm-body {
+  max-width: var(--sk-confirm-stack-max-width);
+  font-size: var(--sk-confirm-body-font-size);
+  line-height: var(--sk-confirm-body-line-height);
+  color: var(--sk-confirm-body-text);
+  text-align: center;
+}
+
+.sk-confirm-footer-spacer {
+  height: var(--sk-confirm-footer-spacer-height);
+  flex: none;
+}
+
+/* Native footer overlay: a separate AppKit window in reality, so the mockup
+ * paints it as an absolute layer over the window bottom (rail height). */
+.sk-confirm-native-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--sk-confirm-footer-spacer-height);
+  z-index: 4;
+}

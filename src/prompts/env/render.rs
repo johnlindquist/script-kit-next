@@ -55,12 +55,13 @@ impl Render for EnvPrompt {
                 .flex_row()
                 .items_center()
                 .gap(px(4.0))
-                .child(
+                .child(crate::components::text_input::pulse_cursor_bar(
                     div()
                         .w(px(CURSOR_WIDTH))
                         .h(px(CURSOR_HEIGHT_LG))
                         .bg(rgb(accent_color)),
-                )
+                    "env-input-cursor-pulse",
+                ))
                 .child(div().text_color(text.placeholder).child(SharedString::from(
                     env_input_placeholder(&self.key, self.exists_in_keyring),
                 )))

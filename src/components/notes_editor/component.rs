@@ -364,7 +364,18 @@ pub(crate) fn should_activate_deeplink_from_mouse_up(
         && selection.is_empty()
 }
 
-const MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY: f32 = 0.45;
+/// Authored opacity for a markdown link destination while no selection
+/// overlaps or touches the link ("rest"/compact state). Shared with the
+/// design-contract exporter as `notesEditor.link.destinationCompactOpacity`.
+pub(crate) const MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY: f32 = 0.45;
+
+/// The rest-state destination color: the shared link accent at the compact
+/// opacity. This is the ONE resolver both the highlighter
+/// (`markdown_link_destination_color`) and the design-contract exporter use;
+/// the active state paints the plain accent.
+pub(crate) fn markdown_link_destination_rest_color(accent: Hsla) -> Hsla {
+    accent.opacity(MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY)
+}
 
 fn markdown_link_highlight_ranges(
     text: &str,
@@ -417,7 +428,7 @@ fn markdown_link_destination_color(
     if active {
         accent
     } else {
-        accent.opacity(MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY)
+        markdown_link_destination_rest_color(accent)
     }
 }
 
@@ -813,8 +824,9 @@ fn ranges_overlap_or_touch(a: &Range<usize>, b: &Range<usize>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        activation_href_at_cursor_in_text, markdown_link_highlight_ranges,
-        should_activate_deeplink_from_mouse_up, MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY,
+        activation_href_at_cursor_in_text, markdown_link_destination_rest_color,
+        markdown_link_highlight_ranges, should_activate_deeplink_from_mouse_up,
+        MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY,
     };
     use gpui::rgb;
     use std::ops::Range;
@@ -861,6 +873,12 @@ mod tests {
         let (muted_text, muted_color) = highlight_for_role(input, "markdownLinkUri", 0..0);
         assert_eq!(muted_text, "kit://clipboard-history?id=clip-1");
         assert_eq!(muted_color.a, MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY);
+        // The highlighter's rest state IS the shared resolver's output — the
+        // design contract exports the same color, never a re-derived one.
+        assert_eq!(
+            muted_color,
+            markdown_link_destination_rest_color(gpui::rgb(0xffcc00).into())
+        );
 
         let (href_text, href_color) =
             highlight_for_role(input, "markdownLinkUri", href_cursor..href_cursor);

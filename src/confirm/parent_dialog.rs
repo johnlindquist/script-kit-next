@@ -69,6 +69,88 @@ impl Default for ParentConfirmOptions {
     }
 }
 
+// ── Design-contract resolvers for the in-window confirm surface ────────────
+// Shared between `render_confirm_prompt` (render_prompts/other.rs) and the
+// token exporter (src/design_contract) so the two can never drift. The
+// legacy popup-window path (src/confirm/window.rs) is a different surface
+// and deliberately does not use these.
+
+/// Title font size in the in-window confirm surface.
+pub(crate) const CONFIRM_PROMPT_TITLE_FONT_SIZE_PX: f32 = 20.0;
+/// Body font size in the in-window confirm surface.
+pub(crate) const CONFIRM_PROMPT_BODY_FONT_SIZE_PX: f32 = 14.0;
+/// Reading-width cap for the body copy.
+pub(crate) const CONFIRM_PROMPT_BODY_MAX_WIDTH_PX: f32 = 560.0;
+
+/// The implicit GPUI line height: `TextStyle::default()` uses `phi()` and
+/// `line_height_in_pixels` rounds (vendor/gpui/src/style.rs). The confirm
+/// renderer never overrides it, so 14pt body → 23, 20pt title → 32.
+/// Pixel-validated against a live capture on 2026-07-11 (body line spacing
+/// measured at exactly 23.0 logical pt).
+pub(crate) fn confirm_prompt_line_height_px(font_size: f32) -> f32 {
+    const PHI: f32 = 1.618_034;
+    (font_size * PHI).round()
+}
+
+/// Layout inputs `render_confirm_prompt` actually consumes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ConfirmPromptMetrics {
+    /// Padding on the centered content region (`design_spacing.padding_xl`).
+    pub content_padding: f32,
+    /// Gap between title and body (`design_spacing.padding_md`). The protocol
+    /// layout model claims 16; the renderer truth is this field (12 under the
+    /// Default design) — recorded as `confirmGap.rendererSpacingVsLayoutOracle`.
+    pub stack_gap: f32,
+    pub title_font_size: f32,
+    pub title_line_height: f32,
+    pub body_font_size: f32,
+    pub body_line_height: f32,
+    pub body_max_width: f32,
+    /// Height of the in-shell native-footer spacer (the shared footer rail
+    /// height). The confirm shell is a fixed `STANDARD_HEIGHT` column, so the
+    /// centered region is `STANDARD_HEIGHT - footer_spacer_height` tall
+    /// starting below the main context header.
+    pub footer_spacer_height: f32,
+}
+
+pub(crate) fn resolved_confirm_prompt_metrics(
+    spacing: crate::designs::DesignSpacing,
+    footer_rail_height: f32,
+) -> ConfirmPromptMetrics {
+    ConfirmPromptMetrics {
+        content_padding: spacing.padding_xl,
+        stack_gap: spacing.padding_md,
+        title_font_size: CONFIRM_PROMPT_TITLE_FONT_SIZE_PX,
+        title_line_height: confirm_prompt_line_height_px(CONFIRM_PROMPT_TITLE_FONT_SIZE_PX),
+        body_font_size: CONFIRM_PROMPT_BODY_FONT_SIZE_PX,
+        body_line_height: confirm_prompt_line_height_px(CONFIRM_PROMPT_BODY_FONT_SIZE_PX),
+        body_max_width: CONFIRM_PROMPT_BODY_MAX_WIDTH_PX,
+        footer_spacer_height: footer_rail_height,
+    }
+}
+
+/// What the in-window confirm surface paints for its two text blocks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ResolvedConfirmPromptColors {
+    pub title_rgba: u32,
+    pub body_rgba: u32,
+}
+
+pub(crate) fn resolved_confirm_prompt_colors(
+    theme: &crate::theme::Theme,
+    is_danger: bool,
+) -> ResolvedConfirmPromptColors {
+    ResolvedConfirmPromptColors {
+        title_rgba: ((if is_danger {
+            theme.colors.ui.error
+        } else {
+            theme.colors.text.primary
+        }) << 8)
+            | 0xFF,
+        body_rgba: (theme.colors.text.secondary << 8) | 0xFF,
+    }
+}
+
 impl ParentConfirmOptions {
     #[allow(dead_code)]
     pub(crate) fn destructive(

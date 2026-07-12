@@ -488,12 +488,14 @@ pub fn initial_background_effect_intensity() -> f32 {
 /// trim so they sit behind content instead of competing with it, and adapt
 /// their lightness to the theme background so the effect stays a quiet glow
 /// on dark themes and a soft tint on light ones.
-pub fn background_effect_layer(
+/// The two accent-derived colors handed to the background shader. Shared by
+/// `background_effect_layer` and the design-contract exporter so HTML mockups
+/// reproduce the exact shader palette.
+pub fn background_effect_palette(
     theme: &crate::theme::Theme,
     effect: BackgroundEffect,
     intensity: f32,
-    elapsed_secs: f32,
-) -> Stateful<Div> {
+) -> (Hsla, Hsla) {
     let accent: Hsla = rgb(theme.colors.accent.selected).into();
     let background: Hsla = rgb(theme.colors.background.main).into();
     let light_theme = background.l > 0.55;
@@ -516,8 +518,16 @@ pub fn background_effect_layer(
     // Rotate toward the warm side so gold stays gold (never green) and the
     // pair reads as one accent with depth; wrap via +1.0 to keep h in 0..1.
     color_b.h = (accent.h - effect.hue_shift() + 1.0).fract();
-    let color_b = tune(color_b);
+    (color_a, tune(color_b))
+}
 
+pub fn background_effect_layer(
+    theme: &crate::theme::Theme,
+    effect: BackgroundEffect,
+    intensity: f32,
+    elapsed_secs: f32,
+) -> Stateful<Div> {
+    let (color_a, color_b) = background_effect_palette(theme, effect, intensity);
     let (focus, energy) = effect_focus_uniforms();
 
     div()

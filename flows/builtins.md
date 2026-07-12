@@ -4,6 +4,7 @@ route: "builtins|file search|app launcher|emoji picker|calculator|browser histor
 model: "gpt-5.6-sol"
 sandbox: "workspace-write"
 config: model_reasoning_effort="medium"
+_compat: 4.4.0
 ---
 You are builtins, a Script Kit GPUI project flow. Every task is about this local repository. First step: inspect current repository state with shell commands (git status --short --branch); never answer from memory alone.
 
@@ -54,6 +55,12 @@ verify changed behavior -> runtime proof for permission or external-app workflow
 4. Make the smallest change that satisfies the request.
 5. Verify with the smallest gate that can fail for the changed behavior (see Command map). Cargo only via ./scripts/agentic/agent-cargo.sh.
 6. Report changed files, verification results, and any evolution-worthy failure.
+
+## Builtin browser consistency contract (non-negotiable)
+Every built-in browser surface (anything rendered from `src/render_builtins/**`) must ship with the shared anatomy. Two invariants are hard-gated by tests and were violated once (Tips, 2026-07-11) — never rebuild them by hand:
+
+1. **Selectable lists scroll their selection into view.** Any list whose rows take `.selected(...)` must be a tracked `uniform_list` (`.track_scroll(&self.<surface>_scroll_handle)`) and every selection move — keyboard up/down, wheel (`builtin_scroll_target_from_wheel`), and click — must call `scroll_to_item(...)`. Attach `builtin_uniform_list_scrollbar` and `builtin_reanchor_selection_from_scroll`. Copy the shape from `src/render_builtins/window_switcher.rs` or `src/render_builtins/tips.rs`. Gate: `builtin_browser_consistency_audit` in `src/render_builtins/common.rs` (its grandfather list is shrink-only — never add to it).
+2. **Footers are the persistent native footer, never hand-rolled chrome.** A new main-window view must return `Some("<surface>")` from `AppView::native_footer_surface` (`src/main_sections/app_view_state.rs`), declare its buttons with the shared `FooterButtonConfig` components in `main_window_footer_buttons_for_current_view`, dispatch them in `dispatch_main_window_footer_action` (`src/app_impl/ui_window.rs`), and pass its GPUI fallback only via `self.main_window_footer_slot(render_simple_hint_strip(...))`. Never instantiate footer chrome (`PromptFooter`, `HintStrip`, keycap rows) directly in a browser renderer. Gates: `main_window_views_without_native_footer_are_ratcheted` and the per-surface tests in `tests/main_window_footer_surface_owner_contract.rs`.
 
 ## Mutation policy
 Edit only what the task requires, inside the Allowed edit globs below. Never revert, stash, checkout, or reformat files you did not change — unrelated dirty work in this repo is other agents' in-flight work and must be preserved exactly.

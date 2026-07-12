@@ -752,6 +752,20 @@ pub(crate) struct DeferredDraw {
     paint_range: Range<PaintIndex>,
 }
 
+/// Paint-time geometry associated with one debug selector occurrence.
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone, Debug)]
+pub struct DebugBoundsEntry {
+    /// Stable selector supplied by the rendered element.
+    pub selector: String,
+    /// Full element bounds after layout and positioning.
+    pub bounds: Bounds<Pixels>,
+    /// Intersection of `bounds` with the active ancestor content mask.
+    pub visible_bounds: Bounds<Pixels>,
+    /// Active ancestor content mask at the element's paint site.
+    pub clip_bounds: Bounds<Pixels>,
+}
+
 pub(crate) struct Frame {
     pub(crate) focus: Option<FocusId>,
     pub(crate) window_active: bool,
@@ -768,6 +782,8 @@ pub(crate) struct Frame {
     pub(crate) cursor_styles: Vec<CursorStyleRequest>,
     #[cfg(any(test, feature = "test-support"))]
     pub(crate) debug_bounds: FxHashMap<String, Bounds<Pixels>>,
+    #[cfg(any(test, feature = "test-support"))]
+    debug_bounds_log: Vec<DebugBoundsEntry>,
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub(crate) next_inspector_instance_ids: FxHashMap<Rc<crate::InspectorElementPath>, usize>,
     #[cfg(any(feature = "inspector", debug_assertions))]
@@ -794,6 +810,8 @@ pub(crate) struct PaintIndex {
     accessed_element_states_index: usize,
     tab_handle_index: usize,
     line_layout_index: LineLayoutIndex,
+    #[cfg(any(test, feature = "test-support"))]
+    debug_bounds_index: usize,
 }
 
 impl Frame {
@@ -815,6 +833,8 @@ impl Frame {
 
             #[cfg(any(test, feature = "test-support"))]
             debug_bounds: FxHashMap::default(),
+            #[cfg(any(test, feature = "test-support"))]
+            debug_bounds_log: Vec::new(),
 
             #[cfg(any(feature = "inspector", debug_assertions))]
             next_inspector_instance_ids: FxHashMap::default(),
@@ -843,6 +863,7 @@ impl Frame {
         #[cfg(any(test, feature = "test-support"))]
         {
             self.debug_bounds.clear();
+            self.debug_bounds_log.clear();
         }
 
         #[cfg(any(feature = "inspector", debug_assertions))]
@@ -943,6 +964,7 @@ pub struct Window {
     pub(crate) image_cache_stack: Vec<AnyImageCache>,
     pub(crate) rendered_frame: Frame,
     pub(crate) next_frame: Frame,
+    rendered_frame_generation: u64,
     next_hitbox_id: HitboxId,
     pub(crate) next_tooltip_id: TooltipId,
     pub(crate) tooltip_bounds: Option<TooltipBounds>,
@@ -1468,6 +1490,7 @@ impl Window {
             requested_autoscroll: None,
             rendered_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
             next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
+            rendered_frame_generation: 0,
             next_frame_callbacks,
             next_hitbox_id: HitboxId(0),
             next_tooltip_id: TooltipId::default(),
@@ -2024,6 +2047,49 @@ impl Window {
         self.platform_window.bounds()
     }
 
+    /// Returns debug-selector bounds from the current rendered frame.
+    ///
+    /// Bounds use the window content coordinate space in logical [`Pixels`]: `(0, 0)` is the
+    /// content viewport's top-left, not the global display origin, and values are not scaled to
+    /// device pixels. They are the element bounds supplied to paint after layout and positioning,
+    /// including scroll offsets, and are not intersected with ancestor clipping masks. When a
+    /// selector is painted more than once in a frame, the last painted bounds are retained.
+    ///
+    /// This borrows the frame-coherent cache that was completed by the most recent draw; it never
+    /// exposes bounds being assembled in the next frame.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn debug_bounds(&self) -> &FxHashMap<String, Bounds<Pixels>> {
+        &self.rendered_frame.debug_bounds
+    }
+
+    /// Returns every debug-selector occurrence from the current rendered frame
+    /// in paint order. Unlike [`Self::debug_bounds`], duplicate selector names
+    /// are preserved so runtime fidelity tooling can fail closed on ambiguity.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn debug_bounds_entries(&self) -> &[DebugBoundsEntry] {
+        &self.rendered_frame.debug_bounds_log
+    }
+
+    /// Monotonic identity of the most recently completed rendered frame.
+    pub fn rendered_frame_generation(&self) -> u64 {
+        self.rendered_frame_generation
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn record_debug_bounds(&mut self, selector: String, bounds: Bounds<Pixels>) {
+        let clip_bounds = self.content_mask().bounds;
+        let visible_bounds = bounds.intersect(&clip_bounds);
+        self.next_frame
+            .debug_bounds
+            .insert(selector.clone(), bounds);
+        self.next_frame.debug_bounds_log.push(DebugBoundsEntry {
+            selector,
+            bounds,
+            visible_bounds,
+            clip_bounds,
+        });
+    }
+
     /// Renders the current frame's scene to a texture and returns the pixel data as an RGBA image.
     /// This does not present the frame to screen - useful for visual testing where we want
     /// to capture what would be rendered without displaying it or requiring the window to be visible.
@@ -2347,6 +2413,7 @@ impl Window {
         let previous_focus_path = self.rendered_frame.focus_path();
         let previous_window_active = self.rendered_frame.window_active;
         mem::swap(&mut self.rendered_frame, &mut self.next_frame);
+        self.rendered_frame_generation = self.rendered_frame_generation.wrapping_add(1);
         self.next_frame.clear();
         let current_focus_path = self.rendered_frame.focus_path();
         let current_window_active = self.rendered_frame.window_active;
@@ -2735,6 +2802,8 @@ impl Window {
             accessed_element_states_index: self.next_frame.accessed_element_states.len(),
             tab_handle_index: self.next_frame.tab_stops.paint_index(),
             line_layout_index: self.text_system.layout_index(),
+            #[cfg(any(test, feature = "test-support"))]
+            debug_bounds_index: self.next_frame.debug_bounds_log.len(),
         }
     }
 
@@ -2767,6 +2836,18 @@ impl Window {
             &self.rendered_frame.tab_stops.insertion_history
                 [range.start.tab_handle_index..range.end.tab_handle_index],
         );
+
+        #[cfg(any(test, feature = "test-support"))]
+        for entry in self.rendered_frame.debug_bounds_log
+            [range.start.debug_bounds_index..range.end.debug_bounds_index]
+            .iter()
+            .cloned()
+        {
+            self.next_frame
+                .debug_bounds
+                .insert(entry.selector.clone(), entry.bounds);
+            self.next_frame.debug_bounds_log.push(entry);
+        }
 
         self.text_system
             .reuse_layouts(range.start.line_layout_index..range.end.line_layout_index);

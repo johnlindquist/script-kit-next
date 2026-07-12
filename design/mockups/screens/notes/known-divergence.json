@@ -1,0 +1,41 @@
+{
+  "screen": "notes",
+  "regions": [
+    {
+      "selector": ".sk-window__material",
+      "kind": "environmental",
+      "blocking": false,
+      "reason": "CSS backdrop-filter cannot reproduce NSVisualEffectView material; blur radius and material bias are emulator calibration (--sk-emulator-*), and any reference capture samples the live desktop rather than the synthetic backdrop."
+    },
+    {
+      "selector": ".sk-window--notes (radius, shadow)",
+      "kind": "native",
+      "blocking": false,
+      "reason": "The Notes window is a standard titled NSPanel (WindowKind::PopUp, window_ops.rs) — its corner radius and drop shadow are system-controlled, not app-authored (no LIQUID_GLASS_WINDOW_RADIUS_PX). --sk-emulator-notes-window-radius/shadow are approximations; do not register the window silhouette pixel-exactly."
+    },
+    {
+      "selector": ".sk-notes-traffic",
+      "kind": "native",
+      "blocking": false,
+      "reason": "AppKit paints the traffic lights. The group ORIGIN (8,7) is app-authored via TitlebarOptions::traffic_light_position (notes.titlebar.trafficLightOriginX/Y) and must register; dot diameter, spacing, colors, and glyph raster are native emulator approximations."
+    },
+    {
+      "selector": ".sk-notes-editor__line (glyph raster + wrap point)",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "JetBrains Mono / .AppleSystemUIFont CoreText rasterization vs browser glyph rendering: small horizontal advance drift accumulates over long mono runs, and the vertical glyph crop inside the fixed 20px line box (title clip) may differ by ≤1-2px from CoreText's baseline placement. The soft-wrap of '- Editor 16 px mono, 20 px line' is encoded at the wrap point OBSERVED in the reference capture — a browser reflow would not reproduce it, so the mockup pins it structurally. The 20px line GRID, text origin, and per-row bounds must still register."
+    },
+    {
+      "selector": ".sk-notes-markdown-heading-marker",
+      "kind": "capture",
+      "blocking": false,
+      "reason": "The stock-resolved heading-marker color is theme text.muted (#FFFFFF in script-kit-dark, exported as --sk-notes-markdown-heading-marker-color); the 2026-07-11 reference capture shows it dimmer/warmer (live-theme, color-profile, or vibrancy drift — same non-blocking class as confirmCapture.stockThemeVsReferenceRaster). Never rewrite the token from PNG samples; geometry blocks, hue does not."
+    },
+    {
+      "selector": ".sk-notes-caret",
+      "kind": "raster",
+      "blocking": false,
+      "reason": "The caret is an absolute overlay (matching GPUI's overlay quad: never displaces text flow, vertically centered via (lineBox − caretHeight)/2). Its x position uses ch units to mirror the mono glyph advance after the last character; the exact advance is font-raster-dependent, so caret XY may be off by ≤2px. Width/height/color are token-exact. Also blink-phase dependent in captures."
+    }
+  ]
+}

@@ -18,6 +18,21 @@ pub enum TriggerPickerMode {
     Command,
 }
 
+impl TriggerPickerMode {
+    /// Leading section header (label, icon token) for this picker mode in the
+    /// main list. Labels align with the footer tips' vocabulary (": filters
+    /// results" → "Filters") so invoking a sigil confirms what the tip
+    /// promised. Shared by the render path and the automation collector so
+    /// they can never disagree.
+    pub fn main_list_section(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Capture => ("Capture", "inbox"),
+            Self::Command => ("Command", "terminal"),
+            Self::AdvancedQuery => ("Filters", "search"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TriggerPickerRowKind {
     Qualifier,

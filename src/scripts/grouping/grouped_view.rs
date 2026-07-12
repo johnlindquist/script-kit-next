@@ -383,7 +383,7 @@ pub(super) fn build_grouped_view_results(
     if !flows_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader(
             "Flows".to_string(),
-            Some("Bot".to_string()),
+            Some("flow".to_string()),
         ));
         for idx in &flows_indices {
             grouped.push(GroupedListItem::Item(*idx));
@@ -423,7 +423,7 @@ pub(super) fn build_grouped_view_results(
         if let Some(row) = row {
             grouped.push(GroupedListItem::SectionHeader(
                 "Flows".to_string(),
-                Some("Bot".to_string()),
+                Some("flow".to_string()),
             ));
             grouped.push(row);
         }

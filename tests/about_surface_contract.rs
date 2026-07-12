@@ -196,9 +196,9 @@ fn about_layout_info_uses_about_specific_window_geometry() {
         .expect("About layout branch should exist");
     let about_layout = &LAYOUT_SOURCE[about_start
         ..LAYOUT_SOURCE[about_start..]
-            .find("// Header")
+            .find("if matches!(self.current_view, AppView::CreationFeedback")
             .map(|offset| about_start + offset)
-            .expect("About layout branch should return before generic header layout")];
+            .expect("About layout branch should return before CreationFeedback")];
 
     for needle in [
         "AboutHeader",
@@ -218,6 +218,12 @@ fn about_layout_info_uses_about_specific_window_geometry() {
         about_layout.contains("LIQUID_GLASS_CONTROL_RADIUS_PX")
             && about_layout.contains("LIQUID_GLASS_COMPACT_RADIUS_PX"),
         "About layout receipt should report Liquid Glass control and compact radii"
+    );
+    assert!(
+        about_layout.contains("let about_header_y = content_top;")
+            && about_layout.contains("let about_scroll_y = content_top + ABOUT_HEADER_HEIGHT;")
+            && about_layout.contains(".with_parent(\"MainViewMain\")"),
+        "About detail receipts should live below and inside MainViewMain"
     );
     for node in [
         "AboutScrollContainer",

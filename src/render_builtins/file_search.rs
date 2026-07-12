@@ -533,8 +533,6 @@ impl ScriptListApp {
             crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
         let empty_text_color = color_resolver.empty_text_color();
         let empty_font_family = typography_resolver.primary_font().to_string();
-        let is_default_design = self.current_design.is_default();
-
         let _opacity = self.theme.get_opacity();
         // bg_with_alpha removed - let vibrancy show through from Root (matches main menu)
         // Removed: box_shadows - shadows on transparent elements block vibrancy
@@ -718,7 +716,11 @@ impl ScriptListApp {
                                         has_selection,
                                     );
 
-                                    if this.try_route_global_cmd_enter_to_agent_chat_context_capture(cx) {
+                                    if this
+                                        .try_route_global_cmd_enter_to_agent_chat_context_capture(
+                                            cx,
+                                        )
+                                    {
                                         cx.stop_propagation();
                                         return;
                                     }
@@ -1375,11 +1377,7 @@ impl ScriptListApp {
         // the input row so main-window chrome keeps identical geometry.
         let menu_def = self.current_main_menu_theme.def();
         let shell = menu_def.shell;
-        let header_gap = if is_default_design {
-            shell.header_gap
-        } else {
-            design_spacing.gap_md
-        };
+        let header_gap = shell.header_gap;
         let input_body = div()
             .flex_1()
             .flex()
@@ -1445,13 +1443,11 @@ impl ScriptListApp {
                 trailing: Vec::new(),
             },
         );
-        let header = crate::components::main_view_chrome::MainViewHeaderChrome {
-            context: Some(self.render_clickable_main_view_context_zone(menu_def, cx)),
+        let header = crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
+            menu_def,
+            self.render_clickable_main_view_context_zone(menu_def, cx),
             input,
-            padding_x: shell.header_padding_x,
-            padding_y: shell.header_padding_y,
-            gap: header_gap,
-        };
+        );
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {
             margin_x: shell.divider_margin_x,
             height: shell.divider_height,

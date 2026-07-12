@@ -1,0 +1,37 @@
+{
+  "source": "scripts/agentic/design-reference-capture.ts --screen actions (protocol captureScreenshot, hiDpi, target kind=actionsDialog)",
+  "capturedAt": "2026-07-11",
+  "logicalSize": [
+    340,
+    300
+  ],
+  "physicalSize": [
+    680,
+    600
+  ],
+  "scaleFactor": 2,
+  "appearance": "dark",
+  "material": "menu (popup NSPanel NSVisualEffectView)",
+  "backdropSaturation": 2.6,
+  "motion": "static",
+  "referenceCrop": [
+    0,
+    0,
+    680,
+    600
+  ],
+  "backdrop": "user's live desktop behind the native child window",
+  "colorProfile": "recorded-at-capture (caret hue leans orange vs stock #FBBF24 \u2014 see actionsCaret.stockProfileVsReferenceCapture conflict)",
+  "fixture": {
+    "actions": 5,
+    "sections": 3,
+    "searchPosition": "top",
+    "searchText": "AGY Info (context placeholder)",
+    "contextHeaderVisible": false,
+    "footerVisible": false,
+    "selectedRow": "Converse",
+    "mainMenuVariantForRows": "infoBarBase",
+    "actionsPopupTheme": "base"
+  },
+  "tokenBundleHash": "sha256:cb709721ef84ef9b2faa29828408fcd83422c5f5567bd1ce3fff695162487922"
+}

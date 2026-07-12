@@ -16,6 +16,13 @@ pub const FLOW_UX_PROTOCOL_VERSION: u64 = 1;
 pub const OUTPUT_TAIL_MAX_BYTES: usize = 64 * 1024;
 pub const OUTPUT_TAIL_MAX_LINES: usize = 500;
 
+/// Cap for the append-only conversation-turn accumulator. Conversation
+/// streaming needs a monotonic buffer (the bounded display tail front-evicts,
+/// which breaks byte cursors — the 2026-07-11 audit P0); on overflow the
+/// capture FREEZES (never evicts) so cursors stay valid, and the UI appends
+/// a truncation caption.
+pub const CONVERSATION_CAPTURE_MAX_BYTES: usize = 4 * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // Roster (`md roster --json`)
 // ---------------------------------------------------------------------------
@@ -75,30 +82,7 @@ impl FlowDescriptor {
     /// Friendly agent-identity name for desk rows: `flow-gmail` → `Gmail`,
     /// `flow-npm` → `NPM`. Filenames make bad identities; rows lead with this.
     pub fn friendly_name(&self) -> String {
-        let base = self.name.strip_prefix("flow-").unwrap_or(&self.name);
-        if base.is_empty() {
-            return self.name.clone();
-        }
-        let words: Vec<String> = base
-            .split(['-', '_'])
-            .filter(|w| !w.is_empty())
-            .map(|w| {
-                if w.len() <= 3 {
-                    w.to_uppercase()
-                } else {
-                    let mut chars = w.chars();
-                    match chars.next() {
-                        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-                        None => String::new(),
-                    }
-                }
-            })
-            .collect();
-        if words.is_empty() {
-            self.name.clone()
-        } else {
-            words.join(" ")
-        }
+        friendly_flow_name(&self.name)
     }
 
     /// Origin string for rows/detail: the concrete package/path when known,
@@ -107,6 +91,35 @@ impl FlowDescriptor {
         self.origin
             .as_deref()
             .unwrap_or_else(|| self.source.label())
+    }
+}
+
+/// Friendly agent-identity form of a raw flow name (shared by descriptor
+/// rows and registry-run rows): `flow-gmail` → `Gmail`, `flow-npm` → `NPM`.
+pub fn friendly_flow_name(name: &str) -> String {
+    let base = name.strip_prefix("flow-").unwrap_or(name);
+    if base.is_empty() {
+        return name.to_string();
+    }
+    let words: Vec<String> = base
+        .split(['-', '_'])
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            if w.len() <= 3 {
+                w.to_uppercase()
+            } else {
+                let mut chars = w.chars();
+                match chars.next() {
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                    None => String::new(),
+                }
+            }
+        })
+        .collect();
+    if words.is_empty() {
+        name.to_string()
+    } else {
+        words.join(" ")
     }
 }
 
@@ -195,7 +208,7 @@ pub struct ExplainInfo {
 
 /// One NDJSON line from a `--events` run. Unknown events are preserved so a
 /// newer mdflow does not break an older app.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RunEventEnvelope {
     pub seq: u64,
     pub run_id: String,
@@ -203,7 +216,7 @@ pub struct RunEventEnvelope {
     pub event: RunEvent,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RunEvent {
     Protocol {
         mdflow_version: String,
@@ -227,7 +240,7 @@ pub enum RunEvent {
     },
     RunCompleted {
         exit_code: i64,
-        duration_ms: u64,
+        duration_ms: Option<u64>,
     },
     RunError {
         exit_code: Option<i64>,
@@ -249,36 +262,87 @@ pub enum OutputChannel {
     Stderr,
 }
 
-/// Parse one NDJSON line into an envelope. Returns `None` for lines that are
-/// not valid protocol objects (callers count these as protocol violations).
-pub fn parse_event_line(line: &str) -> Option<RunEventEnvelope> {
-    let value: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
-    let obj = value.as_object()?;
-    let seq = obj.get("seq")?.as_u64()?;
-    let run_id = obj.get("runId")?.as_str()?.to_string();
-    let ts = obj.get("ts").and_then(|v| v.as_u64()).unwrap_or(0);
-    let name = obj.get("event")?.as_str()?;
+/// Why one NDJSON line was rejected. The stream consumer fails CLOSED on any
+/// of these — a malformed event must never be coerced into progress, and a
+/// missing `run.completed.exitCode` is never success (protocol §3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EventParseError {
+    NotJson,
+    NotObject,
+    /// `protocolVersion` missing or not [`FLOW_UX_PROTOCOL_VERSION`].
+    ProtocolVersion(Option<u64>),
+    /// A load-bearing field is missing or has the wrong type. Purely
+    /// informational fields (`ts`, `durationMs`, `pid`, per-step exit codes)
+    /// stay lenient — failing a healthy run over display-only data would be
+    /// fail-closed theater.
+    Field(&'static str),
+}
 
-    let str_field =
-        |key: &str| -> Option<String> { obj.get(key).and_then(|v| v.as_str()).map(str::to_string) };
+impl std::fmt::Display for EventParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EventParseError::NotJson => write!(f, "line is not valid JSON"),
+            EventParseError::NotObject => write!(f, "line is not a JSON object"),
+            EventParseError::ProtocolVersion(Some(version)) => {
+                write!(f, "unsupported protocolVersion {version}")
+            }
+            EventParseError::ProtocolVersion(None) => write!(f, "missing protocolVersion"),
+            EventParseError::Field(name) => write!(f, "missing or invalid field `{name}`"),
+        }
+    }
+}
+
+/// Parse one NDJSON line into an envelope, validating the frozen contract:
+/// `protocolVersion` must match, envelope identity fields must be present,
+/// and load-bearing payload fields must be present with the right type.
+pub fn parse_event_line(line: &str) -> Result<RunEventEnvelope, EventParseError> {
+    let value: serde_json::Value =
+        serde_json::from_str(line.trim()).map_err(|_| EventParseError::NotJson)?;
+    let obj = value.as_object().ok_or(EventParseError::NotObject)?;
+    match obj.get("protocolVersion").and_then(|v| v.as_u64()) {
+        Some(FLOW_UX_PROTOCOL_VERSION) => {}
+        other => return Err(EventParseError::ProtocolVersion(other)),
+    }
+    let seq = obj
+        .get("seq")
+        .and_then(|v| v.as_u64())
+        .ok_or(EventParseError::Field("seq"))?;
+    let run_id = obj
+        .get("runId")
+        .and_then(|v| v.as_str())
+        .ok_or(EventParseError::Field("runId"))?
+        .to_string();
+    let ts = obj.get("ts").and_then(|v| v.as_u64()).unwrap_or(0);
+    let name = obj
+        .get("event")
+        .and_then(|v| v.as_str())
+        .ok_or(EventParseError::Field("event"))?;
+
+    let req_str = |key: &'static str| -> Result<String, EventParseError> {
+        obj.get(key)
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .ok_or(EventParseError::Field(key))
+    };
 
     let event = match name {
         "protocol" => RunEvent::Protocol {
-            mdflow_version: str_field("mdflowVersion").unwrap_or_default(),
+            mdflow_version: req_str("mdflowVersion")?,
         },
         "run.started" => RunEvent::RunStarted {
-            flow_id: str_field("flowId").unwrap_or_default(),
+            flow_id: req_str("flowId")?,
             pid: obj.get("pid").and_then(|v| v.as_u64()).map(|p| p as u32),
         },
         "output.delta" => RunEvent::OutputDelta {
             channel: match obj.get("channel").and_then(|v| v.as_str()) {
+                Some("stdout") => OutputChannel::Stdout,
                 Some("stderr") => OutputChannel::Stderr,
-                _ => OutputChannel::Stdout,
+                _ => return Err(EventParseError::Field("channel")),
             },
-            text: str_field("text").unwrap_or_default(),
+            text: req_str("text")?,
         },
         "step.started" => RunEvent::StepStarted {
-            step_id: str_field("stepId").unwrap_or_default(),
+            step_id: req_str("stepId")?,
             needs: obj
                 .get("needs")
                 .and_then(|v| v.as_array())
@@ -290,21 +354,26 @@ pub fn parse_event_line(line: &str) -> Option<RunEventEnvelope> {
                 .unwrap_or_default(),
         },
         "step.completed" => RunEvent::StepCompleted {
-            step_id: str_field("stepId").unwrap_or_default(),
+            step_id: req_str("stepId")?,
             exit_code: obj.get("exitCode").and_then(|v| v.as_i64()),
             cached: obj.get("cached").and_then(|v| v.as_bool()).unwrap_or(false),
         },
         "run.completed" => RunEvent::RunCompleted {
-            exit_code: obj.get("exitCode").and_then(|v| v.as_i64()).unwrap_or(0),
-            duration_ms: obj.get("durationMs").and_then(|v| v.as_u64()).unwrap_or(0),
+            // A missing exit code is NEVER success — reject the event and
+            // let the stream consumer fail the run closed.
+            exit_code: obj
+                .get("exitCode")
+                .and_then(|v| v.as_i64())
+                .ok_or(EventParseError::Field("exitCode"))?,
+            duration_ms: obj.get("durationMs").and_then(|v| v.as_u64()),
         },
         "run.error" => RunEvent::RunError {
             exit_code: obj.get("exitCode").and_then(|v| v.as_i64()),
-            message: str_field("message").unwrap_or_default(),
+            message: req_str("message")?,
             duration_ms: obj.get("durationMs").and_then(|v| v.as_u64()),
         },
         "run.cancelled" => RunEvent::RunCancelled {
-            signal: str_field("signal").unwrap_or_else(|| "SIGTERM".to_string()),
+            signal: req_str("signal")?,
             duration_ms: obj.get("durationMs").and_then(|v| v.as_u64()),
         },
         other => RunEvent::Unknown {
@@ -312,12 +381,121 @@ pub fn parse_event_line(line: &str) -> Option<RunEventEnvelope> {
         },
     };
 
-    Some(RunEventEnvelope {
+    Ok(RunEventEnvelope {
         seq,
         run_id,
         ts,
         event,
     })
+}
+
+/// One stream-level contract violation (protocol §3). Any violation fails
+/// the run closed: a stream that lies about ordering or identity can no
+/// longer be trusted to report the outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamViolation {
+    SequenceGap { expected: u64, got: u64 },
+    RunIdChanged,
+    Order(&'static str),
+}
+
+impl std::fmt::Display for StreamViolation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StreamViolation::SequenceGap { expected, got } => {
+                write!(f, "sequence gap (expected {expected}, got {got})")
+            }
+            StreamViolation::RunIdChanged => write!(f, "runId changed mid-stream"),
+            StreamViolation::Order(detail) => write!(f, "{detail}"),
+        }
+    }
+}
+
+/// Per-run protocol state machine (protocol §3): `protocol` first, gapless
+/// `seq` from 0, a stable `runId`, at most one `run.started`, no output/step
+/// events before `run.started`, exactly one terminal event, nothing after
+/// it. Pre-start failures (`protocol` → `run.error`/`run.cancelled` with no
+/// `run.started`) are legitimate.
+#[derive(Debug, Default)]
+pub struct EventStreamValidator {
+    next_seq: u64,
+    run_id: Option<String>,
+    saw_protocol: bool,
+    saw_started: bool,
+    saw_terminal: bool,
+}
+
+impl EventStreamValidator {
+    pub fn validate(&mut self, envelope: &RunEventEnvelope) -> Result<(), StreamViolation> {
+        if self.saw_terminal {
+            return Err(StreamViolation::Order("event after terminal event"));
+        }
+        if envelope.seq != self.next_seq {
+            return Err(StreamViolation::SequenceGap {
+                expected: self.next_seq,
+                got: envelope.seq,
+            });
+        }
+        if let Some(run_id) = &self.run_id {
+            if *run_id != envelope.run_id {
+                return Err(StreamViolation::RunIdChanged);
+            }
+        }
+        match &envelope.event {
+            RunEvent::Protocol { .. } => {
+                if self.saw_protocol {
+                    return Err(StreamViolation::Order("duplicate protocol event"));
+                }
+                self.saw_protocol = true;
+            }
+            event => {
+                if !self.saw_protocol {
+                    return Err(StreamViolation::Order("first event must be `protocol`"));
+                }
+                match event {
+                    RunEvent::RunStarted { .. } => {
+                        if self.saw_started {
+                            return Err(StreamViolation::Order("duplicate run.started"));
+                        }
+                        self.saw_started = true;
+                    }
+                    RunEvent::OutputDelta { .. }
+                    | RunEvent::StepStarted { .. }
+                    | RunEvent::StepCompleted { .. } => {
+                        if !self.saw_started {
+                            return Err(StreamViolation::Order(
+                                "output/step event before run.started",
+                            ));
+                        }
+                    }
+                    RunEvent::RunCompleted { .. } => {
+                        if !self.saw_started {
+                            return Err(StreamViolation::Order("run.completed before run.started"));
+                        }
+                        self.saw_terminal = true;
+                    }
+                    // Pre-start failures legitimately terminate without a
+                    // run.started (missing file, interactive rejection).
+                    RunEvent::RunError { .. } | RunEvent::RunCancelled { .. } => {
+                        self.saw_terminal = true;
+                    }
+                    // Unknown events from a newer mdflow pass through; they
+                    // still consume their sequence slot.
+                    RunEvent::Protocol { .. } => unreachable!("handled above"),
+                    RunEvent::Unknown { .. } => {}
+                }
+            }
+        }
+        if self.run_id.is_none() {
+            self.run_id = Some(envelope.run_id.clone());
+        }
+        self.next_seq = envelope.seq + 1;
+        Ok(())
+    }
+
+    pub fn saw_terminal(&self) -> bool {
+        self.saw_terminal
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -328,6 +506,11 @@ pub fn parse_event_line(line: &str) -> Option<RunEventEnvelope> {
 pub enum RunPhase {
     Starting,
     Running,
+    /// Cancel was requested but the process group is not yet confirmed dead.
+    /// NOT terminal: claiming "Cancelled" before the signal is known to have
+    /// worked would be a lie. The authoritative `run.cancelled` event, the
+    /// reader-thread EOF fallback, or the kill-escalation watcher settles it.
+    Cancelling,
     Succeeded,
     Failed,
     Cancelled,
@@ -345,6 +528,7 @@ impl RunPhase {
         match self {
             RunPhase::Starting => "Starting",
             RunPhase::Running => "Running",
+            RunPhase::Cancelling => "Cancelling",
             RunPhase::Succeeded => "Succeeded",
             RunPhase::Failed => "Failed",
             RunPhase::Cancelled => "Cancelled",
@@ -579,6 +763,186 @@ mod tests {
             r#"{"protocolVersion":1,"seq":5,"runId":"r-2","ts":9,"event":"future.thing","x":1}"#;
         let envelope = parse_event_line(line).expect("parses");
         assert!(matches!(envelope.event, RunEvent::Unknown { ref name } if name == "future.thing"));
+    }
+
+    // ---- Strict parsing (2026-07-11 audit P0: no false success) ----
+
+    /// A `run.completed` without an exit code must be REJECTED, never
+    /// defaulted to 0 — "a missing run.completed.exitCode is never success"
+    /// (protocol §3). This was a real false-success bug.
+    #[test]
+    fn missing_exit_code_is_rejected_not_success() {
+        let line = r#"{"protocolVersion":1,"seq":3,"runId":"r-1","ts":4,"event":"run.completed","durationMs":10}"#;
+        assert_eq!(
+            parse_event_line(line),
+            Err(EventParseError::Field("exitCode"))
+        );
+    }
+
+    #[test]
+    fn wrong_or_missing_protocol_version_is_rejected() {
+        let wrong = r#"{"protocolVersion":2,"seq":0,"runId":"r-1","ts":1,"event":"protocol","mdflowVersion":"5.0.0"}"#;
+        assert_eq!(
+            parse_event_line(wrong),
+            Err(EventParseError::ProtocolVersion(Some(2)))
+        );
+        let missing =
+            r#"{"seq":0,"runId":"r-1","ts":1,"event":"protocol","mdflowVersion":"4.1.0"}"#;
+        assert_eq!(
+            parse_event_line(missing),
+            Err(EventParseError::ProtocolVersion(None))
+        );
+    }
+
+    #[test]
+    fn invalid_or_missing_channel_is_rejected_not_defaulted() {
+        let bad = r#"{"protocolVersion":1,"seq":2,"runId":"r-1","ts":3,"event":"output.delta","channel":"trace","text":"x"}"#;
+        assert_eq!(
+            parse_event_line(bad),
+            Err(EventParseError::Field("channel"))
+        );
+        let missing = r#"{"protocolVersion":1,"seq":2,"runId":"r-1","ts":3,"event":"output.delta","text":"x"}"#;
+        assert_eq!(
+            parse_event_line(missing),
+            Err(EventParseError::Field("channel"))
+        );
+    }
+
+    #[test]
+    fn non_json_and_missing_envelope_fields_are_typed_errors() {
+        assert_eq!(parse_event_line("hello"), Err(EventParseError::NotJson));
+        assert_eq!(
+            parse_event_line(r#""just a string""#),
+            Err(EventParseError::NotObject)
+        );
+        assert_eq!(
+            parse_event_line(
+                r#"{"protocolVersion":1,"runId":"r-1","event":"protocol","mdflowVersion":"4"}"#
+            ),
+            Err(EventParseError::Field("seq"))
+        );
+        assert_eq!(
+            parse_event_line(
+                r#"{"protocolVersion":1,"seq":0,"event":"protocol","mdflowVersion":"4"}"#
+            ),
+            Err(EventParseError::Field("runId"))
+        );
+    }
+
+    // ---- Stream state machine (protocol §3 ordering) ----
+
+    fn env(line: &str) -> RunEventEnvelope {
+        parse_event_line(line).expect("test line parses")
+    }
+
+    #[test]
+    fn validator_accepts_a_conforming_stream() {
+        let mut validator = EventStreamValidator::default();
+        for line in [
+            r#"{"protocolVersion":1,"seq":0,"runId":"r-1","ts":1,"event":"protocol","mdflowVersion":"4.1.0"}"#,
+            r#"{"protocolVersion":1,"seq":1,"runId":"r-1","ts":2,"event":"run.started","flowId":"project:x","pid":9}"#,
+            r#"{"protocolVersion":1,"seq":2,"runId":"r-1","ts":3,"event":"output.delta","channel":"stdout","text":"hi\n"}"#,
+            r#"{"protocolVersion":1,"seq":3,"runId":"r-1","ts":4,"event":"run.completed","exitCode":0,"durationMs":10}"#,
+        ] {
+            validator.validate(&env(line)).expect("conforming stream");
+        }
+        assert!(validator.saw_terminal());
+    }
+
+    #[test]
+    fn validator_rejects_sequence_gaps() {
+        let mut validator = EventStreamValidator::default();
+        validator
+            .validate(&env(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-1","ts":1,"event":"protocol","mdflowVersion":"4.1.0"}"#,
+            ))
+            .unwrap();
+        assert_eq!(
+            validator.validate(&env(
+                r#"{"protocolVersion":1,"seq":2,"runId":"r-1","ts":2,"event":"run.started","flowId":"f"}"#,
+            )),
+            Err(StreamViolation::SequenceGap {
+                expected: 1,
+                got: 2
+            })
+        );
+    }
+
+    #[test]
+    fn validator_requires_protocol_first_and_started_before_output() {
+        let mut validator = EventStreamValidator::default();
+        assert!(matches!(
+            validator.validate(&env(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-1","ts":1,"event":"run.started","flowId":"f"}"#,
+            )),
+            Err(StreamViolation::Order(_))
+        ));
+
+        let mut validator = EventStreamValidator::default();
+        validator
+            .validate(&env(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-1","ts":1,"event":"protocol","mdflowVersion":"4.1.0"}"#,
+            ))
+            .unwrap();
+        assert!(matches!(
+            validator.validate(&env(
+                r#"{"protocolVersion":1,"seq":1,"runId":"r-1","ts":2,"event":"output.delta","channel":"stdout","text":"x"}"#,
+            )),
+            Err(StreamViolation::Order(_))
+        ));
+    }
+
+    /// Pre-start failures (protocol → run.error, no run.started, no pid) are
+    /// a legitimate stream shape (protocol §3).
+    #[test]
+    fn validator_allows_pre_start_error_and_rejects_events_after_terminal() {
+        let mut validator = EventStreamValidator::default();
+        validator
+            .validate(&env(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-1","ts":1,"event":"protocol","mdflowVersion":"4.1.0"}"#,
+            ))
+            .unwrap();
+        validator
+            .validate(&env(
+                r#"{"protocolVersion":1,"seq":1,"runId":"r-1","ts":2,"event":"run.error","exitCode":null,"message":"interactive flow requires a terminal","durationMs":1}"#,
+            ))
+            .expect("pre-start error is a legal terminal");
+        assert!(validator.saw_terminal());
+        assert!(matches!(
+            validator.validate(&env(
+                r#"{"protocolVersion":1,"seq":2,"runId":"r-1","ts":3,"event":"output.delta","channel":"stdout","text":"late"}"#,
+            )),
+            Err(StreamViolation::Order(_))
+        ));
+    }
+
+    #[test]
+    fn validator_rejects_run_id_changes_and_completed_without_started() {
+        let mut validator = EventStreamValidator::default();
+        validator
+            .validate(&env(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-1","ts":1,"event":"protocol","mdflowVersion":"4.1.0"}"#,
+            ))
+            .unwrap();
+        assert_eq!(
+            validator.validate(&env(
+                r#"{"protocolVersion":1,"seq":1,"runId":"r-OTHER","ts":2,"event":"run.started","flowId":"f"}"#,
+            )),
+            Err(StreamViolation::RunIdChanged)
+        );
+
+        let mut validator = EventStreamValidator::default();
+        validator
+            .validate(&env(
+                r#"{"protocolVersion":1,"seq":0,"runId":"r-1","ts":1,"event":"protocol","mdflowVersion":"4.1.0"}"#,
+            ))
+            .unwrap();
+        assert!(matches!(
+            validator.validate(&env(
+                r#"{"protocolVersion":1,"seq":1,"runId":"r-1","ts":2,"event":"run.completed","exitCode":0,"durationMs":1}"#,
+            )),
+            Err(StreamViolation::Order(_))
+        ));
     }
 
     #[test]

@@ -455,6 +455,31 @@ await div("Hello");"#;
     }
 
     #[test]
+    fn chat_scroll_offset_bottom_check_tolerates_subpixel_shortfall() {
+        use super::{scroll_offset_is_at_bottom, CHAT_SCROLL_BOTTOM_TOLERANCE_PX};
+        // Trackpad momentum stopping a fraction of a pixel short of the exact
+        // max offset must still read as "at the bottom" (2026-07-11 report:
+        // the Jump to latest pill stayed visible at the visual bottom).
+        assert!(scroll_offset_is_at_bottom(
+            999.6,
+            1000.0,
+            CHAT_SCROLL_BOTTOM_TOLERANCE_PX
+        ));
+        // Overshoot past max (padding skew) is also the bottom.
+        assert!(scroll_offset_is_at_bottom(
+            1016.0,
+            1000.0,
+            CHAT_SCROLL_BOTTOM_TOLERANCE_PX
+        ));
+        // A reading position well above the bottom is NOT the bottom.
+        assert!(!scroll_offset_is_at_bottom(
+            900.0,
+            1000.0,
+            CHAT_SCROLL_BOTTOM_TOLERANCE_PX
+        ));
+    }
+
+    #[test]
     fn test_resolve_chat_input_key_action_maps_cmd_down_and_end_to_jump_to_latest() {
         assert_eq!(
             resolve_chat_input_key_action("down", true, false),

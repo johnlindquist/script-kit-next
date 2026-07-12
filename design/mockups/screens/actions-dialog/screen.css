@@ -1,0 +1,188 @@
+/* Actions-dialog screen: stage layout + browser-only emulator calibration
+ * plus the screen-owned popup anatomy.
+ *
+ * Everything visual comes from generated --sk-actions-dialog-* /
+ * --sk-footer-* tokens. The --sk-emulator-* values are BROWSER-ONLY
+ * approximations of the native NSPanel material and never map back to Rust.
+ * See ./known-divergence.json.
+ *
+ * Rust anatomy this mirrors (src/actions/dialog.rs render):
+ *   shell 340 wide, fixture height 300 (search 40 + 3×24 sections + 5×36
+ *   rows + 6 list padding + 2 shell border reserve — footerless by contract)
+ *   row: wrapper inset 8 → ListItem outer padding 4 → inner padding 14
+ *        (title origin x=26, selected surface x 12–328, radius 14)
+ *   shortcut keycaps: shared footer-chrome renderer (.sk-keycap cluster)
+ */
+
+:root {
+  --sk-emulator-actions-blur: 32px;
+  --sk-emulator-actions-material-bias: linear-gradient(
+    rgb(30 30 33 / 0.5),
+    rgb(22 22 25 / 0.5)
+  );
+  --sk-emulator-actions-desktop: radial-gradient(
+      900px 600px at 30% 20%,
+      rgb(58 46 80 / 0.9),
+      transparent 60%
+    ),
+    linear-gradient(150deg, rgb(26 24 32), rgb(13 13 17));
+}
+
+body {
+  margin: 0;
+}
+
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--sk-emulator-actions-desktop);
+}
+
+/* ── Popup shell: native NSPanel material → tint → content ─────────────── */
+.sk-actions-dialog {
+  position: relative;
+  width: var(--sk-actions-dialog-width);
+  height: var(--sk-actions-dialog-height);
+  border-radius: var(--sk-actions-dialog-radius);
+  overflow: clip;
+  isolation: isolate;
+  font-family: var(--sk-font-ui), -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Shared compact-search caret hooks → actions tokens. */
+  --sk-compact-caret-width: var(--sk-actions-dialog-caret-width);
+  --sk-compact-caret-height: var(--sk-actions-dialog-caret-height);
+  --sk-compact-caret-color: var(--sk-actions-dialog-caret);
+}
+
+.sk-actions-dialog__material,
+.sk-actions-dialog__tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sk-actions-dialog__material {
+  z-index: 0;
+  -webkit-backdrop-filter: saturate(var(--sk-vibrancy-backdrop-saturation))
+    blur(var(--sk-emulator-actions-blur));
+  backdrop-filter: saturate(var(--sk-vibrancy-backdrop-saturation))
+    blur(var(--sk-emulator-actions-blur));
+  background: var(--sk-emulator-actions-material-bias);
+}
+
+.sk-actions-dialog__tint {
+  z-index: 1;
+  background: var(--sk-actions-dialog-popup-tint);
+}
+
+.sk-actions-dialog__content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--sk-text-name);
+}
+
+/* ── Search row (40pt host, compact text, accent caret) ────────────────── */
+.sk-actions-search {
+  height: var(--sk-actions-dialog-search-height);
+  flex: none;
+  padding-inline: var(--sk-actions-dialog-search-padding-x);
+  padding-block: var(--sk-actions-dialog-search-padding-y);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  overflow: hidden;
+  font-size: var(--sk-actions-dialog-search-font-size);
+  line-height: var(--sk-actions-dialog-search-font-size);
+}
+
+.sk-actions-search .sk-compact-search-text {
+  height: var(--sk-actions-dialog-search-inner-height);
+}
+
+.sk-actions-search[data-placeholder="true"] .sk-compact-search-text__label {
+  color: var(--sk-actions-dialog-search-placeholder);
+}
+
+.sk-actions-search[data-placeholder="false"] .sk-compact-search-text__label {
+  color: var(--sk-actions-dialog-search-text);
+}
+
+/* ── List (padding-bottom is the visible bottom band — NOT a footer) ───── */
+.sk-actions-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--sk-actions-dialog-list-padding-top);
+  padding-bottom: var(--sk-actions-dialog-list-padding-bottom);
+  overflow: hidden;
+}
+
+/* ── Section header: fixed 24pt slot, vertically centered ──────────────── */
+.sk-actions-section {
+  height: var(--sk-actions-dialog-section-height);
+  flex: none;
+  padding-inline: var(--sk-actions-dialog-section-padding-x);
+  display: flex;
+  align-items: center;
+  color: var(--sk-actions-dialog-section-text);
+  font-size: var(--sk-actions-dialog-section-font-size);
+  font-weight: var(--sk-actions-dialog-section-font-weight);
+  line-height: 1;
+  white-space: nowrap;
+  text-transform: none;
+}
+
+/* ── Action row: 36pt slot → wrapper inset → ListItem chrome ───────────── */
+.sk-actions-row {
+  height: var(--sk-actions-dialog-row-height);
+  flex: none;
+  padding-inline: var(--sk-actions-dialog-row-wrapper-inset-x);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.sk-actions-row__list-item {
+  width: 100%;
+  height: 100%;
+  padding: var(--sk-actions-dialog-row-outer-padding-y)
+    var(--sk-actions-dialog-row-outer-padding-x);
+}
+
+.sk-actions-row__surface {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding-inline: var(--sk-actions-dialog-row-inner-padding-x);
+  border-radius: var(--sk-actions-dialog-row-radius);
+  display: flex;
+  align-items: center;
+}
+
+.sk-actions-row[data-state="selected"] .sk-actions-row__surface {
+  background: var(--sk-actions-dialog-row-selected-background);
+}
+
+.sk-actions-row[data-state="hover"] .sk-actions-row__surface {
+  background: var(--sk-actions-dialog-row-hover-background);
+}
+
+.sk-actions-row__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sk-text-name);
+  font-size: var(--sk-actions-dialog-row-title-font-size);
+  line-height: var(--sk-actions-dialog-row-title-line-height);
+  font-weight: var(--sk-actions-dialog-row-name-font-weight);
+}
+
+.sk-actions-row[data-state="selected"] .sk-actions-row__title {
+  font-weight: var(--sk-actions-dialog-row-selected-name-font-weight);
+}

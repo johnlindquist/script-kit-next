@@ -457,6 +457,22 @@ pub(super) fn initial_selection_index(rows: &[GroupedActionItem]) -> usize {
     coerce_action_selection(rows, 0).unwrap_or(0)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ActionsRefreshSelectionPolicy {
+    SnapToFirst,
+    RestoreIdentity,
+}
+
+pub(super) fn actions_refresh_selection_policy(
+    user_moved_selection: bool,
+) -> ActionsRefreshSelectionPolicy {
+    if user_moved_selection {
+        ActionsRefreshSelectionPolicy::RestoreIdentity
+    } else {
+        ActionsRefreshSelectionPolicy::SnapToFirst
+    }
+}
+
 /// Whether config changes require rebuilding grouped rows.
 ///
 /// Grouped rows depend on section style because `Headers` injects extra rows.
@@ -803,6 +819,9 @@ pub struct ActionsDialog {
     last_scroll_time: Option<Instant>,
     /// Pixel scroll position expected from pending keyboard reveal work.
     pending_scrollbar_scroll_top_y: Option<f32>,
+    /// True only after explicit keyboard, pointer, or scroll navigation.
+    /// Automatic/default selection must not gain identity across refreshes.
+    actions_selection_user_moved: bool,
 }
 
 #[inline]
@@ -1120,6 +1139,7 @@ impl ActionsDialog {
             scrollbar_fade_gen: 0,
             last_scroll_time: None,
             pending_scrollbar_scroll_top_y: None,
+            actions_selection_user_moved: false,
         }
     }
 
@@ -1469,13 +1489,7 @@ impl ActionsDialog {
 
         if should_rebuild {
             self.rebuild_grouped_items();
-            self.selected_index = previously_selected_action_id
-                .as_deref()
-                .and_then(|id| {
-                    self.restore_selected_action_id(id)
-                        .then_some(self.selected_index)
-                })
-                .unwrap_or_else(|| initial_selection_index(&self.grouped_items));
+            self.apply_refresh_selection(previously_selected_action_id.as_deref());
             if !self.grouped_items.is_empty() {
                 self.list_state.scroll_to_reveal_item(self.selected_index);
             }
@@ -1715,6 +1729,26 @@ impl ActionsDialog {
         true
     }
 
+    fn apply_refresh_selection(&mut self, previously_selected_action_id: Option<&str>) {
+        let policy = actions_refresh_selection_policy(self.actions_selection_user_moved);
+        let restored = matches!(policy, ActionsRefreshSelectionPolicy::RestoreIdentity)
+            && previously_selected_action_id
+                .map(|id| self.restore_selected_action_id(id))
+                .unwrap_or(false);
+        if !restored {
+            self.selected_index = initial_selection_index(&self.grouped_items);
+            self.clear_mouse_submit_arm();
+        }
+
+        tracing::info!(
+            target: "script_kit::actions",
+            ?policy,
+            restored,
+            selected_action_id = ?self.get_selected_action_id(),
+            "actions_dialog_refresh_selection_applied"
+        );
+    }
+
     /// Apply a route's actions/title/placeholder to the live dialog (no state restore).
     fn apply_route_state_from_route(&mut self, route: &ActionsDialogRoute) {
         self.actions = route.actions.clone();
@@ -1729,15 +1763,9 @@ impl ActionsDialog {
         self.sdk_action_indices.clear();
         self.rebuild_grouped_items();
 
-        let restored = route
-            .initial_selected_action_id
-            .as_deref()
-            .map(|id| self.restore_selected_action_id(id))
-            .unwrap_or(false);
-        if !restored {
-            self.selected_index = initial_selection_index(&self.grouped_items);
-            self.clear_mouse_submit_arm();
-        }
+        self.actions_selection_user_moved = false;
+        self.selected_index = initial_selection_index(&self.grouped_items);
+        self.clear_mouse_submit_arm();
 
         if !self.grouped_items.is_empty() {
             self.list_state.scroll_to_reveal_item(self.selected_index);
@@ -2745,6 +2773,7 @@ impl ActionsDialog {
     /// - `has_action=true`: Send ActionTriggered back to SDK
     /// - `has_action=false`: Submit value directly
     pub fn set_sdk_actions(&mut self, actions: Vec<ProtocolAction>) {
+        let previously_selected_action_id = self.get_selected_action_id();
         let total_count = actions.len();
         let mut sdk_action_indices = Vec::new();
         let mut seen_names: HashSet<String> = HashSet::new();
@@ -2808,7 +2837,7 @@ impl ActionsDialog {
         self.sdk_action_indices = sdk_action_indices;
         // Rebuild grouped items and reset selection
         self.rebuild_grouped_items();
-        self.selected_index = initial_selection_index(&self.grouped_items);
+        self.apply_refresh_selection(previously_selected_action_id.as_deref());
     }
 
     /// Format a keyboard shortcut for display (e.g., "cmd+c" → "⌘C")
@@ -2819,6 +2848,7 @@ impl ActionsDialog {
     /// Clear SDK actions and restore built-in actions
     pub fn clear_sdk_actions(&mut self) {
         if self.sdk_actions.is_some() {
+            let previously_selected_action_id = self.get_selected_action_id();
             logging::log(
                 "ACTIONS",
                 "Clearing SDK actions, restoring built-in actions",
@@ -2835,7 +2865,7 @@ impl ActionsDialog {
             self.search_text.clear();
             // Rebuild grouped items and reset selection
             self.rebuild_grouped_items();
-            self.selected_index = initial_selection_index(&self.grouped_items);
+            self.apply_refresh_selection(previously_selected_action_id.as_deref());
         }
     }
 
@@ -2929,6 +2959,7 @@ impl ActionsDialog {
 
     /// Update the focused script and rebuild actions
     pub fn set_focused_script(&mut self, script: Option<ScriptInfo>) {
+        let previously_selected_action_id = self.get_selected_action_id();
         self.focused_script = script;
         self.focused_scriptlet = None; // Clear scriptlet when only setting script
         self.actions = Self::build_actions(
@@ -2937,7 +2968,7 @@ impl ActionsDialog {
             &self.menu_syntax_section,
             &self.host_section,
         );
-        self.refilter();
+        self.refilter_with_previous_selection(previously_selected_action_id);
     }
 
     /// Update both the focused script and scriptlet for custom actions
@@ -2949,6 +2980,7 @@ impl ActionsDialog {
         script: Option<ScriptInfo>,
         scriptlet: Option<Scriptlet>,
     ) {
+        let previously_selected_action_id = self.get_selected_action_id();
         self.focused_script = script;
         self.focused_scriptlet = scriptlet;
         self.actions = Self::build_actions(
@@ -2957,7 +2989,7 @@ impl ActionsDialog {
             &self.menu_syntax_section,
             &self.host_section,
         );
-        self.refilter();
+        self.refilter_with_previous_selection(previously_selected_action_id);
 
         logging::log(
             "ACTIONS",
@@ -2976,6 +3008,7 @@ impl ActionsDialog {
     /// the owned section here when Cmd+K opens (Run 12 Pass 7 wiring at
     /// `src/app_impl/actions_toggle.rs`'s dialog construction site).
     pub fn set_menu_syntax_section(&mut self, section: Option<PowerSyntaxActionSection>) {
+        let previously_selected_action_id = self.get_selected_action_id();
         self.menu_syntax_section = section;
         self.actions = Self::build_actions(
             &self.focused_script,
@@ -2983,12 +3016,13 @@ impl ActionsDialog {
             &self.menu_syntax_section,
             &self.host_section,
         );
-        self.refilter();
+        self.refilter_with_previous_selection(previously_selected_action_id);
     }
 
     /// Push host-owned contextual rows (e.g. the Day Page "Today" section).
     /// Rows lead the rebuilt list; pass `None` to clear.
     pub fn set_host_section(&mut self, section: Option<Vec<Action>>) {
+        let previously_selected_action_id = self.get_selected_action_id();
         self.host_section = section;
         self.actions = Self::build_actions(
             &self.focused_script,
@@ -2996,7 +3030,7 @@ impl ActionsDialog {
             &self.menu_syntax_section,
             &self.host_section,
         );
-        self.refilter();
+        self.refilter_with_previous_selection(previously_selected_action_id);
     }
 
     /// Update the theme when hot-reloading
@@ -3027,18 +3061,13 @@ impl ActionsDialog {
     /// - Description contains: +15; shortcut contains: +10
     /// - Results are sorted by score (descending, stable on ties)
     fn refilter(&mut self) {
+        let previously_selected = self.get_selected_action_id();
+        self.refilter_with_previous_selection(previously_selected);
+    }
+
+    fn refilter_with_previous_selection(&mut self, previously_selected: Option<String>) {
         self.clear_mouse_submit_arm();
         self.clear_pending_scrollbar_offset();
-        // Preserve selection if possible (track which action was selected)
-        // NOTE: selected_index is an index into grouped_items, not filtered_actions.
-        // We must extract the filter_idx from the GroupedActionItem first.
-        let previously_selected = match self.grouped_items.get(self.selected_index) {
-            Some(GroupedActionItem::Item(filter_idx)) => self
-                .filtered_actions
-                .get(*filter_idx)
-                .and_then(|&idx| self.actions.get(idx).map(|a| a.id.clone())),
-            _ => None,
-        };
 
         if self.search_text.trim().is_empty() {
             self.reset_filter_to_all();
@@ -3085,37 +3114,7 @@ impl ActionsDialog {
         // Rebuild grouped items after filter change
         self.rebuild_grouped_items();
 
-        // Preserve selection if the same action is still in results
-        // NOTE: We must find the position in grouped_items, not filtered_actions,
-        // because grouped_items may include section headers that offset the indices.
-        if let Some(prev_id) = previously_selected {
-            // First find the filter_idx in filtered_actions
-            if let Some(filter_idx) = self.filtered_actions.iter().position(|&idx| {
-                self.actions
-                    .get(idx)
-                    .map(|a| a.id == prev_id)
-                    .unwrap_or(false)
-            }) {
-                // Now find the position in grouped_items that contains Item(filter_idx)
-                if let Some(grouped_idx) = self
-                    .grouped_items
-                    .iter()
-                    .position(|item| matches!(item, GroupedActionItem::Item(i) if *i == filter_idx))
-                {
-                    self.selected_index = grouped_idx;
-                } else {
-                    // Fallback: coerce to first valid item
-                    self.selected_index =
-                        coerce_action_selection(&self.grouped_items, 0).unwrap_or(0);
-                }
-            } else {
-                // Action no longer in results, select first valid item
-                self.selected_index = coerce_action_selection(&self.grouped_items, 0).unwrap_or(0);
-            }
-        } else {
-            // No previous selection, select first valid item
-            self.selected_index = coerce_action_selection(&self.grouped_items, 0).unwrap_or(0);
-        }
+        self.apply_refresh_selection(previously_selected.as_deref());
 
         // Only scroll if we have results
         if !self.grouped_items.is_empty() {
@@ -3303,6 +3302,7 @@ impl ActionsDialog {
     /// Handle character input
     pub fn handle_char(&mut self, ch: char, cx: &mut Context<Self>) {
         self.search_text.push(ch);
+        self.actions_selection_user_moved = false;
         self.refilter();
         cx.notify();
     }
@@ -3311,6 +3311,7 @@ impl ActionsDialog {
     pub fn handle_backspace(&mut self, cx: &mut Context<Self>) {
         if !self.search_text.is_empty() {
             self.search_text.pop();
+            self.actions_selection_user_moved = false;
             self.refilter();
             cx.notify();
         }
@@ -3331,6 +3332,7 @@ impl ActionsDialog {
             .map(|(idx, ch)| idx + ch.len_utf8())
             .unwrap_or(0);
         self.search_text.truncate(boundary);
+        self.actions_selection_user_moved = false;
         self.refilter();
         cx.notify();
     }
@@ -3351,6 +3353,7 @@ impl ActionsDialog {
             sanitized.push(if ch.is_control() { ' ' } else { ch });
         }
         self.search_text.push_str(&sanitized);
+        self.actions_selection_user_moved = false;
         self.refilter();
         cx.notify();
     }
@@ -3360,6 +3363,7 @@ impl ActionsDialog {
     /// Replaces the full search string, refilters, and notifies.
     pub fn set_search_text(&mut self, text: String, cx: &mut Context<Self>) {
         self.search_text = text;
+        self.actions_selection_user_moved = false;
         self.refilter();
         cx.notify();
     }
@@ -3385,6 +3389,7 @@ impl ActionsDialog {
             .position(|item| matches!(item, GroupedActionItem::Item(fi) if *fi == filter_pos))?;
 
         self.selected_index = grouped_idx;
+        self.actions_selection_user_moved = true;
         self.clear_mouse_submit_arm();
         self.update_pending_scrollbar_reveal_offset(self.effective_row_height());
         self.list_state.scroll_to_reveal_item(self.selected_index);
@@ -3491,6 +3496,132 @@ fn actions_dialog_main_window_background_alpha(theme: &theme::Theme) -> u8 {
     (popup_surface & 0xff) as u8
 }
 
+// ── Design-contract resolvers ───────────────────────────────────────────────
+// Shared between `Render for ActionsDialog` and the token exporter
+// (src/design_contract). The exporter passes explicit base definitions so
+// checked-in artifacts never depend on runtime overrides; the renderer passes
+// the current (override-applied) definitions. Both MUST route through these
+// functions — duplicating the arithmetic or the alpha packing is how the HTML
+// mockups drift from what production paints.
+
+/// The exact `ListItemMetricsOverride` mutation the action-row render closure
+/// applies on top of the main-menu metrics: action titles use the popup title
+/// font size, and the line height never shrinks below it.
+///
+/// Deliberately does NOT apply `popup.row.radius`, `inner_y`,
+/// `selection_opacity` or `hover_opacity`: production does not pass those into
+/// the shared `ListItem` (recorded as `actionsRow.*ConfiguredVsPainted`
+/// contract conflicts).
+pub(crate) fn resolved_actions_dialog_row_metrics(
+    popup: &crate::designs::ActionsPopupThemeDef,
+    main_menu: crate::designs::MainMenuThemeDef,
+) -> crate::list_item::ListItemMetricsOverride {
+    let mut metrics = crate::list_item::ListItemMetricsOverride::from_main_menu_def(main_menu);
+    metrics.name_font_size = popup.row.title_font_size;
+    metrics.name_line_height = metrics.name_line_height.max(popup.row.title_font_size);
+    metrics
+}
+
+/// What one action row actually paints: slot/inset geometry plus the resolved
+/// selected/hover fills from the shared main-menu row resolver.
+pub(crate) struct ResolvedActionsDialogRowChrome {
+    pub slot_height: f32,
+    pub wrapper_inset_x: f32,
+    pub metrics: crate::list_item::ListItemMetricsOverride,
+    /// Selected surface left inset from the popup shell edge.
+    pub surface_inset_x: f32,
+    /// Action title text origin from the popup shell edge.
+    pub text_origin_x: f32,
+    pub selected_background_rgba: u32,
+    pub hover_background_rgba: u32,
+}
+
+pub(crate) fn resolved_actions_dialog_row_chrome(
+    popup: &crate::designs::ActionsPopupThemeDef,
+    main_menu: crate::designs::MainMenuThemeDef,
+    theme: &theme::Theme,
+) -> ResolvedActionsDialogRowChrome {
+    let metrics = resolved_actions_dialog_row_metrics(popup, main_menu);
+    let fill = crate::list_item::resolved_main_menu_row_fill(
+        main_menu.row_kind,
+        &metrics,
+        theme.get_opacity().hover,
+    );
+    let base_hex = match fill.base {
+        crate::list_item::MainMenuRowFillBase::TextPrimary => theme.colors.text.primary,
+        crate::list_item::MainMenuRowFillBase::Accent => theme.colors.accent.selected,
+    };
+    ResolvedActionsDialogRowChrome {
+        slot_height: popup.list.row_height,
+        wrapper_inset_x: popup.row.inset_x,
+        surface_inset_x: popup.row.inset_x + metrics.row_outer_padding_x,
+        text_origin_x: popup.row.inset_x
+            + metrics.row_outer_padding_x
+            + metrics.row_inner_padding_x,
+        selected_background_rgba: (base_hex << 8) | fill.selected_alpha as u32,
+        hover_background_rgba: (base_hex << 8) | fill.hover_alpha as u32,
+        metrics,
+    }
+}
+
+/// The search row's resolved paint values, using the same truncating
+/// `(opacity * 255.0) as u8` packing as `semantic_text_rgba` /
+/// `actions_dialog_alpha_u8` above. Default design variant only (the checked-in
+/// contract profile).
+pub(crate) struct ResolvedActionsDialogSearchChrome {
+    pub padding_y: f32,
+    pub caret_rgba: u32,
+    pub placeholder_rgba: u32,
+    pub input_text_rgba: u32,
+}
+
+pub(crate) fn resolved_actions_dialog_search_chrome(
+    popup: &crate::designs::ActionsPopupThemeDef,
+    spacing: &crate::designs::DesignSpacing,
+    theme: &theme::Theme,
+) -> ResolvedActionsDialogSearchChrome {
+    let opacity = theme.get_opacity();
+    let text_primary = theme.colors.text.primary;
+    ResolvedActionsDialogSearchChrome {
+        padding_y: spacing.item_padding_y + popup.search.padding_y_extra,
+        caret_rgba: (theme.colors.accent.selected << 8) | 0xFF,
+        placeholder_rgba: hex_with_alpha(
+            text_primary,
+            actions_dialog_alpha_u8(opacity.text_placeholder),
+        ),
+        input_text_rgba: (text_primary << 8) | 0xFF,
+    }
+}
+
+/// The section-header row's resolved layout and paint. The actions section
+/// renderer centers vertically inside `list.section_header_height` and does
+/// not consume the declared `section.padding_top/bottom` (recorded as the
+/// `actionsSection.paddingDeclaredVsCenteredRenderer` conflict).
+pub(crate) struct ResolvedActionsDialogSectionChrome {
+    pub height: f32,
+    pub padding_x: f32,
+    pub font_size: f32,
+    pub font_weight: gpui::FontWeight,
+    pub text_rgba: u32,
+}
+
+pub(crate) fn resolved_actions_dialog_section_chrome(
+    popup: &crate::designs::ActionsPopupThemeDef,
+    theme: &theme::Theme,
+) -> ResolvedActionsDialogSectionChrome {
+    let opacity = theme.get_opacity();
+    ResolvedActionsDialogSectionChrome {
+        height: popup.list.section_header_height,
+        padding_x: popup.section.padding_x,
+        font_size: popup.section.font_size,
+        font_weight: popup.section.font_weight,
+        text_rgba: hex_with_alpha(
+            theme.colors.text.primary,
+            actions_dialog_alpha_u8(opacity.text_muted_alpha),
+        ),
+    }
+}
+
 impl ActionsDialog {
     fn clear_mouse_submit_arm(&mut self) {
         self.mouse_armed_row = None;
@@ -3567,6 +3698,7 @@ impl ActionsDialog {
     }
 
     pub(crate) fn reveal_selection_after_navigation(&mut self, cx: &mut Context<Self>) {
+        self.actions_selection_user_moved = true;
         self.clear_mouse_submit_arm();
         self.update_pending_scrollbar_reveal_offset(self.effective_row_height());
         self.list_state.scroll_to_reveal_item(self.selected_index);
@@ -3666,6 +3798,7 @@ impl ActionsDialog {
             return;
         }
         self.selected_index = ix;
+        self.actions_selection_user_moved = true;
         self.clear_mouse_submit_arm();
         self.update_pending_scrollbar_reveal_offset(self.effective_row_height());
         self.list_state.scroll_to_reveal_item(self.selected_index);
@@ -3694,6 +3827,8 @@ impl ActionsDialog {
         if !matches!(self.grouped_items.get(ix), Some(GroupedActionItem::Item(_))) {
             return None;
         }
+
+        self.actions_selection_user_moved = true;
 
         let was_selected = self.selected_index == ix;
         let was_mouse_armed = self.mouse_armed_row == Some(ix);
@@ -4139,15 +4274,11 @@ impl Render for ActionsDialog {
                                             );
                                         let main_menu_theme =
                                             crate::designs::current_main_menu_theme();
-                                        let mut actions_row_metrics =
-                                            crate::list_item::ListItemMetricsOverride::from_main_menu_theme(
-                                                main_menu_theme,
+                                        let actions_row_metrics =
+                                            resolved_actions_dialog_row_metrics(
+                                                &popup_theme,
+                                                main_menu_theme.def(),
                                             );
-                                        actions_row_metrics.name_font_size =
-                                            popup_theme.row.title_font_size;
-                                        actions_row_metrics.name_line_height = actions_row_metrics
-                                            .name_line_height
-                                            .max(popup_theme.row.title_font_size);
                                         let shortcut = if style.shortcut_visible {
                                             action.shortcut.clone()
                                         } else {
@@ -4317,6 +4448,7 @@ impl Render for ActionsDialog {
                 .pt(px(popup_theme.list.padding_top))
                 .pb(px(popup_theme.list.padding_bottom))
                 .on_scroll_wheel(cx.listener(|this, _event, _window, cx| {
+                    this.actions_selection_user_moved = true;
                     this.clear_pending_scrollbar_offset();
                     this.trigger_scrollbar_activity(cx);
                     cx.propagate();

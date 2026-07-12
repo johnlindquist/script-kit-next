@@ -930,6 +930,7 @@ enum SurfaceOpenBuiltinAction {
     AiVault,
     DictationHistory,
     SdkReference,
+    Tips,
     ScriptTemplateCatalog,
     MigrateV1Scripts,
 }
@@ -955,6 +956,7 @@ impl SurfaceOpenBuiltinAction {
             builtins::BuiltInFeature::AiVault => Some(Self::AiVault),
             builtins::BuiltInFeature::DictationHistory => Some(Self::DictationHistory),
             builtins::BuiltInFeature::SdkReference => Some(Self::SdkReference),
+            builtins::BuiltInFeature::Tips => Some(Self::Tips),
             builtins::BuiltInFeature::NewScriptFromTemplate => Some(Self::ScriptTemplateCatalog),
             builtins::BuiltInFeature::MigrateV1Scripts => Some(Self::MigrateV1Scripts),
             _ => None,
@@ -981,6 +983,7 @@ impl SurfaceOpenBuiltinAction {
             Self::AiVault => "open_ai_vault",
             Self::DictationHistory => "open_dictation_history",
             Self::SdkReference => "open_sdk_reference",
+            Self::Tips => "open_tips",
             Self::ScriptTemplateCatalog => "open_script_template_catalog",
             Self::MigrateV1Scripts => "open_migrate_v1",
         }
@@ -1003,6 +1006,7 @@ impl SurfaceOpenBuiltinAction {
             Self::AiVault => "Opening AI Vault",
             Self::DictationHistory => "Opening Dictation History",
             Self::SdkReference => "Opening SDK Reference",
+            Self::Tips => "Opening Tips",
             Self::ScriptTemplateCatalog => "Opening Script Template Catalog",
             Self::MigrateV1Scripts => "Opening Migrate v1 Scripts",
         }
@@ -1777,8 +1781,8 @@ static DICTATION_MODEL_PROMPT_STATUS: std::sync::OnceLock<
     parking_lot::Mutex<crate::dictation::DictationModelStatus>,
 > = std::sync::OnceLock::new();
 
-fn dictation_model_prompt_status()
--> &'static parking_lot::Mutex<crate::dictation::DictationModelStatus> {
+fn dictation_model_prompt_status(
+) -> &'static parking_lot::Mutex<crate::dictation::DictationModelStatus> {
     DICTATION_MODEL_PROMPT_STATUS.get_or_init(|| {
         parking_lot::Mutex::new(crate::dictation::DictationModelStatus::NotDownloaded)
     })
@@ -1788,8 +1792,8 @@ static PARAKEET_MODEL_DOWNLOAD_CANCEL: std::sync::OnceLock<
     parking_lot::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
 > = std::sync::OnceLock::new();
 
-fn parakeet_model_download_cancel_slot()
--> &'static parking_lot::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> {
+fn parakeet_model_download_cancel_slot(
+) -> &'static parking_lot::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> {
     PARAKEET_MODEL_DOWNLOAD_CANCEL.get_or_init(|| parking_lot::Mutex::new(None))
 }
 
@@ -3925,10 +3929,7 @@ impl ScriptListApp {
                     cx,
                 );
                 self.start_flow_ux_tick(cx);
-                Self::builtin_success(
-                    dctx,
-                    format!("flow_ux::{}", variant.automation_id()),
-                )
+                Self::builtin_success(dctx, format!("flow_ux::{}", variant.automation_id()))
             }
             builtins::BuiltInFeature::FlowManager => {
                 // The detached Flow Manager is dead (Conversation Desk
@@ -3949,6 +3950,13 @@ impl ScriptListApp {
                 );
                 self.start_flow_ux_tick(cx);
                 Self::builtin_success(dctx, "flow_ux::desk_from_manager_alias")
+            }
+            builtins::BuiltInFeature::NewFlow => {
+                // Same creation path as the desk's "Create a flow…" row:
+                // `md create` is an interactive wizard, so it runs in the
+                // shared Quick Terminal.
+                self.start_flow_create_session(cx);
+                Self::builtin_success(dctx, "flow_ux::create")
             }
 
             // NOTE: Window Actions removed - now handled by window-management extension
@@ -4124,6 +4132,11 @@ impl ScriptListApp {
             builtins::BuiltInFeature::SdkReference => {
                 let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
                     .expect("surface open arm should only receive SdkReference");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
+            }
+            builtins::BuiltInFeature::Tips => {
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive Tips");
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             // =========================================================================
@@ -4424,6 +4437,20 @@ impl ScriptListApp {
                         entries,
                     },
                     "Search SDK functions…",
+                    true,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::Tips => {
+                let entries = script_kit_gpui::tips::load_tips();
+                tracing::info!(category = "BUILTIN", trace_id = %dctx.trace_id, entry_count = entries.len(), "{}", action.log_message());
+                self.open_builtin_filterable_view(
+                    AppView::TipsView {
+                        filter: String::new(),
+                        selected_index: 0,
+                        entries,
+                    },
+                    "Search tips…",
                     true,
                     cx,
                 );
@@ -6611,9 +6638,10 @@ impl ScriptListApp {
                         } else {
                             ai::open_ai_window(&mut **cx)
                         };
-                        match opened.map_err(|error| error.to_string()).and_then(|()| {
-                            ai::set_ai_input(&mut **cx, &transcript, submit)
-                        }) {
+                        match opened
+                            .map_err(|error| error.to_string())
+                            .and_then(|()| ai::set_ai_input(&mut **cx, &transcript, submit))
+                        {
                             Ok(()) => true,
                             Err(error) => {
                                 tracing::warn!(
@@ -7068,12 +7096,10 @@ impl ScriptListApp {
     /// its tail chunk and emit `EndOfStream`.  Hitting this deadline truncates
     /// the recording tail, so it is generous — the flush normally completes in
     /// well under a second.
-    const DICTATION_STOP_COLLECT_DEADLINE: std::time::Duration =
-        std::time::Duration::from_secs(5);
+    const DICTATION_STOP_COLLECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
 
     /// How long the Finished pill stays visible before the overlay closes.
-    const DICTATION_FINISHED_LINGER: std::time::Duration =
-        std::time::Duration::from_millis(900);
+    const DICTATION_FINISHED_LINGER: std::time::Duration = std::time::Duration::from_millis(900);
 
     fn dictation_focus_settle_duration() -> std::time::Duration {
         std::time::Duration::from_millis(Self::DICTATION_FOCUS_SETTLE_MS)
@@ -7188,12 +7214,11 @@ impl ScriptListApp {
                         let speed_tracker =
                             std::sync::Arc::new(parking_lot::Mutex::new(SpeedTracker::new()));
                         let ui_emitter = ui_emitter.clone();
-                        let progress_callback =
-                            {
-                                let speed_tracker = speed_tracker.clone();
-                                let ui_emitter = ui_emitter.clone();
-                                let progress_tx = progress_tx;
-                                move |phase: crate::dictation::download::DownloadPhase,
+                        let progress_callback = {
+                            let speed_tracker = speed_tracker.clone();
+                            let ui_emitter = ui_emitter.clone();
+                            let progress_tx = progress_tx;
+                            move |phase: crate::dictation::download::DownloadPhase,
                                       progress: crate::dictation::download::DownloadProgress| {
                                     match phase {
                                         crate::dictation::download::DownloadPhase::Downloading => {
@@ -7266,7 +7291,7 @@ impl ScriptListApp {
                                         | crate::dictation::download::DownloadPhase::Complete => {}
                                     }
                                 }
-                            };
+                        };
                         match engine_kind {
                             crate::dictation::DictationEngineKind::Parakeet => {
                                 crate::dictation::download::download_parakeet_model(
@@ -7291,10 +7316,7 @@ impl ScriptListApp {
                     .store(false, std::sync::atomic::Ordering::Release);
                 match result {
                     Ok(_path) => {
-                        tracing::info!(
-                            category = "DICTATION",
-                            "Dictation model download complete"
-                        );
+                        tracing::info!(category = "DICTATION", "Dictation model download complete");
                         this.update_dictation_model_prompt_if_visible(
                             crate::dictation::DictationModelStatus::Available,
                             cx,
@@ -7314,7 +7336,10 @@ impl ScriptListApp {
                     }
                     Err(error) if error.to_string().contains("cancelled") => {
                         let cancelled = "model download cancelled".to_string();
-                        tracing::info!(category = "DICTATION", "Dictation model download cancelled");
+                        tracing::info!(
+                            category = "DICTATION",
+                            "Dictation model download cancelled"
+                        );
                         this.update_dictation_model_prompt_if_visible(
                             crate::dictation::DictationModelStatus::DownloadFailed(cancelled),
                             cx,
@@ -7362,8 +7387,8 @@ impl ScriptListApp {
         let prefs = crate::config::load_user_preferences();
         let model_id =
             crate::dictation::DictationModelId::from_preference(prefs.dictation.model.as_deref());
-        let partial_size = crate::dictation::dictation_model_entry(model_id)
-            .partial_download_size_bytes();
+        let partial_size =
+            crate::dictation::dictation_model_entry(model_id).partial_download_size_bytes();
         Self::build_dictation_model_prompt_for_model(status, model_id, partial_size)
     }
 
@@ -7399,9 +7424,9 @@ impl ScriptListApp {
 
         match status {
             DictationModelStatus::NotDownloaded => {
-                let resume_pct = partial_archive_size.filter(|size| *size > 0).map(|size| {
-                    ((size.saturating_mul(100)) / archive_size_bytes.max(1)).min(99)
-                });
+                let resume_pct = partial_archive_size
+                    .filter(|size| *size > 0)
+                    .map(|size| ((size.saturating_mul(100)) / archive_size_bytes.max(1)).min(99));
                 let title = resume_pct
                     .map(|pct| format!("Resume download ({}% already downloaded)", pct))
                     .unwrap_or_else(|| format!("Download {}", model.display_name));
@@ -7423,9 +7448,8 @@ impl ScriptListApp {
                     )),
                 }];
                 if !model.recommended {
-                    let parakeet_size = crate::dictation::download::format_bytes(
-                        parakeet.download_size_bytes(),
-                    );
+                    let parakeet_size =
+                        crate::dictation::download::format_bytes(parakeet.download_size_bytes());
                     choices.push(Choice {
                         name: format!("Switch to {}", parakeet.display_name),
                         value: BUILTIN_DICTATION_MODEL_USE_RECOMMENDED.to_string(),
@@ -7556,10 +7580,7 @@ impl ScriptListApp {
                     Choice {
                         name: "Retry download".to_string(),
                         value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
-                        description: Some(format!(
-                            "Try the {} download again",
-                            model.display_name
-                        )),
+                        description: Some(format!("Try the {} download again", model.display_name)),
                         key: None,
                         semantic_id: Some(builtin_choice_semantic_id(
                             BUILTIN_DICTATION_MODEL_PROMPT_ID,
@@ -8446,7 +8467,7 @@ impl ScriptListApp {
         target_bundle_id: &str,
         target_app_name: &str,
     ) -> anyhow::Result<()> {
-        use anyhow::{Context as _, anyhow};
+        use anyhow::{anyhow, Context as _};
         use objc::runtime::{Class, Object};
         use objc::{msg_send, sel, sel_impl};
 

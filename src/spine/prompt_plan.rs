@@ -234,6 +234,12 @@ pub(crate) fn build_spine_prompt_plan_with_aliases(
             SpineSegmentKind::ProjectCwd { .. } => {
                 plan.prompt_builder_segment_count += 1;
             }
+            SpineSegmentKind::Flow { .. } => {
+                // A resolved flow token (`-gmail`) stages its flow file as a
+                // context part on acceptance (Agent Chat composer); the token
+                // itself contributes nothing further to the prompt plan.
+                plan.prompt_builder_segment_count += 1;
+            }
             SpineSegmentKind::ModeExit { .. } => {
                 plan.blocked_reason = Some(SpinePromptPlanBlockReason::ModeExit);
             }

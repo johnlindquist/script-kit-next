@@ -1491,6 +1491,20 @@ export SK_PATH=~/Projects/my-app/.kit
 
 ## Getting Help
 
+### Main menu tips
+
+Script Kit shows a rotating discoverability tip in the empty root main-menu footer. Disable only that footer line in `~/.scriptkit/config.ts` with:
+
+```typescript
+tips: { enabled: false }
+```
+
+The **Tips** built-in remains available from the launcher.
+
+The catalog lives at `~/.scriptkit/tips.json` (user-owned). Tip text may use
+the `{mainHotkey}` placeholder, which resolves at load time to your registered
+main hotkey (e.g. `⌘;`).
+
 - **Documentation**: You're reading it!
 - **Source Code**: https://github.com/johnlindquist/script-kit-gpui
 - **Community**: https://scriptkit.com
