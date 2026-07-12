@@ -235,9 +235,13 @@ fn focused_text_mini_has_four_sizing_phases() {
         "streaming focused-text mini should grow once assistant output or variations are visible"
     );
     for required in [
+        "focused_text_mini_input_height",
+        "focused_text_mini_result_height",
+        "focused_text_mini_preview_height",
+        "focused_text_mini_inner_height",
         "FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
-        "FOCUSED_TEXT_MINI_STREAMING_HEIGHT",
         "FOCUSED_TEXT_MINI_RESULT_HEIGHT",
+        "layout::WINDOW_BORDER_Y",
         "ViewType::FocusedTextMini",
     ] {
         assert!(
@@ -245,12 +249,6 @@ fn focused_text_mini_has_four_sizing_phases() {
             "missing focused-text mini resize constant: {required}"
         );
     }
-    assert!(
-        WINDOW_RESIZE.contains(
-            "const FOCUSED_TEXT_MINI_STREAMING_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT;"
-        ),
-        "streaming focused-text mini height must remain compact until the final result is ready"
-    );
     assert!(
         WINDOW_RESIZE.contains(
             "const FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT: f32 = crate::panel::PROMPT_INPUT_FIELD_HEIGHT;"
@@ -367,17 +365,26 @@ fn focused_text_mini_height_helpers_match_resize_contract() {
         "pub(crate) fn focused_text_mini_input_height() -> f32",
         "pub(crate) fn focused_text_mini_result_height() -> f32",
         "pub(crate) fn focused_text_mini_preview_height() -> f32",
+        "pub(crate) fn focused_text_mini_inner_height(window_height: f32) -> f32",
         "FOCUSED_TEXT_MINI_RESULT_HEIGHT - FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT",
+        "layout::WINDOW_BORDER_Y",
         "ViewType::FocusedTextMini => match item_count",
-        "2..=4 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y)",
-        // The three-variation rewrite layout gets its own window height so the
-        // stacked cards render without an internal scrollbar.
-        "5 => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + WINDOW_BORDER_Y)",
+        "FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT",
         "FOCUSED_TEXT_MINI_RESIZE_ANIMATE",
     ] {
         assert!(
             WINDOW_RESIZE.contains(required),
             "focused-text mini sizing helpers must stay aligned with resize contract: {required}"
+        );
+    }
+    for required in [
+        "let scope_extra = if self.scope_visible { 1 } else { 0 };",
+        "focused_text_mini_sizing_count",
+        ".debug_selector(|| \"focused-text-mini-scope-row\".to_string())",
+    ] {
+        assert!(
+            AGENT_CHAT_VIEW.contains(required),
+            "focused-text mini scope-aware sizing path must contain: {required}"
         );
     }
 }

@@ -10003,6 +10003,7 @@ impl AgentChatView {
             Some(
                 div()
                     .id("focused-text-mini-scope-row")
+                    .debug_selector(|| "focused-text-mini-scope-row".to_string())
                     .w_full()
                     .h(px(input_height))
                     .max_h(px(input_height))

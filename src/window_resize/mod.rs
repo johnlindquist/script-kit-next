@@ -310,7 +310,7 @@ pub(crate) fn focused_text_mini_preview_height() -> f32 {
 }
 
 pub(crate) fn focused_text_mini_inner_height(window_height: f32) -> f32 {
-    (window_height - WINDOW_BORDER_Y).max(0.0)
+    (window_height - layout::WINDOW_BORDER_Y).max(0.0)
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct FrameGeometry {
@@ -613,19 +613,19 @@ fn height_for_view_with_layout(
             height
         }
         ViewType::FocusedTextMini => match item_count {
-            0 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + WINDOW_BORDER_Y),
+            0 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + layout::WINDOW_BORDER_Y),
             // `focused_text_mini_sizing_count` adds one when the optional
             // scope row is visible. The extra 44px must be represented in the
             // native window height instead of being clipped inside the root.
-            1 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT * 2.0 + WINDOW_BORDER_Y),
-            2 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y),
+            1 => px(FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT * 2.0 + layout::WINDOW_BORDER_Y),
+            2 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT + layout::WINDOW_BORDER_Y),
             3..=4 => px(FOCUSED_TEXT_MINI_RESULT_HEIGHT
                 + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
-                + WINDOW_BORDER_Y),
-            5 => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + WINDOW_BORDER_Y),
+                + layout::WINDOW_BORDER_Y),
+            5 => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + layout::WINDOW_BORDER_Y),
             _ => px(FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT
                 + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
-                + WINDOW_BORDER_Y),
+                + layout::WINDOW_BORDER_Y),
         },
         ViewType::ArgPromptWithChoices => {
             let visible_items = item_count.max(1) as f32;
@@ -1292,26 +1292,31 @@ mod resize_tests {
 
         assert_eq!(
             height(0),
-            FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + WINDOW_BORDER_Y
+            FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + layout::WINDOW_BORDER_Y
         );
         assert_eq!(
             height(1),
-            FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT * 2.0 + WINDOW_BORDER_Y
+            FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT * 2.0 + layout::WINDOW_BORDER_Y
         );
-        assert_eq!(height(2), FOCUSED_TEXT_MINI_RESULT_HEIGHT + WINDOW_BORDER_Y);
+        assert_eq!(
+            height(2),
+            FOCUSED_TEXT_MINI_RESULT_HEIGHT + layout::WINDOW_BORDER_Y
+        );
         assert_eq!(
             height(3),
-            FOCUSED_TEXT_MINI_RESULT_HEIGHT + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + WINDOW_BORDER_Y
+            FOCUSED_TEXT_MINI_RESULT_HEIGHT
+                + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
+                + layout::WINDOW_BORDER_Y
         );
         assert_eq!(
             height(5),
-            FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + WINDOW_BORDER_Y
+            FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + layout::WINDOW_BORDER_Y
         );
         assert_eq!(
             height(6),
             FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT
                 + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
-                + WINDOW_BORDER_Y
+                + layout::WINDOW_BORDER_Y
         );
         assert_eq!(
             focused_text_mini_inner_height(height(3)),
