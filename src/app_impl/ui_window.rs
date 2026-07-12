@@ -1923,6 +1923,9 @@ impl ScriptListApp {
 
     /// Toggle the focused-info panel visibility (Cmd+I / "Show Info" action).
     pub(crate) fn toggle_info_panel(&mut self, cx: &mut Context<Self>) {
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         self.show_info_panel = !self.show_info_panel;
         tracing::info!(
             category = "UI",
@@ -2281,6 +2284,9 @@ impl ScriptListApp {
             return;
         }
 
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         self.main_window_mode = mode;
 
         if let AppView::ChatPrompt { entity, .. } = &self.current_view {
@@ -2329,6 +2335,9 @@ impl ScriptListApp {
             return;
         }
 
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         self.main_window_mode = mode;
         if let AppView::ChatPrompt { entity, .. } = &self.current_view {
             let entity = entity.clone();

@@ -255,6 +255,9 @@ impl ScriptListApp {
         };
 
         self.current_view = AppView::ScriptList;
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         self.main_window_mode = MainWindowMode::Full;
         self.filter_text = query.to_string();
         self.computed_filter_text = query.to_string();

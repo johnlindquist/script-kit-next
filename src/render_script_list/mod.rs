@@ -1520,6 +1520,10 @@ impl ScriptListApp {
                     .into_any_element()
             };
 
+            let boundary_offset_px = self.main_list_boundary_affordance.offset_px;
+            let top_fade = self.main_list_top_fade_snapshot();
+            let main_list_tokens = current_main_menu_theme.def().list;
+
             div()
                 .relative()
                 .flex()
@@ -1527,74 +1531,45 @@ impl ScriptListApp {
                 .flex_1()
                 .w_full()
                 .h_full()
-                .on_scroll_wheel(cx.listener(
+                .overflow_hidden()
+                // Move only the painted row subtree. Header, logical ListState,
+                // scrollbar, and footer remain fixed during boundary pull.
+                .child(
+                    div()
+                        .relative()
+                        .top(px(boundary_offset_px))
+                        .w_full()
+                        .h_full()
+                        .child(variable_height_list),
+                )
+                .when(top_fade.active, |root| {
+                    root.child(
+                        crate::components::list_scroll_affordance::render_top_occlusion(
+                            &self.theme,
+                            main_list_tokens,
+                            top_fade.progress,
+                        ),
+                    )
+                })
+                .child(scrollbar_overlay)
+                // GPUI dispatches bubble listeners in reverse paint order. Keep
+                // this transparent wheel-only hitbox as the final child so our
+                // selection-owned controller runs before List's native listener
+                // and can stop it before logical ListState mutates.
+                .child(div().absolute().inset_0().on_scroll_wheel(cx.listener(
                     move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
                         if scroll_item_count == 0 {
                             return;
                         }
-                        // The script list owns wheel-driven scrolling. Stop propagation
-                        // before any selection math so GPUI's native list scroll path
-                        // cannot drift the viewport away from the active row.
                         cx.stop_propagation();
-                        this.main_list_suppress_hover_until_mouse_move = true;
-                        this.mark_main_menu_selection_user_moved();
-                        if this.hovered_index.take().is_some() {
-                            cx.notify();
-                        }
-
-                        let selected_before = this.selected_index;
-                        let scroll_top_before = this.main_list_state.logical_scroll_top();
-                        let wheel_accum_before = this.wheel_accum;
-
-                        // Convert scroll delta to lines/items
-                        // Lines: direct item count, Pixels: convert based on average item height
-                        let delta_lines: f32 = match event.delta {
-                            gpui::ScrollDelta::Lines(point) => point.y,
-                            gpui::ScrollDelta::Pixels(point) => {
-                                // Convert pixels to items using average item height
-                                let pixels: f32 = point.y.into();
-                                pixels / avg_item_height
-                            }
-                        };
-
-                        // Accumulate smoothly for high-resolution trackpads
-                        // Invert so scroll down (negative delta) moves selection down (positive)
-                        this.wheel_accum += -delta_lines;
-
-                        // Only apply integer steps when magnitude crosses 1.0
-                        // This preserves smooth scrolling feel on trackpads
-                        let steps = this.wheel_accum.trunc() as i32;
-                        if steps != 0 {
-                            // Subtract the applied steps from accumulator
-                            this.wheel_accum -= steps as f32;
-
-                            // Use the existing move_selection_by which handles section headers
-                            // and properly updates scroll via scroll_to_selected_if_needed
-                            this.move_selection_by(steps, cx);
-                        }
-
-                        let scroll_top_after = this.main_list_state.logical_scroll_top();
-                        this.sync_main_list_selection_to_visible_window("wheel");
-                        tracing::debug!(
-                            target: "SCROLL_STATE",
-                            delta_lines,
-                            steps,
-                            total_items = scroll_item_count,
-                            selected_before,
-                            selected_after = this.selected_index,
-                            scroll_top_before = scroll_top_before.item_ix,
-                            scroll_top_after = scroll_top_after.item_ix,
-                            offset_before_px = scroll_top_before.offset_in_item.as_f32(),
-                            offset_after_px = scroll_top_after.offset_in_item.as_f32(),
-                            wheel_accum_before,
-                            wheel_accum_after = this.wheel_accum,
-                            propagation_stopped = true,
-                            "script list wheel handled"
+                        this.handle_main_list_scroll_wheel(
+                            event,
+                            avg_item_height,
+                            scroll_item_count,
+                            cx,
                         );
                     },
-                ))
-                .child(variable_height_list)
-                .child(scrollbar_overlay)
+                )))
                 .into_any_element()
         };
 

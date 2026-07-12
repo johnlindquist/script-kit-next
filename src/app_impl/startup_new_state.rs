@@ -231,6 +231,10 @@
             nav_coalescer: NavCoalescer::new(),
             // Wheel scroll accumulator starts at 0
             wheel_accum: 0.0,
+            main_list_boundary_affordance:
+                crate::scrolling::boundary_affordance::BoundaryAffordanceState::new(
+                    crate::platform::prefers_reduced_motion(),
+                ),
             main_list_suppress_hover_until_mouse_move: false,
             menu_syntax_trigger_picker_suppress_next_launcher_click: false,
             menu_syntax_trigger_picker_enter_guard: None,

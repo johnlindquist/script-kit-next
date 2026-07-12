@@ -24,7 +24,7 @@ fn is_attached_surface(kind: crate::protocol::AutomationWindowKind) -> bool {
     )
 }
 
-/// Translate mouse coordinates from target-local space into the parent
+/// Translate pointer-event coordinates from target-local space into the parent
 /// window's GPUI dispatch space for attached surfaces.
 ///
 /// The parent window is determined from the popup's recorded `parent_window_id`
@@ -93,7 +93,8 @@ fn rebase_mouse_event_to_dispatch_space(
         SimulatedGpuiEvent::MouseMove { x, y }
         | SimulatedGpuiEvent::MouseDown { x, y, .. }
         | SimulatedGpuiEvent::MouseUp { x, y, .. }
-        | SimulatedGpuiEvent::MouseClick { x, y, .. } => {
+        | SimulatedGpuiEvent::MouseClick { x, y, .. }
+        | SimulatedGpuiEvent::ScrollWheel { x, y, .. } => {
             tracing::info!(
                 target: "script_kit::automation",
                 window_id = %resolved.id,
@@ -131,6 +132,19 @@ fn rebase_mouse_event_to_dispatch_space(
             x: x + offset_x,
             y: y + offset_y,
             button: button.clone(),
+        },
+        SimulatedGpuiEvent::ScrollWheel {
+            x,
+            y,
+            delta_x,
+            delta_y,
+            phase,
+        } => SimulatedGpuiEvent::ScrollWheel {
+            x: x + offset_x,
+            y: y + offset_y,
+            delta_x: *delta_x,
+            delta_y: *delta_y,
+            phase: *phase,
         },
         SimulatedGpuiEvent::KeyDown { .. } => event.clone(),
     };
@@ -204,6 +218,15 @@ fn build_keystroke(
         modifiers: mods,
         key: key.to_string(),
         key_char: text.map(String::from),
+    }
+}
+
+/// Convert the wire-level touch phase into GPUI's platform-input phase.
+fn simulated_touch_phase_to_gpui(phase: crate::protocol::SimulatedTouchPhase) -> gpui::TouchPhase {
+    match phase {
+        crate::protocol::SimulatedTouchPhase::Started => gpui::TouchPhase::Started,
+        crate::protocol::SimulatedTouchPhase::Moved => gpui::TouchPhase::Moved,
+        crate::protocol::SimulatedTouchPhase::Ended => gpui::TouchPhase::Ended,
     }
 }
 
@@ -302,6 +325,25 @@ fn apply_simulated_event(
                     position,
                     modifiers: gpui::Modifiers::default(),
                     click_count: 1,
+                }),
+                cx,
+            );
+        }
+        SimulatedGpuiEvent::ScrollWheel {
+            x,
+            y,
+            delta_x,
+            delta_y,
+            phase,
+        } => {
+            let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
+            let delta = gpui::point(gpui::px(*delta_x as f32), gpui::px(*delta_y as f32));
+            window.dispatch_event(
+                gpui::PlatformInput::ScrollWheel(gpui::ScrollWheelEvent {
+                    position,
+                    delta: gpui::ScrollDelta::Pixels(delta),
+                    modifiers: gpui::Modifiers::default(),
+                    touch_phase: simulated_touch_phase_to_gpui(*phase),
                 }),
                 cx,
             );
@@ -501,6 +543,7 @@ pub(crate) fn dispatch_gpui_event(
         SimulatedGpuiEvent::MouseDown { .. } => "mouseDown",
         SimulatedGpuiEvent::MouseUp { .. } => "mouseUp",
         SimulatedGpuiEvent::MouseClick { .. } => "mouseClick",
+        SimulatedGpuiEvent::ScrollWheel { .. } => "scrollWheel",
     };
 
     tracing::info!(

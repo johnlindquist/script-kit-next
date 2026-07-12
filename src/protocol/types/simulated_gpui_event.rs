@@ -1,5 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+/// The lifecycle phase for a simulated touch-driven input event.
+///
+/// This mirrors GPUI's `TouchPhase` without exposing GPUI types in the wire
+/// protocol.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SimulatedTouchPhase {
+    Started,
+    Moved,
+    Ended,
+}
+
 /// A high-fidelity input event intended for dispatch through GPUI's real
 /// event pipeline, as opposed to the legacy `simulateKey` surface which
 /// bypasses GPUI intercepts.
@@ -43,5 +55,16 @@ pub enum SimulatedGpuiEvent {
         y: f64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         button: Option<String>,
+    },
+    /// Simulate a pixel-precise scroll-wheel event at window-relative
+    /// coordinates.
+    ScrollWheel {
+        x: f64,
+        y: f64,
+        #[serde(rename = "deltaX")]
+        delta_x: f64,
+        #[serde(rename = "deltaY")]
+        delta_y: f64,
+        phase: SimulatedTouchPhase,
     },
 }

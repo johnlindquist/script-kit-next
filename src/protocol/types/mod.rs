@@ -79,7 +79,7 @@ pub use primitives::{
     Choice, ClipboardAction, ClipboardEntryType, ClipboardFormat, ClipboardHistoryAction, Field,
     KeyboardAction, MouseAction, SubmitValue, TilePosition, WindowActionType,
 };
-pub use simulated_gpui_event::SimulatedGpuiEvent;
+pub use simulated_gpui_event::{SimulatedGpuiEvent, SimulatedTouchPhase};
 pub use system::{
     ClipboardHistoryEntryData, DisplayInfo, FileSearchResultEntry, SystemWindowInfo,
     TargetWindowBounds,

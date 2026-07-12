@@ -172,6 +172,9 @@ impl ScriptListApp {
     }
 
     pub(crate) fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         // Today → main-menu `@context` round trip: Escape/close while the
         // search is pending cancels back to Today instead of closing the
         // launcher (the second Escape then closes from Today as usual).

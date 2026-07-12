@@ -102,6 +102,15 @@ const DEFAULT_RUST_LOG =
 
 export type Json = Record<string, any>;
 
+/** Target-local, pixel-delta scroll input for GPUI's real event pipeline. */
+export interface GpuiScrollWheelEvent {
+  x: number;
+  y: number;
+  deltaX: number;
+  deltaY: number;
+  phase: "started" | "moved" | "ended";
+}
+
 let launchCounter = 0;
 
 export interface DriverOptions {
@@ -234,7 +243,7 @@ export abstract class ProtocolCore {
       typeof command.requestId === "string" && command.requestId.length > 0
         ? command.requestId
         : `${this.requestIdPrefix}-${process.pid}-${++this.requestCounter}`;
-    const payload = { ...command, requestId };
+    const payload: Json = { ...command, requestId };
     const timeoutMs = opts.timeoutMs ?? this.defaultTimeoutMs;
 
     return new Promise<Json>((resolvePromise, rejectPromise) => {
@@ -316,6 +325,17 @@ export abstract class ProtocolCore {
       expect: "simulateGpuiEventResult",
       timeoutMs: opts.timeoutMs ?? this.defaultTimeoutMs,
     });
+  }
+
+  /** Dispatch a phased, pixel-only wheel event at target-local coordinates. */
+  simulateGpuiScrollWheel(
+    event: GpuiScrollWheelEvent,
+    opts: { target?: Json; timeoutMs?: number } = {},
+  ): Promise<Json> {
+    return this.simulateGpuiEvent(
+      { ...event, type: "scrollWheel" },
+      opts,
+    );
   }
 
   async simulateGpuiClick(

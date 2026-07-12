@@ -1169,6 +1169,8 @@ pub(crate) struct ScriptListApp {
     // Wheel scroll accumulator for smooth trackpad scrolling
     // Accumulates fractional deltas until they cross 1.0, then converts to item steps
     wheel_accum: f32,
+    /// Visual-only boundary gesture state. Logical ListState and selection stay clamped.
+    main_list_boundary_affordance: crate::scrolling::boundary_affordance::BoundaryAffordanceState,
     main_list_suppress_hover_until_mouse_move: bool,
     /// Armed when a menu-syntax picker row accepts on mouse down. The same
     /// physical click can finish after the list has re-rendered to normal

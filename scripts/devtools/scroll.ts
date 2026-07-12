@@ -24,8 +24,21 @@ type Rect = {
   height: number;
 };
 
+type NormalizedScrollMeasurement = {
+  scroll: JsonObject;
+  classification: string | null;
+  missingPrimitive: string | null;
+  listStateViewportHeight: number | null;
+  effectiveViewportHeight: number | null;
+  effectiveSafeViewportHeight: number | null;
+  viewportMeasurementSource: string;
+  viewportMeasurementWarning: string | null;
+  selectedRowVisible: unknown;
+  selectedRowAboveFooter: unknown;
+};
+
 function usage() {
-  return "Usage:\n  bun scripts/devtools/scroll.ts inspect [target args]";
+  return "Usage:\n  bun scripts/devtools/scroll.ts inspect [target args] [--require-affordance]";
 }
 
 function asObject(value: unknown): JsonObject {
@@ -53,7 +66,7 @@ function rectFrom(value: unknown): Rect | null {
     : { x, y, width, height };
 }
 
-export function notesScrollFromState(state: JsonObject) {
+export function notesScrollFromState(state: JsonObject): JsonObject {
   const notes = asObject(state.notes);
   const view = asObject(notes.view);
   const editorAnchor = asObject(notes.editorAnchor);
@@ -83,8 +96,46 @@ export function notesScrollFromState(state: JsonObject) {
   };
 }
 
-function mainListScrollFromState(state: JsonObject) {
+export function mainListScrollFromState(state: JsonObject) {
   return asObject(state.mainListScroll);
+}
+
+export const MAIN_LIST_SCROLL_AFFORDANCE_FIELDS = [
+  "atTop",
+  "atBottom",
+  "topFadeActive",
+  "topFadeProgress",
+  "topFadeAlpha",
+  "overscrollOffsetPx",
+  "overscrollMaxOffsetPx",
+  "overscrollEdge",
+  "overscrollPhase",
+  "generation",
+  "lastTouchPhase",
+  "lastSettleReason",
+  "reducedMotion",
+] as const;
+
+export function inspectMainListScrollAffordance(
+  scroll: JsonObject,
+  required: boolean,
+) {
+  const raw = scroll.affordance;
+  const present = raw != null && typeof raw === "object" && !Array.isArray(raw);
+  const affordance = present ? raw as JsonObject : null;
+  const missingFields = MAIN_LIST_SCROLL_AFFORDANCE_FIELDS
+    .filter((field) => affordance == null || !Object.prototype.hasOwnProperty.call(affordance, field))
+    .map((field) => `mainListScroll.affordance.${field}`);
+  return {
+    required,
+    present,
+    complete: present && missingFields.length === 0,
+    missingFields,
+    affordance,
+    classification: required && missingFields.length > 0
+      ? "blocked-by-missing-primitive"
+      : "ok",
+  };
 }
 
 async function layoutMeasurement(args: TargetArgs): Promise<JsonObject | null> {
@@ -101,7 +152,10 @@ function layoutNodeBounds(layoutReceipt: JsonObject, name: string): Rect | null 
   return rectFrom(node?.bounds);
 }
 
-function normalizeScriptListScrollMeasurement(scroll: JsonObject, layoutReceipt: JsonObject | null) {
+function normalizeScriptListScrollMeasurement(
+  scroll: JsonObject,
+  layoutReceipt: JsonObject | null,
+): NormalizedScrollMeasurement {
   const listStateViewportHeight = asNumber(scroll.viewportHeight);
   const listStateSafeViewportHeight = asNumber(scroll.safeViewportHeight);
   const rawSelectedRowVisible = scroll.selectedRowVisible;
@@ -186,6 +240,7 @@ function classify(
   stateEnvelope: JsonObject,
   scroll: JsonObject,
   measurementClassification?: string | null,
+  affordanceClassification?: string | null,
 ) {
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
@@ -196,6 +251,9 @@ function classify(
   }
   if (measurementClassification) {
     return measurementClassification;
+  }
+  if (affordanceClassification && affordanceClassification !== "ok") {
+    return affordanceClassification;
   }
   if (Object.keys(scroll).length === 0 || scroll.scrollTop == null || scroll.viewportHeight == null) {
     return "blocked-by-missing-primitive";
@@ -213,7 +271,10 @@ async function main() {
     console.error(usage());
     process.exit(2);
   }
-  const { args, warnings: argWarnings } = parseTargetArgs(argv.slice(1));
+  const { args, extras, warnings: argWarnings } = parseTargetArgs(argv.slice(1), {
+    extras: { "--require-affordance": "boolean" },
+  });
+  const requireAffordance = extras["--require-affordance"] === true;
   if (args.help) {
     console.log(usage());
     process.exit(0);
@@ -235,7 +296,7 @@ async function main() {
   const resolvedSurface = String(resolved.semanticSurface ?? resolved.surfaceKind ?? "").toLowerCase();
   const isNotesTarget = resolvedKind === "notes" || resolvedSurface === "notes";
   const rawScroll = isNotesTarget ? notesScrollFromState(state) : mainListScrollFromState(state);
-  const normalized = isNotesTarget
+  const normalized: NormalizedScrollMeasurement = isNotesTarget
     ? {
         scroll: rawScroll,
         classification: null,
@@ -260,7 +321,17 @@ async function main() {
   const maxScrollTop = asNumber(scroll.maxScrollTop);
   const scrollTop = asNumber(scroll.scrollTop);
   const canScrollY = maxScrollTop != null ? maxScrollTop > 0 : contentHeight != null && viewportHeight != null ? contentHeight > viewportHeight : null;
-  const classification = classify(targetReceipt, stateEnvelope, scroll, normalized.classification);
+  const affordanceInspection = inspectMainListScrollAffordance(
+    isNotesTarget ? {} : scroll,
+    requireAffordance,
+  );
+  const classification = classify(
+    targetReceipt,
+    stateEnvelope,
+    scroll,
+    normalized.classification,
+    affordanceInspection.classification,
+  );
 
   printReceipt(finishReceipt(
     { tool: "script-kit-devtools.scroll", command: "scroll.inspect", session: args.session, clock },
@@ -294,6 +365,13 @@ async function main() {
         owner: scroll.owner ?? (isNotesTarget ? "notes.unknown" : "main.list"),
         activeNoteId: scroll.activeNoteId ?? null,
         generation: scroll.generation ?? null,
+        affordance: affordanceInspection.affordance,
+      },
+      affordanceRequirement: {
+        required: affordanceInspection.required,
+        present: affordanceInspection.present,
+        complete: affordanceInspection.complete,
+        missingFields: affordanceInspection.missingFields,
       },
       missingPrimitive: normalized.missingPrimitive,
       resizePressure: {
@@ -308,6 +386,7 @@ async function main() {
         stateEnvelope.status === "error" ? "stateResult" : "",
         targetReceipt.classification !== "ok" ? "strictTargetIdentity" : "",
         normalized.missingPrimitive ?? "",
+        ...(requireAffordance ? affordanceInspection.missingFields : []),
       ].filter(Boolean),
       warnings: argWarnings,
       errors: [

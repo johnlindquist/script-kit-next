@@ -33,6 +33,9 @@ impl ScriptListApp {
         reason: &'static str,
         _cx: &mut Context<Self>,
     ) {
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         let average_item_height =
             crate::list_item::effective_average_item_height_for_scroll_for_theme(
                 self.current_main_menu_theme,

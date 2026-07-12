@@ -176,7 +176,331 @@ fn scrollbar_fade_opacity(progress: f32) -> crate::transitions::Opacity {
     crate::transitions::Opacity::VISIBLE.lerp(&crate::transitions::Opacity::INVISIBLE, eased)
 }
 
+const MAIN_LIST_EDGE_EPSILON_PX: f32 = 0.5;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MainListScrollGeometry {
+    scroll_top: f32,
+    content_height: f32,
+    viewport_height: f32,
+    footer_height: f32,
+    safe_viewport_height: f32,
+    max_scroll_top: f32,
+    at_top: bool,
+    at_bottom: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MainListTopFadeSnapshot {
+    pub(crate) active: bool,
+    pub(crate) progress: f32,
+    pub(crate) alpha: u32,
+}
+
+fn main_list_scroll_geometry_values(
+    content_height: f32,
+    viewport_height: f32,
+    footer_height: f32,
+    scroll_top: f32,
+) -> MainListScrollGeometry {
+    let viewport_height = viewport_height.max(0.0);
+    let footer_height = footer_height.max(0.0);
+    let safe_viewport_height = (viewport_height - footer_height).max(0.0);
+    let max_scroll_top = (content_height - safe_viewport_height).max(0.0);
+    let measured = viewport_height > footer_height && viewport_height > 0.0;
+    let scroll_top = scroll_top.clamp(0.0, max_scroll_top);
+
+    MainListScrollGeometry {
+        scroll_top,
+        content_height,
+        viewport_height,
+        footer_height,
+        safe_viewport_height,
+        max_scroll_top,
+        at_top: measured && scroll_top <= MAIN_LIST_EDGE_EPSILON_PX,
+        at_bottom: measured && (max_scroll_top - scroll_top).abs() <= MAIN_LIST_EDGE_EPSILON_PX,
+    }
+}
+
+#[inline]
+fn main_list_top_fade_progress(scroll_top: f32, ramp: f32) -> f32 {
+    if scroll_top <= MAIN_LIST_EDGE_EPSILON_PX {
+        return 0.0;
+    }
+    let t = (scroll_top / ramp.max(1.0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+fn main_list_boundary_eligibility_values(
+    geometry: MainListScrollGeometry,
+    selected_index: usize,
+    first_selectable: Option<usize>,
+    last_selectable: Option<usize>,
+) -> crate::scrolling::boundary_affordance::BoundaryEligibility {
+    crate::scrolling::boundary_affordance::BoundaryEligibility {
+        top: geometry.at_top && first_selectable == Some(selected_index),
+        bottom: geometry.at_bottom && last_selectable == Some(selected_index),
+    }
+}
+
 impl ScriptListApp {
+    fn main_list_boundary_affordance_tuning(
+        &self,
+    ) -> crate::scrolling::boundary_affordance::BoundaryAffordanceTuning {
+        let tokens = self.current_main_menu_theme.def().list;
+        crate::scrolling::boundary_affordance::BoundaryAffordanceTuning::new(
+            tokens.overscroll_max_distance,
+            tokens.overscroll_resistance,
+            std::time::Duration::from_millis(tokens.overscroll_settle_ms),
+            std::time::Duration::from_millis(tokens.overscroll_idle_timeout_ms),
+            tokens.overscroll_reduced_motion_max_distance,
+        )
+    }
+
+    fn main_list_scroll_geometry(&mut self) -> MainListScrollGeometry {
+        let viewport_height = self.main_list_state.viewport_bounds().size.height.as_f32();
+        let footer_height = main_list_footer_overlay_total_padding().as_f32();
+        let scroll_offset = self.main_list_state.logical_scroll_top();
+        let heights = ScriptListRowHeights::for_theme(self.current_main_menu_theme);
+        let (content_height, scroll_top) = {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            (
+                script_list_content_height_with(&grouped_items, heights),
+                script_list_pixel_top_for_offset(&grouped_items, scroll_offset, heights),
+            )
+        };
+        main_list_scroll_geometry_values(content_height, viewport_height, footer_height, scroll_top)
+    }
+
+    pub(crate) fn main_list_top_fade_snapshot(&mut self) -> MainListTopFadeSnapshot {
+        let geometry = self.main_list_scroll_geometry();
+        let tokens = self.current_main_menu_theme.def().list;
+        let progress = main_list_top_fade_progress(geometry.scroll_top, tokens.top_occlusion_ramp);
+        MainListTopFadeSnapshot {
+            active: progress > 0.0,
+            progress,
+            alpha: crate::components::list_scroll_affordance::top_occlusion_alpha(tokens, progress),
+        }
+    }
+
+    fn main_list_boundary_eligibility(
+        &mut self,
+        geometry: MainListScrollGeometry,
+    ) -> crate::scrolling::boundary_affordance::BoundaryEligibility {
+        let first = self.main_menu_result_caches.first_selectable_index();
+        let last = self.main_menu_result_caches.last_selectable_index();
+        main_list_boundary_eligibility_values(geometry, self.selected_index, first, last)
+    }
+
+    pub(crate) fn reset_main_list_boundary_affordance(
+        &mut self,
+        reason: crate::scrolling::boundary_affordance::SettleReason,
+    ) -> bool {
+        self.main_list_boundary_affordance.reset(reason)
+    }
+
+    fn schedule_main_list_boundary_settle(
+        &mut self,
+        tuning: crate::scrolling::boundary_affordance::BoundaryAffordanceTuning,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::scrolling::boundary_affordance::{normalized_settle_elapsed, BoundaryPhase};
+
+        const FRAME: std::time::Duration = std::time::Duration::from_millis(16);
+        let generation = self.main_list_boundary_affordance.generation;
+        let starting_offset = self.main_list_boundary_affordance.offset_px;
+        let started_at = std::time::Instant::now();
+
+        cx.spawn(async move |this, cx| loop {
+            cx.background_executor().timer(FRAME).await;
+            let elapsed = started_at.elapsed();
+            let normalized = normalized_settle_elapsed(elapsed, tuning.settle_duration);
+            let keep_running = cx
+                .update(|cx| {
+                    this.update(cx, |app, cx| {
+                        if !app.main_list_boundary_affordance.apply_settle_sample(
+                            generation,
+                            starting_offset,
+                            normalized,
+                        ) {
+                            return false;
+                        }
+                        cx.notify();
+                        app.main_list_boundary_affordance.phase == BoundaryPhase::Settling
+                    })
+                })
+                .unwrap_or(false);
+            if !keep_running {
+                break;
+            }
+        })
+        .detach();
+    }
+
+    fn schedule_main_list_boundary_idle_watchdog(
+        &mut self,
+        tuning: crate::scrolling::boundary_affordance::BoundaryAffordanceTuning,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::scrolling::boundary_affordance::IdleWatchdogStatus;
+
+        let generation = self.main_list_boundary_affordance.generation;
+        cx.spawn(async move |this, cx| {
+            let mut delay = tuning.idle_timeout;
+            loop {
+                cx.background_executor().timer(delay).await;
+                let next_delay = cx
+                    .update(|cx| {
+                        this.update(cx, |app, cx| {
+                            match app.main_list_boundary_affordance.idle_watchdog_status(
+                                generation,
+                                std::time::Instant::now(),
+                                tuning,
+                            ) {
+                                IdleWatchdogStatus::Cancelled => None,
+                                IdleWatchdogStatus::Sleep(remaining) => Some(remaining),
+                                IdleWatchdogStatus::TimedOut => {
+                                    let decision = app
+                                        .main_list_boundary_affordance
+                                        .begin_idle_timeout_settle(
+                                            generation,
+                                            std::time::Instant::now(),
+                                            tuning,
+                                        );
+                                    if decision.start_settle.is_some() {
+                                        app.schedule_main_list_boundary_settle(tuning, cx);
+                                    }
+                                    if decision.visual_changed {
+                                        cx.notify();
+                                    }
+                                    None
+                                }
+                            }
+                        })
+                    })
+                    .ok()
+                    .flatten();
+                let Some(remaining) = next_delay else {
+                    break;
+                };
+                delay = remaining;
+            }
+        })
+        .detach();
+    }
+
+    fn apply_selection_owned_wheel_lines(
+        &mut self,
+        delta_lines: f32,
+        item_count: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if item_count == 0 || delta_lines.abs() <= f32::EPSILON {
+            return;
+        }
+
+        self.main_list_suppress_hover_until_mouse_move = true;
+        self.mark_main_menu_selection_user_moved();
+        if self.hovered_index.take().is_some() {
+            cx.notify();
+        }
+
+        let selected_before = self.selected_index;
+        let scroll_top_before = self.main_list_state.logical_scroll_top();
+        let wheel_accum_before = self.wheel_accum;
+        self.wheel_accum += -delta_lines;
+        let steps = self.wheel_accum.trunc() as i32;
+        if steps != 0 {
+            self.wheel_accum -= steps as f32;
+            self.move_selection_by(steps, cx);
+        }
+
+        let scroll_top_after = self.main_list_state.logical_scroll_top();
+        self.sync_main_list_selection_to_visible_window("wheel");
+        tracing::debug!(
+            target: "SCROLL_STATE",
+            delta_lines,
+            steps,
+            total_items = item_count,
+            selected_before,
+            selected_after = self.selected_index,
+            scroll_top_before = scroll_top_before.item_ix,
+            scroll_top_after = scroll_top_after.item_ix,
+            offset_before_px = scroll_top_before.offset_in_item.as_f32(),
+            offset_after_px = scroll_top_after.offset_in_item.as_f32(),
+            wheel_accum_before,
+            wheel_accum_after = self.wheel_accum,
+            propagation_stopped = true,
+            "script list wheel handled"
+        );
+    }
+
+    pub(crate) fn handle_main_list_scroll_wheel(
+        &mut self,
+        event: &gpui::ScrollWheelEvent,
+        average_item_height: f32,
+        item_count: usize,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::scrolling::boundary_affordance::{PreciseTouchPhase, SettleReason};
+
+        if item_count == 0 {
+            return;
+        }
+        cx.stop_propagation();
+
+        match event.delta {
+            gpui::ScrollDelta::Lines(point) => {
+                if self.main_list_boundary_affordance.phase
+                    != crate::scrolling::boundary_affordance::BoundaryPhase::Idle
+                    && self.reset_main_list_boundary_affordance(SettleReason::Reset)
+                {
+                    cx.notify();
+                }
+                self.apply_selection_owned_wheel_lines(point.y, item_count, cx);
+            }
+            gpui::ScrollDelta::Pixels(point) => {
+                let delta_y_px = point.y.as_f32();
+                let geometry = self.main_list_scroll_geometry();
+                let eligibility = self.main_list_boundary_eligibility(geometry);
+                let tuning = self.main_list_boundary_affordance_tuning();
+                let touch_phase = match event.touch_phase {
+                    gpui::TouchPhase::Started => PreciseTouchPhase::Started,
+                    gpui::TouchPhase::Moved => PreciseTouchPhase::Moved,
+                    gpui::TouchPhase::Ended => PreciseTouchPhase::Ended,
+                };
+                let decision = self.main_list_boundary_affordance.handle_precise_scroll(
+                    delta_y_px,
+                    touch_phase,
+                    eligibility,
+                    tuning,
+                    crate::platform::prefers_reduced_motion(),
+                    std::time::Instant::now(),
+                );
+
+                if decision.arm_idle_watchdog || decision.start_settle.is_some() {
+                    self.wheel_accum = 0.0;
+                }
+                if decision.arm_idle_watchdog {
+                    self.schedule_main_list_boundary_idle_watchdog(tuning, cx);
+                }
+                if decision.start_settle.is_some() {
+                    self.schedule_main_list_boundary_settle(tuning, cx);
+                }
+                if decision.visual_changed {
+                    cx.notify();
+                }
+                if decision.residual_delta_y_px.abs() > f32::EPSILON {
+                    self.apply_selection_owned_wheel_lines(
+                        decision.residual_delta_y_px / average_item_height.max(1.0),
+                        item_count,
+                        cx,
+                    );
+                }
+            }
+        }
+    }
+
     pub(crate) fn main_list_scroll_receipt(&mut self) -> serde_json::Value {
         let viewport_height = self.main_list_state.viewport_bounds().size.height;
         let footer_height = main_list_footer_overlay_total_padding();
@@ -202,38 +526,65 @@ impl ScriptListApp {
             let (grouped_items, _) = self.get_grouped_results_cached();
             script_list_pixel_top_for_offset(&grouped_items, scroll_offset, heights)
         };
-        let viewport_height_px = viewport_height.as_f32().max(0.0);
-        let footer_height_px = footer_height.as_f32().max(0.0);
-        let safe_viewport_height = (viewport_height_px - footer_height_px).max(0.0);
-        let max_scroll_top = (content_height - safe_viewport_height).max(0.0);
-        let selected_row_top_in_view = selected_row_top.map(|top| top - scroll_top);
-        let selected_row_bottom_in_view = selected_row_bottom.map(|bottom| bottom - scroll_top);
+        let geometry = main_list_scroll_geometry_values(
+            content_height,
+            viewport_height.as_f32(),
+            footer_height.as_f32(),
+            scroll_top,
+        );
+        let selected_row_top_in_view = selected_row_top.map(|top| top - geometry.scroll_top);
+        let selected_row_bottom_in_view =
+            selected_row_bottom.map(|bottom| bottom - geometry.scroll_top);
         let selected_row_visible = selected_row_top_in_view
             .zip(selected_row_bottom_in_view)
-            .map(|(top, bottom)| top >= 0.0 && bottom <= viewport_height_px)
+            .map(|(top, bottom)| top >= 0.0 && bottom <= geometry.viewport_height)
             .unwrap_or(false);
         let selected_row_above_footer = selected_row_bottom_in_view
-            .map(|bottom| bottom <= safe_viewport_height)
+            .map(|bottom| bottom <= geometry.safe_viewport_height)
             .unwrap_or(false);
+        let tokens = self.current_main_menu_theme.def().list;
+        let top_fade_progress =
+            main_list_top_fade_progress(geometry.scroll_top, tokens.top_occlusion_ramp);
+        let top_fade_alpha = crate::components::list_scroll_affordance::top_occlusion_alpha(
+            tokens,
+            top_fade_progress,
+        );
+        let tuning = self.main_list_boundary_affordance_tuning();
+        let affordance = &self.main_list_boundary_affordance;
 
         serde_json::json!({
-            "scrollTop": scroll_top,
+            "scrollTop": geometry.scroll_top,
             "scrollTopItem": scroll_offset.item_ix,
             "scrollTopOffset": scroll_offset.offset_in_item.as_f32(),
-            "contentHeight": content_height,
-            "viewportHeight": viewport_height_px,
-            "footerHeight": footer_height_px,
+            "contentHeight": geometry.content_height,
+            "viewportHeight": geometry.viewport_height,
+            "footerHeight": geometry.footer_height,
             "footerOverlayHeight": main_list_footer_overlay_height().as_f32().max(0.0),
             "footerRevealClearanceHeight": main_list_footer_reveal_clearance_height().as_f32().max(0.0),
-            "footerOverlayTotalPadding": footer_height_px,
-            "safeViewportHeight": safe_viewport_height,
-            "maxScrollTop": max_scroll_top,
+            "footerOverlayTotalPadding": geometry.footer_height,
+            "safeViewportHeight": geometry.safe_viewport_height,
+            "maxScrollTop": geometry.max_scroll_top,
             "selectedIndex": self.selected_index,
             "selectedRowTop": selected_row_top_in_view,
             "selectedRowBottom": selected_row_bottom_in_view,
             "selectedRowVisible": selected_row_visible,
             "selectedRowAboveFooter": selected_row_above_footer,
             "itemCount": item_count,
+            "affordance": {
+                "atTop": geometry.at_top,
+                "atBottom": geometry.at_bottom,
+                "topFadeActive": top_fade_progress > 0.0,
+                "topFadeProgress": top_fade_progress,
+                "topFadeAlpha": top_fade_alpha,
+                "overscrollOffsetPx": affordance.offset_px,
+                "overscrollMaxOffsetPx": tuning.active_max_distance_px(affordance.reduced_motion),
+                "overscrollEdge": affordance.edge.map(|edge| edge.as_str()),
+                "overscrollPhase": affordance.phase.as_str(),
+                "generation": affordance.generation,
+                "lastTouchPhase": affordance.last_touch_phase.map(|phase| phase.as_str()),
+                "lastSettleReason": affordance.last_settle_reason.map(|reason| reason.as_str()),
+                "reducedMotion": affordance.reduced_motion,
+            },
         })
     }
 
@@ -299,6 +650,10 @@ impl ScriptListApp {
         ) else {
             return;
         };
+
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
 
         tracing::info!(
             target: "script_kit::scroll",
@@ -607,6 +962,9 @@ impl ScriptListApp {
     /// Note: This is separate from validate_selection_bounds() which handles
     /// ensuring the selected index is valid.
     pub fn sync_list_state(&mut self) {
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         let (grouped_items, _) = self.get_grouped_results_cached();
         let item_count = grouped_items.len();
 
@@ -642,6 +1000,9 @@ impl ScriptListApp {
     /// so filter changes replace the list state identity to avoid stale
     /// measured row elements being painted under fresh footer/preflight state.
     pub fn sync_list_state_for_filter_replacement(&mut self) {
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         let (grouped_items, _) = self.get_grouped_results_cached();
         let item_count = grouped_items.len();
         let old_list_count = self.main_list_state.item_count();
@@ -827,7 +1188,9 @@ impl ScriptListApp {
 #[cfg(test)]
 mod scroll_fade_tests {
     use super::{
-        footer_safe_scroll_offset_for_item, scrollbar_fade_duration, scrollbar_fade_opacity,
+        footer_safe_scroll_offset_for_item, main_list_boundary_eligibility_values,
+        main_list_scroll_geometry_values, main_list_top_fade_progress, scrollbar_fade_duration,
+        scrollbar_fade_opacity,
     };
     use crate::list_item::GroupedListItem;
 
@@ -859,6 +1222,48 @@ mod scroll_fade_tests {
     fn test_scrollbar_fade_opacity_does_use_ease_in_curve_when_progress_is_midpoint() {
         let midpoint = scrollbar_fade_opacity(0.5).value();
         assert!((midpoint - 0.75).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn top_occlusion_is_exactly_absent_at_logical_top_and_smoothly_ramps() {
+        assert_eq!(main_list_top_fade_progress(0.0, 24.0), 0.0);
+        assert_eq!(main_list_top_fade_progress(0.5, 24.0), 0.0);
+        let midpoint = main_list_top_fade_progress(12.0, 24.0);
+        assert!((midpoint - 0.5).abs() < f32::EPSILON);
+        assert_eq!(main_list_top_fade_progress(24.0, 24.0), 1.0);
+        assert_eq!(main_list_top_fade_progress(200.0, 24.0), 1.0);
+    }
+
+    #[test]
+    fn boundary_geometry_uses_footer_safe_viewport_and_fails_closed_unmeasured() {
+        let top = main_list_scroll_geometry_values(1000.0, 420.0, 32.0, 0.0);
+        assert!(top.at_top);
+        assert!(!top.at_bottom);
+        assert_eq!(top.safe_viewport_height, 388.0);
+        assert_eq!(top.max_scroll_top, 612.0);
+
+        let bottom = main_list_scroll_geometry_values(1000.0, 420.0, 32.0, 612.0);
+        assert!(!bottom.at_top);
+        assert!(bottom.at_bottom);
+
+        let unmeasured = main_list_scroll_geometry_values(1000.0, 0.0, 32.0, 0.0);
+        assert!(!unmeasured.at_top);
+        assert!(!unmeasured.at_bottom);
+    }
+
+    #[test]
+    fn boundary_capture_requires_the_matching_selected_endpoint() {
+        let top = main_list_scroll_geometry_values(1000.0, 420.0, 32.0, 0.0);
+        let not_first = main_list_boundary_eligibility_values(top, 2, Some(1), Some(20));
+        assert!(!not_first.top);
+        let first = main_list_boundary_eligibility_values(top, 1, Some(1), Some(20));
+        assert!(first.top);
+
+        let bottom = main_list_scroll_geometry_values(1000.0, 420.0, 32.0, 612.0);
+        let not_last = main_list_boundary_eligibility_values(bottom, 19, Some(1), Some(20));
+        assert!(!not_last.bottom);
+        let last = main_list_boundary_eligibility_values(bottom, 20, Some(1), Some(20));
+        assert!(last.bottom);
     }
 
     #[test]

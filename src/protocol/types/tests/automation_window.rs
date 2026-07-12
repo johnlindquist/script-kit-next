@@ -211,6 +211,86 @@ fn simulate_gpui_event_mouse_click_round_trip() {
 }
 
 #[test]
+fn simulated_touch_phase_all_variants_round_trip() {
+    for (phase, expected) in [
+        (SimulatedTouchPhase::Started, "started"),
+        (SimulatedTouchPhase::Moved, "moved"),
+        (SimulatedTouchPhase::Ended, "ended"),
+    ] {
+        let json = serde_json::to_string(&phase).expect("serialize touch phase");
+        assert_eq!(json, format!("\"{expected}\""));
+        let back: SimulatedTouchPhase =
+            serde_json::from_str(&json).expect("deserialize touch phase");
+        assert_eq!(back, phase);
+    }
+}
+
+#[test]
+fn simulate_gpui_event_scroll_wheel_round_trip_uses_pixel_schema() {
+    let event = SimulatedGpuiEvent::ScrollWheel {
+        x: 120.5,
+        y: 240.25,
+        delta_x: -3.0,
+        delta_y: 18.5,
+        phase: SimulatedTouchPhase::Moved,
+    };
+    let value = serde_json::to_value(&event).expect("serialize scroll wheel");
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "type": "scrollWheel",
+            "x": 120.5,
+            "y": 240.25,
+            "deltaX": -3.0,
+            "deltaY": 18.5,
+            "phase": "moved"
+        })
+    );
+    let back: SimulatedGpuiEvent = serde_json::from_value(value).expect("deserialize scroll wheel");
+    assert_eq!(back, event);
+}
+
+#[test]
+fn simulate_gpui_event_scroll_wheel_request_round_trip() {
+    let json = r#"{
+        "type": "simulateGpuiEvent",
+        "requestId": "gpui-scroll-1",
+        "target": {"type": "main"},
+        "event": {
+            "type": "scrollWheel",
+            "x": 160.0,
+            "y": 220.0,
+            "deltaX": 0.0,
+            "deltaY": -24.0,
+            "phase": "started"
+        }
+    }"#;
+    let msg: crate::protocol::Message =
+        serde_json::from_str(json).expect("parse scroll-wheel simulateGpuiEvent");
+    match msg {
+        crate::protocol::Message::SimulateGpuiEvent {
+            request_id,
+            target,
+            event,
+        } => {
+            assert_eq!(request_id, "gpui-scroll-1");
+            assert_eq!(target, Some(AutomationWindowTarget::Main));
+            assert_eq!(
+                event,
+                SimulatedGpuiEvent::ScrollWheel {
+                    x: 160.0,
+                    y: 220.0,
+                    delta_x: 0.0,
+                    delta_y: -24.0,
+                    phase: SimulatedTouchPhase::Started,
+                }
+            );
+        }
+        other => panic!("Expected SimulateGpuiEvent, got: {other:?}"),
+    }
+}
+
+#[test]
 fn simulate_gpui_event_request_round_trip() {
     let json = r#"{
         "type": "simulateGpuiEvent",

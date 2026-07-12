@@ -107,6 +107,22 @@ pub struct MainMenuListTokens {
     pub average_scroll_height: f32,
     pub footer_reveal_clearance_height: f32,
     pub scrollbar_width: f32,
+    /// Height of the fixed top occlusion plane shown once list content scrolls.
+    pub top_occlusion_height: f32,
+    /// Logical scroll distance over which the top occlusion reaches full strength.
+    pub top_occlusion_ramp: f32,
+    /// Peak alpha for the theme-derived top occlusion gradient.
+    pub top_occlusion_peak_alpha: u32,
+    /// Maximum visual-only boundary displacement for precise trackpad input.
+    pub overscroll_max_distance: f32,
+    /// Resistance distance used by the saturating rubber-band curve.
+    pub overscroll_resistance: f32,
+    /// Duration of the non-oscillating boundary rebound.
+    pub overscroll_settle_ms: u64,
+    /// Idle interval used when a platform stream omits an Ended phase.
+    pub overscroll_idle_timeout_ms: u64,
+    /// Reduced-motion cap; direct manipulation remains visible but minimal.
+    pub overscroll_reduced_motion_max_distance: f32,
     pub section_padding_x: f32,
     pub section_padding_top: f32,
     pub section_padding_bottom: f32,
@@ -764,6 +780,14 @@ fn base_main_menu_theme_def(
             average_scroll_height: ((44.0 * 3.0) + 28.0) / 4.0,
             footer_reveal_clearance_height: 0.0,
             scrollbar_width: 16.0,
+            top_occlusion_height: 20.0,
+            top_occlusion_ramp: 24.0,
+            top_occlusion_peak_alpha: 0xCC,
+            overscroll_max_distance: 18.0,
+            overscroll_resistance: 36.0,
+            overscroll_settle_ms: 180,
+            overscroll_idle_timeout_ms: 160,
+            overscroll_reduced_motion_max_distance: 4.0,
             section_padding_x: MAIN_MENU_SECTION_PADDING_X,
             section_padding_top: MAIN_MENU_SECTION_PADDING_TOP,
             section_padding_bottom: MAIN_MENU_SECTION_PADDING_BOTTOM,

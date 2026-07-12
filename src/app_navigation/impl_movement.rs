@@ -12,6 +12,9 @@ impl ScriptListApp {
             return;
         }
 
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         self.clear_menu_syntax_filter_accept_hint();
         self.selected_index = ix;
         self.maybe_expand_root_file_source_chip_page(cx);

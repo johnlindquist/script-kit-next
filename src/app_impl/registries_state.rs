@@ -169,6 +169,9 @@ impl ScriptListApp {
     /// Reset all state and return to the script list view.
     /// This clears all prompt state and resizes the window appropriately.
     pub(crate) fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
+        self.reset_main_list_boundary_affordance(
+            crate::scrolling::boundary_affordance::SettleReason::Reset,
+        );
         clear_main_state_restore_after_focus_loss();
         // Any detached floating popups (Agent Chat composer picker state / history popup /
         // menu-syntax trigger picker) are owned by the
