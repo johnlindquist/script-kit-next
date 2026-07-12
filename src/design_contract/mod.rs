@@ -3263,6 +3263,17 @@ pub fn checked_in_design_bundle() -> Result<DesignTokenBundle, String> {
     // Embedded Agent Chat aliases the canonical main-menu search typography;
     // these records are resolved/non-writable so there is still one owner.
     b.add(
+        "agentChat.composer.fontFamily",
+        TokenStage::Resolved,
+        None,
+        TokenValue::Text {
+            value: crate::list_item::FONT_SYSTEM_UI.to_string(),
+        },
+        None,
+        false,
+        &["mainMenu.type.uiFontFamily"],
+    );
+    b.add(
         "agentChat.composer.fontSize",
         TokenStage::Resolved,
         Some("--sk-agent-chat-composer-font-size"),
@@ -3735,9 +3746,9 @@ pub fn checked_in_design_bundle() -> Result<DesignTokenBundle, String> {
             "style_contract::AGENT_CHAT_PLACEHOLDER_FOLLOW_UP (the kitchen-sink fixture state)",
         ),
         (
-            "agentChat.composer.fontFamily",
+            "agentChat.legacyComposer.fontFamily",
             agent_chat_contract::AGENT_CHAT_INPUT_FONT_FAMILY.to_string(),
-            "style_contract::AGENT_CHAT_INPUT_FONT_FAMILY — a SEPARATE authority from list_item::FONT_SYSTEM_UI; do not collapse into --sk-font-ui until the renderer shares the const",
+            "style_contract::AGENT_CHAT_INPUT_FONT_FAMILY — detached/experimental Agent Chat and Focused Text Mini only",
         ),
         (
             "agentChat.transcript.alignment",
@@ -3757,7 +3768,7 @@ pub fn checked_in_design_bundle() -> Result<DesignTokenBundle, String> {
         (
             "agentChat.fixture.kitchenSinkCwd",
             agent_chat_contract::AGENT_CHAT_KITCHEN_SINK_FIXTURE_CWD.to_string(),
-            "style_contract::AGENT_CHAT_KITCHEN_SINK_FIXTURE_CWD — pinned long path so reference captures are byte-reproducible AND keep the header overlap",
+            "style_contract::AGENT_CHAT_KITCHEN_SINK_FIXTURE_CWD — pinned long path so reference captures are byte-reproducible and exercise clipped context lanes without visible overlap",
         ),
     ] {
         b.add(
@@ -4845,7 +4856,20 @@ mod tests {
             text("agentChat.composer.placeholderFollowUp"),
             "Follow up\u{2026}"
         );
-        assert_eq!(text("agentChat.composer.fontFamily"), ".SystemUIFont");
+        assert_eq!(
+            text("agentChat.composer.fontFamily"),
+            crate::list_item::FONT_SYSTEM_UI
+        );
+        assert_eq!(text("agentChat.legacyComposer.fontFamily"), ".SystemUIFont");
+        let embedded_composer_family = record("agentChat.composer.fontFamily");
+        assert!(matches!(
+            embedded_composer_family.stage,
+            TokenStage::Resolved
+        ));
+        assert_eq!(
+            embedded_composer_family.derived_from,
+            vec!["mainMenu.type.uiFontFamily".to_string()]
+        );
         assert_eq!(
             text("agentChat.transcript.alignment"),
             "bottomFollowTailWithSyntheticActivityTail"
@@ -4874,6 +4898,7 @@ mod tests {
             "agentChat.composer.placeholderEmpty",
             "agentChat.composer.placeholderFollowUp",
             "agentChat.composer.fontFamily",
+            "agentChat.legacyComposer.fontFamily",
             "agentChat.transcript.alignment",
             "agentChat.footer.presentation",
             "agentChat.tool.defaultExpansion",
