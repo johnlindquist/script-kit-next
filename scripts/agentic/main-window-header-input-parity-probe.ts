@@ -1628,7 +1628,24 @@ try {
     path: binary,
     exists: existsSync(binary),
     bytes: binaryBytes,
+    mtimeMs: binaryMtimeMs,
   });
+  check(
+    "binary-mtime-present",
+    typeof binaryMtimeMs === "number" &&
+      Number.isFinite(binaryMtimeMs) &&
+      binaryMtimeMs > 0,
+    { path: binary, mtimeMs: binaryMtimeMs },
+  );
+  check(
+    "probe-file-metadata-present",
+    probeBytes !== null &&
+      probeBytes > 0 &&
+      typeof probeMtimeMs === "number" &&
+      Number.isFinite(probeMtimeMs) &&
+      probeMtimeMs > 0,
+    { path: probePath, bytes: probeBytes, mtimeMs: probeMtimeMs },
+  );
   if (binaryBytes === null || binaryBytes <= 0) {
     throw new Error(
       `Required Script Kit binary is missing or empty at ${binary}. ` +
@@ -1971,15 +1988,39 @@ try {
 
 const finalBinarySha256 = sha256File(binary);
 const finalProbeSha256 = sha256File(probePath);
+const finalBinaryBytes = fileSize(binary);
+const finalBinaryMtimeMs = fileMtimeMs(binary);
+const finalProbeBytes = fileSize(probePath);
+const finalProbeMtimeMs = fileMtimeMs(probePath);
 check(
   "binary-provenance-stable-through-probe",
-  validSha256(finalBinarySha256) && finalBinarySha256 === binarySha256,
-  { before: binarySha256, after: finalBinarySha256 },
+  validSha256(finalBinarySha256) &&
+    finalBinarySha256 === binarySha256 &&
+    finalBinaryBytes === binaryBytes &&
+    finalBinaryMtimeMs === binaryMtimeMs,
+  {
+    before: { sha256: binarySha256, bytes: binaryBytes, mtimeMs: binaryMtimeMs },
+    after: {
+      sha256: finalBinarySha256,
+      bytes: finalBinaryBytes,
+      mtimeMs: finalBinaryMtimeMs,
+    },
+  },
 );
 check(
   "probe-provenance-stable-through-probe",
-  validSha256(finalProbeSha256) && finalProbeSha256 === probeSha256,
-  { before: probeSha256, after: finalProbeSha256 },
+  validSha256(finalProbeSha256) &&
+    finalProbeSha256 === probeSha256 &&
+    finalProbeBytes === probeBytes &&
+    finalProbeMtimeMs === probeMtimeMs,
+  {
+    before: { sha256: probeSha256, bytes: probeBytes, mtimeMs: probeMtimeMs },
+    after: {
+      sha256: finalProbeSha256,
+      bytes: finalProbeBytes,
+      mtimeMs: finalProbeMtimeMs,
+    },
+  },
 );
 const generatedAt = new Date();
 receipt.generatedAt = generatedAt.toISOString();
