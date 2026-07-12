@@ -23,8 +23,9 @@ const HINT_STRIP_CONTENT_GAP: f32 = 8.0;
 const HINT_BUTTON_PADDING_X: f32 = 4.0;
 const HINT_BUTTON_PADDING_Y: f32 = 2.0;
 
-/// Corner radius for hint button hover highlight.
-const HINT_BUTTON_RADIUS: f32 = 4.0;
+/// Corner radius for hint button hover highlight — the canonical
+/// hover-button radius shared by every hover-pill button.
+const HINT_BUTTON_RADIUS: f32 = crate::ui::chrome::ACTION_BUTTON_RADIUS_PX;
 
 /// Size for keyboard glyph icons in the hint strip.
 /// Slightly larger than text_xs (12px) for visual clarity at hint opacity.

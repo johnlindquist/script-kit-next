@@ -87,6 +87,27 @@ pub(crate) struct SemanticChipColors {
     pub text_hex: u32,
 }
 
+/// Danger (destructive/deny) action colors layered over the theme's
+/// `ui.error` color with the shared `DANGER_ACTION_*` alphas, so no surface
+/// hardcodes a danger hue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct DangerActionColors {
+    pub rest_rgba: u32,
+    pub hover_rgba: u32,
+    pub border_rgba: u32,
+}
+
+impl DangerActionColors {
+    pub(crate) fn from_theme(theme: &Theme) -> Self {
+        let error = theme.colors.ui.error;
+        Self {
+            rest_rgba: (error << 8) | crate::ui::chrome::DANGER_ACTION_REST_ALPHA,
+            hover_rgba: (error << 8) | crate::ui::chrome::DANGER_ACTION_HOVER_ALPHA,
+            border_rgba: (error << 8) | crate::ui::chrome::DANGER_ACTION_BORDER_ALPHA,
+        }
+    }
+}
+
 impl AppChromeColors {
     /// Resolve contrast-safe chip colors for a given semantic base color.
     #[allow(dead_code)] // used by binary target (theme_chooser.rs)

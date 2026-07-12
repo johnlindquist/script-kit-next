@@ -24,6 +24,21 @@ pub const LIQUID_GLASS_PANEL_PADDING_PX: f32 = 16.0;
 /// Canonical dense gap between stacked controls/labels inside chrome.
 pub const LIQUID_GLASS_DENSE_GAP_PX: f32 = 8.0;
 
+/// Canonical hover-button corner radius. The footer trailing action buttons
+/// own this value; every other hover-pill button (header context chips,
+/// footer tip, hint-strip buttons, prompt-footer buttons) must share it so
+/// all buttons read as one system.
+pub const ACTION_BUTTON_RADIUS_PX: f32 = 6.0;
+/// Canonical keycap-border alpha while a hover-pill button is hovered.
+pub const ACTION_BUTTON_HOVER_BORDER_ALPHA: u32 = 0x57;
+
+/// Danger (destructive/deny) action fill alphas layered over the theme's
+/// `ui.error` color. One owner for the red family so no surface hardcodes
+/// a danger hue again.
+pub const DANGER_ACTION_REST_ALPHA: u32 = 0x08;
+pub const DANGER_ACTION_HOVER_ALPHA: u32 = 0x14;
+pub const DANGER_ACTION_BORDER_ALPHA: u32 = 0xAA;
+
 /// Minimum cycle for ambient/pulsing motion so status indicators stay calm.
 pub const AMBIENT_PULSE_CYCLE_MS: u64 = 2_000;
 

@@ -6,10 +6,11 @@ pub const MAIN_MENU_HEADER_CONTEXT_EDGE_OUTSET_X: f32 = 8.0;
 /// Canonical hover-button corner radius: the footer trailing action buttons
 /// own this value, and every other hover-pill button (header context chips,
 /// footer tip) must share it so all buttons read as one system.
-pub const MAIN_MENU_ACTION_BUTTON_RADIUS: f32 = 6.0;
+pub const MAIN_MENU_ACTION_BUTTON_RADIUS: f32 = crate::ui::chrome::ACTION_BUTTON_RADIUS_PX;
 /// Canonical keycap-border alpha while a hover-pill button is hovered.
 /// Shared by the footer buttons and the header context chips.
-pub const MAIN_MENU_ACTION_BUTTON_HOVER_BORDER_ALPHA: u32 = 0x57;
+pub const MAIN_MENU_ACTION_BUTTON_HOVER_BORDER_ALPHA: u32 =
+    crate::ui::chrome::ACTION_BUTTON_HOVER_BORDER_ALPHA;
 pub const MAIN_MENU_SECTION_PADDING_X: f32 = 14.0;
 pub const MAIN_MENU_SECTION_PADDING_TOP: f32 = 12.0;
 pub const MAIN_MENU_SECTION_PADDING_BOTTOM: f32 = 4.0;

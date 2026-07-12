@@ -181,7 +181,9 @@ fn shortcut_key_glyph_nudge_y(key: &str, configured_return: Option<f32>) -> f32 
 }
 
 fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
-    (colors.background << 8) | (colors.hover_alpha as u32)
+    // Canonical hover pill: primary-text overlay at theme hover opacity,
+    // matching the native footer buttons (not a background-tinted pill).
+    (colors.text_primary << 8) | (colors.hover_alpha as u32)
 }
 
 fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
@@ -494,7 +496,7 @@ impl PromptFooter {
             .items_center()
             .px(px(8.))
             .py(px(6.))
-            .rounded(px(4.))
+            .rounded(px(crate::ui::chrome::ACTION_BUTTON_RADIUS_PX))
             .child(label_element);
 
         if !shortcut.is_empty() {
@@ -831,7 +833,7 @@ mod tests {
     }
 
     #[test]
-    fn test_footer_button_hover_rgba_uses_stronger_dark_opacity() {
+    fn test_footer_button_hover_rgba_uses_text_primary_with_dark_opacity() {
         let colors = PromptFooterColors {
             accent: 0,
             text_muted: 0,
@@ -844,7 +846,9 @@ mod tests {
             is_light_mode: false,
         };
 
-        assert_eq!(super::footer_button_hover_rgba(colors), 0x2255aa38);
+        // Hover pill is a primary-text overlay (canonical footer style), not
+        // a background tint.
+        assert_eq!(super::footer_button_hover_rgba(colors), 0xffffff38);
     }
 
     #[test]
@@ -859,7 +863,7 @@ mod tests {
     }
 
     #[test]
-    fn test_footer_button_hover_rgba_uses_light_theme_hover_opacity() {
+    fn test_footer_button_hover_rgba_uses_text_primary_with_light_opacity() {
         let colors = PromptFooterColors {
             accent: 0,
             text_muted: 0,
@@ -872,7 +876,7 @@ mod tests {
             is_light_mode: true,
         };
 
-        assert_eq!(super::footer_button_hover_rgba(colors), 0x2255aa2e);
+        assert_eq!(super::footer_button_hover_rgba(colors), 0xffffff2e);
     }
 
     #[test]

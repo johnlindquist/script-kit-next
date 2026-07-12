@@ -10807,14 +10807,15 @@ impl AgentChatView {
         let option_id = option.option_id.clone();
 
         let (accent, bg, hover_bg, caption) = if option.is_reject() {
+            let error = theme.colors.ui.error;
             (
-                rgba(0xEF4444AA),
+                rgba((error << 8) | 0xAA),
                 if is_selected {
-                    rgba(0xEF444418)
+                    rgba((error << 8) | 0x18)
                 } else {
-                    rgba(0xEF444406)
+                    rgba((error << 8) | 0x06)
                 },
-                rgba(0xEF444410),
+                rgba((error << 8) | 0x10),
                 "Deny this request",
             )
         } else if option.is_persistent_allow() {
@@ -10894,6 +10895,7 @@ impl AgentChatView {
         view: WeakEntity<AgentChatView>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
+        let deny_colors = crate::theme::DangerActionColors::from_theme(&theme);
         let preview = request.preview.clone();
         let selected_index = selected_index.min(request.options.len().saturating_sub(1));
         let show_options_button = request.options.len() > 2
@@ -11025,9 +11027,9 @@ impl AgentChatView {
                                     .py(px(6.0))
                                     .cursor_pointer()
                                     .border_l_2()
-                                    .border_color(rgba(0xEF4444AA))
-                                    .bg(rgba(0xEF444408))
-                                    .hover(|d| d.bg(rgba(0xEF444414)))
+                                    .border_color(rgba(deny_colors.border_rgba))
+                                    .bg(rgba(deny_colors.rest_rgba))
+                                    .hover(move |d| d.bg(rgba(deny_colors.hover_rgba)))
                                     .on_click(move |_event, _window, cx| {
                                         if let Some(entity) = deny_view.upgrade() {
                                             entity.update(cx, |this, cx| {
