@@ -66,6 +66,10 @@ const FOOTER_LEFT_PROFILE_ICON_SIZE: f64 = 13.0;
 const FOOTER_STREAMING_DOT_SIZE: f64 = 6.0;
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_DOT_LABEL_GAP: f64 = 6.0;
+/// Braille loading spinner in the footer left info: glyph size and the
+/// fixed lane width that keeps the label from shifting as frames cycle.
+const FOOTER_BRAILLE_SPINNER_FONT_PX: f32 = 15.0;
+const FOOTER_BRAILLE_SPINNER_LANE_PX: f32 = 12.0;
 #[cfg(target_os = "macos")]
 const FOOTER_ACTIVE_DOT_MIN_OPACITY: f32 = 0.6;
 #[cfg(target_os = "macos")]
@@ -115,6 +119,7 @@ pub(crate) enum FooterAction {
     /// picker so the user can change the agent (Pi provider) and model used by
     /// the next launch.
     AgentModel,
+    Tips,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -132,6 +137,8 @@ pub(crate) struct FooterButtonConfig {
     /// nothing. `None` reserves no lane (the common case — keeps ScriptList and
     /// every other button dot-free).
     pub leading_dot: Option<FooterDotStatus>,
+    /// Place this ordinary shared footer button on the leading rail.
+    pub left_pinned: bool,
 }
 
 pub(crate) const MAIN_WINDOW_FOOTER_MAX_ACTION_SLOTS: usize = 3;
@@ -180,11 +187,17 @@ impl FooterButtonConfig {
             enabled: true,
             disabled_reason: None,
             leading_dot: None,
+            left_pinned: false,
         }
     }
 
     pub(crate) fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+
+    pub(crate) fn left_pinned(mut self) -> Self {
+        self.left_pinned = true;
         self
     }
 
@@ -243,6 +256,17 @@ pub(crate) struct FooterLeftInfo {
     pub profile_name: Option<String>,
     /// Optional compact icon token rendered inside the merged left marker.
     pub icon_token: Option<String>,
+    /// Optional key/sigil rendered as a footer-style keycap chip between the
+    /// icon and the label (e.g. the ";" in the footer tip).
+    pub keycap: Option<String>,
+    /// Render the label at semibold weight (footer tips).
+    pub bold_label: bool,
+    /// Optional accent-colored braille spinner glyph rendered before the
+    /// label (loading states, e.g. "Fetching tabs"). The caller re-syncs the
+    /// footer config with the current frame each render tick; only the GPUI
+    /// overlay renders it — main-window surfaces always own their glyphs
+    /// there, and no detached-footer surface sets it.
+    pub spinner_glyph: Option<String>,
     /// Optional action dispatched when the merged left marker is clicked.
     pub action: Option<FooterAction>,
     /// Whether the merged left marker should render as selected/open.
@@ -514,7 +538,11 @@ impl GpuiFooterOverlay {
                 MouseButton::Left,
                 move |_event: &MouseDownEvent, _window, cx| {
                     cx.stop_propagation();
-                    dispatch_agent_chat_footer_action(action);
+                    if matches!(action, FooterAction::Tips) {
+                        send_footer_action_to_channel(action, false);
+                    } else {
+                        dispatch_agent_chat_footer_action(action);
+                    }
                 },
             );
         }
@@ -544,6 +572,27 @@ impl GpuiFooterOverlay {
             );
         }
 
+        if let Some(glyph) = info
+            .spinner_glyph
+            .as_ref()
+            .filter(|glyph| !glyph.trim().is_empty())
+        {
+            let accent = theme.colors.accent.selected;
+            row = row.child(
+                div()
+                    .id("footer-braille-spinner")
+                    .w(px(FOOTER_BRAILLE_SPINNER_LANE_PX))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .font_family(crate::list_item::FONT_MONO)
+                    .text_size(px(FOOTER_BRAILLE_SPINNER_FONT_PX))
+                    .text_color(rgba((accent << 8) | 0xff))
+                    .child(glyph.clone()),
+            );
+        }
+
         if let Some(path) = info
             .icon_token
             .as_deref()
@@ -554,14 +603,32 @@ impl GpuiFooterOverlay {
             ));
         }
 
+        if let Some(keycap) = info.keycap.as_ref().filter(|key| !key.trim().is_empty()) {
+            row = row.child(
+                crate::components::footer_chrome::render_footer_shortcut_keycaps_with_metrics(
+                    keycap.clone(),
+                    theme,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+            );
+        }
+
         if !info.model_name.trim().is_empty() {
             let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
+            let label_weight = if info.bold_label {
+                gpui::FontWeight::SEMIBOLD
+            } else {
+                metrics.font_weight
+            };
             row = row.child(
                 div()
                     .id("agent_chat-model-display")
                     .min_w(px(0.0))
                     .font_family(crate::list_item::FONT_SYSTEM_UI)
-                    .font_weight(metrics.font_weight)
+                    .font_weight(label_weight)
                     .text_size(px(metrics.label_font_size))
                     .text_color(crate::components::footer_chrome::footer_hint_text_color(
                         theme,
@@ -2589,6 +2656,9 @@ unsafe fn layout_footer_hints(
 
 #[cfg(target_os = "macos")]
 fn is_footer_left_pinned_button(button_cfg: &FooterButtonConfig) -> bool {
+    if button_cfg.left_pinned {
+        return true;
+    }
     if matches!(
         button_cfg.action,
         FooterAction::Cwd | FooterAction::AgentModel
@@ -2686,6 +2756,7 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
         FooterAction::PasteResponse => metrics.paste_response_slot_width,
         FooterAction::Cwd => metrics.ai_slot_width,
         FooterAction::AgentModel => metrics.ai_slot_width,
+        FooterAction::Tips => metrics.ai_slot_width,
     }
     .into()
 }
@@ -3827,6 +3898,7 @@ fn footer_action_key(action: FooterAction) -> &'static str {
         FooterAction::PasteResponse => "pasteResponse",
         FooterAction::Cwd => "cwd",
         FooterAction::AgentModel => "agentModel",
+        FooterAction::Tips => "tips",
     }
 }
 
@@ -4656,6 +4728,7 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::PasteResponse => sel!(pasteResponseFooterAction:),
         FooterAction::Cwd => sel!(cwdFooterAction:),
         FooterAction::AgentModel => sel!(agentModelFooterAction:),
+        FooterAction::Tips => sel!(actionsFooterAction:),
     }
 }
 

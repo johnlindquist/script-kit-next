@@ -494,6 +494,22 @@ pub(crate) struct MainMenuSelectionSnapshot {
     selected_key: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MainMenuRefreshSelectionPolicy {
+    SnapToFirst,
+    RestoreIdentity,
+}
+
+pub(crate) fn main_menu_refresh_selection_policy(
+    user_moved_selection: bool,
+) -> MainMenuRefreshSelectionPolicy {
+    if user_moved_selection {
+        MainMenuRefreshSelectionPolicy::RestoreIdentity
+    } else {
+        MainMenuRefreshSelectionPolicy::SnapToFirst
+    }
+}
+
 impl MainMenuSelectionSnapshot {
     fn is_root_file_handoff_selection(&self) -> bool {
         self.selected_key
@@ -503,6 +519,29 @@ impl MainMenuSelectionSnapshot {
 }
 
 impl ScriptListApp {
+    pub(crate) fn mark_main_menu_selection_user_moved(&mut self) {
+        if matches!(self.current_view, AppView::ScriptList) {
+            self.main_menu_selection_user_moved = true;
+        }
+    }
+
+    pub(crate) fn reset_main_menu_selection_user_moved(&mut self) {
+        self.main_menu_selection_user_moved = false;
+    }
+
+    pub(crate) fn snap_main_menu_selection_to_first(&mut self) -> bool {
+        self.get_grouped_results_cached();
+        let first = self
+            .main_menu_result_caches
+            .first_selectable_index()
+            .unwrap_or(0);
+        let changed = self.selected_index != first;
+        self.selected_index = first;
+        self.hovered_index = None;
+        self.last_scrolled_index = None;
+        changed
+    }
+
     pub(crate) fn root_file_source_chip_page_key_for(
         raw_filter_text: &str,
         stripped_query: &str,
@@ -693,6 +732,10 @@ pub(crate) struct ScriptListApp {
     current_app_commands_session:
         Option<crate::menu_bar::current_app_commands::CurrentAppCommandsSession>,
     selected_index: usize,
+    /// True after the user deliberately moves the launcher selection for the
+    /// current filter. Async provider refreshes preserve row identity only in
+    /// that case; untouched auto-selection stays pinned to the first row.
+    main_menu_selection_user_moved: bool,
     /// Main menu filter text (mirrors gpui-component input state)
     filter_text: String,
     /// Inline calculator result derived from filter_text when expression is math-like
@@ -806,6 +849,8 @@ pub(crate) struct ScriptListApp {
     emoji_frequent_snapshot: Vec<String>,
     // Scroll handle for window switcher list
     window_list_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for the Tips browser list
+    tips_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for browser tabs list
     browser_tabs_scroll_handle: UniformListScrollHandle,
     // Scroll handle for process manager list
@@ -827,6 +872,13 @@ pub(crate) struct ScriptListApp {
     )>,
     // Monotonic id source for flow sessions.
     pub(crate) flow_session_counter: u64,
+    /// Escape origin for the CURRENT flow session view: true when the
+    /// session was entered from the Conversation Desk (FlowUxView), false
+    /// when entered from the main launcher or anywhere else. Escape must
+    /// return exactly one step to the surface the user actually came from —
+    /// a main-menu-launched session escaping through the desk reads as a
+    /// swallowed Escape (see `flow_session_returns_to_desk`).
+    pub(crate) flow_session_return_to_desk: bool,
     /// Sender for flow-session chat requests (submit/background). Cloned
     /// into ChatPrompt callbacks, which have no app access.
     pub(crate) flow_chat_sender: mpsc::SyncSender<crate::flows::session::FlowChatRequest>,
@@ -1061,6 +1113,15 @@ pub(crate) struct ScriptListApp {
     /// Frame ticker that re-renders while a background effect is active.
     /// Dropping the task cancels the loop.
     pub(crate) _background_effect_ticker: Option<gpui::Task<()>>,
+    /// Animation clock origin for the shared main-list loading treatment
+    /// (braille constellation + footer spinner) while a slow source fills.
+    pub(crate) main_list_loading_started_at: Option<std::time::Instant>,
+    /// Monotonic guard so an older loading ticker can never clear the clock
+    /// a newer loading interval owns.
+    pub(crate) main_list_loading_ticker_epoch: u64,
+    /// Frame ticker that re-renders while the loading treatment is active.
+    /// Dropping the task cancels the loop.
+    pub(crate) _main_list_loading_ticker: Option<gpui::Task<()>>,
     /// Theme Designer save/manage status for user-authored themes.
     pub(crate) theme_chooser_management: Option<ThemeChooserManagementState>,
     /// Theme Chooser's cached view-local component controls (Sliders & ColorPickers)
@@ -1336,3 +1397,20 @@ enum AliasMatch {
 
 pub(crate) const ROOT_LAUNCHER_PLACEHOLDER: &str =
     "Search • @ context • / commands • ; capture • : filters";
+
+#[cfg(test)]
+mod app_state_selection_tests {
+    use super::{main_menu_refresh_selection_policy, MainMenuRefreshSelectionPolicy};
+
+    #[test]
+    fn async_refresh_snaps_untouched_selection_and_restores_user_selection() {
+        assert_eq!(
+            main_menu_refresh_selection_policy(false),
+            MainMenuRefreshSelectionPolicy::SnapToFirst
+        );
+        assert_eq!(
+            main_menu_refresh_selection_policy(true),
+            MainMenuRefreshSelectionPolicy::RestoreIdentity
+        );
+    }
+}

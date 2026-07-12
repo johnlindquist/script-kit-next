@@ -1,4 +1,7 @@
-use super::{main_window_result_action_label, paste_into_frontmost_app_label};
+use super::{
+    flow_session_footer_buttons, main_list_loading_left_info, main_window_result_action_label,
+    paste_into_frontmost_app_label,
+};
 use crate::scripts::{MatchIndices, Scriptlet, ScriptletMatch};
 use std::sync::Arc;
 
@@ -43,6 +46,16 @@ fn paste_into_frontmost_app_label_falls_back_to_active_app() {
 }
 
 #[test]
+fn flow_session_footer_includes_left_pinned_terminate() {
+    let buttons = flow_session_footer_buttons(true, true, false);
+    let terminate = &buttons[0];
+    assert_eq!(terminate.label.as_ref(), "Terminate Flow");
+    assert_eq!(terminate.key.as_ref(), "⇧⌘⎋");
+    assert!(terminate.left_pinned);
+    assert!(terminate.enabled, "termination remains available mid-turn");
+}
+
+#[test]
 fn main_window_result_action_label_uses_frontmost_app_for_paste_scriptlets() {
     let result = make_scriptlet_result("paste");
     assert_eq!(
@@ -58,4 +71,25 @@ fn main_window_result_action_label_keeps_default_for_non_paste_scriptlets() {
         main_window_result_action_label(&result, Some("TextEdit")),
         "Run Command"
     );
+}
+
+/// The loading footer slot carries the kind's status label plus the braille
+/// frame for the given elapsed time (0.9s cycle, 8 steps — 0.2s lands on
+/// frame index 1).
+#[test]
+fn main_list_loading_left_info_uses_kind_label_and_current_braille_frame() {
+    use crate::main_list_loading::MainListLoadingKind;
+
+    let info = main_list_loading_left_info(MainListLoadingKind::BrowserHistory, 0.2);
+    assert_eq!(info.model_name, "Fetching history");
+    assert_eq!(
+        info.spinner_glyph.as_deref(),
+        Some(crate::components::braille_loading::BRAILLE_SPINNER_FRAMES[1])
+    );
+    assert!(info.action.is_none(), "loading status is not clickable");
+
+    let tabs = main_list_loading_left_info(MainListLoadingKind::BrowserTabs, 0.0);
+    assert_eq!(tabs.model_name, "Fetching tabs");
+    let files = main_list_loading_left_info(MainListLoadingKind::RootFileSearch, 0.0);
+    assert_eq!(files.model_name, "Searching files");
 }

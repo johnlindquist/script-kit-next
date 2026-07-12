@@ -369,6 +369,7 @@ impl ScriptListApp {
                                 app.refresh_scripts(cx);
                                 app.refresh_skills(cx);
                                 app.current_view = AppView::ScriptList;
+                                app.reset_main_menu_selection_user_moved();
                                 app.show_hud(
                                     format!("Installed shared {} into {}", kind, outcome.plugin_id),
                                     Some(2000),
@@ -391,53 +392,6 @@ impl ScriptListApp {
             .detach();
         }
         logging::log("UI", "Script Kit logo SVG loaded for header rendering");
-
-        // Start cursor blink timer - updates all inputs that track cursor visibility
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(530))
-                    .await;
-
-                // CRITICAL: Check window visibility BEFORE cx.update() to avoid
-                // unnecessary GPUI context access when window is hidden.
-                // This reduces CPU usage at idle significantly.
-                if !script_kit_gpui::is_main_window_visible() {
-                    continue;
-                }
-
-                let _ = cx.update(|cx| {
-                    this.update(cx, |app, cx| {
-                        // Additional checks for focused state
-                        // (window visibility already checked above)
-                        let actions_popup_open = is_actions_window_open();
-                        let any_window_focused =
-                            platform::is_main_window_focused() || actions_popup_open;
-                        if !any_window_focused || app.focused_input == FocusedInput::None {
-                            return;
-                        }
-
-                        app.cursor_visible = !app.cursor_visible;
-                        // Also update ActionsDialog cursor if it exists
-                        if let Some(ref dialog) = app.actions_dialog {
-                            dialog.update(cx, |d, _cx| {
-                                d.set_cursor_visible(app.cursor_visible);
-                            });
-                            // Notify the actions window to repaint with new cursor state
-                            notify_actions_window(cx);
-                        }
-                        // Also update AliasInput cursor if it exists
-                        if let Some(ref alias_input) = app.alias_input_entity {
-                            alias_input.update(cx, |input, _cx| {
-                                input.set_cursor_visible(app.cursor_visible);
-                            });
-                        }
-                        cx.notify();
-                    })
-                });
-            }
-        })
-        .detach();
 
         let gpui_input_state = cx.new(|cx| {
             InputState::new(window, cx)
@@ -807,6 +761,7 @@ impl ScriptListApp {
             cached_current_app_entries: Vec::new(),
             current_app_commands_session: None,
             selected_index: 0,
+            main_menu_selection_user_moved: false,
             filter_text: String::new(),
             inline_calculator: None,
             gpui_input_state,
@@ -868,6 +823,7 @@ impl ScriptListApp {
             emoji_scroll_handle: UniformListScrollHandle::new(),
             emoji_frequent_snapshot: Vec::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
+            tips_list_scroll_handle: UniformListScrollHandle::new(),
             browser_tabs_scroll_handle: UniformListScrollHandle::new(),
             process_list_scroll_handle: UniformListScrollHandle::new(),
             flow_ux_scroll_handle: UniformListScrollHandle::new(),
@@ -875,6 +831,7 @@ impl ScriptListApp {
             flow_ux_tick_running: false,
             flow_sessions: Vec::new(),
             flow_session_counter: 0,
+            flow_session_return_to_desk: false,
             flow_chat_sender: flow_chat_tx,
             flow_chat_receiver: flow_chat_rx,
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
@@ -976,6 +933,9 @@ impl ScriptListApp {
             background_effect_intensity: crate::effects::initial_background_effect_intensity(),
             background_effect_started_at: None,
             _background_effect_ticker: None,
+            main_list_loading_started_at: None,
+            main_list_loading_ticker_epoch: 0,
+            _main_list_loading_ticker: None,
             theme_chooser_management: None,
             theme_chooser_controls: None,
             theme_chooser_panel_mode: ThemeChooserPanelMode::default(),
@@ -1298,7 +1258,7 @@ impl ScriptListApp {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
                             if matches!(this.current_view, AppView::FlowSessionView { .. }) {
-                                this.background_flow_session(cx);
+                                this.background_flow_session(window, cx);
                                 handled = true;
                             }
                         });
@@ -1595,16 +1555,17 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // FLOW ROUTER: Tab with a non-empty query routes
-                            // the typed text to the best mdflow flow
-                            // (Conversation Desk, 2026-07-09 — replaces the
-                            // Quick AI Tab entry; Quick AI remains reachable
-                            // via the Cmd+Enter AI hierarchy). Confident
-                            // match auto-starts the conversation with the
-                            // text as the first task; otherwise the desk
-                            // opens with ranked candidates + Create Flow.
-                            // Path-shaped queries (~/, /) keep Tab for
-                            // directory browsing.
+                            // Quick AI: Tab with a non-empty query sends the
+                            // typed text to the zero-context Quick AI profile
+                            // (spark model, no tools/skills/memories). This is
+                            // the header Tab chip's advertised action whenever
+                            // the input has text, so it runs BEFORE root-file
+                            // directory completion — only path-shaped queries
+                            // (~/, /) keep Tab for browsing, matching the
+                            // chip's predicate in `main_header_tab_chip_action`.
+                            // (2026-07-10: restored after the Conversation Desk
+                            // pivot briefly routed Tab-with-text to the flow
+                            // router — flows stay reachable as main-menu rows.)
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !has_shift
                                 && !this.show_actions_popup
@@ -1615,12 +1576,11 @@ impl ScriptListApp {
                             {
                                 let query = this.filter_text.clone();
                                 tracing::info!(
-                                    target: "script_kit::flows",
-                                    event = "flow_router_tab_entry",
-                                    query_len = query.len(),
-                                    "Tab → Flow Router"
+                                    target: "script_kit::tab_ai",
+                                    event = "quick_ai_tab_entry",
+                                    "Tab → Quick AI (zero-context spark)"
                                 );
-                                this.route_text_to_flow(query, window, cx);
+                                this.open_quick_ai_from_launcher(query, window, cx);
                                 cx.stop_propagation();
                                 return;
                             }

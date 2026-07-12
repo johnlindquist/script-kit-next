@@ -90,6 +90,62 @@ impl ScriptListApp {
         }
     }
 
+    /// True while the root file section is visibly empty AND a provider is
+    /// still working for the query the user is currently looking at — the
+    /// state that owns the shared main-list loading treatment. Cached rows
+    /// showing while the provider warms must NOT read as loading, and
+    /// passive global warms (no `files:` filter) never claim the treatment.
+    pub(crate) fn visible_root_file_search_loading(&self) -> bool {
+        let current_search_text = crate::menu_syntax::free_text_for_search(
+            &self.menu_syntax_mode,
+            &self.computed_filter_text,
+        )
+        .trim();
+        root_file_visible_loading_decision(
+            self.root_search.root_file_search_loading,
+            self.root_search.root_file_provider_loading,
+            self.root_search.root_file_search_query == current_search_text,
+            self.root_search.root_file_search_mode,
+            self.current_query_includes_root_source(
+                &self.computed_filter_text,
+                crate::menu_syntax::RootUnifiedSourceFilter::Files,
+            ),
+        )
+    }
+
+    /// Whether a finished provider batch for `request` should publish into
+    /// the visible section right now. Re-evaluated at completion instead of
+    /// captured at request start: source-filter ownership can change while
+    /// the same free-text request stays in flight (e.g. the user adds a
+    /// `files:` filter and the same-request reuse branch keeps the provider
+    /// task), and the captured decision would silently cache rows while the
+    /// visible section stays stuck in loading.
+    fn root_file_request_should_publish_now(
+        &self,
+        generation: u64,
+        request: &RootFileSearchRequest,
+    ) -> bool {
+        if self.root_search.root_file_search_generation != generation {
+            return false;
+        }
+        match request {
+            RootFileSearchRequest::GlobalQuery { query } => {
+                self.root_search.root_file_search_mode
+                    == Some(crate::file_search::RootFileSectionMode::GlobalQuery)
+                    && self.root_search.root_file_search_query == *query
+                    && self.current_query_includes_root_source(
+                        &self.computed_filter_text,
+                        crate::menu_syntax::RootUnifiedSourceFilter::Files,
+                    )
+            }
+            RootFileSearchRequest::DirectoryBrowse {
+                directory,
+                show_hidden,
+                ..
+            } => self.active_root_directory_browse_source_matches(directory, *show_hidden),
+        }
+    }
+
     fn active_root_directory_browse_source_matches(
         &self,
         directory: &str,
@@ -165,8 +221,21 @@ impl ScriptListApp {
         self.invalidate_grouped_cache();
         if matches!(self.current_view, AppView::ScriptList) {
             self.sync_list_state_for_filter_replacement();
-            if let Some(snapshot) = selection_before {
-                self.restore_main_menu_selection_from_snapshot(snapshot);
+            match main_menu_refresh_selection_policy(self.main_menu_selection_user_moved) {
+                MainMenuRefreshSelectionPolicy::RestoreIdentity => {
+                    if let Some(snapshot) = selection_before {
+                        self.restore_main_menu_selection_from_snapshot(snapshot);
+                    }
+                }
+                MainMenuRefreshSelectionPolicy::SnapToFirst => {
+                    self.snap_main_menu_selection_to_first();
+                    tracing::debug!(
+                        target: "script_kit::selection",
+                        event = "main_menu_refresh_snap_to_first_untouched_selection",
+                        reason = "root_file_results_publish",
+                        selected_index = self.selected_index,
+                    );
+                }
             }
             self.validate_selection_bounds(cx);
             self.schedule_main_list_selection_reveal_above_footer(
@@ -384,6 +453,10 @@ impl ScriptListApp {
                     self.root_search.root_file_frame = None;
                     self.invalidate_grouped_cache();
                 }
+                // The same request can become visibly loading through a
+                // newly typed `files:` filter while its provider task is
+                // already in flight — attach the loading treatment.
+                self.ensure_main_list_loading_animation(cx);
                 return;
             }
             RootFileSearchRequest::DirectoryBrowse {
@@ -395,6 +468,7 @@ impl ScriptListApp {
                     self.root_search.root_file_search_query = query.clone();
                     self.refresh_root_file_grouping_after_query_only_change(cx);
                 }
+                self.ensure_main_list_loading_animation(cx);
                 return;
             }
             _ => {}
@@ -411,6 +485,9 @@ impl ScriptListApp {
         self.root_search.root_file_search_loading = self.root_search.root_file_results.is_empty();
         self.root_search.root_file_provider_loading = true;
         self.invalidate_grouped_cache();
+        // Start the loading clock at request acceptance, not after the
+        // debounce or the first provider event.
+        self.ensure_main_list_loading_animation(cx);
 
         let cancel = crate::file_search::new_cancel_token();
         self.root_search.root_file_search_cancel = Some(cancel.clone());
@@ -495,16 +572,23 @@ impl ScriptListApp {
 
             let _ = cx.update(|cx| {
                 this.update(cx, |app, cx| {
+                    // Ownership can change while the request is in flight
+                    // (e.g. a `files:` filter typed onto the same free text),
+                    // so the publish decision is re-evaluated now instead of
+                    // trusting the intent captured at request start.
+                    let publish_now =
+                        app.root_file_request_should_publish_now(generation, &request);
                     tracing::debug!(
                         event = "root_file_provider_done",
                         query = %app.root_search.root_file_search_query,
                         generation,
-                        publish_active_results,
+                        publish_active_results = publish_now,
+                        requested_publish_at_start = publish_active_results,
                         result_count = batch.len(),
                         cache_key = %request_cache_key,
-                        visible_frame_touched = publish_active_results,
+                        visible_frame_touched = publish_now,
                     );
-                    if publish_active_results {
+                    if publish_now {
                         app.apply_root_file_search_results_for_generation(
                             generation, batch, false, true, cx,
                         );
@@ -525,6 +609,109 @@ impl ScriptListApp {
 
 fn root_file_result_fingerprint(files: &[crate::file_search::FileResult]) -> Vec<&str> {
     files.iter().map(|file| file.path.as_str()).collect()
+}
+
+/// Pure core of [`ScriptListApp::visible_root_file_search_loading`].
+///
+/// Both flags are required on purpose: `visible_batch_empty` (the section
+/// has nothing to show) and `provider_loading` (work is actually still in
+/// flight). Cached rows rendering while the provider warms fail the first;
+/// a finished search that found nothing fails the second. Passive global
+/// warms (no explicit `files:` filter) never own the loading treatment;
+/// directory browsing always publishes actively so it can.
+fn root_file_visible_loading_decision(
+    visible_batch_empty: bool,
+    provider_loading: bool,
+    stored_query_matches_current: bool,
+    mode: Option<crate::file_search::RootFileSectionMode>,
+    explicit_files_filter: bool,
+) -> bool {
+    if !visible_batch_empty || !provider_loading || !stored_query_matches_current {
+        return false;
+    }
+    match mode {
+        Some(crate::file_search::RootFileSectionMode::DirectoryBrowse) => true,
+        Some(crate::file_search::RootFileSectionMode::GlobalQuery) => explicit_files_filter,
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod loading_decision_tests {
+    use super::root_file_visible_loading_decision;
+    use crate::file_search::RootFileSectionMode;
+
+    /// A passive global cache warm (no `files:` filter) must not surface
+    /// the main-list loading treatment.
+    #[test]
+    fn passive_global_file_warm_does_not_surface_main_list_loading() {
+        assert!(!root_file_visible_loading_decision(
+            true,
+            true,
+            true,
+            Some(RootFileSectionMode::GlobalQuery),
+            false,
+        ));
+    }
+
+    /// An explicit `files:` search with an empty visible batch owns the
+    /// treatment; so does an empty directory browse.
+    #[test]
+    fn explicit_files_and_directory_browse_empty_batches_surface_loading() {
+        assert!(root_file_visible_loading_decision(
+            true,
+            true,
+            true,
+            Some(RootFileSectionMode::GlobalQuery),
+            true,
+        ));
+        assert!(root_file_visible_loading_decision(
+            true,
+            true,
+            true,
+            Some(RootFileSectionMode::DirectoryBrowse),
+            false,
+        ));
+    }
+
+    /// Cached rows on screen, a finished provider, a stale stored query, or
+    /// no active mode all suppress the treatment.
+    #[test]
+    fn cached_rows_finished_provider_or_stale_query_suppress_loading() {
+        let cases = [
+            (
+                false,
+                true,
+                true,
+                Some(RootFileSectionMode::DirectoryBrowse),
+            ),
+            (
+                true,
+                false,
+                true,
+                Some(RootFileSectionMode::DirectoryBrowse),
+            ),
+            (
+                true,
+                true,
+                false,
+                Some(RootFileSectionMode::DirectoryBrowse),
+            ),
+            (true, true, true, None),
+        ];
+        for (visible_empty, provider, query_matches, mode) in cases {
+            assert!(
+                !root_file_visible_loading_decision(
+                    visible_empty,
+                    provider,
+                    query_matches,
+                    mode,
+                    true
+                ),
+                "case: {visible_empty} {provider} {query_matches} {mode:?}"
+            );
+        }
+    }
 }
 
 fn dedupe_root_file_results(

@@ -99,7 +99,7 @@ impl Render for ScriptListApp {
                         AppView::FlowSessionView { session_id: current } if current == session_id
                     );
                     if in_session {
-                        self.background_flow_session(cx);
+                        self.background_flow_session(window, cx);
                     }
                 }
                 crate::flows::session::FlowChatRequest::ShowActions { session_id } => {
@@ -340,6 +340,7 @@ impl Render for ScriptListApp {
                 | AppView::BrowserHistoryView { .. }
                 | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
+                | AppView::TipsView { .. }
                 | AppView::MiniPrompt { .. }
                 | AppView::ArgPrompt { .. }
                 | AppView::DayPage { .. }
@@ -359,7 +360,7 @@ impl Render for ScriptListApp {
         //
         // HUD is now handled by hud_manager as a separate floating window
         // No need to render it as part of this view
-        let shared_header_owned_by_view = self.current_view.uses_shared_main_view_header();
+        let view_owns_main_window_shell = self.current_view.uses_view_owned_main_window_shell(&*cx);
         let current_view = self.current_view.clone();
         let main_window_modal_dim_active = confirm::is_confirm_window_open()
             || self.shortcut_recorder_state.is_some()
@@ -628,6 +629,11 @@ impl Render for ScriptListApp {
                 selected_index,
                 ref entries,
             } => self.render_sdk_reference_view(filter, selected_index, entries.clone(), cx),
+            AppView::TipsView {
+                ref filter,
+                selected_index,
+                ref entries,
+            } => self.render_tips_view(filter, selected_index, entries.clone(), cx),
             AppView::ScriptTemplateCatalogView {
                 ref filter,
                 selected_index,
@@ -752,7 +758,7 @@ impl Render for ScriptListApp {
         // P0 FIX: Only compute bounds when grid overlay is actually enabled
         // Previously this was computed unconditionally on every frame
         let component_bounds = if grid_config.is_some() {
-            self.build_component_bounds(window_size)
+            self.build_component_bounds(window_size, &*cx)
         } else {
             Vec::new()
         };
@@ -859,6 +865,17 @@ impl Render for ScriptListApp {
             )
         });
 
+        // Braille constellation loading layer: four large, slow-cycling
+        // braille cells behind the list while a slow source fills the main
+        // list (explicit tabs:/history: fetch, visible root file search).
+        // Clock + ticker are owned by `app_impl/main_list_loading.rs`.
+        let main_list_loading_layer = self.main_list_loading_kind().map(|_kind| {
+            crate::components::braille_loading::constellation_loading_layer(
+                &self.theme,
+                self.main_list_loading_elapsed_secs(),
+            )
+        });
+
         // Capture mouse_cursor_hidden for use in div builder
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
 
@@ -893,29 +910,39 @@ impl Render for ScriptListApp {
 
         // Outer container: holds both the clipped main content and the dialog
         // layer which must NOT be clipped (same pattern as Notes window).
-        let main_content_container = if shared_header_owned_by_view {
-            div().flex_1().w_full().min_h(px(0.)).child(main_content)
+        let main_content_container: AnyElement = if view_owns_main_window_shell {
+            div()
+                .flex_1()
+                .w_full()
+                .min_h(px(0.))
+                .child(main_content)
+                .into_any_element()
         } else {
             let menu_def = self.current_main_menu_theme.def();
             div()
+                .id(crate::components::main_view_chrome::MAIN_VIEW_SHELL_ID)
+                .debug_selector(|| {
+                    crate::components::main_view_chrome::MAIN_VIEW_SHELL_ID.to_string()
+                })
                 .flex_1()
                 .w_full()
                 .min_h(px(0.))
                 .flex()
                 .flex_col()
-                .child(self.render_clickable_main_view_context_header(
-                    menu_def,
-                    crate::ui::chrome::HEADER_PADDING_X,
-                    cx,
-                ))
+                .child(self.render_clickable_main_view_context_header(menu_def, cx))
                 .child(
                     div()
+                        .id(crate::components::main_view_chrome::MAIN_VIEW_MAIN_ID)
+                        .debug_selector(|| {
+                            crate::components::main_view_chrome::MAIN_VIEW_MAIN_ID.to_string()
+                        })
                         .flex_1()
                         .w_full()
                         .min_h(px(0.))
                         .overflow_hidden()
                         .child(main_content),
                 )
+                .into_any_element()
         };
 
         div()
@@ -1107,6 +1134,10 @@ impl Render for ScriptListApp {
                     // Procedural shader effect layer, behind content, clipped
                     // by the rounded window container.
                     .children(background_effect_layer)
+                    // Transient braille constellation while the main list is
+                    // slow-filling, above the ambient effect and behind all
+                    // content.
+                    .children(main_list_loading_layer)
                     // Visual styling - rounded corners, subtle border, clip content
                     .rounded(px(12.))
                     .border_1()

@@ -26,6 +26,7 @@
 //! - **Theme integration**: Use `from_theme()` or `from_design()` for colors
 
 pub mod alias_input;
+pub(crate) mod braille_loading;
 pub mod button;
 pub(crate) mod confirm_modal_shell;
 #[cfg(test)]

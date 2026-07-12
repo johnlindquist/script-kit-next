@@ -3,6 +3,44 @@ use std::sync::Once;
 
 static MAIN_FOOTER_ACTION_LISTENER: Once = Once::new();
 
+pub(crate) fn flow_session_footer_buttons(
+    working: bool,
+    enabled: bool,
+    actions_open: bool,
+) -> Vec<crate::footer_popup::FooterButtonConfig> {
+    use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+    let send_label = if working { "Working…" } else { "Send" };
+    vec![
+        // ⇧⌘⎋, not ⌘⎋: macOS consumes Cmd+Escape at the window-server level
+        // before ANY app sees it (verified 2026-07-11 — even a plain active
+        // AppKit app never receives the keyDown), so plain Cmd+Escape is
+        // undeliverable as an app shortcut.
+        FooterButtonConfig::new(FooterAction::Close, "⇧⌘⎋", "Terminate Flow")
+            .left_pinned()
+            .enabled(enabled),
+        FooterButtonConfig::new(FooterAction::Run, "↵", send_label).enabled(enabled && !working),
+        FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+            .selected(actions_open)
+            .enabled(enabled),
+    ]
+}
+
+/// Footer left slot for the shared main-list loading treatment: the braille
+/// spinner frame for `elapsed_secs` plus the loading kind's status label.
+pub(crate) fn main_list_loading_left_info(
+    kind: super::main_list_loading::MainListLoadingKind,
+    elapsed_secs: f32,
+) -> crate::footer_popup::FooterLeftInfo {
+    crate::footer_popup::FooterLeftInfo {
+        model_name: kind.footer_label().to_string(),
+        spinner_glyph: Some(
+            crate::components::braille_loading::footer_braille_frame(elapsed_secs).to_string(),
+        ),
+        ..Default::default()
+    }
+}
+
 /// Thin wrapper delegating to the canonical implementation in `window_resize`.
 fn main_window_sizing_from_grouped_items(
     grouped_items: &[GroupedListItem],
@@ -206,9 +244,7 @@ impl ScriptListApp {
             return false;
         };
         let action_id = match action {
-            crate::footer_popup::FooterAction::Run
-                if availability.open_source_target.is_some() =>
-            {
+            crate::footer_popup::FooterAction::Run if availability.open_source_target.is_some() => {
                 crate::DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID
             }
             crate::footer_popup::FooterAction::Ai if availability.can_add_to_agent_chat => {
@@ -268,6 +304,14 @@ impl ScriptListApp {
         }
 
         match action {
+            crate::footer_popup::FooterAction::Tips => {
+                let builtins = crate::config::load_config().get_builtins();
+                if let Some(entry) =
+                    crate::builtins::resolve_builtin_entry("builtin/tips", &builtins)
+                {
+                    self.execute_builtin(&entry, cx);
+                }
+            }
             crate::footer_popup::FooterAction::Run => {
                 if matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
                     self.dispatch_permissions_wizard_action(
@@ -291,7 +335,7 @@ impl ScriptListApp {
                     }
                     return;
                 } else if matches!(self.current_view, AppView::FlowUxView { .. }) {
-                    self.flow_desk_activate_selected(false, cx);
+                    self.flow_desk_activate_selected(false, window, cx);
                     return;
                 } else if let AppView::ScriptIssuesView { report } = &self.current_view {
                     let report = report.clone();
@@ -309,6 +353,9 @@ impl ScriptListApp {
                     return;
                 } else if matches!(self.current_view, AppView::ThemeChooserView { .. }) {
                     self.submit_theme_chooser_from_input_enter(window, cx);
+                    return;
+                } else if matches!(self.current_view, AppView::TipsView { .. }) {
+                    self.tips_copy_selected_example(cx);
                     return;
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
@@ -425,7 +472,7 @@ impl ScriptListApp {
             }
             crate::footer_popup::FooterAction::Apply => {
                 if matches!(self.current_view, AppView::FlowUxView { .. }) {
-                    self.flow_desk_activate_selected(true, cx);
+                    self.flow_desk_activate_selected(true, window, cx);
                     return;
                 } else if let AppView::ScriptIssuesView { report } = &self.current_view {
                     let report = report.clone();
@@ -458,7 +505,10 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::Close => {
-                if matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
+                if let AppView::FlowSessionView { session_id } = self.current_view {
+                    self.terminate_flow_session(session_id, window, cx);
+                    return;
+                } else if matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
                     self.dispatch_permissions_wizard_action(
                         crate::permissions_wizard::PermissionsWizardAction::Done,
                         window,
@@ -491,6 +541,8 @@ impl ScriptListApp {
                     );
                     self.submit_prompt_response(id.clone(), None, cx);
                     self.cancel_script_execution(cx);
+                } else if matches!(self.current_view, AppView::NonListStatesView { .. }) {
+                    self.go_back_or_close(window, cx);
                 } else if let AppView::EditorPrompt { entity, .. } = &self.current_view {
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -499,6 +551,12 @@ impl ScriptListApp {
                     );
                     let entity = entity.clone();
                     entity.update(cx, |editor, _| editor.submit_cancel());
+                } else if matches!(self.current_view, AppView::TipsView { .. }) {
+                    // Mirror the in-view Escape ladder: clear the filter
+                    // first, then go back to the launcher.
+                    if !self.clear_builtin_view_filter(cx) {
+                        self.go_back_or_close(window, cx);
+                    }
                 } else {
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -521,6 +579,7 @@ impl ScriptListApp {
                 );
                 if !matches!(self.current_view, AppView::ScriptList) {
                     self.current_view = AppView::ScriptList;
+                    self.reset_main_menu_selection_user_moved();
                 }
                 self.cwd_pick_mode = true;
                 self.open_file_search_view("~/".to_string(), FileSearchPresentation::Full, cx);
@@ -578,6 +637,7 @@ impl ScriptListApp {
                 }
                 if !matches!(self.current_view, AppView::ScriptList) {
                     self.current_view = AppView::ScriptList;
+                    self.reset_main_menu_selection_user_moved();
                 }
                 self.open_profile_search(cx);
             }
@@ -763,9 +823,7 @@ impl ScriptListApp {
             AppView::ClipboardHistoryView { .. } if !has_selected_clipboard_entry(self) => {
                 Some("Select an entry to see actions")
             }
-            AppView::DictationHistoryView { .. }
-                if !has_selected_dictation_history_entry(self) =>
-            {
+            AppView::DictationHistoryView { .. } if !has_selected_dictation_history_entry(self) => {
                 Some("Select an entry to see actions")
             }
             AppView::FavoritesBrowseView { .. } if self.selected_favorite_id().is_none() => {
@@ -908,8 +966,6 @@ impl ScriptListApp {
         // Flow session (Threadline): the footer mirrors the chat grammar —
         // Send + Actions, with Send honestly disabled while a turn runs.
         if let AppView::FlowSessionView { session_id } = self.current_view {
-            use crate::footer_popup::{FooterAction, FooterButtonConfig};
-
             let footer_disabled = self.main_window_footer_buttons_blocked();
             let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
             let enabled = !footer_disabled;
@@ -918,14 +974,7 @@ impl ScriptListApp {
                 .iter()
                 .find(|(meta, _)| meta.id == session_id)
                 .is_some_and(|(meta, _)| meta.active_turn.is_some());
-            let send_label = if working { "Working…" } else { "Send" };
-            let buttons = vec![
-                FooterButtonConfig::new(FooterAction::Run, "↵", send_label)
-                    .enabled(enabled && !working),
-                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
-                    .selected(actions_open)
-                    .enabled(enabled),
-            ];
+            let buttons = flow_session_footer_buttons(working, enabled, actions_open);
             tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
@@ -1047,6 +1096,15 @@ impl ScriptListApp {
                 "Resolved HotkeyPrompt footer buttons"
             );
             return buttons;
+        }
+
+        if matches!(self.current_view, AppView::NonListStatesView { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let enabled = !self.main_window_footer_buttons_blocked();
+            return vec![
+                FooterButtonConfig::new(FooterAction::Close, "Esc", "Back").enabled(enabled)
+            ];
         }
 
         if matches!(self.current_view, AppView::ScriptIssuesView { .. }) {
@@ -1280,6 +1338,43 @@ impl ScriptListApp {
             return buttons;
         }
 
+        // Tips browser: Copy Example + Back, honestly disabled when the
+        // selected tip has no example to copy.
+        if let AppView::TipsView {
+            filter,
+            selected_index,
+            entries,
+        } = &self.current_view
+        {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let visible = script_kit_gpui::tips::visible_tip_indices(entries, filter);
+            let has_example = visible
+                .get(*selected_index)
+                .and_then(|index| entries.get(*index))
+                .is_some_and(|tip| !tip.examples.is_empty());
+            let secondary_label = if filter.trim().is_empty() {
+                "Back"
+            } else {
+                "Clear Search"
+            };
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Copy Example")
+                    .enabled(!footer_disabled && has_example),
+                FooterButtonConfig::new(FooterAction::Close, "Esc", secondary_label)
+                    .enabled(!footer_disabled),
+            ];
+            tracing::debug!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Tips footer buttons"
+            );
+            return buttons;
+        }
+
         // EditorPrompt: Enter inserts a newline (submit is ⌘↵/⌘S), so the
         // standard "↵ Run" native footer would lie on this surface.
         if matches!(self.current_view, AppView::EditorPrompt { .. }) {
@@ -1395,7 +1490,32 @@ impl ScriptListApp {
             "Resolved main-window native footer config"
         );
 
-        Some(MainWindowFooterConfig::new(surface, buttons))
+        let mut config = MainWindowFooterConfig::new(surface, buttons);
+        if matches!(self.current_view, AppView::ScriptList)
+            && self.filter_text.trim().is_empty()
+            && crate::config::load_config().is_tips_enabled()
+        {
+            if let Some(tip) = script_kit_gpui::tips::current_footer_tip() {
+                config.left_info = Some(crate::footer_popup::FooterLeftInfo {
+                    model_name: tip.hint.clone(),
+                    icon_token: Some("lightbulb".to_string()),
+                    keycap: tip.hint_key.clone(),
+                    action: Some(crate::footer_popup::FooterAction::Tips),
+                    ..Default::default()
+                });
+            }
+        }
+        // Main list slow-filling (explicit tabs:/history: fetch, visible
+        // root file search): pair the constellation layer with a braille
+        // spinner + per-kind status label in the footer's left slot. Tips
+        // only render on an empty query, so this never clobbers them.
+        if let Some(kind) = self.main_list_loading_kind() {
+            config.left_info = Some(main_list_loading_left_info(
+                kind,
+                self.main_list_loading_elapsed_secs(),
+            ));
+        }
+        Some(config)
     }
 
     pub(crate) fn main_window_uses_native_footer(&self) -> bool {
@@ -1612,18 +1732,20 @@ impl ScriptListApp {
             return None;
         }
         let text = self.shown_selection_hint_text.as_deref()?;
-        Some(crate::components::main_view_chrome::MainViewSelectionHintChip {
-            label: format!(
-                "Rewrite \u{201c}{}\u{201d}",
-                crate::components::main_view_chrome::selection_hint_snippet(text, 24)
-            ),
-        })
+        Some(
+            crate::components::main_view_chrome::MainViewSelectionHintChip {
+                label: format!(
+                    "Rewrite \u{201c}{}\u{201d}",
+                    crate::components::main_view_chrome::selection_hint_snippet(text, 24)
+                ),
+            },
+        )
     }
 
     /// What Tab actually does on the current surface — the single source of
     /// truth for the header Tab chip. MUST mirror the Tab interceptor's
     /// branch order in `startup.rs` (menu-syntax pickers → empty-input cwd
-    /// pick → directory-browse completion → flow router) so the chip never
+    /// pick → directory-browse completion → Quick AI) so the chip never
     /// advertises an action Tab won't take.
     pub(crate) fn main_header_tab_chip_action(
         &self,
@@ -1650,7 +1772,7 @@ impl ScriptListApp {
         if crate::file_search::looks_like_root_directory_browse_query(&self.filter_text) {
             return MainViewTabChipAction::Inactive;
         }
-        MainViewTabChipAction::FlowRoute
+        MainViewTabChipAction::QuickAi
     }
 
     /// Whether Shift+Tab opens the profile (agent/model) picker on the
@@ -1715,13 +1837,13 @@ impl ScriptListApp {
             self.selection_hint_chip(),
             cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
                 // The chip is a button for whatever Tab currently does:
-                // flow-router submit when the input has text, cwd picker otherwise.
+                // Quick AI submit when the input has text, cwd picker otherwise.
                 if matches!(
                     this.main_header_tab_chip_action(),
-                    crate::components::main_view_chrome::MainViewTabChipAction::FlowRoute
+                    crate::components::main_view_chrome::MainViewTabChipAction::QuickAi
                 ) {
                     let query = this.filter_text.clone();
-                    this.route_text_to_flow(query, window, cx);
+                    this.open_quick_ai_from_launcher(query, window, cx);
                     return;
                 }
                 this.dispatch_main_window_footer_action(
@@ -1756,12 +1878,11 @@ impl ScriptListApp {
     pub(crate) fn render_clickable_main_view_context_header(
         &self,
         menu_def: crate::designs::MainMenuThemeDef,
-        padding_x: f32,
         cx: &mut gpui::Context<Self>,
     ) -> gpui::AnyElement {
         crate::components::main_view_chrome::render_main_view_context_header(
+            menu_def,
             self.render_clickable_main_view_context_zone(menu_def, cx),
-            padding_x,
         )
     }
 
@@ -2054,6 +2175,12 @@ impl ScriptListApp {
                     crate::mcp_resources::sdk_reference_dataset_and_visible_counts(entries, filter);
                 Some((ViewType::MainWindow, count))
             }
+            AppView::TipsView {
+                entries, filter, ..
+            } => {
+                let count = script_kit_gpui::tips::visible_tip_indices(entries, filter).len();
+                Some((ViewType::MainWindow, count))
+            }
             AppView::ScriptTemplateCatalogView {
                 templates, filter, ..
             } => {
@@ -2136,7 +2263,9 @@ impl ScriptListApp {
                 Some((compact_ai_view_type_for_mode(self.main_window_mode), 0))
             }
             AppView::DayPage { .. } => Some((ViewType::MainWindow, 0)),
-            AppView::ConfirmPrompt { .. } => Some((ViewType::DivPrompt, 0)),
+            // In-window confirm participates in the canonical 480px main
+            // shell; only its body controls differ from searchable views.
+            AppView::ConfirmPrompt { .. } => Some((ViewType::MainWindow, 0)),
         }
     }
 

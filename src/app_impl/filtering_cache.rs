@@ -78,16 +78,12 @@ fn prepend_inline_calculator_group(
 fn build_menu_syntax_trigger_picker_main_list_results(
     snapshot: &crate::menu_syntax::TriggerPickerSnapshot,
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
-    let section = match snapshot.mode {
-        crate::menu_syntax::TriggerPickerMode::Capture => ("Capture", Some("inbox")),
-        crate::menu_syntax::TriggerPickerMode::Command => ("Command", Some("terminal")),
-        crate::menu_syntax::TriggerPickerMode::AdvancedQuery => ("Refine", Some("search")),
-    };
+    let section = snapshot.mode.main_list_section();
     let mut grouped_items = Vec::with_capacity(snapshot.rows.len() + 1);
     let mut flat_results = Vec::with_capacity(snapshot.rows.len());
     grouped_items.push(GroupedListItem::SectionHeader(
         section.0.to_string(),
-        section.1.map(str::to_string),
+        Some(section.1.to_string()),
     ));
 
     for row in &snapshot.rows {
@@ -316,11 +312,20 @@ impl ScriptListApp {
         } else {
             "implicit_tabs_query"
         };
-        let Some(refresh) = crate::browser_tabs::try_begin_root_browser_tabs_refresh(
+        let refresh = crate::browser_tabs::try_begin_root_browser_tabs_refresh(
             options.cache_ttl_ms,
             providers.len(),
             reason,
-        ) else {
+        );
+        if explicit_tabs {
+            // Explicit `tabs:` queries get the braille loading treatment.
+            // Runs whether or not THIS call began the refresh: `None` with a
+            // refresh already in flight (e.g. an implicit warm started it)
+            // must still attach the animation; `None` with a fresh cache is
+            // a no-op inside the helper.
+            self.ensure_main_list_loading_animation(cx);
+        }
+        let Some(refresh) = refresh else {
             return;
         };
 
@@ -437,9 +442,15 @@ impl ScriptListApp {
         } else {
             "implicit_history_query"
         };
-        let Some(refresh) =
-            crate::browser_history::try_begin_root_browser_history_refresh(&options, reason)
-        else {
+        let refresh =
+            crate::browser_history::try_begin_root_browser_history_refresh(&options, reason);
+        if explicit_history {
+            // Mirror of the tabs wiring: explicit `history:` queries attach
+            // the loading treatment even when the refresh was already begun
+            // elsewhere; a fresh cache leaves this a no-op.
+            self.ensure_main_list_loading_animation(cx);
+        }
+        let Some(refresh) = refresh else {
             return;
         };
 
@@ -598,19 +609,17 @@ impl ScriptListApp {
             }
             _ => None,
         };
-        let brain_hits = timed_root_passive_source("brain", search_text, explicit_brain, || {
-            match &brain_plan {
+        let brain_hits =
+            timed_root_passive_source("brain", search_text, explicit_brain, || match &brain_plan {
                 crate::brain::RootBrainQueryPlan::Skip => Vec::new(),
                 crate::brain::RootBrainQueryPlan::RecentsOnly => {
                     crate::brain::recent_root_brain_hits(brain_options.max_results)
                 }
-                crate::brain::RootBrainQueryPlan::Search(brain_query) => {
-                    brain_semantic_hits.unwrap_or_else(|| {
+                crate::brain::RootBrainQueryPlan::Search(brain_query) => brain_semantic_hits
+                    .unwrap_or_else(|| {
                         crate::brain::search_root_brain_direct(brain_query, &brain_options)
-                    })
-                }
-            }
-        });
+                    }),
+            });
 
         let note_hits = timed_root_passive_source("notes", search_text, explicit_notes, || {
             if !advanced_query_active
@@ -1082,12 +1091,16 @@ impl ScriptListApp {
 
         matches!(
             (kind, result),
-            (ContextPortalKind::ScriptSearch, scripts::SearchResult::Script(_))
-                | (
-                    ContextPortalKind::ScriptletSearch,
-                    scripts::SearchResult::Scriptlet(_)
-                )
-                | (ContextPortalKind::SkillSearch, scripts::SearchResult::Skill(_))
+            (
+                ContextPortalKind::ScriptSearch,
+                scripts::SearchResult::Script(_)
+            ) | (
+                ContextPortalKind::ScriptletSearch,
+                scripts::SearchResult::Scriptlet(_)
+            ) | (
+                ContextPortalKind::SkillSearch,
+                scripts::SearchResult::Skill(_)
+            )
         )
     }
 
@@ -1914,14 +1927,12 @@ impl ScriptListApp {
             let (root_windows, root_windows_provider_status) = self.root_search.root_windows();
             // One roster read feeds both the flow corpus and the degraded
             // discovery note (loading/error/legacy) for the Flows section.
-            let flow_roster =
-                crate::flows::catalog::flow_catalog().roster_for(&self.flow_ux_cwd());
+            let flow_roster = crate::flows::catalog::flow_catalog().roster_for(&self.flow_ux_cwd());
             let flow_corpus_for_grouping = crate::flows::catalog::desk_flows(&flow_roster);
-            let flow_discovery_note =
-                Some(crate::scripts::FlowDiscoveryNote {
-                    status: flow_roster.status,
-                    detail: flow_roster.warnings.first().cloned(),
-                });
+            let flow_discovery_note = Some(crate::scripts::FlowDiscoveryNote {
+                status: flow_roster.status,
+                detail: flow_roster.warnings.first().cloned(),
+            });
             crate::scripts::get_grouped_results_with_validation_query_and_root_files_with_options(
                 &self.scripts,
                 &self.scriptlets,
@@ -2005,6 +2016,26 @@ impl ScriptListApp {
                         .get_unified_search()
                         .brain_inbox_section_options(),
                     chrono::Utc::now().timestamp(),
+                );
+            }
+            (grouped_items, flat_results)
+        };
+        // Active conversations are prepended after Brain so they outrank it.
+        let (grouped_items, flat_results) = {
+            let (mut grouped_items, mut flat_results) = (grouped_items, flat_results);
+            if !menu_syntax_owns_main_list && !spine_owns_for_computed {
+                let sessions: Vec<_> = self
+                    .flow_sessions
+                    .iter()
+                    .map(|(meta, _)| meta.clone())
+                    .collect();
+                let flows = self.flow_desk_corpus();
+                crate::scripts::prepend_root_flow_sessions_section(
+                    &mut grouped_items,
+                    &mut flat_results,
+                    &raw_filter_text,
+                    &sessions,
+                    &flows,
                 );
             }
             (grouped_items, flat_results)
@@ -3500,6 +3531,7 @@ pub(crate) fn build_rich_dictation_rows(
                     subtitle: hit.target.clone(),
                     score: 0,
                     matched_field: hit.matched_field,
+                    evidence: hit.evidence.clone(),
                 },
             ));
             grouped.push(GroupedListItem::Item(idx));
@@ -3542,6 +3574,7 @@ pub(crate) fn build_rich_agent_chat_history_rows(
                     score: 0,
                     matched_field: hit.matched_field,
                     subtitle: hit.entry.title_display().to_string(),
+                    evidence: hit.evidence.clone(),
                 },
             ));
             grouped.push(GroupedListItem::Item(idx));
@@ -3782,10 +3815,8 @@ fn main_menu_agent_chat_cwd_context() -> Option<(std::path::PathBuf, Vec<std::pa
         crate::ai::agent_chat::profiles::resolve_effective_profile(&ai_preferences, &profile_ctx);
     // Pure cwd-only resolution: the full launch resolver runs create_dir_all
     // and logs per call, which is unacceptable in this per-keystroke path.
-    let cwd = crate::ai::agent_chat::launch::resolve_selected_launch_cwd(
-        &ai_preferences,
-        &profile_ctx,
-    );
+    let cwd =
+        crate::ai::agent_chat::launch::resolve_selected_launch_cwd(&ai_preferences, &profile_ctx);
     let recents = crate::ai::agent_chat::ui::agent_chat_cwd_recents_for_profile(&profile.id);
     Some((cwd, recents))
 }

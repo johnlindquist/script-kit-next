@@ -35,6 +35,8 @@ mod filter_input_updates;
 mod filtering_cache;
 #[path = "lifecycle_reset.rs"]
 mod lifecycle_reset;
+#[path = "main_list_loading.rs"]
+pub(crate) mod main_list_loading;
 #[path = "menu_syntax_actions.rs"]
 pub(crate) mod menu_syntax_actions;
 #[path = "menu_syntax_ai.rs"]
