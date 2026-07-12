@@ -205,7 +205,7 @@ fn focused_text_mini_initial_state_is_input_only_without_native_footer() {
 }
 
 #[test]
-fn focused_text_mini_has_four_sizing_phases() {
+fn focused_text_mini_has_scope_aware_sizing_phases() {
     for required in [
         "FOCUSED_TEXT_MINI_SIZE_INPUT_ONLY",
         "FOCUSED_TEXT_MINI_SIZE_RESULT",
@@ -361,6 +361,17 @@ fn focused_text_mini_window_animation_reveals_fixed_height_content() {
 
 #[test]
 fn focused_text_mini_height_helpers_match_resize_contract() {
+    let inner_height = source_between(
+        WINDOW_RESIZE,
+        "pub(crate) fn focused_text_mini_inner_height(window_height: f32) -> f32",
+        "#[derive(Debug, Clone, Copy, PartialEq)]",
+    );
+    assert!(
+        inner_height.contains("layout::WINDOW_BORDER_Y")
+            && !inner_height.contains("window_height - WINDOW_BORDER_Y"),
+        "focused_text_mini_inner_height must use the namespaced window-border owner"
+    );
+
     for required in [
         "pub(crate) fn focused_text_mini_input_height() -> f32",
         "pub(crate) fn focused_text_mini_result_height() -> f32",
