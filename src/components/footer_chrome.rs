@@ -732,7 +732,7 @@ pub(crate) fn render_footer_hint_action_button_frame(
         )
 }
 
-fn footer_hover_text_color(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
+pub(crate) fn footer_hover_text_color(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
     let alpha = alpha.unwrap_or_else(|| {
         crate::designs::current_main_menu_theme()
             .def()
@@ -747,7 +747,7 @@ fn footer_hover_text_color(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
         .with_opacity((alpha as f32 / 255.0).clamp(0.0, 1.0))
 }
 
-fn footer_hover_glyph_color(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
+pub(crate) fn footer_hover_glyph_color(theme: &Theme, alpha: Option<u32>) -> gpui::Hsla {
     let alpha = alpha.unwrap_or_else(|| {
         crate::designs::current_main_menu_theme()
             .def()
@@ -1214,11 +1214,7 @@ pub(crate) fn footer_shortcut_keycap_layout_model_measured<'a>(
 }
 
 #[allow(dead_code)]
-pub(crate) fn render_footer_keycap(
-    token: String,
-    max_width_px: Option<f32>,
-    theme: &Theme,
-) -> AnyElement {
+fn render_footer_keycap(token: String, max_width_px: Option<f32>, theme: &Theme) -> AnyElement {
     render_footer_keycap_with_metrics(token, max_width_px, theme, None, None, None)
 }
 
@@ -1417,10 +1413,12 @@ mod tests {
     fn footer_key_glyph_nudges_match_footer_contract() {
         assert!(is_footer_return_key_glyph("↵"));
         assert!(!is_footer_return_key_glyph("Enter"));
-        assert_eq!(footer_key_glyph_nudge_y("⌘"), 1.0);
+        assert_eq!(footer_key_glyph_nudge_x("⌘"), 0.5);
+        assert_eq!(footer_key_glyph_nudge_y("⌘"), 0.0);
+        assert_eq!(footer_key_glyph_nudge_y("Space"), -0.75);
         assert_eq!(footer_key_glyph_nudge_y("↵"), 2.0);
         assert_eq!(footer_key_glyph_nudge_y(";"), -1.0);
-        assert_eq!(footer_appkit_glyph_y("⌘", 20.0, 10.0), 4.0);
+        assert_eq!(footer_appkit_glyph_y("⌘", 20.0, 10.0), 5.0);
         assert_eq!(footer_appkit_glyph_y("↵", 20.0, 10.0), 3.0);
         assert_eq!(footer_appkit_glyph_y(";", 20.0, 10.0), 6.0);
         assert_eq!(footer_button_height(32.0), 28.0);

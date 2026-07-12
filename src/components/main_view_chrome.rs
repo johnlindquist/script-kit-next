@@ -465,7 +465,6 @@ pub(crate) fn render_main_view_context_zone_required(
     let info = def.header_info_bar;
     let text_alpha = (info.opacity.clamp(0.0, 1.0) * 255.0).round() as u32;
     let border = rgba((theme.colors.ui.border << 8) | info.pill_border_alpha);
-    let hover_border = rgba((theme.colors.ui.border << 8) | info.pill_hover_border_alpha);
     let rest_bg = rgba((theme.colors.background.search_box << 8) | info.pill_bg_alpha);
     let hover_bg = rgba((theme.colors.text.primary << 8) | info.pill_hover_bg_alpha);
     let text_color = rgba((theme.colors.text.primary << 8) | text_alpha);
@@ -580,11 +579,7 @@ pub(crate) fn render_main_view_context_zone_required(
         .text_size(px(info.font_size))
         .text_color(text_color)
         .cursor_pointer()
-        .hover(move |s| {
-            s.bg(hover_bg)
-                .text_color(hover_text_color)
-                .border_color(hover_border)
-        })
+        .hover(move |s| s.bg(hover_bg).text_color(hover_text_color))
         .on_click(on_cwd_click)
         .child(cwd_key);
     if show_pills {
@@ -608,11 +603,7 @@ pub(crate) fn render_main_view_context_zone_required(
         .text_size(px(info.font_size))
         .text_color(text_color)
         .cursor_pointer()
-        .hover(move |s| {
-            s.bg(hover_bg)
-                .text_color(hover_text_color)
-                .border_color(hover_border)
-        })
+        .hover(move |s| s.bg(hover_bg).text_color(hover_text_color))
         .on_click(on_agent_model_click)
         .child(model_key);
     if show_pills {
@@ -671,11 +662,7 @@ pub(crate) fn render_main_view_context_zone_required(
             .text_size(px(info.font_size))
             .text_color(text_color)
             .cursor_pointer()
-            .hover(move |s| {
-                s.bg(hover_bg)
-                    .text_color(hover_text_color)
-                    .border_color(hover_border)
-            })
+            .hover(move |s| s.bg(hover_bg).text_color(hover_text_color))
             .on_click(on_selection_click)
             .child(key_slot);
         if show_pills {

@@ -587,37 +587,56 @@ impl GpuiFooterOverlay {
         } else {
             "footer-left-info"
         };
+        let interactive = info.action.is_some();
         let mut row = div()
             .id(row_id)
             .debug_selector(|| "agent-chat.footer-overlay.profile".to_string())
             .flex()
-            .flex_1()
             .items_center()
             .gap(px(FOOTER_LEFT_DOT_LABEL_GAP as f32))
             .min_w(px(0.0))
             .overflow_hidden();
 
         if let Some(action) = info.action {
-            row = row.cursor_pointer().on_mouse_down(
-                MouseButton::Left,
-                move |_event: &MouseDownEvent, _window, cx| {
-                    cx.stop_propagation();
-                    if matches!(action, FooterAction::Tips) {
-                        send_footer_action_to_channel(action, false);
-                    } else {
-                        dispatch_agent_chat_footer_action(action);
-                    }
-                },
-            );
+            // Clickable left-info markers (footer tip, Agent Chat profile)
+            // are real footer buttons: same hover pill, radius, and pressed
+            // fill as the trailing action buttons, with label/keycap/glyph
+            // brightening through the shared footer-action-button group.
+            let chrome = crate::theme::AppChromeColors::from_theme(theme);
+            let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
+            let hover_bg = rgba(chrome.hover_rgba);
+            let active_bg = rgba(chrome.selection_rgba);
+            row = row
+                .h(px(crate::components::footer_chrome::footer_button_height(
+                    crate::components::footer_chrome::current_main_menu_footer_height(),
+                )))
+                .px(px(metrics.button_padding_x))
+                .rounded(px(metrics.button_radius))
+                .group("footer-action-button")
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover_bg))
+                .active(move |style| style.bg(active_bg))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    move |_event: &MouseDownEvent, _window, cx| {
+                        cx.stop_propagation();
+                        if matches!(action, FooterAction::Tips) {
+                            send_footer_action_to_channel(action, false);
+                        } else {
+                            dispatch_agent_chat_footer_action(action);
+                        }
+                    },
+                );
+        } else {
+            row = row.flex_1();
         }
 
         if info.selected {
             let accent = theme.colors.accent.selected;
-            row = row
-                .rounded(px(4.0))
-                .px(px(4.0))
-                .py(px(1.0))
-                .bg(rgba((accent << 8) | 0x18));
+            row = row.bg(rgba((accent << 8) | 0x18));
+            if !interactive {
+                row = row.rounded(px(4.0)).px(px(4.0)).py(px(1.0));
+            }
         }
 
         if info.icon_token.is_none() && !matches!(info.dot_status, FooterDotStatus::Hidden) {
@@ -663,9 +682,20 @@ impl GpuiFooterOverlay {
             .as_deref()
             .and_then(crate::components::footer_chrome::footer_icon_path)
         {
-            row = row.child(svg().path(path).size(px(13.0)).flex_shrink_0().text_color(
-                crate::components::footer_chrome::footer_hint_text_color(theme),
-            ));
+            let hover_glyph =
+                crate::components::footer_chrome::footer_hover_glyph_color(theme, None);
+            row = row.child(
+                svg()
+                    .path(path)
+                    .size(px(13.0))
+                    .flex_shrink_0()
+                    .text_color(crate::components::footer_chrome::footer_hint_text_color(
+                        theme,
+                    ))
+                    .group_hover("footer-action-button", move |style| {
+                        style.text_color(hover_glyph)
+                    }),
+            );
         }
 
         if let Some(keycap) = info.keycap.as_ref().filter(|key| !key.trim().is_empty()) {
@@ -688,6 +718,7 @@ impl GpuiFooterOverlay {
             } else {
                 metrics.font_weight
             };
+            let hover_text = crate::components::footer_chrome::footer_hover_text_color(theme, None);
             row = row.child(
                 div()
                     .id("agent_chat-model-display")
@@ -699,6 +730,9 @@ impl GpuiFooterOverlay {
                     .text_color(crate::components::footer_chrome::footer_hint_text_color(
                         theme,
                     ))
+                    .group_hover("footer-action-button", move |style| {
+                        style.text_color(hover_text)
+                    })
                     .overflow_hidden()
                     .text_ellipsis()
                     .whitespace_nowrap()
@@ -706,7 +740,21 @@ impl GpuiFooterOverlay {
             );
         }
 
-        row.into_any_element()
+        if interactive {
+            // The button pill hugs its content inside the left lane instead
+            // of stretching a hover highlight across the empty footer.
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .overflow_hidden()
+                .flex()
+                .items_center()
+                .justify_start()
+                .child(row)
+                .into_any_element()
+        } else {
+            row.into_any_element()
+        }
     }
 
     fn render_button(
@@ -957,6 +1005,7 @@ fn close_gpui_footer_overlay(cx: &mut App) {
             window.remove_window();
         });
         crate::windows::remove_automation_window(GPUI_FOOTER_OVERLAY_AUTOMATION_ID);
+        crate::windows::remove_runtime_window_handle(GPUI_FOOTER_OVERLAY_AUTOMATION_ID);
     }
 }
 
@@ -1019,6 +1068,12 @@ fn sync_gpui_footer_overlay(
         });
         return;
     }
+
+    // Register the overlay's live GPUI handle so simulated pointer events
+    // (hover proofs, click probes) dispatch into this window's own scene
+    // instead of falling back to parent-translated main-window dispatch,
+    // which can never reach elements painted by this renderer.
+    crate::windows::upsert_runtime_window_handle(GPUI_FOOTER_OVERLAY_AUTOMATION_ID, handle.into());
 
     if let Ok(mut guard) = storage.lock() {
         *guard = Some(GpuiFooterOverlaySlot {

@@ -108,9 +108,19 @@ fn saved_main_window_style_values_are_project_defaults() {
     assert_eq!(base.header_info_bar.key_opacity, 0.5);
     assert_eq!(base.header_info_bar.pill_padding_x, 6.0);
     assert_eq!(base.header_info_bar.pill_padding_y, 0.0);
-    assert_eq!(base.header_info_bar.pill_radius, 14.0);
+    // Header context chips share the footer action buttons' hover-pill
+    // radius and hovered keycap-border alpha (canonical hover button style).
+    assert_eq!(
+        base.header_info_bar.pill_radius,
+        base.footer.metrics.button_radius
+    );
+    assert_eq!(base.header_info_bar.pill_radius, 6.0);
     assert_eq!(base.header_info_bar.pill_hover_bg_alpha, 0x10);
-    assert_eq!(base.header_info_bar.pill_hover_border_alpha, 0x34);
+    assert_eq!(
+        base.header_info_bar.pill_hover_border_alpha,
+        base.footer.button.hover_border_alpha
+    );
+    assert_eq!(base.header_info_bar.pill_hover_border_alpha, 0x57);
     assert_eq!(base.header_info_bar.pill_hover_text_alpha, 0xff);
     assert_eq!(base.header_info_bar.pill_hover_key_alpha, 0xff);
     assert_eq!(base.header_info_bar.context_edge_outset_x, 8.0);

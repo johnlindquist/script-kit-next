@@ -3,6 +3,13 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use gpui::FontWeight;
 
 pub const MAIN_MENU_HEADER_CONTEXT_EDGE_OUTSET_X: f32 = 8.0;
+/// Canonical hover-button corner radius: the footer trailing action buttons
+/// own this value, and every other hover-pill button (header context chips,
+/// footer tip) must share it so all buttons read as one system.
+pub const MAIN_MENU_ACTION_BUTTON_RADIUS: f32 = 6.0;
+/// Canonical keycap-border alpha while a hover-pill button is hovered.
+/// Shared by the footer buttons and the header context chips.
+pub const MAIN_MENU_ACTION_BUTTON_HOVER_BORDER_ALPHA: u32 = 0x57;
 pub const MAIN_MENU_SECTION_PADDING_X: f32 = 14.0;
 pub const MAIN_MENU_SECTION_PADDING_TOP: f32 = 12.0;
 pub const MAIN_MENU_SECTION_PADDING_BOTTOM: f32 = 4.0;
@@ -504,8 +511,26 @@ impl MainMenuThemeVariant {
         use HeaderInfoBarLayout::*;
         match self {
             MainMenuThemeVariant::InfoBarBase => header_info_bar_tokens(
-                Split, 0.50, 22.0, 7.0, 6.0, 0.0, 14.0, 0x00, 0x00, 0x10, 0x34, 0xff, 0xff, true,
-                true, true, "·",
+                Split,
+                0.50,
+                22.0,
+                7.0,
+                6.0,
+                0.0,
+                // Header context chips are hover-pill buttons: they share the
+                // footer action buttons' radius and hovered keycap-border
+                // alpha so every hover button in the app reads identically.
+                MAIN_MENU_ACTION_BUTTON_RADIUS,
+                0x00,
+                0x00,
+                0x10,
+                MAIN_MENU_ACTION_BUTTON_HOVER_BORDER_ALPHA,
+                0xff,
+                0xff,
+                true,
+                true,
+                true,
+                "·",
             ),
             MainMenuThemeVariant::InfoBarBreadcrumb => header_info_bar_tokens(
                 Split, 0.52, 14.0, 8.0, 4.0, 1.0, 4.0, 0x14, 0x00, 0x10, 0x34, 0xff, 0xff, true,
@@ -707,7 +732,7 @@ fn base_main_menu_theme_def(
             hover: 0x10,
             active: 0x24,
             border_alpha: 50,
-            hover_border_alpha: 0x57,
+            hover_border_alpha: MAIN_MENU_ACTION_BUTTON_HOVER_BORDER_ALPHA,
             hover_text_alpha: 0xff,
             hover_glyph_alpha: 0xff,
             uses_accent: false,
@@ -720,7 +745,7 @@ fn base_main_menu_theme_def(
             button_padding_x: 4.0,
             button_padding_y: 2.0,
             run_button_padding_x: 12.0,
-            button_radius: 6.0,
+            button_radius: MAIN_MENU_ACTION_BUTTON_RADIUS,
             label_font_size: 13.0,
             font_weight: FontWeight(400.0),
             keycap_padding_x: 0.0,
