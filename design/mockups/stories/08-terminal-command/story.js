@@ -1,0 +1,10 @@
+/* Run a Terminal Command — continuous timeline story */
+(function () {
+  "use strict";
+  var story = {"id": "08-terminal-command", "durationMs": 7000, "loop": true, "surfaces": [{"id": "terminal-prompt", "initial": true}], "chapters": [{"id": "open", "label": "Terminal open", "at": 0}, {"id": "type", "label": "Type command", "at": 400}, {"id": "run", "label": "Run output", "at": 3200}, {"id": "ansi", "label": "ANSI sample", "at": 4200}, {"id": "idle", "label": "Idle prompt", "at": 5600}], "actions": [{"at": 0, "kind": "setTerminalLines", "surface": "terminal-prompt", "lines": [{"text": "$ ", "cursor": true}]}, {"at": 400, "duration": 2400, "kind": "setTerminalLines", "surface": "terminal-prompt", "mode": "typeCommand", "prompt": "$ ", "command": "printf 'SCRIPT KIT TERMINAL FIXTURE\\n'"}, {"at": 3200, "kind": "setTerminalLines", "surface": "terminal-prompt", "lines": [{"text": "$ printf 'SCRIPT KIT TERMINAL FIXTURE\\n'"}, {"text": "SCRIPT KIT TERMINAL FIXTURE"}, {"text": "$ ", "cursor": true}]}, {"at": 4200, "kind": "setTerminalLines", "surface": "terminal-prompt", "lines": [{"text": "$ printf 'SCRIPT KIT TERMINAL FIXTURE\\n'"}, {"text": "SCRIPT KIT TERMINAL FIXTURE"}, {"html": "ansi <span class=\"sk-term-ansi-red\">red</span> <span class=\"sk-term-ansi-green\">green</span> <span class=\"sk-term-ansi-yellow\">yellow</span> <span class=\"sk-term-ansi-blue\">blue</span> <span class=\"sk-term-bold\">bold</span>"}, {"text": "$ ", "cursor": true}]}, {"at": 5600, "kind": "setTerminalLines", "surface": "terminal-prompt", "lines": [{"text": "$ printf 'SCRIPT KIT TERMINAL FIXTURE\\n'"}, {"text": "SCRIPT KIT TERMINAL FIXTURE"}, {"html": "ansi <span class=\"sk-term-ansi-red\">red</span> <span class=\"sk-term-ansi-green\">green</span> <span class=\"sk-term-ansi-yellow\">yellow</span> <span class=\"sk-term-ansi-blue\">blue</span> <span class=\"sk-term-bold\">bold</span>"}, {"text": "$ sleep 60"}, {"text": "$ ", "cursor": true}]}]};
+  window.StoryPlayer.mount({
+    root: document.querySelector("[data-story-root]") || document.body,
+    story: story,
+    autoplay: true,
+  });
+})();

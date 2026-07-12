@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 2,
+  "buildId": "story-mockup-realism-v2",
+  "architecture": "continuous-iframe-timeline",
+  "count": 9,
+  "stories": [
+    {
+      "id": "01-run-script-with-arg",
+      "title": "Run a Script with Choices",
+      "blurb": "Type to filter the launcher, move selection, open an arg prompt, pick a fruit, and run \u2014 continuous keystroke-level motion.",
+      "entry": "01-run-script-with-arg/index.html",
+      "chapters": [
+        {
+          "id": "rest",
+          "label": "Launcher rest",
+          "at": 0
+        },
+        {
+          "id": "type",
+          "label": "Type filter",
+          "at": 400
+        },
+        {
+          "id": "select",
+          "label": "Select script",
+          "at": 2200
+        },
+        {
+          "id": "arg",
+          "label": "Arg prompt",
+          "at": 3200
+        },
+        {
+          "id": "pick",
+          "label": "Pick fruit",
+          "at": 4200
+        },
+        {
+          "id": "run",
+          "label": "Run",
+          "at": 6200
+        }
+      ],
+      "surfaces": [
+        "main-menu",
+        "arg-prompt"
+      ],
+      "durationMs": 7500,
+      "actionKinds": [
+        "hideSurface",
+        "pressKey",
+        "setFooterState",
+        "setSelection",
+        "showSurface",
+        "type",
+        "walkSelection"
+      ]
+    },
+    {
+      "id": "02-delete-via-actions",
+      "title": "Delete via Actions Menu",
+      "blurb": "Focus a row, open \u2318K over the live launcher, filter to Delete, confirm the danger prompt.",
+      "entry": "02-delete-via-actions/index.html",
+      "chapters": [
+        {
+          "id": "focus",
+          "label": "Focus row",
+          "at": 0
+        },
+        {
+          "id": "actions",
+          "label": "Open Actions \u2318K",
+          "at": 900
+        },
+        {
+          "id": "filter",
+          "label": "Type delete",
+          "at": 1800
+        },
+        {
+          "id": "choose",
+          "label": "Select Delete",
+          "at": 3200
+        },
+        {
+          "id": "confirm",
+          "label": "Confirm danger",
+          "at": 4000
+        },
+        {
+          "id": "done",
+          "label": "Row removed",
+          "at": 5600
+        }
+      ],
+      "surfaces": [
+        "main-menu",
+        "actions-dialog",
+        "confirm-popup"
+      ],
+      "durationMs": 7000,
+      "actionKinds": [
+        "closeOverlay",
+        "hideSurface",
+        "openOverlay",
+        "setFooterState",
+        "setSelection",
+        "showSurface",
+        "type"
+      ]
+    },
+    {
+      "id": "03-clipboard-paste",
+      "title": "Paste from Clipboard History",
+      "blurb": "Open clipboard history, walk selection through seeded rows, preview updates, paste the pin.",
+      "entry": "03-clipboard-paste/index.html",
+      "chapters": [
+        {
+          "id": "open",
+          "label": "Open clipboard",
+          "at": 0
+        },
+        {
+          "id": "walk",
+          "label": "Walk entries",
+          "at": 600
+        },
+        {
+          "id": "pin",
+          "label": "Select pin",
+          "at": 3200
+        },
+        {
+          "id": "preview",
+          "label": "Preview detail",
+          "at": 4000
+        },
+        {
+          "id": "paste",
+          "label": "Paste \u21b5",
+          "at": 5200
+        }
+      ],
+      "surfaces": [
+        "clipboard-history"
+      ],
+      "durationMs": 6500,
+      "actionKinds": [
+        "setFooterState",
+        "setSelection",
+        "walkSelection"
+      ]
+    },
+    {
+      "id": "04-day-page-capture",
+      "title": "Capture a Day Page Note",
+      "blurb": "Open Today and type a spine line character-by-character with a live caret.",
+      "entry": "04-day-page-capture/index.html",
+      "chapters": [
+        {
+          "id": "open",
+          "label": "Day Page open",
+          "at": 0
+        },
+        {
+          "id": "type",
+          "label": "Type spine line",
+          "at": 500
+        },
+        {
+          "id": "task",
+          "label": "Add task line",
+          "at": 3200
+        },
+        {
+          "id": "rest",
+          "label": "Rest state",
+          "at": 5600
+        }
+      ],
+      "surfaces": [
+        "day-page"
+      ],
+      "durationMs": 7000,
+      "actionKinds": [
+        "setFooterState",
+        "setLines"
+      ]
+    },
+    {
+      "id": "05-notes-scratchpad",
+      "title": "Scratch Notes Panel",
+      "blurb": "Type markdown in the Notes NSPanel with the real titlebar, mono editor, and in-window footer.",
+      "entry": "05-notes-scratchpad/index.html",
+      "chapters": [
+        {
+          "id": "open",
+          "label": "Open Notes",
+          "at": 0
+        },
+        {
+          "id": "type",
+          "label": "Type markdown",
+          "at": 400
+        },
+        {
+          "id": "list",
+          "label": "Add list",
+          "at": 3800
+        },
+        {
+          "id": "footer",
+          "label": "Footer rest",
+          "at": 6200
+        }
+      ],
+      "surfaces": [
+        "notes"
+      ],
+      "durationMs": 7500,
+      "actionKinds": [
+        "setText",
+        "type"
+      ]
+    },
+    {
+      "id": "06-settings-theme",
+      "title": "Browse Settings Hub",
+      "blurb": "Open Settings, type to filter, walk selection onto Theme Designer.",
+      "entry": "06-settings-theme/index.html",
+      "chapters": [
+        {
+          "id": "open",
+          "label": "Open Settings",
+          "at": 0
+        },
+        {
+          "id": "type",
+          "label": "Type theme",
+          "at": 600
+        },
+        {
+          "id": "select",
+          "label": "Theme Designer",
+          "at": 2400
+        },
+        {
+          "id": "ready",
+          "label": "Ready to open",
+          "at": 3600
+        }
+      ],
+      "surfaces": [
+        "settings"
+      ],
+      "durationMs": 5000,
+      "actionKinds": [
+        "setFooterState",
+        "setSelection",
+        "type"
+      ]
+    },
+    {
+      "id": "07-chat-follow-up",
+      "title": "SDK Chat Follow-up",
+      "blurb": "Read chat history, type a follow-up keystroke-by-keystroke, send, and stream the reply.",
+      "entry": "07-chat-follow-up/index.html",
+      "chapters": [
+        {
+          "id": "open",
+          "label": "Open chat",
+          "at": 0
+        },
+        {
+          "id": "type",
+          "label": "Type follow-up",
+          "at": 800
+        },
+        {
+          "id": "send",
+          "label": "Send",
+          "at": 3200
+        },
+        {
+          "id": "stream",
+          "label": "Stream reply",
+          "at": 3600
+        }
+      ],
+      "surfaces": [
+        "chat-prompt"
+      ],
+      "durationMs": 7000,
+      "actionKinds": [
+        "appendMessage",
+        "setFooterState",
+        "setText",
+        "streamText",
+        "type"
+      ]
+    },
+    {
+      "id": "08-terminal-command",
+      "title": "Run a Terminal Command",
+      "blurb": "Type a shell command one cell at a time, then print the deterministic ANSI fixture.",
+      "entry": "08-terminal-command/index.html",
+      "chapters": [
+        {
+          "id": "open",
+          "label": "Terminal open",
+          "at": 0
+        },
+        {
+          "id": "type",
+          "label": "Type command",
+          "at": 400
+        },
+        {
+          "id": "run",
+          "label": "Run output",
+          "at": 3200
+        },
+        {
+          "id": "ansi",
+          "label": "ANSI sample",
+          "at": 4200
+        },
+        {
+          "id": "idle",
+          "label": "Idle prompt",
+          "at": 5600
+        }
+      ],
+      "surfaces": [
+        "terminal-prompt"
+      ],
+      "durationMs": 7000,
+      "actionKinds": [
+        "setTerminalLines"
+      ]
+    },
+    {
+      "id": "09-agent-chat-handoff",
+      "title": "Handoff to Agent Chat",
+      "blurb": "Open Agent Chat kitchen-sink, type a follow-up, arm send, and stream an assistant turn.",
+      "entry": "09-agent-chat-handoff/index.html",
+      "chapters": [
+        {
+          "id": "open",
+          "label": "Open Agent Chat",
+          "at": 0
+        },
+        {
+          "id": "type",
+          "label": "Type follow-up",
+          "at": 800
+        },
+        {
+          "id": "arm",
+          "label": "Send armed",
+          "at": 3000
+        },
+        {
+          "id": "stream",
+          "label": "Stream reply",
+          "at": 3600
+        }
+      ],
+      "surfaces": [
+        "agent-chat"
+      ],
+      "durationMs": 7500,
+      "actionKinds": [
+        "appendMessage",
+        "setFooterState",
+        "setSendState",
+        "setText",
+        "streamText",
+        "type"
+      ]
+    }
+  ]
+}

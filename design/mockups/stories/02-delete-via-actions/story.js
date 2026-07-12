@@ -1,0 +1,10 @@
+/* Delete via Actions Menu — continuous timeline story */
+(function () {
+  "use strict";
+  var story = {"id": "02-delete-via-actions", "durationMs": 7000, "loop": true, "surfaces": [{"id": "main-menu", "initial": true}, {"id": "actions-dialog", "initial": false}, {"id": "confirm-popup", "initial": false}], "chapters": [{"id": "focus", "label": "Focus row", "at": 0}, {"id": "actions", "label": "Open Actions \u2318K", "at": 900}, {"id": "filter", "label": "Type delete", "at": 1800}, {"id": "choose", "label": "Select Delete", "at": 3200}, {"id": "confirm", "label": "Confirm danger", "at": 4000}, {"id": "done", "label": "Row removed", "at": 5600}], "actions": [{"at": 0, "kind": "setSelection", "surface": "main-menu", "index": 4}, {"at": 0, "kind": "setFooterState", "surface": "main-menu", "footer": {"runLabel": "Run", "runKeys": ["\u21b5"], "actionsLabel": "Actions", "actionsKeys": ["\u2318", "K"], "agentLabel": "Agent", "agentKeys": ["\u2318", "\u21b5"]}}, {"at": 900, "kind": "openOverlay", "surface": "actions-dialog"}, {"at": 900, "kind": "setSelection", "surface": "actions-dialog", "index": 0}, {"at": 1800, "duration": 1000, "kind": "type", "surface": "actions-dialog", "text": "del", "as": "filter"}, {"at": 3200, "kind": "setSelection", "surface": "actions-dialog", "index": 0}, {"at": 4000, "kind": "closeOverlay", "surface": "actions-dialog"}, {"at": 4000, "kind": "hideSurface", "surface": "main-menu"}, {"at": 4000, "kind": "showSurface", "surface": "confirm-popup"}, {"at": 4000, "kind": "setFooterState", "surface": "confirm-popup", "footer": {"runLabel": "Delete", "runKeys": ["\u21b5"], "actionsLabel": "Keep", "actionsKeys": ["Esc"], "hideAgent": true, "selected": "run"}}, {"at": 5600, "kind": "hideSurface", "surface": "confirm-popup"}, {"at": 5600, "kind": "showSurface", "surface": "main-menu"}, {"at": 5600, "kind": "setSelection", "surface": "main-menu", "index": 3}]};
+  window.StoryPlayer.mount({
+    root: document.querySelector("[data-story-root]") || document.body,
+    story: story,
+    autoplay: true,
+  });
+})();
