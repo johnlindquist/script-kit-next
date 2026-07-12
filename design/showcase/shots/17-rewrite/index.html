@@ -1,0 +1,164 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<style>
+/* Shot 17-rewrite — AI rewrite panel over macOS TextEdit.
+ * All positions measured from reference JPG (2150×1294 @2x → 1075×647). */
+html,body{margin:0;padding:0;overflow:hidden;background:#000}
+.scene{position:relative;width:1075px;height:647px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  -webkit-font-smoothing:antialiased}
+
+/* ── Wallpaper (macOS Ventura-style abstract, CSS approximation) ── */
+.wallpaper{position:absolute;inset:0;background:
+  radial-gradient(360px 200px at -4% 51%, rgba(205,205,205,0.9), rgba(160,150,160,0.35) 45%, transparent 62%),
+  radial-gradient(520px 420px at -6% 106%, rgb(238,163,76), rgba(190,95,50,0.75) 45%, transparent 68%),
+  radial-gradient(760px 560px at -8% -18%, rgb(138,42,225), rgba(95,25,190,0.8) 48%, transparent 70%),
+  radial-gradient(300px 340px at 103% 24%, rgb(232,96,54), rgba(210,80,60,0.75) 45%, transparent 65%),
+  radial-gradient(320px 240px at 102% -2%, rgb(205,62,100), transparent 60%),
+  radial-gradient(560px 300px at 83% -10%, rgb(66,146,228), rgba(50,110,210,0.6) 45%, transparent 65%),
+  radial-gradient(620px 330px at 75% 108%, rgb(133,25,180), rgba(100,20,150,0.6) 45%, transparent 65%),
+  radial-gradient(560px 380px at 28% -12%, rgb(42,8,158), transparent 62%),
+  radial-gradient(500px 260px at 24% 108%, rgb(10,5,20), transparent 60%),
+  linear-gradient(115deg, rgb(30,6,90) 0%, rgb(6,4,45) 40%, rgb(1,1,42) 100%)}
+
+/* ── TextEdit window (background, plain macOS chrome) ── */
+.textedit{position:absolute;left:89px;top:44px;width:946px;height:550px;
+  border-radius:9px;background:#1e1e1e;
+  box-shadow:0 0 0 1px rgba(255,255,255,0.22), 0 22px 60px rgba(0,0,0,0.55);
+  overflow:hidden}
+.te-chrome{position:absolute;left:0;top:0;right:0;height:97px;background:#1e1b22}
+.te-light{position:absolute;top:9px;width:12.5px;height:12.5px;border-radius:50%}
+.te-light.r{left:6px;background:#d85a5e}
+.te-light.y{left:29px;background:#dbb73d}
+.te-light.g{left:52px;background:#5eb25d}
+.te-title{position:absolute;left:81px;top:3px;font-size:13px;font-weight:700;
+  line-height:16px;color:#8f8e94;white-space:nowrap}
+/* ruler: line at y83, ticks hang below (small 9px grid, quarter 36, inch 72;
+   phase: inch tick at rel x 721.5) */
+.te-ruler-line{position:absolute;left:0;right:0;top:83px;height:1px;background:#57555a}
+.te-ticks{position:absolute;left:0;right:0;top:84px;height:6px;background:
+  repeating-linear-gradient(90deg, #57555a 0 1px, transparent 1px 72px) 1.5px 0 / 100% 6px no-repeat,
+  repeating-linear-gradient(90deg, rgba(87,85,90,0.85) 0 1px, transparent 1px 36px) 1.5px 0 / 100% 4px no-repeat,
+  repeating-linear-gradient(90deg, rgba(87,85,90,0.7) 0 1px, transparent 1px 9px) 1.5px 0 / 100% 2px no-repeat}
+.te-num{position:absolute;top:88.5px;font-size:9px;line-height:8px;color:#c4c3c8}
+.te-tab-marker{position:absolute;top:78.5px;left:920.5px;width:0;height:0;
+  border-left:4.5px solid transparent;border-right:4.5px solid transparent;
+  border-top:4.5px solid #9a989b}
+.te-doc{position:absolute;left:0;top:97px;right:0;bottom:0;background:#1e1e1e}
+.te-selline{position:absolute;top:2px;left:0;width:897px;height:15.5px;
+  background:rgb(70,98,137);overflow:hidden}
+.te-seltext{position:absolute;right:3px;top:0;line-height:15.5px;font-size:13px;
+  color:#f4f7fb;white-space:nowrap}
+.te-vscroll{position:absolute;right:0;top:99px;width:14px;height:430px;
+  background:#221f26;border-left:1px solid rgba(0,0,0,0.35);
+  border-top:1px solid #48454c}
+.te-hscroll{position:absolute;left:0;right:0;bottom:1px;height:19.5px;background:#17151b}
+.te-hthumb{position:absolute;left:1px;top:4px;width:699px;height:12.5px;
+  border-radius:6px;background:#211f26;box-shadow:0 0 0 1px rgba(255,255,255,0.05)}
+
+/* ── Script Kit rewrite panel (foreground) ── */
+.panel{position:absolute;left:37px;top:60px;width:749px;height:480px;
+  border-radius:12px;background:rgba(32,32,34,0.88);
+  -webkit-backdrop-filter:blur(40px) saturate(1.5);
+  backdrop-filter:blur(40px) saturate(1.5);
+  box-shadow:0 0 0 1px rgba(255,255,255,0.24), 0 30px 80px rgba(0,0,0,0.6),
+    0 10px 30px rgba(0,0,0,0.4);
+  color:var(--sk-color-text-primary)}
+.p-abs{position:absolute}
+.p-path{left:17px;top:8px;font-size:12px;line-height:17px;color:rgba(255,255,255,0.45)}
+.p-btn{width:17px;height:17.5px;border-radius:6px;border:1px solid rgba(255,255,255,0.11);
+  display:grid;place-items:center;color:rgba(255,255,255,0.35)}
+.p-btn svg{width:11px;height:11px;display:block}
+.p-hdr-right{right:58px;top:8px;font-size:12px;line-height:17px;
+  color:rgba(255,255,255,0.45);white-space:nowrap}
+.p-placeholder{left:21px;top:30px;font-size:16px;line-height:21px;
+  color:var(--sk-text-placeholder)}
+.p-send{left:725px;top:32px;width:16px;height:17px;color:rgba(255,255,255,0.42)}
+.p-send svg{width:16px;height:17px;display:block}
+
+.p-card{left:16.5px;top:247px;width:716px;height:133px;
+  border-radius:var(--sk-agent-chat-user-radius);background:rgba(255,255,255,0.024)}
+.p-quotebar{left:28.5px;top:255px;width:2px;height:63px;background:rgba(255,255,255,0.19)}
+.p-sellabel{left:41px;top:253px;font-size:12px;line-height:16px;color:#a5a5a7}
+.p-quote{left:41px;top:276px;width:668px;font-size:14px;line-height:21px;
+  font-style:italic;color:#cdcdcf}
+.p-prompt{left:29.5px;top:326.5px;width:640px;font-size:14px;line-height:22.5px;
+  color:rgba(255,255,255,0.96)}
+.p-response{left:29.5px;top:388px;width:640px;font-size:14px;line-height:22.5px;
+  color:rgba(255,255,255,0.96)}
+
+.p-footer{left:0;right:0;bottom:0;height:32px;
+  border-top:1px solid rgba(255,255,255,0.09);
+  display:flex;align-items:center;justify-content:flex-end;
+  padding-right:26px;gap:8px}
+.p-footer .lbl{font-size:var(--sk-footer-label-font-size);color:var(--sk-footer-text);
+  white-space:nowrap}
+.p-footer .gap{width:16px}
+.p-footer .sk-keycap{color:rgba(255,255,255,0.75)}
+.p-footer .kc-wide{padding-inline:4px}
+</style></head>
+<body>
+<div class="scene">
+  <div class="wallpaper"></div>
+
+  <!-- TextEdit window -->
+  <div class="textedit">
+    <div class="te-chrome">
+      <div class="te-light r"></div>
+      <div class="te-light y"></div>
+      <div class="te-light g"></div>
+      <div class="te-title">Untitled 3</div>
+    </div>
+    <div class="te-ruler-line"></div>
+    <div class="te-ticks"></div>
+    <div class="te-num" style="left:721.5px">10</div>
+    <div class="te-num" style="left:793.5px">11</div>
+    <div class="te-num" style="left:865.5px">12</div>
+    <div class="te-num" style="left:937.5px">13</div>
+    <div class="te-tab-marker"></div>
+    <div class="te-doc">
+      <div class="te-selline">
+        <div class="te-seltext">hectic right now. Anyway let me know if that works or whatever.</div>
+      </div>
+    </div>
+    <div class="te-vscroll"></div>
+    <div class="te-hscroll"><div class="te-hthumb"></div></div>
+  </div>
+
+  <!-- Script Kit rewrite panel -->
+  <div class="panel">
+    <div class="p-abs p-path">~/</div>
+    <div class="p-abs p-btn" style="left:38px;top:7.5px">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h8M7 4.5 10.5 8 7 11.5M13 4v8"/></svg>
+    </div>
+    <div class="p-abs p-hdr-right">Script Kit &middot; gpt-5.5</div>
+    <div class="p-abs p-btn" style="left:697.5px;top:7px">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.5 12.5 7.5H10v4H6v-4H3.5L8 2.5Z"/></svg>
+    </div>
+    <div class="p-abs p-btn" style="left:719px;top:7px">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h8M7 4.5 10.5 8 7 11.5M13 4v8"/></svg>
+    </div>
+    <div class="p-abs p-placeholder">Follow up...</div>
+    <div class="p-abs p-send">
+      <svg viewBox="0 0 16 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 15V3M3 8l5-5 5 5"/></svg>
+    </div>
+
+    <div class="p-abs p-card"></div>
+    <div class="p-abs p-quotebar"></div>
+    <div class="p-abs p-sellabel">Selection &mdash; TextEdit</div>
+    <div class="p-abs p-quote">Hey, so basically I think we should maybe push the meeting because stuff came up and things are kind of hectic right now. Anyway let me know if that works or whatever.</div>
+    <div class="p-abs p-prompt">@selected Rewrite the attached selection in a polished, professional workplace tone. Preserve the meaning and approximate length; return only the rewritten text.</div>
+    <div class="p-abs p-response">Hi, I think we should consider rescheduling the meeting, as something has come up and things are a bit hectic right now. Please let me know if that works for you.</div>
+
+    <div class="p-abs p-footer">
+      <span class="lbl">Paste Response</span>
+      <span class="sk-keycap kc-wide">&#9166;</span>
+      <span class="gap"></span>
+      <span class="lbl">Actions</span>
+      <span class="sk-keycap">&#8984;</span>
+      <span class="sk-keycap">K</span>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script></body></html>

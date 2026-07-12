@@ -1,0 +1,268 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>10-file-search</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#000}
+*{box-sizing:border-box}
+.scene{position:relative;width:838px;height:570px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  -webkit-font-smoothing:antialiased}
+
+/* ── Wallpaper (CSS approximation of photographic macOS abstract) ── */
+.wall{position:absolute;inset:0;
+  background:
+    /* top-right blue ribbon hugging the top edge */
+    radial-gradient(150px 60px at 101% -1%, rgb(50 115 210 / .95), transparent 75%),
+    radial-gradient(420px 55px at 90% -1%, rgb(40 95 200 / .85), rgb(25 55 160 / .4) 60%, transparent 80%),
+    /* bottom-right magenta corner */
+    radial-gradient(340px 240px at 104% 106%, rgb(195 48 212 / .98), rgb(150 32 175 / .75) 45%, transparent 75%),
+    /* right pink band (y~230-310) */
+    radial-gradient(140px 95px at 100.5% 50%, rgb(185 64 145 / .95), rgb(130 50 115 / .55) 55%, transparent 80%),
+    /* right dark pocket (y~325) */
+    radial-gradient(120px 70px at 101% 57%, rgb(20 2 12 / .9), transparent 78%),
+    /* right magenta band (y~380-500) */
+    radial-gradient(170px 130px at 101% 74%, rgb(170 44 205 / .92), transparent 75%),
+    /* top-left purple mass */
+    radial-gradient(560px 430px at -8% -10%, rgb(145 45 205), rgb(118 35 180 / .92) 42%, rgb(70 18 160 / .55) 63%, transparent 80%),
+    /* left pink hotspot (y~175) */
+    radial-gradient(130px 115px at -3% 31%, rgb(215 48 155 / .97), rgb(175 40 135 / .55) 55%, transparent 80%),
+    /* bottom-left orange corner */
+    radial-gradient(250px 230px at -9% 109%, rgb(220 135 68), rgb(165 85 46 / .85) 45%, rgb(115 48 38 / .5) 66%, transparent 82%),
+    /* rust wash left lower */
+    radial-gradient(150px 250px at -6% 76%, rgb(135 52 40 / .75), transparent 72%),
+    /* deep navy base */
+    linear-gradient(118deg, rgb(34 8 105) 0%, rgb(16 9 80) 24%, rgb(10 8 62) 42%, rgb(8 4 42) 62%, rgb(14 4 55) 80%, rgb(30 6 95) 100%)}
+/* under-window feeds for the vibrancy blur */
+.wall::before{content:"";position:absolute;left:90px;top:400px;width:420px;height:260px;
+  border-radius:50%;
+  background:radial-gradient(closest-side, rgb(175 78 115 / .78), transparent);
+  filter:blur(20px)}
+.wall::after{content:"";position:absolute;left:-120px;top:250px;width:340px;height:120px;
+  transform:rotate(-35deg);border-radius:50%;
+  background:radial-gradient(closest-side, rgb(185 182 190 / .6), transparent 70%);
+  filter:blur(14px)}
+/* Edge strips: measured band sequences along each visible margin, masked inward */
+.edge{position:absolute;pointer-events:none}
+.edge-top{left:0;top:0;right:0;height:52px;
+  -webkit-mask-image:linear-gradient(#000 30%,transparent);mask-image:linear-gradient(#000 30%,transparent);
+  background:linear-gradient(to right,
+    rgb(126 37 217) 0%, rgb(93 24 205) 15%, rgb(51 9 171) 27%, rgb(16 4 105) 39%,
+    rgb(9 8 65) 51%, rgb(10 9 66) 63%, rgb(11 15 88) 75%, rgb(31 70 173) 87%, rgb(38 85 190) 100%)}
+.edge-bottom{left:0;bottom:0;right:0;height:60px;
+  -webkit-mask-image:linear-gradient(transparent,#000 70%);mask-image:linear-gradient(transparent,#000 70%);
+  background:linear-gradient(to right,
+    rgb(196 119 63) 0%, rgb(162 104 66) 3%, rgb(20 22 63) 12%, rgb(5 11 69) 21%,
+    rgb(57 53 54) 30%, rgb(3 1 37) 39%, rgb(6 2 35) 57%, rgb(18 13 79) 66%,
+    rgb(23 3 64) 75%, rgb(27 5 81) 84%, rgb(46 6 59) 92.5%, rgb(120 25 140) 97%, rgb(166 38 185) 100%)}
+.edge-left{left:0;top:0;bottom:0;width:72px;
+  -webkit-mask-image:linear-gradient(to right,#000 30%,transparent);mask-image:linear-gradient(to right,#000 30%,transparent);
+  background:linear-gradient(to bottom,
+    rgb(133 40 217) 0%, rgb(137 35 205) 22%, rgb(163 38 182) 28.5%, rgb(194 42 128) 35%,
+    rgb(119 22 86) 41.5%, rgb(14 12 13) 48%, rgb(131 131 131) 55%, rgb(99 30 40) 61%,
+    rgb(124 47 41) 75%, rgb(157 83 48) 88%, rgb(175 102 59) 94%, rgb(186 116 65) 100%)}
+.edge-right{right:0;top:0;bottom:0;width:64px;
+  -webkit-mask-image:linear-gradient(to left,#000 30%,transparent);mask-image:linear-gradient(to left,#000 30%,transparent);
+  background:linear-gradient(to bottom,
+    rgb(48 105 195) 0%, rgb(20 5 46) 4.5%, rgb(17 5 45) 20%, rgb(10 11 47) 31%,
+    rgb(134 52 118) 44%, rgb(170 59 135) 52.5%, rgb(24 1 9) 57%, rgb(159 39 199) 70%,
+    rgb(141 30 171) 83%, rgb(164 38 184) 96.5%, rgb(166 38 185) 100%)}
+
+/* ── Window shell ── */
+.sk-window{position:absolute;left:43.5px;top:44.5px;
+  width:var(--sk-window-main-width);height:var(--sk-window-main-height);
+  border-radius:var(--sk-window-radius);overflow:clip;isolation:isolate;
+  border:1px solid rgb(255 255 255 / .16);
+  box-shadow:0 0 0 .5px rgb(0 0 0 / .45), 0 24px 70px rgb(0 0 0 / .5), 0 8px 24px rgb(0 0 0 / .4)}
+.sk-window__material{position:absolute;inset:0;z-index:0;
+  -webkit-backdrop-filter:saturate(1.4) blur(40px);
+  backdrop-filter:saturate(1.4) blur(40px);
+  background:linear-gradient(rgb(52 50 64 / .56), rgb(44 42 56 / .54))}
+.sk-window__tint{position:absolute;inset:0;z-index:1;background:var(--sk-window-vibrancy-tint)}
+.sk-window__content{position:relative;z-index:3;width:100%;height:100%;
+  display:flex;flex-direction:column;color:var(--sk-text-name)}
+
+/* ── Header: context row + search ── */
+.hdr{height:var(--sk-main-menu-context-height);margin-top:var(--sk-main-menu-header-padding-y);
+  padding-inline:14px;display:flex;align-items:center;justify-content:space-between;
+  font-size:13px;color:rgb(255 255 255 / .45)}
+.hdr-side{display:flex;align-items:center;gap:7px}
+.hkey{width:19px;height:19px;flex:none;display:grid;place-items:center;
+  border:1px solid rgb(255 255 255 / .22);border-radius:6.5px;color:rgb(255 255 255 / .5)}
+.hkey svg{width:11px;height:11px;display:block}
+.search{position:relative;height:var(--sk-main-menu-search-height);margin-top:2px;
+  display:flex;align-items:center;
+  padding-left:var(--sk-main-menu-search-text-inset-x);
+  font-size:var(--sk-main-menu-search-font-size);
+  font-weight:var(--sk-main-menu-search-font-weight);color:var(--sk-text-name)}
+.caret{width:var(--sk-caret-width);height:var(--sk-caret-height);margin-left:1px;
+  background:var(--sk-text-name);flex:none}
+.sk-divider{height:var(--sk-window-divider-height);margin-top:4px;
+  background:rgb(255 255 255 / .07);flex:none}
+
+/* ── Body: list + preview ── */
+.body{flex:1 1 auto;min-height:0;display:flex;overflow:hidden}
+.list{width:375px;flex:none;display:flex;flex-direction:column;overflow:hidden}
+.row{width:100%;height:var(--sk-main-menu-row-height);flex:none;
+  padding:0 var(--sk-main-menu-row-outer-padding-x)}
+.row-surface{width:100%;height:100%;min-width:0;
+  padding:var(--sk-main-menu-row-inner-padding-y) var(--sk-main-menu-row-inner-padding-x);
+  border-radius:var(--sk-main-menu-row-radius);
+  display:flex;align-items:center;gap:var(--sk-main-menu-row-icon-text-gap)}
+.row[data-state=selected] .row-surface{background:var(--sk-main-menu-row-selected-background)}
+.row-icon{width:var(--sk-main-menu-icon-container-size);height:var(--sk-main-menu-icon-container-size);
+  flex:none;display:grid;place-items:center;overflow:visible}
+.row-icon svg{display:block}
+.row-copy{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;
+  gap:var(--sk-main-menu-row-name-description-gap)}
+.row-name{color:var(--sk-text-name);font-size:var(--sk-main-menu-name-font-size);
+  font-weight:var(--sk-main-menu-name-font-weight);line-height:var(--sk-main-menu-name-line-height);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row[data-state=selected] .row-name{font-weight:var(--sk-main-menu-selected-name-font-weight)}
+.row-desc{display:none;color:var(--sk-text-muted);
+  font-size:var(--sk-main-menu-description-font-size);
+  line-height:var(--sk-main-menu-description-line-height);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row[data-state=selected] .row-desc{display:block}
+.row-meta{flex:none;margin-left:auto;color:var(--sk-text-muted);font-size:13px;white-space:nowrap}
+
+/* ── Preview panel ── */
+.preview{flex:1 1 auto;min-width:0;padding:19px 26px 0 17.5px;overflow:hidden}
+.pv-title{font-size:20px;font-weight:700;line-height:26px;color:var(--sk-text-name)}
+.pv-path{margin-top:11px;font-size:12.5px;letter-spacing:-.12px;line-height:20px;
+  color:rgb(255 255 255 / .92);white-space:nowrap;overflow:hidden}
+.pv-kv{margin-top:0;height:23.5px;display:flex;align-items:center;justify-content:space-between;
+  font-size:14px;color:rgb(255 255 255 / .88)}
+.pv-kv:first-of-type{margin-top:9px}
+
+/* ── Footer ── */
+.footer{height:32px;flex:none;margin-top:auto;
+  border-top:var(--sk-window-divider-height) solid rgb(255 255 255 / .09);
+  padding-inline:var(--sk-footer-side-inset);
+  display:flex;align-items:center;justify-content:flex-end;gap:2px}
+.f-action{height:var(--sk-footer-button-height);display:flex;align-items:center;
+  gap:6px;padding-inline:var(--sk-footer-centered-edge-padding-x);
+  color:var(--sk-footer-text)}
+.f-label{font-size:var(--sk-footer-label-font-size);white-space:nowrap}
+.keycap{min-width:var(--sk-footer-keycap-height);height:var(--sk-footer-keycap-height);
+  padding-inline:3px;border:var(--sk-window-divider-height) solid var(--sk-footer-keycap-border);
+  border-radius:var(--sk-footer-keycap-radius);display:grid;place-items:center;
+  color:var(--sk-footer-text);font-size:12px;line-height:1}
+.f-gap{width:36px}
+</style></head>
+<body>
+<div class="scene">
+  <div class="wall"></div>
+  <div class="edge edge-top"></div>
+  <div class="edge edge-bottom"></div>
+  <div class="edge edge-left"></div>
+  <div class="edge edge-right"></div>
+  <div class="sk-window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <div class="sk-window__content">
+      <div class="hdr">
+        <div class="hdr-side">
+          <span>~/.scriptkit</span>
+          <span class="hkey"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6h7M5.5 3.5 8 6l-2.5 2.5M10.5 2.5v7"/></svg></span>
+        </div>
+        <div class="hdr-side">
+          <span>Script Kit &middot; GPT-5.5</span>
+          <span class="hkey"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M6 1.5 10 6H7.8v4H4.2V6H2z"/></svg></span>
+          <span class="hkey"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6h7M5.5 3.5 8 6l-2.5 2.5M10.5 2.5v7"/></svg></span>
+        </div>
+      </div>
+      <div class="search"><span>launch</span><span class="caret"></span></div>
+      <div class="sk-divider"></div>
+      <div class="body">
+        <div class="list">
+          <div class="row" data-state="selected">
+            <div class="row-surface">
+              <div class="row-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24">
+                  <defs>
+                    <linearGradient id="yl" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#f0c455"/><stop offset="1" stop-color="#dfa332"/>
+                    </linearGradient>
+                    <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#fbfbfb"/><stop offset="1" stop-color="#d9d9dc"/>
+                    </linearGradient>
+                  </defs>
+                  <rect width="24" height="24" rx="6" fill="url(#yl)"/>
+                  <g transform="rotate(-4 12 12)">
+                    <rect x="5" y="5" width="14" height="12.5" fill="url(#pg)"/>
+                    <g stroke="#8a8a90" stroke-width=".7">
+                      <line x1="6.5" y1="8.5" x2="17.5" y2="8.5"/><line x1="6.5" y1="10" x2="17.5" y2="10"/>
+                      <line x1="6.5" y1="11.5" x2="17.5" y2="11.5"/><line x1="6.5" y1="13" x2="15" y2="13"/>
+                    </g>
+                    <path d="M4 17.2 Q12 15.8 20 17.2 L20 18.6 Q12 17.4 4 18.6 Z" fill="#c9c9ce"/>
+                  </g>
+                </svg>
+              </div>
+              <div class="row-copy">
+                <span class="row-name">LAUNCH.md</span>
+                <span class="row-desc">~/dev/beads/npm-package/LAUN&hellip;</span>
+              </div>
+              <span class="row-meta">4.3 KB &middot; 12/8/&hellip;</span>
+            </div>
+          </div>
+
+          <!-- folder rows -->
+          <div class="row"><div class="row-surface">
+            <div class="row-icon"><svg width="22" height="22" viewBox="0 0 22 22"><defs><linearGradient id="fd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e3e6"/><stop offset="1" stop-color="#9d9da4"/></linearGradient></defs><path d="M4 5.5 l4.5 -1.2 1 1.7 6.5 0 v11 H4 Z" fill="#55555c"/><rect x="3.6" y="6.8" width="14.8" height="10.4" rx=".6" fill="url(#fd)" transform="skewX(-2)"/></svg></div>
+            <div class="row-copy"><span class="row-name">LAUNCHXL</span></div>
+            <span class="row-meta">128 B &middot; 10/27/&hellip;</span>
+          </div></div>
+          <div class="row"><div class="row-surface">
+            <div class="row-icon"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M4 5.5 l4.5 -1.2 1 1.7 6.5 0 v11 H4 Z" fill="#55555c"/><rect x="3.6" y="6.8" width="14.8" height="10.4" rx=".6" fill="url(#fd)" transform="skewX(-2)"/></svg></div>
+            <div class="row-copy"><span class="row-name">Launch Application.action</span></div>
+            <span class="row-meta">96 B &middot; May 21</span>
+          </div></div>
+          <div class="row"><div class="row-surface">
+            <div class="row-icon"><svg width="22" height="22" viewBox="0 0 22 22"><g transform="rotate(-3 11 11)"><rect x="4" y="4" width="14" height="12.5" fill="url(#pg)"/><g stroke="#8a8a90" stroke-width=".7"><line x1="5.5" y1="7.5" x2="16.5" y2="7.5"/><line x1="5.5" y1="9" x2="16.5" y2="9"/><line x1="5.5" y1="10.5" x2="16.5" y2="10.5"/><line x1="5.5" y1="12" x2="14" y2="12"/></g><path d="M3 16.2 Q11 14.8 19 16.2 L19 17.6 Q11 16.4 3 17.6 Z" fill="#c9c9ce"/></g></svg></div>
+            <div class="row-copy"><span class="row-name">LaunchAgent.plist</span></div>
+            <span class="row-meta">196 B &middot; May 21</span>
+          </div></div>
+          <div class="row"><div class="row-surface">
+            <div class="row-icon"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M4 5.5 l4.5 -1.2 1 1.7 6.5 0 v11 H4 Z" fill="#55555c"/><rect x="3.6" y="6.8" width="14.8" height="10.4" rx=".6" fill="url(#fd)" transform="skewX(-2)"/></svg></div>
+            <div class="row-copy"><span class="row-name">LaunchAgents</span></div>
+            <span class="row-meta">14.6 KB &middot; May&hellip;</span>
+          </div></div>
+          <div class="row"><div class="row-surface">
+            <div class="row-icon"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M4 5.5 l4.5 -1.2 1 1.7 6.5 0 v11 H4 Z" fill="#55555c"/><rect x="3.6" y="6.8" width="14.8" height="10.4" rx=".6" fill="url(#fd)" transform="skewX(-2)"/></svg></div>
+            <div class="row-copy"><span class="row-name">LaunchAngels</span></div>
+            <span class="row-meta">160 B &middot; May 21</span>
+          </div></div>
+          <div class="row"><div class="row-surface">
+            <div class="row-icon"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M4 5.5 l4.5 -1.2 1 1.7 6.5 0 v11 H4 Z" fill="#55555c"/><rect x="3.6" y="6.8" width="14.8" height="10.4" rx=".6" fill="url(#fd)" transform="skewX(-2)"/></svg></div>
+            <div class="row-copy"><span class="row-name">LaunchApp.cat</span></div>
+            <span class="row-meta">1.1 KB &middot; May 21</span>
+          </div></div>
+          <div class="row"><div class="row-surface">
+            <div class="row-icon"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M4 5.5 l4.5 -1.2 1 1.7 6.5 0 v11 H4 Z" fill="#55555c"/><rect x="3.6" y="6.8" width="14.8" height="10.4" rx=".6" fill="url(#fd)" transform="skewX(-2)"/></svg></div>
+            <div class="row-copy"><span class="row-name">LaunchApp.catfamily</span></div>
+            <span class="row-meta">576 B &middot; May 21</span>
+          </div></div>
+          <div class="row"><div class="row-surface">
+            <div class="row-icon"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M4 5.5 l4.5 -1.2 1 1.7 6.5 0 v11 H4 Z" fill="#55555c"/><rect x="3.6" y="6.8" width="14.8" height="10.4" rx=".6" fill="url(#fd)" transform="skewX(-2)"/></svg></div>
+            <div class="row-copy"><span class="row-name">LaunchApp.patternfamily</span></div>
+            <span class="row-meta">256 B &middot; May 21</span>
+          </div></div>
+        </div>
+        <div class="preview">
+          <div class="pv-title">LAUNCH.md</div>
+          <div class="pv-path">/Users/johnlindquist/dev/beads/npm-package/LAUNCH.md</div>
+          <div class="pv-kv"><span>Size</span><span>4.3 KB</span></div>
+          <div class="pv-kv"><span>Modified</span><span>12/8/25</span></div>
+          <div class="pv-kv"><span>Type</span><span>File</span></div>
+        </div>
+      </div>
+      <div class="footer">
+        <div class="f-action"><span class="f-label">Run</span><span class="keycap">&#9166;</span></div>
+        <div class="f-gap"></div>
+        <div class="f-action"><span class="f-label">Actions</span><span class="keycap">&#8984;</span><span class="keycap">K</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script>
+</body></html>

@@ -1,0 +1,153 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#000}
+*{box-sizing:border-box}
+.scene{position:relative;width:838px;height:570px;overflow:hidden;background:#0a0845}
+
+/* ── Wallpaper (CSS approximation of abstract macOS art; only 44px margins show) ── */
+.w-top,.w-bottom,.w-left,.w-right{position:absolute;pointer-events:none}
+.w-top{left:0;right:0;top:0;height:88px;
+  background:linear-gradient(90deg,
+    rgb(136,42,218) 0%, rgb(87,22,204) 17%, rgb(30,4,137) 33%,
+    rgb(9,8,65) 50%, rgb(10,9,67) 67%, rgb(20,45,148) 84%, rgb(48,108,196) 100%);}
+.w-bottom{left:0;right:0;bottom:0;height:88px;
+  background:linear-gradient(90deg,
+    rgb(202,126,68) 0%, rgb(163,105,67) 4%, rgb(8,13,68) 17%, rgb(59,55,56) 30%,
+    rgb(10,10,62) 44%, rgb(7,3,40) 50%, rgb(6,2,37) 58%, rgb(19,4,59) 72%,
+    rgb(34,5,97) 85%, rgb(163,36,169) 100%);}
+.w-left{left:0;top:0;bottom:0;width:44px;
+  background:linear-gradient(180deg,
+    rgb(136,42,218) 0%, rgb(138,34,205) 18%, rgb(188,42,169) 31%,
+    rgb(104,24,95) 44%, rgb(127,125,126) 55%, rgb(120,80,80) 63%,
+    rgb(117,39,39) 70%, rgb(151,71,44) 83%, rgb(190,115,64) 96%, rgb(202,126,68) 100%);}
+.w-right{right:0;top:0;bottom:0;width:44px;
+  background:linear-gradient(180deg,
+    rgb(48,108,196) 0%, rgb(35,60,130) 2%, rgb(20,5,46) 5%,
+    rgb(18,6,44) 15%, rgb(11,10,41) 31%, rgb(145,56,122) 44%,
+    rgb(177,63,132) 50%, rgb(76,12,46) 56%, rgb(160,39,202) 70%,
+    rgb(141,28,172) 83%, rgb(163,36,169) 100%);}
+
+/* ── Window shell ─────────────────────────────────────────────────────── */
+.window{position:absolute;left:44.5px;top:44.5px;width:749px;height:479.5px;
+  border-radius:11px;overflow:hidden;isolation:isolate;
+  box-shadow:0 0 0 1px rgba(5,0,12,.55), 0 24px 60px rgba(0,0,0,.5);}
+.win-fill{position:absolute;inset:0;pointer-events:none;
+  background:
+    /* soft blurred-wallpaper blobs (vibrancy emulation) */
+    radial-gradient(90px 60px at 105px 420px, rgba(160,157,166,.8), rgba(160,157,166,0) 70%),
+    radial-gradient(120px 70px at 285px 378px, rgba(100,92,112,.45), rgba(100,92,112,0) 70%),
+    radial-gradient(110px 60px at 195px 420px, rgba(110,45,55,.5), rgba(110,45,55,0) 70%),
+    radial-gradient(240px 130px at 0% 102%, rgba(56,44,50,.9), rgba(56,44,50,0) 75%),
+    radial-gradient(120px 35px at 88% 0%, rgba(35,55,110,.3), rgba(35,55,110,0) 75%),
+    radial-gradient(70px 115px at 100% 73%, rgba(92,38,122,.55), rgba(92,38,122,0) 72%),
+    radial-gradient(160px 140px at 0% 48%, rgba(86,28,92,.35), rgba(86,28,92,0) 75%),
+    linear-gradient(90deg,
+      rgb(66,27,78) 0%, rgb(55,27,78) 14%, rgb(39,27,77) 26%, rgb(30,27,77) 38%,
+      rgb(27,26,57) 47.5%, rgb(27,26,57) 58%, rgb(28,27,52) 68%, rgb(29,27,48) 78%, rgb(30,27,48) 100%);}
+.window::after{content:"";position:absolute;inset:0;border-radius:11px;
+  border:1px solid rgba(255,255,255,.17);pointer-events:none;z-index:9}
+
+/* ── Context zone (header) ────────────────────────────────────────────── */
+.ctx{position:absolute;left:0;right:0;top:7.5px;height:17.5px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  font-size:11px;color:rgba(255,255,255,.42);z-index:5}
+.ctx-left{position:absolute;left:20.5px;top:0;height:100%;display:flex;align-items:center;gap:10px}
+.ctx-right{position:absolute;right:14.5px;top:0;height:100%;display:flex;align-items:center}
+.ctx-right .ctx-label{margin-right:6px;letter-spacing:-.08px}
+.ctx-key{width:17.5px;height:17.5px;flex:none;border:1px solid rgba(255,255,255,.13);
+  border-radius:5.5px;display:grid;place-items:center;color:rgba(255,255,255,.4)}
+.ctx-key + .ctx-key{margin-left:4.5px}
+.ctx-key svg{display:block}
+
+/* ── Editor ───────────────────────────────────────────────────────────── */
+.editor{position:absolute;left:72.5px;top:54px;width:660px;height:367px;overflow:hidden;
+  font-family:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:16px;line-height:20px;font-weight:400;color:#fff;
+  font-variant-ligatures:none;z-index:4}
+.editor .ln{height:20px;position:relative;white-space:pre}
+.mk{color:#fff;font-weight:700}
+.ttl{color:rgb(251,191,36);font-weight:700}
+.b{color:rgb(251,191,36);font-weight:700}
+.lbl{color:rgb(251,191,36)}
+.dst{color:rgb(248,227,172)}
+.caret{position:absolute;left:0;top:1px;width:1.5px;height:17.5px;background:#fff}
+.emoji{display:inline-block;position:relative;width:24px;height:19.5px;top:2.5px;margin-left:-5px;
+  border:1.5px solid rgba(233,237,244,.92);background:
+    radial-gradient(circle at 50% 52%, #ffe6f6 0 7%, #ff7fd2 16%, #d4148d 28%, rgba(150,20,140,.75) 40%, rgba(90,10,90,.4) 52%, rgba(20,4,30,0) 68%),
+    conic-gradient(from 8deg at 50% 52%,
+      rgba(255,160,230,.9) 0 3deg, rgba(40,8,40,0) 3deg 24deg,
+      rgba(240,130,220,.8) 24deg 27deg, rgba(40,8,40,0) 27deg 52deg,
+      rgba(255,180,240,.9) 52deg 55deg, rgba(40,8,40,0) 55deg 86deg,
+      rgba(230,120,210,.8) 86deg 89deg, rgba(40,8,40,0) 89deg 118deg,
+      rgba(255,160,230,.9) 118deg 121deg, rgba(40,8,40,0) 121deg 150deg,
+      rgba(240,130,220,.8) 150deg 153deg, rgba(40,8,40,0) 153deg 186deg,
+      rgba(255,180,240,.9) 186deg 189deg, rgba(40,8,40,0) 189deg 218deg,
+      rgba(230,120,210,.8) 218deg 221deg, rgba(40,8,40,0) 221deg 252deg,
+      rgba(255,160,230,.9) 252deg 255deg, rgba(40,8,40,0) 255deg 288deg,
+      rgba(240,130,220,.8) 288deg 291deg, rgba(40,8,40,0) 291deg 322deg,
+      rgba(255,180,240,.9) 322deg 325deg, rgba(40,8,40,0) 325deg 360deg),
+    #0c0616}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────── */
+.sbar{position:absolute;left:720.5px;top:50px;width:4.5px;height:342px;
+  border-radius:2.5px;background:rgb(154,124,51);z-index:5}
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+.ftr{position:absolute;left:0;right:0;bottom:0;height:32px;
+  border-top:1px solid rgba(255,255,255,.09);
+  background:linear-gradient(90deg, rgba(255,255,255,.028) 55%, rgba(150,90,200,.09) 100%);
+  display:flex;align-items:center;justify-content:flex-end;padding-right:24.5px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;z-index:5}
+.f-label{font-size:13px;color:rgba(255,255,255,.8);margin-right:6px}
+.kc{min-width:19.5px;height:19.5px;padding:0 3px;border:1px solid rgba(255,255,255,.196);
+  border-radius:6px;display:grid;place-items:center;color:rgba(255,255,255,.8);
+  font-size:11px;line-height:1}
+.kc + .kc{margin-left:4.5px}
+</style></head>
+<body><div class="scene">
+  <div class="w-top"></div><div class="w-bottom"></div>
+  <div class="w-left"></div><div class="w-right"></div>
+  <div class="window">
+    <div class="win-fill"></div>
+    <div class="ctx">
+      <div class="ctx-left">
+        <span class="ctx-label">~</span>
+        <span class="ctx-key"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6h6.5"/><path d="M5.5 3.5 8 6l-2.5 2.5"/><path d="M10.5 3v6"/></svg></span>
+      </div>
+      <div class="ctx-right">
+        <span class="ctx-label">Script Kit · GPT-5.5</span>
+        <span class="ctx-key"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"><path d="M4.5 10.5v-4H2.2L6 2.2 9.8 6.5H7.5v4z"/></svg></span>
+        <span class="ctx-key"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 6h6.5"/><path d="M5.5 3.5 8 6l-2.5 2.5"/><path d="M10.5 3v6"/></svg></span>
+      </div>
+    </div>
+    <div class="editor">
+      <div class="ln"><span class="caret"></span><span class="mk">#</span> <span class="ttl">Friday, July 4</span></div>
+      <div class="ln"></div>
+      <div class="ln">Up early — launch week. Freedom ships today. <span class="emoji"></span></div>
+      <div class="ln"></div>
+      <div class="ln"><span class="mk">##</span> <span class="ttl">Focus</span></div>
+      <div class="ln"></div>
+      <div class="ln"><span class="b">-</span> [ ] Cut the v2.1 release and push the tag</div>
+      <div class="ln"><span class="b">-</span> [ ] Screenshot tour for the new landing page</div>
+      <div class="ln"><span class="b">-</span> [x] Morning run before it gets hot</div>
+      <div class="ln"></div>
+      <div class="ln"><span class="mk">##</span> <span class="ttl">Notes</span></div>
+      <div class="ln"></div>
+      <div class="ln">The clipboard → day page loop is finally invisible. Copied a link</div>
+      <div class="ln">twice yesterday and it was just *here* this morning. That's the</div>
+      <div class="ln">hero demo.</div>
+      <div class="ln"></div>
+      <div class="ln">00:05 [<span class="lbl">Clipboard entry</span>]<span class="dst">(kit://clipboard-history</span></div>
+      <div class="ln"><span class="dst">?id=91a36280-01cc-4ca0-ae7a-9181468742f9)</span></div>
+      <div class="ln">00:11 [<span class="lbl">Clipboard entry</span>]<span class="dst">(kit://clipboard-history</span></div>
+    </div>
+    <div class="sbar"></div>
+    <div class="ftr">
+      <span class="f-label">Actions</span>
+      <span class="kc">⌘</span>
+      <span class="kc">K</span>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script></body></html>

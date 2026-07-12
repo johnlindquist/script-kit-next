@@ -1,0 +1,226 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>Theme Designer</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#000}
+*{box-sizing:border-box}
+.scene{position:relative;width:838px;height:570px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  -webkit-font-smoothing:antialiased}
+
+/* ── Desktop wallpaper (CSS approximation of abstract macOS art) ── */
+.wallpaper{position:absolute;inset:0;
+  background:
+    /* bottom-right magenta bloom */
+    radial-gradient(360px 300px at 101% 102%, #d557d6 0%, #b03cb8 30%, rgba(130,32,140,0.6) 55%, transparent 75%),
+    /* right-side pink band */
+    radial-gradient(220px 240px at 102% 52%, rgba(215,90,160,0.95) 0%, rgba(160,55,115,0.6) 50%, transparent 75%),
+    /* right upper dark region */
+    radial-gradient(300px 340px at 100% 27%, rgba(13,3,36,0.95) 0%, rgba(15,4,40,0.7) 55%, transparent 80%),
+    /* top-right blue swoosh */
+    radial-gradient(400px 220px at 102% -4%, #3a72d2 0%, #2450ae 35%, rgba(20,40,120,0.6) 55%, transparent 70%),
+    /* top-left vivid purple */
+    radial-gradient(720px 520px at 2% -6%, #8a2ade 0%, #6a15cf 32%, rgba(76,14,180,0.72) 50%, transparent 66%),
+    /* center dark field */
+    radial-gradient(900px 560px at 56% 70%, #05041e 0%, rgba(6,5,34,0.85) 45%, rgba(8,8,44,0.4) 72%, transparent 95%),
+    linear-gradient(105deg, #4a0dbb 0%, #150e4e 32%, #090934 50%, #0c0838 72%, #240a50 100%);
+}
+/* left edge ribbon stack: purple → black → gray → dark red → orange */
+.wallpaper::before{content:"";position:absolute;left:0;top:0;bottom:0;width:150px;
+  background:linear-gradient(180deg,
+    #8a2ade 0%, #7a1fd4 20%, #6716b4 32%, #2a1548 44%,
+    #0a0809 49%, #3a3a3a 54%, #16100f 60%,
+    #6e1f24 68%, #8a2c24 78%, #b45a32 90%, #c7793f 100%);
+  -webkit-mask-image:linear-gradient(to right, black 25%, transparent 100%);
+  mask-image:linear-gradient(to right, black 25%, transparent 100%);
+}
+/* bottom edge: orange left corner fading into dark navy */
+.wallpaper::after{content:"";position:absolute;left:0;right:0;bottom:0;height:110px;
+  background:linear-gradient(90deg,
+    #c7793f 0%, #7a3a2e 14%, #101448 26%, #05041e 45%, #0b0430 66%,
+    rgba(60,8,90,0.8) 82%, transparent 92%);
+  -webkit-mask-image:linear-gradient(to top, black 35%, transparent 100%);
+  mask-image:linear-gradient(to top, black 35%, transparent 100%);
+}
+
+/* ── Window shell ── */
+.window{position:absolute;left:44px;top:45px;width:749px;height:479px;
+  border-radius:7px;overflow:clip;isolation:isolate;
+  box-shadow:0 30px 70px rgba(0,0,0,0.55), 0 8px 24px rgba(0,0,0,0.35)}
+.window::before{content:"";position:absolute;inset:0;z-index:0;
+  -webkit-backdrop-filter:blur(120px) saturate(1.15);
+  backdrop-filter:blur(120px) saturate(1.15);
+  background:linear-gradient(rgba(20,44,62,0.55), rgba(79,63,91,0.55))}
+.window::after{content:"";position:absolute;inset:0;z-index:1;
+  background:rgba(15,15,15,0.18);
+  border-radius:7px;border:1px solid rgba(255,255,255,0.16);pointer-events:none}
+.content{position:relative;z-index:2;width:100%;height:100%;color:#fff}
+
+/* ── Header: context zone ── */
+.hdr{position:absolute;left:11px;right:13px;top:5px;height:22px;
+  display:flex;align-items:center;justify-content:space-between}
+.hdr-left,.hdr-right{display:flex;align-items:center;gap:8px}
+.hdr-text{font-size:13.5px;font-weight:500;color:rgba(255,255,255,0.85)}
+.hdr-right .hdr-text{font-weight:400;color:rgba(255,255,255,0.78)}
+.hdr-btn{width:21px;height:21px;border-radius:7px;border:1px solid rgba(255,255,255,0.22);
+  display:grid;place-items:center;color:rgba(255,255,255,0.72)}
+.hdr-btn svg{width:12px;height:12px;display:block}
+.hdr-left .hdr-btn{width:19px;height:19px;border-radius:6px}
+
+/* ── Search row ── */
+.search{position:absolute;left:18px;right:20px;top:27px;height:29px;
+  display:flex;align-items:center;justify-content:space-between}
+.search .ph{font-size:20px;font-weight:430;color:rgba(255,255,255,0.42)}
+.search .count{font-size:20px;font-weight:400;color:rgba(255,255,255,0.62)}
+
+/* ── Theme list (left column) ── */
+.list{position:absolute;left:0;top:62px;width:375px;bottom:32px;overflow:hidden}
+.row{height:44px;padding:0 0 0 7.5px}
+.row-surface{width:359.5px;height:44px;border-radius:14px;
+  display:flex;align-items:center;padding:0 10.5px 0 11px}
+.row.sel .row-surface{background:rgba(255,255,255,0.125)}
+.swatch{width:40px;height:8px;border-radius:2px;overflow:hidden;
+  display:flex;flex:none}
+.swatch i{width:8px;height:8px;flex:none}
+.row-copy{margin-left:8.5px;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1px}
+.row-name{font-size:15.5px;font-weight:400;color:rgba(255,255,255,0.96);
+  line-height:18px;white-space:nowrap}
+.row.sel .row-name{font-weight:590;color:#fff}
+.row-desc{font-size:13px;color:rgba(255,255,255,0.66);line-height:16px;white-space:nowrap}
+.pill{margin-left:auto;flex:none;height:25px;padding:0 13px;border-radius:8px;
+  border:1px solid rgba(251,191,36,0.38);display:flex;align-items:center;
+  font-size:14px;color:#fff;background:rgba(251,191,36,0.05)}
+
+/* ── Facts panel (right column) ── */
+.panel{position:absolute;left:391.5px;right:0;top:62px;bottom:32px}
+.strip{position:absolute;left:0;right:19px;top:9.5px;height:26px;
+  display:flex;align-items:center}
+.btn{height:26px;border-radius:7px;display:flex;align-items:center;
+  font-size:14px;color:#fff}
+.btn.preview{width:62px;justify-content:center;
+  border:1px solid rgba(251,191,36,0.42);background:rgba(251,191,36,0.05)}
+.btn.customize{margin-left:9px;padding:0 13px;background:rgba(255,255,255,0.055)}
+.base{margin-left:auto;font-size:14px;color:rgba(255,255,255,0.94)}
+.facts{position:absolute;left:13px;right:32.5px;top:57px}
+.facts-title{font-size:12.5px;font-weight:700;letter-spacing:0.4px;color:#fff}
+.facts-sub{margin-top:8px;font-size:13.5px;color:rgba(255,255,255,0.93)}
+.fgrid{margin-top:9px}
+.frow{height:29.4px;display:flex;align-items:center;justify-content:space-between}
+.flabel{font-size:13.5px;color:rgba(255,255,255,0.92)}
+.fvalue{font-size:13.5px;color:#fff;display:flex;align-items:center;gap:8px}
+.chip{width:13px;height:13px;border-radius:3.5px;flex:none}
+.chip.amber{background:#eeb93a}
+.chip.bg{background:#0d0d0d;border:1px solid rgba(255,255,255,0.14)}
+
+/* ── Footer ── */
+.footer{position:absolute;left:0;right:0;bottom:0;height:32px;
+  border-top:1px solid rgba(255,255,255,0.09);background:rgba(10,8,16,0.14);
+  display:flex;align-items:center;justify-content:flex-end;
+  padding-right:24px;gap:4px}
+.flab{font-size:13px;color:rgba(255,255,255,0.85);margin-right:2px}
+.fgap{width:22px}
+.keycap{min-width:20px;height:20px;padding:0 4px;border-radius:6px;
+  border:1px solid rgba(255,255,255,0.22);display:grid;place-items:center;
+  color:rgba(255,255,255,0.8);font-size:11px;line-height:1}
+.keycap svg{width:12px;height:12px}
+</style></head>
+<body>
+<div class="scene">
+  <div class="wallpaper"></div>
+  <div class="window">
+    <div class="content">
+      <div class="hdr">
+        <div class="hdr-left">
+          <span class="hdr-text">~/.scriptkit</span>
+          <span class="hdr-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h8M7 4.5 10.5 8 7 11.5M13 3.5v9"/></svg></span>
+        </div>
+        <div class="hdr-right">
+          <span class="hdr-text">Script Kit · GPT-5.5</span>
+          <span class="hdr-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V3.5M4.8 6.5 8 3.2l3.2 3.3"/><path d="M3.5 12.5h9"/></svg></span>
+          <span class="hdr-btn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h8M7 4.5 10.5 8 7 11.5M13 3.5v9"/></svg></span>
+        </div>
+      </div>
+      <div class="search">
+        <span class="ph">Search themes or paste #hex...</span>
+        <span class="count">73 themes</span>
+      </div>
+
+      <div class="list">
+        <div class="row sel"><div class="row-surface">
+          <span class="swatch"><i style="background:#0f0f0f"></i><i style="background:#fbbf24"></i><i style="background:#ffffff"></i><i style="background:#ffffff"></i><i style="background:#353136"></i></span>
+          <span class="row-copy">
+            <span class="row-name">Script Kit Dark</span>
+            <span class="row-desc">Default dark theme with yellow accent</span>
+          </span>
+          <span class="pill">Saved</span>
+        </div></div>
+        <div class="row"><div class="row-surface">
+          <span class="swatch"><i style="background:#282a36"></i><i style="background:#bd93f9"></i><i style="background:#ffffff"></i><i style="background:#c0c0c0"></i><i style="background:#44475a"></i></span>
+          <span class="row-copy"><span class="row-name">Dracula</span></span>
+        </div></div>
+        <div class="row"><div class="row-surface">
+          <span class="swatch"><i style="background:#2e3440"></i><i style="background:#88c0d0"></i><i style="background:#ffffff"></i><i style="background:#d8dee9"></i><i style="background:#4c566a"></i></span>
+          <span class="row-copy"><span class="row-name">Nord</span></span>
+        </div></div>
+        <div class="row"><div class="row-surface">
+          <span class="swatch"><i style="background:#1e1e2e"></i><i style="background:#cba6f7"></i><i style="background:#ffffff"></i><i style="background:#bac2de"></i><i style="background:#45475a"></i></span>
+          <span class="row-copy"><span class="row-name">Catppuccin Mocha</span></span>
+        </div></div>
+        <div class="row"><div class="row-surface">
+          <span class="swatch"><i style="background:#282c34"></i><i style="background:#61afef"></i><i style="background:#ffffff"></i><i style="background:#9da5b4"></i><i style="background:#3e4452"></i></span>
+          <span class="row-copy"><span class="row-name">One Dark</span></span>
+        </div></div>
+        <div class="row"><div class="row-surface">
+          <span class="swatch"><i style="background:#1a1b26"></i><i style="background:#7aa2f7"></i><i style="background:#ffffff"></i><i style="background:#a9b1d6"></i><i style="background:#3b4261"></i></span>
+          <span class="row-copy"><span class="row-name">Tokyo Night</span></span>
+        </div></div>
+        <div class="row"><div class="row-surface">
+          <span class="swatch"><i style="background:#282828"></i><i style="background:#fe8019"></i><i style="background:#ffffff"></i><i style="background:#d5c4a1"></i><i style="background:#504945"></i></span>
+          <span class="row-copy"><span class="row-name">Gruvbox Dark</span></span>
+        </div></div>
+        <div class="row"><div class="row-surface">
+          <span class="swatch"><i style="background:#191724"></i><i style="background:#ebbcba"></i><i style="background:#ffffff"></i><i style="background:#c4a7e7"></i><i style="background:#403d52"></i></span>
+          <span class="row-copy"><span class="row-name">Rosé Pine</span></span>
+        </div></div>
+        <div class="row"><div class="row-surface">
+          <span class="swatch"><i style="background:#002b36"></i><i style="background:#268bd2"></i><i style="background:#ffffff"></i><i style="background:#eee8d5"></i><i style="background:#586e75"></i></span>
+          <span class="row-copy"><span class="row-name">Solarized Dark</span></span>
+        </div></div>
+      </div>
+
+      <div class="panel">
+        <div class="strip">
+          <span class="btn preview">Preview</span>
+          <span class="btn customize">Customize</span>
+          <span class="base">Base: Script Kit Dark</span>
+        </div>
+        <div class="facts">
+          <div class="facts-title">THEME FACTS</div>
+          <div class="facts-sub">Live values for the previewed theme</div>
+          <div class="fgrid">
+            <div class="frow"><span class="flabel">Status</span><span class="fvalue">Built-in preset</span></div>
+            <div class="frow"><span class="flabel">Source</span><span class="fvalue">Built-in preset</span></div>
+            <div class="frow"><span class="flabel">Accent</span><span class="fvalue"><span class="chip amber"></span>Amber #FBBF24</span></div>
+            <div class="frow"><span class="flabel">Background</span><span class="fvalue"><span class="chip bg"></span>#0F0F0F</span></div>
+            <div class="frow"><span class="flabel">Appearance</span><span class="fvalue">Dark · dark colors</span></div>
+            <div class="frow"><span class="flabel">Vibrancy</span><span class="fvalue">On · Menu</span></div>
+            <div class="frow"><span class="flabel">Surface Opacity</span><span class="fvalue">50%</span></div>
+            <div class="frow"><span class="flabel">Backdrop Gradient</span><span class="fvalue">Off</span></div>
+            <div class="frow"><span class="flabel">UI Font Size</span><span class="fvalue">16.0 px</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <span class="flab">Apply</span>
+        <span class="keycap" style="min-width:26px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4v4H4"/><path d="m6.5 5.5-2.5 2.5 2.5 2.5"/></svg></span>
+        <span class="fgap"></span>
+        <span class="flab">Actions</span>
+        <span class="keycap">⌘</span>
+        <span class="keycap">K</span>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script>
+</body></html>

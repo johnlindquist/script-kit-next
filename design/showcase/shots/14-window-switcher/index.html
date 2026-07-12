@@ -1,0 +1,364 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>14-window-switcher</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+* { box-sizing: border-box; }
+
+.scene {
+  position: relative;
+  width: 838px;
+  height: 570px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Desktop wallpaper (CSS approximation of abstract macOS art) ── */
+.wallpaper {
+  position: absolute;
+  inset: 0;
+  background:
+    /* near-black pool bottom-center */
+    radial-gradient(480px 220px at 40% 105%, rgb(5 3 22 / 0.95), transparent 72%),
+    /* dark pocket right edge between magenta and purple */
+    radial-gradient(110px 80px at 102% 62%, rgb(24 6 38 / 0.75), transparent 72%),
+    /* dark red-violet left pocket under pink band */
+    radial-gradient(160px 110px at -4% 47%, rgb(105 25 70 / 0.85), transparent 72%),
+    /* dark red left band */
+    radial-gradient(230px 170px at -5% 73%, rgb(135 48 40 / 0.95), transparent 70%),
+    /* orange bottom-left corner riding up the left edge */
+    radial-gradient(280px 480px at -10% 112%, rgb(232 140 68), transparent 68%),
+    /* pink-violet left band */
+    radial-gradient(260px 160px at -6% 33%, rgb(215 50 165 / 0.95), transparent 70%),
+    /* magenta right-middle */
+    radial-gradient(260px 140px at 103% 51%, rgb(196 68 158), transparent 68%),
+    /* bright purple bottom-right */
+    radial-gradient(400px 520px at 108% 95%, rgb(196 44 222), transparent 68%),
+    /* blue along top edge right side */
+    radial-gradient(480px 190px at 97% -7%, rgb(52 118 228), transparent 62%),
+    /* blue-violet along top edge */
+    radial-gradient(560px 260px at 12% -14%, rgb(90 28 242 / 0.85), transparent 62%),
+    /* red-violet top-left corner */
+    radial-gradient(560px 460px at -6% 2%, rgb(165 46 230), transparent 60%),
+    /* dark navy base */
+    linear-gradient(105deg, rgb(13 11 74), rgb(9 8 64) 50%, rgb(16 6 52));
+}
+
+/* gray metallic diagonal streak: from left edge (~y290) to bottom (~x220) */
+.streak { position: absolute; pointer-events: none; }
+.streak.s1 {
+  left: -95px; top: 400px; width: 400px; height: 62px;
+  transform: rotate(51deg);
+  background: linear-gradient(90deg, rgb(180 180 180 / 0.95), rgb(105 103 105 / 0.55) 55%, rgb(40 40 44 / 0) 95%);
+  filter: blur(9px);
+}
+.streak.s2 {
+  left: 40px; top: 480px; width: 260px; height: 46px;
+  transform: rotate(51deg);
+  background: linear-gradient(90deg, rgb(90 88 92 / 0.7), rgb(45 44 48 / 0.3) 70%, transparent);
+  filter: blur(11px);
+}
+
+/* Neutralizing wash under the window only — calibrates what the vibrancy
+ * blur samples so the interior matches the native capture (the real desktop
+ * behind the reference window differs from the visible frame). */
+.bleed {
+  position: absolute;
+  left: 43.5px; top: 44.5px; width: 750px; height: 479.5px;
+  border-radius: 10px;
+  background:
+    radial-gradient(45% 42% at 12% 100%, rgb(138 108 152 / 0.65), transparent 70%),
+    linear-gradient(100deg,
+      rgb(125 76 172 / 0.72) 0%,
+      rgb(118 72 162 / 0.68) 30%,
+      rgb(60 54 92 / 0.78) 52%,
+      rgb(56 50 88 / 0.82) 100%);
+}
+
+/* ── App window ── */
+.win {
+  position: absolute;
+  left: 43.5px; top: 44.5px;
+  width: 750px; height: 479.5px;
+  border-radius: 10px;
+  overflow: clip;
+  isolation: isolate;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.20),
+    0 24px 70px rgb(0 0 0 / 0.55),
+    0 6px 22px rgb(0 0 0 / 0.40);
+}
+.win .material {
+  position: absolute; inset: 0; z-index: 0;
+  -webkit-backdrop-filter: saturate(1.5) blur(36px);
+  backdrop-filter: saturate(1.5) blur(36px);
+  background: linear-gradient(rgb(29 29 32 / 0.50), rgb(21 21 24 / 0.50));
+}
+.win .tint {
+  position: absolute; inset: 0; z-index: 1;
+  background: rgb(15 15 15 / 0.30);
+}
+.win .content {
+  position: absolute; inset: 0; z-index: 2;
+  color: #fff;
+}
+
+/* ── Context strip ── */
+.ctx {
+  position: absolute; top: 7px; left: 20px; right: 14px; height: 18px;
+  display: flex; align-items: center;
+}
+.ctx .tilde {
+  font-size: 12px; color: rgb(255 255 255 / 0.55); line-height: 1;
+  margin-right: 10px;
+}
+.kbox {
+  width: 16px; height: 16px; flex: none;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 5px;
+  display: inline-grid; place-items: center;
+  color: rgb(255 255 255 / 0.55);
+}
+.kbox svg { width: 10px; height: 10px; display: block; }
+.ctx .spacer { flex: 1 1 auto; }
+.ctx .app-label {
+  font-size: 11px; color: rgb(255 255 255 / 0.52);
+  margin-right: 8px; letter-spacing: 0.1px;
+}
+.ctx .right { display: flex; align-items: center; gap: 6px; }
+
+/* ── Search row ── */
+.search {
+  position: absolute; top: 31px; left: 19.5px; right: 21.5px; height: 22px;
+  display: flex; align-items: center;
+}
+.search .caret {
+  width: 2px; height: 18px; flex: none;
+  background: rgb(255 255 255 / 0.9);
+  margin-right: 2px;
+}
+.search .ph {
+  font-size: 20px; font-weight: 430;
+  color: rgb(255 255 255 / 0.40);
+  white-space: nowrap;
+}
+.search .count {
+  margin-left: auto;
+  font-size: 14px;
+  color: rgb(255 255 255 / 0.62);
+}
+
+/* ── List (left pane) ── */
+.list {
+  position: absolute; top: 63px; left: 0; width: 375px; height: 385px;
+  overflow: hidden;
+}
+.row {
+  height: 44px; padding: 0 3.5px 0 4.5px;
+}
+.row .surface {
+  height: 100%; border-radius: 12px;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 4px 14px;
+  gap: 2px;
+}
+.row.selected .surface { background: rgb(255 255 255 / 0.125); }
+.row .name {
+  font-size: 14px; font-weight: 450; line-height: 16px;
+  color: #fff;
+  white-space: nowrap; overflow: hidden;
+}
+.row.selected .name { font-weight: 500; }
+.row .desc {
+  font-size: 12px; line-height: 16px;
+  color: rgb(255 255 255 / 0.62);
+  white-space: nowrap; overflow: hidden;
+}
+.dot {
+  position: absolute;
+  left: 362.5px; top: 441.5px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgb(251 191 36 / 0.55);
+}
+
+.vdiv {
+  position: absolute; top: 56px; left: 374.5px; width: 1px; height: 392px;
+  background: rgb(255 255 255 / 0.05);
+}
+
+/* ── Detail (right pane) ── */
+.detail { position: absolute; left: 392.5px; top: 63px; right: 0; bottom: 31.5px; }
+.detail .lbl {
+  position: absolute; left: 0;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.6px;
+  color: rgb(255 255 255 / 0.46);
+  line-height: 12px;
+}
+.d-window { top: 15px; }
+.d-title {
+  position: absolute; left: 0; top: 42px;
+  font-size: 19px; font-weight: 700; line-height: 22px;
+  color: rgb(255 255 255 / 0.96);
+}
+.d-sub {
+  position: absolute; left: 0; top: 74.5px;
+  font-size: 15px; line-height: 18px;
+  color: rgb(255 255 255 / 0.84);
+}
+.d-div {
+  position: absolute; left: -1.5px; right: 18px; top: 103.5px; height: 1px;
+  background: rgb(255 255 255 / 0.09);
+}
+.d-details { top: 114.5px; }
+.d-bounds-lbl {
+  position: absolute; left: 0; top: 142px;
+  font-size: 14px; line-height: 16px;
+  color: rgb(255 255 255 / 0.55);
+}
+.d-bounds-val {
+  position: absolute; left: 0; top: 164px;
+  font-size: 15px; line-height: 18px;
+  color: rgb(255 255 255 / 0.92);
+}
+.d-shortcuts { top: 194px; }
+.d-btns {
+  position: absolute; left: -1px; top: 220px;
+  display: flex; gap: 12px;
+}
+.d-btn {
+  height: 27px; border-radius: 8px;
+  background: rgb(70 70 74 / 0.32);
+  display: flex; align-items: center;
+  padding: 0 14px; gap: 9px;
+  font-size: 14px;
+}
+.d-btn .g { color: rgb(255 255 255 / 0.62); }
+.d-btn svg { width: 13px; height: 13px; display: block; color: rgb(255 255 255 / 0.62); }
+.d-btn .esc { color: rgb(255 255 255 / 0.93); }
+.d-btn .back { color: rgb(255 255 255 / 0.50); }
+
+/* ── Footer ── */
+.footer {
+  position: absolute; left: 0; right: 0; bottom: 0; top: 448px;
+  border-top: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.03);
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 36.5px;
+}
+.footer .run {
+  font-size: 14px; color: rgb(255 255 255 / 0.92);
+  margin-right: 8px;
+}
+.keycap {
+  width: 20px; height: 20px; flex: none;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: 6px;
+  display: grid; place-items: center;
+  color: rgb(255 255 255 / 0.85);
+}
+.keycap svg { width: 11px; height: 11px; display: block; }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="wallpaper"></div>
+  <div class="streak s1"></div>
+  <div class="streak s2"></div>
+  <div class="bleed"></div>
+
+  <div class="win">
+    <div class="material"></div>
+    <div class="tint"></div>
+    <div class="content">
+
+      <div class="ctx">
+        <span class="tilde">~</span>
+        <span class="kbox">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1.5 6h6.5M5.5 3.5L8 6l-2.5 2.5M10.5 3v6"/>
+          </svg>
+        </span>
+        <span class="spacer"></span>
+        <span class="app-label">Script Kit &middot; GPT&#8209;5.5</span>
+        <span class="right">
+          <span class="kbox">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+              <path d="M6 1.5l4 4H8v4H4v-4H2z"/>
+            </svg>
+          </span>
+          <span class="kbox">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1.5 6h6.5M5.5 3.5L8 6l-2.5 2.5M10.5 3v6"/>
+            </svg>
+          </span>
+        </span>
+      </div>
+
+      <div class="search">
+        <span class="caret"></span>
+        <span class="ph">Search windows...</span>
+        <span class="count">15 windows</span>
+      </div>
+
+      <div class="list">
+        <div class="row selected">
+          <div class="surface">
+            <div class="name">UAD Meter &amp; Control Panel: UAD Meter</div>
+            <div class="desc">344&times;72 at (0, 38)</div>
+          </div>
+        </div>
+        <div class="row"><div class="surface"><div class="name">cmux: &middot;&nbsp; Claude Code</div></div></div>
+        <div class="row"><div class="surface"><div class="name">Activity Monitor: Activity Monitor</div></div></div>
+        <div class="row"><div class="surface"><div class="name">Safari: Claude Platform</div></div></div>
+        <div class="row"><div class="surface"><div class="name">1Password: Lock Screen &mdash; 1Password</div></div></div>
+        <div class="row"><div class="surface"><div class="name">Finder: static</div></div></div>
+        <div class="row"><div class="surface"><div class="name">Finder: eggo-paper-mario</div></div></div>
+        <div class="row"><div class="surface"><div class="name">Messages: Messages - Google Messages for we&hellip;</div></div></div>
+        <div class="row"><div class="surface"><div class="name">Zed: codex-workshop &mdash; xpert-20260625-23221</div></div></div>
+      </div>
+      <span class="dot"></span>
+
+      <div class="vdiv"></div>
+
+      <div class="detail">
+        <div class="lbl d-window">WINDOW</div>
+        <div class="d-title">UAD Meter</div>
+        <div class="d-sub">UAD Meter &amp; Control Panel</div>
+        <div class="d-div"></div>
+        <div class="lbl d-details">DETAILS</div>
+        <div class="d-bounds-lbl">Bounds</div>
+        <div class="d-bounds-val">344&times;72 &middot; 0, 38</div>
+        <div class="lbl d-shortcuts">SHORTCUTS</div>
+        <div class="d-btns">
+          <div class="d-btn">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 2.5v3a1.5 1.5 0 0 1-1.5 1.5H2.5M4.5 4.5L2 7l2.5 2.5"/>
+            </svg>
+            <span class="g">Switch</span>
+          </div>
+          <div class="d-btn">
+            <span class="esc">Esc</span>
+            <span class="back">Back</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <span class="run">Run</span>
+        <span class="keycap">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2.5v3a1.5 1.5 0 0 1-1.5 1.5H2.5M4.5 4.5L2 7l2.5 2.5"/>
+          </svg>
+        </span>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script>
+</body>
+</html>

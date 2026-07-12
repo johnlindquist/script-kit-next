@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Script Kit — Clipboard History</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<style>
+html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+
+.scene {
+  position: relative;
+  width: 838px;
+  height: 570px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
+
+/* ── Desktop wallpaper (CSS approximation of macOS abstract swirl) ─────── */
+.desktop {
+  position: absolute;
+  inset: 0;
+  background:
+    /* left silver ribbon (edge) */
+    radial-gradient(110px 55px at -2% 52%, rgb(170 168 164 / 0.98), rgb(138 136 134 / 0.78) 45%, transparent 75%),
+    /* left rust band */
+    radial-gradient(140px 105px at -4% 80%, rgb(172 72 44), rgb(138 58 40) 50%, rgb(120 50 40 / 0.5) 66%, transparent 80%),
+    /* bottom-left orange */
+    radial-gradient(180px 105px at 0% 102%, rgb(212 136 66), rgb(165 90 48) 52%, transparent 82%),
+    /* top-left bright purple (edge) */
+    radial-gradient(330px 220px at -2% -6%, rgb(158 50 242), rgb(112 30 212 / 0.7) 55%, transparent 80%),
+    /* left mid purple (edge strip) */
+    radial-gradient(130px 240px at -5% 28%, rgb(192 50 238), rgb(160 42 205 / 0.75) 55%, transparent 78%),
+    /* top-right blue */
+    radial-gradient(300px 170px at 102% -5%, rgb(56 138 248), rgb(42 96 195 / 0.6) 55%, transparent 82%),
+    /* right pink swirl */
+    radial-gradient(170px 260px at 103% 52%, rgb(228 92 178), rgb(185 66 142 / 0.65) 58%, transparent 80%),
+    /* bottom-right magenta */
+    radial-gradient(250px 175px at 101% 102%, rgb(200 48 218 / 0.98), rgb(140 30 170 / 0.6) 55%, transparent 82%),
+    /* right lower purple */
+    radial-gradient(165px 185px at 104% 80%, rgb(175 30 212), transparent 78%),
+    /* bottom mid dark */
+    radial-gradient(420px 150px at 45% 107%, rgb(6 3 34 / 0.95), transparent 85%),
+    /* top edge dark navy strip */
+    linear-gradient(180deg, rgb(11 6 84) 0px, rgb(11 6 84 / 0.9) 28px, transparent 50px),
+    /* ── window-region fields (seen only through the vibrancy blur; the
+       saturate(2.6) in the material re-amplifies these desaturated values) ── */
+    /* gray-purple field behind list pane */
+    radial-gradient(360px 320px at 25% 48%, rgb(71 51 95 / 0.97), rgb(71 51 95 / 0.9) 60%, transparent 84%),
+    /* gray footer band */
+    radial-gradient(620px 105px at 45% 93%, rgb(71 65 74 / 0.95), transparent 84%),
+    /* muted navy band behind header */
+    radial-gradient(360px 100px at 45% 9%, rgb(45 45 64 / 0.95), transparent 80%),
+    /* blue-violet top-right interior */
+    radial-gradient(300px 140px at 76% 14%, rgb(50 53 106 / 0.92), transparent 80%),
+    /* dark desaturated field behind preview pane */
+    radial-gradient(430px 300px at 80% 58%, rgb(40 37 54 / 0.97), rgb(40 37 54 / 0.88) 60%, transparent 84%),
+    /* base */
+    linear-gradient(107deg, rgb(120 38 190) 0%, rgb(72 26 148) 15%, rgb(20 12 80) 34%, rgb(18 12 62) 52%, rgb(26 12 58) 66%, rgb(56 20 86) 82%, rgb(118 32 145) 100%);
+}
+
+/* ── Window shell overrides (750×480 at measured position) ─────────────── */
+:root {
+  --sk-emulator-menu-blur: 34px;
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(28 26 36 / 0.42),
+    rgb(20 19 28 / 0.42)
+  );
+}
+
+.sk-window {
+  position: absolute;
+  left: 44px;
+  top: 44px;
+  border: 0.5px solid rgb(255 255 255 / 0.35);
+  box-shadow: 0 22px 70px rgb(0 0 0 / 0.55), 0 6px 24px rgb(0 0 0 / 0.35);
+}
+
+/* ── Header: context pills (this capture's sans style) ─────────────────── */
+.shot-context {
+  height: var(--sk-main-menu-context-height);
+  margin-top: 2px;
+  padding: 0 12px 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgb(255 255 255 / 0.62);
+}
+
+.shot-context__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.shot-context__keycap {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgb(255 255 255 / 0.28);
+  border-radius: 7px;
+  display: inline-grid;
+  place-items: center;
+  color: rgb(255 255 255 / 0.62);
+}
+
+.shot-context__keycap svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.shot-search {
+  position: relative;
+  height: var(--sk-main-menu-search-height);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  padding-left: 19px;
+  font-size: var(--sk-main-menu-search-font-size);
+  font-weight: var(--sk-main-menu-search-font-weight);
+}
+
+.shot-search .sk-caret {
+  position: absolute;
+  left: 17px;
+  top: calc((var(--sk-main-menu-search-height) - var(--sk-caret-height)) / 2);
+  width: var(--sk-caret-width);
+  height: var(--sk-caret-height);
+  background: var(--sk-text-name);
+}
+
+.shot-search .sk-placeholder {
+  color: var(--sk-text-placeholder);
+  white-space: nowrap;
+}
+
+/* ── Split: list pane | preview pane ───────────────────────────────────── */
+.shot-split {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.shot-list {
+  width: 375px;
+  flex: none;
+  min-height: 0;
+  padding-block: var(--sk-spacing-padding-xs);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sk-clipboard-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.sk-list-row__icon-tile .sk-clipboard-emoji {
+  font-size: 13px;
+}
+
+/* ── Preview pane (render_clipboard_preview_panel) ─────────────────────── */
+.shot-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sk-footer-content-gap);
+  padding: 16px;
+  background: var(--sk-window-vibrancy-tint);
+  border-left: var(--sk-window-divider-height) solid var(--sk-chrome-border);
+  overflow: hidden;
+}
+
+.shot-preview__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.shot-preview__content pre {
+  margin: 0;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 23px;
+  color: var(--sk-text-name);
+  white-space: pre;
+  font-variant-ligatures: none;
+}
+
+.shot-preview__info {
+  flex: none;
+  width: max-content;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sk-footer-content-gap);
+  padding-top: 12px;
+  border-top: var(--sk-window-divider-height) solid var(--sk-chrome-border);
+  font-size: 12px;
+  line-height: 19.4px;
+  color: var(--sk-text-name);
+}
+
+.shot-preview__info-heading {
+  font-weight: 600;
+}
+
+.shot-preview__info-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shot-preview__info-value {
+  white-space: nowrap;
+}
+
+/* ── Footer ────────────────────────────────────────────────────────────── */
+.shot-footer-rail {
+  border-top: var(--sk-window-divider-height) solid rgb(255 255 255 / 0.08);
+}
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="desktop"></div>
+
+  <div class="sk-window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+
+    <div class="sk-window__content">
+      <header>
+        <div class="shot-context">
+          <span class="shot-context__group">~/.scriptkit
+            <span class="shot-context__keycap">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 8h9"/><path d="M8 4.5 11.5 8 8 11.5"/><path d="M13.5 3.5v9"/>
+              </svg>
+            </span>
+          </span>
+          <span class="shot-context__group">Script Kit · GPT-5.5
+            <span class="shot-context__keycap">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 12.5V5"/><path d="M4.5 8 8 4.5 11.5 8"/>
+              </svg>
+            </span>
+            <span class="shot-context__keycap">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 8h9"/><path d="M8 4.5 11.5 8 8 11.5"/><path d="M13.5 3.5v9"/>
+              </svg>
+            </span>
+          </span>
+        </div>
+        <div class="shot-search">
+          <span class="sk-caret"></span>
+          <span class="sk-placeholder">Search • @ context • / command • . style • | profile</span>
+        </div>
+      </header>
+
+      <div class="shot-split">
+        <section class="shot-list">
+          <div class="sk-list-row" data-state="selected">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon-tile" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy">
+                <span class="sk-list-row__name">// Rename Desktop screenshots by capture ...</span>
+                <span class="sk-list-row__description">just now</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="sk-list-row">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy"><span class="sk-list-row__name">git rebase -i HEAD~3</span></span>
+            </div>
+          </div>
+
+          <div class="sk-list-row">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy"><span class="sk-list-row__name">#7C5CFF</span></span>
+            </div>
+          </div>
+
+          <div class="sk-list-row">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy"><span class="sk-list-row__name">https://scriptkit.com</span></span>
+            </div>
+          </div>
+
+          <div class="sk-list-row">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy"><span class="sk-list-row__name">Ship the launch post by Friday — include the...</span></span>
+            </div>
+          </div>
+
+          <div class="sk-list-row">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy"><span class="sk-list-row__name">CLIPBOARD-SENTINEL-selection-hint-prob...</span></span>
+            </div>
+          </div>
+
+          <div class="sk-list-row">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy"><span class="sk-list-row__name">CLIPBOARD-SENTINEL-gdocs-probe</span></span>
+            </div>
+          </div>
+
+          <div class="sk-list-row">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy"><span class="sk-list-row__name">GoogleDocs capture probe sentenceGoogle...</span></span>
+            </div>
+          </div>
+
+          <div class="sk-list-row">
+            <div class="sk-list-row__surface">
+              <span class="sk-list-row__icon" aria-hidden="true"><span class="sk-clipboard-emoji">📄</span></span>
+              <span class="sk-list-row__copy"><span class="sk-list-row__name">SENTINEL–syscopy2</span></span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="shot-preview">
+          <div class="shot-preview__content">
+<pre>// Rename Desktop screenshots by
+capture date
+const shots = await readdir(home(
+"Desktop"))
+for (const file of shots.filter(f =&gt;
+f.endsWith(".png"))) {
+  const stamp = format(await stat</pre>
+          </div>
+          <div class="shot-preview__info">
+            <div class="shot-preview__info-heading">Information</div>
+            <div class="shot-preview__info-row">
+              <span class="shot-preview__info-label">Type</span>
+              <span class="shot-preview__info-value">Text</span>
+            </div>
+            <div class="shot-preview__info-row">
+              <span class="shot-preview__info-label">Copied</span>
+              <span class="shot-preview__info-value">just now · Jul 4, 2026 at 12:11 AM</span>
+            </div>
+            <div class="shot-preview__info-row">
+              <span class="shot-preview__info-label">Size</span>
+              <span class="shot-preview__info-value">279 bytes</span>
+            </div>
+            <div class="shot-preview__info-row">
+              <span class="shot-preview__info-label">Pinned</span>
+              <span class="shot-preview__info-value">No</span>
+            </div>
+            <div class="shot-preview__info-row">
+              <span class="shot-preview__info-label">Characters</span>
+              <span class="shot-preview__info-value">279</span>
+            </div>
+            <div class="shot-preview__info-row">
+              <span class="shot-preview__info-label">Lines</span>
+              <span class="shot-preview__info-value">6</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <footer class="sk-footer-host">
+        <div class="sk-footer-rail shot-footer-rail">
+          <span class="sk-footer-spacer"></span>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Paste into Finder</span>
+            <kbd class="sk-keycap">↵</kbd>
+          </button>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Actions</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script>
+</body>
+</html>

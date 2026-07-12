@@ -1,0 +1,14 @@
+{
+  "id": "05-emoji-picker",
+  "sceneSize": [838, 570],
+  "rmse": 0.0931,
+  "iterations": 6,
+  "divergences": [
+    "desktop wallpaper approximated with CSS radial/linear gradients; reference is a photographic abstract 3D render with sharp ribbon shapes that cannot be reproduced exactly (dominant residual in RMSE)",
+    "NSVisualEffectView menu material emulated with backdrop-filter blur+saturate plus a neutral bias wash calibrated against sampled interior colors (saturate 1.3 instead of token 2.6 to match the JPEG's desaturated interior)",
+    "emoji glyphs rendered as native Apple Color Emoji at 28px; sub-pixel glyph rasterization differs slightly from the GPUI capture",
+    "selected-cell border approximated as 1px rgba(215,165,90,0.75) ring sampled from JPEG (JPEG chroma bleed makes the exact native accent color ambiguous)",
+    "header chip icons (tab-pin, send-up) and footer return-arrow drawn as inline SVG approximations of the native glyphs",
+    "font antialiasing / SF Pro browser rasterization differs from native CoreText"
+  ]
+}

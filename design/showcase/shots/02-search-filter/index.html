@@ -1,0 +1,330 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<style>
+html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+
+.scene {
+  position: relative;
+  width: 838px;
+  height: 570px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  --sk-emulator-menu-blur: 32px;
+  --sk-emulator-menu-material-bias: linear-gradient(
+    rgb(58 58 62 / 0.52),
+    rgb(48 48 52 / 0.52)
+  );
+}
+
+/* ── Desktop wallpaper (CSS approximation, sampled from reference) ────── */
+.desktop {
+  position: absolute;
+  inset: 0;
+  background:
+    /* top-right blue glow */
+    radial-gradient(340px 130px at 101% -2%, rgb(64 138 245 / 1), rgb(32 66 180 / 0.6) 45%, transparent 66%),
+    /* right dark notch ~41% */
+    radial-gradient(120px 90px at 102% 41%, rgb(28 8 48 / 0.9), transparent 75%),
+    /* right magenta band ~51% */
+    radial-gradient(150px 100px at 102.5% 51%, rgb(220 82 170 / 1), rgb(175 50 175 / 0.5) 55%, transparent 78%),
+    /* right dark notch ~60% */
+    radial-gradient(110px 70px at 102% 60.5%, rgb(45 6 55 / 0.85), transparent 75%),
+    /* right bright purple band ~70% */
+    radial-gradient(140px 90px at 102.5% 70%, rgb(215 55 255 / 1), transparent 72%),
+    /* bottom-right magenta/purple */
+    radial-gradient(280px 240px at 102.5% 103%, rgb(220 52 250 / 1), rgb(150 30 185 / 0.55) 55%, transparent 76%),
+    /* left orange bottom */
+    radial-gradient(280px 250px at -4% 106%, rgb(238 150 80 / 1), rgb(175 98 56 / 0.6) 50%, transparent 70%),
+    /* left red-brown band ~71% */
+    radial-gradient(230px 140px at -4% 72%, rgb(160 52 45 / 1), transparent 68%),
+    /* left gray streak ~60% */
+    radial-gradient(190px 85px at -4% 60.5%, rgb(200 198 199 / 1), rgb(115 113 113 / 0.5) 55%, transparent 75%),
+    /* left dark notch ~51% */
+    radial-gradient(150px 70px at -3% 51%, rgb(10 8 10 / 0.92), transparent 78%),
+    /* left pink band ~41% */
+    radial-gradient(240px 120px at -4% 41.5%, rgb(250 55 125 / 1), rgb(190 42 115 / 0.5) 55%, transparent 74%),
+    /* left purple stretch (persists to ~40%) */
+    radial-gradient(200px 340px at -5% 16%, rgb(150 38 235 / 0.95), rgb(125 32 200 / 0.5) 60%, transparent 80%),
+    /* top-left purple corner */
+    radial-gradient(480px 340px at -6% -8%, rgb(165 48 250 / 1), rgb(120 30 205 / 0.55) 50%, transparent 74%),
+    /* purple bleed under window upper-left (visible only through vibrancy) */
+    radial-gradient(240px 190px at 13% 42%, rgb(130 45 135 / 0.45), transparent 70%),
+    /* dark ribbons below window bottom-left */
+    radial-gradient(340px 90px at 28% 103%, rgb(4 3 14 / 0.9), transparent 80%),
+    /* bottom-center near-black navy */
+    radial-gradient(600px 200px at 48% 106%, rgb(5 3 28 / 0.9), transparent 75%),
+    /* base */
+    linear-gradient(115deg, rgb(38 22 85) 0%, rgb(22 18 72) 30%, rgb(22 21 62) 55%, rgb(26 18 62) 100%);
+}
+
+/* ── Window placement over the backdrop ───────────────────────────────── */
+.sk-window {
+  position: absolute;
+  left: 43.5px;
+  top: 44px;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.22),
+    0 30px 80px rgb(0 0 0 / 0.7),
+    0 10px 28px rgb(0 0 0 / 0.55);
+}
+
+/* Warm neutralizer: native vibrancy reads less blue than the browser
+ * emulation; cancel the residual blue cast inside the window. */
+.sk-window__effect {
+  background: rgb(16 15 0 / 0.16);
+}
+
+/* Native footer bar reads slightly lighter/warmer than the list area. */
+.sk-footer-rail {
+  background: rgb(255 216 185 / 0.055);
+}
+
+/* Reference shows a proportional (SF Pro) context zone at ~11px, brighter
+ * than the token rest opacity, inset ~8.5px from the header edge. */
+.sk-context-zone {
+  font-family: inherit;
+  font-size: 10.5px;
+  margin-inline: 6.5px;
+}
+.sk-context-zone .sk-context-pill {
+  opacity: 0.58;
+}
+.sk-context-zone .sk-context-key {
+  font-size: 9px;
+}
+
+/* Reference search text measures ~16.5px, not the 20px token. */
+.sk-search-shell {
+  font-size: 16.5px;
+  padding-left: 18.5px;
+}
+
+.sk-search-shell .sk-input-text {
+  color: var(--sk-text-name);
+  white-space: pre;
+}
+
+/* Caret rides after the typed text instead of at the input origin. */
+.sk-search-shell .sk-caret {
+  position: static;
+  margin-left: 1px;
+  flex: none;
+  height: 20px;
+  transform: translateY(1.5px);
+}
+
+/* ── Match highlighting ───────────────────────────────────────────────── */
+/* Unselected row names rest at muted; matched substring pops to white. */
+.sk-list-row__name { color: var(--sk-text-muted); }
+.sk-list-row__name .m,
+.sk-list-row[data-state="selected"] .sk-list-row__name,
+.sk-list-row[data-bright-name] .sk-list-row__name {
+  color: var(--sk-text-name);
+}
+.sk-list-row__name .m { font-weight: 600; }
+.sk-list-row[data-state="selected"] .sk-list-row__name .dim {
+  color: var(--sk-text-strong);
+  font-weight: var(--sk-main-menu-name-font-weight);
+}
+
+/* Rows that always show their description (reference behavior). */
+.sk-list-row[data-desc] .sk-list-row__description { display: block; }
+
+/* ── Icon tiles ───────────────────────────────────────────────────────── */
+.sk-list-row__icon-tile--white {
+  background: rgb(255 255 255);
+  color: rgb(30 30 34);
+}
+.sk-list-row__icon-tile--dark {
+  background: rgb(48 44 56 / 0.92);
+  color: rgb(214 212 220);
+}
+
+/* ── Trailing amber accessory ─────────────────────────────────────────── */
+.sk-row-accessory {
+  flex: none;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  color: var(--sk-color-accent);
+  opacity: 0.9;
+}
+.sk-row-accessory svg { width: 16px; height: 16px; display: block; }
+.sk-row-accessory.cmd {
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 400;
+}
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="desktop"></div>
+
+  <div class="sk-window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <div class="sk-window__effect"></div>
+
+    <div class="sk-window__content">
+      <header class="sk-header">
+        <div class="sk-context-zone">
+          <span class="sk-context-pill">~/.scriptkit <span class="sk-context-key">⇥</span></span>
+          <span class="sk-context-pill">Script Kit · GPT-5.5 <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+        <div class="sk-search-shell">
+          <span class="sk-input-text">clip</span>
+          <span class="sk-caret"></span>
+        </div>
+      </header>
+
+      <section class="sk-list">
+        <!-- Clipboard History (selected) -->
+        <div class="sk-list-row" data-state="selected" data-desc>
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon-tile" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name"><span class="m">Clip</span><span class="dim">board History</span></span>
+              <span class="sk-list-row__description">Open clipboard history to view, search, and reuse copied items</span>
+            </span>
+            <span class="sk-row-accessory cmd">⌘</span>
+          </div>
+        </div>
+
+        <!-- Clipboard -->
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon-tile sk-list-row__icon-tile--white" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5h1.5A1.5 1.5 0 0 1 13 4v8.5a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 12.5V4a1.5 1.5 0 0 1 1.5-1.5H6"/><rect x="6" y="1.5" width="4" height="2.5" rx="0.9"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name"><span class="m">Clip</span>board</span>
+            </span>
+            <span class="sk-row-accessory" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.7 3.6 17.4A2 2 0 0 1 2.6 15.7V8.3a2 2 0 0 1 1-1.7L11 2.3a2 2 0 0 1 2 0l7.4 4.3a2 2 0 0 1 1 1.7v7.4a2 2 0 0 1-1 1.7L13 21.7a2 2 0 0 1-2 0Z"/><path d="M3 7.5 12 12l9-4.5"/><path d="M12 22V12"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- Paste Next Clipboard Item -->
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5h1.5A1.5 1.5 0 0 1 13 4v2M3 6V4a1.5 1.5 0 0 1 1.5-1.5H6"/><rect x="6" y="1.5" width="4" height="2.5" rx="0.9"/><path d="M3 9v3.5A1.5 1.5 0 0 0 4.5 14H8"/><path d="M10.5 11.5H14M14 11.5l-2-2M14 11.5l-2 2"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Paste Next <span class="m">Clip</span>board Item</span>
+            </span>
+            <span class="sk-row-accessory cmd">⌘</span>
+          </div>
+        </div>
+
+        <!-- Section: Menu Bar Actions -->
+        <div class="sk-section-slot">
+          <div class="sk-section-header">Menu Bar Actions</div>
+        </div>
+
+        <!-- Edit → Show Clipboard -->
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.5"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Edit → Show <span class="m">Clip</span>board</span>
+            </span>
+            <span class="sk-row-accessory cmd">⌘</span>
+          </div>
+        </div>
+
+        <!-- Emoji Picker (hover) -->
+        <div class="sk-list-row" data-state="hover" data-bright-name>
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M5.5 9.5s.9 1.3 2.5 1.3 2.5-1.3 2.5-1.3"/><path d="M6 6.2h.01M10 6.2h.01" stroke-width="1.6"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Emoji Picker</span>
+            </span>
+            <span class="sk-row-accessory cmd">⌘</span>
+          </div>
+        </div>
+
+        <!-- Copy Password -->
+        <div class="sk-list-row" data-bright-name data-desc>
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon-tile sk-list-row__icon-tile--dark" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 5 3 3-3 3"/><path d="M9 11.5h3"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Copy Password</span>
+              <span class="sk-list-row__description">Copy password for an item to clipboard</span>
+            </span>
+            <span class="sk-row-accessory" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- Copy Username -->
+        <div class="sk-list-row" data-bright-name data-desc>
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon-tile sk-list-row__icon-tile--dark" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 5 3 3-3 3"/><path d="M9 11.5h3"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Copy Username</span>
+              <span class="sk-list-row__description">Copy username for an item to clipboard</span>
+            </span>
+            <span class="sk-row-accessory" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- Copy One-Time Password -->
+        <div class="sk-list-row" data-bright-name data-desc>
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon-tile sk-list-row__icon-tile--dark" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 5 3 3-3 3"/><path d="M9 11.5h3"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Copy One-Time Password</span>
+              <span class="sk-list-row__description">Copy OTP/2FA code for an item to clipboard</span>
+            </span>
+            <span class="sk-row-accessory" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></svg>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <footer class="sk-footer-host">
+        <div class="sk-footer-rail">
+          <span class="sk-footer-spacer"></span>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Open Clipboard History</span>
+            <kbd class="sk-keycap">↵</kbd>
+          </button>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Actions</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+          </button>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Agent</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">↵</kbd>
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script>
+</body>
+</html>

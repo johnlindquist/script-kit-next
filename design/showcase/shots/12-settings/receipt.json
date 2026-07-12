@@ -1,0 +1,14 @@
+{
+  "id": "12-settings",
+  "sceneSize": [838, 570],
+  "rmse": 0.1096,
+  "iterations": 6,
+  "divergences": [
+    "wallpaper approximated with CSS gradients: the reference desktop is a photographic abstract wallpaper (metallic 3D swirls); the gray/black ribbon crossing the left edge is approximated with one masked linear-gradient band, so its exact curvature and specular detail differ",
+    "vibrancy bleed: the window interior color is produced by backdrop-filter blur over the CSS wallpaper, so the interior tint tracks the approximated (not photographic) backdrop — sampled interior deltas are within ~5-25/255 per channel",
+    "remaining RMSE (~0.11 normalized) is dominated by the flat wallpaper/vibrancy color offsets and font antialiasing; window geometry, row pitch (44px), header anatomy, and all text land on the reference positions",
+    "reference shows no 'Settings' section header (unlike design/mockups/screens/settings fixture) — rows start directly under the search shell at y=63 from window top; transcribed as rendered",
+    "footer divider drawn at rgba(255,255,255,0.14) as measured from the capture instead of the near-invisible --sk-footer-divider token value",
+    "context-zone pills rendered at measured ~0.45 white opacity with system font, matching the capture rather than the mono 10.5px/0.17-opacity token stack"
+  ]
+}

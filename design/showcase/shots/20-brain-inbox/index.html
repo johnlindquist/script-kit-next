@@ -1,0 +1,237 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>Brain Inbox — Script Kit</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#000}
+.scene{position:relative;width:838px;height:570px;overflow:hidden;background:#05021c}
+
+/* ── Desktop wallpaper (CSS approximation of the reference capture) ────── */
+.backdrop{position:absolute;inset:0;background:
+  radial-gradient(280px 120px at 92% 0%, rgb(45 95 190 / .85), transparent 70%),
+  radial-gradient(500px 340px at 5% 0%, rgb(120 35 200 / .8), transparent 70%),
+  radial-gradient(300px 260px at 0% 42%, rgb(190 40 140 / .6), transparent 70%),
+  radial-gradient(300px 220px at 0% 105%, rgb(180 100 60 / .6), transparent 70%),
+  radial-gradient(280px 380px at 100% 88%, rgb(160 35 185 / .6), transparent 70%),
+  linear-gradient(175deg, rgb(10 10 62), rgb(5 2 30) 60%, rgb(4 2 26))}
+/* Edge strips: exact sampled reference edge colors, masked to fade inward. */
+.edge{position:absolute;pointer-events:none}
+.edge-l{left:0;top:0;bottom:0;width:200px;
+  background:linear-gradient(180deg,
+    rgb(134 39 216) 1%, rgb(138 37 211) 8%, rgb(138 35 206) 15%, rgb(144 35 202) 22%,
+    rgb(182 41 173) 29%, rgb(192 42 97) 36%, rgb(99 24 89) 43%, rgb(120 118 119) 50%,
+    rgb(131 130 131) 57%, rgb(105 31 38) 64%, rgb(120 41 38) 71%, rgb(138 58 41) 78%,
+    rgb(158 78 46) 85%, rgb(176 98 53) 92%, rgb(194 121 67) 99%);
+  -webkit-mask-image:linear-gradient(90deg,#000,rgb(0 0 0 / .55) 35%,transparent 100%);
+  mask-image:linear-gradient(90deg,#000,rgb(0 0 0 / .55) 35%,transparent 100%)}
+.edge-r{right:0;top:0;bottom:0;width:120px;
+  background:linear-gradient(180deg,
+    rgb(41 90 188) 1%, rgb(19 4 45) 8%, rgb(17 5 44) 15%, rgb(17 5 43) 22%,
+    rgb(9 11 46) 29%, rgb(17 9 31) 36%, rgb(144 55 123) 43%, rgb(176 63 132) 50%,
+    rgb(77 13 41) 57%, rgb(160 43 183) 64%, rgb(147 35 191) 71%, rgb(121 23 150) 78%,
+    rgb(143 28 176) 85%, rgb(155 32 183) 92%, rgb(163 35 172) 99%);
+  -webkit-mask-image:linear-gradient(270deg,#000,rgb(0 0 0 / .5) 30%,transparent 80%);
+  mask-image:linear-gradient(270deg,#000,rgb(0 0 0 / .5) 30%,transparent 80%)}
+.edge-t{left:0;right:0;top:0;height:110px;
+  background:linear-gradient(90deg,
+    rgb(134 39 216) 0%, rgb(109 31 213) 10%, rgb(75 16 194) 20%, rgb(42 7 158) 29%,
+    rgb(15 4 105) 39%, rgb(8 7 66) 48%, rgb(9 9 65) 58%, rgb(10 9 67) 67%,
+    rgb(10 11 75) 72%, rgb(12 21 100) 77%, rgb(17 39 140) 82%, rgb(28 67 170) 87%,
+    rgb(40 90 185) 92%, rgb(43 98 191) 100%);
+  -webkit-mask-image:linear-gradient(180deg,#000,rgb(0 0 0 / .5) 30%,transparent 85%);
+  mask-image:linear-gradient(180deg,#000,rgb(0 0 0 / .5) 30%,transparent 85%)}
+.edge-b{left:0;right:0;bottom:0;height:120px;
+  background:linear-gradient(90deg,
+    rgb(194 120 66) 0%, rgb(128 90 63) 5%, rgb(41 36 63) 10%, rgb(9 15 68) 15%,
+    rgb(5 11 71) 20%, rgb(4 9 73) 24%, rgb(56 52 53) 29%, rgb(40 36 37) 34%,
+    rgb(4 2 23) 39%, rgb(14 19 69) 44%, rgb(6 2 38) 48%, rgb(6 2 38) 58%,
+    rgb(16 14 80) 63%, rgb(18 8 64) 68%, rgb(20 5 63) 72%, rgb(25 4 71) 77%,
+    rgb(27 5 78) 82%, rgb(38 5 109) 87%, rgb(57 6 155) 92%, rgb(176 37 200) 100%);
+  -webkit-mask-image:linear-gradient(0deg,#000,rgb(0 0 0 / .5) 30%,transparent 85%);
+  mask-image:linear-gradient(0deg,#000,rgb(0 0 0 / .5) 30%,transparent 85%)}
+
+/* ── Window placement ──────────────────────────────────────────────────── */
+.sk-window{position:absolute;left:44px;top:44px;
+  box-shadow:0 0 0 1px rgb(255 255 255 / .22), 0 24px 60px rgb(0 0 0 / .55), 0 6px 18px rgb(0 0 0 / .4);
+  --sk-emulator-menu-blur:32px;
+  --sk-emulator-menu-material-bias:linear-gradient(rgb(46 46 50 / .56), rgb(38 38 42 / .56))}
+
+/* ── Context zone (measured: content inset 14, pills w/ icon keycaps) ──── */
+.ctx{height:var(--sk-main-menu-context-height);margin-top:4px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px 0 15px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  font-size:11px;color:rgb(255 255 255 / .42)}
+.ctx__side{display:flex;align-items:center;gap:5px}
+.ctx__key{width:17.5px;height:17.5px;flex:none;border:1px solid rgb(255 255 255 / .22);
+  border-radius:6px;display:grid;place-items:center;color:rgb(255 255 255 / .5)}
+.ctx__key svg{width:10px;height:10px}
+.ctx__side--left .ctx__key{margin-left:8px}
+
+/* ── Search ────────────────────────────────────────────────────────────── */
+.search{position:relative;height:var(--sk-main-menu-search-height);margin-top:6px;
+  display:flex;align-items:center;
+  padding-left:var(--sk-main-menu-search-text-inset-x);
+  font-size:var(--sk-main-menu-search-font-size);
+  font-weight:var(--sk-main-menu-search-font-weight)}
+.search .sk-caret{position:absolute;left:16px;top:4px;
+  width:var(--sk-caret-width);height:var(--sk-caret-height);background:#fff}
+.search .ph{color:rgb(255 255 255 / .4);white-space:nowrap}
+
+/* ── List tweaks ───────────────────────────────────────────────────────── */
+.sk-list{padding-top:2px}
+.sk-list-row__description{color:rgb(255 255 255 / .62)}
+.tile-inbox svg{width:14px;height:14px}
+/* ── Footer (rail 32, Ask pill fully rounded, measured h29 w136) ───────── */
+.footer{height:32px;flex:none;display:flex;align-items:center;
+  padding:0 var(--sk-footer-side-inset);gap:var(--sk-footer-item-gap);
+  border-top:1px solid rgb(255 255 255 / .12)}
+.f-act{height:29px;border:none;display:flex;align-items:center;gap:4px;
+  padding:0 10px;border-radius:14.5px;background:transparent;
+  color:var(--sk-footer-text);font:inherit}
+.f-act--ask{background:rgb(255 255 255 / .07);padding:0 12px 0 14px;gap:6px}
+.f-label{white-space:nowrap;font-size:var(--sk-footer-label-font-size)}
+.f-key{min-width:20px;height:20px;border:1px solid rgb(255 255 255 / .22);
+  border-radius:6px;display:grid;place-items:center;
+  color:var(--sk-footer-text);font-size:11px;line-height:1;font-family:inherit}
+.f-gap{flex:1 1 auto}
+</style></head>
+<body>
+<div class="scene">
+  <div class="backdrop"></div>
+  <div class="edge edge-t"></div>
+  <div class="edge edge-b"></div>
+  <div class="edge edge-l"></div>
+  <div class="edge edge-r"></div>
+
+  <div class="sk-window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <div class="sk-window__content">
+
+      <div class="ctx">
+        <span class="ctx__side ctx__side--left">~
+          <span class="ctx__key"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8h8M10.5 8 7.8 5.3M10.5 8l-2.7 2.7M13.5 3.5v9"/></svg></span>
+        </span>
+        <span class="ctx__side">Script Kit · GPT-5.5
+          <span class="ctx__key"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5V4M8 4 5 7M8 4l3 3"/></svg></span>
+          <span class="ctx__key"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8h8M10.5 8 7.8 5.3M10.5 8l-2.7 2.7M13.5 3.5v9"/></svg></span>
+        </span>
+      </div>
+
+      <div class="search">
+        <span class="sk-caret"></span>
+        <span class="ph">Search&nbsp; •&nbsp; @ context&nbsp; •&nbsp; / command&nbsp; •&nbsp; . style&nbsp; •&nbsp; | profile</span>
+      </div>
+
+      <section class="sk-list">
+        <div class="sk-section-slot" data-first="true">
+          <div class="sk-section-header">Brain Inbox</div>
+        </div>
+
+        <div class="sk-list-row" data-state="selected">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon-tile tile-inbox" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">dash</span>
+              <span class="sk-list-row__description">Drifting · The focus review showed dash in the lower attention cluster, but there was no matching 2026-07-03 activit…</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">sideshow</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">lively-rafter-gf4n</span></span>
+          </div>
+        </div>
+
+        <div class="sk-section-slot">
+          <div class="sk-section-header">
+            <span class="sk-section-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/></svg>
+            </span>
+            Suggested
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a10 10 0 1 1 10-10c0 2.21-1.79 3-3 3h-2.5a2.5 2.5 0 0 0-2.5 2.5c0 .61.22 1.17.58 1.6.36.44.42 1.06.05 1.49-.6.7-1.55 1.41-2.63 1.41z"/><circle cx="13.5" cy="6.5" r=".8" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Theme Designer</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Clipboard History</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-9.3z"/><circle cx="11.5" cy="12.5" r="2.6"/><path d="m13.4 14.4 2.1 2.1"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Search Files</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Reset Window Positions</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4M2 10h4M2 14h4M2 18h4"/><path d="M21.4 2.6a2.05 2.05 0 0 1 0 2.9L13 14l-4 1 1-4 8.4-8.4a2.05 2.05 0 0 1 3 0z"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Open Notes</span></span>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span class="f-gap"></span>
+        <button class="f-act f-act--ask">
+          <span class="f-label">Ask Your Brain</span>
+          <kbd class="f-key">↵</kbd>
+        </button>
+        <button class="f-act">
+          <span class="f-label">Actions</span>
+          <kbd class="f-key">⌘</kbd><kbd class="f-key">K</kbd>
+        </button>
+        <button class="f-act">
+          <span class="f-label">Agent</span>
+          <kbd class="f-key">⌘</kbd><kbd class="f-key">↵</kbd>
+        </button>
+      </footer>
+
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script>
+</body></html>

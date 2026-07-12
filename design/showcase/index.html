@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script Kit — Script away the friction of your day</title>
+<meta name="description" content="A visual tour of the Script Kit desktop app for macOS — every frame rebuilt as live, pixel-matched HTML/CSS: unified search, clipboard history, notes, day page, agent chat, instant rewrites, terminal, and themes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lexend:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020204;
+    --panel: rgba(255,255,255,.04);
+    --border: rgba(255,255,255,.10);
+    --text: #ffffff;
+    --dim: rgba(255,255,255,.62);
+    --dimmer: rgba(255,255,255,.38);
+    --amber: #f5bd0c;
+    --amber-soft: rgba(245,189,12,.12);
+    --amber-border: rgba(245,189,12,.35);
+    --radius: 16px;
+    --heading: "Lexend", -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    --body: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--body); line-height: 1.65;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  .glow {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(64rem 42rem at 50% -18%, rgba(245,189,12,.09), transparent 62%),
+      radial-gradient(50rem 36rem at -10% 30%, rgba(245,189,12,.04), transparent 60%),
+      radial-gradient(46rem 34rem at 110% 78%, rgba(255,255,255,.04), transparent 60%);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  header { padding: 100px 0 36px; text-align: center; }
+  .kicker {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: var(--heading); font-size: .76rem; letter-spacing: .18em; text-transform: uppercase; font-weight: 600;
+    color: var(--amber); border: 1px solid var(--amber-border); border-radius: 999px;
+    padding: 7px 16px; margin-bottom: 30px; background: var(--amber-soft);
+  }
+  .kicker .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+  h1 {
+    font-family: var(--heading); font-size: clamp(2.5rem, 6.4vw, 4.5rem); font-weight: 800;
+    letter-spacing: -.03em; line-height: 1.04; color: #fff;
+  }
+  h1 .amber { color: var(--amber); }
+  .sub { max-width: 660px; margin: 26px auto 0; color: var(--dim); font-size: clamp(1.05rem, 2.4vw, 1.2rem); }
+
+  figure.shot {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px; box-shadow: 0 40px 90px -32px rgba(0,0,0,.9); overflow: hidden;
+  }
+  figure.shot img, figure.shot iframe.embed { width: 100%; height: auto; display: block; border: 0; border-radius: calc(var(--radius) - 8px); background: #101014; }
+  .hero-shot { margin: 56px auto 0; max-width: 1040px; }
+  .hero-shot figcaption { text-align: center; color: var(--dimmer); font-size: .86rem; padding: 14px 8px 2px; }
+
+  section { padding: 84px 0; border-top: 1px solid rgba(255,255,255,.06); }
+  .tag {
+    font-family: var(--heading); font-size: .72rem; letter-spacing: .17em; text-transform: uppercase;
+    color: var(--amber); font-weight: 700;
+  }
+  h2 { font-family: var(--heading); font-size: clamp(1.6rem, 3.4vw, 2.25rem); font-weight: 700; letter-spacing: -.02em; margin: 10px 0 14px; line-height: 1.12; }
+  p { color: var(--dim); font-size: 1.03rem; }
+  p + p { margin-top: 12px; }
+  em { color: rgba(255,255,255,.85); }
+  .keys { margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; }
+  kbd {
+    font-family: var(--mono); font-size: .78rem; color: var(--amber);
+    background: rgba(245,189,12,.07); border: 1px solid rgba(245,189,12,.28); border-bottom-width: 2px;
+    border-radius: 7px; padding: 3px 9px; white-space: nowrap;
+  }
+
+  .feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 52px; align-items: center; }
+  .feature.flip .copy { order: 2; }
+  .feature.flip .media { order: 1; }
+
+  /* Unified search spotlight */
+  .unified { text-align: center; }
+  .unified .lede { max-width: 700px; margin: 0 auto; }
+  .unified h2 { font-size: clamp(1.9rem, 4.4vw, 3rem); }
+  .domains {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 30px auto 40px; max-width: 860px;
+  }
+  .domains span {
+    font-family: var(--mono); font-size: .84rem; color: rgba(255,255,255,.78);
+    border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; background: rgba(255,255,255,.03);
+  }
+  .domains span b { color: var(--amber); font-weight: 600; }
+  .unified .big-shot { max-width: 980px; margin: 0 auto; }
+  .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 18px; }
+  .trio figcaption { color: var(--dimmer); font-size: .82rem; text-align: center; padding: 10px 6px 2px; }
+  .syntax {
+    font-family: var(--mono); color: var(--dimmer); font-size: .95rem; margin-top: 34px;
+  }
+  .syntax b { color: var(--amber); font-weight: 600; }
+
+  footer { padding: 96px 0 72px; text-align: center; color: var(--dim); font-size: .92rem; border-top: 1px solid rgba(255,255,255,.06); margin-top: 40px; }
+  footer .big { font-family: var(--heading); color: var(--text); font-size: 1.2rem; font-weight: 700; margin-bottom: 10px; }
+  footer a { color: var(--amber); text-decoration: none; border-bottom: 1px solid var(--amber-border); }
+  footer a:hover { color: #fff; border-color: #fff; }
+  .note { margin-top: 22px; font-size: .82rem; color: var(--dimmer); }
+
+  @media (max-width: 880px) {
+    .feature, .feature.flip { grid-template-columns: 1fr; gap: 26px; }
+    .feature.flip .copy { order: 1; }
+    .feature.flip .media { order: 2; }
+    .trio { grid-template-columns: 1fr; }
+    header { padding: 64px 0 24px; }
+    section { padding: 60px 0; }
+  }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="wrap">
+
+<header>
+  <span class="kicker"><span class="dot"></span>Script Kit · Desktop</span>
+  <h1>Script away the<br>friction of <span class="amber">your day.</span></h1>
+  <p class="sub">A translucent command bar that floats above everything you do — scripts, clipboard, notes, AI, and your whole day. One hotkey in. It never steals focus from the app you're working in.</p>
+  <div class="hero-shot">
+    <figure class="shot">
+      <iframe class="embed" src="shots/01-main-launcher/index.html" title="Script Kit launcher floating over the macOS desktop" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe>
+      <figcaption>Not a screenshot — this is live HTML/CSS, pixel-matched against the real capture. Select the text.</figcaption>
+    </figure>
+  </div>
+</header>
+
+<section class="unified">
+  <div class="lede">
+    <div class="tag">Unified search</div>
+    <h2>One search box.<br>Everything on your Mac.</h2>
+    <p>There's no "mode" to remember. The same field searches every domain at once and ranks what you actually use — your scripts sit next to your files, your clipboard, your open windows, even the menu-bar commands of the app you're standing in.</p>
+  </div>
+  <div class="domains">
+    <span><b>scripts</b> you've written</span>
+    <span><b>apps</b> on disk</span>
+    <span><b>files</b> everywhere</span>
+    <span><b>windows</b> across apps</span>
+    <span><b>clipboard</b> history</span>
+    <span><b>emoji</b> &amp; symbols</span>
+    <span><b>notes</b> &amp; day pages</span>
+    <span><b>brain inbox</b> captures</span>
+    <span><b>menu-bar actions</b> of the front app</span>
+    <span><b>settings</b> &amp; built-ins</span>
+  </div>
+  <div class="big-shot">
+    <figure class="shot"><iframe class="embed" src="shots/02-search-filter/index.html" title="Typing 'clip' surfaces Clipboard History, Paste Next Clipboard Item, and the front app's own Edit → Show Clipboard menu action" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure>
+    <figcaption style="color:var(--dimmer);font-size:.86rem;padding-top:14px">Typing <code style="font-family:var(--mono);color:var(--amber)">clip</code> finds Script Kit's own tools <em style="color:rgba(255,255,255,.8)">and</em> the front app's menu-bar commands — one list, one Return key.</figcaption>
+  </div>
+  <div class="trio">
+    <figure class="shot"><iframe class="embed" src="shots/10-file-search/index.html" title="File search" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe><figcaption>…it searches your disk</figcaption></figure>
+    <figure class="shot"><iframe class="embed" src="shots/14-window-switcher/index.html" title="Window switcher" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe><figcaption>…and every open window</figcaption></figure>
+    <figure class="shot"><iframe class="embed" src="shots/15-app-launcher/index.html" title="App launcher" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe><figcaption>…and yes, it launches apps</figcaption></figure>
+  </div>
+  <p class="syntax">Power grammar: <b>@</b> context &nbsp;·&nbsp; <b>/</b> command &nbsp;·&nbsp; <b>.</b> style &nbsp;·&nbsp; <b>|</b> profile</p>
+</section>
+
+<section class="feature">
+  <div class="copy">
+    <div class="tag">Instant rewrites</div>
+    <h2>Select text anywhere.<br>Paste back a better version.</h2>
+    <p>Highlight text in any app — TextEdit, your browser, your editor — and Script Kit is already offering to rewrite it. Pick a style: Professional, Concise, Friendly, or Direct.</p>
+    <p>The rewrite streams in from your own model, and one keystroke pastes it straight back where the selection was. Your app never loses focus, and the loop never touches your clipboard.</p>
+    <div class="keys"><kbd>select → rewrite chip</kbd><kbd>pick a style</kbd><kbd>↵ paste response</kbd></div>
+  </div>
+  <div class="media" style="display:grid;gap:18px">
+    <figure class="shot"><iframe class="embed" src="shots/18-rewrite-styles/index.html" title="Rewrite style picker over a TextEdit selection" loading="lazy" scrolling="no" style="aspect-ratio:2150/1294"></iframe></figure>
+    <figure class="shot"><iframe class="embed" src="shots/17-rewrite/index.html" title="Finished rewrite with Paste Response affordance" loading="lazy" scrolling="no" style="aspect-ratio:2150/1294"></iframe></figure>
+  </div>
+</section>
+
+
+<section class="feature flip">
+  <div class="copy">
+    <div class="tag">The SDK</div>
+    <h2>Scripts, not extensions.</h2>
+    <p>A Script Kit script is one TypeScript file in <code style="font-family:ui-monospace,monospace;color:#f5bd0c">~/.scriptkit</code>. <code style="font-family:ui-monospace,monospace;color:#f5bd0c">await arg()</code> gives you a full launcher UI for free, and the script is runnable the second you save — no React scaffold, no build step, no store review.</p>
+    <p>Your launcher becomes a REPL for your day: every repetitive chore is ten lines away from being a keystroke.</p>
+    <div class="keys"><kbd>one file</kbd><kbd>UI for free</kbd><kbd>save → run</kbd></div>
+  </div>
+  <div class="media"><figure class="shot" style="padding:0"><pre style="margin:0;padding:28px 30px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;line-height:1.75;color:#e8e8f0;overflow-x:auto;background:#07070d"><span style="color:#6b6b80">// share-standup.ts</span>
+<span style="color:#f5bd0c">const</span> project = <span style="color:#f5bd0c">await</span> arg(<span style="color:#9ece6a">"Which project?"</span>, [<span style="color:#9ece6a">"launcher"</span>, <span style="color:#9ece6a">"notes"</span>, <span style="color:#9ece6a">"sdk"</span>])
+<span style="color:#f5bd0c">const</span> update = <span style="color:#f5bd0c">await</span> editor(<span style="color:#9ece6a">`# ${project} — standup`</span>)
+copy(update)
+<span style="color:#f5bd0c">await</span> notify(<span style="color:#9ece6a">"Standup copied — paste it anywhere"</span>)</pre></figure></div>
+</section>
+
+<section class="unified" style="text-align:center">
+  <div class="lede">
+    <div class="tag">Bring the AI you already pay for</div>
+    <h2>Use your Codex subscription.</h2>
+    <p>Script Kit's agent doesn't come with a second bill. Sign in once with the Codex account you already have, and GPT&#8209;5.5 powers Agent Chat, instant rewrites, and inline predictions — your subscription, your models, no per-token anxiety.</p>
+    <p>Model and provider are always one keystroke away: swap them from the launcher chip whenever you like.</p>
+  </div>
+  <div class="keys" style="justify-content:center;margin-top:26px">
+    <kbd>your Codex account</kbd><kbd>GPT-5.5</kbd><kbd>no extra API bill</kbd><kbd>swap models anytime</kbd>
+  </div>
+</section>
+
+<section class="feature">
+  <div class="copy">
+    <div class="tag">Clipboard history</div>
+    <h2>Everything you copied is still here.</h2>
+    <p>A searchable, previewed history of text, code, links, and images — type, size, character and line counts, and when you copied it. Return pastes it into the app you came from.</p>
+    <div class="keys"><kbd>full preview</kbd><kbd>↵ paste into front app</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/04-clipboard-history/index.html" title="Clipboard history with a code snippet previewed" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="feature flip">
+  <div class="copy">
+    <div class="tag">Day Page</div>
+    <h2>Today, captured automatically.</h2>
+    <p>A single page for the day that fills itself in. Copy a link twice and it just <em>appears</em> here the next morning — no filing, no folders, no tags. Add your focus list on top; the day writes its own timeline underneath.</p>
+    <p><em>Copy → forgotten → recalled.</em></p>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/07-day-page/index.html" title="Day Page with focus list and auto-captured clipboard entries" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="feature flip">
+  <div class="copy">
+    <div class="tag">The Brain</div>
+    <h2>Copy. Forget. It comes back.</h2>
+    <p>Nothing asks to be filed. Copies, dictations, and chat turns sediment into plain markdown under <code style="font-family:ui-monospace,monospace;color:#f5bd0c">~/.scriptkit/brain</code>, searchable within seconds — and the Brain Inbox resurfaces them right at the top of the launcher when they matter again.</p>
+    <p>Launchers have history. Script Kit has memory.</p>
+    <div class="keys"><kbd>zero filing</kbd><kbd>plain markdown</kbd><kbd>Ask Your Brain ↵</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/20-brain-inbox/index.html" title="Brain Inbox resurfacing captures at the top of the launcher" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="feature">
+  <div class="copy">
+    <div class="tag">Notes</div>
+    <h2>A floating, always-there scratchpad.</h2>
+    <p>A persistent markdown editor one keystroke away. Headings, checklists, quotes, links — live-rendered, autosaved, with word count and read time in the footer. The running list you never have to file.</p>
+    <div class="keys"><kbd>markdown live</kbd><kbd>autosaves</kbd><kbd>⌘N new note</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/06-notes/index.html" title="Notes window with a launch checklist" loading="lazy" scrolling="no" style="aspect-ratio:1560/1351"></iframe></figure></div>
+</section>
+
+<section class="feature">
+  <div class="copy">
+    <div class="tag">Embedded references</div>
+    <h2>Notes that link to real things.</h2>
+    <p>Notes and Day Pages embed live <code style="font-family:ui-monospace,monospace;color:#f5bd0c">kit://</code> links to actual resources — a clipboard entry, a captured fragment, a chat thread. Click one and the real thing reopens, with provenance, not a stale pasted copy.</p>
+    <p>Your notes stop being a silo and become a view over everything you touched.</p>
+    <div class="keys"><kbd>kit:// deep links</kbd><kbd>live provenance</kbd><kbd>@ mentions resolve</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/19-references/index.html" title="Day Page with embedded kit:// clipboard references" loading="lazy" scrolling="no" style="aspect-ratio:1573/335"></iframe></figure></div>
+</section>
+
+<section class="feature flip">
+  <div class="copy">
+    <div class="tag">Agent Chat</div>
+    <h2>An AI that already knows what you're looking at.</h2>
+    <p>Ask a question and it answers inline — with the current app, selection, clipboard, and recent files available as context. It thinks, streams real markdown, and offers to paste the response straight back into your work.</p>
+    <div class="keys"><kbd>⌘ ↵ ask</kbd><kbd>streams live</kbd><kbd>paste response</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/08-agent-chat/index.html" title="Agent Chat answering with markdown bullets" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="feature">
+  <div class="copy">
+    <div class="tag">Context composer</div>
+    <h2>Attach files, scripts, or the clipboard — before you send.</h2>
+    <p>Type <kbd>/</kbd> for a skill or agent command, <kbd>@</kbd> to attach files, scripts, clipboard, or history. Previous chats are one <kbd>⌘P</kbd> away. Context is explicit, not guessed.</p>
+    <div class="keys"><kbd>/ skills</kbd><kbd>@ context</kbd><kbd>⌘ P history</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/13-agent-chat-composer/index.html" title="Agent Chat composer with context affordances" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="unified" style="text-align:center">
+  <div class="lede">
+    <div class="tag">Non-activating panel</div>
+    <h2>It never steals focus.</h2>
+    <p>The whole app is a non-activating panel: summon it over any window and your cursor stays exactly where it was. That&rsquo;s the mechanic behind everything above — rewrites, clipboard, emoji all land back in your app because Script Kit never took your app away.</p>
+  </div>
+  <div class="keys" style="justify-content:center;margin-top:26px">
+    <kbd>cursor stays put</kbd><kbd>no app switch</kbd><kbd>paste lands home</kbd>
+  </div>
+</section>
+
+<section class="feature flip">
+  <div class="copy">
+    <div class="tag">Quick terminal</div>
+    <h2>A shell, without leaving the launcher.</h2>
+    <p>Drop into a real terminal in the same floating window — run a command, read the output, dismiss. It keeps its working directory in sync and can hand the whole session to an agent.</p>
+    <div class="keys"><kbd>real PTY</kbd><kbd>⌘↵ hand to agent</kbd><kbd>⌘W close</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/09-terminal/index.html" title="Quick terminal listing directories" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="feature">
+  <div class="copy">
+    <div class="tag">Dictation</div>
+    <h2>Talk. It types where you were.</h2>
+    <p>Hold the hotkey and speak — Whisper runs on-device, a live waveform shows you&rsquo;re heard, and the transcript lands in whatever field you were focused on. No audio ever leaves your Mac.</p>
+    <p>Every dictation is kept as a first-class, searchable record, so the thing you said last Tuesday is one search away.</p>
+    <div class="keys"><kbd>hold → speak</kbd><kbd>on-device Whisper</kbd><kbd>searchable history</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/21-dictation/index.html" title="Dictation overlay with live waveform and mic controls" loading="lazy" scrolling="no" style="aspect-ratio:1428/531"></iframe></figure></div>
+</section>
+
+<section class="feature">
+  <div class="copy">
+    <div class="tag">Emoji &amp; symbols</div>
+    <h2>Emoji, without the OS picker.</h2>
+    <p>Nearly 300 emoji, grouped and searchable in the same shell as everything else. Arrow, Return, done — it lands in whatever you were typing.</p>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/05-emoji-picker/index.html" title="Emoji picker grid" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="feature flip">
+  <div class="copy">
+    <div class="tag">Themes</div>
+    <h2>73 themes, live preview, real vibrancy.</h2>
+    <p>Dracula, Nord, Catppuccin, Tokyo Night, and more — or paste a hex to build your own. A live facts panel shows the exact accent, background, vibrancy, and surface opacity while you preview. What you see is what ships.</p>
+    <div class="keys"><kbd>paste #hex</kbd><kbd>live preview</kbd><kbd>↵ apply</kbd></div>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/11-theme-designer/index.html" title="Theme designer with live theme facts" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="feature">
+  <div class="copy">
+    <div class="tag">Settings</div>
+    <h2>Set up once, stay out of your way.</h2>
+    <p>Theme, dictation, microphone, permissions, suggested-item cleanup — all searchable in the same shell, honoring the same keyboard grammar as everything else.</p>
+  </div>
+  <div class="media"><figure class="shot"><iframe class="embed" src="shots/12-settings/index.html" title="Settings list" loading="lazy" scrolling="no" style="aspect-ratio:1675/1139"></iframe></figure></div>
+</section>
+
+<section class="unified" style="text-align:center">
+  <div class="lede">
+    <div class="tag">Local-first &amp; open source</div>
+    <h2>Plain files. Your machine.</h2>
+    <p>Scripts, notes, brain, themes — plain files in your home directory you can grep, sync, and version. The search index is derived and self-healing. The app is open source on GitHub. No account, no cloud lock-in.</p>
+    <p>And the built-in MCP server exposes your scripts as tools, so Claude, Codex, and any other agent can drive your launcher too.</p>
+  </div>
+  <div class="keys" style="justify-content:center;margin-top:26px">
+    <kbd>grep your notes</kbd><kbd>git your scripts</kbd><kbd>MCP built in</kbd><kbd>open source</kbd>
+  </div>
+</section>
+
+<footer>
+  <p class="big">Script Kit</p>
+  <p>Every frame on this page is a live HTML/CSS recreation, pixel-matched against an unedited <code style="font-family:var(--mono)">screencapture</code> of the app running on macOS — same layout, same tokens, rendered by your browser right now.</p>
+  <p style="margin-top:14px"><a href="https://scriptkit.com">scriptkit.com</a> &nbsp;·&nbsp; <a href="https://github.com/johnlindquist/kit">github.com/johnlindquist/kit</a></p>
+  <p class="note">Recreated in HTML/CSS, verified against macOS 26 captures · Script Kit GPUI</p>
+</footer>
+
+</div>
+</body>
+</html>

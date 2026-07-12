@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>19-references</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+
+.scene {
+  position: relative;
+  width: 787px;
+  height: 168px;
+  overflow: hidden;
+  font-family: var(--sk-notes-editor-font-family, "JetBrains Mono"), ui-monospace, monospace;
+}
+
+/* ── Desktop wallpaper (visible sliver right of the window edge) ─────────
+ * Abstract macOS-style wallpaper: mauve-pink upper zone, a near-black
+ * diagonal band, vivid violet below-right, dark maroon blob at top-right. */
+.wallpaper {
+  position: absolute;
+  left: 700px;
+  top: 0;
+  width: 87px;
+  height: 168px;
+  /* base: mauve-pink upper zone, brightening to the right */
+  background: linear-gradient(92deg,
+    rgb(70 30 70) 0%,
+    rgb(88 36 84) 47%,
+    rgb(118 47 106) 63%,
+    rgb(138 54 118) 76%,
+    rgb(153 59 125) 87%,
+    rgb(172 60 137) 100%);
+}
+/* Diagonal near-black band with the vivid violet zone below-right of it.
+ * Oversized strip rotated so its long axis follows the band (top leans
+ * right ~26.6deg); gradient runs across it. Centerline passes (61,73). */
+.wp-band {
+  position: absolute;
+  left: -89px;
+  top: -177px;
+  width: 300px;
+  height: 500px;
+  transform: rotate(26.57deg);
+  background: linear-gradient(90deg,
+    transparent 0,
+    transparent 130px,
+    rgb(32 6 42 / 0.85) 141px,
+    rgb(19 3 29) 146px,
+    rgb(19 3 29) 158px,
+    rgb(72 15 96) 167px,
+    rgb(126 28 155) 175px,
+    rgb(150 38 185) 205px,
+    rgb(163 42 202) 265px,
+    rgb(160 40 198) 300px);
+}
+/* Dark maroon curl hugging the top-right corner */
+.wp-blob {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(50px 32px at 84px 17px,
+    rgb(14 2 8) 0 35%, rgb(100 19 40 / 0.85) 62%, transparent 82%);
+}
+
+/* ── Day Page window (cropped: only its right portion is in frame) ──────
+ * Fill = blurred wallpaper behind a translucent dark material; painted
+ * directly as sampled gradients. Right edge carries the 1px light border
+ * and a soft shadow onto the wallpaper. */
+.window {
+  position: absolute;
+  top: -20px;
+  bottom: -20px;
+  left: -20px;
+  width: 761px; /* right edge lands at x=740, border at 740..741 */
+  border-right: 1px solid rgb(92 76 104);
+  box-shadow: 3px 0 8px rgb(0 0 0 / 0.8);
+  background:
+    /* warm dim wash, bottom-left corner */
+    radial-gradient(210px 160px at -15px 112%, rgb(46 36 45 / 0.9), rgb(46 36 45 / 0.5) 45%, transparent 72%),
+    /* purple ramp climbing from the bottom-right corner */
+    radial-gradient(320px 145px at 104% 77%, rgb(60 27 80 / 0.95), rgb(58 27 78 / 0.5) 55%, transparent 80%),
+    /* base: blurred-wallpaper drift, y-independent (window is cropped) */
+    linear-gradient(90deg,
+      rgb(66 27 77) 0,
+      rgb(65 27 78) 95px,
+      rgb(58 27 78) 170px,
+      rgb(39 27 78) 270px,
+      rgb(28 26 62) 330px,
+      rgb(27 26 57) 370px,
+      rgb(29 27 48) 470px,
+      rgb(29 27 48) 640px,
+      rgb(35 27 49) 715px,
+      rgb(38 27 52) 761px);
+}
+
+/* ── Editor text (raw markdown, NotesEditor mono grid) ─────────────────── */
+.editor {
+  position: absolute;
+  left: 61.5px;
+  top: 6px;
+  letter-spacing: 0.1px;
+  font-size: var(--sk-notes-editor-font-size, 16px);
+  line-height: var(--sk-notes-editor-line-box-height, 20px);
+  color: var(--sk-notes-editor-text-color, rgb(255 255 255));
+  font-weight: 400;
+}
+.editor .line { height: 20px; white-space: pre; }
+
+.md-marker { color: var(--sk-notes-markdown-heading-marker-color, rgb(255 255 255)); }
+.md-title {
+  color: var(--sk-notes-markdown-title-color, rgb(251 191 36));
+  font-weight: var(--sk-notes-markdown-title-font-weight, 700);
+}
+.link-label { color: var(--sk-notes-editor-link-label, rgb(251 191 36)); }
+/* Destination rest color renders as accent blended toward white in the
+ * capture (accent 35% over white ≈ rgb(253 233 178)); hardcoded to match. */
+.link-dest { color: rgb(253 233 178); }
+
+/* ── Brain-gold scrollbar thumb (top end runs out of frame) ────────────── */
+.thumb {
+  position: absolute;
+  left: 712px;
+  top: -8px;
+  width: 6px;
+  height: 154px;
+  border-radius: 3px;
+  background: rgb(157 123 53);
+}
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="wallpaper"><div class="wp-band"></div><div class="wp-blob"></div></div>
+  <div class="window"></div>
+  <div class="editor">
+    <div class="line"><span class="md-marker">##</span> <span class="md-title">Notes</span></div>
+    <div class="line"></div>
+    <div class="line">The clipboard &#8594; day page loop is finally invisible. Copied a link</div>
+    <div class="line">twice yesterday and it was just *here* this morning. That's the</div>
+    <div class="line">hero demo.</div>
+    <div class="line"></div>
+    <div class="line">00:05 [<span class="link-label">Clipboard entry</span>](<span class="link-dest">kit://clipboard-history</span></div>
+    <div class="line"><span class="link-dest">?id=91a36280-01cc-4ca0-ae7a-9181468742f9</span>)</div>
+  </div>
+  <div class="thumb"></div>
+</div>
+<script src="../../shared/fit.js"></script>
+</body>
+</html>

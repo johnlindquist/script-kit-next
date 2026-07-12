@@ -1,0 +1,424 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>15-app-launcher</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<style>
+html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+
+.scene {
+  position: relative;
+  width: 838px;
+  height: 570px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
+
+/* ── Wallpaper (CSS approximation of the abstract macOS wallpaper) ────── */
+.wallpaper {
+  position: absolute;
+  inset: 0;
+  background:
+    /* blue glow along top-right edge */
+    radial-gradient(260px 70px at 93% -2%, rgb(42 95 190 / 0.95), rgb(25 55 150 / 0.5) 50%, transparent 75%),
+    radial-gradient(130px 35px at 100.5% 0.5%, rgb(48 108 205), transparent 80%),
+    /* dark pocket under the blue corner */
+    radial-gradient(170px 130px at 103% 12%, rgb(14 4 38 / 0.85), transparent 75%),
+    /* violet top-left flood */
+    radial-gradient(460px 380px at -5% -8%, rgb(138 42 222 / 0.98), rgb(112 30 205 / 0.92) 40%, rgb(62 12 178 / 0.65) 64%, transparent 82%),
+    /* left red-brown below the silver band */
+    radial-gradient(180px 140px at -4% 70%, rgb(108 34 40 / 0.95), rgb(100 33 40 / 0.5) 55%, transparent 75%),
+    /* left warming toward corner */
+    radial-gradient(140px 95px at -4% 87%, rgb(135 68 45 / 0.92), transparent 72%),
+    /* bottom-left orange corner */
+    radial-gradient(190px 150px at -5% 104%, rgb(200 120 64 / 0.98), rgb(150 85 52 / 0.55) 55%, transparent 72%),
+    /* right magenta mid band */
+    radial-gradient(120px 80px at 102% 50%, rgb(172 68 130 / 0.95), rgb(150 55 110 / 0.5) 55%, transparent 75%),
+    /* right bright purples lower */
+    radial-gradient(170px 140px at 103% 72%, rgb(168 42 205 / 0.95), rgb(145 32 170 / 0.55) 55%, transparent 78%),
+    radial-gradient(140px 105px at 103% 85%, rgb(148 30 168 / 0.92), transparent 75%),
+    /* bottom-right magenta corner */
+    radial-gradient(220px 160px at 101% 103%, rgb(202 74 202 / 0.95), rgb(160 35 175 / 0.55) 52%, transparent 72%),
+    /* bottom deep purple lift near right */
+    radial-gradient(240px 95px at 87% 104%, rgb(52 8 115 / 0.8), transparent 72%),
+    /* hidden warm-purple field under the window: feeds the vibrancy bleed */
+    radial-gradient(260px 480px at 12% 60%, rgb(135 38 160 / 0.5), transparent 72%),
+    /* bottom darkening */
+    linear-gradient(to bottom, transparent 58%, rgb(4 2 28 / 0.78) 94%),
+    /* base: deep navy field */
+    linear-gradient(100deg, rgb(55 14 135) 0%, rgb(16 8 85) 25%, rgb(9 9 62) 45%, rgb(10 8 56) 65%, rgb(16 5 45) 85%, rgb(18 5 48) 100%);
+  background-color: rgb(8 8 50);
+}
+
+/* crisp diagonal band stack crossing the lower-left: pink ridge, crimson,
+   dark gap, silver streak, dark under-edge */
+.wallpaper::before {
+  content: "";
+  position: absolute;
+  left: -150px;
+  top: 148px;
+  width: 380px;
+  height: 300px;
+  transform: rotate(42deg);
+  background:
+    linear-gradient(to bottom,
+      transparent 0%,
+      rgb(150 40 150 / 0.4) 10%,
+      rgb(190 60 128 / 0.8) 22%,
+      rgb(178 40 82 / 0.95) 30%,
+      rgb(90 18 55 / 0.9) 38%,
+      rgb(22 6 18 / 0.95) 44%,
+      rgb(125 122 125 / 0.98) 54%,
+      rgb(148 146 148) 59%,
+      rgb(118 116 118 / 0.95) 65%,
+      rgb(28 8 12 / 0.9) 74%,
+      rgb(95 30 36 / 0.8) 84%,
+      transparent 100%);
+  filter: blur(2px);
+}
+
+/* crisp dark arc on the right edge between magenta and bright purple */
+.wallpaper::after {
+  content: "";
+  position: absolute;
+  right: -50px;
+  top: 305px;
+  width: 280px;
+  height: 130px;
+  transform: rotate(-36deg);
+  background: linear-gradient(to bottom,
+      transparent 0%,
+      rgb(50 14 35 / 0.7) 32%,
+      rgb(18 4 16 / 0.92) 48%,
+      rgb(30 8 25 / 0.7) 62%,
+      transparent 100%);
+  filter: blur(2px);
+}
+
+/* ── Window ───────────────────────────────────────────────────────────── */
+.launcher-window {
+  position: absolute;
+  left: 44.5px;
+  top: 45px;
+  width: 749px;
+  height: 478.5px;
+  border-radius: var(--sk-window-radius);
+  overflow: clip;
+  isolation: isolate;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.14),
+    0 24px 60px rgb(0 0 0 / 0.55),
+    0 8px 24px rgb(0 0 0 / 0.4);
+}
+
+.launcher-window .win-material {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  -webkit-backdrop-filter: saturate(var(--sk-vibrancy-backdrop-saturation)) blur(32px);
+  backdrop-filter: saturate(var(--sk-vibrancy-backdrop-saturation)) blur(32px);
+  background: linear-gradient(rgb(58 58 38 / 0.55), rgb(52 52 34 / 0.55));
+}
+
+.launcher-window .win-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--sk-window-vibrancy-tint);
+}
+
+.launcher-window .win-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--sk-text-name);
+}
+
+/* ── Header: context zone + search ────────────────────────────────────── */
+.hdr {
+  flex: none;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.context-zone {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cz-left {
+  display: flex;
+  align-items: center;
+  padding-left: 18px;
+  gap: 9px;
+}
+
+.cz-right {
+  display: flex;
+  align-items: center;
+  padding-right: 12px;
+  gap: 5px;
+}
+
+.cz-tilde {
+  color: rgb(255 255 255 / 0.32);
+  font-size: 12px;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.cz-chip {
+  width: 18px;
+  height: 16.5px;
+  border: 1px solid rgb(255 255 255 / 0.13);
+  border-radius: 5.5px;
+  display: grid;
+  place-items: center;
+  color: rgb(255 255 255 / 0.38);
+}
+
+.cz-chip svg { display: block; }
+
+.cz-model {
+  color: rgb(255 255 255 / 0.5);
+  font-size: 10.5px;
+  line-height: 1;
+  white-space: nowrap;
+  margin-right: 1px;
+}
+
+/* ── Search shell ─────────────────────────────────────────────────────── */
+.search-shell {
+  position: relative;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding-left: 18px;
+  font-size: 18px;
+  font-weight: 430;
+  color: var(--sk-text-name);
+}
+
+.search-shell .query { white-space: pre; }
+
+.search-shell .caret {
+  width: 2.5px;
+  height: 21px;
+  margin-left: 1px;
+  border-radius: 1px;
+  background: var(--sk-text-name);
+  flex: none;
+}
+
+/* ── List ─────────────────────────────────────────────────────────────── */
+.list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-row {
+  width: 100%;
+  height: var(--sk-main-menu-row-height);
+  flex: none;
+  padding: 0 var(--sk-main-menu-row-outer-padding-x);
+}
+
+.app-row .row-surface {
+  width: 100%;
+  height: 100%;
+  padding: 4px 14px;
+  border-radius: var(--sk-main-menu-row-radius);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--sk-main-menu-row-selected-background);
+}
+
+.app-row .app-name {
+  color: var(--sk-text-name);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.app-icon-slot {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.app-icon-slot svg { display: block; }
+
+.cursor-overlay {
+  position: absolute;
+  left: -4px;
+  bottom: -3px;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+.ftr {
+  flex: none;
+  height: 32px;
+  padding-inline: var(--sk-footer-side-inset);
+  display: flex;
+  align-items: center;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+  background: rgb(255 255 255 / 0.035);
+}
+
+.ftr-spacer { flex: 1 1 auto; }
+
+.ftr-action {
+  height: 32px;
+  flex: none;
+  border-radius: var(--sk-footer-button-radius);
+  padding-inline: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sk-footer-text);
+}
+
+.ftr-label {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.kcap {
+  min-width: 20px;
+  height: 20px;
+  border: 1px solid var(--sk-footer-keycap-border);
+  border-radius: var(--sk-footer-keycap-radius);
+  display: grid;
+  place-items: center;
+  color: var(--sk-footer-text);
+  font-size: 11px;
+  line-height: 1;
+}
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="wallpaper"></div>
+
+  <div class="launcher-window">
+    <div class="win-material"></div>
+    <div class="win-tint"></div>
+    <div class="win-content">
+
+      <div class="hdr">
+        <div class="context-zone">
+          <div class="cz-left">
+            <span class="cz-tilde">~</span>
+            <span class="cz-chip">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M0.8 4.5 H5.6 M3.6 2.2 L6 4.5 L3.6 6.8 M8 2 V7"/>
+              </svg>
+            </span>
+          </div>
+          <div class="cz-right">
+            <span class="cz-model">Script Kit &middot; GPT-5.5</span>
+            <span class="cz-chip">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 8 V3 M2.6 5 L5 2.6 L7.4 5 M3 8 H7"/>
+              </svg>
+            </span>
+            <span class="cz-chip">
+              <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M0.8 4.5 H5.6 M3.6 2.2 L6 4.5 L3.6 6.8 M8 2 V7"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="search-shell">
+          <span class="query">safari</span>
+          <span class="caret"></span>
+        </div>
+      </div>
+
+      <div class="list">
+        <div class="app-row">
+          <div class="row-surface">
+            <span class="app-icon-slot">
+              <!-- Safari app icon approximation: gold-rim squircle, white face, blue compass -->
+              <svg width="20" height="20" viewBox="0 0 20 20">
+                <defs>
+                  <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#e8bd57"/>
+                    <stop offset="1" stop-color="#cf9a34"/>
+                  </linearGradient>
+                  <radialGradient id="dial" cx="0.5" cy="0.35" r="0.75">
+                    <stop offset="0" stop-color="#79b6f2"/>
+                    <stop offset="0.55" stop-color="#4a8ce0"/>
+                    <stop offset="1" stop-color="#3671cd"/>
+                  </radialGradient>
+                  <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#fffdf6"/>
+                    <stop offset="1" stop-color="#f4ead2"/>
+                  </linearGradient>
+                </defs>
+                <rect x="0" y="0" width="20" height="20" rx="5.4" fill="url(#rim)"/>
+                <rect x="1.7" y="1.7" width="16.6" height="16.6" rx="4.2" fill="url(#face)"/>
+                <circle cx="10" cy="10" r="6.7" fill="url(#dial)"/>
+                <!-- tick marks -->
+                <g stroke="#eaf3ff" stroke-width="0.55">
+                  <line x1="10" y1="3.9" x2="10" y2="5.1"/>
+                  <line x1="10" y1="14.9" x2="10" y2="16.1"/>
+                  <line x1="3.9" y1="10" x2="5.1" y2="10"/>
+                  <line x1="14.9" y1="10" x2="16.1" y2="10"/>
+                  <line x1="5.7" y1="5.7" x2="6.5" y2="6.5"/>
+                  <line x1="13.5" y1="13.5" x2="14.3" y2="14.3"/>
+                  <line x1="14.3" y1="5.7" x2="13.5" y2="6.5"/>
+                  <line x1="6.5" y1="13.5" x2="5.7" y2="14.3"/>
+                </g>
+                <!-- needle: red NE half, white SW half -->
+                <polygon points="14.2,5.8 11.1,11.1 8.9,8.9" fill="#e4453a"/>
+                <polygon points="5.8,14.2 8.9,8.9 11.1,11.1" fill="#f6f6f6"/>
+              </svg>
+              <!-- mouse cursor caught in the capture -->
+              <span class="cursor-overlay">
+                <svg width="10" height="12" viewBox="0 0 10 12">
+                  <path d="M1 1 L1 9.2 L3.1 7.4 L4.5 10.6 L6.1 9.9 L4.7 6.8 L7.6 6.6 Z"
+                        fill="#111" stroke="#fff" stroke-width="0.9"/>
+                </svg>
+              </span>
+            </span>
+            <span class="app-name">Safari</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ftr">
+        <div class="ftr-spacer"></div>
+        <div class="ftr-action" style="margin-right: 14px;">
+          <span class="ftr-label">Run</span>
+          <span class="kcap">&#9166;</span>
+        </div>
+        <div class="ftr-action">
+          <span class="ftr-label">Actions</span>
+          <span class="kcap">&#8984;</span>
+          <span class="kcap">K</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+[
+  {
+    "id": "01-main-launcher",
+    "status": "ok",
+    "rmse": 0.0849062,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/01-main-launcher-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/01-main-launcher-diff.png"
+  },
+  {
+    "id": "02-search-filter",
+    "status": "ok",
+    "rmse": 0.105771,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/02-search-filter-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/02-search-filter-diff.png"
+  },
+  {
+    "id": "04-clipboard-history",
+    "status": "ok",
+    "rmse": 0.154574,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/04-clipboard-history-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/04-clipboard-history-diff.png"
+  },
+  {
+    "id": "05-emoji-picker",
+    "status": "ok",
+    "rmse": 0.0931451,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/05-emoji-picker-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/05-emoji-picker-diff.png"
+  },
+  {
+    "id": "06-notes",
+    "status": "ok",
+    "rmse": 0.158844,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/06-notes-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/06-notes-diff.png"
+  },
+  {
+    "id": "07-day-page",
+    "status": "ok",
+    "rmse": 0.0992481,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/07-day-page-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/07-day-page-diff.png"
+  },
+  {
+    "id": "08-agent-chat",
+    "status": "ok",
+    "rmse": 0.165616,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/08-agent-chat-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/08-agent-chat-diff.png"
+  },
+  {
+    "id": "09-terminal",
+    "status": "ok",
+    "rmse": 0.0798283,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/09-terminal-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/09-terminal-diff.png"
+  },
+  {
+    "id": "10-file-search",
+    "status": "ok",
+    "rmse": 0.107349,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/10-file-search-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/10-file-search-diff.png"
+  },
+  {
+    "id": "11-theme-designer",
+    "status": "ok",
+    "rmse": 0.138885,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/11-theme-designer-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/11-theme-designer-diff.png"
+  },
+  {
+    "id": "12-settings",
+    "status": "ok",
+    "rmse": 0.109614,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/12-settings-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/12-settings-diff.png"
+  },
+  {
+    "id": "13-agent-chat-composer",
+    "status": "ok",
+    "rmse": 0.0942692,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/13-agent-chat-composer-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/13-agent-chat-composer-diff.png"
+  },
+  {
+    "id": "14-window-switcher",
+    "status": "ok",
+    "rmse": 0.104058,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/14-window-switcher-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/14-window-switcher-diff.png"
+  },
+  {
+    "id": "15-app-launcher",
+    "status": "ok",
+    "rmse": 0.0716432,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/15-app-launcher-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/15-app-launcher-diff.png"
+  },
+  {
+    "id": "17-rewrite",
+    "status": "ok",
+    "rmse": 0.120233,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/17-rewrite-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/17-rewrite-diff.png"
+  },
+  {
+    "id": "18-rewrite-styles",
+    "status": "ok",
+    "rmse": 0.0981696,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/18-rewrite-styles-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/18-rewrite-styles-diff.png"
+  },
+  {
+    "id": "19-references",
+    "status": "ok",
+    "rmse": 0.17986,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/19-references-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/19-references-diff.png"
+  },
+  {
+    "id": "20-brain-inbox",
+    "status": "ok",
+    "rmse": 0.0983369,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/20-brain-inbox-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/20-brain-inbox-diff.png"
+  },
+  {
+    "id": "21-dictation",
+    "status": "ok",
+    "rmse": 0.0583916,
+    "render": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/21-dictation-render.png",
+    "diff": "/Users/johnlindquist/dev/script-kit-gpui/.test-output/showcase-verify/21-dictation-diff.png"
+  }
+]

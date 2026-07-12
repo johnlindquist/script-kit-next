@@ -1,0 +1,144 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>Script Kit — Notes (Launch Checklist)</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#000}
+.scene{position:relative;width:780px;height:676px;overflow:hidden;
+  background:linear-gradient(90deg,rgb(10 9 66) 0%,rgb(10 9 66) 52%,
+    rgb(13 8 40) 72%,rgb(13 8 40) 100%);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+
+/* ── Wallpaper (CSS approximation of photographic abstract) ─────────── */
+.wall{position:absolute;inset:0}
+.wall-top{position:absolute;left:0;top:0;width:100%;height:150px;
+  background:linear-gradient(90deg,
+    rgb(151 43 207) 0%, rgb(121 38 218) 12%, rgb(95 26 205) 22%,
+    rgb(62 13 183) 32%, rgb(32 6 142) 41%, rgb(12 3 92) 51%,
+    rgb(9 8 65) 61%, rgb(10 9 66) 78%, rgb(13 22 101) 90%,
+    rgb(24 52 160) 100%);
+  -webkit-mask-image:linear-gradient(180deg,#000 55%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 55%,transparent 100%)}
+.wall-left{position:absolute;left:0;top:0;width:380px;height:100%;
+  background:linear-gradient(180deg,
+    rgb(150 42 206) 0%, rgb(152 39 183) 16%, rgb(174 39 116) 23%,
+    rgb(60 8 40) 30%, rgb(118 118 118) 41.5%, rgb(94 23 37) 51%,
+    rgb(119 40 35) 61%, rgb(157 71 38) 71%, rgb(191 101 49) 80%,
+    rgb(213 131 55) 90%, rgb(238 171 66) 96%, rgb(245 200 97) 100%);
+  -webkit-mask-image:linear-gradient(90deg,#000 12%,rgb(0 0 0/0.55) 34%,transparent 95%);
+  mask-image:linear-gradient(90deg,#000 12%,rgb(0 0 0/0.55) 34%,transparent 95%)}
+.wall-right{position:absolute;right:0;top:0;width:220px;height:100%;
+  background:linear-gradient(180deg,
+    rgb(21 48 155) 0%, rgb(34 79 172) 13%, rgb(16 4 40) 22%,
+    rgb(15 5 40) 32%, rgb(13 3 40) 42%, rgb(12 10 34) 51%,
+    rgb(15 5 42) 61%, rgb(27 4 72) 71%, rgb(34 6 91) 80%,
+    rgb(31 5 92) 90%, rgb(42 5 121) 100%);
+  -webkit-mask-image:linear-gradient(270deg,#000 20%,rgb(0 0 0/0.5) 45%,transparent 95%);
+  mask-image:linear-gradient(270deg,#000 20%,rgb(0 0 0/0.5) 45%,transparent 95%)}
+.wall-bottom{position:absolute;left:0;bottom:0;width:100%;height:150px;
+  background:linear-gradient(90deg,
+    rgb(222 140 56) 0%, rgb(200 130 62) 7%, rgb(120 90 55) 12%,
+    rgb(72 82 84) 17%, rgb(10 20 71) 25%, rgb(4 11 66) 32%,
+    rgb(2 2 4) 40%, rgb(50 46 47) 47%, rgb(38 32 38) 55%,
+    rgb(66 58 126) 62%, rgb(40 88 80) 69%, rgb(18 8 48) 77%,
+    rgb(24 5 66) 84%, rgb(27 5 78) 92%, rgb(41 5 116) 100%);
+  -webkit-mask-image:linear-gradient(0deg,#000 45%,transparent 100%);
+  mask-image:linear-gradient(0deg,#000 45%,transparent 100%)}
+
+/* ── Notes window (vibrant NSPanel emulation) ───────────────────────── */
+.win{position:absolute;left:45px;top:45.5px;width:690.5px;height:567.5px;
+  box-sizing:border-box;border-radius:12px;
+  border:1px solid rgb(255 255 255 / 0.24);
+  background-color:rgb(45 42 52 / 0.5);
+  background-image:radial-gradient(300px 480px at 0% 45%,rgb(120 30 110 / 0.38),transparent 70%),
+    radial-gradient(420px 300px at 40% 82%,rgb(60 25 110 / 0.22),transparent 70%),
+    radial-gradient(500px 320px at 96% 2%,rgb(18 32 110 / 0.35),transparent 70%);
+  -webkit-backdrop-filter:blur(60px) saturate(1.3);
+  backdrop-filter:blur(60px) saturate(1.3);
+  box-shadow:0 25px 60px rgb(0 0 0 / 0.55), 0 8px 24px rgb(0 0 0 / 0.35);
+  display:flex;flex-direction:column;overflow:hidden}
+
+/* titlebar */
+.titlebar{position:relative;flex:none;height:36px;display:flex;
+  align-items:center}
+.traffic{position:absolute;left:9px;top:8.5px;display:flex;gap:8.5px}
+.traffic i{width:12px;height:12px;border-radius:50%}
+.traffic i.r{background:#ed6a5e}
+.traffic i.y{background:#f4bf4f}
+.traffic i.g{background:#61c554}
+.titlebar .lead{flex:none;width:60px}
+.titlebar .trail{flex:none;width:100px}
+.title{flex:1 1 auto;text-align:center;font-size:13.5px;position:relative;top:-2px;
+  color:rgb(220 220 240 / 0.34);white-space:nowrap;overflow:hidden}
+
+/* editor */
+.editor{flex:1 1 auto;min-height:0;overflow:hidden;
+  padding:19px 25px 0 25px;
+  font-family:var(--sk-font-mono),"JetBrains Mono",ui-monospace,"SF Mono",monospace;
+  font-size:16px;color:rgb(255 255 255 / 0.93)}
+.editor div{height:20px;line-height:20px;overflow:clip;white-space:pre}
+.h{color:#fbbf24;font-weight:700}
+.d{color:#fbbf24;font-weight:700}
+
+/* footer */
+.footer{flex:none;height:32px;box-sizing:border-box;display:flex;
+  align-items:center;padding:9px 12px 0 17px;font-size:12px}
+.f-left{display:flex;align-items:center;flex:none}
+.chev{font-size:14px;color:rgb(255 255 255 / 0.10);width:12px;text-align:center}
+.chev + .chev{margin-left:17px}
+.check{margin-left:10px;color:rgb(251 191 36 / 0.36);font-size:12px}
+.count{margin-left:3px;color:rgb(255 255 255 / 0.30)}
+.f-center{flex:1 1 auto;text-align:center;color:rgb(255 255 255 / 0.30);
+  white-space:nowrap}
+.f-right{flex:none;color:rgb(255 255 255 / 0.17);white-space:nowrap}
+.f-right .txt{margin-left:6px}
+</style></head>
+<body><div class="scene">
+  <div class="wall">
+    <div class="wall-top"></div>
+    <div class="wall-right"></div>
+    <div class="wall-left"></div>
+    <div class="wall-bottom"></div>
+  </div>
+  <div class="win">
+    <div class="titlebar">
+      <span class="traffic"><i class="r"></i><i class="y"></i><i class="g"></i></span>
+      <span class="lead"></span>
+      <span class="title">Launch Checklist — Script Kit v2</span>
+      <span class="trail"></span>
+    </div>
+    <div class="editor">
+      <div># <span class="h">Launch Checklist — Script Kit v2</span></div>
+      <div></div>
+      <div>A running list for the July launch. Keep receipts for every ship.</div>
+      <div></div>
+      <div>## <span class="h">This week</span></div>
+      <div></div>
+      <div><span class="d">-</span> [x] Ship clipboard sediment view</div>
+      <div><span class="d">-</span> [x] Selection hint chip for instant rewrites</div>
+      <div><span class="d">-</span> [ ] Record the 90-second hero demo</div>
+      <div><span class="d">-</span> [ ] Draft the launch post for scriptkit.com</div>
+      <div></div>
+      <div>## <span class="h">The hero loop</span></div>
+      <div></div>
+      <div>Copy → forgotten → recalled. The demo should show a snippet</div>
+      <div>captured on Tuesday resurfacing in Friday's Day Page — no</div>
+      <div>filing, no folders, no tags.</div>
+      <div></div>
+      <div>&gt; "The best filing system is the one you never touch."</div>
+      <div></div>
+      <div>## <span class="h">Links</span></div>
+      <div></div>
+      <div><span class="d">-</span> scriptkit.com</div>
+      <div><span class="d">-</span> github.com/johnlindquist/kit</div>
+    </div>
+    <div class="footer">
+      <span class="f-left">
+        <span class="chev">‹</span><span class="chev">›</span>
+        <span class="check">✓</span><span class="count">1/14</span>
+      </span>
+      <span class="f-center">Ln 22/21 · 100 words · 562 chars · ~1 min read</span>
+      <span class="f-right">updated ↓ just now<span class="txt">TXT</span></span>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script></body></html>

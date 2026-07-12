@@ -1,0 +1,248 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>Script Kit — Main Launcher</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/components.css">
+<style>
+/* Scene: 1675×1139 @2x reference → 838×570 logical. */
+html,body{margin:0;padding:0;overflow:hidden;background:#000}
+.scene{position:relative;width:838px;height:570px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif}
+
+/* ── Wallpaper: CSS-gradient approximation of the photographic abstract ── */
+.wallpaper{position:absolute;inset:0;background:
+  /* left gray ribbon highlights */
+  radial-gradient(120px 55px at 0% 55%, rgb(165 163 165 / .95), rgb(120 118 120 / .55) 55%, transparent 78%),
+  radial-gradient(80px 32px at 27% 100%, rgb(95 92 95 / .9), transparent 75%),
+  /* near-black pocket bottom center */
+  radial-gradient(90px 42px at 36% 102%, rgb(0 0 0 / .9), transparent 80%),
+  /* bottom-left orange */
+  radial-gradient(230px 190px at -6% 106%, rgb(205 128 72), rgb(165 92 52 / .9) 45%, transparent 70%),
+  /* left red-brown band */
+  radial-gradient(140px 200px at -6% 74%, rgb(132 48 46), rgb(112 40 42 / .85) 50%, transparent 78%),
+  /* left pink */
+  radial-gradient(170px 130px at -6% 37%, rgb(205 46 125), rgb(172 38 115 / .85) 50%, transparent 78%),
+  /* top-left purple */
+  radial-gradient(460px 400px at -6% -8%, rgb(140 40 224), rgb(114 30 206 / .92) 45%, transparent 72%),
+  /* top-right blue */
+  radial-gradient(360px 150px at 103% -8%, rgb(46 100 200), rgb(32 72 172 / .85) 45%, transparent 72%),
+  /* right mid pink */
+  radial-gradient(170px 130px at 105% 52%, rgb(190 66 150), rgb(152 52 120 / .85) 55%, transparent 80%),
+  /* right dark gap */
+  radial-gradient(190px 60px at 103% 62%, rgb(8 1 10), rgb(8 1 10 / .85) 55%, transparent 82%),
+  /* right magenta ribbons */
+  radial-gradient(200px 110px at 104% 73%, rgb(175 40 212), rgb(142 32 172 / .9) 50%, transparent 75%),
+  radial-gradient(240px 190px at 105% 92%, rgb(172 40 190), rgb(142 30 158 / .85) 50%, transparent 75%),
+  /* bottom center-right purple glow */
+  radial-gradient(300px 120px at 82% 108%, rgb(40 8 110 / .7), transparent 75%),
+  /* right upper dark column */
+  linear-gradient(270deg, rgb(16 5 42) 0%, rgb(16 5 42 / 0) 10%),
+  /* base navy field */
+  linear-gradient(180deg, rgb(10 9 66) 0%, rgb(8 6 52) 60%, rgb(6 4 36) 100%)}
+
+/* Edge strips: vertical/horizontal color runs sampled from the reference
+   photo every ~40 logical px, masked to fade toward the window. */
+.wall-edge{position:absolute;filter:blur(5px)}
+.wall-left{left:-6px;top:-6px;bottom:-6px;width:120px;
+  background:linear-gradient(180deg,
+    rgb(130 39 218) 0%, rgb(132 35 208) 9%, rgb(130 33 201) 21%,
+    rgb(150 36 188) 28%, rgb(189 42 122) 36%, rgb(101 21 81) 43%,
+    rgb(79 77 78) 50%, rgb(124 124 124) 57%, rgb(99 32 41) 64%,
+    rgb(111 39 40) 71%, rgb(127 55 43) 78%, rgb(145 74 46) 85%,
+    rgb(163 94 55) 92%, rgb(183 111 63) 100%);
+  -webkit-mask-image:linear-gradient(90deg,#000 30%,transparent 100%);
+  mask-image:linear-gradient(90deg,#000 30%,transparent 100%)}
+.wall-right{right:-6px;top:-6px;bottom:-6px;width:110px;
+  background:linear-gradient(180deg,
+    rgb(41 89 189) 0%, rgb(20 5 44) 9%, rgb(17 7 44) 22%, rgb(16 5 46) 30%,
+    rgb(12 9 30) 37%, rgb(104 41 98) 43%, rgb(164 62 128) 51%,
+    rgb(18 1 13) 58%, rgb(37 6 48) 64%, rgb(159 38 195) 72%,
+    rgb(124 26 147) 79%, rgb(145 28 171) 86%, rgb(151 31 181) 92%,
+    rgb(165 40 175) 100%);
+  -webkit-mask-image:linear-gradient(270deg,#000 30%,transparent 100%);
+  mask-image:linear-gradient(270deg,#000 30%,transparent 100%)}
+.wall-top{left:-6px;right:-6px;top:-6px;height:90px;
+  background:linear-gradient(90deg,
+    rgb(133 39 215) 0%, rgb(111 32 212) 10%, rgb(83 20 199) 18%,
+    rgb(48 8 166) 27%, rgb(21 5 115) 37%, rgb(8 6 69) 46%,
+    rgb(10 10 64) 56%, rgb(10 9 66) 66%, rgb(12 20 95) 75%,
+    rgb(29 67 168) 85%, rgb(41 92 184) 100%);
+  -webkit-mask-image:linear-gradient(180deg,#000 30%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 30%,transparent 100%)}
+.wall-bottom{left:-6px;right:-6px;bottom:-6px;height:100px;
+  background:linear-gradient(90deg,
+    rgb(183 111 63) 0%, rgb(37 32 54) 10%, rgb(7 10 61) 18%,
+    rgb(53 51 52) 26%, rgb(2 0 1) 35%, rgb(7 3 38) 43%,
+    rgb(5 2 33) 51%, rgb(6 3 34) 60%, rgb(15 6 53) 68%,
+    rgb(22 5 60) 76%, rgb(28 4 80) 85%, rgb(45 6 35) 93%,
+    rgb(160 36 178) 100%);
+  -webkit-mask-image:linear-gradient(0deg,#000 30%,transparent 100%);
+  mask-image:linear-gradient(0deg,#000 30%,transparent 100%)}
+
+/* ── Window placement (measured: rect 87..1587 × 89..1048 phys) ────────── */
+.sk-window{position:absolute;left:43.5px;top:44.5px;
+  border-radius:11px;
+  border:1px solid rgb(255 255 255 / .24);
+  box-shadow:0 30px 70px rgb(0 0 0 / .55), 0 10px 28px rgb(0 0 0 / .38)}
+:root{
+  --sk-emulator-menu-blur:32px;
+  /* Reference interior reads neutral-gray (27,27,56 over navy): lighter wash,
+     gentler saturation than the shipped 2.6. */
+  --sk-vibrancy-backdrop-saturation:1.55;
+  --sk-emulator-menu-material-bias:linear-gradient(rgb(55 55 60 / .52), rgb(47 47 52 / .52));
+  /* footer band measured 31.5px tall (divider at y≈448 rel) */
+  --sk-window-native-footer-host-height:32px;
+}
+
+/* Context zone in the reference renders SF ~13px at ~.5 white (brighter than
+   the shipped mono treatment) — scene-local calibration. */
+.sk-context-zone{margin-inline:0;padding-inline:6.5px;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
+  font-size:11px;font-weight:500}
+/* Reference placeholder measures ~18px advance width, not the 20px token. */
+.sk-search-shell{font-size:18px}
+.sk-context-zone .sk-context-pill{opacity:1;color:rgb(255 255 255 / .42)}
+.sk-context-key{color:rgb(255 255 255 / .45);font-size:10px;border-color:rgb(255 255 255 / .16)}
+/* Reference footer band reads warmer/lighter than the list surface. */
+.sk-footer-host{background:rgb(255 190 140 / .07)}
+.sk-footer-rail{border-top-color:rgb(255 255 255 / .09)}
+
+.sk-list-row__icon svg{display:block}
+
+/* Colored app-icon tiles (Codex, Screen Sharing) */
+.app-tile{width:20px;height:20px;flex:none;border-radius:5px;display:grid;place-items:center}
+.app-tile svg{width:14px;height:14px;display:block}
+.app-tile--codex{background:linear-gradient(180deg,#b9bce8,#8d90dd)}
+.app-tile--screenshare{background:linear-gradient(180deg,#8fb2ec,#3c5fc2)}
+
+/* Amber Theme Designer tile uses the shared icon-tile tokens */
+.sk-list-row__icon-tile svg{width:14px;height:14px}
+</style></head>
+<body><div class="scene">
+  <div class="wallpaper"></div>
+  <div class="wall-edge wall-left"></div>
+  <div class="wall-edge wall-right"></div>
+  <div class="wall-edge wall-top"></div>
+  <div class="wall-edge wall-bottom"></div>
+
+  <div class="sk-window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+
+    <div class="sk-window__content">
+      <header class="sk-header">
+        <div class="sk-context-zone">
+          <span class="sk-context-pill">~/.scriptkit <span class="sk-context-key">⇥</span></span>
+          <span class="sk-context-pill">Script Kit · GPT-5.5 <span class="sk-context-key">⇧</span><span class="sk-context-key">⇥</span></span>
+        </div>
+        <div class="sk-search-shell">
+          <span class="sk-placeholder">Search • @ context • / command • . style • | profile</span>
+        </div>
+      </header>
+
+      <section class="sk-list">
+        <div class="sk-section-slot" data-first="true">
+          <div class="sk-section-header">
+            <span class="sk-section-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.26L21 9.27l-4.5 4.38L17.8 20 12 16.77 6.2 20l1.3-6.35L3 9.27l6.1-1.01L12 2z"/></svg>
+            </span>
+            Suggested
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-state="selected">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon-tile" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a10 10 0 1 1 10-10c0 2.21-1.79 3-4 3h-2.4a2 2 0 0 0-1.5 3.3c.5.58.4 1.53-.3 2.1a3.4 3.4 0 0 1-1.8 1.6Z"/><circle cx="7.5" cy="11.5" r=".5" fill="currentColor"/><circle cx="10.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="15" cy="8" r=".5" fill="currentColor"/></svg>
+            </span>
+            <span class="sk-list-row__copy">
+              <span class="sk-list-row__name">Theme Designer</span>
+              <span class="sk-list-row__description">Design your color theme with live preview</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17v-6a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L7.6 6.6A2 2 0 0 0 5.93 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9"/><circle cx="17" cy="17" r="3"/><path d="m21 21-1.9-1.9"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Search Files</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Clipboard History</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Reset Window Positions</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row" data-state="hover">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 2 3 12.4V16h3.6L17 5.6a2.55 2.55 0 0 0-3.6-3.6Z" transform="translate(6 2) scale(.62)"/><path d="M8 2H18a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8"/><path d="M8 2v20"/><path d="M4 6h4M4 10h4M4 14h4M4 18h4"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Open Notes</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="app-tile app-tile--codex" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 12a9 9 0 0 0-9-9" opacity=".55"/><circle cx="12" cy="12" r="3.4" fill="#fff" stroke="none"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Codex</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="sk-list-row__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2z"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Change Tone (Professional)</span></span>
+          </div>
+        </div>
+
+        <div class="sk-list-row">
+          <div class="sk-list-row__surface">
+            <span class="app-tile app-tile--screenshare" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2.5" fill="#dfe9fb"/><circle cx="12" cy="9.4" r="2.4" fill="#2c4aa8"/><path d="M7.2 16.5c.6-2.6 2.5-4 4.8-4s4.2 1.4 4.8 4Z" fill="#2c4aa8"/></svg>
+            </span>
+            <span class="sk-list-row__copy"><span class="sk-list-row__name">Screen Sharing</span></span>
+          </div>
+        </div>
+      </section>
+
+      <footer class="sk-footer-host">
+        <div class="sk-footer-rail">
+          <span class="sk-footer-spacer"></span>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Open Theme Designer</span>
+            <kbd class="sk-keycap">↵</kbd>
+          </button>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Actions</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">K</kbd>
+          </button>
+          <button class="sk-footer-action">
+            <span class="sk-footer-label">Agent</span>
+            <kbd class="sk-keycap">⌘</kbd><kbd class="sk-keycap">↵</kbd>
+          </button>
+        </div>
+      </footer>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script></body></html>
