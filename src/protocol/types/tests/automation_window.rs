@@ -233,6 +233,9 @@ fn simulate_gpui_event_scroll_wheel_round_trip_uses_pixel_schema() {
         delta_x: -3.0,
         delta_y: 18.5,
         phase: SimulatedTouchPhase::Moved,
+        direct_phase: None,
+        momentum_phase: None,
+        timestamp_seconds: None,
     };
     let value = serde_json::to_value(&event).expect("serialize scroll wheel");
     assert_eq!(
@@ -248,6 +251,42 @@ fn simulate_gpui_event_scroll_wheel_round_trip_uses_pixel_schema() {
     );
     let back: SimulatedGpuiEvent = serde_json::from_value(value).expect("deserialize scroll wheel");
     assert_eq!(back, event);
+}
+
+#[test]
+fn simulate_gpui_event_scroll_wheel_preserves_native_lifecycle_and_timestamp() {
+    use crate::protocol::SimulatedScrollPhase;
+
+    let value = serde_json::json!({
+        "type": "scrollWheel",
+        "x": 10.0,
+        "y": 20.0,
+        "deltaX": 0.0,
+        "deltaY": 4.0,
+        "phase": "moved",
+        "directPhase": "none",
+        "momentumPhase": "changed",
+        "timestampSeconds": 42.125
+    });
+    let event: SimulatedGpuiEvent =
+        serde_json::from_value(value.clone()).expect("deserialize rich scroll lifecycle");
+    assert_eq!(
+        event,
+        SimulatedGpuiEvent::ScrollWheel {
+            x: 10.0,
+            y: 20.0,
+            delta_x: 0.0,
+            delta_y: 4.0,
+            phase: SimulatedTouchPhase::Moved,
+            direct_phase: Some(SimulatedScrollPhase::None),
+            momentum_phase: Some(SimulatedScrollPhase::Changed),
+            timestamp_seconds: Some(42.125),
+        }
+    );
+    assert_eq!(
+        serde_json::to_value(event).expect("serialize rich lifecycle"),
+        value
+    );
 }
 
 #[test]
@@ -283,6 +322,9 @@ fn simulate_gpui_event_scroll_wheel_request_round_trip() {
                     delta_x: 0.0,
                     delta_y: -24.0,
                     phase: SimulatedTouchPhase::Started,
+                    direct_phase: None,
+                    momentum_phase: None,
+                    timestamp_seconds: None,
                 }
             );
         }

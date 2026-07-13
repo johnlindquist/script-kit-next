@@ -11,6 +11,7 @@
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -93,6 +94,14 @@ function affordanceOf(state: Json): Json {
   return inspection.affordance as Json;
 }
 
+function traceSamplesOf(state: Json): Json[] {
+  const samples = affordanceOf(state).traceSamples;
+  if (!Array.isArray(samples)) {
+    throw new Error("elastic traceSamples missing; diagnostic gate is not active");
+  }
+  return samples as Json[];
+}
+
 function compactState(state: Json): Json {
   const scroll = state.mainListScroll ?? {};
   const affordance = affordanceOf(state);
@@ -120,6 +129,20 @@ function compactState(state: Json): Json {
     generation: affordance.generation,
     lastTouchPhase: affordance.lastTouchPhase,
     lastSettleReason: affordance.lastSettleReason,
+    directPhase: affordance.directPhase,
+    momentumPhase: affordance.momentumPhase,
+    nativeTimestampSeconds: affordance.nativeTimestampSeconds,
+    momentumSuppressed: affordance.momentumSuppressed,
+    rawPullPx: affordance.rawPullPx,
+    visualVelocityPxPerSecond: affordance.visualVelocityPxPerSecond,
+    reboundInitialOffsetPx: affordance.reboundInitialOffsetPx,
+    reboundInitialVelocityPxPerSecond: affordance.reboundInitialVelocityPxPerSecond,
+    reboundElapsedMs: affordance.reboundElapsedMs,
+    reboundOmegaPerSecond: affordance.reboundOmegaPerSecond,
+    frameGeneration: affordance.frameGeneration,
+    traceSampleCount: Array.isArray(affordance.traceSamples)
+      ? affordance.traceSamples.length
+      : null,
     reducedMotion: affordance.reducedMotion,
   };
 }
@@ -210,9 +233,14 @@ async function wheel(
   point: { x: number; y: number },
   phase: "started" | "moved" | "ended",
   deltaY: number,
+  lifecycle: {
+    directPhase?: "none" | "mayBegin" | "began" | "changed" | "stationary" | "ended" | "cancelled";
+    momentumPhase?: "none" | "mayBegin" | "began" | "changed" | "stationary" | "ended" | "cancelled";
+    timestampSeconds?: number;
+  } = {},
 ): Promise<Json> {
   const response = await driver!.simulateGpuiScrollWheel(
-    { x: point.x, y: point.y, deltaX: 0, deltaY, phase },
+    { x: point.x, y: point.y, deltaX: 0, deltaY, phase, ...lifecycle },
     { target, timeoutMs: 5_000 },
   );
   if (response.success !== true) {
@@ -358,8 +386,41 @@ async function establishBottom(): Promise<{ state: Json; endpoint: Json }> {
   return { state: confirmed, endpoint };
 }
 
-async function settleAfterEnded(point: { x: number; y: number }): Promise<Json> {
-  await wheel(point, "ended", 0);
+async function settleAfterEnded(
+  point: { x: number; y: number },
+  timestampSeconds?: number,
+): Promise<Json> {
+  await wheel(
+    point,
+    timestampSeconds == null ? "ended" : "moved",
+    0,
+    timestampSeconds == null
+      ? {}
+      : { directPhase: "ended", momentumPhase: "none", timestampSeconds },
+  );
+  const released = await driver!.getState();
+  const releasedAffordance = affordanceOf(released);
+  check(
+    "direct-terminal-phase-begins-rebound-in-same-dispatch",
+    releasedAffordance.reducedMotion === true
+      ? releasedAffordance.overscrollPhase === "idle"
+      : releasedAffordance.overscrollPhase === "settling",
+    compactState(released),
+  );
+
+  if (timestampSeconds != null) {
+    await wheel(point, "moved", 8, {
+      directPhase: "none",
+      momentumPhase: "changed",
+      timestampSeconds: timestampSeconds + 0.008,
+    });
+    const afterMomentum = await driver!.getState();
+    check(
+      "momentum-cannot-reenter-direct-tracking-after-release",
+      affordanceOf(afterMomentum).overscrollPhase !== "tracking",
+      compactState(afterMomentum),
+    );
+  }
   return pollState("ended settle", (state) => {
     try {
       const affordance = affordanceOf(state);
@@ -372,6 +433,202 @@ async function settleAfterEnded(point: { x: number; y: number }): Promise<Json> 
       return false;
     }
   }, 3_000);
+}
+
+async function exerciseTerminalLifecycleScenarios(
+  label: "top" | "bottom",
+  point: { x: number; y: number },
+  establish: () => Promise<{ state: Json; endpoint: Json }>,
+  outwardDeltaY: number,
+): Promise<void> {
+  const baseTimestamp = label === "top" ? 300 : 400;
+
+  const cancelledBaseline = await establish();
+  await wheel(point, "moved", 0, {
+    directPhase: "began", momentumPhase: "none", timestampSeconds: baseTimestamp,
+  });
+  await wheel(point, "moved", outwardDeltaY, {
+    directPhase: "changed", momentumPhase: "none", timestampSeconds: baseTimestamp + 0.008,
+  });
+  await wheel(point, "moved", 0, {
+    directPhase: "cancelled", momentumPhase: "none", timestampSeconds: baseTimestamp + 0.012,
+  });
+  const cancelled = await driver!.getState();
+  const cancelledAffordance = affordanceOf(cancelled);
+  check(`${label}-cancelled-starts-zero-velocity-rebound-immediately`,
+    cancelledAffordance.overscrollPhase === "settling"
+      && cancelledAffordance.lastSettleReason === "cancelled"
+      && Number(cancelledAffordance.reboundInitialVelocityPxPerSecond) === 0,
+    compactState(cancelled));
+  const cancelledSettled = await pollState(`${label} cancelled settle`, (state) =>
+    affordanceOf(state).overscrollPhase === "idle"
+      && Number(affordanceOf(state).overscrollOffsetPx) === 0);
+  check(`${label}-cancelled-preserves-logical-scroll-and-selection`,
+    sameLogicalTuple(cancelledBaseline.state, cancelledSettled), {
+      before: compactState(cancelledBaseline.state),
+      after: compactState(cancelledSettled),
+    });
+
+  const implicitBaseline = await establish();
+  await wheel(point, "moved", 0, {
+    directPhase: "began", momentumPhase: "none", timestampSeconds: baseTimestamp + 1,
+  });
+  await wheel(point, "moved", outwardDeltaY, {
+    directPhase: "changed", momentumPhase: "none", timestampSeconds: baseTimestamp + 1.008,
+  });
+  await wheel(point, "moved", 0, {
+    directPhase: "none", momentumPhase: "began", timestampSeconds: baseTimestamp + 1.012,
+  });
+  const implicit = await driver!.getState();
+  const implicitAffordance = affordanceOf(implicit);
+  check(`${label}-momentum-began-provides-immediate-implicit-release`,
+    implicitAffordance.overscrollPhase === "settling"
+      && implicitAffordance.lastSettleReason === "momentumBeganImplicitRelease"
+      && implicitAffordance.momentumSuppressed === true,
+    compactState(implicit));
+  await wheel(point, "moved", 0, {
+    directPhase: "none", momentumPhase: "ended", timestampSeconds: baseTimestamp + 1.020,
+  });
+  const implicitSettled = await pollState(`${label} implicit release settle`, (state) => {
+    const affordance = affordanceOf(state);
+    return affordance.overscrollPhase === "idle"
+      && affordance.momentumSuppressed === false
+      && Number(affordance.overscrollOffsetPx) === 0;
+  });
+  check(`${label}-momentum-terminal-clears-suppression`, true, compactState(implicitSettled));
+  check(`${label}-implicit-release-preserves-logical-scroll-and-selection`,
+    sameLogicalTuple(implicitBaseline.state, implicitSettled), {
+      before: compactState(implicitBaseline.state),
+      after: compactState(implicitSettled),
+    });
+
+  await establish();
+  await wheel(point, "moved", 0, {
+    directPhase: "began", momentumPhase: "none", timestampSeconds: baseTimestamp + 2,
+  });
+  await wheel(point, "moved", outwardDeltaY, {
+    directPhase: "changed", momentumPhase: "none", timestampSeconds: baseTimestamp + 2.008,
+  });
+  await wheel(point, "moved", 0, {
+    directPhase: "ended", momentumPhase: "none", timestampSeconds: baseTimestamp + 2.012,
+  });
+  const released = await driver!.getState();
+  const beforeInterrupt = await driver!.getState();
+  await wheel(point, "moved", 0, {
+    directPhase: "mayBegin", momentumPhase: "none", timestampSeconds: baseTimestamp + 2.016,
+  });
+  const interrupted = await driver!.getState();
+  const interruptTrace = Array.isArray(affordanceOf(interrupted).traceSamples)
+    ? affordanceOf(interrupted).traceSamples as Json[]
+    : [];
+  const mayBeginIndex = interruptTrace.findLastIndex((sample: Json) =>
+    sample.kind === "input" && sample.directPhase === "mayBegin");
+  const preMayBeginSample = mayBeginIndex > 0 ? interruptTrace[mayBeginIndex - 1] : null;
+  const mayBeginSample = mayBeginIndex >= 0 ? interruptTrace[mayBeginIndex] : null;
+  const interruptionJumpPx = preMayBeginSample && mayBeginSample
+    ? Math.abs(Number(mayBeginSample.offsetPx) - Number(preMayBeginSample.offsetPx))
+    : Number.POSITIVE_INFINITY;
+  check(`${label}-new-direct-may-begin-interrupts-rebound-without-jump`,
+    affordanceOf(interrupted).overscrollPhase === "tracking"
+      && interruptionJumpPx <= 1,
+    {
+      released: compactState(released),
+      beforeInterrupt: compactState(beforeInterrupt),
+      interrupted: compactState(interrupted),
+      preMayBeginSample,
+      mayBeginSample,
+      interruptionJumpPx,
+    });
+  await wheel(point, "moved", 0, {
+    directPhase: "cancelled", momentumPhase: "none", timestampSeconds: baseTimestamp + 2.020,
+  });
+  await pollState(`${label} interrupted cleanup`, (state) =>
+    affordanceOf(state).overscrollPhase === "idle");
+}
+
+function evaluateReboundTrace(
+  label: string,
+  settledState: Json,
+  releaseGeneration: number,
+  maxOffsetPx: number,
+): Json {
+  const samples = traceSamplesOf(settledState);
+  const momentumRegrabs = samples.filter((sample) =>
+    sample.kind === "input"
+    && sample.momentumPhase !== "none"
+    && sample.boundaryPhase === "tracking");
+  check(`${label}-edge-rebound-records-zero-momentum-regrabs`,
+    momentumRegrabs.length === 0, momentumRegrabs);
+  const release = samples.find((sample) =>
+    sample.kind === "input"
+    && Number(sample.generation) === releaseGeneration
+    && sample.boundaryPhase === "settling"
+  );
+  const frames = samples.filter((sample) =>
+    sample.kind === "reboundFrame"
+    && Number(sample.generation) === releaseGeneration
+  );
+  if (!release || frames.length === 0) {
+    check(`${label}-trace-has-release-and-frame-samples`, false, {
+      release: release ?? null,
+      frameCount: frames.length,
+    });
+    return { release: release ?? null, frames };
+  }
+
+  const releaseAt = Number(release.arrivalElapsedMs);
+  const releaseOffset = Math.abs(Number(release.offsetPx));
+  const elapsed = (sample: Json) => Number(sample.arrivalElapsedMs) - releaseAt;
+  const firstFrameMs = elapsed(frames[0]);
+  const half = frames.find((sample) => Math.abs(Number(sample.offsetPx)) <= releaseOffset * 0.5);
+  const tenPercent = frames.find((sample) =>
+    Math.abs(Number(sample.offsetPx)) <= releaseOffset * 0.1
+  );
+  const exact = frames.find((sample) => Number(sample.offsetPx) === 0);
+  const peak = Math.max(releaseOffset, ...frames.map((sample) => Math.abs(Number(sample.offsetPx))));
+  const wrongSign = Math.max(0, ...frames.map((sample) =>
+    Math.sign(Number(sample.offsetPx)) === -Math.sign(Number(release.offsetPx))
+      ? Math.abs(Number(sample.offsetPx))
+      : 0
+  ));
+  const plateau = frames.slice(2).some((sample, index) => {
+    const previous = frames[index + 1];
+    const beforePrevious = frames[index];
+    return Math.abs(Number(sample.offsetPx)) > 2
+      && Math.abs(Number(sample.offsetPx) - Number(previous.offsetPx)) < 0.25
+      && Math.abs(Number(previous.offsetPx) - Number(beforePrevious.offsetPx)) < 0.25;
+  });
+
+  check(`${label}-first-rebound-change-is-next-frame`, firstFrameMs >= 0 && firstFrameMs <= 34, {
+    firstFrameMs,
+  });
+  check(`${label}-trajectory-stays-within-cap`, peak <= maxOffsetPx + 0.25, { peak, maxOffsetPx });
+  check(`${label}-outward-release-peak-is-bounded`, peak <= releaseOffset * 1.22 + 0.25, {
+    peak,
+    releaseOffset,
+  });
+  check(`${label}-wrong-sign-overshoot-is-bounded`, wrongSign <= 0.5, { wrongSign });
+  check(`${label}-rebound-half-point-is-timely`, half != null
+    && elapsed(half) >= 45 && elapsed(half) <= 100, half ? { elapsedMs: elapsed(half) } : null);
+  check(`${label}-rebound-ten-percent-point-is-timely`, tenPercent != null
+    && elapsed(tenPercent) <= 200, tenPercent ? { elapsedMs: elapsed(tenPercent) } : null);
+  check(`${label}-rebound-finishes-exactly-by-deadline`, exact != null
+    && elapsed(exact) <= 320, exact ? { elapsedMs: elapsed(exact) } : null);
+  check(`${label}-rebound-has-no-visible-plateau`, !plateau, { plateau });
+
+  return {
+    release,
+    frames,
+    metrics: {
+      firstFrameMs,
+      halfMs: half ? elapsed(half) : null,
+      tenPercentMs: tenPercent ? elapsed(tenPercent) : null,
+      exactMs: exact ? elapsed(exact) : null,
+      peak,
+      wrongSign,
+      plateau,
+    },
+  };
 }
 
 function screenshotBlocker(error: string): boolean {
@@ -453,13 +710,15 @@ async function runProbe(): Promise<Json> {
     readyTimeoutMs: 30_000,
     defaultTimeoutMs: 8_000,
     env: {
+      RUST_BACKTRACE: "1",
+      SCRIPT_KIT_MAIN_LIST_ELASTIC_TRACE: "1",
       SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
       SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER: JSON.stringify(provider),
     },
   });
 
   driver.send({ type: "show" });
-  await driver.waitForState({ windowVisible: true }, { timeoutMs });
+  await driver.waitForState({ windowVisible: true, windowFocused: true }, { timeoutMs });
   await driver.setFilterAndWait(filterInput, { timeoutMs });
   const ready = await pollState("deterministic long ScriptList", (state) => {
     try {
@@ -469,7 +728,10 @@ async function runProbe(): Promise<Json> {
       return state.surfaceContract?.surfaceKind === "ScriptList"
         && rootSearch.query === query
         && rootSearch.loading === false
-        && Number(state.visibleChoiceCount) >= 12
+        // Headers/status rows count toward the scrollable list but not
+        // visibleChoiceCount. Readiness is proven by the actual list geometry.
+        && Number(scroll.itemCount) >= 12
+        && Number(state.visibleChoiceCount) > 0
         && Number(scroll.maxScrollTop) > 0
         && inspection.complete;
     } catch {
@@ -516,7 +778,7 @@ async function runProbe(): Promise<Json> {
       const affordance = affordanceOf(state);
       const expectedReason = affordance.reducedMotion === true
         ? "reducedMotion"
-        : "idleTimeout";
+        : "missingTerminalWatchdog";
       return affordance.overscrollPhase === "idle"
         && affordance.overscrollEdge == null
         && Number(affordance.overscrollOffsetPx) === 0
@@ -551,8 +813,17 @@ async function runProbe(): Promise<Json> {
   check("top-fade-is-exactly-inactive", topAffordance.topFadeActive === false
     && Number(topAffordance.topFadeProgress) === 0
     && Number(topAffordance.topFadeAlpha) === 0, compactState(top.state));
-  await wheel(point, "started", 0);
-  await wheel(point, "moved", 36);
+  const topGestureTimestamp = 100.0;
+  await wheel(point, "moved", 0, {
+    directPhase: "began",
+    momentumPhase: "none",
+    timestampSeconds: topGestureTimestamp,
+  });
+  await wheel(point, "moved", 36, {
+    directPhase: "changed",
+    momentumPhase: "none",
+    timestampSeconds: topGestureTimestamp + 0.016,
+  });
   const topTracking = await driver.getState();
   const topTrackingAffordance = affordanceOf(topTracking);
   check("top-outward-pull-tracks-positive-bounded-offset",
@@ -566,7 +837,14 @@ async function runProbe(): Promise<Json> {
     before: compactState(top.state),
     tracking: compactState(topTracking),
   });
-  const topSettled = await settleAfterEnded(point);
+  const topSettled = await settleAfterEnded(point, topGestureTimestamp + 0.020);
+  const topSettleAffordance = affordanceOf(topSettled);
+  const topTrajectory = evaluateReboundTrace(
+    "top",
+    topSettled,
+    Number(topSettleAffordance.generation),
+    Number(topSettleAffordance.overscrollMaxOffsetPx),
+  );
   check("top-ended-gesture-settles-to-exact-zero",
     Number(affordanceOf(topSettled).overscrollOffsetPx) === 0,
     compactState(topSettled));
@@ -580,7 +858,9 @@ async function runProbe(): Promise<Json> {
     baseline: compactState(top.state),
     tracking: compactState(topTracking),
     settled: compactState(topSettled),
+    trajectory: topTrajectory,
   };
+  await exerciseTerminalLifecycleScenarios("top", point, establishTop, 36);
 
   // Reversal: inward travel first unwinds the rubber band without moving the list.
   const reversalTop = await establishTop();
@@ -654,7 +934,9 @@ async function runProbe(): Promise<Json> {
   await establishTop();
   let middle = await driver.getState();
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    await gpuiKey("pagedown");
+    await wheel(point, "started", 0);
+    await wheel(point, "moved", -44);
+    await wheel(point, "ended", 0);
     middle = await pollState("middle logical scroll", (state) => {
       try {
         return affordanceOf(state).overscrollPhase === "idle";
@@ -675,6 +957,93 @@ async function runProbe(): Promise<Json> {
       && Number(middleAffordance.topFadeAlpha) > 0,
     compactState(middle));
   scenarios.middle = compactState(middle);
+
+  // A native throw is direct contact followed by a distinct momentum stream.
+  // Keep both rich lifecycle fields explicit so legacy touch-phase fallback
+  // cannot accidentally turn these momentum samples into direct movement.
+  const middleSelected = Number(middle.mainListScroll?.selectedIndex);
+  const middleItemCount = Number(middle.mainListScroll?.itemCount);
+  const throwDeltaSign = middleSelected >= (middleItemCount - 1) / 2 ? 1 : -1;
+  const selectionDirection = -throwDeltaSign;
+  const throwTimestamp = 500.0;
+  await wheel(point, "moved", 0, {
+    directPhase: "began", momentumPhase: "none", timestampSeconds: throwTimestamp,
+  });
+  await wheel(point, "moved", 24 * throwDeltaSign, {
+    directPhase: "changed", momentumPhase: "none", timestampSeconds: throwTimestamp + 0.008,
+  });
+  await wheel(point, "moved", 24 * throwDeltaSign, {
+    directPhase: "changed", momentumPhase: "none", timestampSeconds: throwTimestamp + 0.016,
+  });
+  await wheel(point, "moved", 0, {
+    directPhase: "ended", momentumPhase: "none", timestampSeconds: throwTimestamp + 0.020,
+  });
+  const interiorReleased = await driver.getState();
+  const interiorReleasedAffordance = affordanceOf(interiorReleased);
+  check("interior-direct-release-leaves-momentum-unowned",
+    interiorReleasedAffordance.atTop === false
+      && interiorReleasedAffordance.atBottom === false
+      && interiorReleasedAffordance.overscrollPhase === "idle"
+      && Number(interiorReleasedAffordance.overscrollOffsetPx) === 0
+      && interiorReleasedAffordance.momentumSuppressed === false,
+    compactState(interiorReleased));
+
+  const momentumInputs = [
+    { phase: "began" as const, deltaY: 52 * throwDeltaSign, dt: 0.024 },
+    { phase: "changed" as const, deltaY: 48 * throwDeltaSign, dt: 0.032 },
+    { phase: "changed" as const, deltaY: 44 * throwDeltaSign, dt: 0.040 },
+    { phase: "changed" as const, deltaY: 40 * throwDeltaSign, dt: 0.048 },
+    { phase: "changed" as const, deltaY: 36 * throwDeltaSign, dt: 0.056 },
+    { phase: "changed" as const, deltaY: 32 * throwDeltaSign, dt: 0.064 },
+  ];
+  const momentumStates: Json[] = [];
+  for (const input of momentumInputs) {
+    await wheel(point, "moved", input.deltaY, {
+      directPhase: "none",
+      momentumPhase: input.phase,
+      timestampSeconds: throwTimestamp + input.dt,
+    });
+    momentumStates.push(await driver.getState());
+  }
+  await wheel(point, "moved", 0, {
+    directPhase: "none", momentumPhase: "ended", timestampSeconds: throwTimestamp + 0.072,
+  });
+  const momentumTerminal = await driver.getState();
+  const releaseSelected = Number(interiorReleased.mainListScroll?.selectedIndex);
+  const selectedPath = momentumStates.map((state) =>
+    Number(state.mainListScroll?.selectedIndex));
+  const advanceCount = selectedPath.reduce((count, value, index) => {
+    const previous = index === 0 ? releaseSelected : selectedPath[index - 1];
+    return count + ((value - previous) * selectionDirection > 0 ? 1 : 0);
+  }, 0);
+  const finalMomentumState = momentumStates.at(-1)!;
+  check("interior-momentum-advances-selection-over-multiple-events",
+    advanceCount >= 2
+      && (Number(finalMomentumState.mainListScroll?.selectedIndex) - releaseSelected)
+        * selectionDirection > 0,
+    { releaseSelected, selectedPath, advanceCount, selectionDirection });
+  check("interior-momentum-advances-logical-list",
+    !sameLogicalTuple(interiorReleased, finalMomentumState), {
+      release: compactState(interiorReleased),
+      final: compactState(finalMomentumState),
+    });
+  check("interior-momentum-never-enters-boundary-rebound",
+    momentumStates.every((state) => {
+      const affordance = affordanceOf(state);
+      return affordance.overscrollPhase === "idle"
+        && Number(affordance.overscrollOffsetPx) === 0
+        && affordance.momentumSuppressed === false;
+    }), momentumStates.map(compactState));
+  check("interior-momentum-terminal-leaves-suppression-clear",
+    affordanceOf(momentumTerminal).momentumSuppressed === false,
+    compactState(momentumTerminal));
+  scenarios.interiorMomentum = {
+    released: compactState(interiorReleased),
+    momentum: momentumStates.map(compactState),
+    terminal: compactState(momentumTerminal),
+    selectedPath,
+    advanceCount,
+  };
   screenshotResult = await captureScreenshot();
 
   // Bottom: endpoint and logical tuple stay fixed under an outward pull.
@@ -699,6 +1068,23 @@ async function runProbe(): Promise<Json> {
       tracking: compactState(bottomTracking),
     });
   const bottomSettled = await settleAfterEnded(point);
+  const bottomSettleAffordance = affordanceOf(bottomSettled);
+  const bottomTrajectory = evaluateReboundTrace(
+    "bottom",
+    bottomSettled,
+    Number(bottomSettleAffordance.generation),
+    Number(bottomSettleAffordance.overscrollMaxOffsetPx),
+  );
+  const topHalfMs = Number(topTrajectory.metrics?.halfMs);
+  const bottomHalfMs = Number(bottomTrajectory.metrics?.halfMs);
+  const symmetryDeltaMs = Math.abs(topHalfMs - bottomHalfMs);
+  check("top-bottom-rebound-timing-is-symmetric",
+    Number.isFinite(topHalfMs) && Number.isFinite(bottomHalfMs)
+      && symmetryDeltaMs <= Math.max(2, Math.max(topHalfMs, bottomHalfMs) * 0.08), {
+      topHalfMs,
+      bottomHalfMs,
+      symmetryDeltaMs,
+    });
   check("bottom-ended-gesture-settles-to-exact-zero",
     Number(affordanceOf(bottomSettled).overscrollOffsetPx) === 0,
     compactState(bottomSettled));
@@ -712,7 +1098,9 @@ async function runProbe(): Promise<Json> {
     baseline: compactState(bottom.state),
     tracking: compactState(bottomTracking),
     settled: compactState(bottomSettled),
+    trajectory: bottomTrajectory,
   };
+  await exerciseTerminalLifecycleScenarios("bottom", point, establishBottom, -36);
 
   return {
     eventPoint: { bounds, point },
@@ -740,6 +1128,12 @@ try {
     } catch (error) {
       failures.push("driver-cleanup");
       runtimeError ??= error instanceof Error ? error.message : String(error);
+    }
+  }
+  if (runtimeError) {
+    const appLog = join(sessionDir, "app.log");
+    if (existsSync(appLog)) {
+      writeFileSync(join(outputDir, "failed-app.log"), readFileSync(appLog));
     }
   }
   try {

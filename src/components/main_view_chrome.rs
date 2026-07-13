@@ -19,6 +19,7 @@ pub(crate) const MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID: &str = "main-view-context-mo
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_CONTEXT_SELECTION_BUTTON_ID: &str = "main-view-context-selection-button";
 pub(crate) const MAIN_VIEW_HEADER_ID: &str = "main-view-header";
+pub(crate) const MAIN_VIEW_HEADER_UNDERLAY_ID: &str = "main-view-header-underlay";
 pub(crate) const MAIN_VIEW_CWD_UNAVAILABLE_LABEL: &str = "No cwd";
 pub(crate) const MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL: &str = "Agent model unavailable";
 const DEFAULT_CONTEXT_EDGE_OUTSET_X: f32 = 8.0;
@@ -298,7 +299,14 @@ pub(crate) fn render_main_view_chrome(
     def: MainMenuThemeDef,
     chrome: MainViewChrome,
 ) -> AnyElement {
-    render_main_view_chrome_with_options(root, theme, def, chrome, true, true)
+    render_main_view_chrome_with_options(
+        root,
+        theme,
+        def,
+        chrome,
+        MainViewHeaderPlacement::Flow,
+        true,
+    )
 }
 
 /// List surfaces that already reserve the footer through list padding, an
@@ -311,7 +319,31 @@ pub(crate) fn render_main_view_chrome_footer_flush(
     def: MainMenuThemeDef,
     chrome: MainViewChrome,
 ) -> AnyElement {
-    render_main_view_chrome_with_options(root, theme, def, chrome, true, false)
+    render_main_view_chrome_with_options(
+        root,
+        theme,
+        def,
+        chrome,
+        MainViewHeaderPlacement::Flow,
+        false,
+    )
+}
+
+#[allow(dead_code)]
+pub(crate) fn render_main_view_chrome_header_overlay_footer_flush(
+    root: gpui::Stateful<gpui::Div>,
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    chrome: MainViewChrome,
+) -> AnyElement {
+    render_main_view_chrome_with_options(
+        root,
+        theme,
+        def,
+        chrome,
+        MainViewHeaderPlacement::Overlay,
+        false,
+    )
 }
 
 /// Full-width utility surfaces can put their title inside the same scrollable
@@ -323,7 +355,21 @@ pub(crate) fn render_main_view_chrome_without_header(
     def: MainMenuThemeDef,
     chrome: MainViewChrome,
 ) -> AnyElement {
-    render_main_view_chrome_with_options(root, theme, def, chrome, false, true)
+    render_main_view_chrome_with_options(
+        root,
+        theme,
+        def,
+        chrome,
+        MainViewHeaderPlacement::Hidden,
+        true,
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MainViewHeaderPlacement {
+    Flow,
+    Overlay,
+    Hidden,
 }
 
 fn render_main_view_chrome_with_options(
@@ -331,40 +377,97 @@ fn render_main_view_chrome_with_options(
     theme: &crate::theme::Theme,
     def: MainMenuThemeDef,
     chrome: MainViewChrome,
-    include_header: bool,
+    header_placement: MainViewHeaderPlacement,
     include_main_bottom_inset: bool,
 ) -> AnyElement {
-    if include_header {
-        root = root.child(render_main_view_header_with_context_outset(
-            chrome.header,
-            def.header_info_bar.context_edge_outset_x,
-        ));
+    let MainViewChrome {
+        header,
+        divider,
+        main,
+        footer,
+        overlays,
+    } = chrome;
+    match header_placement {
+        MainViewHeaderPlacement::Flow => {
+            root = root.child(render_main_view_header_with_context_outset(
+                header,
+                def.header_info_bar.context_edge_outset_x,
+            ));
+            if divider.visible {
+                root = root.child(render_main_view_header_divider(
+                    theme,
+                    def,
+                    divider.margin_x,
+                    divider.height,
+                ));
+            }
+            root = root.child(render_main_view_main_slot_with_bottom_inset(
+                def,
+                main,
+                include_main_bottom_inset,
+            ));
+        }
+        MainViewHeaderPlacement::Overlay => {
+            let header_height =
+                main_view_header_metrics(def, Some(def.search.height)).header_height;
+            root = root
+                .child(render_main_view_main_slot_with_bottom_inset(
+                    def, main, false,
+                ))
+                .child(render_main_view_header_underlay(theme, header_height))
+                .child(div().absolute().top_0().left_0().right_0().child(
+                    render_main_view_header_with_context_outset(
+                        header,
+                        def.header_info_bar.context_edge_outset_x,
+                    ),
+                ));
+            if divider.visible {
+                root = root.child(
+                    div()
+                        .absolute()
+                        .top(px(header_height))
+                        .left_0()
+                        .right_0()
+                        .child(render_main_view_header_divider(
+                            theme,
+                            def,
+                            divider.margin_x,
+                            divider.height,
+                        )),
+                );
+            }
+        }
+        MainViewHeaderPlacement::Hidden => {
+            root = root.child(render_main_view_main_slot_with_bottom_inset(
+                def,
+                main,
+                include_main_bottom_inset,
+            ));
+        }
     }
 
-    if chrome.divider.visible {
-        root = root.child(render_main_view_header_divider(
-            theme,
-            def,
-            chrome.divider.margin_x,
-            chrome.divider.height,
-        ));
-    }
-
-    root = root.child(render_main_view_main_slot_with_bottom_inset(
-        def,
-        chrome.main,
-        include_main_bottom_inset,
-    ));
-
-    if let Some(footer) = chrome.footer {
+    if let Some(footer) = footer {
         root = root.child(footer);
     }
 
-    for element in chrome.overlays {
+    for element in overlays {
         root = root.child(element);
     }
 
     root.into_any_element()
+}
+
+fn render_main_view_header_underlay(theme: &crate::theme::Theme, height: f32) -> AnyElement {
+    div()
+        .id(MAIN_VIEW_HEADER_UNDERLAY_ID)
+        .debug_selector(|| MAIN_VIEW_HEADER_UNDERLAY_ID.to_string())
+        .absolute()
+        .top_0()
+        .left_0()
+        .right_0()
+        .h(px(height))
+        .bg(rgba(crate::theme::main_view_header_underlay_rgba(theme)))
+        .into_any_element()
 }
 
 pub(crate) fn render_main_view_header(chrome: MainViewHeaderChrome) -> AnyElement {

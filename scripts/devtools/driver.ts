@@ -109,6 +109,9 @@ export interface GpuiScrollWheelEvent {
   deltaX: number;
   deltaY: number;
   phase: "started" | "moved" | "ended";
+  directPhase?: "none" | "mayBegin" | "began" | "changed" | "stationary" | "ended" | "cancelled";
+  momentumPhase?: "none" | "mayBegin" | "began" | "changed" | "stationary" | "ended" | "cancelled";
+  timestampSeconds?: number;
 }
 
 let launchCounter = 0;

@@ -139,12 +139,18 @@ fn rebase_mouse_event_to_dispatch_space(
             delta_x,
             delta_y,
             phase,
+            direct_phase,
+            momentum_phase,
+            timestamp_seconds,
         } => SimulatedGpuiEvent::ScrollWheel {
             x: x + offset_x,
             y: y + offset_y,
             delta_x: *delta_x,
             delta_y: *delta_y,
             phase: *phase,
+            direct_phase: *direct_phase,
+            momentum_phase: *momentum_phase,
+            timestamp_seconds: *timestamp_seconds,
         },
         SimulatedGpuiEvent::KeyDown { .. } => event.clone(),
     };
@@ -335,6 +341,9 @@ fn apply_simulated_event(
             delta_x,
             delta_y,
             phase,
+            direct_phase,
+            momentum_phase,
+            timestamp_seconds,
         } => {
             let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
             let delta = gpui::point(gpui::px(*delta_x as f32), gpui::px(*delta_y as f32));
@@ -344,10 +353,35 @@ fn apply_simulated_event(
                     delta: gpui::ScrollDelta::Pixels(delta),
                     modifiers: gpui::Modifiers::default(),
                     touch_phase: simulated_touch_phase_to_gpui(*phase),
+                    phase: direct_phase
+                        .map(simulated_scroll_phase_to_gpui)
+                        .unwrap_or_else(|| match simulated_touch_phase_to_gpui(*phase) {
+                            gpui::TouchPhase::Started => gpui::ScrollPhase::Began,
+                            gpui::TouchPhase::Moved => gpui::ScrollPhase::Changed,
+                            gpui::TouchPhase::Ended => gpui::ScrollPhase::Ended,
+                        }),
+                    momentum_phase: momentum_phase
+                        .map(simulated_scroll_phase_to_gpui)
+                        .unwrap_or(gpui::ScrollPhase::None),
+                    timestamp_seconds: timestamp_seconds.filter(|value| value.is_finite()),
                 }),
                 cx,
             );
         }
+    }
+}
+
+fn simulated_scroll_phase_to_gpui(
+    phase: crate::protocol::SimulatedScrollPhase,
+) -> gpui::ScrollPhase {
+    match phase {
+        crate::protocol::SimulatedScrollPhase::None => gpui::ScrollPhase::None,
+        crate::protocol::SimulatedScrollPhase::MayBegin => gpui::ScrollPhase::MayBegin,
+        crate::protocol::SimulatedScrollPhase::Began => gpui::ScrollPhase::Began,
+        crate::protocol::SimulatedScrollPhase::Changed => gpui::ScrollPhase::Changed,
+        crate::protocol::SimulatedScrollPhase::Stationary => gpui::ScrollPhase::Stationary,
+        crate::protocol::SimulatedScrollPhase::Ended => gpui::ScrollPhase::Ended,
+        crate::protocol::SimulatedScrollPhase::Cancelled => gpui::ScrollPhase::Cancelled,
     }
 }
 

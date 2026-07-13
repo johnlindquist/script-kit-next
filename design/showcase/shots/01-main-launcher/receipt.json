@@ -1,0 +1,13 @@
+{
+  "id": "01-main-launcher",
+  "sceneSize": [838, 570],
+  "rmse": 0.0859,
+  "divergences": [
+    "Desktop wallpaper is a CSS gradient approximation (radial/linear gradients sampled from the reference photo) of a continuous photographic nebula texture; fine diagonal streak detail and grain are not reproduced pixel-exact, especially in the strip directly above the window.",
+    "Window vibrancy is emulated with backdrop-filter(saturate+blur) over a dedicated flat ambient-wash layer sized to the window rect (tuned to match measured mid-list-row colors ~rgb(50,27,76)); this stands in for what would be a true Gaussian blur of the actual wallpaper bitmap behind the window, so very local hue drift across the window interior is smoothed out rather than exactly reproduced.",
+    "Codex row icon is a hand-drawn inline-SVG approximation (white tile, blue-to-purple gradient cloud/blob glyph with a '>_' mark) of the real OpenAI Codex app icon; shape is a close visual match, not a vector-exact trace.",
+    "Font rendering antialiasing/hinting differs slightly between the JPG capture's source renderer and the headless Chromium used for the HTML recreation, contributing sub-pixel edge noise across all text.",
+    "Window border/shadow softness (box-shadow blur radius) is a measured approximation, not a pixel-exact match of the reference's compositor shadow falloff."
+  ],
+  "iterations": 5
+}

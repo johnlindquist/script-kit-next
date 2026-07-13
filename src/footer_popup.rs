@@ -610,7 +610,9 @@ impl GpuiFooterOverlay {
                 .h(px(crate::components::footer_chrome::footer_button_height(
                     crate::components::footer_chrome::current_main_menu_footer_height(),
                 )))
-                .px(px(metrics.button_padding_x))
+                .px(px(
+                    crate::components::footer_chrome::footer_centered_action_edge_padding_x(),
+                ))
                 .rounded(px(metrics.button_radius))
                 .group("footer-action-button")
                 .cursor_pointer()
@@ -2202,6 +2204,13 @@ unsafe fn refresh_footer_host_impl(
 
     let divider_view = find_subview_by_identifier(footer_view, FOOTER_DIVIDER_ID);
     if divider_view != nil {
+        // The GPUI overlay supplies the visible footer controls above this
+        // native material host. Hide only the hard divider in that mode so
+        // the controls read as floating, while keeping the identified view
+        // installed for fidelity inspection and the native-only fallback.
+        let divider_hidden = if gpui_overlay_owns_glyphs { YES } else { NO };
+        let _: () = msg_send![divider_view, setHidden: divider_hidden];
+
         if footer_geometry_changed {
             let divider_frame = NSRect::new(
                 NSPoint::new(0.0, footer_height() - 1.0),

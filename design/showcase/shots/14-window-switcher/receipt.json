@@ -1,0 +1,10 @@
+{
+  "id": "14-window-switcher",
+  "sceneSize": [838, 570],
+  "rmse": 0.100977,
+  "divergences": [
+    "Wallpaper (purple/blue/orange abstract macOS art) approximated with layered CSS radial/linear gradients rather than the exact photographic source; the diagonal metallic streak faintly visible through the window's backdrop-filter blur (bottom-right of detail pane) is a coarser CSS approximation than the photographic original.",
+    "Remaining RMSE is dominated by photographic wallpaper texture/JPEG compression grain outside and faintly through the vibrancy-blurred window, plus font antialiasing differences — not content or layout mismatches."
+  ],
+  "iterations": 2
+}

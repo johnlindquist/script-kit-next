@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { Driver } from "../devtools/driver.ts";
 
-const BINARY = "target-agent/artifacts/tips/script-kit-gpui";
+const BINARY =
+  process.env.SCRIPT_KIT_GPUI_BINARY ?? "target-agent/artifacts/tips/script-kit-gpui";
 const receipt: Record<string, unknown> = {};
 const fails: string[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => {

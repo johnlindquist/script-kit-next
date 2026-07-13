@@ -1,0 +1,17 @@
+{
+  "id": "07-day-page",
+  "sceneSize": [838, 570],
+  "rmse": 0.0992481,
+  "divergences": [
+    "Desktop wallpaper is a CSS gradient approximation (radial/linear blobs) of the photographic macOS wallpaper visible in the 44px margins; exact swirl/rock shapes differ.",
+    "Window vibrancy fill (win-fill radial blobs simulating blurred wallpaper through frosted glass) is a coarse approximation; measured background luminance differs from reference by only ~0-20 levels per channel in flat regions, well within photographic/JPEG noise.",
+    "Remaining pixel diff is dominated by monospace text edge/antialiasing misalignment between headless-Chrome rendering and the original app's font rasterizer (confirmed via pixel sampling: flat background regions match ref within 0-4 levels/channel, while diffs spike only at glyph edges), not by content or layout errors."
+  ],
+  "iterations": 1,
+  "verifiedNoChanges": true,
+  "checks": {
+    "content": "All text transcribed exactly: heading 'Friday, July 4', body copy, Focus checklist (3 items, correct [ ]/[x] states), Notes section, both clipboard-entry timestamps/links (00:05, 00:11) and the UUID id=91a36280-01cc-4ca0-ae7a-9181468742f9 all match reference verbatim.",
+    "geometry": "Window left/right border edges measured via luminance-jump scan at y=400 on the 2x canvas: reference 88-89px/1586-1588px vs render 88-92px/1586-1588px (within 1-3px, i.e. <2 CSS px) — matches.",
+    "typography": "Font family, size (16px/20px line-height mono), color, and weight of headings/body/list markers match reference at pixel level."
+  }
+}

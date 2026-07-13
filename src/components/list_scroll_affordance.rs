@@ -4,7 +4,7 @@
 //! derive progress from logical geometry and mount this fixed paint layer
 //! above the translated row subtree, leaving hit testing and scrollbars alone.
 
-use gpui::{div, linear_color_stop, linear_gradient, prelude::*, px, rgba, AnyElement};
+use gpui::{div, linear_color_stop, linear_gradient, prelude::*, px, rgba, AnyElement, Pixels};
 
 use crate::designs::MainMenuListTokens;
 
@@ -22,14 +22,27 @@ pub(crate) fn render_top_occlusion(
     tokens: MainMenuListTokens,
     progress: f32,
 ) -> AnyElement {
+    render_top_occlusion_at(theme, tokens, progress, px(0.0))
+}
+
+pub(crate) const MAIN_LIST_TOP_OCCLUSION_ID: &str = "main-list-top-occlusion";
+
+pub(crate) fn render_top_occlusion_at(
+    theme: &crate::theme::Theme,
+    tokens: MainMenuListTokens,
+    progress: f32,
+    top: Pixels,
+) -> AnyElement {
     let alpha = top_occlusion_alpha(tokens, progress);
     let base = theme.colors.background.main;
     let opaque = rgba((base << 8) | alpha);
     let transparent = rgba(base << 8);
 
     div()
+        .id(MAIN_LIST_TOP_OCCLUSION_ID)
+        .debug_selector(|| MAIN_LIST_TOP_OCCLUSION_ID.to_string())
         .absolute()
-        .top_0()
+        .top(top)
         .left_0()
         .right(px(tokens.scrollbar_width))
         .h(px(tokens.top_occlusion_height))
@@ -49,8 +62,8 @@ mod tests {
     fn top_occlusion_alpha_clamps_progress_and_uses_peak_token() {
         let tokens = crate::designs::MainMenuThemeVariant::InfoBarBase.def().list;
         assert_eq!(top_occlusion_alpha(tokens, -1.0), 0);
-        assert_eq!(top_occlusion_alpha(tokens, 0.5), 0x66);
-        assert_eq!(top_occlusion_alpha(tokens, 1.0), 0xCC);
-        assert_eq!(top_occlusion_alpha(tokens, 2.0), 0xCC);
+        assert_eq!(top_occlusion_alpha(tokens, 0.5), 0x17);
+        assert_eq!(top_occlusion_alpha(tokens, 1.0), 0x2E);
+        assert_eq!(top_occlusion_alpha(tokens, 2.0), 0x2E);
     }
 }

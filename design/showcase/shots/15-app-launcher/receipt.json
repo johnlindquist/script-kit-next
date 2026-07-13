@@ -1,0 +1,11 @@
+{
+  "id": "15-app-launcher",
+  "sceneSize": [838, 570],
+  "rmse": 0.0668,
+  "divergences": [
+    "Desktop wallpaper is a CSS gradient approximation of a photographic macOS wallpaper; fine-grained blur/noise and exact diagonal-band curvature cannot be matched pixel-for-pixel with flat radial/linear gradients.",
+    "Content (search query 'safari', selected 'Safari' row with Safari app icon, header chips, 'Script Kit · GPT-5.5' model label, footer 'Run ↵' / 'Actions ⌘ K') was verified against the reference and matches exactly; no content corrections were needed.",
+    "Window geometry (left/top/width/height, footer height, row pitch) measured via luminance-edge scan and confirmed within ~1px of the existing draft; no structural changes were needed."
+  ],
+  "iterations": 3
+}

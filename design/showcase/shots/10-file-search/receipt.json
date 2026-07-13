@@ -1,0 +1,13 @@
+{
+  "id": "10-file-search",
+  "sceneSize": [838, 570],
+  "rmse": 0.1039,
+  "divergences": [
+    "Content verified exact: all file/folder names (LAUNCH.md, LAUNCHXL, Launch Application.action, LaunchAgent.plist, LaunchAgents, LaunchAngels, LaunchApp.cat/.catfamily/.patternfamily), sizes, dates, path (/Users/johnlindquist/dev/beads/npm-package/LAUNCH.md), header text (~/.scriptkit, Script Kit · GPT-5.5), search query 'launch', and footer keycaps (Run ↵, Actions ⌘K) match the reference pixel-for-pixel in text content.",
+    "Fixed this pass: the under-window vibrancy feed (.wall::before) was too small/offset, so the backdrop-filter blur behind the file list sampled the 'deep navy base' gradient instead of a warm plum tone, causing list-row backgrounds to drift from ~(60,28,78) at the top to ~(27,24,57) near the footer while the reference stays a near-constant warm plum (~58,28,78) top to bottom. Enlarged and repositioned the feed (left:-30px top:70px 520x520, warmer magenta radial-gradient) so the blurred result stays consistent down the whole list column. This dropped window-interior RMSE from 0.1138 to 0.1097 and full-frame RMSE from 0.1073 to 0.1039.",
+    "Remaining gap is dominated by photographic wallpaper micro-detail: the reference has a distinct diagonal grey/silver light streak crossing the lower-left wallpaper band (visible below and left of the window) that our CSS-gradient wallpaper only approximates as a softer, more horizontal band; exact photographic swirl geometry is not reproduced.",
+    "Row folder icons are a simplified flat-gradient approximation (folder tab + body, generic Finder-style grey gradient) rather than a precise vector trace of the exact macOS folder icon bevel/highlight; close in color and silhouette but slightly less rounded/3D than the reference.",
+    "Row-pitch and text baseline alignment were verified to match the reference within 1px across all 9 visible rows (measured via glyph luminance peak scan), so no structural/layout fix was needed."
+  ],
+  "iterations": 2
+}

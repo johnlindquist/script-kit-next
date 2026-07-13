@@ -1,0 +1,11 @@
+{
+  "id": "13-agent-chat-composer",
+  "sceneSize": [838, 570],
+  "rmse": 0.0945,
+  "divergences": [
+    "Wallpaper is a CSS gradient approximation of a photographic macOS-style desktop background; the reference has fine diagonal ribbon/thread streaks and subtle color noise that flat/radial CSS gradients cannot fully reproduce. Per-region RMSE confirms this: inside the window rect the render-vs-reference RMSE is ~20, while the wallpaper corners measure ~24-38 — the wallpaper is the dominant remaining error, not window content.",
+    "Window rect (left/top/width/height), header context-zone chips ('~/' + arrow icon, 'Script Kit · gpt-5.5' model pill + two icons), composer text '@cmd:\"Test what's going on here\"', guidance title/body, all 5 guidance rows (/, @, ⇧↵, ⌘P, ⌘K with exact labels), and footer (Send ↵, Actions ⌘K) were verified character-for-character against the reference — no content mismatches found.",
+    "Font antialiasing differences between the browser rasterizer and the original screenshot's rasterizer account for residual low-level diff noise on all text glyphs."
+  ],
+  "iterations": 2
+}

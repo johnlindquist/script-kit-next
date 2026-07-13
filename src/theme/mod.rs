@@ -65,7 +65,9 @@ pub mod user_themes;
 pub(crate) mod validation;
 
 // Re-export shared chrome contract for app surfaces
-pub(crate) use chrome::{AppChromeColors, DangerActionColors, SemanticChipColors};
+pub(crate) use chrome::{
+    main_view_header_underlay_rgba, AppChromeColors, DangerActionColors, SemanticChipColors,
+};
 
 // Re-export contrast audit helpers
 #[allow(unused_imports)]

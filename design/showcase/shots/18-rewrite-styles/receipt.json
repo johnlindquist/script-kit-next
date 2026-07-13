@@ -1,0 +1,11 @@
+{
+  "id": "18-rewrite-styles",
+  "sceneSize": [1075, 647],
+  "rmse": 0.0934,
+  "divergences": [
+    "Wallpaper is a CSS gradient/arc approximation of a photographic macOS wallpaper; background-only RMSE (~0.144) dominates the remaining full-frame error while the TextEdit+Script Kit window region alone measures ~0.068.",
+    "Content verified against reference: header pill \"Rewrite “Hey, so basically I thin…”\", model label \"Script Kit · GPT-5.5\", list rows Professional/Concise/Friendly/Direct with matching description text and sparkle icons, footer \"Rewrite ↵\" / \"Actions ⌘ K\" all match exactly.",
+    "Fine antialiasing/JPEG artifacting around small text (ruler numerals, description ellipsis) and subtle scrollbar-track opacity in the TextEdit pane are left as photographic/rendering-detail noise, not structural mismatches."
+  ],
+  "iterations": 2
+}

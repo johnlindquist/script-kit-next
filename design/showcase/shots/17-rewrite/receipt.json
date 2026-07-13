@@ -1,0 +1,11 @@
+{
+  "id": "17-rewrite",
+  "sceneSize": [1075, 647],
+  "rmse": 0.11072,
+  "divergences": [
+    "Wallpaper is a macOS flow-ribbon photo; recreated with base fill + four edge-strip linear-gradients sampled every ~40 logical px from the reference photo along the visible left/right/top/bottom margins (TextEdit occludes the interior), each blurred and masked to fade toward the window, plus one extra radial-gradient patch for the bottom-right magenta swirl. The sharp diagonal ridge/fold lines and complex 2D swirl shapes in the real photo are approximated with soft blurred bands, not exact ridges — this residual is dominated by photographic detail and is the largest remaining error contributor.",
+    "Text rendering (antialiasing, subpixel hinting) differs slightly between the reference's real macOS/TextEdit rendering and the Chromium render used for the scene; visible only as thin edge outlines in the diff, no wrap or position mismatch remains.",
+    "TextEdit ruler ticks/marks approximated with repeating-linear-gradient layers rather than exact per-tick SVG; matches reference spacing and phase closely."
+  ],
+  "iterations": 4
+}

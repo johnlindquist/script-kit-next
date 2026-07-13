@@ -1,0 +1,12 @@
+{
+  "id": "09-terminal",
+  "sceneSize": [838, 570],
+  "rmse": 0.0798283,
+  "divergences": [
+    "Wallpaper (desktop backdrop and window vibrancy material) is CSS-gradient approximated from a photographic JPEG; residual per-pixel color noise from real photo detail/JPEG compression accounts for nearly all remaining RMSE — verified content, window geometry, and font metrics are exact matches.",
+    "Window rect measured against reference at 2x: left/top/right/bottom edges land within 1px of the scene's --win (left 87px, top 89px, right 1587px, bottom 1049px at 2x) — effectively pixel-perfect.",
+    "Terminal row pitch measured ~36.6px (2x) vs the --sk-terminal-cell-height token (18.2px * 2 = 36.4px) — matches within antialiasing/measurement noise.",
+    "All terminal lines, prompt arrows, '~' cyan segments, ls output filenames, and footer keycap labels transcribed and re-verified character-for-character against the reference; no content mismatches found."
+  ],
+  "iterations": 2
+}

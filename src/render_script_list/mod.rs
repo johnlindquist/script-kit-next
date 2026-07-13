@@ -1107,6 +1107,13 @@ impl ScriptListApp {
             let footer_padding = main_list_footer_overlay_total_padding();
             let row_generation = self.main_list_row_generation;
 
+            let header_overlay_height = px(
+                crate::components::main_view_chrome::main_view_header_metrics(
+                    current_main_menu_theme.def(),
+                    Some(current_main_menu_theme.def().search.height),
+                )
+                .header_height,
+            );
             let variable_height_list =
                 list(self.main_list_state.clone(), move |ix, _window, cx| {
                     let _item_render_start = std::time::Instant::now();
@@ -1443,6 +1450,7 @@ impl ScriptListApp {
                 // which is required for the list's hitbox to capture scroll wheel events
                 .with_sizing_behavior(ListSizingBehavior::Infer)
                 .h_full()
+                .pt(header_overlay_height)
                 .pb(footer_padding);
 
             // Wrap list in a relative container with scrollbar overlay
@@ -1465,7 +1473,8 @@ impl ScriptListApp {
             let scrollbar_overlay = {
                 let footer_overlay_height = main_list_footer_overlay_total_padding();
                 let viewport_height = self.main_list_state.viewport_bounds().size.height;
-                let safe_viewport_height = (viewport_height - footer_overlay_height).max(px(0.0));
+                let safe_viewport_height =
+                    (viewport_height - header_overlay_height - footer_overlay_height).max(px(0.0));
                 // Resolve the per-kind heights once: `effective_*_for_theme`
                 // rebuilds the full metrics override struct per call, which is
                 // too expensive to repeat per item on every render.
@@ -1507,7 +1516,7 @@ impl ScriptListApp {
 
                 div()
                     .absolute()
-                    .top_0()
+                    .top(header_overlay_height)
                     .right_0()
                     .h(safe_viewport_height)
                     .w(px(self.current_main_menu_theme.def().list.scrollbar_width))
@@ -1536,6 +1545,7 @@ impl ScriptListApp {
                 // scrollbar, and footer remain fixed during boundary pull.
                 .child(
                     div()
+                        .id("launcher-main-elastic-document")
                         .relative()
                         .top(px(boundary_offset_px))
                         .w_full()
@@ -1544,10 +1554,11 @@ impl ScriptListApp {
                 )
                 .when(top_fade.active, |root| {
                     root.child(
-                        crate::components::list_scroll_affordance::render_top_occlusion(
+                        crate::components::list_scroll_affordance::render_top_occlusion_at(
                             &self.theme,
                             main_list_tokens,
                             top_fade.progress,
+                            header_overlay_height,
                         ),
                     )
                 })
@@ -1557,7 +1568,7 @@ impl ScriptListApp {
                 // selection-owned controller runs before List's native listener
                 // and can stop it before logical ListState mutates.
                 .child(div().absolute().inset_0().on_scroll_wheel(cx.listener(
-                    move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                    move |this, event: &gpui::ScrollWheelEvent, window, cx| {
                         if scroll_item_count == 0 {
                             return;
                         }
@@ -1566,6 +1577,7 @@ impl ScriptListApp {
                             event,
                             avg_item_height,
                             scroll_item_count,
+                            window,
                             cx,
                         );
                     },
@@ -2197,6 +2209,13 @@ impl ScriptListApp {
                     .w_full()
                     .h_full()
                     .min_h(px(0.))
+                    .pt(px(
+                        crate::components::main_view_chrome::main_view_header_metrics(
+                            menu_def,
+                            Some(menu_def.search.height),
+                        )
+                        .header_height,
+                    ))
                     .child(info_panel)
                     .into_any_element()
             } else {
@@ -2233,7 +2252,7 @@ impl ScriptListApp {
                 self.main_menu_render_diagnostics.last_render_log_item_count = item_count_for_log;
             }
 
-            return crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
+            return crate::components::main_view_chrome::render_main_view_chrome_header_overlay_footer_flush(
                 root,
                 &self.theme,
                 menu_def,
@@ -2300,7 +2319,19 @@ impl ScriptListApp {
                                 ),
                             )
                         })
-                        .child(div().flex_1().min_h(px(0.)).child(preview_panel)),
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_h(px(0.))
+                                .pt(px(
+                                    crate::components::main_view_chrome::main_view_header_metrics(
+                                        menu_def,
+                                        Some(menu_def.search.height),
+                                    )
+                                    .header_height,
+                                ))
+                                .child(preview_panel),
+                        ),
                 )
             })
             .into_any_element();
@@ -2373,7 +2404,7 @@ impl ScriptListApp {
             self.main_menu_render_diagnostics.last_render_log_item_count = item_count_for_log;
         }
 
-        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
+        crate::components::main_view_chrome::render_main_view_chrome_header_overlay_footer_flush(
             root,
             &self.theme,
             menu_def,

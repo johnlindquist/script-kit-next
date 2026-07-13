@@ -1522,6 +1522,39 @@ impl PlatformWindow for MacWindow {
         self.0.as_ref().lock().request_frame_callback = Some(callback);
     }
 
+    fn request_frame(&self) {
+        let window_state = self.0.clone();
+        let mut lock = window_state.as_ref().lock();
+        let visible = unsafe {
+            lock.native_window
+                .occlusionState()
+                .contains(NSWindowOcclusionState::NSWindowOcclusionStateVisible)
+        };
+        if visible {
+            lock.start_display_link();
+            return;
+        }
+
+        // CVDisplayLink deliberately does not run for an occluded NSWindow.
+        // DevTools and capture clients still need the same one-frame contract,
+        // so emulate a single display interval without moving animation timing
+        // back into application code.
+        let foreground_executor = lock.foreground_executor.clone();
+        let background_executor = lock.background_executor.clone();
+        drop(lock);
+        foreground_executor
+            .spawn(async move {
+                background_executor.timer(Duration::from_millis(16)).await;
+                let mut lock = window_state.as_ref().lock();
+                if let Some(mut callback) = lock.request_frame_callback.take() {
+                    drop(lock);
+                    callback(Default::default());
+                    window_state.as_ref().lock().request_frame_callback = Some(callback);
+                }
+            })
+            .detach();
+    }
+
     fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
         self.0.as_ref().lock().event_callback = Some(callback);
     }

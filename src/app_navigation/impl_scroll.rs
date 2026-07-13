@@ -130,38 +130,55 @@ fn script_list_offset_for_pixel_top(
     }
 }
 
-fn footer_safe_scroll_offset_for_item(
+fn main_list_safe_scroll_offset_for_item(
     items: &[GroupedListItem],
     current_offset: gpui::ListOffset,
     viewport_height: gpui::Pixels,
+    header_overlay_height: gpui::Pixels,
     footer_overlay_height: gpui::Pixels,
     target_ix: usize,
 ) -> Option<gpui::ListOffset> {
-    if items.is_empty() || target_ix >= items.len() || viewport_height <= footer_overlay_height {
+    if items.is_empty()
+        || target_ix >= items.len()
+        || viewport_height <= header_overlay_height + footer_overlay_height
+    {
         return None;
     }
 
     let heights = ScriptListRowHeights::current();
     let viewport_height = viewport_height.as_f32();
     let footer_overlay_height = footer_overlay_height.as_f32();
-    let safe_viewport_height = viewport_height - footer_overlay_height;
+    let safe_viewport_height =
+        viewport_height - header_overlay_height.as_f32() - footer_overlay_height;
     let max_scroll_top =
         (script_list_content_height_with(items, heights) - safe_viewport_height).max(0.0);
     let current_scroll_top = script_list_pixel_top_for_offset(items, current_offset, heights);
     let target_top = script_list_pixel_top_for_item(items, target_ix, heights);
     let target_bottom = target_top + heights.row_height(&items[target_ix], target_ix);
     let safe_bottom = current_scroll_top + safe_viewport_height;
-
-    if target_bottom <= safe_bottom {
+    let safe_scroll_top = if target_top < current_scroll_top {
+        target_top
+    } else if target_bottom > safe_bottom {
+        target_bottom - safe_viewport_height
+    } else {
         return None;
     }
-
-    let safe_scroll_top = (current_scroll_top + (target_bottom - safe_bottom)).min(max_scroll_top);
+    .clamp(0.0, max_scroll_top);
     Some(script_list_offset_for_pixel_top(
         items,
         safe_scroll_top,
         heights,
     ))
+}
+
+fn leading_context_scroll_offset_for_selection(
+    target_ix: usize,
+    first_selectable_ix: Option<usize>,
+) -> Option<gpui::ListOffset> {
+    (first_selectable_ix == Some(target_ix)).then_some(gpui::ListOffset {
+        item_ix: 0,
+        offset_in_item: gpui::px(0.0),
+    })
 }
 
 #[inline]
@@ -178,12 +195,44 @@ fn scrollbar_fade_opacity(progress: f32) -> crate::transitions::Opacity {
 
 const MAIN_LIST_EDGE_EPSILON_PX: f32 = 0.5;
 
+fn schedule_main_list_boundary_rebound_frame(
+    app: gpui::WeakEntity<ScriptListApp>,
+    generation: u64,
+    started_at: std::time::Instant,
+    tuning: crate::scrolling::boundary_affordance::BoundaryAffordanceTuning,
+    window: &mut gpui::Window,
+) {
+    window.on_next_frame(move |window, cx| {
+        let keep_running = app
+            .update(cx, |app, cx| {
+                if !app.main_list_boundary_affordance.apply_settle_sample(
+                    generation,
+                    started_at.elapsed(),
+                    tuning,
+                ) {
+                    return false;
+                }
+                cx.notify();
+                app.main_list_boundary_affordance.phase
+                    == crate::scrolling::boundary_affordance::BoundaryPhase::Settling
+            })
+            .unwrap_or(false);
+        if keep_running {
+            schedule_main_list_boundary_rebound_frame(app, generation, started_at, tuning, window);
+        }
+    });
+    window.request_animation_frame();
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct MainListScrollGeometry {
     scroll_top: f32,
     content_height: f32,
     viewport_height: f32,
     footer_height: f32,
+    header_height: f32,
+    safe_viewport_top: f32,
+    safe_viewport_bottom: f32,
     safe_viewport_height: f32,
     max_scroll_top: f32,
     at_top: bool,
@@ -200,14 +249,18 @@ pub(crate) struct MainListTopFadeSnapshot {
 fn main_list_scroll_geometry_values(
     content_height: f32,
     viewport_height: f32,
+    header_height: f32,
     footer_height: f32,
     scroll_top: f32,
 ) -> MainListScrollGeometry {
     let viewport_height = viewport_height.max(0.0);
-    let footer_height = footer_height.max(0.0);
-    let safe_viewport_height = (viewport_height - footer_height).max(0.0);
+    let header_height = header_height.max(0.0).min(viewport_height);
+    let footer_height = footer_height.max(0.0).min(viewport_height);
+    let safe_viewport_top = header_height;
+    let safe_viewport_bottom = (viewport_height - footer_height).max(safe_viewport_top);
+    let safe_viewport_height = (safe_viewport_bottom - safe_viewport_top).max(0.0);
     let max_scroll_top = (content_height - safe_viewport_height).max(0.0);
-    let measured = viewport_height > footer_height && viewport_height > 0.0;
+    let measured = viewport_height > header_height + footer_height && viewport_height > 0.0;
     let scroll_top = scroll_top.clamp(0.0, max_scroll_top);
 
     MainListScrollGeometry {
@@ -215,6 +268,9 @@ fn main_list_scroll_geometry_values(
         content_height,
         viewport_height,
         footer_height,
+        header_height,
+        safe_viewport_top,
+        safe_viewport_bottom,
         safe_viewport_height,
         max_scroll_top,
         at_top: measured && scroll_top <= MAIN_LIST_EDGE_EPSILON_PX,
@@ -231,6 +287,20 @@ fn main_list_top_fade_progress(scroll_top: f32, ramp: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
+#[inline]
+fn main_list_top_fade_progress_for_selection(
+    scroll_top: f32,
+    ramp: f32,
+    selected_index: usize,
+    first_selectable: Option<usize>,
+) -> f32 {
+    if first_selectable == Some(selected_index) {
+        0.0
+    } else {
+        main_list_top_fade_progress(scroll_top, ramp)
+    }
+}
+
 fn main_list_boundary_eligibility_values(
     geometry: MainListScrollGeometry,
     selected_index: usize,
@@ -243,22 +313,36 @@ fn main_list_boundary_eligibility_values(
     }
 }
 
+fn main_list_scroll_lifecycle_phase(
+    phase: gpui::ScrollPhase,
+) -> crate::scrolling::boundary_affordance::ScrollLifecyclePhase {
+    use crate::scrolling::boundary_affordance::ScrollLifecyclePhase;
+    match phase {
+        gpui::ScrollPhase::None => ScrollLifecyclePhase::None,
+        gpui::ScrollPhase::MayBegin => ScrollLifecyclePhase::MayBegin,
+        gpui::ScrollPhase::Began => ScrollLifecyclePhase::Began,
+        gpui::ScrollPhase::Changed => ScrollLifecyclePhase::Changed,
+        gpui::ScrollPhase::Stationary => ScrollLifecyclePhase::Stationary,
+        gpui::ScrollPhase::Ended => ScrollLifecyclePhase::Ended,
+        gpui::ScrollPhase::Cancelled => ScrollLifecyclePhase::Cancelled,
+    }
+}
+
 impl ScriptListApp {
     fn main_list_boundary_affordance_tuning(
         &self,
     ) -> crate::scrolling::boundary_affordance::BoundaryAffordanceTuning {
-        let tokens = self.current_main_menu_theme.def().list;
-        crate::scrolling::boundary_affordance::BoundaryAffordanceTuning::new(
-            tokens.overscroll_max_distance,
-            tokens.overscroll_resistance,
-            std::time::Duration::from_millis(tokens.overscroll_settle_ms),
-            std::time::Duration::from_millis(tokens.overscroll_idle_timeout_ms),
-            tokens.overscroll_reduced_motion_max_distance,
-        )
+        crate::scrolling::boundary_affordance::BoundaryAffordanceTuning::default()
     }
 
     fn main_list_scroll_geometry(&mut self) -> MainListScrollGeometry {
         let viewport_height = self.main_list_state.viewport_bounds().size.height.as_f32();
+        let def = self.current_main_menu_theme.def();
+        let header_height = crate::components::main_view_chrome::main_view_header_metrics(
+            def,
+            Some(def.search.height),
+        )
+        .header_height;
         let footer_height = main_list_footer_overlay_total_padding().as_f32();
         let scroll_offset = self.main_list_state.logical_scroll_top();
         let heights = ScriptListRowHeights::for_theme(self.current_main_menu_theme);
@@ -269,13 +353,24 @@ impl ScriptListApp {
                 script_list_pixel_top_for_offset(&grouped_items, scroll_offset, heights),
             )
         };
-        main_list_scroll_geometry_values(content_height, viewport_height, footer_height, scroll_top)
+        main_list_scroll_geometry_values(
+            content_height,
+            viewport_height,
+            header_height,
+            footer_height,
+            scroll_top,
+        )
     }
 
     pub(crate) fn main_list_top_fade_snapshot(&mut self) -> MainListTopFadeSnapshot {
         let geometry = self.main_list_scroll_geometry();
         let tokens = self.current_main_menu_theme.def().list;
-        let progress = main_list_top_fade_progress(geometry.scroll_top, tokens.top_occlusion_ramp);
+        let progress = main_list_top_fade_progress_for_selection(
+            geometry.scroll_top,
+            tokens.top_occlusion_ramp,
+            self.selected_index,
+            self.main_menu_result_caches.first_selectable_index(),
+        );
         MainListTopFadeSnapshot {
             active: progress > 0.0,
             progress,
@@ -302,27 +397,39 @@ impl ScriptListApp {
     fn schedule_main_list_boundary_settle(
         &mut self,
         tuning: crate::scrolling::boundary_affordance::BoundaryAffordanceTuning,
+        window: Option<&mut gpui::Window>,
         cx: &mut Context<Self>,
     ) {
-        use crate::scrolling::boundary_affordance::{normalized_settle_elapsed, BoundaryPhase};
+        use crate::scrolling::boundary_affordance::BoundaryPhase;
 
-        const FRAME: std::time::Duration = std::time::Duration::from_millis(16);
         let generation = self.main_list_boundary_affordance.generation;
-        let starting_offset = self.main_list_boundary_affordance.offset_px;
         let started_at = std::time::Instant::now();
 
+        if let Some(window) = window {
+            schedule_main_list_boundary_rebound_frame(
+                cx.weak_entity(),
+                generation,
+                started_at,
+                tuning,
+                window,
+            );
+            return;
+        }
+
+        // The idle watchdog has no Window borrow. It is only a recovery path
+        // for platforms that omit terminal lifecycle events; native release
+        // always uses display-frame callbacks above.
+        const FRAME: std::time::Duration = std::time::Duration::from_millis(16);
         cx.spawn(async move |this, cx| loop {
             cx.background_executor().timer(FRAME).await;
             let elapsed = started_at.elapsed();
-            let normalized = normalized_settle_elapsed(elapsed, tuning.settle_duration);
             let keep_running = cx
                 .update(|cx| {
                     this.update(cx, |app, cx| {
-                        if !app.main_list_boundary_affordance.apply_settle_sample(
-                            generation,
-                            starting_offset,
-                            normalized,
-                        ) {
+                        if !app
+                            .main_list_boundary_affordance
+                            .apply_settle_sample(generation, elapsed, tuning)
+                        {
                             return false;
                         }
                         cx.notify();
@@ -368,7 +475,7 @@ impl ScriptListApp {
                                             tuning,
                                         );
                                     if decision.start_settle.is_some() {
-                                        app.schedule_main_list_boundary_settle(tuning, cx);
+                                        app.schedule_main_list_boundary_settle(tuning, None, cx);
                                     }
                                     if decision.visual_changed {
                                         cx.notify();
@@ -440,9 +547,10 @@ impl ScriptListApp {
         event: &gpui::ScrollWheelEvent,
         average_item_height: f32,
         item_count: usize,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
-        use crate::scrolling::boundary_affordance::{PreciseTouchPhase, SettleReason};
+        use crate::scrolling::boundary_affordance::SettleReason;
 
         if item_count == 0 {
             return;
@@ -464,18 +572,27 @@ impl ScriptListApp {
                 let geometry = self.main_list_scroll_geometry();
                 let eligibility = self.main_list_boundary_eligibility(geometry);
                 let tuning = self.main_list_boundary_affordance_tuning();
-                let touch_phase = match event.touch_phase {
-                    gpui::TouchPhase::Started => PreciseTouchPhase::Started,
-                    gpui::TouchPhase::Moved => PreciseTouchPhase::Moved,
-                    gpui::TouchPhase::Ended => PreciseTouchPhase::Ended,
+                let legacy_phase = match event.touch_phase {
+                    gpui::TouchPhase::Started => {
+                        crate::scrolling::boundary_affordance::PreciseTouchPhase::Started
+                    }
+                    gpui::TouchPhase::Moved => {
+                        crate::scrolling::boundary_affordance::PreciseTouchPhase::Moved
+                    }
+                    gpui::TouchPhase::Ended => {
+                        crate::scrolling::boundary_affordance::PreciseTouchPhase::Ended
+                    }
                 };
-                let decision = self.main_list_boundary_affordance.handle_precise_scroll(
+                let decision = self.main_list_boundary_affordance.handle_scroll_lifecycle(
                     delta_y_px,
-                    touch_phase,
+                    main_list_scroll_lifecycle_phase(event.phase),
+                    main_list_scroll_lifecycle_phase(event.momentum_phase),
+                    legacy_phase,
                     eligibility,
                     tuning,
                     crate::platform::prefers_reduced_motion(),
                     std::time::Instant::now(),
+                    event.timestamp_seconds,
                 );
 
                 if decision.arm_idle_watchdog || decision.start_settle.is_some() {
@@ -485,7 +602,7 @@ impl ScriptListApp {
                     self.schedule_main_list_boundary_idle_watchdog(tuning, cx);
                 }
                 if decision.start_settle.is_some() {
-                    self.schedule_main_list_boundary_settle(tuning, cx);
+                    self.schedule_main_list_boundary_settle(tuning, Some(window), cx);
                 }
                 if decision.visual_changed {
                     cx.notify();
@@ -529,30 +646,70 @@ impl ScriptListApp {
         let geometry = main_list_scroll_geometry_values(
             content_height,
             viewport_height.as_f32(),
+            crate::components::main_view_chrome::main_view_header_metrics(
+                self.current_main_menu_theme.def(),
+                Some(self.current_main_menu_theme.def().search.height),
+            )
+            .header_height,
             footer_height.as_f32(),
             scroll_top,
         );
-        let selected_row_top_in_view = selected_row_top.map(|top| top - geometry.scroll_top);
+        let selected_row_top_in_view =
+            selected_row_top.map(|top| geometry.header_height + top - geometry.scroll_top);
         let selected_row_bottom_in_view =
-            selected_row_bottom.map(|bottom| bottom - geometry.scroll_top);
+            selected_row_bottom.map(|bottom| geometry.header_height + bottom - geometry.scroll_top);
         let selected_row_visible = selected_row_top_in_view
             .zip(selected_row_bottom_in_view)
             .map(|(top, bottom)| top >= 0.0 && bottom <= geometry.viewport_height)
             .unwrap_or(false);
         let selected_row_above_footer = selected_row_bottom_in_view
-            .map(|bottom| bottom <= geometry.safe_viewport_height)
+            .map(|bottom| bottom <= geometry.safe_viewport_bottom)
             .unwrap_or(false);
+        let selected_row_below_header = selected_row_top_in_view
+            .map(|top| top >= geometry.safe_viewport_top)
+            .unwrap_or(false);
+        let selected_row_within_safe_viewport =
+            selected_row_below_header && selected_row_above_footer;
         let tokens = self.current_main_menu_theme.def().list;
-        let top_fade_progress =
-            main_list_top_fade_progress(geometry.scroll_top, tokens.top_occlusion_ramp);
+        let top_fade_progress = main_list_top_fade_progress_for_selection(
+            geometry.scroll_top,
+            tokens.top_occlusion_ramp,
+            self.selected_index,
+            self.main_menu_result_caches.first_selectable_index(),
+        );
         let top_fade_alpha = crate::components::list_scroll_affordance::top_occlusion_alpha(
             tokens,
             top_fade_progress,
         );
         let tuning = self.main_list_boundary_affordance_tuning();
         let affordance = &self.main_list_boundary_affordance;
+        let trace_enabled = std::env::var_os("SCRIPT_KIT_MAIN_LIST_ELASTIC_TRACE").is_some();
+        let trace_samples: Vec<_> = if trace_enabled {
+            affordance
+                .trace_samples()
+                .map(|sample| {
+                    serde_json::json!({
+                        "kind": sample.kind.as_str(),
+                        "arrivalElapsedMs": sample.arrival_elapsed_ms,
+                        "nativeTimestampSeconds": sample.native_timestamp_seconds,
+                        "directPhase": sample.direct_phase.as_str(),
+                        "momentumPhase": sample.momentum_phase.as_str(),
+                        "deltaY": sample.delta_y,
+                        "rawPullPx": sample.raw_pull_px,
+                        "offsetPx": sample.offset_px,
+                        "velocityPxPerSecond": sample.velocity_px_per_second,
+                        "boundaryPhase": sample.boundary_phase.as_str(),
+                        "generation": sample.generation,
+                        "renderedFrameGeneration": sample.rendered_frame_generation,
+                        "reboundElapsedMs": sample.last_rebound_elapsed_ms,
+                    })
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
 
-        serde_json::json!({
+        let mut receipt = serde_json::json!({
             "scrollTop": geometry.scroll_top,
             "scrollTopItem": scroll_offset.item_ix,
             "scrollTopOffset": scroll_offset.offset_in_item.as_f32(),
@@ -583,9 +740,39 @@ impl ScriptListApp {
                 "generation": affordance.generation,
                 "lastTouchPhase": affordance.last_touch_phase.map(|phase| phase.as_str()),
                 "lastSettleReason": affordance.last_settle_reason.map(|reason| reason.as_str()),
+                "directPhase": affordance.last_direct_phase.as_str(),
+                "momentumPhase": affordance.last_momentum_phase.as_str(),
+                "nativeTimestampSeconds": affordance.last_native_timestamp_seconds,
+                "momentumSuppressed": affordance.suppress_momentum_until_terminal,
+                "rawPullPx": affordance.raw_pull_px(),
+                "visualVelocityPxPerSecond": affordance.visual_velocity_px_per_second,
+                "reboundInitialOffsetPx": affordance.rebound_initial_offset_px(),
+                "reboundInitialVelocityPxPerSecond": affordance.rebound_initial_velocity_px_per_second(),
+                "reboundElapsedMs": affordance.last_rebound_elapsed_ms,
+                "reboundOmegaPerSecond": tuning.spring_omega_per_second(),
+                "frameGeneration": affordance.rendered_frame_generation,
+                "traceSamples": trace_samples,
                 "reducedMotion": affordance.reduced_motion,
             },
-        })
+        });
+        if let Some(object) = receipt.as_object_mut() {
+            object.insert("headerOverlayHeight".into(), geometry.header_height.into());
+            object.insert("listTopInset".into(), geometry.header_height.into());
+            object.insert("safeViewportTop".into(), geometry.safe_viewport_top.into());
+            object.insert(
+                "safeViewportBottom".into(),
+                geometry.safe_viewport_bottom.into(),
+            );
+            object.insert(
+                "selectedRowBelowHeader".into(),
+                selected_row_below_header.into(),
+            );
+            object.insert(
+                "selectedRowWithinSafeViewport".into(),
+                selected_row_within_safe_viewport.into(),
+            );
+        }
+        receipt
     }
 
     pub(crate) fn reveal_main_list_selection_above_footer(&mut self, reason: &str) {
@@ -608,7 +795,17 @@ impl ScriptListApp {
                     .update(|cx| {
                         this.update(cx, |app, cx| {
                             let viewport_height = app.main_list_state.viewport_bounds().size.height;
-                            if viewport_height <= main_list_footer_overlay_total_padding() {
+                            let def = app.current_main_menu_theme.def();
+                            let header_height = gpui::px(
+                                crate::components::main_view_chrome::main_view_header_metrics(
+                                    def,
+                                    Some(def.search.height),
+                                )
+                                .header_height,
+                            );
+                            if viewport_height
+                                <= header_height + main_list_footer_overlay_total_padding()
+                            {
                                 app.last_scrolled_index = None;
                                 cx.notify();
                                 return false;
@@ -635,7 +832,16 @@ impl ScriptListApp {
         }
 
         let viewport_height = self.main_list_state.viewport_bounds().size.height;
-        let safe_height = viewport_height - main_list_footer_overlay_total_padding();
+        let def = self.current_main_menu_theme.def();
+        let header_overlay_height = gpui::px(
+            crate::components::main_view_chrome::main_view_header_metrics(
+                def,
+                Some(def.search.height),
+            )
+            .header_height,
+        );
+        let safe_height =
+            viewport_height - header_overlay_height - main_list_footer_overlay_total_padding();
         if safe_height <= gpui::px(0.0) {
             return;
         }
@@ -677,10 +883,17 @@ impl ScriptListApp {
 
         let adjusted_scroll_offset = {
             let (grouped_items, _) = self.get_grouped_results_cached();
-            footer_safe_scroll_offset_for_item(
+            main_list_safe_scroll_offset_for_item(
                 &grouped_items,
                 self.main_list_state.logical_scroll_top(),
                 viewport_height,
+                gpui::px(
+                    crate::components::main_view_chrome::main_view_header_metrics(
+                        self.current_main_menu_theme.def(),
+                        Some(self.current_main_menu_theme.def().search.height),
+                    )
+                    .header_height,
+                ),
                 main_list_footer_overlay_total_padding(),
                 target,
             )
@@ -710,10 +923,19 @@ impl ScriptListApp {
         // Use perf guard for scroll timing
         let _scroll_perf = crate::perf::ScrollPerfGuard::new();
 
-        // Perform the scroll using ListState for variable-height list
-        // This scrolls the actual list() component used in render_script_list
-        self.main_list_state.scroll_to_reveal_item(target);
-        self.adjust_selected_item_above_footer_overlay(target);
+        // Revealing the first selectable row alone can leave a leading section
+        // header clipped above the viewport. Restore the true logical top so
+        // returning to the first row matches the initial launcher layout.
+        if let Some(offset) = leading_context_scroll_offset_for_selection(
+            target,
+            self.main_menu_result_caches.first_selectable_index(),
+        ) {
+            self.main_list_state.scroll_to(offset);
+        } else {
+            // Perform the scroll using ListState for variable-height list.
+            self.main_list_state.scroll_to_reveal_item(target);
+            self.adjust_selected_item_above_footer_overlay(target);
+        }
         if self.main_list_state.viewport_bounds().size.height
             > main_list_footer_overlay_total_padding()
         {
@@ -1188,9 +1410,11 @@ impl ScriptListApp {
 #[cfg(test)]
 mod scroll_fade_tests {
     use super::{
-        footer_safe_scroll_offset_for_item, main_list_boundary_eligibility_values,
-        main_list_scroll_geometry_values, main_list_top_fade_progress, scrollbar_fade_duration,
-        scrollbar_fade_opacity,
+        leading_context_scroll_offset_for_selection, main_list_boundary_eligibility_values,
+        main_list_safe_scroll_offset_for_item, main_list_scroll_geometry_values,
+        main_list_scroll_lifecycle_phase, main_list_top_fade_progress,
+        main_list_top_fade_progress_for_selection, scrollbar_fade_duration, scrollbar_fade_opacity,
+        script_list_pixel_top_for_offset, ScriptListRowHeights,
     };
     use crate::list_item::GroupedListItem;
 
@@ -1235,31 +1459,69 @@ mod scroll_fade_tests {
     }
 
     #[test]
+    fn top_occlusion_is_absent_when_selection_returns_to_first_row() {
+        assert_eq!(
+            main_list_top_fade_progress_for_selection(28.0, 96.0, 1, Some(1)),
+            0.0
+        );
+
+        let after_first_row = main_list_top_fade_progress_for_selection(44.0, 96.0, 2, Some(1));
+        assert!(after_first_row > 0.0 && after_first_row < 0.5);
+    }
+
+    #[test]
+    fn returning_to_first_selectable_restores_leading_section_header() {
+        let offset = leading_context_scroll_offset_for_selection(1, Some(1))
+            .expect("first selectable row should restore the real list top");
+        assert_eq!(offset.item_ix, 0);
+        assert_eq!(offset.offset_in_item, gpui::px(0.0));
+        assert!(leading_context_scroll_offset_for_selection(2, Some(1)).is_none());
+    }
+
+    #[test]
+    fn native_terminal_direct_phase_releases_before_momentum() {
+        assert_eq!(
+            main_list_scroll_lifecycle_phase(gpui::ScrollPhase::Ended),
+            crate::scrolling::boundary_affordance::ScrollLifecyclePhase::Ended
+        );
+        assert_eq!(
+            main_list_scroll_lifecycle_phase(gpui::ScrollPhase::Cancelled),
+            crate::scrolling::boundary_affordance::ScrollLifecyclePhase::Cancelled
+        );
+        assert_eq!(
+            main_list_scroll_lifecycle_phase(gpui::ScrollPhase::Began),
+            crate::scrolling::boundary_affordance::ScrollLifecyclePhase::Began
+        );
+    }
+
+    #[test]
     fn boundary_geometry_uses_footer_safe_viewport_and_fails_closed_unmeasured() {
-        let top = main_list_scroll_geometry_values(1000.0, 420.0, 32.0, 0.0);
+        let top = main_list_scroll_geometry_values(1000.0, 420.0, 58.0, 32.0, 0.0);
         assert!(top.at_top);
         assert!(!top.at_bottom);
-        assert_eq!(top.safe_viewport_height, 388.0);
-        assert_eq!(top.max_scroll_top, 612.0);
+        assert_eq!(top.safe_viewport_top, 58.0);
+        assert_eq!(top.safe_viewport_bottom, 388.0);
+        assert_eq!(top.safe_viewport_height, 330.0);
+        assert_eq!(top.max_scroll_top, 670.0);
 
-        let bottom = main_list_scroll_geometry_values(1000.0, 420.0, 32.0, 612.0);
+        let bottom = main_list_scroll_geometry_values(1000.0, 420.0, 58.0, 32.0, 670.0);
         assert!(!bottom.at_top);
         assert!(bottom.at_bottom);
 
-        let unmeasured = main_list_scroll_geometry_values(1000.0, 0.0, 32.0, 0.0);
+        let unmeasured = main_list_scroll_geometry_values(1000.0, 0.0, 58.0, 32.0, 0.0);
         assert!(!unmeasured.at_top);
         assert!(!unmeasured.at_bottom);
     }
 
     #[test]
     fn boundary_capture_requires_the_matching_selected_endpoint() {
-        let top = main_list_scroll_geometry_values(1000.0, 420.0, 32.0, 0.0);
+        let top = main_list_scroll_geometry_values(1000.0, 420.0, 58.0, 32.0, 0.0);
         let not_first = main_list_boundary_eligibility_values(top, 2, Some(1), Some(20));
         assert!(!not_first.top);
         let first = main_list_boundary_eligibility_values(top, 1, Some(1), Some(20));
         assert!(first.top);
 
-        let bottom = main_list_scroll_geometry_values(1000.0, 420.0, 32.0, 612.0);
+        let bottom = main_list_scroll_geometry_values(1000.0, 420.0, 58.0, 32.0, 670.0);
         let not_last = main_list_boundary_eligibility_values(bottom, 19, Some(1), Some(20));
         assert!(!not_last.bottom);
         let last = main_list_boundary_eligibility_values(bottom, 20, Some(1), Some(20));
@@ -1280,20 +1542,23 @@ mod scroll_fade_tests {
             GroupedListItem::Item(8),
         ];
 
-        let adjusted = footer_safe_scroll_offset_for_item(
+        let adjusted = main_list_safe_scroll_offset_for_item(
             &rows,
             gpui::ListOffset {
                 item_ix: 0,
                 offset_in_item: gpui::px(0.0),
             },
             gpui::px(360.0),
+            gpui::px(58.0),
             gpui::px(30.0),
             8,
         )
         .expect("target should be pushed above the footer overlay");
 
-        assert_eq!(adjusted.item_ix, 0);
-        assert_eq!(adjusted.offset_in_item, gpui::px(30.0));
+        assert_eq!(
+            script_list_pixel_top_for_offset(&rows, adjusted, ScriptListRowHeights::current()),
+            124.0
+        );
     }
 
     #[test]
@@ -1310,19 +1575,22 @@ mod scroll_fade_tests {
             GroupedListItem::Item(8),
         ];
 
-        let adjusted = footer_safe_scroll_offset_for_item(
+        let adjusted = main_list_safe_scroll_offset_for_item(
             &rows,
             gpui::ListOffset {
                 item_ix: 0,
                 offset_in_item: gpui::px(0.0),
             },
             gpui::px(360.0),
+            gpui::px(58.0),
             gpui::px(30.0),
             8,
         )
         .expect("last row should get the extra footer-height trailing scroll budget");
 
-        assert_eq!(adjusted.item_ix, 0);
-        assert_eq!(adjusted.offset_in_item, gpui::px(30.0));
+        assert_eq!(
+            script_list_pixel_top_for_offset(&rows, adjusted, ScriptListRowHeights::current()),
+            124.0
+        );
     }
 }

@@ -12,6 +12,20 @@ pub enum SimulatedTouchPhase {
     Ended,
 }
 
+/// Lossless lifecycle phase for direct and momentum scroll streams.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SimulatedScrollPhase {
+    #[default]
+    None,
+    MayBegin,
+    Began,
+    Changed,
+    Stationary,
+    Ended,
+    Cancelled,
+}
+
 /// A high-fidelity input event intended for dispatch through GPUI's real
 /// event pipeline, as opposed to the legacy `simulateKey` surface which
 /// bypasses GPUI intercepts.
@@ -66,5 +80,23 @@ pub enum SimulatedGpuiEvent {
         #[serde(rename = "deltaY")]
         delta_y: f64,
         phase: SimulatedTouchPhase,
+        #[serde(
+            rename = "directPhase",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        direct_phase: Option<SimulatedScrollPhase>,
+        #[serde(
+            rename = "momentumPhase",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        momentum_phase: Option<SimulatedScrollPhase>,
+        #[serde(
+            rename = "timestampSeconds",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        timestamp_seconds: Option<f64>,
     },
 }

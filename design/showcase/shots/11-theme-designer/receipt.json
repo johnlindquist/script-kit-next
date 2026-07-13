@@ -1,0 +1,11 @@
+{
+  "id": "11-theme-designer",
+  "sceneSize": [838, 570],
+  "rmse": 0.1301,
+  "divergences": [
+    "Wallpaper is macOS-style abstract art with sharp angular color-shard boundaries (e.g. a hard diagonal cut between the top-right blue swoosh and the dark navy beneath it, and a similar dark/magenta valley on the right-edge strip around y=300-420css). One shard (top-right) was recreated with a clip-path polygon; the remaining shard edges are approximated with smooth measured gradients per edge (left/top/right/bottom sampled directly from the reference at 2x) rather than exact polygons, since the visible margin is only the ~44-50px frame around the window.",
+    "The window's backdrop-filter blur(120px) needs a plausible interior wallpaper field behind the whole window (not just the exposed margin) to produce the right frosted-glass wash; this interior field (.wp-wash) is a coarse radial-gradient approximation of the full desktop composition, not pixel-measured, since it is only ever seen through heavy blur.",
+    "Residual RMSE is dominated by JPEG compression block noise in the reference over what are smooth CSS gradients in the render (confirmed by inspecting a visually-smooth reference region that nonetheless diffs as high-frequency noise), plus ordinary text/icon edge anti-aliasing differences between the native app's captured render and Chromium's text rasterizer — both expected per the brief's fidelity ceiling for photographic/antialiasing detail."
+  ],
+  "iterations": 6
+}

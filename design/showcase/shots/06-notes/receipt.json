@@ -1,0 +1,16 @@
+{
+  "id": "06-notes",
+  "sceneSize": [780, 676],
+  "rmse": 0.0754,
+  "divergences": [
+    "Desktop wallpaper (macOS dynamic abstract) is a hand-tuned multi-stop CSS gradient approximation (wall-top/left/right/bottom), not the source photo — residual color noise there is JPEG compression detail plus gradient-vs-photo mismatch, most visible in the bottom-left and left-mid diagonal transition zones.",
+    "Remaining RMSE is dominated by font antialiasing on the dense monospace editor text (measured: blank interior rows ~0.02-0.04 RMSE vs text rows ~0.30-0.39 RMSE in isolation) — Chromium's text rendering differs at the sub-pixel level from the reference's native capture even with matched font size/position."
+  ],
+  "iterations": 4,
+  "notes": [
+    "Iteration 1: baseline measurement, RMSE 0.1588 (inherited draft).",
+    "Iteration 2: found the editor text was offset ~2px left of the reference (measured via first/last bright-column scan on several lines); increased .editor padding-left from 25px to 27px. This single fix dropped RMSE from 0.159 to 0.0754 — confirms text-edge misalignment was the dominant error source, not color/wallpaper.",
+    "Iteration 3: measured window glass-morphism glow (left pink radial, top-right blue radial) via blank-margin row sampling — render was systematically brighter/more saturated than reference (left margin +9 to +28 luminance). Reduced .win background-color opacity 0.5->0.64 darker base, radial glow alphas 0.38/0.22/0.35 -> 0.22/0.14/0.20, and backdrop-filter saturate 1.3 -> 1.05. Left-margin diff dropped to single digits; net RMSE unchanged (background strip is a small fraction of frame) but structurally more correct.",
+    "Iteration 4: attempted to re-derive wall-left/wall-bottom gradient stops directly from measured reference pixel columns/rows; this improved point-sample accuracy but raised overall RMSE (0.075->0.082) because the true photo has a much sharper corner falloff than a simple mask retune could capture — reverted wall-left/wall-bottom to the original draft's gradients, confirmed RMSE back at 0.0754."
+  ]
+}

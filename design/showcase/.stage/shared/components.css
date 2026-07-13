@@ -1,0 +1,429 @@
+/* Shared mockup components mapping 1:1 to Rust component boundaries.
+ *
+ * CSS component            Rust boundary
+ * .sk-window               main window shell (main_sections/render_impl.rs)
+ * .sk-context-zone         main_view_chrome context zone (HeaderInfoBarTokens)
+ * .sk-search-shell         main-view filter input (MainMenuSearchTokens, panel.rs caret)
+ * .sk-list-row             list_item::ListItem (MainMenuRowTokens + resolved fills)
+ * .sk-section-slot/header  render_section_header (MainMenuListTokens)
+ * .sk-footer-host/rail     native footer host + footer_chrome rail (FooterMetricsTokens)
+ * .sk-keycap               footer keycap renderer
+ *
+ * RULES (enforced by design/mockups/tests/lint-mockups.mjs):
+ * - No literal colors, px sizes, radii, gaps, opacities, or font sizes here.
+ *   Every visual value must come from a generated `--sk-*` custom property
+ *   (design/mockups/generated/tokens.css).
+ * - Browser-only calibration lives in `--sk-emulator-*` variables, declared
+ *   in the screen stylesheet, never mapped back to Rust.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+/* ── Window shell: material → tint → effect → content ─────────────────── */
+.sk-window {
+  position: relative;
+  width: var(--sk-window-main-width);
+  height: var(--sk-window-main-height);
+  border-radius: var(--sk-window-radius);
+  overflow: clip;
+  isolation: isolate;
+  font-family: var(--sk-font-ui), -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.sk-window__material,
+.sk-window__tint,
+.sk-window__effect {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sk-window__material {
+  z-index: 0;
+  /* Browser approximation of NSVisualEffectView menu material — the blur
+   * radius and material bias are emulator-only calibration values. */
+  -webkit-backdrop-filter: saturate(var(--sk-vibrancy-backdrop-saturation))
+    blur(var(--sk-emulator-menu-blur));
+  backdrop-filter: saturate(var(--sk-vibrancy-backdrop-saturation))
+    blur(var(--sk-emulator-menu-blur));
+  background: var(--sk-emulator-menu-material-bias);
+}
+
+.sk-window__tint {
+  z-index: 1;
+  background: var(--sk-window-vibrancy-tint);
+}
+
+.sk-window__effect {
+  z-index: 2;
+}
+
+.sk-window__content {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--sk-text-name);
+}
+
+/* ── Context zone (info bar) ──────────────────────────────────────────── */
+/* Header padding is the SHELL header padding (2px), not the content inset;
+ * the context row then outsets a further 8px (render_main_view_header_with_
+ * context_outset), and the search text inset is measured inside the header. */
+.sk-header {
+  padding-inline: var(--sk-main-menu-header-padding-x);
+  padding-block: var(--sk-main-menu-header-padding-y);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sk-main-menu-header-gap);
+}
+
+.sk-context-zone {
+  height: var(--sk-main-menu-context-height);
+  margin-inline: calc(-1 * var(--sk-main-menu-context-edge-outset-x));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--sk-font-mono), ui-monospace, monospace;
+  font-size: var(--sk-main-menu-context-font-size);
+  color: var(--sk-color-text-primary);
+}
+
+/* Chip anatomy mirrors render_main_view_context_zone_required: the label AND
+ * its keycap sit inside a key-opacity wrapper, and the chip text carries the
+ * zone opacity — so content lands at opacity × key_opacity (very dim). */
+.sk-context-zone .sk-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sk-main-menu-context-gap);
+  padding-inline: var(--sk-main-menu-context-pill-padding-x);
+  border-radius: var(--sk-main-menu-context-pill-radius);
+  opacity: calc(
+    var(--sk-main-menu-context-opacity) * var(--sk-main-menu-context-key-opacity)
+  );
+}
+
+.sk-context-key {
+  min-width: var(--sk-main-menu-context-keycap-height);
+  height: var(--sk-main-menu-context-keycap-height);
+  padding-inline: var(--sk-footer-keycap-padding-x);
+  border: var(--sk-window-divider-height) solid var(--sk-footer-keycap-border);
+  border-radius: var(--sk-footer-keycap-radius);
+  display: inline-grid;
+  place-items: center;
+  font-size: var(--sk-main-menu-context-keycap-font-size);
+  line-height: 1;
+}
+
+/* ── Search shell ─────────────────────────────────────────────────────── */
+.sk-search-shell {
+  position: relative;
+  height: var(--sk-main-menu-search-height);
+  display: flex;
+  align-items: center;
+  padding-left: var(--sk-main-menu-search-text-inset-x);
+  padding-right: calc(var(--sk-main-menu-search-text-inset-x) / 2);
+  font-size: var(--sk-main-menu-search-font-size);
+  font-weight: var(--sk-main-menu-search-font-weight);
+}
+
+/* GPUI paints the caret as an overlay at the text origin — it does not
+ * displace the text, so the mockup caret must not take flex space. */
+.sk-search-shell .sk-caret {
+  position: absolute;
+  left: var(--sk-main-menu-search-text-inset-x);
+  top: calc((var(--sk-main-menu-search-height) - var(--sk-caret-height)) / 2);
+  width: var(--sk-caret-width);
+  height: var(--sk-caret-height);
+  background: var(--sk-text-name);
+}
+
+.sk-search-shell .sk-placeholder {
+  color: var(--sk-text-placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sk-divider {
+  height: var(--sk-window-divider-height);
+  background: var(--sk-chrome-divider);
+  flex: none;
+}
+
+/* ── List / sections ──────────────────────────────────────────────────── */
+.sk-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sk-section-slot {
+  width: 100%;
+  height: var(--sk-main-menu-section-slot-height);
+  flex: none;
+}
+
+.sk-section-slot[data-first="true"] {
+  height: var(--sk-main-menu-first-section-slot-height);
+}
+
+.sk-section-header {
+  width: 100%;
+  height: 100%;
+  padding: var(--sk-main-menu-section-padding-top)
+    var(--sk-main-menu-section-padding-x)
+    var(--sk-main-menu-section-padding-bottom);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sk-main-menu-section-gap);
+  color: var(--sk-text-muted);
+  font-size: var(--sk-main-menu-section-font-size);
+  font-weight: var(--sk-main-menu-section-font-weight);
+  line-height: 1;
+  white-space: nowrap;
+  /* The launcher section renderer preserves supplied casing. */
+  text-transform: none;
+}
+
+.sk-section-icon {
+  width: var(--sk-main-menu-section-icon-size);
+  height: var(--sk-main-menu-section-icon-size);
+  flex: none;
+}
+
+.sk-section-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.sk-section-slot[data-first="true"] .sk-section-header {
+  padding-top: var(--sk-main-menu-first-section-padding-top);
+}
+
+.sk-list-row {
+  width: 100%;
+  height: var(--sk-main-menu-row-height);
+  flex: none;
+  padding: var(--sk-main-menu-row-outer-padding-y)
+    var(--sk-main-menu-row-outer-padding-x);
+}
+
+.sk-list-row__surface {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: var(--sk-main-menu-row-inner-padding-y)
+    var(--sk-main-menu-row-inner-padding-x);
+  border-radius: var(--sk-main-menu-row-radius);
+  display: flex;
+  align-items: center;
+  gap: var(--sk-main-menu-row-icon-text-gap);
+}
+
+.sk-list-row[data-state="selected"] .sk-list-row__surface {
+  background: var(--sk-main-menu-row-selected-background);
+}
+
+.sk-list-row[data-state="hover"] .sk-list-row__surface {
+  background: var(--sk-main-menu-row-hover-background);
+}
+
+.sk-list-row__icon {
+  width: var(--sk-main-menu-icon-container-size);
+  height: var(--sk-main-menu-icon-container-size);
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--sk-text-icon);
+}
+
+.sk-list-row[data-state="selected"] .sk-list-row__icon {
+  color: var(--sk-color-text-primary);
+}
+
+.sk-list-row__icon svg {
+  width: var(--sk-main-menu-icon-svg-size);
+  height: var(--sk-main-menu-icon-svg-size);
+}
+
+.sk-list-row__icon-tile {
+  width: var(--sk-main-menu-icon-tile-size);
+  height: var(--sk-main-menu-icon-tile-size);
+  flex: none;
+  border-radius: var(--sk-main-menu-icon-tile-radius);
+  display: grid;
+  place-items: center;
+  background: var(--sk-main-menu-icon-tile-background);
+  color: var(--sk-color-text-on-accent);
+}
+
+.sk-list-row__icon-tile svg {
+  width: var(--sk-main-menu-icon-svg-size);
+  height: var(--sk-main-menu-icon-svg-size);
+}
+
+.sk-list-row__copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sk-main-menu-row-name-description-gap);
+}
+
+.sk-list-row__name,
+.sk-list-row__description {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sk-list-row__name {
+  color: var(--sk-text-name);
+  font-size: var(--sk-main-menu-name-font-size);
+  font-weight: var(--sk-main-menu-name-font-weight);
+  line-height: var(--sk-main-menu-name-line-height);
+}
+
+.sk-list-row[data-state="selected"] .sk-list-row__name {
+  font-weight: var(--sk-main-menu-selected-name-font-weight);
+}
+
+/* Progressive disclosure: descriptions paint on the selected row. */
+.sk-list-row__description {
+  display: none;
+  color: var(--sk-text-muted);
+  font-size: var(--sk-main-menu-description-font-size);
+  line-height: var(--sk-main-menu-description-line-height);
+}
+
+.sk-list-row[data-state="selected"] .sk-list-row__description {
+  display: block;
+}
+
+/* ── Compact search text (text_input::render_compact_search_text) ─────── */
+/* Structural anatomy only: the caret overlays the text origin without
+ * consuming flex space (GPUI renders it as a zero-width relative box).
+ * Hosts supply font size, heights and colors via descendant rules. */
+.sk-compact-search-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  overflow: hidden;
+}
+
+.sk-compact-search-text__caret {
+  position: relative;
+  width: 0;
+  flex: none;
+}
+
+/* Hosts alias the private --sk-compact-caret-* hooks to their generated
+ * tokens (e.g. the actions screen maps them to --sk-actions-dialog-caret-*).
+ * The shared rule stays host-neutral. */
+.sk-compact-search-text__caret::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--sk-compact-caret-width) / 2);
+  top: calc(-1 * var(--sk-compact-caret-height) / 2);
+  width: var(--sk-compact-caret-width);
+  height: var(--sk-compact-caret-height);
+  border-radius: calc(var(--sk-compact-caret-width) / 2);
+  background: var(--sk-compact-caret-color);
+}
+
+.sk-compact-search-text__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Shortcut keycap cluster (footer_chrome row shortcut renderer) ─────── */
+/* One .sk-keycap child per symbol (⌘⇧K = three boxes), footer content gap
+ * between them, pushed to the row's trailing edge. */
+.sk-shortcut-cluster {
+  display: flex;
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sk-footer-content-gap);
+  margin-left: auto;
+}
+
+/* ── Footer: native host reserves 36, rail paints 32 inside ───────────── */
+.sk-footer-host {
+  width: 100%;
+  height: var(--sk-window-native-footer-host-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.sk-footer-rail {
+  width: 100%;
+  height: 100%;
+  padding-inline: var(--sk-footer-side-inset);
+  display: flex;
+  align-items: center;
+  gap: var(--sk-footer-item-gap);
+  border-top: var(--sk-window-divider-height) solid var(--sk-footer-divider);
+}
+
+.sk-footer-spacer {
+  flex: 1 1 auto;
+}
+
+/* Universal footer buttons HUG their content (slot widths are max bounds
+ * only — render_universal_footer_action_buttons). Never set min-width. */
+.sk-footer-action {
+  height: var(--sk-footer-button-height);
+  max-width: var(--sk-footer-run-max-width);
+  flex: none;
+  border: none;
+  border-radius: var(--sk-footer-button-radius);
+  padding-block: var(--sk-footer-button-padding-y);
+  padding-inline: var(--sk-footer-centered-edge-padding-x);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sk-footer-content-gap);
+  background: transparent;
+  color: var(--sk-footer-text);
+  font: inherit;
+}
+
+/* Native footer focus: the focused action (Tab-cycled, Enter-resolved)
+ * paints the shared footer active fill. */
+.sk-footer-action[data-selected="true"] {
+  background: var(--sk-footer-button-active);
+}
+
+.sk-footer-label {
+  white-space: nowrap;
+  font-size: var(--sk-footer-label-font-size);
+}
+
+.sk-keycap {
+  min-width: var(--sk-footer-keycap-height);
+  height: var(--sk-footer-keycap-height);
+  padding-inline: var(--sk-footer-keycap-padding-x);
+  border: var(--sk-window-divider-height) solid var(--sk-footer-keycap-border);
+  border-radius: var(--sk-footer-keycap-radius);
+  display: grid;
+  place-items: center;
+  color: var(--sk-footer-text);
+  font-size: var(--sk-footer-keycap-font-size);
+  line-height: 1;
+}

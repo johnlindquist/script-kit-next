@@ -1,0 +1,12 @@
+{
+  "id": "04-clipboard-history",
+  "sceneSize": [838, 570],
+  "rmse": 0.1556,
+  "divergences": [
+    "Wallpaper is approximated with layered CSS radial/linear gradients; the reference wallpaper has hard-edged geometric facets (e.g. the blue/navy diagonal boundary at the top-right corner and a diagonal gray/black band along the bottom edge) that a small set of soft radial blobs cannot reproduce exactly — this is documented photographic/geometric wallpaper detail, not a layout or token bug.",
+    "Global tone check: full-image mean/stddev per RGB channel are within ~1-4/255 of the reference (render mean [50.9,32.7,77.5] vs ref [49.3,34.8,73.7]), confirming there is no systematic exposure/hue bias left to correct — the residual RMSE is spatial/textural (font antialiasing differences between Chromium's text rasterizer and the reference capture's renderer, JPEG compression blocking, and wallpaper facet/texture detail), consistent with the brief's documented plateau allowance.",
+    "Tuned the 'seen only through the vibrancy blur' desktop fields (list-pane, header, footer, and top-right preview fields) three times to reduce excess purple/magenta saturation vs. the reference's cooler, darker interior tones; local pixel sampling confirms these regions are now materially closer to the reference (e.g. list-pane background at x=700 improved from render(45,26,76)/ref(28,27,71) to render(31,19,74)/ref(28,27,71)), even though the aggregate RMSE metric barely moved because it is dominated by the pervasive high-frequency noise described above.",
+    "Preview-pane background and the outside-window right/top-left wallpaper strips already matched closely from the initial draft and were left unchanged."
+  ],
+  "iterations": 4
+}

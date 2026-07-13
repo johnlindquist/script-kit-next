@@ -1,0 +1,13 @@
+{
+  "id": "19-references",
+  "sceneSize": [787, 168],
+  "rmse": 0.1767,
+  "divergences": [
+    "Transcribed text already matched the reference exactly (## Notes heading, the three-line clipboard/day-page paragraph, and the 00:05 [Clipboard entry](kit://clipboard-history?id=...) link line); no content changes were needed there, contrary to the stale task description.",
+    "Fixed a real structural bug: the previous draft's .wp-blob painted a dark maroon radial curl hugging the top-right corner of the wallpaper sliver. Pixel sampling of the reference shows the top-right corner is in fact the single brightest point in the whole wallpaper (no dark blob at all) — replaced the 3-layer wallpaper (base + wp-band + wp-blob) with one linear-gradient(119.5deg, ...) fitted to the measured diagonal band (centerline regression: slope dy/dx=-1.77 in 2x px, i.e. ~29.5deg off vertical, not the previous 26.57deg guess), verified by least-squares projection bucketing of the reference pixels onto the band's cross-axis.",
+    "Recalibrated the window's bottom-left 'warm dim wash' radial: the old ellipse was centered/sized so its effect had already faded to fully transparent by the time it reached the visible frame (measured zero effect at y=100..115 logical where the reference clearly shows warming). Repositioned/resized so the ramp starts near zero at the top edge and reaches full strength by the bottom edge, matching sampled deltas from the base gradient at x=0 (y=0: ~0 delta -> y=320(2x): ~(-21,+4,-33) delta).",
+    "Slightly reduced the bottom-right 'purple ramp' radial opacity (0.95/0.5 -> 0.8/0.28) since it was measurably ~20-25/255 too strong versus the reference mid-right band.",
+    "Remaining residual RMSE is dominated by text-row font rendering, not structure/color: measured mean abs per-pixel diff is ~21/255 on text-glyph rows vs ~7/255 on blank/background-only rows (3x higher), even though transcribed text, line pitch, and per-line rightmost-glyph x-position all match the reference almost exactly (e.g. line-end x differs by only 1px at 2x scale). This is consistent with anti-aliasing/hinting differences between the headless-Chromium JetBrains Mono rasterization used here and whatever produced the original JPG capture, compounded by JPEG compression noise around high-contrast glyph edges -- the class of residual the brief explicitly allows as a plateau."
+  ],
+  "iterations": 4
+}

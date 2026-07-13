@@ -1,0 +1,11 @@
+{
+  "id": "20-brain-inbox",
+  "sceneSize": [838, 570],
+  "rmse": 0.0983,
+  "divergences": [
+    "Desktop wallpaper is a CSS gradient approximation of the photographic capture; exact hue/luminance per-pixel values diverge, especially in the saturated purple/magenta corners.",
+    "Window vibrancy (backdrop-filter blur) samples the CSS-gradient backdrop instead of the true photo, so the window's left edge (closest to the brightest wallpaper region) shows a larger per-pixel color delta than the plain right side of the window.",
+    "List-row icons are inline-SVG Lucide-style approximations; glyph stroke placement/antialiasing differs slightly from the reference's rendered icon font, producing small local diffs inside icon tiles (e.g. the yellow inbox icon on the selected 'dash' row)."
+  ],
+  "iterations": 1
+}

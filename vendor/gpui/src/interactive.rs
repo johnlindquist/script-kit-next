@@ -95,6 +95,29 @@ pub enum TouchPhase {
     Ended,
 }
 
+/// Lossless lifecycle phase for precise scroll gestures.
+///
+/// Direct finger scrolling and momentum scrolling have independent phase
+/// streams on macOS, so [`ScrollWheelEvent`] carries one value for each.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ScrollPhase {
+    #[default]
+    /// No lifecycle phase is present on this event.
+    None,
+    /// The platform may begin a direct gesture.
+    MayBegin,
+    /// A direct or momentum gesture began.
+    Began,
+    /// A direct or momentum gesture changed.
+    Changed,
+    /// The direct gesture is active without movement.
+    Stationary,
+    /// The direct or momentum gesture ended normally.
+    Ended,
+    /// The direct or momentum gesture was cancelled.
+    Cancelled,
+}
+
 /// A mouse down event from the platform
 #[derive(Clone, Debug, Default)]
 pub struct MouseDownEvent {
@@ -437,6 +460,15 @@ pub struct ScrollWheelEvent {
 
     /// The phase of the touch event.
     pub touch_phase: TouchPhase,
+
+    /// Direct gesture lifecycle, when the platform exposes it.
+    pub phase: ScrollPhase,
+
+    /// Momentum lifecycle, independent from the direct gesture lifecycle.
+    pub momentum_phase: ScrollPhase,
+
+    /// Native monotonic event timestamp in seconds, when available.
+    pub timestamp_seconds: Option<f64>,
 }
 
 impl Sealed for ScrollWheelEvent {}

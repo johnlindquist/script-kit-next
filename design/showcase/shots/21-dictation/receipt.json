@@ -1,0 +1,11 @@
+{
+  "id": "21-dictation",
+  "sceneSize": [714, 266],
+  "rmse": 0.0583897,
+  "divergences": [
+    "Desktop wallpaper (blurred purple/blue/pink swoosh art) is approximated with layered CSS radial/linear gradients and blurred circle divs; exact photographic gradient banding and the faint blue-tinted rim along the dark swoosh's bottom-right curve are not reproduced pixel-for-pixel. Tried adding an extra radial-gradient rim layer to catch this curve (RMSE 0.0584 -> 0.0602, worse) and reverted it.",
+    "Finder-style icon in the top-right of the pill is an inline-SVG approximation (rounded-square gradient + simplified face glyph), not a pixel match of the real icon's internal shading at this tiny size.",
+    "Minor sub-pixel text kerning/antialiasing differences (e.g. 'Stop' label, keycap glyphs) from browser font rendering vs the reference capture; content strings, keycap set, and order all verified to match exactly (timer '0:07', waveform bars, 'Select Mic' + mic icon, 'Stop' + shift/cmd/semicolon keycaps, 'Cancel' + undo keycap)."
+  ],
+  "iterations": 2
+}

@@ -1,23 +1,24 @@
 #!/usr/bin/env bun
-/** One-off: does the GPUI footer overlay window exist when the spike is on? */
+/** One-off: does the GPUI footer overlay window exist when explicitly enabled? */
 import { join, resolve } from "node:path";
 import { Driver } from "../devtools/driver";
 
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
-const BINARY = join(
-  PROJECT_ROOT,
-  "target-agent/pools/agent-debug/debug/script-kit-gpui",
-);
+const BINARY =
+  process.env.SCRIPT_KIT_GPUI_BINARY ??
+  join(PROJECT_ROOT, "target-agent/pools/agent-debug/debug/script-kit-gpui");
 
 const driver = await Driver.launch({
   binary: BINARY,
   sessionName: "footer-overlay-probe",
   sandboxHome: true,
-  env: { SCRIPT_KIT_GPUI_FOOTER_OVERLAY_SPIKE: "1" },
+  env: { SCRIPT_KIT_GPUI_FOOTER_OVERLAY: "1" },
 });
 try {
   driver.send({ type: "show" });
-  await driver.waitForState({ windowFocused: true }, { timeoutMs: 5000 }).catch(() => {});
+  await driver
+    .waitForState({ windowFocused: true }, { timeoutMs: 5000 })
+    .catch(() => {});
   await Bun.sleep(800);
   const windows = await driver.request(
     { type: "listAutomationWindows" },

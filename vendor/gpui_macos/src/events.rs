@@ -256,13 +256,10 @@ pub(crate) unsafe fn platform_input_from_native(
                 })
             }),
             NSEventType::NSScrollWheel => window_height.map(|window_height| {
-                let phase = match native_event.phase() {
-                    NSEventPhase::NSEventPhaseMayBegin | NSEventPhase::NSEventPhaseBegan => {
-                        TouchPhase::Started
-                    }
-                    NSEventPhase::NSEventPhaseEnded => TouchPhase::Ended,
-                    _ => TouchPhase::Moved,
-                };
+                let direct_phase = map_scroll_phase(native_event.phase());
+                let momentum_phase = map_scroll_phase(native_event.momentumPhase());
+                let phase = legacy_touch_phase(direct_phase);
+                let timestamp_seconds = native_event.timestamp();
 
                 let raw_data = point(
                     native_event.scrollingDeltaX() as f32,
@@ -282,6 +279,9 @@ pub(crate) unsafe fn platform_input_from_native(
                     ),
                     delta,
                     touch_phase: phase,
+                    phase: direct_phase,
+                    momentum_phase,
+                    timestamp_seconds: timestamp_seconds.is_finite().then_some(timestamp_seconds),
                     modifiers: read_modifiers(native_event),
                 })
             }),
@@ -332,6 +332,27 @@ pub(crate) unsafe fn platform_input_from_native(
             }),
             _ => None,
         }
+    }
+}
+
+fn map_scroll_phase(phase: NSEventPhase) -> gpui::ScrollPhase {
+    match phase {
+        NSEventPhase::NSEventPhaseNone => gpui::ScrollPhase::None,
+        NSEventPhase::NSEventPhaseMayBegin => gpui::ScrollPhase::MayBegin,
+        NSEventPhase::NSEventPhaseBegan => gpui::ScrollPhase::Began,
+        NSEventPhase::NSEventPhaseChanged => gpui::ScrollPhase::Changed,
+        NSEventPhase::NSEventPhaseStationary => gpui::ScrollPhase::Stationary,
+        NSEventPhase::NSEventPhaseEnded => gpui::ScrollPhase::Ended,
+        NSEventPhase::NSEventPhaseCancelled => gpui::ScrollPhase::Cancelled,
+        _ => gpui::ScrollPhase::None,
+    }
+}
+
+fn legacy_touch_phase(phase: gpui::ScrollPhase) -> TouchPhase {
+    match phase {
+        gpui::ScrollPhase::MayBegin | gpui::ScrollPhase::Began => TouchPhase::Started,
+        gpui::ScrollPhase::Ended | gpui::ScrollPhase::Cancelled => TouchPhase::Ended,
+        _ => TouchPhase::Moved,
     }
 }
 
@@ -571,4 +592,44 @@ fn chars_for_modified_key(code: CGKeyCode, modifiers: u32) -> String {
         let _: () = msg_send![keyboard, release];
     }
     String::from_utf16(&buffer[..buffer_size]).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod scroll_phase_tests {
+    use super::*;
+
+    #[test]
+    fn maps_every_native_scroll_phase_without_collapsing_lifecycle() {
+        for (native, expected) in [
+            (NSEventPhase::NSEventPhaseNone, gpui::ScrollPhase::None),
+            (
+                NSEventPhase::NSEventPhaseMayBegin,
+                gpui::ScrollPhase::MayBegin,
+            ),
+            (NSEventPhase::NSEventPhaseBegan, gpui::ScrollPhase::Began),
+            (
+                NSEventPhase::NSEventPhaseChanged,
+                gpui::ScrollPhase::Changed,
+            ),
+            (
+                NSEventPhase::NSEventPhaseStationary,
+                gpui::ScrollPhase::Stationary,
+            ),
+            (NSEventPhase::NSEventPhaseEnded, gpui::ScrollPhase::Ended),
+            (
+                NSEventPhase::NSEventPhaseCancelled,
+                gpui::ScrollPhase::Cancelled,
+            ),
+        ] {
+            assert_eq!(map_scroll_phase(native), expected);
+        }
+    }
+
+    #[test]
+    fn legacy_cancelled_phase_is_terminal() {
+        assert_eq!(
+            legacy_touch_phase(gpui::ScrollPhase::Cancelled),
+            TouchPhase::Ended
+        );
+    }
 }

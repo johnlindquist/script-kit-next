@@ -1,0 +1,390 @@
+<meta charset="utf-8">
+<title>Script Kit — Emoji Picker</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+  * { box-sizing: border-box; }
+
+  .scene {
+    position: relative;
+    width: 838px;
+    height: 570px;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  }
+
+  /* ── Desktop wallpaper (CSS approximation of abstract 3D render) ────── */
+  .wallpaper {
+    position: absolute;
+    inset: 0;
+    background:
+      /* orange glow bottom-left */
+      radial-gradient(360px 320px at -3% 100%, rgb(245 160 80 / 1), rgb(195 92 52 / 0.85) 45%, transparent 70%),
+      /* gray ribbon left-middle */
+      radial-gradient(220px 180px at -6% 54%, rgb(148 138 128 / 0.95), rgb(98 90 86 / 0.5) 50%, transparent 72%),
+      /* warm purple left under window */
+      radial-gradient(340px 460px at -2% 44%, rgb(185 82 150 / 0.6), transparent 76%),
+      /* vivid purple top-left */
+      radial-gradient(500px 320px at 4% -4%, rgb(138 40 235 / 1), rgb(105 28 210 / 0.75) 42%, transparent 64%),
+      /* blue top-right corner */
+      radial-gradient(240px 140px at 101% -3%, rgb(42 82 180 / 0.75), rgb(24 46 130 / 0.4) 48%, transparent 70%),
+      /* magenta right edge */
+      radial-gradient(200px 300px at 104% 64%, rgb(200 62 150 / 1), rgb(150 34 155 / 0.6) 50%, transparent 74%),
+      /* magenta bottom-right */
+      radial-gradient(330px 220px at 99% 102%, rgb(180 35 190 / 0.95), transparent 66%),
+      /* dark diagonal band bottom-center */
+      linear-gradient(115deg, transparent 30%, rgb(6 4 30 / 0.9) 48%, rgb(8 4 40 / 0.9) 66%, transparent 82%),
+      /* navy base */
+      linear-gradient(150deg, rgb(30 10 115) 0%, rgb(8 6 76) 26%, rgb(8 8 64) 55%, rgb(10 4 46) 100%);
+  }
+
+  /* dark sweeping curves in lower half */
+  .wallpaper::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(700px 340px at 42% 118%, rgb(8 6 40 / 0.9), transparent 70%),
+      radial-gradient(500px 260px at 22% 108%, rgb(20 18 22 / 0.85), transparent 65%);
+  }
+
+  /* ── Window shell: material → tint → content ─────────────────────────── */
+  .sk-window {
+    position: absolute;
+    left: 44px;
+    top: 44.5px;
+    width: 748.5px;
+    height: 480.5px;
+    border-radius: 15px;
+    overflow: clip;
+    isolation: isolate;
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.22) inset,
+      0 25px 60px rgb(0 0 0 / 0.55),
+      0 6px 20px rgb(0 0 0 / 0.35);
+  }
+
+  .sk-window__material,
+  .sk-window__tint {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .sk-window__material {
+    z-index: 0;
+    -webkit-backdrop-filter: saturate(1.3) blur(32px);
+    backdrop-filter: saturate(1.3) blur(32px);
+    background: linear-gradient(rgb(58 56 92 / 0.5), rgb(56 54 84 / 0.5));
+  }
+
+  .sk-window__tint {
+    z-index: 1;
+    background: var(--sk-window-vibrancy-tint);
+  }
+
+  .sk-window__content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    color: var(--sk-text-name);
+  }
+
+  /* ── Header: context row + search ────────────────────────────────────── */
+  .header {
+    flex: none;
+    padding: 4px 16px 0;
+  }
+
+  .context-row {
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10.5px;
+    color: rgb(255 255 255 / 0.42);
+  }
+
+  .context-left, .context-right {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .chip-btn {
+    width: 20px;
+    height: 20px;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    color: rgb(255 255 255 / 0.45);
+  }
+
+  .chip-btn svg { width: 12px; height: 12px; display: block; }
+
+  .search-row {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .search-left {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding-left: 4px;
+    font-size: 17px;
+    font-weight: var(--sk-main-menu-search-font-weight);
+  }
+
+  .caret {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2.5px;
+    height: 21px;
+    background: #fff;
+  }
+
+  .placeholder {
+    color: rgb(255 255 255 / 0.44);
+    white-space: nowrap;
+  }
+
+  .count {
+    font-size: 14px;
+    color: rgb(255 255 255 / 0.62);
+    padding-right: 3px;
+  }
+
+  /* ── Section header ───────────────────────────────────────────────────── */
+  .section-row {
+    flex: none;
+    height: 30px;
+    margin-top: 11.5px;
+    padding: 0 17px 0 17px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #fff;
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
+  .section-count { font-weight: 500; padding-right: 7px; }
+
+  /* ── Emoji grid ───────────────────────────────────────────────────────── */
+  .grid {
+    flex: none;
+    margin-top: 11.5px;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .grid-row {
+    height: 48px;
+    flex: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .cell {
+    width: 36px;
+    height: 36px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    font-size: 28px;
+    line-height: 1;
+    font-family: "Apple Color Emoji", sans-serif;
+  }
+
+  .cell[data-selected="true"] {
+    background: var(--sk-theme-selection-background);
+    box-shadow: 0 0 0 1px rgb(215 165 90 / 0.75);
+  }
+
+  /* ── Footer ───────────────────────────────────────────────────────────── */
+  .footer {
+    margin-top: auto;
+    flex: none;
+    height: 32px;
+    border-top: 1px solid rgb(255 255 255 / 0.09);
+    background: rgb(255 255 255 / 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-inline: var(--sk-footer-side-inset);
+    gap: 2px;
+  }
+
+  .footer-action {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-inline: 7px;
+    color: var(--sk-footer-text);
+    font-size: 12.5px;
+  }
+
+  .footer-gap { width: 14px; }
+
+  .keycap {
+    min-width: 20px;
+    height: 20px;
+    padding-inline: 2px;
+    border: 1px solid var(--sk-footer-keycap-border);
+    border-radius: var(--sk-footer-keycap-radius);
+    display: grid;
+    place-items: center;
+    color: var(--sk-footer-text);
+    font-size: var(--sk-footer-keycap-font-size);
+    line-height: 1;
+  }
+
+  .keycap svg { width: 11px; height: 11px; display: block; }
+</style>
+<div class="scene">
+  <div class="wallpaper"></div>
+  <div class="sk-window">
+    <div class="sk-window__material"></div>
+    <div class="sk-window__tint"></div>
+    <div class="sk-window__content">
+      <div class="header">
+        <div class="context-row">
+          <div class="context-left">
+            <span>~/.scriptkit</span>
+            <span class="chip-btn">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.5 8h8.5M8.5 5.5 11 8l-2.5 2.5M13.5 4.5v7"/>
+              </svg>
+            </span>
+          </div>
+          <div class="context-right">
+            <span>Script Kit &middot; GPT-5.5</span>
+            <span class="chip-btn">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3.2 4.2 7h2.3v3.5h3V7h2.3L8 3.2Z"/>
+              </svg>
+            </span>
+            <span class="chip-btn">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.5 8h8.5M8.5 5.5 11 8l-2.5 2.5M13.5 4.5v7"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="search-row">
+          <div class="search-left">
+            <span class="caret"></span>
+            <span class="placeholder">Search Emoji &amp; Symbols...</span>
+          </div>
+          <span class="count">296 emojis</span>
+        </div>
+      </div>
+      <div class="section-row">
+        <span>Smileys &amp; Emotion</span>
+        <span class="section-count">97</span>
+      </div>
+      <div class="grid">
+        <div class="grid-row">
+          <span class="cell" data-selected="true">&#x1F600;</span>
+          <span class="cell">&#x1F603;</span>
+          <span class="cell">&#x1F604;</span>
+          <span class="cell">&#x1F601;</span>
+          <span class="cell">&#x1F606;</span>
+          <span class="cell">&#x1F605;</span>
+          <span class="cell">&#x1F602;</span>
+          <span class="cell">&#x1F923;</span>
+        </div>
+        <div class="grid-row">
+          <span class="cell">&#x1F60A;</span>
+          <span class="cell">&#x1F607;</span>
+          <span class="cell">&#x1F642;</span>
+          <span class="cell">&#x1F643;</span>
+          <span class="cell">&#x1F609;</span>
+          <span class="cell">&#x1F60C;</span>
+          <span class="cell">&#x1F60D;</span>
+          <span class="cell">&#x1F970;</span>
+        </div>
+        <div class="grid-row">
+          <span class="cell">&#x1F618;</span>
+          <span class="cell">&#x1F617;</span>
+          <span class="cell">&#x1F619;</span>
+          <span class="cell">&#x1F61A;</span>
+          <span class="cell">&#x1F60B;</span>
+          <span class="cell">&#x1F61B;</span>
+          <span class="cell">&#x1F61C;</span>
+          <span class="cell">&#x1F92A;</span>
+        </div>
+        <div class="grid-row">
+          <span class="cell">&#x1F61D;</span>
+          <span class="cell">&#x1F911;</span>
+          <span class="cell">&#x1F917;</span>
+          <span class="cell">&#x1F92D;</span>
+          <span class="cell">&#x1F92B;</span>
+          <span class="cell">&#x1F914;</span>
+          <span class="cell">&#x1F910;</span>
+          <span class="cell">&#x1F928;</span>
+        </div>
+        <div class="grid-row">
+          <span class="cell">&#x1F610;</span>
+          <span class="cell">&#x1F611;</span>
+          <span class="cell">&#x1F636;</span>
+          <span class="cell">&#x1F60F;</span>
+          <span class="cell">&#x1F612;</span>
+          <span class="cell">&#x1F644;</span>
+          <span class="cell">&#x1F62C;</span>
+          <span class="cell">&#x1F62E;</span>
+        </div>
+        <div class="grid-row">
+          <span class="cell">&#x1F62F;</span>
+          <span class="cell">&#x1F632;</span>
+          <span class="cell">&#x1F633;</span>
+          <span class="cell">&#x1F97A;</span>
+          <span class="cell">&#x1F622;</span>
+          <span class="cell">&#x1F62D;</span>
+          <span class="cell">&#x1F624;</span>
+          <span class="cell">&#x1F620;</span>
+        </div>
+        <div class="grid-row">
+          <span class="cell">&#x1F621;</span>
+          <span class="cell">&#x1F92C;</span>
+          <span class="cell">&#x1F631;</span>
+          <span class="cell">&#x1F628;</span>
+          <span class="cell">&#x1F630;</span>
+          <span class="cell">&#x1F625;</span>
+          <span class="cell">&#x1F613;</span>
+          <span class="cell">&#x1F92F;</span>
+        </div>
+      </div>
+      <div class="footer">
+        <div class="footer-action">
+          <span>Paste into Finder</span>
+          <span class="keycap">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12.5 4v4.5H4M6.5 6 4 8.5 6.5 11"/>
+            </svg>
+          </span>
+        </div>
+        <div class="footer-gap"></div>
+        <div class="footer-action">
+          <span>Actions</span>
+          <span class="keycap">&#x2318;</span>
+          <span class="keycap">K</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="../../shared/fit.js"></script>

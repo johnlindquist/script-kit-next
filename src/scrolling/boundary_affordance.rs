@@ -5,12 +5,22 @@
 //! schedules the watchdog/rebound work requested by [`BoundaryDecision`], and
 //! guards each async update with the generation helpers below.
 
-use std::time::{Duration, Instant};
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
 
 const RAW_PULL_CAP_MULTIPLIER: f32 = 3.0;
 const INVERSE_RESISTANCE_RATIO_LIMIT: f32 = 0.999;
-const SETTLE_DECAY: f32 = 6.0;
 const SETTLE_ZERO_EPSILON_PX: f32 = 0.1;
+const SETTLE_VELOCITY_EPSILON_PX_PER_SECOND: f32 = 4.0;
+const VELOCITY_STALE_AFTER: Duration = Duration::from_millis(100);
+const VELOCITY_MIN_INTERVAL_SECONDS: f64 = 0.001;
+const VELOCITY_WINDOW_SECONDS: f64 = 0.048;
+const VELOCITY_SAMPLE_CAPACITY: usize = 8;
+const SPRING_OMEGA_PER_SECOND: f32 = 26.0;
+const REBOUND_HARD_DEADLINE: Duration = Duration::from_millis(320);
+const TRACE_SAMPLE_CAPACITY: usize = 128;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BoundaryEdge {
@@ -73,7 +83,9 @@ impl PreciseTouchPhase {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SettleReason {
     Ended,
-    IdleTimeout,
+    Cancelled,
+    MomentumBeganImplicitRelease,
+    MissingTerminalWatchdog,
     ReducedMotion,
     Reset,
 }
@@ -82,10 +94,42 @@ impl SettleReason {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Ended => "ended",
-            Self::IdleTimeout => "idleTimeout",
+            Self::Cancelled => "cancelled",
+            Self::MomentumBeganImplicitRelease => "momentumBeganImplicitRelease",
+            Self::MissingTerminalWatchdog => "missingTerminalWatchdog",
             Self::ReducedMotion => "reducedMotion",
             Self::Reset => "reset",
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum ScrollLifecyclePhase {
+    #[default]
+    None,
+    MayBegin,
+    Began,
+    Changed,
+    Stationary,
+    Ended,
+    Cancelled,
+}
+
+impl ScrollLifecyclePhase {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::MayBegin => "mayBegin",
+            Self::Began => "began",
+            Self::Changed => "changed",
+            Self::Stationary => "stationary",
+            Self::Ended => "ended",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
+    const fn is_terminal(self) -> bool {
+        matches!(self, Self::Ended | Self::Cancelled)
     }
 }
 
@@ -155,16 +199,24 @@ impl BoundaryAffordanceTuning {
     fn raw_pull_cap_px(self) -> f32 {
         self.normalized_resistance_px() * RAW_PULL_CAP_MULTIPLIER
     }
+
+    pub(crate) const fn spring_omega_per_second(self) -> f32 {
+        SPRING_OMEGA_PER_SECOND
+    }
+
+    pub(crate) const fn rebound_hard_deadline(self) -> Duration {
+        REBOUND_HARD_DEADLINE
+    }
 }
 
 impl Default for BoundaryAffordanceTuning {
     fn default() -> Self {
         Self::new(
-            18.0,
             36.0,
-            Duration::from_millis(180),
-            Duration::from_millis(160),
-            4.0,
+            44.0,
+            REBOUND_HARD_DEADLINE,
+            Duration::from_millis(300),
+            3.0,
         )
     }
 }
@@ -189,6 +241,40 @@ pub(crate) enum IdleWatchdogStatus {
     TimedOut,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ElasticTraceKind {
+    Input,
+    ReboundFrame,
+    Reset,
+}
+
+impl ElasticTraceKind {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Input => "input",
+            Self::ReboundFrame => "reboundFrame",
+            Self::Reset => "reset",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ElasticTraceSample {
+    pub kind: ElasticTraceKind,
+    pub arrival_elapsed_ms: f64,
+    pub native_timestamp_seconds: Option<f64>,
+    pub direct_phase: ScrollLifecyclePhase,
+    pub momentum_phase: ScrollLifecyclePhase,
+    pub delta_y: f32,
+    pub raw_pull_px: f32,
+    pub offset_px: f32,
+    pub velocity_px_per_second: f32,
+    pub boundary_phase: BoundaryPhase,
+    pub generation: u64,
+    pub rendered_frame_generation: u64,
+    pub last_rebound_elapsed_ms: f64,
+}
+
 #[derive(Debug)]
 pub(crate) struct BoundaryAffordanceState {
     pub offset_px: f32,
@@ -199,8 +285,32 @@ pub(crate) struct BoundaryAffordanceState {
     pub last_touch_phase: Option<PreciseTouchPhase>,
     pub last_settle_reason: Option<SettleReason>,
     pub reduced_motion: bool,
+    pub visual_velocity_px_per_second: f32,
+    pub last_native_timestamp_seconds: Option<f64>,
+    pub last_direct_phase: ScrollLifecyclePhase,
+    pub last_momentum_phase: ScrollLifecyclePhase,
+    pub suppress_momentum_until_terminal: bool,
     last_event_at: Option<Instant>,
     idle_watchdog_armed: bool,
+    velocity_samples: VecDeque<VelocitySample>,
+    rebound: Option<ReboundState>,
+    trace_started_at: Option<Instant>,
+    trace_samples: VecDeque<ElasticTraceSample>,
+    pub rendered_frame_generation: u64,
+    pub last_rebound_elapsed_ms: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct VelocitySample {
+    offset_px: f32,
+    observed_at: Instant,
+    native_timestamp_seconds: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ReboundState {
+    initial_offset_px: f32,
+    initial_velocity_px_per_second: f32,
 }
 
 impl Default for BoundaryAffordanceState {
@@ -220,8 +330,19 @@ impl BoundaryAffordanceState {
             last_touch_phase: None,
             last_settle_reason: None,
             reduced_motion,
+            visual_velocity_px_per_second: 0.0,
+            last_native_timestamp_seconds: None,
+            last_direct_phase: ScrollLifecyclePhase::None,
+            last_momentum_phase: ScrollLifecyclePhase::None,
+            suppress_momentum_until_terminal: false,
             last_event_at: None,
             idle_watchdog_armed: false,
+            velocity_samples: VecDeque::new(),
+            rebound: None,
+            trace_started_at: None,
+            trace_samples: VecDeque::new(),
+            rendered_frame_generation: 0,
+            last_rebound_elapsed_ms: 0.0,
         }
     }
 
@@ -254,6 +375,171 @@ impl BoundaryAffordanceState {
         self.advance_generation()
     }
 
+    pub(crate) fn handle_scroll_lifecycle(
+        &mut self,
+        delta_y_px: f32,
+        direct_phase: ScrollLifecyclePhase,
+        momentum_phase: ScrollLifecyclePhase,
+        legacy_phase: PreciseTouchPhase,
+        eligibility: BoundaryEligibility,
+        tuning: BoundaryAffordanceTuning,
+        reduced_motion: bool,
+        now: Instant,
+        native_timestamp_seconds: Option<f64>,
+    ) -> BoundaryDecision {
+        let decision = self.handle_scroll_lifecycle_inner(
+            delta_y_px,
+            direct_phase,
+            momentum_phase,
+            legacy_phase,
+            eligibility,
+            tuning,
+            reduced_motion,
+            now,
+            native_timestamp_seconds,
+        );
+        self.record_trace_sample(ElasticTraceKind::Input, delta_y_px, now);
+        decision
+    }
+
+    fn handle_scroll_lifecycle_inner(
+        &mut self,
+        delta_y_px: f32,
+        direct_phase: ScrollLifecyclePhase,
+        momentum_phase: ScrollLifecyclePhase,
+        legacy_phase: PreciseTouchPhase,
+        eligibility: BoundaryEligibility,
+        tuning: BoundaryAffordanceTuning,
+        reduced_motion: bool,
+        now: Instant,
+        native_timestamp_seconds: Option<f64>,
+    ) -> BoundaryDecision {
+        self.last_direct_phase = direct_phase;
+        self.last_momentum_phase = momentum_phase;
+        self.last_native_timestamp_seconds =
+            native_timestamp_seconds.filter(|value| value.is_finite());
+        if native_timestamp_seconds.is_some_and(|value| !value.is_finite()) {
+            self.velocity_samples.clear();
+            self.visual_velocity_px_per_second = 0.0;
+        }
+
+        if direct_phase != ScrollLifecyclePhase::None {
+            return match direct_phase {
+                ScrollLifecyclePhase::MayBegin | ScrollLifecyclePhase::Began => {
+                    self.suppress_momentum_until_terminal = false;
+                    self.handle_precise_scroll(
+                        delta_y_px,
+                        PreciseTouchPhase::Started,
+                        eligibility,
+                        tuning,
+                        reduced_motion,
+                        now,
+                        native_timestamp_seconds,
+                    )
+                }
+                ScrollLifecyclePhase::Changed => {
+                    self.suppress_momentum_until_terminal = false;
+                    self.handle_precise_scroll(
+                        delta_y_px,
+                        PreciseTouchPhase::Moved,
+                        eligibility,
+                        tuning,
+                        reduced_motion,
+                        now,
+                        native_timestamp_seconds,
+                    )
+                }
+                ScrollLifecyclePhase::Stationary => BoundaryDecision {
+                    residual_delta_y_px: 0.0,
+                    ..BoundaryDecision::default()
+                },
+                ScrollLifecyclePhase::Ended | ScrollLifecyclePhase::Cancelled => {
+                    self.last_touch_phase = Some(PreciseTouchPhase::Ended);
+                    let reason = if direct_phase == ScrollLifecyclePhase::Cancelled {
+                        SettleReason::Cancelled
+                    } else {
+                        SettleReason::Ended
+                    };
+
+                    // A terminal direct event owns the following momentum tail
+                    // only when it releases a real elastic boundary capture.
+                    // Interior releases must leave native fling deltas unowned.
+                    if self.phase == BoundaryPhase::Settling
+                        || self.suppress_momentum_until_terminal
+                    {
+                        return BoundaryDecision::default();
+                    }
+                    if !self.has_releasable_elastic_capture() {
+                        self.finish_at_zero(reason);
+                        return BoundaryDecision::default();
+                    }
+
+                    self.age_velocity_for_release(now, native_timestamp_seconds);
+                    if direct_phase == ScrollLifecyclePhase::Cancelled {
+                        self.visual_velocity_px_per_second = 0.0;
+                    }
+                    self.suppress_momentum_until_terminal = true;
+                    let mut decision = self.begin_settle(reason, tuning);
+                    decision.residual_delta_y_px = 0.0;
+                    decision
+                }
+                ScrollLifecyclePhase::None => unreachable!(),
+            };
+        }
+
+        if momentum_phase != ScrollLifecyclePhase::None {
+            if momentum_phase == ScrollLifecyclePhase::Began
+                && self.has_releasable_elastic_capture()
+            {
+                self.age_velocity_for_release(now, native_timestamp_seconds);
+                self.suppress_momentum_until_terminal = true;
+                let mut decision =
+                    self.begin_settle(SettleReason::MomentumBeganImplicitRelease, tuning);
+                decision.residual_delta_y_px = 0.0;
+                return decision;
+            }
+
+            let was_suppressed = self.suppress_momentum_until_terminal;
+            if momentum_phase.is_terminal() {
+                self.suppress_momentum_until_terminal = false;
+            }
+            return BoundaryDecision {
+                residual_delta_y_px: if was_suppressed { 0.0 } else { delta_y_px },
+                ..BoundaryDecision::default()
+            };
+        }
+
+        self.handle_precise_scroll(
+            delta_y_px,
+            legacy_phase,
+            eligibility,
+            tuning,
+            reduced_motion,
+            now,
+            native_timestamp_seconds,
+        )
+    }
+
+    #[inline]
+    fn has_releasable_elastic_capture(&self) -> bool {
+        self.phase == BoundaryPhase::Tracking
+            && self.edge.is_some()
+            && self.offset_px.abs() >= SETTLE_ZERO_EPSILON_PX
+    }
+
+    pub(crate) fn trace_samples(&self) -> impl Iterator<Item = &ElasticTraceSample> {
+        self.trace_samples.iter()
+    }
+
+    pub(crate) fn rebound_initial_offset_px(&self) -> Option<f32> {
+        self.rebound.map(|rebound| rebound.initial_offset_px)
+    }
+
+    pub(crate) fn rebound_initial_velocity_px_per_second(&self) -> Option<f32> {
+        self.rebound
+            .map(|rebound| rebound.initial_velocity_px_per_second)
+    }
+
     /// Consume one precise pixel-scroll event. Positive Y pulls outward at the
     /// top; negative Y pulls outward at the bottom.
     pub(crate) fn handle_precise_scroll(
@@ -264,6 +550,7 @@ impl BoundaryAffordanceState {
         tuning: BoundaryAffordanceTuning,
         reduced_motion: bool,
         now: Instant,
+        native_timestamp_seconds: Option<f64>,
     ) -> BoundaryDecision {
         let before = self.visual_signature();
         let delta_y_px = finite_or_zero(delta_y_px);
@@ -275,6 +562,13 @@ impl BoundaryAffordanceState {
 
         self.reduced_motion = reduced_motion;
         self.last_touch_phase = Some(touch_phase);
+        self.last_native_timestamp_seconds =
+            native_timestamp_seconds.filter(|value| value.is_finite());
+
+        if touch_phase == PreciseTouchPhase::Started {
+            self.visual_velocity_px_per_second = 0.0;
+            self.velocity_samples.clear();
+        }
 
         if self.phase == BoundaryPhase::Settling
             && matches!(
@@ -313,6 +607,10 @@ impl BoundaryAffordanceState {
             if self.phase == BoundaryPhase::Tracking {
                 decision.residual_delta_y_px = self.apply_tracking_delta(delta_y_px, tuning);
 
+                if touch_phase != PreciseTouchPhase::Ended {
+                    self.update_visual_velocity(now, self.last_native_timestamp_seconds);
+                }
+
                 if self.phase == BoundaryPhase::Tracking
                     && touch_phase != PreciseTouchPhase::Ended
                     && !self.idle_watchdog_armed
@@ -337,7 +635,7 @@ impl BoundaryAffordanceState {
     pub(crate) fn begin_settle(
         &mut self,
         reason: SettleReason,
-        _tuning: BoundaryAffordanceTuning,
+        tuning: BoundaryAffordanceTuning,
     ) -> BoundaryDecision {
         let before = self.visual_signature();
         let mut decision = BoundaryDecision::default();
@@ -351,6 +649,17 @@ impl BoundaryAffordanceState {
             self.advance_generation();
             self.phase = BoundaryPhase::Settling;
             self.raw_pull_px = 0.0;
+            let edge_sign = self.edge.map(BoundaryEdge::sign).unwrap_or(1.0);
+            let normalized_offset = (edge_sign * self.offset_px).max(0.0);
+            let velocity_limit = tuning.spring_omega_per_second() * normalized_offset;
+            let normalized_velocity = (edge_sign * self.visual_velocity_px_per_second)
+                .clamp(-velocity_limit, velocity_limit);
+            self.visual_velocity_px_per_second = edge_sign * normalized_velocity;
+            self.rebound = Some(ReboundState {
+                initial_offset_px: self.offset_px,
+                initial_velocity_px_per_second: self.visual_velocity_px_per_second,
+            });
+            self.last_rebound_elapsed_ms = 0.0;
             self.last_settle_reason = Some(reason);
             self.last_event_at = None;
             self.idle_watchdog_armed = false;
@@ -396,31 +705,62 @@ impl BoundaryAffordanceState {
         {
             return BoundaryDecision::default();
         }
-        self.begin_settle(SettleReason::IdleTimeout, tuning)
+        self.begin_settle(SettleReason::MissingTerminalWatchdog, tuning)
     }
 
-    /// Apply one normalized rebound sample. A stale task cannot mutate state.
+    /// Apply one analytic critically damped rebound sample. A stale task cannot mutate state.
     /// The accepted terminal sample always produces exact zero/idle state.
     pub(crate) fn apply_settle_sample(
         &mut self,
         captured_generation: u64,
-        starting_offset_px: f32,
-        normalized_elapsed: f32,
+        elapsed: Duration,
+        tuning: BoundaryAffordanceTuning,
     ) -> bool {
         if !self.settling_generation_is_current(captured_generation) {
             return false;
         }
+        self.last_rebound_elapsed_ms = elapsed.as_secs_f64() * 1000.0;
 
-        let next = settled_offset(starting_offset_px, normalized_elapsed);
-        if next == 0.0 {
+        if elapsed >= tuning.rebound_hard_deadline() {
+            self.finish_at_zero_preserving_generation();
+            self.rendered_frame_generation = self.rendered_frame_generation.wrapping_add(1);
+            self.record_trace_sample(ElasticTraceKind::ReboundFrame, 0.0, Instant::now());
+            return true;
+        }
+
+        let Some(rebound) = self.rebound else {
+            self.finish_at_zero_preserving_generation();
+            return true;
+        };
+        let (next, velocity) = critically_damped_rebound(
+            rebound.initial_offset_px,
+            rebound.initial_velocity_px_per_second,
+            elapsed,
+            tuning.spring_omega_per_second(),
+        );
+        let crossed_zero = rebound.initial_offset_px.signum() != next.signum();
+        if crossed_zero
+            || (next.abs() < SETTLE_ZERO_EPSILON_PX
+                && velocity.abs() < SETTLE_VELOCITY_EPSILON_PX_PER_SECOND)
+        {
             self.finish_at_zero_preserving_generation();
         } else {
             let Some(edge) = self.edge else {
                 self.finish_at_zero_preserving_generation();
                 return true;
             };
-            self.offset_px = edge.sign() * next.abs();
+            let max_distance = tuning.active_max_distance_px(self.reduced_motion);
+            let bounded_magnitude = next.abs().min(max_distance);
+            self.offset_px = edge.sign() * bounded_magnitude;
+            self.visual_velocity_px_per_second =
+                if next.abs() > max_distance && velocity.signum() == next.signum() {
+                    0.0
+                } else {
+                    velocity
+                };
         }
+        self.rendered_frame_generation = self.rendered_frame_generation.wrapping_add(1);
+        self.record_trace_sample(ElasticTraceKind::ReboundFrame, 0.0, Instant::now());
         true
     }
 
@@ -436,7 +776,9 @@ impl BoundaryAffordanceState {
     pub(crate) fn reset(&mut self, reason: SettleReason) -> bool {
         let before = self.visual_signature();
         self.advance_generation();
+        self.suppress_momentum_until_terminal = false;
         self.finish_at_zero(reason);
+        self.record_trace_sample(ElasticTraceKind::Reset, 0.0, Instant::now());
         before != self.visual_signature()
     }
 
@@ -483,6 +825,8 @@ impl BoundaryAffordanceState {
         self.advance_generation();
         self.idle_watchdog_armed = false;
         self.last_event_at = None;
+        self.rebound = None;
+        self.visual_velocity_px_per_second = 0.0;
 
         let Some(edge) = self.edge else {
             self.finish_at_zero_preserving_generation();
@@ -506,6 +850,131 @@ impl BoundaryAffordanceState {
                 tuning.normalized_resistance_px(),
             );
         self.phase = BoundaryPhase::Tracking;
+        self.velocity_samples.clear();
+    }
+
+    fn update_visual_velocity(&mut self, now: Instant, native_timestamp_seconds: Option<f64>) {
+        let next = VelocitySample {
+            offset_px: self.offset_px,
+            observed_at: now,
+            native_timestamp_seconds,
+        };
+        let Some(previous) = self.velocity_samples.back().copied() else {
+            self.velocity_samples.push_back(next);
+            return;
+        };
+
+        let native_dt = next
+            .native_timestamp_seconds
+            .zip(previous.native_timestamp_seconds)
+            .map(|(current, prior)| current - prior)
+            .filter(|dt| dt.is_finite());
+        let wall_dt = now.saturating_duration_since(previous.observed_at);
+        let dt = native_dt.unwrap_or_else(|| wall_dt.as_secs_f64());
+        if dt == 0.0 {
+            if let Some(latest) = self.velocity_samples.back_mut() {
+                *latest = next;
+            }
+            self.recompute_visual_velocity();
+            return;
+        }
+        if dt < VELOCITY_MIN_INTERVAL_SECONDS || wall_dt > VELOCITY_STALE_AFTER {
+            self.velocity_samples.clear();
+            self.velocity_samples.push_back(next);
+            self.visual_velocity_px_per_second = 0.0;
+            return;
+        }
+
+        self.velocity_samples.push_back(next);
+        while self.velocity_samples.len() > VELOCITY_SAMPLE_CAPACITY {
+            self.velocity_samples.pop_front();
+        }
+        while self.velocity_samples.len() > 2 {
+            let first = self.velocity_samples.front().copied().unwrap();
+            let span = next
+                .native_timestamp_seconds
+                .zip(first.native_timestamp_seconds)
+                .map(|(current, prior)| current - prior)
+                .unwrap_or_else(|| {
+                    now.saturating_duration_since(first.observed_at)
+                        .as_secs_f64()
+                });
+            if span <= VELOCITY_WINDOW_SECONDS {
+                break;
+            }
+            self.velocity_samples.pop_front();
+        }
+        self.recompute_visual_velocity();
+    }
+
+    fn recompute_visual_velocity(&mut self) {
+        if self.velocity_samples.len() < 2 {
+            self.visual_velocity_px_per_second = 0.0;
+            return;
+        }
+        let first = self.velocity_samples.front().copied().unwrap();
+        let times: Vec<f64> = self
+            .velocity_samples
+            .iter()
+            .map(|sample| {
+                sample
+                    .native_timestamp_seconds
+                    .zip(first.native_timestamp_seconds)
+                    .map(|(current, start)| current - start)
+                    .unwrap_or_else(|| {
+                        sample
+                            .observed_at
+                            .saturating_duration_since(first.observed_at)
+                            .as_secs_f64()
+                    })
+            })
+            .collect();
+        if times.iter().any(|time| !time.is_finite() || *time < 0.0) {
+            self.velocity_samples.clear();
+            self.visual_velocity_px_per_second = 0.0;
+            return;
+        }
+        let mean_t = times.iter().sum::<f64>() / times.len() as f64;
+        let mean_x = self
+            .velocity_samples
+            .iter()
+            .map(|sample| sample.offset_px as f64)
+            .sum::<f64>()
+            / self.velocity_samples.len() as f64;
+        let numerator = times
+            .iter()
+            .zip(self.velocity_samples.iter())
+            .map(|(time, sample)| (time - mean_t) * (sample.offset_px as f64 - mean_x))
+            .sum::<f64>();
+        let denominator = times
+            .iter()
+            .map(|time| (time - mean_t).powi(2))
+            .sum::<f64>();
+        self.visual_velocity_px_per_second = if denominator >= VELOCITY_MIN_INTERVAL_SECONDS.powi(2)
+        {
+            (numerator / denominator) as f32
+        } else {
+            0.0
+        };
+    }
+
+    fn age_velocity_for_release(&mut self, now: Instant, native_timestamp_seconds: Option<f64>) {
+        let Some(sample) = self.velocity_samples.back().copied() else {
+            self.visual_velocity_px_per_second = 0.0;
+            return;
+        };
+        let native_age = native_timestamp_seconds
+            .zip(sample.native_timestamp_seconds)
+            .map(|(current, prior)| current - prior)
+            .filter(|age| age.is_finite() && *age >= 0.0);
+        let stale = native_age
+            .map(|age| age > VELOCITY_STALE_AFTER.as_secs_f64())
+            .unwrap_or_else(|| {
+                now.saturating_duration_since(sample.observed_at) > VELOCITY_STALE_AFTER
+            });
+        if stale {
+            self.visual_velocity_px_per_second = 0.0;
+        }
     }
 
     fn finish_at_zero(&mut self, reason: SettleReason) {
@@ -521,6 +990,9 @@ impl BoundaryAffordanceState {
         self.phase = BoundaryPhase::Idle;
         self.last_event_at = None;
         self.idle_watchdog_armed = false;
+        self.visual_velocity_px_per_second = 0.0;
+        self.velocity_samples.clear();
+        self.rebound = None;
     }
 
     fn advance_generation(&mut self) -> u64 {
@@ -530,6 +1002,28 @@ impl BoundaryAffordanceState {
 
     fn visual_signature(&self) -> (u32, Option<BoundaryEdge>, BoundaryPhase) {
         (self.offset_px.to_bits(), self.edge, self.phase)
+    }
+
+    fn record_trace_sample(&mut self, kind: ElasticTraceKind, delta_y: f32, now: Instant) {
+        let started_at = *self.trace_started_at.get_or_insert(now);
+        self.trace_samples.push_back(ElasticTraceSample {
+            kind,
+            arrival_elapsed_ms: now.saturating_duration_since(started_at).as_secs_f64() * 1000.0,
+            native_timestamp_seconds: self.last_native_timestamp_seconds,
+            direct_phase: self.last_direct_phase,
+            momentum_phase: self.last_momentum_phase,
+            delta_y,
+            raw_pull_px: self.raw_pull_px,
+            offset_px: self.offset_px,
+            velocity_px_per_second: self.visual_velocity_px_per_second,
+            boundary_phase: self.phase,
+            generation: self.generation,
+            rendered_frame_generation: self.rendered_frame_generation,
+            last_rebound_elapsed_ms: self.last_rebound_elapsed_ms,
+        });
+        while self.trace_samples.len() > TRACE_SAMPLE_CAPACITY {
+            self.trace_samples.pop_front();
+        }
     }
 }
 
@@ -559,28 +1053,24 @@ pub(crate) fn raw_pull_for_offset(offset_px: f32, max_px: f32, resistance_px: f3
     -resistance_px * (1.0 - ratio).ln()
 }
 
-pub(crate) fn settle_factor(normalized_elapsed: f32) -> f32 {
-    if !normalized_elapsed.is_finite() || normalized_elapsed >= 1.0 {
-        return 0.0;
+pub(crate) fn critically_damped_rebound(
+    initial_offset_px: f32,
+    initial_velocity_px_per_second: f32,
+    elapsed: Duration,
+    omega_per_second: f32,
+) -> (f32, f32) {
+    if !omega_per_second.is_finite() || omega_per_second <= 0.0 {
+        return (0.0, 0.0);
     }
-    let u = normalized_elapsed.max(0.0);
-    (1.0 + SETTLE_DECAY * u) * (-SETTLE_DECAY * u).exp()
-}
-
-pub(crate) fn settled_offset(starting_offset_px: f32, normalized_elapsed: f32) -> f32 {
-    let offset = finite_or_zero(starting_offset_px) * settle_factor(normalized_elapsed);
-    if normalized_elapsed >= 1.0 || offset.abs() < SETTLE_ZERO_EPSILON_PX {
-        0.0
-    } else {
-        offset
-    }
-}
-
-pub(crate) fn normalized_settle_elapsed(elapsed: Duration, duration: Duration) -> f32 {
-    if duration.is_zero() {
-        return 1.0;
-    }
-    (elapsed.as_secs_f64() / duration.as_secs_f64()).min(1.0) as f32
+    let t = elapsed.as_secs_f32().max(0.0);
+    let omega = omega_per_second;
+    let x0 = finite_or_zero(initial_offset_px);
+    let v0 = finite_or_zero(initial_velocity_px_per_second);
+    let coefficient = v0 + omega * x0;
+    let decay = (-omega * t).exp();
+    let position = (x0 + coefficient * t) * decay;
+    let velocity = (v0 - omega * coefficient * t) * decay;
+    (finite_or_zero(position), finite_or_zero(velocity))
 }
 
 fn finite_nonnegative(value: f32) -> f32 {
@@ -630,6 +1120,7 @@ mod tests {
             BoundaryAffordanceTuning::default(),
             false,
             now,
+            None,
         )
     }
 
@@ -642,6 +1133,28 @@ mod tests {
             assert!(offset < 18.0 || (18.0 - offset).abs() <= f32::EPSILON);
             previous = offset;
         }
+    }
+
+    #[test]
+    fn shipping_drag_tuning_has_immediate_diminishing_gain() {
+        let tuning = BoundaryAffordanceTuning::default();
+        let initial_gain = tuning.max_distance_px / tuning.resistance_px;
+        assert!((0.75..=0.95).contains(&initial_gain));
+
+        let samples = [0.0, 5.0, 12.0, 36.0, 72.0, 132.0];
+        let offsets: Vec<_> = samples
+            .into_iter()
+            .map(|raw| resisted_offset(raw, tuning.max_distance_px, tuning.resistance_px))
+            .collect();
+        assert_eq!(offsets[0], 0.0);
+        assert!(offsets.windows(2).all(|pair| pair[1] > pair[0]));
+        let gains: Vec<_> = offsets
+            .windows(2)
+            .zip(samples.windows(2))
+            .map(|(offset, raw)| (offset[1] - offset[0]) / (raw[1] - raw[0]))
+            .collect();
+        assert!(gains.windows(2).all(|pair| pair[1] < pair[0]));
+        assert!(offsets.last().copied().unwrap_or_default() < tuning.max_distance_px);
     }
 
     #[test]
@@ -695,8 +1208,8 @@ mod tests {
         let mut state = BoundaryAffordanceState::default();
         moved(&mut state, 100_000.0, top_only(), now);
 
-        assert_eq!(state.raw_pull_px(), 108.0);
-        assert!(state.offset_px < 18.0);
+        assert_eq!(state.raw_pull_px(), 132.0);
+        assert!(state.offset_px < 36.0);
     }
 
     #[test]
@@ -712,6 +1225,7 @@ mod tests {
             tuning,
             false,
             now,
+            None,
         );
         assert_eq!(ended.start_settle, Some(SettleReason::Ended));
         let settling_offset = state.offset_px;
@@ -724,6 +1238,7 @@ mod tests {
             tuning,
             false,
             now,
+            None,
         );
 
         assert!(grabbed.arm_idle_watchdog);
@@ -744,30 +1259,422 @@ mod tests {
         let starting_offset = state.offset_px;
         state.cancel_pending_work();
 
-        assert!(!state.apply_settle_sample(stale_generation, starting_offset, 0.5));
+        assert!(!state.apply_settle_sample(stale_generation, Duration::from_millis(90), tuning,));
         assert_eq!(state.offset_px, starting_offset);
     }
 
     #[test]
     fn critically_damped_settle_decreases_and_finishes_at_exact_zero() {
-        let samples = [0.0, 0.15, 0.35, 0.6, 0.9];
-        let mut previous = settled_offset(18.0, samples[0]);
-        for u in samples.into_iter().skip(1) {
-            let next = settled_offset(18.0, u);
-            assert!(next < previous, "u={u} next={next} previous={previous}");
+        let tuning = BoundaryAffordanceTuning::default();
+        let samples_ms = [0, 30, 60, 100, 180];
+        let mut previous = 18.0;
+        for milliseconds in samples_ms.into_iter().skip(1) {
+            let (next, _) = critically_damped_rebound(
+                18.0,
+                0.0,
+                Duration::from_millis(milliseconds),
+                tuning.spring_omega_per_second(),
+            );
+            assert!(
+                next < previous,
+                "t={milliseconds} next={next} previous={previous}"
+            );
             previous = next;
         }
-        assert_eq!(settled_offset(18.0, 1.0), 0.0);
 
         let now = Instant::now();
-        let tuning = BoundaryAffordanceTuning::default();
         let mut state = BoundaryAffordanceState::default();
         moved(&mut state, 36.0, top_only(), now);
         state.begin_settle(SettleReason::Ended, tuning);
         let generation = state.generation;
-        let starting_offset = state.offset_px;
-        assert!(state.apply_settle_sample(generation, starting_offset, 1.0));
+        assert!(state.apply_settle_sample(generation, Duration::from_secs(1), tuning));
         assert_idle_exact(&state);
+    }
+
+    #[test]
+    fn shipping_spring_meets_peak_turn_and_return_thresholds() {
+        let tuning = BoundaryAffordanceTuning::default();
+        let omega = tuning.spring_omega_per_second();
+        let x0 = 20.0;
+        let v0 = omega * x0;
+        let (at_release, release_velocity) =
+            critically_damped_rebound(x0, v0, Duration::ZERO, omega);
+        assert!((at_release - x0).abs() < 0.001);
+        assert!((release_velocity - v0).abs() < 0.001);
+
+        let turn_ms = 19;
+        let (peak, velocity_at_turn) =
+            critically_damped_rebound(x0, v0, Duration::from_millis(turn_ms), omega);
+        assert!(peak <= 1.22 * x0);
+        assert!(velocity_at_turn.abs() < 12.0);
+        assert!(turn_ms <= 25);
+
+        let (half, _) = critically_damped_rebound(x0, 0.0, Duration::from_millis(64), omega);
+        assert!((0.45..=0.55).contains(&(half / x0)));
+        let (ten_percent, _) =
+            critically_damped_rebound(x0, 0.0, Duration::from_millis(150), omega);
+        assert!(ten_percent <= 0.11 * x0);
+    }
+
+    #[test]
+    fn release_rebound_preserves_measured_visual_velocity() {
+        let start = Instant::now();
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        state.handle_precise_scroll(
+            0.0,
+            PreciseTouchPhase::Started,
+            top_only(),
+            tuning,
+            false,
+            start,
+            Some(10.0),
+        );
+        state.handle_precise_scroll(
+            24.0,
+            PreciseTouchPhase::Moved,
+            top_only(),
+            tuning,
+            false,
+            start + Duration::from_millis(16),
+            Some(10.016),
+        );
+        state.handle_precise_scroll(
+            12.0,
+            PreciseTouchPhase::Moved,
+            top_only(),
+            tuning,
+            false,
+            start + Duration::from_millis(32),
+            Some(10.032),
+        );
+        assert!(state.visual_velocity_px_per_second > 0.0);
+        let release_velocity = state.visual_velocity_px_per_second;
+        let release_offset = state.offset_px;
+        state.handle_precise_scroll(
+            0.0,
+            PreciseTouchPhase::Ended,
+            top_only(),
+            tuning,
+            false,
+            start + Duration::from_millis(36),
+            Some(10.036),
+        );
+        assert_eq!(state.phase, BoundaryPhase::Settling);
+        assert_eq!(
+            state
+                .rebound
+                .expect("release should capture rebound velocity")
+                .initial_velocity_px_per_second,
+            release_velocity.min(tuning.spring_omega_per_second() * release_offset)
+        );
+    }
+
+    #[test]
+    fn cancelled_release_rebounds_immediately_with_zero_velocity() {
+        let start = Instant::now();
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        moved(&mut state, 24.0, top_only(), start);
+        state.visual_velocity_px_per_second = 500.0;
+
+        let decision = state.handle_scroll_lifecycle(
+            0.0,
+            ScrollLifecyclePhase::Cancelled,
+            ScrollLifecyclePhase::None,
+            PreciseTouchPhase::Moved,
+            top_only(),
+            tuning,
+            false,
+            start + Duration::from_millis(16),
+            Some(1.016),
+        );
+
+        assert_eq!(decision.start_settle, Some(SettleReason::Cancelled));
+        assert_eq!(state.phase, BoundaryPhase::Settling);
+        assert_eq!(state.last_settle_reason, Some(SettleReason::Cancelled));
+        assert_eq!(
+            state
+                .rebound
+                .expect("cancel should create rebound")
+                .initial_velocity_px_per_second,
+            0.0
+        );
+    }
+
+    #[test]
+    fn momentum_implicit_release_is_suppressed_until_terminal() {
+        let start = Instant::now();
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        moved(&mut state, 24.0, top_only(), start);
+
+        let began = state.handle_scroll_lifecycle(
+            4.0,
+            ScrollLifecyclePhase::None,
+            ScrollLifecyclePhase::Began,
+            PreciseTouchPhase::Moved,
+            top_only(),
+            tuning,
+            false,
+            start + Duration::from_millis(16),
+            Some(2.016),
+        );
+        assert_eq!(
+            began.start_settle,
+            Some(SettleReason::MomentumBeganImplicitRelease)
+        );
+        assert!(state.suppress_momentum_until_terminal);
+
+        let changed = state.handle_scroll_lifecycle(
+            20.0,
+            ScrollLifecyclePhase::None,
+            ScrollLifecyclePhase::Changed,
+            PreciseTouchPhase::Moved,
+            top_only(),
+            tuning,
+            false,
+            start + Duration::from_millis(24),
+            Some(2.024),
+        );
+        assert_eq!(changed.residual_delta_y_px, 0.0);
+        assert_eq!(state.phase, BoundaryPhase::Settling);
+
+        state.handle_scroll_lifecycle(
+            0.0,
+            ScrollLifecyclePhase::None,
+            ScrollLifecyclePhase::Ended,
+            PreciseTouchPhase::Moved,
+            top_only(),
+            tuning,
+            false,
+            start + Duration::from_millis(32),
+            Some(2.032),
+        );
+        assert!(!state.suppress_momentum_until_terminal);
+        assert_eq!(state.phase, BoundaryPhase::Settling);
+    }
+
+    #[test]
+    fn unsuppressed_momentum_preserves_selection_owned_delta() {
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        let decision = state.handle_scroll_lifecycle(
+            -18.0,
+            ScrollLifecyclePhase::None,
+            ScrollLifecyclePhase::Changed,
+            PreciseTouchPhase::Moved,
+            BoundaryEligibility::default(),
+            tuning,
+            false,
+            Instant::now(),
+            Some(3.0),
+        );
+        assert_eq!(decision.residual_delta_y_px, -18.0);
+        assert_eq!(state.phase, BoundaryPhase::Idle);
+    }
+
+    #[test]
+    fn interior_direct_release_does_not_claim_following_momentum() {
+        let start = Instant::now();
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        let interior = BoundaryEligibility::default();
+
+        state.handle_scroll_lifecycle(
+            0.0,
+            ScrollLifecyclePhase::Began,
+            ScrollLifecyclePhase::None,
+            PreciseTouchPhase::Started,
+            interior,
+            tuning,
+            false,
+            start,
+            Some(20.000),
+        );
+        let changed = state.handle_scroll_lifecycle(
+            -24.0,
+            ScrollLifecyclePhase::Changed,
+            ScrollLifecyclePhase::None,
+            PreciseTouchPhase::Moved,
+            interior,
+            tuning,
+            false,
+            start + Duration::from_millis(8),
+            Some(20.008),
+        );
+        assert_eq!(changed.residual_delta_y_px, -24.0);
+
+        let ended = state.handle_scroll_lifecycle(
+            0.0,
+            ScrollLifecyclePhase::Ended,
+            ScrollLifecyclePhase::None,
+            PreciseTouchPhase::Ended,
+            interior,
+            tuning,
+            false,
+            start + Duration::from_millis(12),
+            Some(20.012),
+        );
+        assert_eq!(ended.start_settle, None);
+        assert_eq!(state.phase, BoundaryPhase::Idle);
+        assert!(!state.suppress_momentum_until_terminal);
+
+        let momentum_began = state.handle_scroll_lifecycle(
+            -18.0,
+            ScrollLifecyclePhase::None,
+            ScrollLifecyclePhase::Began,
+            PreciseTouchPhase::Moved,
+            interior,
+            tuning,
+            false,
+            start + Duration::from_millis(16),
+            Some(20.016),
+        );
+        assert_eq!(momentum_began.residual_delta_y_px, -18.0);
+        let momentum_changed = state.handle_scroll_lifecycle(
+            -14.0,
+            ScrollLifecyclePhase::None,
+            ScrollLifecyclePhase::Changed,
+            PreciseTouchPhase::Moved,
+            interior,
+            tuning,
+            false,
+            start + Duration::from_millis(24),
+            Some(20.024),
+        );
+        assert_eq!(momentum_changed.residual_delta_y_px, -14.0);
+        assert!(!state.suppress_momentum_until_terminal);
+
+        let momentum_ended = state.handle_scroll_lifecycle(
+            0.0,
+            ScrollLifecyclePhase::None,
+            ScrollLifecyclePhase::Ended,
+            PreciseTouchPhase::Moved,
+            interior,
+            tuning,
+            false,
+            start + Duration::from_millis(32),
+            Some(20.032),
+        );
+        assert_eq!(momentum_ended.residual_delta_y_px, 0.0);
+        assert!(!state.suppress_momentum_until_terminal);
+    }
+
+    #[test]
+    fn unsafe_timestamps_clear_velocity_instead_of_spiking() {
+        let start = Instant::now();
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        for (delta, milliseconds, timestamp) in [
+            (12.0, 0, 5.0),
+            (12.0, 1, 5.0005),
+            (12.0, 2, 4.0),
+            (12.0, 3, f64::NAN),
+        ] {
+            state.handle_scroll_lifecycle(
+                delta,
+                ScrollLifecyclePhase::Changed,
+                ScrollLifecyclePhase::None,
+                PreciseTouchPhase::Moved,
+                top_only(),
+                tuning,
+                false,
+                start + Duration::from_millis(milliseconds),
+                Some(timestamp),
+            );
+            assert!(state.visual_velocity_px_per_second.is_finite());
+            assert_eq!(state.visual_velocity_px_per_second, 0.0);
+        }
+    }
+
+    #[test]
+    fn stale_release_zeros_direct_velocity() {
+        let start = Instant::now();
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        for (delta, timestamp, milliseconds) in [(12.0, 7.0, 0), (12.0, 7.016, 16)] {
+            state.handle_scroll_lifecycle(
+                delta,
+                ScrollLifecyclePhase::Changed,
+                ScrollLifecyclePhase::None,
+                PreciseTouchPhase::Moved,
+                top_only(),
+                tuning,
+                false,
+                start + Duration::from_millis(milliseconds),
+                Some(timestamp),
+            );
+        }
+        assert!(state.visual_velocity_px_per_second > 0.0);
+        state.handle_scroll_lifecycle(
+            0.0,
+            ScrollLifecyclePhase::Ended,
+            ScrollLifecyclePhase::None,
+            PreciseTouchPhase::Moved,
+            top_only(),
+            tuning,
+            false,
+            start + Duration::from_millis(200),
+            Some(7.200),
+        );
+        assert_eq!(
+            state
+                .rebound
+                .expect("stale release still rebounds")
+                .initial_velocity_px_per_second,
+            0.0
+        );
+    }
+
+    #[test]
+    fn diagnostic_trace_ring_is_bounded_and_records_frame_generation() {
+        let start = Instant::now();
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        for index in 0..(TRACE_SAMPLE_CAPACITY + 12) {
+            state.handle_scroll_lifecycle(
+                0.0,
+                ScrollLifecyclePhase::Stationary,
+                ScrollLifecyclePhase::None,
+                PreciseTouchPhase::Moved,
+                BoundaryEligibility::default(),
+                tuning,
+                false,
+                start + Duration::from_millis(index as u64),
+                Some(index as f64 / 1000.0),
+            );
+        }
+        assert_eq!(state.trace_samples().count(), TRACE_SAMPLE_CAPACITY);
+
+        moved(&mut state, 24.0, top_only(), start + Duration::from_secs(1));
+        state.begin_settle(SettleReason::Ended, tuning);
+        let generation = state.generation;
+        assert!(state.apply_settle_sample(generation, Duration::from_millis(16), tuning,));
+        let latest = state.trace_samples().last().expect("frame trace sample");
+        assert_eq!(latest.kind, ElasticTraceKind::ReboundFrame);
+        assert_eq!(latest.rendered_frame_generation, 1);
+    }
+
+    #[test]
+    fn high_release_velocity_never_exceeds_visual_distance_cap() {
+        let tuning = BoundaryAffordanceTuning::default();
+        let mut state = BoundaryAffordanceState::default();
+        state.offset_px = 12.0;
+        state.edge = Some(BoundaryEdge::Top);
+        state.phase = BoundaryPhase::Tracking;
+        state.visual_velocity_px_per_second = 2_500.0;
+        state.begin_settle(SettleReason::Ended, tuning);
+        let generation = state.generation;
+
+        for milliseconds in [1, 8, 16, 32, 64] {
+            assert!(state.apply_settle_sample(
+                generation,
+                Duration::from_millis(milliseconds),
+                tuning,
+            ));
+            assert!(state.offset_px <= tuning.max_distance_px);
+        }
     }
 
     #[test]
@@ -782,6 +1689,7 @@ mod tests {
             tuning,
             true,
             now,
+            None,
         );
         assert!(state.offset_px > 0.0);
         assert!(state.offset_px <= 4.0);
@@ -793,6 +1701,7 @@ mod tests {
             tuning,
             true,
             now,
+            None,
         );
         assert_eq!(ended.start_settle, None);
         assert_eq!(state.last_settle_reason, Some(SettleReason::ReducedMotion));
@@ -810,11 +1719,14 @@ mod tests {
 
         assert_eq!(
             state.idle_watchdog_status(generation, start + Duration::from_millis(60), tuning,),
-            IdleWatchdogStatus::Sleep(Duration::from_millis(100))
+            IdleWatchdogStatus::Sleep(Duration::from_millis(240))
         );
         let settle =
-            state.begin_idle_timeout_settle(generation, start + Duration::from_millis(160), tuning);
-        assert_eq!(settle.start_settle, Some(SettleReason::IdleTimeout));
+            state.begin_idle_timeout_settle(generation, start + Duration::from_millis(300), tuning);
+        assert_eq!(
+            settle.start_settle,
+            Some(SettleReason::MissingTerminalWatchdog)
+        );
         assert_eq!(state.phase, BoundaryPhase::Settling);
         assert_eq!(
             state.idle_watchdog_status(generation, start + Duration::from_secs(1), tuning),
@@ -832,14 +1744,10 @@ mod tests {
     }
 
     #[test]
-    fn normalized_elapsed_handles_zero_duration() {
+    fn invalid_spring_rate_rebound_finishes_immediately() {
         assert_eq!(
-            normalized_settle_elapsed(Duration::from_millis(1), Duration::ZERO),
-            1.0
-        );
-        assert_eq!(
-            normalized_settle_elapsed(Duration::from_millis(90), Duration::from_millis(180)),
-            0.5
+            critically_damped_rebound(18.0, 100.0, Duration::from_millis(1), 0.0),
+            (0.0, 0.0)
         );
     }
 

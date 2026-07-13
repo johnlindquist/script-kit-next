@@ -1,0 +1,11 @@
+{
+  "id": "02-search-filter",
+  "sceneSize": [838, 570],
+  "rmse": 0.1058,
+  "divergences": [
+    "Wallpaper approximated with layered CSS radial/linear gradients; reference has fine photographic grain/diagonal glare bands (e.g. right edge ~y=300-420px@2x near the Clipboard row accessory, and a faint diagonal streak below the header at ~x=780-900,y=500-620px@2x) that a flat CSS gradient cannot reproduce pixel-for-pixel. This is the dominant remaining diff mass in the RMSE compare.",
+    "Footer band micro-geometry: measured top-separator edge sits ~4-5 CSS px higher in the render than the reference at one sampled column, consistent with using the shared --sk-footer-rail-height token (32px) rather than hand-fitting per-shot; window bottom edge itself is pixel-aligned (matches at y=1048-1049@2x in both)."
+  ],
+  "iterations": 1,
+  "notes": "Verified all visible text content (header context pills, search text 'clip', all 8 row names/descriptions, 'Menu Bar Actions' section header, footer action labels and keycaps) transcribes exactly against the reference; no content mismatches found. Window rect (left/right edges at x=85-88 and x=1585-1589@2x in both), row pitch, selection highlight (Clipboard History), hover highlight (Emoji Picker), and icon tiles/accessories all matched within 1-3px on direct pixel sampling. No structural fix was needed this pass; shot was already near-converged from the prior session."
+}
