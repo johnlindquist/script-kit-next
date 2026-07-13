@@ -494,14 +494,6 @@ pub(crate) struct MainMenuSelectionSnapshot {
     selected_key: Option<String>,
 }
 
-impl MainMenuSelectionSnapshot {
-    fn is_root_file_handoff_selection(&self) -> bool {
-        self.selected_key
-            .as_deref()
-            .is_some_and(|key| key.starts_with("fallback/root-file-search-handoff/"))
-    }
-}
-
 impl ScriptListApp {
     pub(crate) fn root_file_source_chip_page_key_for(
         raw_filter_text: &str,
@@ -584,34 +576,79 @@ impl ScriptListApp {
         true
     }
 
-    pub(crate) fn restore_root_file_handoff_selection_from_snapshot(
+}
+
+#[cfg(test)]
+struct MainMenuSelectionTestHost;
+
+#[cfg(test)]
+impl gpui::Render for MainMenuSelectionTestHost {
+    fn render(
         &mut self,
-        snapshot: &MainMenuSelectionSnapshot,
-    ) -> bool {
-        if !snapshot.is_root_file_handoff_selection() {
-            return false;
-        }
-        let Some(selected_key) = snapshot.selected_key.as_deref() else {
-            return false;
-        };
-
-        self.get_grouped_results_cached();
-        let Some(grouped_index) = self
-            .main_menu_result_caches
-            .grouped_index_for_stable_selection_key(selected_key)
-        else {
-            return false;
-        };
-
-        if self.selected_index == grouped_index {
-            return false;
-        }
-
-        self.selected_index = grouped_index;
-        self.hovered_index = None;
-        self.last_scrolled_index = None;
-        true
+        _window: &mut gpui::Window,
+        _cx: &mut gpui::Context<Self>,
+    ) -> impl gpui::IntoElement {
+        gpui::div()
     }
+}
+
+#[cfg(test)]
+fn main_menu_selection_test_app(
+    cx: &mut gpui::TestAppContext,
+) -> gpui::Entity<ScriptListApp> {
+    use gpui::AppContext as _;
+
+    let app = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let app_for_window = app.clone();
+    cx.update(|cx| {
+        gpui_component::init(cx);
+        cx.open_window(Default::default(), |window, cx| {
+            let entity = cx.new(|cx| {
+                ScriptListApp::new(crate::config::Config::default(), false, window, cx)
+            });
+            *app_for_window.lock().expect("lock selection test app") = Some(entity);
+            cx.new(|_| MainMenuSelectionTestHost)
+        })
+        .expect("open main-menu selection test window");
+    });
+    let entity = app
+        .lock()
+        .expect("lock initialized selection test app")
+        .take()
+        .expect("selection test app initialized");
+    entity
+}
+
+#[cfg(test)]
+fn main_menu_selection_test_script(name: &str) -> std::sync::Arc<crate::scripts::Script> {
+    std::sync::Arc::new(crate::scripts::Script {
+        name: name.to_string(),
+        path: std::path::PathBuf::from(format!("/tmp/{name}.ts")),
+        extension: "ts".to_string(),
+        plugin_id: "main".to_string(),
+        ..Default::default()
+    })
+}
+
+#[cfg(test)]
+fn selected_main_menu_stable_key(app: &mut ScriptListApp) -> Option<String> {
+    app.get_grouped_results_cached();
+    app.main_menu_result_caches
+        .flat_result_index_for_coerced_grouped_selection(app.selected_index)
+        .and_then(|(_, result_index)| {
+            app.main_menu_result_caches
+                .search_result_for_flat_index(result_index)
+        })
+        .and_then(crate::scripts::SearchResult::stable_selection_key)
+}
+
+#[cfg(test)]
+fn first_selectable_main_menu_stable_key(app: &mut ScriptListApp) -> Option<String> {
+    app.get_grouped_results_cached();
+    let first = app.main_menu_result_caches.first_selectable_index()?;
+    app.main_menu_result_caches
+        .search_result_for_grouped_item(first)
+        .and_then(crate::scripts::SearchResult::stable_selection_key)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
