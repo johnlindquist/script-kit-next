@@ -6,13 +6,6 @@ use super::opacity::{
 };
 use super::Theme;
 
-pub(crate) fn main_view_header_underlay_rgba(theme: &Theme) -> u32 {
-    hex_to_rgba_with_opacity(
-        theme.colors.background.main,
-        super::opacity::OPACITY_MAIN_VIEW_HEADER_UNDERLAY,
-    )
-}
-
 fn composite_over(fg_hex: u32, alpha: f32, bg_hex: u32) -> u32 {
     let blend = |fg_ch: u32, bg_ch: u32| -> u32 {
         ((fg_ch as f32 * alpha + bg_ch as f32 * (1.0 - alpha)).round() as u32).min(255)

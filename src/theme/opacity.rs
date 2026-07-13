@@ -63,8 +63,6 @@ pub const OPACITY_PREVIEW_TEXT: f32 = 0.75;
 pub const OPACITY_PROMINENT: f32 = 0.80;
 /// Near-full emphasis.
 pub const OPACITY_NEAR_FULL: f32 = 0.85;
-/// Fixed main-view header underlay over scrollable launcher content.
-pub const OPACITY_MAIN_VIEW_HEADER_UNDERLAY: f32 = OPACITY_NEAR_FULL;
 /// Warning banner hover overlay.
 pub const OPACITY_WARNING_BANNER_HOVER: f32 = 0.88;
 /// Active/pressed state (button hover, focused chrome).

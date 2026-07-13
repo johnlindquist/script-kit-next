@@ -19,7 +19,6 @@ pub(crate) const MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID: &str = "main-view-context-mo
 #[allow(dead_code)]
 pub(crate) const MAIN_VIEW_CONTEXT_SELECTION_BUTTON_ID: &str = "main-view-context-selection-button";
 pub(crate) const MAIN_VIEW_HEADER_ID: &str = "main-view-header";
-pub(crate) const MAIN_VIEW_HEADER_UNDERLAY_ID: &str = "main-view-header-underlay";
 pub(crate) const MAIN_VIEW_CWD_UNAVAILABLE_LABEL: &str = "No cwd";
 pub(crate) const MAIN_VIEW_AGENT_MODEL_UNAVAILABLE_LABEL: &str = "Agent model unavailable";
 const DEFAULT_CONTEXT_EDGE_OUTSET_X: f32 = 8.0;
@@ -414,7 +413,6 @@ fn render_main_view_chrome_with_options(
                 .child(render_main_view_main_slot_with_bottom_inset(
                     def, main, false,
                 ))
-                .child(render_main_view_header_underlay(theme, header_height))
                 .child(div().absolute().top_0().left_0().right_0().child(
                     render_main_view_header_with_context_outset(
                         header,
@@ -455,19 +453,6 @@ fn render_main_view_chrome_with_options(
     }
 
     root.into_any_element()
-}
-
-fn render_main_view_header_underlay(theme: &crate::theme::Theme, height: f32) -> AnyElement {
-    div()
-        .id(MAIN_VIEW_HEADER_UNDERLAY_ID)
-        .debug_selector(|| MAIN_VIEW_HEADER_UNDERLAY_ID.to_string())
-        .absolute()
-        .top_0()
-        .left_0()
-        .right_0()
-        .h(px(height))
-        .bg(rgba(crate::theme::main_view_header_underlay_rgba(theme)))
-        .into_any_element()
 }
 
 pub(crate) fn render_main_view_header(chrome: MainViewHeaderChrome) -> AnyElement {
