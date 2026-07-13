@@ -1,4 +1,4 @@
-<meta charset="utf-8">
+<!doctype html><html><head><meta charset="utf-8">
 <title>Script Kit — Emoji Picker</title>
 <link rel="stylesheet" href="../../shared/tokens.css">
 <style>
@@ -254,6 +254,8 @@
 
   .keycap svg { width: 11px; height: 11px; display: block; }
 </style>
+</head>
+<body>
 <div class="scene">
   <div class="wallpaper"></div>
   <div class="sk-window">
@@ -300,7 +302,7 @@
         <div class="grid-row">
           <span class="cell" data-selected="true">&#x1F600;</span>
           <span class="cell">&#x1F603;</span>
-          <span class="cell">&#x1F604;</span>
+          <span class="cell" data-demo-key="emoji-0-2">&#x1F604;</span>
           <span class="cell">&#x1F601;</span>
           <span class="cell">&#x1F606;</span>
           <span class="cell">&#x1F605;</span>
@@ -310,9 +312,9 @@
         <div class="grid-row">
           <span class="cell">&#x1F60A;</span>
           <span class="cell">&#x1F607;</span>
-          <span class="cell">&#x1F642;</span>
+          <span class="cell" data-demo-key="emoji-1-2">&#x1F642;</span>
           <span class="cell">&#x1F643;</span>
-          <span class="cell">&#x1F609;</span>
+          <span class="cell" data-demo-key="emoji-1-4">&#x1F609;</span>
           <span class="cell">&#x1F60C;</span>
           <span class="cell">&#x1F60D;</span>
           <span class="cell">&#x1F970;</span>
@@ -369,7 +371,7 @@
         </div>
       </div>
       <div class="footer">
-        <div class="footer-action">
+        <div class="footer-action" data-demo-key="primary">
           <span>Paste into Finder</span>
           <span class="keycap">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -378,7 +380,7 @@
           </span>
         </div>
         <div class="footer-gap"></div>
-        <div class="footer-action">
+        <div class="footer-action" data-demo-key="actions">
           <span>Actions</span>
           <span class="keycap">&#x2318;</span>
           <span class="keycap">K</span>
@@ -388,3 +390,14 @@
   </div>
 </div>
 <script src="../../shared/fit.js"></script>
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  if (params.get("demo") !== "1") return;
+  const runner = document.createElement("script");
+  runner.src = "../../shared/demo.js";
+  runner.dataset.config = "./demo.js";
+  document.head.appendChild(runner);
+})();
+</script>
+</body></html>
