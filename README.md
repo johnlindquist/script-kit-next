@@ -321,6 +321,21 @@ See `kit-init/theme.example.json` for all available options.
 
 ## Development
 
+### Standalone Spotlight glass demo
+
+Build the separate Rust/GPUI prototype through the protected artifact facade, then run its verified immutable executable as a resident process:
+
+```bash
+bun scripts/devtools/devtools.ts build-ops act demo-build --artifact-out <new-reference.json>
+bun scripts/devtools/devtools.ts build-ops query artifact --reference <new-reference.json> --task spotlight-demo
+```
+
+Launch the verified manifest's `binaryPath` through owned process supervision with explicit visible-app authorization. Do not use `cargo run` for this resident preview: its bounded build deadline terminates the demo and its build lease stays held. The immutable executable runs independently, without retaining the Cargo build pool or build timeout.
+
+**Option+2** globally shows the demo and replays its original expanded-to-detached glass morph. **Enter/Space** toggles the split while focused, **Esc** hides without quitting, and **Cmd+Q** quits. The shortcut exists only while this demo process runs; no login item or main-app shortcut is installed. Its measured spring/timing/geometry is unchanged.
+
+For agent control with explicit native-input authorization, use `SCRIPT_KIT_NONINTERACTIVE=0 bun scripts/agentic/macos-input.ts key digit2 --modifiers alt --force-native --target liquid-glass-demo`. `digit2` names the physical number-row key; literal `2` remains layout-aware text input. Injector acceptance alone is not replay proof: the real GPUI action emits JSON stdout with `event: "liquid_glass_demo"`, `action: "replay"`, and a monotonic `replay_id`; hide and successful hotkey registration emit their own receipts. Observe the exact demo PID/window for visible/hidden postconditions.
+
 ### Owned native agent workflow
 
 Use the repository dispatcher, `bun scripts/devtools/devtools.ts`, as the agent entry point. The owned app requires `--features owned-ui-evaluation`; this does not change the normal `./dev.sh` default of `local-llm`. Provider-free fixtures need **no auth seeding, Pi sidecar provisioning, model downloads, or live provider setup**.
@@ -356,11 +371,15 @@ bun scripts/devtools/devtools.ts build-ops act exporter-build \
 
 Proceed only after successful build receipts with closed cleanup. These are actual application, Rust libtest, and exporter artifacts, respectively, published through `agent-cargo.sh` in the shared `agent-debug` pool. Each `--artifact-out` exclusively creates an **ArtifactReference** (`manifestPath`, `manifestSha256`) pointing to immutable **Manifest V3** publication: exact Cargo target/features/profile, compiler-input content, toolchain/configuration, binary hash, and build/lease identity. The exporter action owns its test profile. Never choose a binary by mtime, launch a raw target path, rewrite a manifest, or overwrite a reference to make it appear current.
 
-The managed lane disables incremental compilation authoritatively (`CARGO_INCREMENTAL=0` and dev/test/build incremental settings `false`), including inherited enabling defaults. Conflicting forced Cargo configuration, incremental rustc flags, and target/build-directory relocation are refused. This does not change the human `dev.sh` watcher or its `target/` profiles. Inspect the effective compiler/wrapper policy; a selected sccache backend is not proof of cache hits.
+The managed lane disables incremental compilation authoritatively (`CARGO_INCREMENTAL=0` and dev/test/build incremental settings `false`), including inherited enabling defaults. Conflicting forced Cargo configuration, incremental rustc flags, and target/build-directory relocation are refused. This does not change the human `dev.sh` watcher's profile or incremental settings. Inspect the effective compiler/wrapper policy; a selected sccache backend is not proof of cache hits.
 
-The **40 GiB budget covers all of `target-agent/`**, including pools, exports, shared caches, pending publications, runtime, and quarantine. The **25 GiB free-space floor** and **two-worker ceiling** remain. Admission, sampled cancellation, and postflight checks stop growth on resource refusal; this is **not a filesystem-enforced hard quota**. Allocated-block accounting deduplicates hardlinks within the budget scope; unique APFS extent usage is unknown. External caches, `target/`, and evidence directories are separately reported, not silently charged to this budget.
+The allocation policy covers all of `target-agent/`, including pools, exports, shared caches, pending publications, runtime, and quarantine. **Identity-pinned root links on a different volume have no default size cap**; `targetAgentBudgetBytes: null` reports this uncapped state. Ordinary/local storage retains the **40 GiB default**, and an explicit numeric `SCRIPT_KIT_AGENT_TARGET_BUDGET_GB` still sets a cap. The **25 GiB default free-space floor** and **two-worker ceiling** remain; raise `SCRIPT_KIT_AGENT_MIN_FREE_GB` for a larger reserve. Admission, sampled cancellation, and postflight checks still refuse incomplete observations or insufficient free space. This is **not a filesystem-enforced hard quota**. Allocated-block accounting deduplicates hardlinks within the managed scope; unique APFS extent usage is unknown. External caches, `target/`, and evidence directories are separately reported.
+
+An existing `target-agent` root link can use explicitly trusted storage. With user authorization, run `bun scripts/agentic/managed-storage.ts trust "$PWD" "/absolute/canonical/destination"`, then `bun scripts/agentic/managed-storage.ts inspect "$PWD"`. Registration creates the local ignored `.agent-cargo-storage.json`; it does not move directories or replace existing authority. Every consumer checks the exact link, destination, device/inode, and owner. Nested links and stale routes are refused. Complete allocation accounting covers the destination tree even when its size cap is disabled, and the configured free-space floor applies to both repository and destination volumes. A recreated link or replaced destination requires explicit renewed registration after investigating the change; a running guard refuses if its uncapped route becomes local storage.
 
 `SCRIPT_KIT_AGENT_INVENTORY_TIMEOUT_MS` optionally sets the complete-census deadline in integer milliseconds (default `8000`, range `1`–`300000`); incomplete measurements still refuse admission.
+
+`SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS` sets the free-space query deadline (default `2000`, range `1`–`60000` milliseconds). A bounded per-run setting can accommodate filesystem scheduling delays under load. A stalled query still cancels the build, reports `inventory_free_space_time_limit`, and never substitutes an earlier sample for the missing measurement.
 
 No automatic eviction, budget increase, low-disk bypass, or shared-cache clear follows a refusal. Historical 65/66 GiB allowances are not reusable permission. Inspect storage and exact locks, then stop the batch until the resource or ownership issue is resolved.
 

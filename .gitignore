@@ -57,6 +57,7 @@ target-agent-prompt-container/
 
 # Per-agent Cargo target dirs (scripts/agentic/agent-cargo.sh)
 target-agent/
+.agent-cargo-storage.json
 
 # External repos / proof-of-concept clones
 gpui-vibrancy-poc/

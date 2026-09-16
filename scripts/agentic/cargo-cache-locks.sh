@@ -82,10 +82,44 @@ def observe_children(value):
             groups.add(int(fields[1]))
         observations += [{'group':child['processGroupId'], 'observed':'present' if child['processGroupId'] in groups else None} for child in value['children']]
     return observations
+def trusted_root_link(part):
+    # Consume the same pinned local route as managed-storage.ts without starting
+    # another runtime for every lease observation and publication callback.
+    if part.name != 'target-agent':
+        raise RuntimeError('lease_path_symlink')
+    root = part.parent
+    if str(root.resolve()) != str(root):
+        raise RuntimeError('lease_path_symlink')
+    fd = os.open(root / '.agent-cargo-storage.json', os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid()
+            or info.st_mode & 0o022 or info.st_size > 16384):
+            raise RuntimeError('lease_route_authority_invalid')
+        route = json.loads(os.read(fd, 16385))
+    finally:
+        os.close(fd)
+    destination = route.get('destination')
+    if not isinstance(destination, str) or not os.path.isabs(destination) or os.path.normpath(destination) != destination:
+        raise RuntimeError('lease_route_invalid')
+    target = pathlib.Path(destination)
+    if any(component.is_symlink() for component in [target, *target.parents]):
+        raise RuntimeError('lease_route_destination_symlink')
+    source_info, target_info = part.lstat(), target.lstat()
+    if (not stat.S_ISDIR(target_info.st_mode) or target_info.st_uid != os.getuid()
+        or source_info.st_uid != os.getuid() or target_info.st_mode & 0o022
+        or os.readlink(part) != destination or str(part.resolve()) != destination
+        or root == target or target in root.parents or target == root / 'target' or root / 'target' in target.parents):
+        raise RuntimeError('lease_route_destination_invalid')
+    facts = {'schemaVersion':1, 'repositoryRoot':str(root), 'linkedRoot':'target-agent',
+             'destination':destination, 'linkDevice':source_info.st_dev, 'linkInode':source_info.st_ino,
+             'destinationDevice':target_info.st_dev, 'destinationInode':target_info.st_ino, 'ownerUid':os.getuid()}
+    if any(type(route.get(key)) is not type(value) or route[key] != value for key, value in facts.items()):
+        raise RuntimeError('lease_route_changed')
 def safe(path):
     for part in [path, *path.parents]:
         if part.is_symlink():
-            raise RuntimeError('lease_path_symlink')
+            trusted_root_link(part)
 def snapshot(path):
     safe(path)
     info = path.stat()

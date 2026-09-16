@@ -4,6 +4,7 @@ import * as fsPromises from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import * as workerThreads from "node:worker_threads";
+import { managedStorageRoot, trustedManagedRootLink } from "../../agentic/managed-storage.ts";
 
 export interface AllocationObservation {
   present: boolean; complete: boolean; logicalBytes: number; allocatedBytes: number;
@@ -74,7 +75,15 @@ function targetAgentAllocation(root: string): AllocationObservation {
   try {
     const stat = lstatSync(root);
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error("inventory_repository_not_directory");
-    return scanAllocation(join(root, "target-agent"), [], new Set(), Number(stat.dev), true);
+    let storage: string;
+    try { storage = managedStorageRoot(root); }
+    catch (error) { throw new Error(`inventory_output_symlink:${String(error)}`); }
+    const path = storage === root ? join(root, "target-agent") : storage;
+    const linked = existsSync(join(root, "target-agent")) && lstatSync(join(root, "target-agent")).isSymbolicLink();
+    const expectedDevice = linked ? Number(lstatSync(storage).dev) : Number(stat.dev);
+    const observation = scanAllocation(path, [], new Set(), expectedDevice, true);
+    if (managedStorageRoot(root) !== storage) throw new Error("inventory_storage_route_changed");
+    return observation;
   } catch (error) {
     return { present: false, complete: false, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors: [String(error)] };
   }
@@ -91,10 +100,25 @@ function byteLimit(name: string, fallback: number): number {
   if (!Number.isSafeInteger(bytes)) throw new Error(`invalid_${name}`);
   return bytes;
 }
-export function buildLimits() {
+function targetAgentBudget(root: string): number | null {
+  if (process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB !== undefined) return byteLimit("SCRIPT_KIT_AGENT_TARGET_BUDGET_GB", 40);
+  const path = join(resolve(root), "target-agent");
+  let stat: Stats | undefined;
+  try { stat = lstatSync(path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  if (stat?.isSymbolicLink()) {
+    const route = trustedManagedRootLink(path);
+    // Only an identity-pinned root on another volume is uncapped.
+    if (route.destinationDevice !== route.linkDevice) return null;
+  }
+  return 40 * 1024 ** 3;
+}
+
+export function buildLimits(root: string) {
   return {
-    targetAgentBudgetBytes: byteLimit("SCRIPT_KIT_AGENT_TARGET_BUDGET_GB", 40),
+    targetAgentBudgetBytes: targetAgentBudget(root),
     minimumFreeBytes: byteLimit("SCRIPT_KIT_AGENT_MIN_FREE_GB", 25),
+    freeSampleTimeoutMs: positiveLimit("SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS", 2_000, 1, 60_000),
     compilerWorkers: 2, nativeWorkersWithinEachCompiler: 1, testWorkers: 2,
     logBytesPerTask: 4 * 1024 ** 2,
     budgetScope: "all target-agent entries; dev targets, external caches and evidence outside target-agent reported separately",
@@ -105,6 +129,8 @@ export function buildLimits() {
 export function buildStorage(root: string, external = true, budgetOnly = false) {
   // Budget authority must never share diagnostic inode state: a link in target/ cannot hide budgeted bytes.
   const targetAgent = targetAgentAllocation(root);
+  let storageRoot = root;
+  try { storageRoot = managedStorageRoot(root); } catch { /* targetAgent carries the refusal. */ }
   const seen = new Set<string>(), poolSeen = new Set<string>();
   const categories = [
     ["dev-target", "target", ["pi-sidecar"], false],
@@ -124,7 +150,7 @@ export function buildStorage(root: string, external = true, budgetOnly = false) 
     deletionScope: ["immutable-artifacts", "evidence-and-tasks"].includes(category) ? "finalized-managed-records-only" : "none",
     ...(!targetAgent.complete && child.startsWith("target-agent")
       ? { present: targetAgent.present, complete: false, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors: [...targetAgent.errors] }
-      : allocation(join(root, child), exclude, poolBudgeted ? poolSeen : seen)) }));
+      : allocation(child.startsWith("target-agent") && storageRoot !== root ? join(storageRoot, child.slice("target-agent".length)) : join(root, child), exclude, poolBudgeted ? poolSeen : seen)) }));
   const cargoHome = process.env.CARGO_HOME || join(homedir(), ".cargo");
   const kitHome = process.env.SK_PATH || join(homedir(), ".scriptkit");
   const candidates = [["cargo-registry", join(cargoHome, "registry")], ["cargo-git", join(cargoHome, "git")],
@@ -134,7 +160,7 @@ export function buildStorage(root: string, external = true, budgetOnly = false) 
   const externalObservations = external ? candidates.map(([category, path]) => ({ category, path, deletionScope: "never", ...allocation(path!) })) : [];
   let volume: { complete: boolean; availableBytes: number | null; reason?: string };
   try {
-    const value = statfsSync(root), availableBytes = value.bavail * value.bsize;
+    const availableBytes = managedAvailableBytes(root);
     if (!Number.isSafeInteger(availableBytes) || availableBytes < 0) throw new Error("inventory_invalid_available");
     volume = { complete: true, availableBytes };
   }
@@ -143,7 +169,19 @@ export function buildStorage(root: string, external = true, budgetOnly = false) 
     targetAgentAllocatedBytes: targetAgent.allocatedBytes, targetAgentComplete: targetAgent.complete, targetAgentErrors: targetAgent.errors,
     agentPoolAllocatedBytes: observations.filter(value => value.poolBudgeted).reduce((sum, value) => sum + value.allocatedBytes, 0),
     uniquePhysicalBytes: null, reclaimablePhysicalBytes: null, hardQuota: false as const, automaticEviction: false as const,
-    measurement: "allocated blocks; independent target-agent budget and pool subtotal inode sets; no symlink traversal; APFS clone sharing unknown; diagnostic and external totals not additive" };
+    measurement: "allocated blocks; independent target-agent budget and pool subtotal inode sets; only a pinned root link is followed; APFS clone sharing unknown; diagnostic and external totals not additive" };
+}
+
+function managedAvailableBytes(root: string): number {
+  const storage = managedStorageRoot(root);
+  const bytes = managedVolumePaths(root, storage).map(path => { const value = statfsSync(path); return value.bavail * value.bsize; });
+  if (bytes.some(value => !Number.isSafeInteger(value) || value < 0)) throw new Error("inventory_invalid_available");
+  if (managedStorageRoot(root) !== storage) throw new Error("inventory_storage_route_changed");
+  return Math.min(...bytes);
+}
+function managedVolumePaths(root: string, storage: string): string[] {
+  // Ordinary managed directories share the repository volume by contract.
+  return storage !== root && lstatSync(join(root, "target-agent")).isSymbolicLink() ? [root, storage] : [root];
 }
 function executable(path: string | null): boolean {
   if (!path) return false;
@@ -171,7 +209,7 @@ export interface BuildResourceObservation {
   targetAgentAllocatedBytes: number;
   availableBytes: number | null;
   reserveBytes: number;
-  targetAgentBudgetBytes: number;
+  targetAgentBudgetBytes: number | null;
   minimumFreeBytes: number;
   withinLimits: boolean;
   failureCodes: string[];
@@ -214,12 +252,12 @@ export class BuildResourceError extends Error {
 }
 
 interface ResourcePolicy {
-  targetAgentBudgetBytes: number;
+  targetAgentBudgetBytes: number | null;
   minimumFreeBytes: number;
   conflict: boolean;
 }
-function resourcePolicy(): ResourcePolicy {
-  try { return { ...buildLimits(), conflict: process.env.SCRIPT_KIT_AGENT_ALLOW_LOW_DISK === "1" }; }
+function resourcePolicy(root: string): ResourcePolicy {
+  try { return { ...buildLimits(root), conflict: process.env.SCRIPT_KIT_AGENT_ALLOW_LOW_DISK === "1" }; }
   catch { return { targetAgentBudgetBytes: 0, minimumFreeBytes: 0, conflict: true }; }
 }
 
@@ -229,7 +267,7 @@ function resourceObservation(policy: ResourcePolicy, allocated: (Pick<Allocation
   const failureCodes: string[] = [];
   if (policy.conflict || !validReserve) failureCodes.push("resource_policy_conflict");
   const reserve = validReserve ? reserveBytes : 0;
-  if (allocated && allocated.allocatedBytes > policy.targetAgentBudgetBytes - reserve) failureCodes.push("resource_budget_exceeded");
+  if (policy.targetAgentBudgetBytes !== null && allocated && allocated.allocatedBytes > policy.targetAgentBudgetBytes - reserve) failureCodes.push("resource_budget_exceeded");
   if (validAvailable && available - reserve < policy.minimumFreeBytes) failureCodes.push("resource_free_space_below_floor");
   const complete = allocated?.complete === true && validAvailable;
   if (!complete) failureCodes.push("resource_observation_incomplete");
@@ -241,9 +279,9 @@ function resourceObservation(policy: ResourcePolicy, allocated: (Pick<Allocation
 }
 
 export function requireBuildAdmission(root: string, options: { phase?: string; reserveBytes?: number } = {}): BuildResourceObservation {
-  const policy = resourcePolicy(), allocated = targetAgentAllocation(root);
+  const policy = resourcePolicy(root), allocated = targetAgentAllocation(root);
   let available: number | null = null;
-  try { const value = statfsSync(root); available = value.bavail * value.bsize; } catch { /* Incomplete observations refuse below. */ }
+  try { available = managedAvailableBytes(root); } catch { /* Incomplete observations refuse below. */ }
   const observation = resourceObservation(policy, allocated, available, options.phase ?? "preflight", options.reserveBytes ?? 0);
   if (!observation.withinLimits) throw new BuildResourceError(observation.failureCodes[0]!, observation);
   return observation;
@@ -258,7 +296,8 @@ if (!workerThreads.isMainThread && workerThreads.workerData?.role === ALLOCATION
 }
 
 export function startBuildResourceGuard(root: string, onRefusal: (error: BuildResourceError) => void, initialObservation?: BuildResourceObservation): { stop(): Promise<BuildResourceSummary> } {
-  const policy = resourcePolicy();
+  const freeSampleTimeoutMs = positiveLimit("SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS", 2_000, 1, 60_000);
+  const policy = resourcePolicy(root);
   const validInitial = initialObservation != null && initialObservation.complete === true && initialObservation.withinLimits === true
     && initialObservation.reserveBytes === 0 && initialObservation.targetAgentBudgetBytes === policy.targetAgentBudgetBytes
     && initialObservation.minimumFreeBytes === policy.minimumFreeBytes && initialObservation.scope === "target-agent"
@@ -276,6 +315,7 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
   let stopped = false, stopPromise: Promise<BuildResourceSummary> | undefined;
   let worker: workerThreads.Worker | undefined, workerExited = false;
   let allocated: AllocationObservation | null = null, available: number | null = initial ? initialObservation!.availableBytes : null;
+  let availableError: string | undefined;
   let scanId = 0, pendingScan = 0, scanStarted = 0, scanFailures = 0, freeFailures = 0;
   let scanDeadline: NodeJS.Timeout | undefined;
 
@@ -325,7 +365,11 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
     void closing;
   };
   const check = (forceIncomplete = false): void => {
-    const observation = resourceObservation(policy, allocated ?? initial, available, "in-build");
+    const currentPolicy = resourcePolicy(root);
+    currentPolicy.conflict ||= policy.conflict || currentPolicy.targetAgentBudgetBytes !== policy.targetAgentBudgetBytes
+      || currentPolicy.minimumFreeBytes !== policy.minimumFreeBytes;
+    const observation = resourceObservation(currentPolicy, allocated ?? initial, available, "in-build");
+    if (availableError) observation.errors = [...(observation.errors ?? []), availableError];
     // While the initial two independent samples are pending, known breaches still refuse immediately.
     if (forceIncomplete || observation.failureCodes.some(code => code !== "resource_observation_incomplete")) refuse(observation);
   };
@@ -347,21 +391,25 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
     const started = performance.now();
     let settled = false;
     const deadline = later(() => {
-      settled = true; available = null; summary.sampleCount++; check(true);
-    }, 2_000);
+      settled = true; available = null; availableError = "inventory_free_space_time_limit"; summary.sampleCount++; check(true);
+    }, freeSampleTimeoutMs);
     const failed = (error: unknown): void => {
       if (stopped || settled) return;
-      settled = true; cancel(deadline); available = null; summary.sampleCount++;
+      settled = true; cancel(deadline); available = null; availableError = String(error); summary.sampleCount++;
       if (transient([String(error)]) && freeFailures++ === 0) {
         summary.transientFailureCount = (summary.transientFailureCount ?? 0) + 1; later(sampleFree, 250);
       } else check(true);
     };
     try {
-      void fsPromises.statfs(root).then(value => {
+      const storage = managedStorageRoot(root);
+      void Promise.all(managedVolumePaths(root, storage).map(path => fsPromises.statfs(path))).then(values => {
         if (stopped || settled) return;
-        const bytes = value.bavail * value.bsize;
-        if (!Number.isSafeInteger(bytes) || bytes < 0) { failed(new Error("inventory_invalid_available")); return; }
-        settled = true; cancel(deadline); freeFailures = 0; available = bytes; summary.sampleCount++;
+        const amounts = values.map(value => value.bavail * value.bsize);
+        const bytes = Math.min(...amounts);
+        if (amounts.some(value => !Number.isSafeInteger(value) || value < 0)) { failed(new Error("inventory_invalid_available")); return; }
+        try { if (managedStorageRoot(root) !== storage) throw new Error("inventory_storage_route_changed"); }
+        catch (error) { failed(error); return; }
+        settled = true; cancel(deadline); freeFailures = 0; available = bytes; availableError = undefined; summary.sampleCount++;
         summary.minimumSampledAvailableBytes = Math.min(summary.minimumSampledAvailableBytes ?? bytes, bytes);
         check();
         if (!stopped) later(sampleFree, Math.max(0, 1_000 - (performance.now() - started)));

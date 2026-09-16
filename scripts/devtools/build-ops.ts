@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { artifactHash, ArtifactVerificationError, compilerCompatibility, verifyImmutableArtifact } from "../agentic/build-artifact.ts";
+import { artifactHash, artifactTarget, ArtifactVerificationError, compilerCompatibility, verifyImmutableArtifact } from "../agentic/build-artifact.ts";
 import type { ArtifactReference, ArtifactKind } from "../agentic/build-artifact.ts";
 import { RETENTION_CANDIDATE_KINDS, beginManagedTask, cacheLease, canonicalJson, claimOutput, emptyOwnedCleanup, finalizeManagedTask, listManagedTasks, managedKeepSet, managedRetentionPlan, managedTaskRecordPath, pruneManagedRecords, readManagedTask, readOwnedJson, updateManagedKeepSet, updateManagedTask, validateOutputTarget } from "../agentic/artifact-lifecycle.ts";
 import type { ManagedTask, OwnedCleanup, OwnedProcessIdentity, OutputClaim, RetentionCandidate, TaskIdentity } from "../agentic/artifact-lifecycle.ts";
@@ -23,6 +23,7 @@ export const BUILD_ACTIONS: Readonly<Record<string, readonly string[]>> = Object
   "app-build": ["build", "--locked", "--bin", "script-kit-gpui"],
   "libtest-build": ["test", "--locked", "--lib", "--no-run"],
   "exporter-build": ["build", "--locked", "--profile", "test", "--bin", "export_design_tokens"],
+  "demo-build": ["build", "--locked", "--offline", "--profile", "dev", "--bin", "liquid-glass-demo"],
   "app-check": ["check", "--locked", "--lib", "--bin", "script-kit-gpui"],
   "app-clippy": ["clippy", "--locked", "--lib", "--bin", "script-kit-gpui", "--no-deps", "--", "-D", "warnings"],
   "lib-test": ["test", "--locked", "--lib"],
@@ -253,7 +254,7 @@ async function closeBuildProcess(child: OwnedProcess, streams: readonly Promise<
 }
 
 export async function executeBuildAction(root: string, action: string, args: readonly string[], timeoutMs: number): Promise<BuildOperationResult> {
-  const kind: ArtifactKind | undefined = action === "app-build" ? "application" : action === "libtest-build" ? "rust-libtest" : action === "exporter-build" ? "tool" : undefined;
+  const kind: ArtifactKind | undefined = action === "app-build" ? "application" : action === "libtest-build" ? "rust-libtest" : action === "exporter-build" ? "tool" : action === "demo-build" ? "spotlight-demo" : undefined;
   const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
   Object.assign(env, { SCRIPT_KIT_REPO_ROOT: root, SCRIPT_KIT_NONINTERACTIVE: "1", SCRIPT_KIT_AGENT_TIMEOUT_MS: String(timeoutMs) });
   delete env.SCRIPT_KIT_AGENT_POLICY_ONLY; delete env.SCRIPT_KIT_AGENT_RESULT_PATH;
@@ -305,7 +306,7 @@ export async function executeBuildAction(root: string, action: string, args: rea
     if (result.status === "succeeded" && kind) {
       const reference = result.artifacts?.[0];
       if (!reference || result.artifacts!.length !== 1) throw new Error("wrapper_artifact_reference_missing");
-      const artifact = verifyImmutableArtifact(root, reference, { kind, packageName: "script-kit-gpui", targetName: kind === "application" ? "script-kit-gpui" : kind === "rust-libtest" ? "script_kit_gpui" : "export_design_tokens", sourcePolicy: "current-content" });
+      const artifact = verifyImmutableArtifact(root, reference, { kind, packageName: "script-kit-gpui", targetName: artifactTarget(kind).targetName, profile: kind === "spotlight-demo" ? "dev" : undefined, sourcePolicy: "current-content" });
       result.artifact = artifact.reference; result.binaryPath = artifact.manifest.binaryPath;
     }
   } catch (error) {
@@ -388,8 +389,8 @@ export async function runBuildOps(argv: string[]): Promise<void> {
   };
   try {
     const options = parseOptions([...(subject.startsWith("--") ? [subject] : []), ...rest]);
-    if (verb === "discover") result = { verbs: ["discover", "inspect", "query", "act", "wait", "diagnose"], actions: Object.fromEntries(Object.entries(BUILD_ACTIONS).map(([name, args]) => [name, productStatic(args)])), managedActions: productStatic(managedActionSchemas), limits: buildLimits(), pool: "agent-debug", applicationLaunchSupported: false, cacheDeletionSupported: false, policy: policy(root, BUILD_ACTIONS["app-build"]!) };
-    else if (verb === "inspect") result = { configuration: compilerCompatibility(root), policy: policy(root, BUILD_ACTIONS[String(options.task || "app-build")] ?? []), dependencies: buildDependencies(root), limits: buildLimits(), performedInstallation: false, performedBuild: false };
+    if (verb === "discover") result = { verbs: ["discover", "inspect", "query", "act", "wait", "diagnose"], actions: Object.fromEntries(Object.entries(BUILD_ACTIONS).map(([name, args]) => [name, productStatic(args)])), managedActions: productStatic(managedActionSchemas), limits: buildLimits(root), pool: "agent-debug", applicationLaunchSupported: false, cacheDeletionSupported: false, policy: policy(root, BUILD_ACTIONS["app-build"]!) };
+    else if (verb === "inspect") result = { configuration: compilerCompatibility(root), policy: policy(root, BUILD_ACTIONS[String(options.task || "app-build")] ?? []), dependencies: buildDependencies(root), limits: buildLimits(root), performedInstallation: false, performedBuild: false };
     else if (verb === "diagnose") result = subject === "locks" ? { locks: locks(root) } : { dependencies: buildDependencies(root), locks: locks(root), tasks: listManagedTasks(root), disk: buildStorage(root) };
     else if (verb === "query") {
       if (subject === "storage") result = buildStorage(root);
@@ -406,7 +407,7 @@ export async function runBuildOps(argv: string[]): Promise<void> {
       } else if (subject === "artifact") {
         const reference = readOwnedJson(resolve(String(options.reference))) as unknown as ArtifactReference;
         const kind = String(options.task || "application") as ArtifactKind;
-        const artifact = verifyImmutableArtifact(root, reference, { kind, packageName: "script-kit-gpui", targetName: kind === "application" ? "script-kit-gpui" : kind === "tool" ? "export_design_tokens" : "script_kit_gpui", sourcePolicy: "current-content" });
+        const artifact = verifyImmutableArtifact(root, reference, { kind, packageName: "script-kit-gpui", targetName: artifactTarget(kind).targetName, profile: kind === "spotlight-demo" ? "dev" : undefined, sourcePolicy: "current-content" });
         result = { artifact: artifact.reference, manifest: artifact.manifest };
       } else throw new Error("unknown_build_query");
     } else if (verb === "act") {

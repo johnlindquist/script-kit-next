@@ -36,6 +36,7 @@ import {
 import { isDeepStrictEqual } from "node:util";
 import type { ArtifactReference, Sha256, SourceIdentity } from "./build-artifact.ts";
 import { spawnSync } from "node:child_process";
+import { trustedManagedRootLink } from "./managed-storage.ts";
 
 export interface TaskIdentity {
   readonly kind: "build-job" | "runtime-run" | "evidence-run";
@@ -281,7 +282,8 @@ function existingPathComponents(anchor: string, candidate: string): string[] {
 function assertNoSymlinkComponents(anchor: string, candidate: string): void {
   for (const path of existingPathComponents(anchor, candidate)) {
     if (lstatSync(path).isSymbolicLink()) {
-      throw new Error(`output path contains symlink component: ${path}`);
+      try { trustedManagedRootLink(path); }
+      catch (error) { throw new Error(`output path contains symlink component: ${path}; ${String(error)}`); }
     }
   }
 }

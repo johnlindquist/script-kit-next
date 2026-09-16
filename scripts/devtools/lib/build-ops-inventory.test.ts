@@ -5,8 +5,9 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import * as workerThreads from "node:worker_threads";
-import { allocation, buildLimits, buildStorage, BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "./build-ops-inventory.ts";
+import { allocation, buildStorage, BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "./build-ops-inventory.ts";
 import type { AllocationObservation, BuildResourceObservation, BuildResourceSummary } from "./build-ops-inventory.ts";
+import { registerManagedStorageRoute } from "../../agentic/managed-storage.ts";
 
 // Bun spies invoke constructor bodies as functions; this view preserves the actual module property.
 interface WorkerMockBoundary {
@@ -21,13 +22,14 @@ const numberStatfsBoundary: NumberStatfsBoundary = fsPromises;
 
 const GiB = 1024 ** 3;
 const roots: string[] = [], restore: Array<() => void> = [];
-const environment = ["SCRIPT_KIT_AGENT_TARGET_BUDGET_GB", "SCRIPT_KIT_AGENT_MIN_FREE_GB", "SCRIPT_KIT_AGENT_ALLOW_LOW_DISK", "SCRIPT_KIT_NONINTERACTIVE", "CARGO_HOME", "RUSTUP_HOME", "SK_PATH", "SCCACHE_DIR"];
+const environment = ["SCRIPT_KIT_AGENT_TARGET_BUDGET_GB", "SCRIPT_KIT_AGENT_MIN_FREE_GB", "SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS", "SCRIPT_KIT_AGENT_ALLOW_LOW_DISK", "SCRIPT_KIT_NONINTERACTIVE", "CARGO_HOME", "RUSTUP_HOME", "SK_PATH", "SCCACHE_DIR"];
 beforeEach(() => {
   const saved = environment.map(name => [name, process.env[name]] as const);
   restore.push(() => { for (const [name, value] of saved) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
   process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB = "1";
   process.env.SCRIPT_KIT_AGENT_MIN_FREE_GB = "0";
   delete process.env.SCRIPT_KIT_AGENT_ALLOW_LOW_DISK;
+  delete process.env.SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS;
 });
 afterEach(() => {
   for (const undo of restore.splice(0).reverse()) undo();
@@ -45,6 +47,22 @@ function volume(bytes: number) { return { bavail: bytes, bsize: 1 } as fs.StatsF
 function observedVolume(bytes: number): void {
   const mock = spyOn(fs, "statfsSync").mockReturnValue(volume(bytes)); restore.push(() => mock.mockRestore());
 }
+
+test("a trusted linked tree is budgeted and either volume can refuse free-space admission", () => {
+  const root = fixture(), destination = fixture();
+  fs.symlinkSync(destination, join(root, "target-agent"));
+  registerManagedStorageRoute(root, destination);
+  file(destination, "shared/payload"); file(destination, "artifacts/payload");
+  process.env.SCRIPT_KIT_AGENT_MIN_FREE_GB = "1";
+  const query = spyOn(fs, "statfsSync").mockImplementation(path => volume(String(path) === destination ? GiB - 1 : 2 * GiB));
+  restore.push(() => query.mockRestore());
+  const storage = buildStorage(root, false, true);
+  expect(storage.targetAgentComplete).toBe(true);
+  expect(storage.targetAgentAllocatedBytes).toBeGreaterThanOrEqual(16_384);
+  expect(refusal(() => requireBuildAdmission(root)).code).toBe("resource_free_space_below_floor");
+  query.mockImplementation(path => volume(String(path) === root ? GiB - 1 : 2 * GiB));
+  expect(refusal(() => requireBuildAdmission(root)).code).toBe("resource_free_space_below_floor");
+});
 function refusal(fn: () => unknown): BuildResourceError {
   try { fn(); } catch (error) { expect(error).toBeInstanceOf(BuildResourceError); return error as BuildResourceError; }
   throw new Error("expected resource refusal");
@@ -52,12 +70,47 @@ function refusal(fn: () => unknown): BuildResourceError {
 function sample(allocatedBytes: number, errors: string[] = []): AllocationObservation {
   return { present: true, complete: errors.length === 0, logicalBytes: allocatedBytes, allocatedBytes, entries: 1, linksNotFollowed: 0, errors };
 }
+function externalFixture(allocatedBytes = 42 * GiB) {
+  const root = fixture(), destination = fixture(), payload = file(destination, "unknown/payload");
+  const original = fs.lstatSync, device = Number(fs.lstatSync(root).dev) + 1;
+  const stat = spyOn(fs, "lstatSync").mockImplementation(((candidate: fs.PathLike, ...args: unknown[]) => {
+    const value = Reflect.apply(original, fs, [candidate, ...args]), path = String(candidate);
+    if (path !== destination && !path.startsWith(destination + "/")) return value;
+    return Object.assign(Object.create(Object.getPrototypeOf(value)), value, { dev: device },
+      path === payload ? { blocks: allocatedBytes / 512, size: allocatedBytes } : {});
+  }) as typeof fs.lstatSync);
+  restore.push(() => stat.mockRestore());
+  fs.symlinkSync(destination, join(root, "target-agent"));
+  registerManagedStorageRoute(root, destination);
+  delete process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB;
+  return { root, destination };
+}
 
-test("defaults describe the complete target-agent policy without raising existing limits", () => {
-  delete process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB; delete process.env.SCRIPT_KIT_AGENT_MIN_FREE_GB;
-  expect(buildLimits()).toMatchObject({ targetAgentBudgetBytes: 40 * GiB, minimumFreeBytes: 25 * GiB, compilerWorkers: 2, nativeWorkersWithinEachCompiler: 1, testWorkers: 2, hardQuota: false, automaticEviction: false });
-  expect(buildLimits()).not.toHaveProperty("poolBudgetBytes");
+test("trusted cross-volume storage is uncapped but publication still reserves free space", () => {
+  const f = externalFixture(); observedVolume(GiB);
+  process.env.SCRIPT_KIT_AGENT_MIN_FREE_GB = "1";
+  const admitted = requireBuildAdmission(f.root);
+  expect(admitted.targetAgentAllocatedBytes).toBeGreaterThan(40 * GiB);
+  expect(admitted.targetAgentBudgetBytes).toBeNull();
+  expect(admitted.withinLimits).toBe(true);
+  expect(refusal(() => requireBuildAdmission(f.root, { phase: "pre-publication", reserveBytes: 1 })).code).toBe("resource_free_space_below_floor");
 });
+
+test("an explicit allocation budget still limits trusted cross-volume storage", () => {
+  const f = externalFixture(); observedVolume(2 * GiB);
+  process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB = "1";
+  expect(refusal(() => requireBuildAdmission(f.root)).code).toBe("resource_budget_exceeded");
+});
+
+test("uncapped storage still refuses incomplete allocation observations", () => {
+  const f = externalFixture(); observedVolume(2 * GiB);
+  fs.symlinkSync(f.root, join(f.destination, "shared"));
+  const denied = refusal(() => requireBuildAdmission(f.root));
+  expect(denied.code).toBe("resource_observation_incomplete");
+  expect(denied.observation.targetAgentBudgetBytes).toBeNull();
+  expect(denied.observation.complete).toBe(false);
+});
+
 
 test("complete scope includes exports, pending, shared, quarantine, runtime, leases and unknown entries", () => {
   const root = fixture();
@@ -208,8 +261,8 @@ class FixtureWorker extends EventEmitter {
   answer(value: AllocationObservation): void { this.emit("message", { id: this.requests.at(-1), allocation: value }); }
 }
 async function microtasks(): Promise<void> { for (let i = 0; i < 8; i++) await Promise.resolve(); }
-function guardFixture() {
-  const root = fixture(), worker = new FixtureWorker(), refusals: BuildResourceError[] = [];
+function guardFixture(root = fixture()) {
+  const worker = new FixtureWorker(), refusals: BuildResourceError[] = [];
   let now = 0, next = 0;
   const timers = new Map<number, { at: number; callback: () => void }>();
   const timer = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, ms = 0) => {
@@ -232,6 +285,20 @@ function guardFixture() {
   };
   return { root, worker, refusals, timers, free, advance, start: (initial?: BuildResourceObservation) => startBuildResourceGuard(root, error => refusals.push(error), initial) };
 }
+
+test("an uncapped guard refuses when its pinned external route becomes local storage", async () => {
+  const f = externalFixture(8192), g = guardFixture(f.root); observedVolume(2 * GiB);
+  const guard = g.start(requireBuildAdmission(f.root));
+  try {
+    g.worker.answer(sample(8192)); await microtasks();
+    expect(g.refusals).toEqual([]);
+    fs.unlinkSync(join(f.root, "target-agent"));
+    fs.mkdirSync(join(f.root, "target-agent"));
+    await g.advance(1_000);
+    expect(g.refusals.map(error => error.code)).toEqual(["resource_policy_conflict"]);
+    expect(await guard.stop()).toMatchObject({ complete: false, workerClosed: true });
+  } finally { await guard.stop(); }
+});
 
 test("guard samples bounded summaries, admits one scan in flight, and closes timers and worker once", async () => {
   const f = guardFixture(), guard = f.start();
@@ -326,7 +393,35 @@ test("a stalled free-space query refuses on its deadline without launching a sec
   const guard = f.start(); f.worker.answer(sample(4096)); await f.advance(2_000);
   expect(f.refusals.map(error => error.code)).toEqual(["resource_observation_incomplete"]);
   expect(f.free).toHaveBeenCalledTimes(1);
+  expect(f.refusals[0]!.observation.errors).toContain("inventory_free_space_time_limit");
   expect(await guard.stop()).toMatchObject({ complete: false, workerClosed: true }); expect(f.timers.size).toBe(0);
+});
+
+test("a bounded free-space deadline accepts a delayed authoritative measurement", async () => {
+  const f = guardFixture(), free = Promise.withResolvers<fs.StatsFs>();
+  process.env.SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS = "10000";
+  f.free.mockImplementation(() => free.promise);
+  const guard = f.start(); f.worker.answer(sample(4096)); await f.advance(3_000);
+  expect(f.refusals).toEqual([]);
+  free.resolve(volume(2 * GiB)); await microtasks();
+  expect(await guard.stop()).toMatchObject({ complete: true, minimumSampledAvailableBytes: 2 * GiB });
+});
+
+test("an extended free-space deadline still refuses a stalled query exactly once", async () => {
+  const f = guardFixture();
+  process.env.SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS = "10000";
+  f.free.mockImplementation(() => Promise.withResolvers<fs.StatsFs>().promise);
+  const guard = f.start(); f.worker.answer(sample(4096)); await f.advance(9_999);
+  expect(f.refusals).toEqual([]); await f.advance(1);
+  expect(f.refusals.map(error => error.code)).toEqual(["resource_observation_incomplete"]);
+  expect(f.free).toHaveBeenCalledTimes(1);
+  expect(await guard.stop()).toMatchObject({ complete: false, workerClosed: true });
+});
+
+for (const value of ["0", "-1", "disabled", "60001"]) test(`invalid free-space deadline ${value} starts no worker`, () => {
+  const f = guardFixture(); process.env.SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS = value;
+  expect(() => f.start()).toThrow("invalid_SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS");
+  expect(f.worker.requests).toHaveLength(0); expect(f.free).not.toHaveBeenCalled();
 });
 
 test("the real request-owned worker scans a tiny fixture and closes its thread", async () => {

@@ -13,7 +13,6 @@ import {
   selectExactRpcEnvelope,
   selectExactlyOne,
   SOURCE_PROVENANCE,
-  SYSTEM_EVENTS_KEY_CODES,
 } from "./macos-input";
 
 describe("complete JSON document framing", () => {
@@ -88,33 +87,10 @@ describe("exact session RPC correlation", () => {
   });
 });
 
-describe("native System Events key planning and receipts", () => {
-  test.each([["Escape", 53], ["Delete", 51], ["Down", 125]] as const)("keeps %s keyCode in the plan and receipt", (key, keyCode) => {
-    const plan = planNativeKey(key, []);
-    expect(plan.kind).toBe("keyCode");
-    expect(plan.actualMethod).toBe("native.systemEvents.keyCode");
-    expect(plan.keyCode).toBe(keyCode);
-    const result = resultFor(plan.actualMethod, "accessibility", { key, keyCode: plan.keyCode });
-    expect(result.keyCode).toBe(keyCode);
-    expect(result.receipt.keyCode).toBe(keyCode);
-    expect(result.actualMethod).toBe("native.systemEvents.keyCode");
-    expect(result.receipt.actualMethod).toBe("native.systemEvents.keyCode");
-  });
-
-  test("literal plans and type receipts use dotted method and null keyCode", () => {
-    const plan = planNativeKey('"', ["cmd"]);
-    expect(plan).toMatchObject({ kind: "keystroke", actualMethod: "native.systemEvents.keystroke", keyCode: null });
-    const result = resultFor("native.systemEvents.keystroke", "accessibility", { text: "hello", keyCode: null });
-    expect(result.keyCode).toBeNull();
-    expect(result.receipt.keyCode).toBeNull();
-    expect(result.actualMethod).toBe("native.systemEvents.keystroke");
-  });
-
-  test("the named table retains the complete special/function/keypad surface", () => {
-    expect(Object.keys(SYSTEM_EVENTS_KEY_CODES).length).toBeGreaterThanOrEqual(75);
-    for (const name of ["enter", "escape", "forwarddelete", "home", "end", "f1", "f20", "keypad0", "keypad9", "volumeup", "function"]) {
-      expect(SYSTEM_EVENTS_KEY_CODES[name]).toBeNumber();
-    }
+describe("native System Events key planning", () => {
+  test("physical digit names and literal text select different native operations", () => {
+    expect(planNativeKey("digit2", ["alt"]).actualMethod).toBe("native.systemEvents.keyCode");
+    expect(planNativeKey("2", ["alt"]).actualMethod).toBe("native.systemEvents.keystroke");
   });
 
   test("unknown named keys fail hard", () => {

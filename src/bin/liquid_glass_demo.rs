@@ -7,11 +7,24 @@
 //! GPUI's transparent Metal surface. The five visible pieces are therefore
 //! sibling views in one native window, so AppKit drags them atomically.
 //!
-//! Run with:
-//! `./scripts/agentic/agent-cargo.sh run --bin liquid-glass-demo`
+//! Build with `bun scripts/devtools/devtools.ts build-ops act demo-build
+//! --artifact-out <new-reference.json>`, then verify that reference as
+//! `spotlight-demo` and launch its immutable executable separately from Cargo.
+//! A resident preview must not retain Cargo's build deadline or pool lease.
+//!
+//! Option+2 globally shows/replays the demo while this process runs. Enter or
+//! Space toggles the split locally; Escape hides the window; Command+Q quits.
 
-use std::time::Instant;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::{Duration, Instant};
 
+use global_hotkey::{
+    hotkey::{Code, HotKey, Modifiers},
+    GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
+};
 use gpui::{
     div, prelude::*, px, size, AnimationExt, Bounds, Context, FocusHandle, KeyDownEvent, Render,
     Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
@@ -92,6 +105,7 @@ struct SpotlightGlassDemo {
     transition_started: Option<Instant>,
     detached: bool,
     auto_split_started: bool,
+    replay_id: u64,
     bar_width: Spring,
     circle_progress: Spring,
     shadow_disabled: bool,
@@ -108,6 +122,7 @@ impl SpotlightGlassDemo {
             transition_started: None,
             detached: false,
             auto_split_started: false,
+            replay_id: 0,
             // Tuned to the source: fast front-loaded contraction, a restrained
             // 5-7% overshoot, then target lock inside roughly 500 ms.
             bar_width: Spring::new(EXPANDED_BAR_W, 320.0, 24.0),
@@ -119,6 +134,31 @@ impl SpotlightGlassDemo {
             #[cfg(target_os = "macos")]
             native: None,
         }
+    }
+
+    fn replay(&mut self) -> u64 {
+        let now = Instant::now();
+        self.started = now;
+        self.last_frame = now;
+        self.transition_started = None;
+        self.detached = false;
+        self.auto_split_started = false;
+        self.bar_width.position = EXPANDED_BAR_W;
+        self.bar_width.velocity = 0.0;
+        self.bar_width.target = EXPANDED_BAR_W;
+        self.circle_progress.position = 0.0;
+        self.circle_progress.velocity = 0.0;
+        self.circle_progress.target = 0.0;
+
+        // Put the native glass back at the initial frame before revealing a
+        // previously hidden window; the next render resumes its normal clock.
+        #[cfg(target_os = "macos")]
+        if let Some(native) = &self.native {
+            native.sync(EXPANDED_BAR_W, 0.0, BRIDGE_SPACING, true);
+        }
+
+        self.replay_id += 1;
+        self.replay_id
     }
 
     fn set_detached(&mut self, detached: bool) {
@@ -170,10 +210,53 @@ impl SpotlightGlassDemo {
         BRIDGE_SPACING + (SETTLED_SPACING - BRIDGE_SPACING) * retract
     }
 
-    fn on_key(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
+    fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         match event.keystroke.key.as_str() {
             "enter" | "space" => self.set_detached(!self.detached),
-            "escape" => cx.quit(),
+            "escape" => {
+                let handle = window.window_handle();
+                // Native orderOut: calls back into GPUI synchronously. Run it
+                // after this key listener releases the App borrow.
+                cx.spawn(async move |_this, cx| {
+                    #[cfg(target_os = "macos")]
+                    {
+                        if let Ok(Some(ns_window)) =
+                            cx.update_window(handle, |_, window, _| ns_window_of(window))
+                        {
+                            use cocoa::base::nil;
+                            use objc::{msg_send, sel, sel_impl};
+
+                            // SAFETY: The live window is resolved on the AppKit
+                            // main thread, outside GPUI's App borrow.
+                            unsafe {
+                                let _: () = msg_send![ns_window, orderOut: nil];
+                                let visible: bool = msg_send![ns_window, isVisible];
+                                if !visible {
+                                    println!(
+                                        "{{\"event\":\"liquid_glass_demo\",\"action\":\"hidden\"}}"
+                                    );
+                                } else {
+                                    eprintln!("liquid-glass-demo: failed to hide the demo window");
+                                }
+                            }
+                        } else {
+                            eprintln!("liquid-glass-demo: demo window is unavailable for hiding");
+                        }
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    cx.update(|cx| {
+                        cx.hide();
+                        println!("{{\"event\":\"liquid_glass_demo\",\"action\":\"hidden\"}}");
+                    });
+                })
+                .detach();
+                return;
+            }
+            "q" if event.keystroke.modifiers.platform => {
+                println!("{{\"event\":\"liquid_glass_demo\",\"action\":\"quit\"}}");
+                cx.quit();
+                return;
+            }
             _ => return,
         }
         cx.notify();
@@ -187,6 +270,16 @@ fn ns_view_of(window: &Window) -> Option<cocoa::base::id> {
         return None;
     };
     Some(appkit.ns_view.as_ptr() as cocoa::base::id)
+}
+#[cfg(target_os = "macos")]
+fn ns_window_of(window: &Window) -> Option<cocoa::base::id> {
+    use cocoa::base::nil;
+    use objc::{msg_send, sel, sel_impl};
+
+    let ns_view = ns_view_of(window)?;
+    // SAFETY: The view belongs to the live GPUI window on the AppKit main thread.
+    let ns_window = unsafe { msg_send![ns_view, window] };
+    (ns_window != nil).then_some(ns_window)
 }
 
 #[cfg(target_os = "macos")]
@@ -685,22 +778,154 @@ impl Render for SpotlightGlassDemo {
 fn main() {
     application().run(|cx| {
         let bounds = Bounds::centered(None, size(px(WINDOW_W), px(WINDOW_H)), cx);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: None,
-                focus: true,
-                show: true,
-                kind: WindowKind::PopUp,
-                is_movable: true,
-                is_resizable: false,
-                window_background: WindowBackgroundAppearance::Transparent,
-                ..Default::default()
-            },
-            |_, cx| cx.new(SpotlightGlassDemo::new),
-        )
-        .expect("open the Spotlight detached-glass prototype");
+        let demo_window = cx
+            .open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    titlebar: None,
+                    focus: true,
+                    show: true,
+                    kind: WindowKind::PopUp,
+                    is_movable: true,
+                    is_resizable: false,
+                    window_background: WindowBackgroundAppearance::Transparent,
+                    ..Default::default()
+                },
+                |_, cx| cx.new(SpotlightGlassDemo::new),
+            )
+            .expect("open the Spotlight detached-glass prototype");
         cx.on_window_closed(|cx, _| cx.quit()).detach();
         cx.activate(true);
+
+        // Carbon registration must happen on the main thread with AppKit's
+        // event loop running. Only this demo process owns this one shortcut.
+        let manager = match GlobalHotKeyManager::new() {
+            Ok(manager) => manager,
+            Err(error) => {
+                eprintln!("liquid-glass-demo: cannot create global hotkey manager: {error}");
+                println!("{{\"event\":\"liquid_glass_demo\",\"action\":\"hotkey_unavailable\",\"code\":\"manager_initialization_failed\"}}");
+                cx.quit();
+                return;
+            }
+        };
+        let hotkey = HotKey::new(Some(Modifiers::ALT), Code::Digit2);
+        if let Err(error) = manager.register(hotkey) {
+            eprintln!("liquid-glass-demo: cannot register global alt+2: {error}");
+            println!("{{\"event\":\"liquid_glass_demo\",\"action\":\"hotkey_unavailable\",\"shortcut\":\"alt+2\",\"code\":\"registration_failed\"}}");
+            cx.quit();
+            return;
+        }
+
+        let (tx, rx) = async_channel::bounded::<()>(16);
+        let stopping = Arc::new(AtomicBool::new(false));
+        let listener_stopping = Arc::clone(&stopping);
+        let listener = std::thread::Builder::new()
+            .name("liquid-glass-demo-hotkey".into())
+            .spawn(move || {
+                let events = GlobalHotKeyEvent::receiver();
+                while !listener_stopping.load(Ordering::Acquire) {
+                    match events.recv_timeout(Duration::from_millis(100)) {
+                        Ok(event) if event.id == hotkey.id() && event.state == HotKeyState::Pressed => {
+                            if tx.send_blocking(()).is_err() {
+                                break;
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(error) if error.is_timeout() => {}
+                        Err(_) => {
+                            eprintln!("liquid-glass-demo: global hotkey event receiver disconnected");
+                            break;
+                        }
+                    }
+                }
+            });
+        let listener = match listener {
+            Ok(listener) => listener,
+            Err(error) => {
+                eprintln!("liquid-glass-demo: cannot start global hotkey listener: {error}");
+                if let Err(error) = manager.unregister(hotkey) {
+                    eprintln!("liquid-glass-demo: cannot unregister alt+2: {error}");
+                }
+                cx.quit();
+                return;
+            }
+        };
+
+        let quit_rx = rx.clone();
+        let mut listener = Some(listener);
+        cx.on_app_quit(move |_| {
+            stopping.store(true, Ordering::Release);
+            quit_rx.close();
+            if let Err(error) = manager.unregister(hotkey) {
+                eprintln!("liquid-glass-demo: cannot unregister alt+2: {error}");
+            }
+            let listener = listener.take();
+            async move {
+                if let Some(listener) = listener {
+                    if listener.join().is_err() {
+                        eprintln!("liquid-glass-demo: global hotkey listener panicked during shutdown");
+                    }
+                }
+            }
+        })
+        .detach();
+
+        // The foreground receiver is owned by the application, not the render
+        // cycle; it therefore keeps delivering while the window is hidden.
+        cx.spawn(async move |cx| {
+            while rx.recv().await.is_ok() {
+                let preview = demo_window.update(cx, |demo, window, cx| {
+                    let replay_id = demo.replay();
+                    cx.notify();
+                    #[cfg(target_os = "macos")]
+                    return (replay_id, ns_window_of(window));
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        window.activate_window();
+                        (replay_id, ())
+                    }
+                });
+                let (replay_id, native_window) = match preview {
+                    Ok(preview) => preview,
+                    Err(error) => {
+                        eprintln!("liquid-glass-demo: demo window is unavailable for replay: {error}");
+                        break;
+                    }
+                };
+                #[cfg(target_os = "macos")]
+                {
+                    use cocoa::base::{id, nil, YES};
+                    use objc::{class, msg_send, sel, sel_impl};
+
+                    let Some(native_window) = native_window else {
+                        eprintln!("liquid-glass-demo: native window is unavailable for replay");
+                        continue;
+                    };
+                    // AppKit activation fires synchronous GPUI delegate callbacks.
+                    // Like the main window's show path, keep it outside the App borrow.
+                    unsafe {
+                        let app: id = msg_send![class!(NSApplication), sharedApplication];
+                        let _: () = msg_send![app, activateIgnoringOtherApps: YES];
+                        let _: () = msg_send![native_window, makeKeyAndOrderFront: nil];
+                        let visible: bool = msg_send![native_window, isVisible];
+                        if !visible {
+                            eprintln!("liquid-glass-demo: failed to reveal the demo window");
+                            continue;
+                        }
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    let _ = native_window;
+                    cx.update(|cx| cx.activate(true));
+                }
+                println!(
+                    "{{\"event\":\"liquid_glass_demo\",\"action\":\"replay\",\"source\":\"alt+2\",\"replay_id\":{}}}",
+                    replay_id
+                );
+            }
+        })
+        .detach();
+        println!("{{\"event\":\"liquid_glass_demo\",\"action\":\"hotkey_registered\",\"shortcut\":\"alt+2\"}}");
     });
 }

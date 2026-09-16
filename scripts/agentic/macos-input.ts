@@ -157,6 +157,9 @@ export interface InputResult extends DeliveryEvidence {
 }
 
 export const SYSTEM_EVENTS_KEY_CODES: Readonly<Record<string, number>> = Object.freeze({
+  // Physical number-row keys for global shortcuts; literal digits remain text.
+  digit0: 29, digit1: 18, digit2: 19, digit3: 20, digit4: 21,
+  digit5: 23, digit6: 22, digit7: 26, digit8: 28, digit9: 25,
   enter: 36, return: 36, tab: 48, space: 49, delete: 51, backspace: 51,
   escape: 53, esc: 53, command: 55, cmd: 55, shift: 56, capslock: 57,
   option: 58, alt: 58, control: 59, ctrl: 59, rightshift: 60,
@@ -620,7 +623,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       emit({ schemaVersion: SCHEMA_VERSION, status: "ok", command, data: { osascript: existsSync("/usr/bin/osascript"), systemEventsOnlyForKeyboard: true } });
       return 0;
     } else if (command === "help" || command === "--help") {
-      emit({ schemaVersion: SCHEMA_VERSION, status: "ok", command: "help", data: { commands: ["key", "type", "click", "check"], forceNativeBypassesProtocolFor: ["key", "type"], deliveredMeans: "delivery_proved_at_deliveryScope" } });
+      emit({ schemaVersion: SCHEMA_VERSION, status: "ok", command: "help", data: { commands: ["key", "type", "click", "check"], namedKeys: Object.keys(SYSTEM_EVENTS_KEY_CODES), modifierAliases: Object.keys(MODIFIER_ALIASES), forceNativeBypassesProtocolFor: ["key", "type"], deliveredMeans: "delivery_proved_at_deliveryScope" } });
       return 0;
     } else throw hardError("KEY_INJECTOR_FAILED", `Unknown command: ${command}`);
 

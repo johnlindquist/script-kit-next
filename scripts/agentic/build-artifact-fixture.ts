@@ -2,7 +2,7 @@ import { chmodSync, lstatSync, mkdirSync, realpathSync, rmSync, writeFileSync } 
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { artifactHash, assertSourceBoundary, compilerCompatibility, observeArtifactSource, observeToolchain, publishImmutableArtifact } from "./build-artifact.ts";
+import { artifactHash, artifactTarget, assertSourceBoundary, compilerCompatibility, observeArtifactSource, observeToolchain, publishImmutableArtifact } from "./build-artifact.ts";
 import type { ArtifactKind, ArtifactReference } from "./build-artifact.ts";
 import { beginManagedTask, cacheLease, canonicalJson, claimOutput, emptyOwnedCleanup, finalizeManagedTask, listManagedTasks, removeFinalizedManagedTask, updateManagedTask, validateOutputTarget, withManagedMetadata } from "./artifact-lifecycle.ts";
 import type { ManagedTask } from "./artifact-lifecycle.ts";
@@ -13,7 +13,7 @@ export interface ArtifactFixture { reference: ArtifactReference; executablePath:
 export function createArtifactFixture(directory: string, options: { kind?: ArtifactKind; executable?: string; existingRepository?: boolean; features?: readonly string[] } = {}): ArtifactFixture {
   const root = realpathSync(directory);
   const kind = options.kind ?? "application";
-  const name = kind === "application" ? "script-kit-gpui" : kind === "rust-libtest" ? "script_kit_gpui" : "export_design_tokens";
+  const { targetName: name, sourcePath } = artifactTarget(kind);
   if (!options.existingRepository) {
   writeFileSync(join(root, ".gitignore"), "target-agent/\n.test-output/\n");
   mkdirSync(join(root, "scripts/agentic"), { recursive: true });
@@ -25,6 +25,7 @@ export function createArtifactFixture(directory: string, options: { kind?: Artif
   writeFileSync(join(root, "src/main.rs"), "fn main() {}\n");
   writeFileSync(join(root, "src/lib.rs"), "pub fn fixture() {}\n");
   writeFileSync(join(root, "src/bin/export_design_tokens.rs"), "fn main() {}\n");
+  writeFileSync(join(root, "src/bin/liquid_glass_demo.rs"), "fn main() {}\n");
   for (const args of [["init", "-q"], ["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-qm", "fixture"]]) {
     const out = spawnSync("git", args, { cwd: root, encoding: "utf8" });
     if (out.status !== 0) throw new Error(out.stderr);
@@ -48,7 +49,7 @@ export function createArtifactFixture(directory: string, options: { kind?: Artif
     writeFileSync(executable, options.executable ?? "#!/bin/sh\nprintf 'fixture\\n'\n", { mode: 0o700 });
     reference = publishImmutableArtifact(root, task, executable, {
       artifactKind: kind, target: { packageId: `path+file://${root}#script-kit-gpui@0.0.0`, packageName: "script-kit-gpui", targetName: name,
-        targetKind: [kind === "rust-libtest" ? "lib" : "bin"], crateTypes: [kind === "rust-libtest" ? "lib" : "bin"], sourcePath: kind === "rust-libtest" ? "src/lib.rs" : kind === "tool" ? "src/bin/export_design_tokens.rs" : "src/main.rs",
+        targetKind: [kind === "rust-libtest" ? "lib" : "bin"], crateTypes: [kind === "rust-libtest" ? "lib" : "bin"], sourcePath,
         features: [...(options.features ?? [])], cargoProfile: { test: kind === "rust-libtest" }, requestedProfile: kind === "rust-libtest" ? "test" : "dev", targetTriple: host },
       source, toolchain, requestedPolicySha256: artifactHash(canonicalJson(requestedPolicy)), effectiveConfiguration,
       effectiveConfigurationSha256: artifactHash(canonicalJson(effectiveConfiguration)), requiresExactGitHead: false,
@@ -85,7 +86,7 @@ export function createBuildWorkspace(directory: string): BuildWorkspaceFixture {
   writeFileSync(join(root, "Cargo.toml"), '[package]\nname="script-kit-gpui"\nversion="0.0.0"\nedition="2021"\n');
   writeFileSync(join(root, "Cargo.lock"), "version = 4\n");
   writeFileSync(join(root, "rust-toolchain.toml"), '[toolchain]\nchannel="1.98.0"\nprofile="minimal"\ncomponents=["rustfmt","clippy","rust-analyzer"]\n');
-  for (const name of ["main.rs", "lib.rs", "bin/export_design_tokens.rs"]) writeFileSync(join(root, "src", name), "// fixture input\n");
+  for (const name of ["main.rs", "lib.rs", "bin/export_design_tokens.rs", "bin/liquid_glass_demo.rs"]) writeFileSync(join(root, "src", name), "// fixture input\n");
   for (const args of [["init", "-q"], ["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-qm", "fixture"]]) {
     const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
     if (result.status !== 0) throw new Error(result.stderr);
@@ -140,7 +141,7 @@ if '--message-format=json-render-diagnostics' in args:
         else:
             executable.write_text('#!/bin/sh\\nprintf fixture\\n')
         executable.chmod(0o700); stamp.write_text(generation)
-    source = 'src/lib.rs' if lib else ('src/main.rs' if name == 'script-kit-gpui' else 'src/bin/export_design_tokens.rs')
+    source = 'src/lib.rs' if lib else ('src/main.rs' if name == 'script-kit-gpui' else 'src/bin/liquid_glass_demo.rs' if name == 'liquid-glass-demo' else 'src/bin/export_design_tokens.rs')
     message = {'reason':'compiler-artifact','package_id':'path+' + root.as_uri() + '#script-kit-gpui@0.0.0',
       'target':{'name':name,'kind':['lib' if lib else 'bin'],'crate_types':['lib' if lib else 'bin'],'src_path':str(root/source)},
       'features':args[args.index('--features')+1].split(',') if '--features' in args else [], 'profile':{'test':lib},'executable':str(executable),'fresh':fresh}

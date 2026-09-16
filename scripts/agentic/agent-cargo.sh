@@ -423,7 +423,7 @@ lock_dir="${lock_root}/${lock_name}.lock"
 shared_cache_dir="${REPO_ROOT}/target-agent/shared"
 metal_module_cache="${SCRIPT_KIT_METAL_MODULE_CACHE_DIR:-${shared_cache_dir}/clang-modules}"
 
-for protected_cache_path in \
+protected_cache_paths=( \
   "${REPO_ROOT}/target-agent" \
   "${REPO_ROOT}/target-agent/pools" \
   "${REPO_ROOT}/target-agent/agents" \
@@ -431,11 +431,9 @@ for protected_cache_path in \
   "${REPO_ROOT}/target-agent/shared" \
   "${REPO_ROOT}/target-agent/artifacts" \
   "$target_dir" \
-  "$metal_module_cache"; do
-  if [[ -L "$protected_cache_path" ]]; then
-    worker_failure "protected cache ownership cannot follow a symlink: ${protected_cache_path}"
-  fi
-done
+  "$metal_module_cache" )
+bun "${SCRIPT_ROOT}/managed-storage.ts" validate "${protected_cache_paths[@]}" >/dev/null \
+  || worker_failure "protected cache route was refused"
 
 if [[ "${SCRIPT_KIT_AGENT_POLICY_ONLY:-0}" == "1" ]]; then
   printf '{"schemaVersion":3,"pool":"%s","jobs":%s,"test_threads":%s,"native_workers":1,"cachePolicy":"%s","incremental":{"enabled":false,"owner":"agent-cargo"},"cacheProbeStatus":"not-probed","passive":true}\n' "$pool" "$CARGO_BUILD_JOBS" "$RUST_TEST_THREADS" "$use_sccache"

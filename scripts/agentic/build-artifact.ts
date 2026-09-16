@@ -9,11 +9,22 @@ import type { Stats } from "node:fs";
 import { atomicManagedJson, beginManagedTask, bindSupervisorTask, cacheLease, canonicalJson, claimOutput, emptyOwnedCleanup, finalizeManagedTask, finalizeSupervisorTask, isRetiredManagedArtifact, managedTaskRecordPath, readManagedTask, readOwnedJson, registerManagedArtifactReference, registerManagedPublicationIntent, updateManagedPublicationIntent, updateManagedTask, validateOutputTarget, withManagedMetadata } from "./artifact-lifecycle.ts";
 import type { ManagedTask, OwnedCleanup, OwnedProcessIdentity, TaskIdentity } from "./artifact-lifecycle.ts";
 import { spawnOwnedProcess } from "./owned-process.ts";
+import { trustedManagedRootLink } from "./managed-storage.ts";
 import { BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "../devtools/lib/build-ops-inventory.ts";
 import type { BuildResourceObservation, BuildResourceReport, BuildResourceSummary } from "../devtools/lib/build-ops-inventory.ts";
 
 export type Sha256 = string;
-export type ArtifactKind = "application" | "rust-libtest" | "tool";
+export type ArtifactKind = "application" | "rust-libtest" | "tool" | "spotlight-demo";
+const ARTIFACT_TARGETS = {
+  application: { targetName: "script-kit-gpui", sourcePath: "src/main.rs" },
+  "rust-libtest": { targetName: "script_kit_gpui", sourcePath: "src/lib.rs" },
+  tool: { targetName: "export_design_tokens", sourcePath: "src/bin/export_design_tokens.rs" },
+  "spotlight-demo": { targetName: "liquid-glass-demo", sourcePath: "src/bin/liquid_glass_demo.rs" },
+} as const satisfies Record<ArtifactKind, { targetName: string; sourcePath: string }>;
+export function artifactTarget(kind: ArtifactKind) {
+  if (!Object.hasOwn(ARTIFACT_TARGETS, kind)) refuse("manifest_invalid", "unsupported artifact kind");
+  return ARTIFACT_TARGETS[kind];
+}
 export interface ArtifactReference { readonly manifestPath: string; readonly manifestSha256: Sha256; }
 export interface CargoTargetIdentity {
   readonly packageId: string; readonly packageName: string; readonly targetName: string;
@@ -71,7 +82,12 @@ export function canonicalArtifactPath(root: string, child: string): string {
   let cursor = realpathSync(root);
   for (const part of child.split("/")) {
     cursor = join(cursor, part);
-    try { if (lstatSync(cursor).isSymbolicLink()) refuse("unsafe_artifact_path", "symlink in owned path"); }
+    try {
+      if (lstatSync(cursor).isSymbolicLink()) {
+        try { trustedManagedRootLink(cursor); }
+        catch { refuse("unsafe_artifact_path", "untrusted or changed symlink in owned path"); }
+      }
+    }
     catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error; }
   }
   return cursor;
@@ -613,8 +629,7 @@ export interface CargoArtifactMessage {
 }
 
 export function selectCargoArtifact(root: string, messages: readonly CargoArtifactMessage[], kind: ArtifactKind, profile: CargoTargetIdentity["requestedProfile"], targetTriple: string): { message: CargoArtifactMessage; target: CargoTargetIdentity } {
-  const name = kind === "application" ? "script-kit-gpui" : kind === "rust-libtest" ? "script_kit_gpui" : "export_design_tokens";
-  const source = kind === "application" ? "src/main.rs" : kind === "rust-libtest" ? "src/lib.rs" : "src/bin/export_design_tokens.rs";
+  const { targetName: name, sourcePath: source } = artifactTarget(kind);
   const packagePrefix = `path+${pathToFileURL(root).href}#`;
   const selected = messages.filter(message => message.reason === "compiler-artifact" && message.target?.name === name
     && message.package_id.startsWith(packagePrefix)
@@ -809,13 +824,18 @@ export async function runWrapperCargo(args: string[]): Promise<number> {
     logFd = openSync(join(claim.root, "cargo.log"), constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
     const wantsArtifact = !!process.env.SCRIPT_KIT_AGENT_ARTIFACT_KIND;
     const mutatesSource = !wantsArtifact && ((args[0] === "fmt" && !args.includes("--check")) || args[0] === "metadata");
-    const kind: ArtifactKind = process.env.SCRIPT_KIT_AGENT_ARTIFACT_KIND === "rust-libtest" ? "rust-libtest"
+    const inferredKind: ArtifactKind = args[0] === "test" && args.includes("--lib") && args.includes("--no-run") ? "rust-libtest"
+      : args.some((value, i) => (value === "--bin" && args[i + 1] === "liquid-glass-demo") || value === "--bin=liquid-glass-demo") ? "spotlight-demo"
       : args.some((value, i) => (value === "--bin" && args[i + 1] === "export_design_tokens") || value === "--bin=export_design_tokens") ? "tool" : "application";
+    const kind = wantsArtifact ? process.env.SCRIPT_KIT_AGENT_ARTIFACT_KIND as ArtifactKind : inferredKind;
+    artifactTarget(kind);
+    if (wantsArtifact && kind !== inferredKind) throw new Error("artifact_producer_mismatch");
     if (wantsArtifact && (kind === "rust-libtest" ? !(args[0] === "test" && args.includes("--lib") && args.includes("--no-run")) : args[0] !== "build")) throw new Error("artifact_producer_mismatch");
     const toolchain = observeToolchain(root);
     const { rustcPath, cargoPath: _cargoPath, host, ...toolchainRecord } = toolchain;
     const normalized = normalizeCompilerPolicy(root, args);
     const { compatibility, profile } = normalized;
+    if (wantsArtifact && kind === "spotlight-demo" && profile !== "dev") throw new Error("artifact_producer_mismatch");
     const cache = selectCompilerCache(root, rustcPath, normalized);
     const requestedPolicy = { args, pool: "agent-debug", compilerWorkers: Number(process.env.CARGO_BUILD_JOBS), testWorkers: Number(process.env.RUST_TEST_THREADS), cachePolicy: process.env.SCRIPT_KIT_AGENT_USE_SCCACHE || "auto", loadLimitPercent: process.env.SCRIPT_KIT_AGENT_MAX_SYSTEM_LOAD_PERCENT || null };
     const source = observeSource();

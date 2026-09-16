@@ -8,7 +8,7 @@ import { BUILD_ACTIONS, BuildOperationError, executeBuildAction, routeChanged, r
 import type { BuildOperationResult, ChangedRoute } from "./build-ops.ts";
 import { buildDependencies, buildStorage } from "./lib/build-ops-inventory.ts";
 import * as inventory from "./lib/build-ops-inventory.ts";
-import { artifactHash, assertSourceBoundary, bundleTreeHash, canonicalArtifactPath, observeArtifactSource, unsignedMachOPayloadSha256, verifyImmutableArtifact } from "../agentic/build-artifact.ts";
+import { artifactHash, artifactTarget, assertSourceBoundary, bundleTreeHash, canonicalArtifactPath, observeArtifactSource, unsignedMachOPayloadSha256, verifyImmutableArtifact } from "../agentic/build-artifact.ts";
 import { assertOutputOwnership, beginManagedTask, cacheLease, claimOutput, emptyOwnedCleanup, finalizeManagedTask, managedKeepSet, managedRetentionPlan, managedTaskRecordPath, pruneManagedRecords, readManagedTask, updateManagedTask, validateOutputTarget } from "../agentic/artifact-lifecycle.ts";
 import type { ArtifactKind, ArtifactReference } from "../agentic/build-artifact.ts";
 import * as ownedProcess from "../agentic/owned-process.ts";
@@ -27,11 +27,11 @@ afterEach(() => {
   for (const root of roots.splice(0)) { writable(root); rmSync(root, { recursive: true }); }
 });
 function build(root: string, env: Record<string, string>, kind: ArtifactKind, extra: Record<string, string> = {}) {
-  const args = kind === "rust-libtest" ? ["test", "--locked", "--lib", "--no-run"] : ["build", "--locked", "--bin", kind === "application" ? "script-kit-gpui" : "export_design_tokens"];
+  const args = kind === "rust-libtest" ? ["test", "--locked", "--lib", "--no-run"] : ["build", "--locked", "--bin", artifactTarget(kind).targetName];
   const out = Bun.spawnSync(["bash", resolve(import.meta.dir, "../agentic/agent-cargo.sh"), ...args], { cwd: root, env: { ...env, SCRIPT_KIT_AGENT_ARTIFACT_KIND: kind, ...extra }, timeout: 25_000 });
   return { status: out.exitCode, stderr: out.stderr.toString(), result: out.stdout.length ? JSON.parse(out.stdout.toString()) : null };
 }
-const expectation = (kind: ArtifactKind) => ({ kind, packageName: "script-kit-gpui", targetName: kind === "application" ? "script-kit-gpui" : kind === "tool" ? "export_design_tokens" : "script_kit_gpui", sourcePolicy: "recorded-content" as const });
+const expectation = (kind: ArtifactKind) => ({ kind, packageName: "script-kit-gpui", targetName: artifactTarget(kind).targetName, sourcePolicy: "recorded-content" as const });
 
 test("passive inventory does not invoke tools or create managed outputs", () => {
   const f = fixture(); const before = readdirSync(f.root).sort();
@@ -218,7 +218,7 @@ test("changed routing rejects noncanonical and control-bearing paths", () => {
     expect(() => routeChanged([path])).toThrow("invalid_changed_path");
   }
 });
-for (const kind of ["application", "rust-libtest", "tool"] as const) test(`publishes independently verifiable ${kind} Cargo output`, () => {
+for (const kind of ["application", "rust-libtest", "tool", "spotlight-demo"] as const) test(`publishes independently verifiable ${kind} Cargo output`, () => {
   const f = fixture(); const outcome = build(f.root, f.env, kind);
   expect(outcome.status).toBe(0);
   const reference: ArtifactReference = outcome.result.artifacts[0];
