@@ -326,6 +326,7 @@ struct PendingContextTurn {
 /// Resolution is deliberately separate: parts in this payload may invoke
 /// subprocesses, resource reads, screenshot capture, PNG encoding, or other
 /// work that must never run from `submit_input` on the GPUI main thread.
+#[derive(Clone)]
 struct PendingContextResolutionJob {
     blocks: Vec<ContentBlock>,
     items: Vec<StagedContextItem>,
@@ -340,7 +341,7 @@ struct PreparedTurnPayload {
     payload_fingerprint: String,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct PreparedContextTransition {
     attempted_items: Vec<StagedContextItem>,
     attempted_ids: Vec<ContextItemId>,
@@ -366,7 +367,9 @@ struct ResolvedPendingContext {
 ///
 /// Carries the content blocks for the turn AND the optional resolution
 /// receipt so callers can surface partial-failure feedback.
+#[derive(Clone)]
 struct PreparedTurnBlocks {
+    brain_failure: Option<crate::ai::reliability::AppFailureRecord>,
     blocks: Vec<ContentBlock>,
     receipt: Option<crate::ai::message_parts::ContextResolutionReceipt>,
     /// Visible label+snippet receipts for the transcript user message.
@@ -374,9 +377,20 @@ struct PreparedTurnBlocks {
     context_transition: PreparedContextTransition,
 }
 
+#[derive(Clone)]
+struct PendingBrainDecision {
+    display_text: String,
+    prepared: PreparedTurnBlocks,
+    context_job: Option<PendingContextResolutionJob>,
+    clear_composer: bool,
+    composer_revision: u64,
+    queued_message: Option<AgentChatQueuedMessage>,
+}
+
 /// A user submit captured while the current turn is locked.
 #[derive(Debug, Clone)]
 pub(crate) struct AgentChatQueuedMessage {
+    pub(crate) id: String,
     pub(crate) text: String,
     pub(crate) context_items: Vec<StagedContextItem>,
 }
@@ -384,6 +398,7 @@ pub(crate) struct AgentChatQueuedMessage {
 impl AgentChatQueuedMessage {
     fn new(text: String, context_items: Vec<StagedContextItem>) -> Self {
         Self {
+            id: uuid::Uuid::new_v4().to_string(),
             text,
             context_items,
         }
@@ -436,6 +451,7 @@ pub(crate) struct AgentChatThread {
     /// Provider-independent authority for submit, runtime, failure, cancellation,
     /// and recovery. `status` is a compatibility projection for existing UI.
     reliability_state: AiOperationState,
+    pending_brain_decision: Option<PendingBrainDecision>,
     /// Monotonic identity for background submit preparation. A cancellation
     /// or newer submit invalidates any late resolution result.
     context_resolution_id: u64,
@@ -648,8 +664,12 @@ impl AgentChatThread {
         self.input.cursor().hash(&mut hash);
         self.input.selection().anchor.hash(&mut hash);
         std::mem::discriminant(&self.status).hash(&mut hash);
-        self.queued_messages.len().hash(&mut hash);
+        for queued in &self.queued_messages {
+            queued.id.hash(&mut hash);
+        }
         self.queue_paused.hash(&mut hash);
+        self.pending_brain_decision.is_some().hash(&mut hash);
+        self.context_resolution_id.hash(&mut hash);
         self.pending_permission
             .as_ref()
             .map(|request| request.id)
@@ -1203,6 +1223,7 @@ impl AgentChatThread {
             },
             status: AgentChatThreadStatus::Idle,
             reliability_state,
+            pending_brain_decision: None,
             context_resolution_id: 0,
             pasted_image_preparations: std::collections::HashMap::new(),
             pending_permission: None,
@@ -1675,6 +1696,12 @@ impl AgentChatThread {
     /// Prepends staged context blocks on the first submit, then clears them.
     /// Starts streaming events from the Agent Chat agent.
     pub(crate) fn submit_input(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        if self.pending_brain_decision.is_some() {
+            return Err(
+                "Memory is unavailable. Choose Retry Memory or Continue Without Memory in Actions."
+                    .to_string(),
+            );
+        }
         // Do not consume, expand, queue, or submit a draft containing an unfinished image.
         self.ensure_pasted_images_ready()?;
         let input = self.input.text().to_string();
@@ -1701,8 +1728,6 @@ impl AgentChatThread {
             }
         }
 
-        self.resume_queue_for_manual_submit();
-
         if matches!(
             self.status,
             AgentChatThreadStatus::Streaming | AgentChatThreadStatus::WaitingForPermission
@@ -1725,11 +1750,7 @@ impl AgentChatThread {
         }
 
         let context_job = self.take_pending_context_for_background_resolution();
-        self.submit_captured_turn(trimmed.to_string(), context_job, true, cx)
-    }
-
-    fn resume_queue_for_manual_submit(&mut self) {
-        self.queue_paused = false;
+        self.submit_captured_turn(trimmed.to_string(), context_job, true, None, cx)
     }
 
     fn queue_current_composer(&mut self, text: String) {
@@ -1956,6 +1977,7 @@ impl AgentChatThread {
         display_text: String,
         context_job: Option<PendingContextResolutionJob>,
         clear_composer: bool,
+        retained_queue_message: Option<AgentChatQueuedMessage>,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         let needs_background_preparation =
@@ -1984,34 +2006,23 @@ impl AgentChatThread {
         let transcript_generation = self.transcript_generation;
         let should_stage_brain_recall = self.should_stage_brain_recall();
 
-        let (tx, rx) = async_channel::bounded(1);
-        std::thread::Builder::new()
-            .name("agent-chat-context-resolution".to_string())
-            .spawn({
-                let display_text = display_text.clone();
-                move || {
-                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        Self::prepare_captured_turn_in_background(
-                            &display_text,
-                            context_job,
-                            should_stage_brain_recall,
-                        )
-                    }))
-                    .map_err(|_| "agent_chat_context_resolution_panicked".to_string());
-                    let _ = tx.send_blocking(result);
-                }
-            })
-            .map_err(|error| {
-                let error = format!("failed to start context resolution: {error}");
-                self.fail_pending_turn_preparation(error.clone(), cx);
-                error
-            })?;
+        let retained_context_job = context_job.clone();
+        let composer_revision = self.input.revision();
+        let preparation_text = display_text.clone();
+        let preparation = cx.background_executor().spawn(async move {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Self::prepare_captured_turn_in_background(
+                    &preparation_text,
+                    context_job,
+                    should_stage_brain_recall,
+                )
+            }))
+            .map_err(|_| "agent_chat_context_resolution_panicked".to_string())
+        });
 
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
-            let result = rx.recv().await.unwrap_or_else(|_| {
-                Err("agent_chat_context_resolution_channel_closed".to_string())
-            });
+            let result = preparation.await;
             cx.update(|cx| {
                 let Some(entity) = entity.upgrade() else {
                     return;
@@ -2026,6 +2037,14 @@ impl AgentChatThread {
 
                     match result {
                         Ok(prepared) => {
+                            if prepared.brain_failure.is_some() {
+                                this.status = AgentChatThreadStatus::Idle;
+                                this.queue_paused = true;
+                                this.context_bootstrap_note = Some("Memory unavailable · Retry Memory or Continue Without Memory in Actions".into());
+                                this.pending_brain_decision = Some(PendingBrainDecision { display_text, prepared, context_job: retained_context_job, clear_composer, composer_revision, queued_message: retained_queue_message });
+                                this.notify_semantic_change(cx);
+                                return;
+                            }
                             this.set_context_resolution_note(prepared.receipt.as_ref());
                             if let Err(error) = this.start_prepared_turn(
                                 display_text,
@@ -2038,6 +2057,9 @@ impl AgentChatThread {
                                 },
                                 cx,
                             ) {
+                                if let Some(message) = retained_queue_message {
+                                    this.restore_rejected_queue_message(message, cx);
+                                }
                                 if error == "primary_context_unavailable" {
                                     this.status = AgentChatThreadStatus::Error;
                                     let failure = this
@@ -2057,12 +2079,21 @@ impl AgentChatThread {
                                             message,
                                         );
                                     }
+                                } else if matches!(this.reliability_state.phase, AiPhase::AwaitingRecovery { .. }) {
+                                    // start_prepared_turn already recorded the adapter's typed failure.
+                                    this.status = AgentChatThreadStatus::Error;
+                                    this.notify_semantic_change(cx);
                                 } else {
                                     this.fail_pending_turn_preparation(error, cx);
                                 }
                             }
                         }
-                        Err(error) => this.fail_pending_turn_preparation(error, cx),
+                        Err(error) => {
+                            if let Some(message) = retained_queue_message {
+                                this.restore_rejected_queue_message(message, cx);
+                            }
+                            this.fail_pending_turn_preparation(error, cx);
+                        },
                     }
                 });
             });
@@ -2102,6 +2133,7 @@ impl AgentChatThread {
     ) -> Result<(), String> {
         // WP-B2 backstop: adjudicate the queued message's parts once more at
         // dequeue so nothing forbidden survives to the provider.
+        let retained = message.clone();
         let context_items = self.filter_admissible_items(message.context_items);
         let context_job = (!context_items.is_empty()).then(|| PendingContextResolutionJob {
             attachments: context_items
@@ -2111,7 +2143,23 @@ impl AgentChatThread {
             blocks: Vec::new(),
             items: context_items,
         });
-        self.submit_captured_turn(message.text, context_job, false, cx)
+        self.submit_captured_turn(message.text, context_job, false, Some(retained), cx)
+    }
+
+    fn restore_rejected_queue_message(
+        &mut self,
+        message: AgentChatQueuedMessage,
+        cx: &mut Context<Self>,
+    ) {
+        if !self
+            .queued_messages
+            .iter()
+            .any(|queued| queued.id == message.id)
+        {
+            self.queued_messages.push_front(message);
+        }
+        self.queue_paused = true;
+        self.notify_semantic_change(cx);
     }
 
     fn submit_next_queued_if_ready(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
@@ -2122,7 +2170,11 @@ impl AgentChatThread {
             return Ok(());
         }
         if let Some(message) = self.queued_messages.pop_front() {
-            self.submit_queued_message(message, cx)?;
+            let retained = message.clone();
+            if let Err(error) = self.submit_queued_message(message, cx) {
+                self.restore_rejected_queue_message(retained, cx);
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -2334,7 +2386,7 @@ impl AgentChatThread {
     fn prepare_turn_blocks_with_receipt(&mut self, input: &str) -> PreparedTurnBlocks {
         self.prepare_turn_blocks_with_receipt_using(
             input,
-            |query| crate::brain::recall_context_block(query).ok().flatten(),
+            crate::brain::recall_context_block,
             crate::brain::record_ask_signals,
         )
     }
@@ -2346,17 +2398,26 @@ impl AgentChatThread {
         record_ask_signals: S,
     ) -> PreparedTurnBlocks
     where
-        R: FnOnce(&str) -> Option<String>,
+        R: FnOnce(&str) -> anyhow::Result<Option<String>>,
         S: FnOnce(&str),
     {
         let mut blocks = Vec::new();
+        let mut brain_failure = None;
 
         // --- Brain recall: stage relevant local memory for the Brain profile ---
         // Lexical + attention-signal retrieval over the brain store (notes,
         // past chat turns). Milliseconds on sqlite; hard-capped output so it
         // can never crowd a prompt. Empty recall stages nothing.
         if self.should_stage_brain_recall() {
-            let brain_block = recall_context(input);
+            let brain_block = match recall_context(input) {
+                Ok(block) => block,
+                Err(error) => {
+                    brain_failure = Some(crate::ai::reliability::context_unavailable_failure(
+                        &error.to_string(),
+                    ));
+                    None
+                }
+            };
             if let Some(recall) = brain_block {
                 tracing::info!(
                     target: "script_kit::brain",
@@ -2395,6 +2456,7 @@ impl AgentChatThread {
                 "--- USER REQUEST ---\n{input}"
             ))));
             return PreparedTurnBlocks {
+                brain_failure,
                 blocks,
                 receipt: Some(receipt),
                 attachments,
@@ -2410,6 +2472,7 @@ impl AgentChatThread {
             ))));
         }
         PreparedTurnBlocks {
+            brain_failure,
             blocks,
             receipt: None,
             attachments: Vec::new(),
@@ -3651,6 +3714,8 @@ impl AgentChatThread {
     }
 
     fn reset_pending_context_for_new_entry_intent(&mut self) {
+        self.pending_brain_decision = None;
+        self.context_resolution_id = self.context_resolution_id.wrapping_add(1);
         self.clear_all_pending_context("new_entry_intent");
         self.context_bootstrap_state = AgentChatContextBootstrapState::Ready;
         self.context_bootstrap_note = None;
@@ -3727,18 +3792,59 @@ impl AgentChatThread {
         self.queue_paused
     }
 
-    pub(crate) fn remove_queued_message(&mut self, index: usize, cx: &mut Context<Self>) {
-        if index < self.queued_messages.len() {
-            self.queued_messages.remove(index);
-            self.notify_semantic_change(cx);
+    pub(crate) fn queue_revision(&self) -> String {
+        use std::hash::{Hash, Hasher};
+        let mut hash = std::collections::hash_map::DefaultHasher::new();
+        self.queue_paused.hash(&mut hash);
+        for message in &self.queued_messages {
+            message.id.hash(&mut hash);
         }
+        format!("{:016x}", hash.finish())
     }
 
-    pub(crate) fn clear_queued_messages(&mut self, cx: &mut Context<Self>) {
-        if !self.queued_messages.is_empty() {
-            self.queued_messages.clear();
-            self.notify_semantic_change(cx);
+    pub(crate) fn remove_queued_message(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        let Some(index) = self
+            .queued_messages
+            .iter()
+            .position(|message| message.id == id)
+        else {
+            return false;
+        };
+        self.queued_messages.remove(index);
+        self.notify_semantic_change(cx);
+        true
+    }
+
+    pub(crate) fn clear_queued_messages(&mut self, expected: &str, cx: &mut Context<Self>) -> bool {
+        if self.queue_revision() != expected {
+            return false;
         }
+        self.queued_messages.clear();
+        self.notify_semantic_change(cx);
+        true
+    }
+
+    pub(crate) fn set_queue_paused(
+        &mut self,
+        paused: bool,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        if !paused && self.pending_brain_decision.is_some() {
+            return Err("memory_decision_required".to_string());
+        }
+        if !paused
+            && !self.queued_messages.is_empty()
+            && matches!(self.status, AgentChatThreadStatus::Error)
+        {
+            self.reset_reliability_for_new_turn(cx)
+                .map_err(|error| format!("queue_recovery_reset:{:?}", error.reason))?;
+        }
+        self.queue_paused = paused;
+        self.notify_semantic_change(cx);
+        if !paused {
+            self.submit_next_queued_if_ready(cx)?;
+        }
+        Ok(())
     }
 
     /// Human-readable bootstrap status note, if any.
@@ -4053,3 +4159,80 @@ include!("thread_test_support.rs");
 #[cfg(test)]
 #[path = "thread/tests.rs"]
 mod tests;
+
+impl AgentChatThread {
+    pub(crate) fn held_brain_request(&self, generation: u64) -> Option<AgentChatQueuedMessage> {
+        if generation != self.context_resolution_id {
+            return None;
+        }
+        let decision = self.pending_brain_decision.as_ref()?;
+        Some(AgentChatQueuedMessage {
+            id: format!("memory-{}-{generation}", self.ui_thread_id),
+            text: decision.display_text.clone(),
+            context_items: decision
+                .context_job
+                .as_ref()
+                .map(|job| job.items.clone())
+                .unwrap_or_else(|| decision.prepared.context_transition.attempted_items.clone()),
+        })
+    }
+
+    pub(crate) fn brain_decision_failure(
+        &self,
+    ) -> Option<&crate::ai::reliability::AppFailureRecord> {
+        self.pending_brain_decision
+            .as_ref()
+            .and_then(|decision| decision.prepared.brain_failure.as_ref())
+    }
+
+    pub(crate) fn resolve_brain_decision(
+        &mut self,
+        retry: bool,
+        generation: u64,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if generation != self.context_resolution_id {
+            return false;
+        }
+        let Some(decision) = self.pending_brain_decision.as_ref() else {
+            return false;
+        };
+        let clear_composer =
+            decision.clear_composer && self.input.revision() == decision.composer_revision;
+        let mut decision = self.pending_brain_decision.take().unwrap();
+        decision.clear_composer = clear_composer;
+        let retained = decision.clone();
+        self.context_bootstrap_note = None;
+        let result = if retry {
+            self.submit_captured_turn(
+                decision.display_text,
+                decision.context_job,
+                decision.clear_composer,
+                decision.queued_message,
+                cx,
+            )
+        } else {
+            self.start_prepared_turn(
+                decision.display_text,
+                decision.prepared.blocks,
+                decision.prepared.attachments,
+                decision.prepared.context_transition,
+                PreparedTurnCommitOptions {
+                    clear_composer: decision.clear_composer,
+                    push_user_message: true,
+                },
+                cx,
+            )
+        };
+        if result.is_err() {
+            self.pending_brain_decision = Some(retained);
+            self.context_bootstrap_note = Some("Memory unavailable · Review in Actions".into());
+        }
+        self.notify_semantic_change(cx);
+        result.is_ok()
+    }
+
+    pub(crate) fn brain_decision_generation(&self) -> u64 {
+        self.context_resolution_id
+    }
+}

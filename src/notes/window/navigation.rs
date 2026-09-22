@@ -518,6 +518,8 @@ impl NotesApp {
             ),
             "dirtyState": {
                 "hasUnsavedChanges": self.has_unsaved_changes,
+                "status": self.document_save_status(),
+                "failure": self.save_failure,
                 "lastSaveConfirmedMsAgo": self.last_save_confirmed.map(|instant| instant.elapsed().as_millis() as u64),
                 "lastSaveAttemptMsAgo": self.last_save_time.map(|instant| instant.elapsed().as_millis() as u64),
             },
@@ -1523,20 +1525,46 @@ impl NotesApp {
         .join("\n")
     }
 
-    /// Show a brief action feedback message in the footer (auto-clears after 2s)
-    /// If `accent` is true, the message renders in accent color; otherwise muted.
-    pub(super) fn show_action_feedback(&mut self, msg: impl Into<String>, accent: bool) {
-        self.action_feedback = Some((msg.into(), accent, Instant::now()));
+    /// Queue feedback for the shared Root notification layer on the next render.
+    pub(super) fn show_action_feedback(&mut self, msg: impl Into<String>, _accent: bool) {
+        self.action_feedback = Some((
+            msg.into(),
+            crate::components::document_status::DocumentFeedbackKind::Information,
+        ));
     }
 
-    /// Check if action feedback should still be visible (within 2s window)
-    pub(super) fn get_action_feedback(&self) -> Option<(&str, bool)> {
-        self.action_feedback.as_ref().and_then(|(msg, accent, t)| {
-            if t.elapsed() < Duration::from_millis(ACTION_FEEDBACK_MS) {
-                Some((msg.as_str(), *accent))
-            } else {
-                None
-            }
-        })
+    pub(super) fn show_action_error(&mut self, msg: impl Into<String>) {
+        self.action_feedback = Some((
+            msg.into(),
+            crate::components::document_status::DocumentFeedbackKind::Error,
+        ));
+    }
+
+    pub(super) fn record_save_failure(&mut self, error: &impl std::fmt::Display) {
+        let failure = crate::components::document_status::DocumentSaveFailure::capture(error);
+        if self
+            .save_failure
+            .as_ref()
+            .map(|old| &old.diagnostic_fingerprint)
+            != Some(&failure.diagnostic_fingerprint)
+        {
+            self.action_feedback = Some((
+                "Couldn't save the note. Your changes are still open. Use Retry Save in Actions."
+                    .to_string(),
+                crate::components::document_status::DocumentFeedbackKind::SaveFailure,
+            ));
+        }
+        self.save_failure = Some(failure);
+        self.document_revision = self.document_revision.wrapping_add(1);
+        self.last_save_time = Some(Instant::now());
+    }
+
+    pub(crate) fn document_save_status(
+        &self,
+    ) -> crate::components::document_status::DocumentSaveStatus {
+        crate::components::document_status::DocumentSaveStatus::from_facts(
+            self.has_unsaved_changes,
+            self.save_failure.as_ref(),
+        )
     }
 }

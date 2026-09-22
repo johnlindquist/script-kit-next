@@ -10,6 +10,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   utimesSync,
@@ -21,6 +22,8 @@ import { createArtifactFixture, createBuildWorkspace } from "./build-artifact-fi
 import type { ArtifactFixture } from "./build-artifact-fixture.ts";
 import { artifactHash } from "./build-artifact.ts";
 import { spawnOwnedProcess } from "./owned-process.ts";
+import { registerManagedStorageRoute } from "./managed-storage.ts";
+import { buildStorage } from "../devtools/lib/build-ops-inventory.ts";
 
 interface PolicyWorkspace { root: string; bin: string; capture: string; env: Record<string, string>; }
 function wrapperRecord(result: { stdout: string }) {
@@ -473,7 +476,7 @@ process.exit(child.exitCode);
     expect(libtestRecord).toMatchObject({ state: "closed", artifactReferences: [libtestRun.artifact], cleanup: { closed: true } });
     expect(calls.some(call => call.args.includes("reliability"))).toBe(false);
     expect(readFileSync(workspace.capture, "utf8")).toContain("takeover=0 input=0 capture=0 visible=0 live_ai=0 app=0");
-  }, 30000);
+  }, 60000);
 
   test("uses two workers, a persistent sandbox-safe shader cache, timings, and a truthful receipt", () => {
     const workspace = fixture();
@@ -704,6 +707,47 @@ process.exit(child.exitCode);
     expect(result.stderr).toContain("protected cache ownership cannot follow a symlink");
     expect(existsSync(workspace.capture)).toBe(false);
     expect(existsSync(join(external, ".last_used"))).toBe(false);
+  });
+
+  test("builds and publishes through one explicitly pinned root link with the same lease and budget", () => {
+    const workspace = fixture(), external = realpathSync(temporaryDirectory("script-kit-trusted-storage-"));
+    const destination = join(external, "target-agent");
+    renameSync(join(workspace.root, "target-agent"), destination);
+    symlinkSync(destination, join(workspace.root, "target-agent"));
+    registerManagedStorageRoute(workspace.root, destination);
+    const result = run("agent-cargo.sh", ["build", "--bin", "script-kit-gpui"], { ...workspace.env, SCRIPT_KIT_AGENT_ARTIFACT_KIND: "application" });
+    if (result.status !== 0) throw new Error(`${result.status}\n${result.stdout}\n${result.stderr}`);
+    expect(result.status).toBe(0);
+    expect(existsSync(workspace.capture)).toBe(true);
+    expect(existsSync(join(destination, ".locks/pool-agent-debug.lock"))).toBe(false);
+    const output = JSON.parse(result.stdout);
+    expect(output.artifacts).toHaveLength(1);
+    expect(existsSync(join(workspace.root, output.artifacts[0].manifestPath))).toBe(true);
+    const storage = buildStorage(workspace.root, false, true);
+    expect(storage.targetAgentComplete).toBe(true);
+    expect(storage.targetAgentAllocatedBytes).toBeGreaterThan(0);
+    expect(storage.categories.find(value => value.category === "immutable-artifacts")?.allocatedBytes).toBeGreaterThan(0);
+  }, 60_000);
+
+  test("a pinned root does not authorize nested links or a redirected destination", () => {
+    const workspace = fixture(), external = realpathSync(temporaryDirectory("script-kit-trusted-storage-"));
+    const destination = join(external, "target-agent"), link = join(workspace.root, "target-agent");
+    renameSync(link, destination);
+    symlinkSync(destination, link);
+    registerManagedStorageRoute(workspace.root, destination);
+    rmSync(join(destination, "pools/agent-debug"), { recursive: true });
+    const nested = temporaryDirectory("script-kit-untrusted-nested-");
+    symlinkSync(nested, join(destination, "pools/agent-debug"));
+    const nestedResult = run("agent-cargo.sh", ["check", "--lib"], workspace.env);
+    expect(nestedResult.status).toBe(64);
+    expect(existsSync(workspace.capture)).toBe(false);
+    expect(buildStorage(workspace.root, false, true).targetAgentComplete).toBe(false);
+    rmSync(link);
+    symlinkSync(nested, link);
+    const redirected = run("agent-cargo.sh", ["check", "--lib"], workspace.env);
+    expect(redirected.status).toBe(64);
+    expect(existsSync(workspace.capture)).toBe(false);
+    expect(existsSync(join(nested, ".last_used"))).toBe(false);
   });
 
   test("refuses a symlinked artifact authority before Cargo writes", () => {
@@ -1784,7 +1828,7 @@ describe("isolated session readiness ownership", () => {
     ]) {
       copyFileSync(join(scripts, script), join(localScripts, script));
     }
-    for (const file of ["build-artifact.ts", "artifact-lifecycle.ts", "owned-process.ts", "session-supervisor.py"]) copyFileSync(join(scripts, file), join(localScripts, file));
+    for (const file of ["build-artifact.ts", "artifact-lifecycle.ts", "managed-storage.ts", "owned-process.ts", "session-supervisor.py"]) copyFileSync(join(scripts, file), join(localScripts, file));
     const devtoolsLib = join(workspace.root, "scripts/devtools/lib");
     mkdirSync(devtoolsLib, { recursive: true });
     copyFileSync(join(scripts, "../devtools/lib/build-ops-inventory.ts"), join(devtoolsLib, "build-ops-inventory.ts"));

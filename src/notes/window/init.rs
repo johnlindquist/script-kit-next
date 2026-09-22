@@ -245,6 +245,7 @@ impl NotesApp {
             active_day_binding: None,
             pending_day_editor_reconcile: None,
             has_unsaved_changes: false,
+            save_failure: None,
             instance_id,
             entry_reveal: NotesEntryReveal::new(instance_id),
             last_save_time: None,
@@ -294,6 +295,7 @@ impl NotesApp {
             .semantic_revision(cx)
             .saturating_add(self.search_revision)
             .saturating_add(self.notes_action_execution_generation)
+            .saturating_add(self.document_revision)
     }
 
     pub(crate) fn document_revision(&self) -> u64 {
@@ -418,17 +420,17 @@ impl NotesApp {
 
             let written = io::with_brain_write_lock(|| -> anyhow::Result<(String, bool)> {
                 let Some(disk_now) = io::read_private_document_if_present(&path)? else {
-                    io::atomic_write(&path, &editor_content)?;
+                    write_verified_day_note(&path, &editor_content)?;
                     return Ok((editor_content.clone(), false));
                 };
                 if disk_now == base {
-                    io::atomic_write(&path, &editor_content)?;
+                    write_verified_day_note(&path, &editor_content)?;
                     return Ok((editor_content.clone(), false));
                 }
                 if let Some(suffix) = day_external_append_suffix(&disk_now, &base) {
                     let merged =
                         day_merge_editor_with_external_appends(&editor_content, suffix, &disk_now);
-                    io::atomic_write(&path, &merged)?;
+                    write_verified_day_note(&path, &merged)?;
                     return Ok((merged, true));
                 }
                 // Preserve the conflicting disk version through the same
@@ -445,7 +447,7 @@ impl NotesApp {
                     conflict_sha256 = %safe_conflict.sha256,
                     "day note diverged on disk; preserved the conflicting private document"
                 );
-                io::atomic_write(&path, &editor_content)?;
+                write_verified_day_note(&path, &editor_content)?;
                 Ok((editor_content.clone(), false))
             });
 
@@ -464,6 +466,12 @@ impl NotesApp {
                         crate::runtime_policy::record_completed_fixture_effect();
                     }
                     self.has_unsaved_changes = false;
+                    if self.save_failure.take().is_some() {
+                        self.action_feedback = Some((
+                            "Saved".to_string(),
+                            crate::components::document_status::DocumentFeedbackKind::SaveRecovered,
+                        ));
+                    }
                     self.last_save_time = Some(Instant::now());
                     self.last_save_confirmed = Some(Instant::now());
                     return true;
@@ -480,6 +488,7 @@ impl NotesApp {
                         path_sha256 = %safe_path.sha256,
                         "Failed to save day note from Notes window"
                     );
+                    self.record_save_failure(&e);
                     return false;
                 }
             }
@@ -498,10 +507,13 @@ impl NotesApp {
                 notes_len = self.notes.len(),
                 "Skipping note save because the selected note is not present in the current notes list"
             );
+            self.record_save_failure(&"The selected note is unavailable");
             return false;
         };
 
-        if let Err(e) = storage::save_note(note) {
+        if let Err(e) = storage::save_note(note)
+            .and_then(|()| storage::verify_saved_note_content(note.id, &note.content))
+        {
             let safe_error = crate::logging::log_private_user_value(&e.to_string());
             tracing::error!(
                 error_bytes = safe_error.raw_bytes,
@@ -509,6 +521,7 @@ impl NotesApp {
                 note_id = %id,
                 "Failed to save note"
             );
+            self.record_save_failure(&e);
             return false;
         }
 
@@ -517,6 +530,12 @@ impl NotesApp {
             crate::runtime_policy::record_completed_fixture_effect();
         }
         self.has_unsaved_changes = false;
+        if self.save_failure.take().is_some() {
+            self.action_feedback = Some((
+                "Saved".to_string(),
+                crate::components::document_status::DocumentFeedbackKind::SaveRecovered,
+            ));
+        }
         self.last_save_time = Some(Instant::now());
         self.last_save_confirmed = Some(Instant::now());
         true
@@ -544,7 +563,7 @@ impl NotesApp {
 
     /// Check if we should save now (debounce check)
     pub(super) fn should_save_now(&self) -> bool {
-        if !self.has_unsaved_changes {
+        if !self.has_unsaved_changes || self.save_failure.is_some() {
             return false;
         }
 
@@ -1415,4 +1434,13 @@ mod day_save_merge_tests {
         assert!(merged.contains("- captured"));
         assert!(merged.ends_with('\n'));
     }
+}
+
+fn write_verified_day_note(path: &std::path::Path, content: &str) -> anyhow::Result<()> {
+    crate::brain::substrate::io::atomic_write(path, content)?;
+    anyhow::ensure!(
+        crate::brain::substrate::io::read_private_document(path)? == content,
+        "Saved day-note canonical content differs"
+    );
+    Ok(())
 }

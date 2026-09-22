@@ -268,7 +268,10 @@ impl MainInitialData {
             windows_status: window_control::RootWindowsProviderStatus::Ready { count: 0 },
             frecency_store: FrecencyStore::with_path(root.join("frecency.json")),
             input_history,
-            preferences: config::ScriptKitUserPreferences::default(),
+            preferences: config::ScriptKitUserPreferences {
+                animation: config.animation.unwrap_or_default(),
+                ..Default::default()
+            },
             launcher_context: Default::default(),
             theme,
             theme_revision,

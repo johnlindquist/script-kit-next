@@ -222,6 +222,31 @@ fn collect_dictation_snapshot(
         chip.source = Some("DictationTargetDescriptor".to_string());
         elements.push(chip);
     }
+    if interactive {
+        if let Some(actions) =
+            crate::dictation::dictation_recording_actions_for_instance(resolved.generation?, cx)
+        {
+            for action in actions.into_iter().filter(|action| {
+                matches!(
+                    action.id.as_str(),
+                    "dictation_microphone" | "dictation_jump_latest"
+                )
+            }) {
+                let mut button = ElementInfo::button(elements.len(), &action.title);
+                button.semantic_id = action.id.clone();
+                button.source = Some(action.id);
+                button.value = action.description;
+                button.selectable = Some(true);
+                elements.push(button);
+            }
+        }
+    }
+    if let crate::dictation::DictationSessionPhase::Failed(failure) = &state.phase {
+        let mut message = ElementInfo::panel("dictation.failure");
+        message.text = Some(failure.safe_message().to_string());
+        message.status_kind = Some("failed".to_string());
+        elements.push(message);
+    }
     let total_count = elements.len();
 
     Some(SurfaceElementSnapshot {

@@ -2105,13 +2105,12 @@ unsafe fn refresh_footer_host_impl(
         return false;
     }
 
-    let content_view: id = msg_send![ns_window, contentView];
-    if content_view == nil {
-        return false;
-    }
-
     let footer_view = find_subview_by_identifier(search_root, FOOTER_EFFECT_ID);
     if footer_view == nil {
+        return false;
+    }
+    let footer_host: id = msg_send![footer_view, superview];
+    if footer_host == nil {
         return false;
     }
     let Some((owner, _, _)) = native_footer_binding(ns_window) else {
@@ -2194,7 +2193,9 @@ unsafe fn refresh_footer_host_impl(
             crate::platform::ns_visual_effect_material::CONTENT_BACKGROUND
         }
     };
-    let content_bounds: NSRect = msg_send![content_view, bounds];
+    // The overlay host is narrower than the window; all footer lanes must
+    // resolve against that host so the trailing capsule keeps its edge inset.
+    let content_bounds: NSRect = msg_send![footer_host, bounds];
     let signature = native_footer_refresh_signature(
         config,
         &theme_snapshot,

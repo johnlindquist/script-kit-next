@@ -185,11 +185,11 @@ test("owned-copy receipt metadata remains inspectable while copied text stays pr
 });
 test("finite coverage criteria and factor links remain metadata without exposing arbitrary labels", () => {
   const value = sanitizeReceipt(annotateOwnedEvidence({ caseCriteria: [{ required: ["headers-inert", "private criterion"], proved: ["headers-inert"] }],
-    terminalIntents: { required: ["automaticTop"], notApplicable: [{ intent: "explicitAnchor", status: "notApplicable", proof: false, cause: "separateTerminalIntentSchedules" }] },
+    terminalIntents: { required: ["automatic"], notApplicable: [{ intent: "explicitAnchor", status: "notApplicable", proof: false, cause: "separateTerminalIntentSchedules" }] },
     factors: [{ outcome: "disconnect", intent: "explicitAnchor", scheduleIds: ["provider-terminal-errors/tabs/disconnect", "private factor"] }],
   }), { mode: "fixture-redacted", fixtureId: "search-coverage-metadata" }).sanitized as Json;
   expect(value.caseCriteria[0].required[0]).toBe("headers-inert"); expect(value.caseCriteria[0].proved).toEqual(["headers-inert"]);
-  expect(value.terminalIntents.required).toEqual(["automaticTop"]); expect(value.terminalIntents.notApplicable[0].intent).toBe("explicitAnchor");
+  expect(value.terminalIntents.required).toEqual(["automatic"]); expect(value.terminalIntents.notApplicable[0].intent).toBe("explicitAnchor");
   expect(value.factors[0].scheduleIds[0]).toBe("provider-terminal-errors/tabs/disconnect");
   expect(JSON.stringify(value)).not.toContain("private ");
 });
@@ -1537,7 +1537,7 @@ function captureBundleFixture(alter: (result: Json, current: Json) => void = () 
       cause: "rootEntityNotify", localInputFocused: true, nativeWindowActive: false, nativeWindow: { visible: false, key: false },
       search: { rawInput: "private pooled query", committedRows: [{ label: "private pooled row" }] }, fileSearch: null,
       paintBindings: [{ kind: "mainSearch", id: "main-search", metadata: { privatePayload: "private binding bytes" } }],
-      paintFailures: [], pixelEvidence: [{ kind: "selectionMarker", probe: { x: 1, y: 2, r: 3, g: 4, b: 5, a: 255 } }],
+      paintFailures: [], pixelEvidence: [{ kind: "selectionIcon", probe: { x: 1, y: 2, r: 3, g: 4, b: 5, a: 255 } }],
       pixelEvidenceComplete: true, pendingResources: 0, failedResources: 0, additionalNativeFact: { preserved: true } };
     const earlier = [2, 5].map(generation => {
       const stamp = structuredClone(current); stamp.frame.target.frameGeneration = generation; return stamp;

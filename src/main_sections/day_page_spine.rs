@@ -42,14 +42,9 @@ impl DayPageView {
         text_plane.source_name = Some("getLayoutInfo".to_string());
         text_plane.selectable = Some(false);
 
-        let bound_date = self.session.bound_date();
         let identity = crate::components::main_view_chrome::SemanticChipSpec::enabled_identity(
-            bound_date
-                .map(|date| format!("day-page-document:{date}"))
-                .unwrap_or_else(|| "day-page-document:unbound".to_string()),
-            bound_date
-                .map(|date| format!("Today · {date}"))
-                .unwrap_or_else(|| "Today".to_string()),
+            self.document_semantic_id(),
+            self.document_label(),
             crate::components::main_view_chrome::SemanticChipAction::OpenDetails,
             "⌘P",
         );
@@ -77,15 +72,59 @@ impl DayPageView {
             shelf.kind = Some("layout_receipt".to_string());
             shelf.source = Some("DayPageClipboardShelf".to_string());
             shelf.source_name = Some("getLayoutInfo".to_string());
-            shelf.selectable = Some(true);
+            shelf.selectable = Some(false);
             elements.push(shelf);
+            let mut toggle = protocol::ElementInfo::button(
+                0,
+                if self.clipboard_shelf_expanded {
+                    "Collapse kept clipboard entries"
+                } else {
+                    "Expand kept clipboard entries"
+                },
+            );
+            toggle.semantic_id = "day-page-clipboard-shelf-toggle".to_string();
+            toggle.source = Some("day_page:clipboard_toggle".to_string());
+            toggle.selected = Some(self.clipboard_shelf_expanded);
+            toggle.selectable = Some(true);
+            elements.push(toggle);
+            if self.clipboard_shelf_expanded {
+                for (index, entry) in self.clipboard_shelf.iter().enumerate() {
+                    let mut control =
+                        protocol::ElementInfo::button(index, "Open kept clipboard entry");
+                    control.semantic_id =
+                        format!("day-page-clipboard-shelf-item-{}", entry.item.entry_id);
+                    control.source =
+                        Some(format!("day_page:clipboard_open:{}", entry.item.entry_id));
+                    control.value = Some(crate::clipboard_history::entry_resource_uri(
+                        &entry.item.entry_id,
+                    ));
+                    control.selectable = Some(true);
+                    elements.push(control);
+                }
+            }
+        }
+
+        let status = crate::components::document_status::DocumentSaveStatus::from_facts(
+            self.session.is_dirty(),
+            self.save_failure.as_ref(),
+        );
+        let mut save = protocol::ElementInfo::panel("day-page-save-status");
+        save.text = Some(status.label().to_string());
+        save.status_kind = Some(format!("{status:?}").to_lowercase());
+        elements.push(save);
+        if let Some(failure) = self.handoff_failure.as_ref() {
+            let mut panel = protocol::ElementInfo::panel("day-page-handoff-failure");
+            panel.text = Some(failure.primary_message().to_string());
+            panel.value = Some(serde_json::json!({"failure": failure.failure}).to_string());
+            panel.selectable = Some(false);
+            elements.push(panel);
         }
 
         if self.read_mode && self.kit_resource_preview.is_none() {
             elements.push(protocol::ElementInfo {
                 semantic_id: "day-page-read-preview".to_string(),
                 element_type: protocol::ElementType::Panel,
-                text: Some("Day Page Preview".to_string()),
+                text: Some(format!("{} Preview", self.document_label())),
                 value: Some(content.clone()),
                 content: None,
                 selected: None,

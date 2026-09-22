@@ -400,8 +400,8 @@ impl ScriptListApp {
                         }
                         _ if is_key_down(key) => {
                             if filtered_len > 0 {
-                                let new_selected = (current_selected + 1)
-                                    .min(filtered_len.saturating_sub(1));
+                                let new_selected =
+                                    (current_selected + 1).min(filtered_len.saturating_sub(1));
                                 if let AppView::ClipboardHistoryView { selected_index, .. } =
                                     &mut this.current_view
                                 {
@@ -724,6 +724,7 @@ impl ScriptListApp {
                     },
                     None,
                     list_colors,
+                    self.current_main_menu_theme,
                 ),
             )
             .child(

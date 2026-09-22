@@ -1277,6 +1277,8 @@ impl ScriptListApp {
 pub(crate) struct ScriptListApp {
     pub(crate) main_services: MainServices,
     pub(crate) main_preferences: config::ScriptKitUserPreferences,
+    /// Invalidates a queued animation replay when a newer selection or dismissal wins.
+    pub(crate) animation_replay_generation: u64,
     pub(crate) prompt_completion: Option<crate::prompt_completion::PromptCompletionBinding>,
     main_revisions: MainRevisionFacts,
     main_revision_input_text: String,

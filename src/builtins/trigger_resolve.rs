@@ -203,6 +203,11 @@ fn render_variant(id: TriggerBuiltin) -> &'static str {
         TriggerBuiltin::MainWindow => "MainWindow",
         TriggerBuiltin::QuickTerminal => "QuickTerminal",
         TriggerBuiltin::Webcam => "Webcam",
+        TriggerBuiltin::AnimationPresets => "AnimationPresets",
+        TriggerBuiltin::AnimationNext => "AnimationNext",
+        TriggerBuiltin::AnimationPrevious => "AnimationPrevious",
+        TriggerBuiltin::AnimationReplay => "AnimationReplay",
+        TriggerBuiltin::AnimationPreset(preset) => preset.id(),
     }
 }
 

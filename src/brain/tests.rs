@@ -96,11 +96,9 @@ fn curator_first_run_on_fresh_db_only_stamps_marker() {
     assert!((now - stamped).abs() < 60, "marker must be stamped to now");
 }
 
-/// Regression: identical content stored under several sources (clipboard +
-/// note + chat turn) used to fill every launcher slot with duplicates.
-/// `brain_search` must collapse them to one hit and let distinct memories in.
+/// Repeated content in different canonical sources must preserve each identity.
 #[test]
-fn brain_search_dedupes_identical_content_across_sources() {
+fn brain_search_preserves_identical_content_from_distinct_sources() {
     let _db = init_test_db();
     let dup = "We agreed to upgrade the dedupletron cluster to 1.31 next sprint.";
     store::upsert_doc(
@@ -137,7 +135,10 @@ fn brain_search_dedupes_identical_content_across_sources() {
     .unwrap();
     let hits = search::brain_search("dedupletron upgrade", None, None, 4).unwrap();
     let dup_hits = hits.iter().filter(|hit| hit.doc.content == dup).count();
-    assert_eq!(dup_hits, 1, "identical content must collapse to one hit");
+    assert_eq!(
+        dup_hits, 3,
+        "distinct canonical sources must remain accessible"
+    );
     assert!(
         hits.iter().any(|hit| hit.doc.source_id == "dup-other"),
         "distinct memory should fill the freed slot"
@@ -909,6 +910,37 @@ fn brain_status_resource_reports_health() {
             && !body.contains("private status note body")
             && !body.contains("statusfragment42"),
         "status resource should report counts/health, not dump memory content"
+    );
+}
+
+#[test]
+fn health_checked_distinguishes_absent_corrupt_and_available_snapshots() {
+    let _db = init_test_db();
+    assert!(matches!(
+        super::health::read_health_checked(),
+        super::health::BrainHealthRead::NotYetIndexed
+    ));
+    store::meta_set("health", "private malformed fixture").unwrap();
+    assert!(matches!(
+        super::health::read_health_checked(),
+        super::health::BrainHealthRead::Unavailable {
+            code: "brain_health_unavailable",
+            ..
+        }
+    ));
+    let snapshot = super::health::BrainHealth {
+        last_cycle_started_unix: None,
+        last_cycle_finished_unix: None,
+        last_cycle_ok: None,
+        last_error: None,
+        docs_total: 0,
+        docs_pending_embedding: 0,
+        recall_mode: "lexical-only".into(),
+        embedder_alive: false,
+    };
+    super::health::record_health(&snapshot).unwrap();
+    assert!(
+        matches!(super::health::read_health_checked(), super::health::BrainHealthRead::Available { snapshot: observed } if observed == snapshot)
     );
 }
 

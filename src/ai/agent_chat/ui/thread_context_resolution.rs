@@ -234,8 +234,18 @@ impl AgentChatThread {
         should_stage_brain_recall: bool,
     ) -> PreparedTurnBlocks {
         let mut blocks = Vec::new();
+        let mut brain_failure = None;
         if should_stage_brain_recall {
-            if let Some(recall) = crate::brain::recall_context_block(input).ok().flatten() {
+            let recall = match crate::brain::recall_context_block(input) {
+                Ok(recall) => recall,
+                Err(error) => {
+                    brain_failure = Some(crate::ai::reliability::context_unavailable_failure(
+                        &error.to_string(),
+                    ));
+                    None
+                }
+            };
+            if let Some(recall) = recall {
                 tracing::info!(
                     target: "script_kit::brain",
                     event = "agent_chat_brain_recall_staged",
@@ -278,6 +288,7 @@ impl AgentChatThread {
                 "--- USER REQUEST ---\n{input}"
             ))));
             return PreparedTurnBlocks {
+                brain_failure,
                 blocks,
                 receipt: Some(receipt),
                 attachments,
@@ -293,6 +304,7 @@ impl AgentChatThread {
             ))));
         }
         PreparedTurnBlocks {
+            brain_failure,
             blocks,
             receipt: None,
             attachments: Vec::new(),

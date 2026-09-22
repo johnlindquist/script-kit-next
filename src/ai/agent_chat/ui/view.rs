@@ -769,8 +769,6 @@ pub(crate) struct AgentChatView {
     history_closed_at: Option<Instant>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
-    /// Whether the queued message strip is expanded to individual rows.
-    message_queue_expanded: bool,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands discovered at creation, with source identity.
@@ -2061,7 +2059,7 @@ text_style.text_inset_left,
                         AgentChatThreadStatus::WaitingForPermission
                     ),
                     context_preparing: self.context_capture_pending_for_thread(thread),
-                    context_failed: thread.pasted_image_preparation() == Some(crate::pasted_image::PastedImagePreparation::Failed),
+                    context_failed: thread.brain_decision_failure().is_some() || thread.pasted_image_preparation() == Some(crate::pasted_image::PastedImagePreparation::Failed),
                     composer_has_text: !thread.input.text().trim().is_empty()
                         || !thread.pending_context_items().is_empty(),
                     retry_available: Self::retryable_recovery_active(thread),
@@ -3489,6 +3487,14 @@ text_style.text_inset_left,
             return FooterDotStatus::Hidden;
         }
 
+        if self
+            .live_thread()
+            .read(cx)
+            .brain_decision_failure()
+            .is_some()
+        {
+            return FooterDotStatus::Error;
+        }
         if self.live_thread().read(cx).pasted_image_preparation()
             == Some(crate::pasted_image::PastedImagePreparation::Failed)
         {
@@ -3519,6 +3525,15 @@ text_style.text_inset_left,
 
         if let Some(status) = self.command_status {
             return Some(status);
+        }
+
+        if self
+            .live_thread()
+            .read(cx)
+            .brain_decision_failure()
+            .is_some()
+        {
+            return Some("Memory unavailable · Review recovery in Actions");
         }
 
         if self.live_thread().read(cx).pasted_image_preparation()
@@ -6330,7 +6345,6 @@ text_style.text_inset_left,
             history_popup_lifetime: None,
             history_closed_at: None,
             attach_menu_open: false,
-            message_queue_expanded: false,
             search_state: None,
             cached_slash_commands: if fixture_sources {
                 Self::DEFAULT_SLASH_COMMANDS
@@ -6455,7 +6469,6 @@ text_style.text_inset_left,
             history_popup_lifetime: None,
             history_closed_at: None,
             attach_menu_open: false,
-            message_queue_expanded: false,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
@@ -10295,7 +10308,6 @@ crate::components::main_view_chrome::MainViewInputShellIds::new(
         }
 
         let theme = theme::get_cached_theme();
-        let accent = theme.colors.accent.selected;
         let border = theme.colors.ui.border;
         let dimmed = theme.colors.text.dimmed;
         let muted_text = theme.colors.text.muted;
@@ -10324,14 +10336,6 @@ crate::components::main_view_chrome::MainViewInputShellIds::new(
                 .flex_row()
                 .items_center()
                 .gap(px(5.0))
-                // Gold left accent bar
-                .child(
-                    div()
-                        .w(px(2.0))
-                        .h(px(14.0))
-                        .rounded(px(1.0))
-                        .bg(rgb(accent)),
-                )
                 // Label + dismiss in ghost container
                 .child(
                     div()
@@ -10583,6 +10587,11 @@ crate::components::main_view_chrome::MainViewInputShellIds::new(
                 text_primary,
             );
         let (icon_char, tooltip, id) = match (busy, can_send) {
+            _ if is_waiting => (
+                "\u{25CF}",
+                "Waiting for permission — resolve the permission request",
+                "agent_chat-permission-waiting",
+            ),
             (true, true) => (
                 "\u{21E7}",
                 "Queue message — sends when the current turn finishes",
@@ -10626,7 +10635,7 @@ crate::components::main_view_chrome::MainViewInputShellIds::new(
                     });
                 }
             });
-        } else if can_send {
+        } else if can_send && !is_waiting {
             btn = btn.cursor_pointer().on_click(move |_event, _window, cx| {
                 if let Some(view) = weak_view.upgrade() {
                     view.update(cx, |this, cx| this.submit_with_expanded_tokens(cx));

@@ -210,31 +210,73 @@ fn read_brain_docs_resource(uri: &str) -> Result<(String, String), String> {
 
 /// Resolve a brain resource URI to (mime_type, body).
 pub fn read_brain_resource(uri: &str) -> Result<(String, String), String> {
-    store::init_brain_db().map_err(|error| format!("brain init failed: {error}"))?;
+    store::init_brain_db().map_err(|error| {
+        format!(
+            "Brain is unavailable. Diagnostic: {}",
+            crate::logging::log_private_user_value(&error.to_string()).sha256
+        )
+    })?;
     if uri == BRAIN_RESOURCE_URI || uri.starts_with("kit://brain?") {
-        let (docs, embedded, signals) =
-            store::doc_stats().map_err(|error| format!("brain stats failed: {error}"))?;
+        let mut unavailable = Vec::new();
+        let stats = status_value(
+            store::doc_stats(),
+            "brain_stats_unavailable",
+            &mut unavailable,
+        );
+        let docs = stats.get(0).cloned().unwrap_or(serde_json::Value::Null);
+        let embedded = stats.get(1).cloned().unwrap_or(serde_json::Value::Null);
+        let signals = stats.get(2).cloned().unwrap_or(serde_json::Value::Null);
         let model = super::embedder::resolve_embed_model();
-        let docs_by_source: serde_json::Map<String, serde_json::Value> = store::source_counts()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(source, count)| (source, serde_json::json!(count)))
-            .collect();
-        // Meta timestamps double as health checks: a stale lastIndexCycle
-        // means the indexer thread died or the app hasn't run lately.
-        let meta_ts = |key: &str| -> serde_json::Value {
-            store::meta_get(key)
-                .ok()
-                .flatten()
-                .and_then(|value| value.parse::<i64>().ok())
-                .map(|ts| serde_json::json!(ts))
-                .unwrap_or(serde_json::Value::Null)
+        let counts = status_value(
+            store::source_counts().map(|counts| {
+                counts
+                    .into_iter()
+                    .map(|(source, count)| (source, serde_json::json!(count)))
+                    .collect::<serde_json::Map<String, serde_json::Value>>()
+            }),
+            "brain_source_counts_unavailable",
+            &mut unavailable,
+        );
+        let docs_by_source = counts;
+        let health_read = super::health::read_health_checked();
+        if matches!(
+            health_read,
+            super::health::BrainHealthRead::Unavailable { .. }
+        ) {
+            unavailable.push(serde_json::to_value(&health_read).unwrap_or_default());
+        }
+        let health = match &health_read {
+            super::health::BrainHealthRead::Available { snapshot } => {
+                serde_json::to_value(snapshot).unwrap_or_default()
+            }
+            _ => serde_json::Value::Null,
         };
-        // BrainHealth snapshot recorded by the indexer after every cycle, so
-        // swallowed failures surface here. Null until the first cycle runs.
-        let health = super::health::read_health()
-            .and_then(|health| serde_json::to_value(health).ok())
-            .unwrap_or(serde_json::Value::Null);
+        let mut meta_ts = |key: &str| -> serde_json::Value {
+            let value = status_value(
+                store::meta_get(key),
+                "brain_metadata_unavailable",
+                &mut unavailable,
+            );
+            match value.as_str() {
+                Some(value) => match value.parse::<i64>() {
+                    Ok(ts) => serde_json::json!(ts),
+                    Err(error) => {
+                        unavailable.push(serde_json::json!({"code":"brain_metadata_invalid", "key":key, "diagnostic":crate::logging::log_private_user_value(&error.to_string()).sha256}));
+                        serde_json::Value::Null
+                    }
+                },
+                None => serde_json::Value::Null,
+            }
+        };
+        let last_index = meta_ts("last_index_cycle");
+        let last_curator = meta_ts("curator_last_run");
+        let last_prune = meta_ts("ambient_prune_last");
+        let last_download = meta_ts("embed_model_download_attempt");
+        let fts_version = status_value(
+            store::meta_get("fts_version"),
+            "brain_metadata_unavailable",
+            &mut unavailable,
+        );
         let body = serde_json::json!({
             "schemaVersion": 1,
             "docs": docs,
@@ -242,14 +284,17 @@ pub fn read_brain_resource(uri: &str) -> Result<(String, String), String> {
             "embedded": embedded,
             "signals": signals,
             "health": health,
+            "healthAvailability": health_read,
+            "status": if unavailable.is_empty() {"available"} else {"partial"},
+            "unavailable": unavailable,
             "semanticSearch": model.is_some(),
             "embedModel": model.map(|m| m.model_id),
             "embedHelperFound": super::embedder::helper_available(),
-            "lastIndexCycle": meta_ts("last_index_cycle"),
-            "lastCuratorRun": meta_ts("curator_last_run"),
-            "lastAmbientPrune": meta_ts("ambient_prune_last"),
-            "lastModelDownloadAttempt": meta_ts("embed_model_download_attempt"),
-            "ftsVersion": store::meta_get("fts_version").ok().flatten(),
+            "lastIndexCycle": last_index,
+            "lastCuratorRun": last_curator,
+            "lastAmbientPrune": last_prune,
+            "lastModelDownloadAttempt": last_download,
+            "ftsVersion": fts_version,
             "dbSizeBytes": store::db_size_bytes(),
             "canonicalRoots": {
                 "brain": "~/.scriptkit/brain",
@@ -385,5 +430,19 @@ mod tests {
             query_param("kit://brain/recall?q=%€", "q").as_deref(),
             Some("%€")
         );
+    }
+}
+
+fn status_value<T: serde::Serialize>(
+    result: anyhow::Result<T>,
+    code: &'static str,
+    unavailable: &mut Vec<serde_json::Value>,
+) -> serde_json::Value {
+    match result.and_then(|value| serde_json::to_value(value).map_err(anyhow::Error::from)) {
+        Ok(value) => value,
+        Err(error) => {
+            unavailable.push(serde_json::json!({"code":code,"diagnostic":crate::logging::log_private_user_value(&error.to_string()).sha256}));
+            serde_json::Value::Null
+        }
     }
 }

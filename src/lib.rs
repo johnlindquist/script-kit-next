@@ -533,22 +533,94 @@ pub fn set_script_requested_hide(value: bool) {
     SCRIPT_REQUESTED_HIDE.store(value, Ordering::SeqCst);
 }
 
+/// Ordinary show requests remain unconditional; animation replays are bound to
+/// the launcher selection and the exact visibility generation of their hide.
+#[derive(Debug, Clone, Copy)]
+pub enum ShowWindowRequest {
+    Normal,
+    AnimationReplay {
+        visibility_generation: u64,
+        replay_generation: u64,
+        preset_number: usize,
+    },
+}
+
+impl ShowWindowRequest {
+    /// Replays never override a newer hide, show, or preset selection.
+    pub fn is_current(
+        self,
+        current_visibility_generation: u64,
+        is_logically_visible: bool,
+        current_replay_generation: u64,
+        current_preset_number: usize,
+    ) -> bool {
+        match self {
+            Self::Normal => true,
+            Self::AnimationReplay {
+                visibility_generation,
+                replay_generation,
+                preset_number,
+            } => {
+                !is_logically_visible
+                    && visibility_generation == current_visibility_generation
+                    && replay_generation == current_replay_generation
+                    && preset_number == current_preset_number
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod animation_replay_tests {
+    #[test]
+    fn queued_animation_replay_cannot_reopen_after_a_superseding_action() {
+        let request = super::ShowWindowRequest::AnimationReplay {
+            visibility_generation: 8,
+            replay_generation: 4,
+            preset_number: 2,
+        };
+        assert!(request.is_current(8, false, 4, 2));
+        assert!(!request.is_current(8, true, 4, 2));
+        assert!(!request.is_current(9, false, 4, 2));
+        assert!(!request.is_current(8, false, 5, 2));
+        assert!(!request.is_current(8, false, 4, 3));
+        assert!(super::ShowWindowRequest::Normal.is_current(9, true, 5, 3));
+    }
+}
+
 /// Channel for requesting the main window to be shown
 /// Used by prompt_handler to signal that the window should come back after script exit
 static SHOW_WINDOW_CHANNEL: std::sync::LazyLock<(
-    async_channel::Sender<()>,
-    async_channel::Receiver<()>,
+    async_channel::Sender<ShowWindowRequest>,
+    async_channel::Receiver<ShowWindowRequest>,
 )> = std::sync::LazyLock::new(|| async_channel::bounded(10));
 
-/// Get the show window channel (sender, receiver)
-pub fn show_window_channel() -> &'static (async_channel::Sender<()>, async_channel::Receiver<()>) {
+/// Get the show window channel (sender, receiver).
+pub fn show_window_channel() -> &'static (
+    async_channel::Sender<ShowWindowRequest>,
+    async_channel::Receiver<ShowWindowRequest>,
+) {
     &SHOW_WINDOW_CHANNEL
 }
 
 /// Request showing the main window (called from prompt_handler on ScriptExit)
 pub fn request_show_main_window() {
     let (tx, _) = show_window_channel();
-    let _ = tx.try_send(());
+    let _ = tx.try_send(ShowWindowRequest::Normal);
+}
+
+/// Queue a replay only after native main-window hide completion confirms it is hidden.
+pub fn request_show_main_window_for_animation_replay(
+    visibility_generation: u64,
+    replay_generation: u64,
+    preset_number: usize,
+) -> Result<(), async_channel::TrySendError<ShowWindowRequest>> {
+    let (tx, _) = show_window_channel();
+    tx.try_send(ShowWindowRequest::AnimationReplay {
+        visibility_generation,
+        replay_generation,
+        preset_number,
+    })
 }
 
 /// Legacy hook retained for split runtime call sites.

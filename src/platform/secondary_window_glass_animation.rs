@@ -216,6 +216,24 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
 ) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
 
+    // The selection is an atomic Copy snapshot. Do not read it again in any
+    // material, content, geometry, settle, or finish callback of this entry.
+    if surface == GlassEntrySurface::Main
+        && crate::window_manager::get_main_window() == Some(window)
+    {
+        let preset = crate::theme::animation::current_preset();
+        let spec = preset.spec();
+        if !spec.legacy {
+            animate_tahoe_glass_coherent_main_appearance(
+                window,
+                log_target,
+                window_name,
+                preset,
+                spec,
+            );
+            return;
+        }
+    }
     let policy = glass_entry_policy(surface);
     let outset_sign = policy.direction.geometry_sign();
 
@@ -252,6 +270,15 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
         return; // morph disabled via theme sliders
     };
     let is_main_window = crate::window_manager::get_main_window() == Some(window);
+    if is_main_window
+        && GLASS_COHERENT_ENTRY_STATES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_key(&(window as usize))
+    {
+        log_skip("pending_hidden_restore");
+        return;
+    }
     if is_main_window && glass_morph_recently_started() {
         restore_alpha(window);
         log_skip("recently_started_debounce");
@@ -625,7 +652,13 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
         };
 
     if let Ok(mut guard) = GLASS_ENTRY_CONTENT_TARGETS.lock() {
-        guard.insert(window as usize, content_targets);
+        guard.insert(
+            window as usize,
+            GlassEntryContentTarget {
+                duration: tuning.content_fade_duration,
+                views: content_targets,
+            },
+        );
     }
 
     // Stash the tail and schedule: content reveal @53ms, tail @88ms.
@@ -746,4 +779,502 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
             (tuning.alpha_finish_duration * 1_000_000_000.0).round() as u64,
         ),
     );
+    if surface == GlassEntrySurface::Main && is_main_window {
+        // The rollback keeps every old selector, frame, curve, and timeline
+        // untouched. Its receipt is observational, not a new settle callback.
+        let legacy_preset = crate::theme::animation::MainWindowAnimationPreset::PreviousCalibration;
+        let duration_ms = (tuning.total_entry_duration() * 1000.0).round() as u32;
+        MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .replace(MainGlassEntryRuntimeReceipt {
+                window_key: window as usize,
+                window_number: msg_send![window, windowNumber],
+                preset_id: legacy_preset.id(),
+                duration_ms,
+                compression_ms: ((tuning.material_onset_duration + phase1) * 1000.0).round() as u32,
+                reveal_ms: (tuning.content_fade_duration * 1000.0).round() as u32,
+                start_width_scale: onset_start.size.width / final_frame.size.width,
+                squish_width_scale: squish.size.width / final_frame.size.width,
+                window_start_alpha: tuning.start_alpha,
+                material_start_alpha: 1.0,
+                backdrop_start_alpha_effective: msg_send![glass_view, alphaValue],
+                content_start_alpha,
+                main_content_start_alpha_effective_range: None,
+                capsule_label_start_alpha_effective_range: None,
+                capsule_label_count: 0,
+                capsule_inner_start_fraction: content_start_alpha,
+                backdrop_blur_radius: entry_blur_radius,
+                capsule_blur_radius: footer_blur_radius,
+                foreground_blur_radius: 0.0,
+                foreground_root_count: content_root_count,
+                foreground_blurred_root_count: 0,
+                capsule_count: footer_capsule_count,
+                capsule_blurred_count: footer_blurred_capsule_count,
+                capsule_material_count: footer_material_ramp_count,
+                material_supported: onset_supported,
+                expected_frame: [
+                    final_frame.origin.x,
+                    final_frame.origin.y,
+                    final_frame.size.width,
+                    final_frame.size.height,
+                ],
+                actual_frame: None,
+                actual_alpha: None,
+                post_hide_alpha: None,
+                effects_restored: None,
+                frame_restored: None,
+                outcome: "legacy_calibration",
+                configured_at_host_time_ns,
+                cancelled_at_host_time_ns: None,
+                actual_end_host_time_ns: None,
+            });
+        logging::log(log_target, &format!(
+            "event=main_glass_entry_captured preset={} duration_ms={} compression_ms={} reveal_ms={} outcome=legacy_calibration",
+            legacy_preset.id(), duration_ms,
+            ((tuning.material_onset_duration + phase1) * 1000.0).round() as u32,
+            (tuning.content_fade_duration * 1000.0).round() as u32,
+        ));
+    }
+}
+
+/// Main-only continuous choreography. Existing AppKit groups, tagged glass
+/// callbacks, bounce targets, and cancellation owner remain authoritative.
+#[cfg(target_os = "macos")]
+unsafe fn animate_tahoe_glass_coherent_main_appearance(
+    window: id,
+    log_target: &str,
+    window_name: &str,
+    preset: crate::theme::animation::MainWindowAnimationPreset,
+    spec: crate::theme::animation::MainWindowAnimationSpec,
+) {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    MAIN_COHERENT_ENTRY_PREPARING.store(true, std::sync::atomic::Ordering::Relaxed);
+    cancel_ns_window_exit_dematerialize_impl(window, false);
+    MAIN_COHERENT_ENTRY_PREPARING.store(false, std::sync::atomic::Ordering::Relaxed);
+    if GLASS_COHERENT_ENTRY_STATES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .contains_key(&(window as usize))
+    {
+        logging::log(
+            log_target,
+            &format!(
+            "event=glass_morph_skip window={} phase=enter preset={} reason=pending_hidden_restore",
+            window_name, preset.id(),
+        ),
+        );
+        return;
+    }
+    let skip = |reason: &str| {
+        let _: () = msg_send![window, setAlphaValue: 1.0f64];
+        logging::log(
+            log_target,
+            &format!(
+                "event=glass_morph_skip window={} phase=enter preset={} reason={}",
+                window_name,
+                preset.id(),
+                reason,
+            ),
+        );
+    };
+    if glass_morph_recently_started() {
+        skip("recently_started_debounce");
+        return;
+    }
+    let tuning = main_glass_morph_tuning(spec);
+    let final_frame: NSRect = msg_send![window, frame];
+    if final_frame.size.width < 40.0 || final_frame.size.height < 40.0 {
+        skip("frame_too_small");
+        return;
+    }
+    let content_view: id = msg_send![window, contentView];
+    if content_view == nil {
+        skip("no_content_view");
+        return;
+    }
+    let backdrop: id = msg_send![content_view, viewWithTag: TAHOE_GLASS_BACKDROP_TAG];
+    if backdrop == nil {
+        skip("no_glass_view");
+        return;
+    }
+
+    let width = final_frame.size.width;
+    let start_outset = width * (spec.start_width_scale - 1.0) * 0.5;
+    let squish_inset = width * (1.0 - spec.squish_width_scale) * 0.5;
+    let start = NSRect::new(
+        NSPoint::new(final_frame.origin.x - start_outset, final_frame.origin.y),
+        NSSize::new(width * spec.start_width_scale, final_frame.size.height),
+    );
+    let squish = NSRect::new(
+        NSPoint::new(final_frame.origin.x + squish_inset, final_frame.origin.y),
+        NSSize::new(width * spec.squish_width_scale, final_frame.size.height),
+    );
+    let native_window_number: i64 = msg_send![window, windowNumber];
+    let mut state = GlassCoherentEntryState::new(final_frame, backdrop, native_window_number);
+    let Some(backdrop_natural_alpha) = state.capture_alpha(backdrop) else {
+        skip("no_backdrop_alpha");
+        return;
+    };
+    let backdrop_layer_captured = state.capture_layer(backdrop);
+
+    // The initial widest frame is installed before show/orderFront; the
+    // compression starts here at T=0, overlapping all presence channels.
+    let _: () = msg_send![window, setAlphaValue: spec.window_start_alpha];
+    let _: () = msg_send![window, setFrame: start display: true];
+
+    let resolved_style = resolve_native_glass_style(
+        &crate::theme::get_cached_theme(),
+        NativeGlassSurfaceRole::WindowBackdrop,
+    );
+    let red = f64::from((resolved_style.signature.tint_rgb >> 16) & 0xff) / 255.0;
+    let green = f64::from((resolved_style.signature.tint_rgb >> 8) & 0xff) / 255.0;
+    let blue = f64::from(resolved_style.signature.tint_rgb & 0xff) / 255.0;
+    let tint: id = msg_send![class!(NSColor),
+        colorWithCalibratedRed: red green: green blue: blue
+        alpha: f64::from(resolved_style.effective_tint_alpha)
+    ];
+    let style_supported: bool = msg_send![backdrop, respondsToSelector: sel!(setStyle:)];
+    let tint_supported: bool = msg_send![backdrop, respondsToSelector: sel!(setTintColor:)];
+    let material_supported = style_supported && tint_supported;
+    let reveal_duration = f64::from(spec.reveal_ms) / 1000.0;
+    if material_supported {
+        state.capture_style(backdrop);
+        let _: () = msg_send![backdrop, setStyle: 1isize]; // Clear
+        let _: () = msg_send![backdrop, setTintColor: nil];
+    }
+    let backdrop_start_alpha = backdrop_natural_alpha * spec.material_start_alpha;
+    let _: () = msg_send![backdrop, setAlphaValue: backdrop_start_alpha];
+
+    // The native detached footer is a separate GPUI sibling: never seed or
+    // filter its gap-spanning container. Only the rounded glass capsules and
+    // their own foreground labels participate in this reveal.
+    let footer_host = crate::footer_popup::main_window_footer_entry_alpha_target(window);
+    let capsules = crate::footer_popup::main_window_footer_entry_capsules(window);
+    let capsule_count = capsules.len();
+    let mut capsule_blur_count = 0usize;
+    let mut capsule_material_count = 0usize;
+    let mut content_roots = 0usize;
+    let mut foreground_blur_count = 0usize;
+    let mut content_targets = Vec::new();
+    let mut main_start_alpha_min = f64::INFINITY;
+    let mut main_start_alpha_max = 0.0f64;
+    let mut capsule_label_start_min = f64::INFINITY;
+    let mut capsule_label_start_max = 0.0f64;
+    let mut capsule_label_count = 0usize;
+    // The outer capsule already multiplies its label alpha. Seed its inner
+    // foreground only for the additional content/material difference.
+    let capsule_inner_start_fraction =
+        (spec.content_start_alpha / spec.material_start_alpha).min(1.0);
+    let subviews: id = msg_send![content_view, subviews];
+    if subviews != nil {
+        let count: usize = msg_send![subviews, count];
+        for index in 0..count {
+            let child: id = msg_send![subviews, objectAtIndex: index];
+            if child == nil || child == backdrop || child == footer_host {
+                continue;
+            }
+            let native_glass: bool = objc::runtime::Class::get("NSGlassEffectView")
+                .is_some_and(|class| msg_send![child, isKindOfClass: class]);
+            let native_container: bool = objc::runtime::Class::get("NSGlassEffectContainerView")
+                .is_some_and(|class| msg_send![child, isKindOfClass: class]);
+            let contains_footer: bool =
+                footer_host != nil && msg_send![footer_host, isDescendantOf: child];
+            if native_glass || native_container || contains_footer {
+                continue;
+            }
+            let Some(alpha) = state.capture_alpha(child) else {
+                continue;
+            };
+            state.capture_layer(child);
+            if alpha <= 0.001 {
+                continue;
+            }
+            let _: () = msg_send![child, setAlphaValue: alpha * spec.content_start_alpha];
+            let measured: f64 = msg_send![child, alphaValue];
+            main_start_alpha_min = main_start_alpha_min.min(measured);
+            main_start_alpha_max = main_start_alpha_max.max(measured);
+            content_targets.push((child as usize, alpha));
+            content_roots += 1;
+            if spec.foreground_blur_radius > 0.0
+                && clip_entry_defocus_to_backdrop(child, backdrop, spec)
+            {
+                state.mark_owned_mask(child);
+                state.mark_owned_clip(child);
+                let installed = ramp_entry_defocus(
+                    child,
+                    reveal_duration,
+                    spec.foreground_blur_radius,
+                    log_target,
+                );
+                state.mark_owned_filter(child);
+                state.mark_owned_clip(child);
+                if installed > 0.0 {
+                    foreground_blur_count += 1;
+                }
+            }
+        }
+    }
+    for &capsule in &capsules {
+        let capsule_layer_captured = state.capture_layer(capsule);
+        let style_ok: bool = msg_send![capsule, respondsToSelector: sel!(setStyle:)];
+        let tint_ok: bool = msg_send![capsule, respondsToSelector: sel!(setTintColor:)];
+        if style_ok && tint_ok {
+            state.capture_style(capsule);
+            let _: () = msg_send![capsule, setStyle: 1isize];
+            let _: () = msg_send![capsule, setTintColor: nil];
+            capsule_material_count += 1;
+        }
+        if let Some(alpha) = state.capture_alpha(capsule) {
+            let _: () = msg_send![capsule, setAlphaValue: alpha * spec.material_start_alpha];
+        }
+        if spec.blur_radius > 0.0 && capsule_layer_captured {
+            let installed =
+                ramp_entry_defocus(capsule, reveal_duration, spec.blur_radius, log_target);
+            state.mark_owned_filter(capsule);
+            state.mark_owned_clip(capsule);
+            if installed > 0.0 {
+                capsule_blur_count += 1;
+            }
+        }
+        let foreground: id = msg_send![capsule, contentView];
+        let foreground_original_alpha = if capsule_inner_start_fraction < 1.0 {
+            state.capture_layer(foreground);
+            state.capture_alpha(foreground)
+        } else if foreground != nil {
+            Some(msg_send![foreground, alphaValue])
+        } else {
+            None
+        };
+        if let Some(alpha) = foreground_original_alpha {
+            if alpha > 0.001 {
+                if capsule_inner_start_fraction < 1.0 {
+                    let _: () = msg_send![foreground,
+                        setAlphaValue: alpha * capsule_inner_start_fraction];
+                    content_targets.push((foreground as usize, alpha));
+                }
+                let outer_actual: f64 = msg_send![capsule, alphaValue];
+                let inner_actual: f64 = msg_send![foreground, alphaValue];
+                let effective = outer_actual * inner_actual;
+                capsule_label_start_min = capsule_label_start_min.min(effective);
+                capsule_label_start_max = capsule_label_start_max.max(effective);
+                capsule_label_count += 1;
+            }
+        }
+    }
+    GLASS_COHERENT_ENTRY_STATES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(window as usize, state);
+    GLASS_ENTRY_CONTENT_TARGETS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(
+            window as usize,
+            GlassEntryContentTarget {
+                duration: reveal_duration,
+                views: content_targets,
+            },
+        );
+    GLASS_MORPH_TAIL_TARGETS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(
+            window as usize,
+            GlassMorphTailTarget {
+                squish_frame: [
+                    squish.origin.x,
+                    squish.origin.y,
+                    squish.size.width,
+                    squish.size.height,
+                ],
+                final_frame: [
+                    final_frame.origin.x,
+                    final_frame.origin.y,
+                    final_frame.size.width,
+                    final_frame.size.height,
+                ],
+                phase1: tuning.phase1,
+                phase2: tuning.phase2,
+                alpha_ramp_duration: tuning.alpha_ramp_duration,
+                phase1_alpha_target: tuning.phase1_alpha_target,
+                alpha_finish_duration: tuning.alpha_finish_duration,
+            },
+        );
+
+    // Use the same native grouped Clear→Regular+tint onset animator as the
+    // calibration, but overlap it with the immediate compression. No hold.
+    let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
+    let material_ctx: id = msg_send![class!(NSAnimationContext), currentContext];
+    let _: () = msg_send![material_ctx, setDuration: reveal_duration];
+    let _: () = msg_send![material_ctx, setAllowsImplicitAnimation: true];
+    if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
+        let name = tahoe_ns_string("easeOut");
+        if name != nil {
+            let curve: id = msg_send![timing_class, functionWithName: name];
+            if curve != nil {
+                let _: () = msg_send![material_ctx, setTimingFunction: curve];
+            }
+        }
+    }
+    let backdrop_animator: id = msg_send![backdrop, animator];
+    if material_supported {
+        let _: () = msg_send![backdrop_animator, setStyle: 0isize]; // Regular
+        if tint != nil {
+            let _: () = msg_send![backdrop_animator, setTintColor: tint];
+        }
+    }
+    let _: () = msg_send![backdrop_animator, setAlphaValue: backdrop_natural_alpha];
+    for capsule in capsules {
+        let capsule_animator: id = msg_send![capsule, animator];
+        if capsule_material_count > 0 {
+            let saved = GLASS_COHERENT_ENTRY_STATES.lock().ok().and_then(|guard| {
+                guard.get(&(window as usize)).and_then(|state| {
+                    state
+                        .styles
+                        .iter()
+                        .find(|style| style.view == capsule as usize)
+                        .map(|style| (style.style, style.tint))
+                })
+            });
+            if let Some((style, tint)) = saved {
+                let _: () = msg_send![capsule_animator, setStyle: style];
+                let _: () = msg_send![capsule_animator, setTintColor: tint as id];
+            }
+        }
+        let saved_alpha = GLASS_COHERENT_ENTRY_STATES.lock().ok().and_then(|guard| {
+            guard.get(&(window as usize)).and_then(|state| {
+                state
+                    .alpha_views
+                    .iter()
+                    .find(|(view, _)| *view == capsule as usize)
+                    .map(|(_, alpha)| *alpha)
+            })
+        });
+        if let Some(alpha) = saved_alpha {
+            let _: () = msg_send![capsule_animator, setAlphaValue: alpha];
+        }
+    }
+    let _: () = msg_send![class!(NSAnimationContext), endGrouping];
+    let backdrop_blur = if spec.blur_radius > 0.0 && backdrop_layer_captured {
+        ramp_entry_defocus(backdrop, reveal_duration, spec.blur_radius, log_target)
+    } else {
+        0.0
+    };
+    if spec.blur_radius > 0.0 && backdrop_layer_captured {
+        if let Some(state) = GLASS_COHERENT_ENTRY_STATES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_mut(&(window as usize))
+        {
+            state.mark_owned_filter(backdrop);
+            state.mark_owned_clip(backdrop);
+        }
+    }
+
+    tahoe_glass_backdrop_reveal_entry_content(&*backdrop, sel!(revealOwnWindowEntryContent));
+    tahoe_glass_backdrop_begin_entry_tail(&*backdrop, sel!(beginOwnWindowEntryTail));
+    if let Some(state) = GLASS_COHERENT_ENTRY_STATES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_mut(&(window as usize))
+    {
+        state.mark_added_animations();
+    }
+    let _: () = msg_send![backdrop,
+        performSelector: sel!(finishOwnWindowEntry)
+        withObject: nil
+        afterDelay: (tuning.duration + 0.020f64)
+    ];
+    record_native_glass_entry_span(window, tuning.duration);
+    let configured_ns = crate::platform::host_clock::host_time_ns();
+    MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .replace(MainGlassEntryRuntimeReceipt {
+            window_key: window as usize,
+            window_number: native_window_number,
+            preset_id: preset.id(),
+            duration_ms: spec.duration_ms,
+            compression_ms: spec.compression_ms,
+            reveal_ms: spec.reveal_ms,
+            start_width_scale: spec.start_width_scale,
+            squish_width_scale: spec.squish_width_scale,
+            window_start_alpha: spec.window_start_alpha,
+            material_start_alpha: spec.material_start_alpha,
+            backdrop_start_alpha_effective: backdrop_start_alpha,
+            content_start_alpha: spec.content_start_alpha,
+            main_content_start_alpha_effective_range: (content_roots > 0)
+                .then_some([main_start_alpha_min, main_start_alpha_max]),
+            capsule_label_start_alpha_effective_range: (capsule_label_count > 0)
+                .then_some([capsule_label_start_min, capsule_label_start_max]),
+            capsule_label_count,
+            capsule_inner_start_fraction,
+            backdrop_blur_radius: backdrop_blur,
+            capsule_blur_radius: if capsule_blur_count > 0 {
+                spec.blur_radius
+            } else {
+                0.0
+            },
+            foreground_blur_radius: spec.foreground_blur_radius,
+            foreground_root_count: content_roots,
+            foreground_blurred_root_count: foreground_blur_count,
+            capsule_count,
+            capsule_blurred_count: capsule_blur_count,
+            capsule_material_count,
+            material_supported,
+            expected_frame: [
+                final_frame.origin.x,
+                final_frame.origin.y,
+                final_frame.size.width,
+                final_frame.size.height,
+            ],
+            actual_frame: None,
+            actual_alpha: None,
+            post_hide_alpha: None,
+            effects_restored: None,
+            frame_restored: None,
+            outcome: "in_flight",
+            configured_at_host_time_ns: configured_ns,
+            cancelled_at_host_time_ns: None,
+            actual_end_host_time_ns: None,
+        });
+    if spec.foreground_blur_radius > 0.0 && content_roots > 0 && foreground_blur_count == 0 {
+        logging::log(
+            log_target,
+            &format!(
+            "event=main_glass_foreground_defocus_skip preset={} reason=no_safely_clipped_gpui_root",
+            preset.id(),
+        ),
+        );
+    }
+    if content_roots > 0 && capsule_label_count > 0 {
+        logging::log(log_target, &format!(
+            "event=main_glass_effective_presence preset={} main_content_start_alpha_min={:.6} main_content_start_alpha_max={:.6} capsule_label_start_alpha_min={:.6} capsule_label_start_alpha_max={:.6} capsule_inner_start_fraction={:.6} capsule_label_capped_by_material={} capsule_blur_radius={:.2} main_foreground_blur_radius={:.2}",
+            preset.id(), main_start_alpha_min, main_start_alpha_max,
+            capsule_label_start_min, capsule_label_start_max,
+            capsule_inner_start_fraction,
+            spec.content_start_alpha > spec.material_start_alpha,
+            if capsule_blur_count > 0 { spec.blur_radius } else { 0.0 },
+            spec.foreground_blur_radius,
+        ));
+    }
+    GLASS_MORPH_LAST_DURATION_MS.store(
+        spec.duration_ms as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    logging::log(log_target, &format!(
+        "event=glass_morph window={} variant=window_frame phase=enter surface_profile=main preset={} direction=shrink_in total_entry_duration_ns={} visible_tail_duration_ns={} phase1_ns={} hold_ns=0 phase2_ns={} start_scale_x={:.6} squish_scale_x={:.6} start_scale_y=1 squish_scale_y=1 start_alpha={:.4} material_start_alpha={:.4} content_start_alpha={:.4} alpha_ramp_ns={} reveal_ns={} entry_blur_radius={:.2} foreground_blur_radius={:.2} foreground_blurred_root_count={} foreground_root_count={} footer_capsule_count={} footer_blurred_capsule_count={} footer_material_ramp_count={} expected_settle_deadline_ns={} final_width_pt={:.2} final_height_pt={:.2} final_alpha=1 geometry_curve=easeOut rebound_curve=easeInEaseOut material_curve=easeOut",
+        window_name, preset.id(), spec.duration_ms as u64 * 1_000_000,
+        spec.duration_ms as u64 * 1_000_000, spec.compression_ms as u64 * 1_000_000,
+        (spec.duration_ms - spec.compression_ms) as u64 * 1_000_000,
+        spec.start_width_scale, spec.squish_width_scale,
+        spec.window_start_alpha, spec.material_start_alpha,
+        spec.content_start_alpha, spec.reveal_ms as u64 * 1_000_000,
+        spec.reveal_ms as u64 * 1_000_000, backdrop_blur,
+        spec.foreground_blur_radius, foreground_blur_count, content_roots,
+        capsule_count, capsule_blur_count, capsule_material_count,
+        configured_ns.saturating_add(spec.duration_ms as u64 * 1_000_000),
+        final_frame.size.width, final_frame.size.height,
+    ));
 }

@@ -100,6 +100,7 @@ fn render_dictation_history_leading_slot(
                 label,
                 None,
                 list_colors,
+                main_menu_theme,
             ),
         )
 }
@@ -224,13 +225,17 @@ impl ScriptListApp {
         if let crate::dictation::DictationHistoryViewState::Ready(page) = &history_state {
             self.dictation_history_previous_page = Some(page.clone());
         }
-        let page = history_state.page().cloned().unwrap_or(crate::dictation::DictationHistoryPage {
-            total_matches: 0,
-            visible_count: 0,
-            offset: 0,
-            rows: Vec::new(),
-            has_more: false,
-        });
+        let page =
+            history_state
+                .page()
+                .cloned()
+                .unwrap_or(crate::dictation::DictationHistoryPage {
+                    total_matches: 0,
+                    visible_count: 0,
+                    offset: 0,
+                    rows: Vec::new(),
+                    has_more: false,
+                });
         let filtered_entries = page.rows.clone();
         let filtered_len = filtered_entries.len();
         let row_keys: Vec<String> = filtered_entries
@@ -328,7 +333,8 @@ impl ScriptListApp {
                     None
                 };
 
-                let Some((current_filter, current_selected, current_visible_limit)) = view_state else {
+                let Some((current_filter, current_selected, current_visible_limit)) = view_state
+                else {
                     return;
                 };
 
@@ -439,9 +445,7 @@ impl ScriptListApp {
                 crate::dictation::DictationHistoryViewState::NoFilteredMatches => {
                     "No dictations match your filter"
                 }
-                crate::dictation::DictationHistoryViewState::Ready(_) => {
-                    "No saved dictation yet"
-                }
+                crate::dictation::DictationHistoryViewState::Ready(_) => "No saved dictation yet",
             };
             crate::components::render_simple_empty_state(
                 "dictation-history-empty",
@@ -649,9 +653,8 @@ impl ScriptListApp {
                             if let AppView::DictationHistoryView { visible_limit, .. } =
                                 &mut this.current_view
                             {
-                                *visible_limit = visible_limit.saturating_add(
-                                    crate::dictation::DICTATION_HISTORY_PAGE_SIZE,
-                                );
+                                *visible_limit = visible_limit
+                                    .saturating_add(crate::dictation::DICTATION_HISTORY_PAGE_SIZE);
                                 cx.notify();
                             }
                         });
@@ -747,7 +750,9 @@ mod dictation_history_paint_tests {
                 timestamp: "2026-07-18T12:00:00Z".to_string(),
                 transcript: "A rendered dictation history row".to_string(),
                 preview: "A rendered dictation history row".to_string(),
-                target_id: crate::dictation::DictationTarget::TabAiHarness.sticky_label().to_string(),
+                target_id: crate::dictation::DictationTarget::TabAiHarness
+                    .sticky_label()
+                    .to_string(),
                 target_label_snapshot: "Agent Chat".to_string(),
                 audio_duration_ms: 1_250,
             };
@@ -781,7 +786,9 @@ mod dictation_history_paint_tests {
                 timestamp: "2026-07-18T12:00:00Z".to_string(),
                 transcript: "A rendered dictation history row".to_string(),
                 preview: "A rendered dictation history row".to_string(),
-                target_id: crate::dictation::DictationTarget::TabAiHarness.sticky_label().to_string(),
+                target_id: crate::dictation::DictationTarget::TabAiHarness
+                    .sticky_label()
+                    .to_string(),
                 target_label_snapshot: "Agent Chat".to_string(),
                 audio_duration_ms: 1_250,
             };

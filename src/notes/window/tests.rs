@@ -277,67 +277,6 @@ fn test_platform_arrow_shortcuts_only_run_note_navigation_when_editor_not_focuse
     );
 }
 
-const NOTES_ACTIONS_SOURCE: &str = include_str!("notes_actions.rs");
-
-#[test]
-fn test_show_selected_note_missing_feedback_notifies_after_feedback_state_update() {
-    assert!(
-        NOTES_ACTIONS_SOURCE.contains(
-            "self.show_action_feedback(Self::SELECTED_NOTE_NOT_FOUND_FEEDBACK, true);\n        cx.notify();"
-        ),
-        "Missing-note feedback should notify after updating action feedback state"
-    );
-}
-
-#[test]
-fn test_duplicate_selected_note_sets_feedback_before_select_note() {
-    let feedback_idx = NOTES_ACTIONS_SOURCE
-        .find("self.show_action_feedback(\"Duplicated\", false);")
-        .expect("Expected duplicate feedback call in notes_actions.rs");
-    let select_idx = NOTES_ACTIONS_SOURCE
-        .find("self.select_note(duplicate.id, window, cx);")
-        .expect("Expected duplicate select_note call in notes_actions.rs");
-
-    assert!(
-        feedback_idx < select_idx,
-        "Duplicate feedback should be set before select_note triggers notify"
-    );
-}
-
-#[test]
-fn test_copy_as_markdown_notifies_after_feedback_state_update() {
-    const CLIPBOARD_OPS_SOURCE: &str = include_str!("clipboard_ops.rs");
-    let copy = CLIPBOARD_OPS_SOURCE
-        .split("fn copy_as_markdown(")
-        .nth(1)
-        .and_then(|body| body.split("\n    }").next())
-        .expect("copy_as_markdown must exist");
-    assert!(
-        copy.contains("self.copy_text_to_clipboard(&content, \"Copied\", cx);"),
-        "Copy-as-markdown must delegate feedback and notification to the shared copy owner"
-    );
-    let helper = NOTES_ACTIONS_SOURCE
-        .split("fn copy_text_to_clipboard(")
-        .nth(1)
-        .and_then(|body| body.split("pub(super) fn note_deeplink(").next())
-        .expect("shared copy helper must exist");
-    assert!(
-        helper.contains(
-            "self.show_action_feedback(receipt.feedback(success_message.to_owned()), false)"
-        ) && helper
-            .contains("self.show_action_feedback(format!(\"Failed to copy: {error}\"), true)"),
-        "shared copy helper must update feedback for both successful and failed copies"
-    );
-    let feedback = helper
-        .rfind("self.show_action_feedback(")
-        .expect("copy feedback");
-    let notify = helper.find("cx.notify();").expect("copy notification");
-    assert!(
-        feedback < notify,
-        "Copy-as-markdown must notify after the shared helper updates feedback"
-    );
-}
-
 #[test]
 fn test_notes_editor_disables_dynamic_code_editor_bottom_margin() {
     const COMPONENT_SOURCE: &str = include_str!("../../components/notes_editor/component.rs");

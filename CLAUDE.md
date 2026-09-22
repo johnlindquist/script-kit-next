@@ -117,7 +117,33 @@ generic bug fix, refactor, theme change, or contrast task is not permission.
 If a requested change appears to require different motion values, preserve the
 calibration and ask for explicit permission instead.
 
-The locked production contract is (entry retuned 2026-07-26 to the
+**2026-09-16 main-entry comparison catalog (user-authorized):** the owner asked
+to implement coherent entry and 25 launcher presets for choosing the balance
+through real use. At the owner's subsequent 2026-09-16 choice, main-window
+entry defaults to `SharpPresence`: no resizing/morph or defocus. Its existing
+timing and appearance stay unchanged. `PreviousCalibration` (Animation 21)
+and the other comparison alternatives remain intact. Other surfaces,
+exits, settled materials, footer geometry, and glyph tokens remain locked.
+This catalog is not a newly measured Spotlight calibration. Do not collapse its
+alternatives or change the chosen/default preset during unrelated fixes.
+
+`src/theme/animation.rs` owns preset IDs/specs; `config.ts`'s
+`animation.preset` persists the explicit choice. Launcher registration/dispatch,
+typed generation-guarded show requests in `src/lib.rs`, and the existing native
+animation/lifecycle owners provide selection and replay. `getState` exposes
+`mainWindowAnimation` with selection/catalog and captured native lifecycle.
+Coherent remains an optional preset: 298ms total (158ms compression, 140ms rebound, no onset-width pause),
+140ms overlapping reveal, 0.15 initial material/content presence, the 0.85
+NSWindow alpha floor, 12pt backdrop/capsule and 4pt bounded foreground defocus.
+Capsule foreground is not double-faded when material/content curves agree;
+mixed presets report effective label alpha and ancestor caps honestly.
+Model-property receipts do not prove composited pixel presence or sharpness.
+The named calibration fixture/envelopes still defend the preserved baseline:
+visible calibration captures must explicitly select `PreviousCalibration`
+through the supported launcher operation before measuring, not widen tolerances
+or relabel a different preset as calibrated.
+
+The preserved calibration contract is (entry retuned 2026-07-26 to the
 Spotlight visible tail — Oracle session `glass-entry-spotlight-retune`,
 user-authorized, evidence: the frame-by-frame measurement page
 https://eager-hollow-dyyf.here.now/ and the before/after receipts in
@@ -125,19 +151,19 @@ https://eager-hollow-dyyf.here.now/ and the before/after receipts in
 cd5634ec8; exit/material values remain from the 2026-07-24 calibration
 against `CleanShot 2026-07-24 at 09.18.40.mp4`):
 
-- **2026-07-27 SPEED SCALE (authorized): every entry duration is HALVED**
-  relative to Spotlight's measured wall clock, at explicit user request
-  ("make the animate in like 2x faster"). Shape, ratios, curves, geometry,
-  and alpha semantics are Spotlight's; only the tempo departs. Restoring
-  1:1 Spotlight timing = doubling every entry duration below;
-- default entry duration (visible tail) `0.105s`: `35ms` ease-out
-  compression, NO explicit hold, `70ms` ease-in-out rebound. The
+- **2026-09-15 SPEED RESTORATION (authorized): Spotlight's 1:1 entry tempo**
+  replaces the 2026-07-27 2x speed-up, at the owner's request to match the
+  supplied frame-by-frame reference. Temporal phases are doubled from that
+  speed-up; shape, ratios, curves, geometry, alpha levels, blur radii, and
+  exit semantics stay unchanged;
+- default entry duration (visible tail) `0.210s`: `70ms` ease-out
+  compression, NO explicit hold, `140ms` ease-in-out rebound. The
   compression ease-out ends at zero velocity and the rebound begins at zero
   velocity — that turn, not a dead hold, is the physical settling;
-- material onset prefix `44ms` (glass Clear→Regular + tint ramp at a
+- material onset prefix `88ms` (glass Clear→Regular + tint ramp at a
   CONSTANT `0.85` NSWindow alpha, curve `(0.18,0)/(0.14,0)`); GPUI content
   roots fade in WITH the material from the first photon — hold `0ms`, fade
-  `44ms`, ending exactly at tail start (2026-08-13 content-timing retune:
+  `88ms`, ending exactly at tail start (2026-08-13 content-timing retune:
   the 57fps Spotlight reference shows content faintly present from frame 1,
   and the prior 26ms hold produced readable empty-body frames once the
   native footer stopped enrolling in the content fade). **2026-08-13
@@ -145,7 +171,7 @@ against `CleanShot 2026-07-24 at 09.18.40.mp4`):
   'empty' window"):** content roots seed at `0.21 ×` their natural alpha —
   Spotlight's measured first-photon presence (~21% of settled) — never at
   `0.0`, then fade to full (`GLASS_ENTRY_CONTENT_START_ALPHA`,
-  `SCRIPT_KIT_GLASS_CONTENT_START` override). Total entry `149ms`
+  `SCRIPT_KIT_GLASS_CONTENT_START` override). Total entry `298ms`
   = onset + tail (Oracle session `glass-entry-onset-v2`, measured from
   `CleanShot 2026-07-27 at 10.08.42.mp4`);
 - entry inset `0.006` per side, producing a main shrink-in
@@ -155,15 +181,15 @@ against `CleanShot 2026-07-24 at 09.18.40.mp4`):
   (user-authorized, measured from `CleanShot 2026-08-13 at 00.25.36.mp4`,
   57fps):** the MAIN window's first photon is `103.05%` wide (Spotlight's
   measured first photon), easing to the preserved `101.2%` visible-tail
-  start over `18ms` inside the material prefix, with the main backdrop's
-  onset defocus raised to `12pt → 0` resolved across the `44ms` prefix
+  start over `36ms` inside the material prefix, with the main backdrop's
+  onset defocus raised to `12pt → 0` resolved across the `88ms` prefix
   (`GLASS_MAIN_ONSET_START_WIDTH_SCALE`, `GLASS_MAIN_ONSET_GEOMETRY_DURATION`,
   `GLASS_MAIN_ENTRY_BLUR_RADIUS`; popups/secondary keep the shared `8pt`
   full-entry ramp. Each floating footer `NSGlassEffectView` capsule uses the
-  same main `12pt → 0` defocus across `44ms`, applied per capsule with
+  same main `12pt → 0` defocus across `88ms`, applied per capsule with
   `masksToBounds`, AND — 2026-08-13 capsule material parity, user report:
   the buttons "don't match the blur of the main window" — the same
-  Clear→Regular + tint material ramp as the main backdrop across the `44ms`
+  Clear→Regular + tint material ramp as the main backdrop across the `88ms`
   prefix, with each capsule's own foreground contentView joining the shared
   content fade at the `0.21` presence floor; the footer container, hints
   host, and transparent inter-capsule gaps remain filter-free and never
@@ -174,9 +200,9 @@ against `CleanShot 2026-07-24 at 09.18.40.mp4`):
   is `0` (vertical damping 0.0 — Spotlight measures ±0–2px). Squish factor
   stays `0.25`, clamped `0.0065–0.015` per side; the default hits the
   0.0065 minimum = Spotlight's measured `−1.3%` total squish;
-- entry alpha: visible start `0.85`, easing to `0.99` over `18ms`
+- entry alpha: visible start `0.85`, easing to `0.99` over `36ms`
   (ease-out), holding the model value at `0.99` through max compression,
-  then easing `0.99 → 1.0` over `26ms` from rebound start. A shrink-in
+  then easing `0.99 → 1.0` over `52ms` from rebound start. A shrink-in
   frame must NEVER be fully opaque while wider than natural size;
 - the `0.85` floor lineage: retuned from `0.0` on 2026-07-25 (HITL
   submission `98cab5e5-6f15-4311-8d49-83e31602e641` / Oracle plan
@@ -188,8 +214,8 @@ against `CleanShot 2026-07-24 at 09.18.40.mp4`):
   `glass_hidden_park_on_visible_window`);
 - phase-one fraction `1/3`, squish hold `0.0s`, fade fraction `2/3`;
 - Notes body reveal uses the material-safe anchor, ABSOLUTE from native
-  configure: onset + `max(geometric crossing 11ms, alpha ramp 18ms)` =
-  `62ms`, then keeps its `90ms` body fade;
+  configure: onset + `max(geometric crossing 23ms, alpha ramp 36ms)` =
+  `124ms`, then keeps its `90ms` body fade;
 - glass material: stability tint floor `0.35` and capsule veil `0.0`
   (`src/ui/chrome/tokens.rs`) — the veil was removed in the user-authorized
   Jul 27 calibration; the older `0.80` policy text was stale. The Jul 23
@@ -337,7 +363,7 @@ Focused checks are listed at the bottom of that file.
 
 Source-audit tests (tests that `read_to_string`/`include_str!` app source and assert on its text) are decision locks, not behavior coverage. They are a scarce resource — do NOT mint one per feature pass.
 
-Reality check: `tests/source_audit_inventory.md` is generated by `python3 -B tests/source_audit_inventory.py` and currently reports 3,218 reader sites across 454 of 548 Rust test files. Of those, 2,716 sites in 396 files resolve to `src/**`; another 49 sites in 31 files have dynamic targets the scanner cannot prove safe (the file categories can overlap). The ordinary-PR guard compares normalized per-file reader-site multisets against the exact base tree, so adding a source read inside a grandfathered file or swapping one target for another fails; new unresolved dynamic reads fail conservatively too. Separately, `tests/source_audit_ratchet.rs` has a shrink-only allowlist for `.matches(...).count()` / `.match_indices(...).count()` assertions; it is not a corpus-wide source-audit ratchet. The existing corpus is NOT precedent for writing more. New invariants climb the ladder below, and when a grandfathered audit blocks a legitimate refactor, apply the pruning rule instead of patching its strings.
+Reality check: `tests/source_audit_inventory.md` is generated by `python3 -B tests/source_audit_inventory.py` and currently reports 2,806 reader sites across 409 of 504 Rust test files. Of those, 2,322 sites in 350 files resolve to `src/**`; another 48 sites in 30 files have dynamic targets the scanner cannot prove safe (the file categories can overlap). The ordinary-PR guard compares normalized per-file reader-site multisets against the exact base tree, so adding a source read inside a grandfathered file or swapping one target for another fails; new unresolved dynamic reads fail conservatively too. Separately, `tests/source_audit_ratchet.rs` has a shrink-only allowlist for `.matches(...).count()` / `.match_indices(...).count()` assertions; it is not a corpus-wide source-audit ratchet. The existing corpus is NOT precedent for writing more. New invariants climb the ladder below, and when a grandfathered audit blocks a legitimate refactor, apply the pruning rule instead of patching its strings.
 
 Enforcement ladder — pick the highest rung that can express the invariant:
 

@@ -1268,7 +1268,7 @@ app.run(move |cx: &mut App| {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("VISIBILITY", "Show window listener started (event-driven)");
             let (_, rx) = script_kit_gpui::show_window_channel();
-            while let Ok(()) = rx.recv().await {
+            while let Ok(request) = rx.recv().await {
                 logging::log(
                     "VISIBILITY",
                     "Show window request received - bringing main menu back",
@@ -1276,6 +1276,17 @@ app.run(move |cx: &mut App| {
                 let app_entity_inner = app_entity_for_show.clone();
                 let window_inner = window_for_show;
                 cx.update(move |cx: &mut gpui::App| {
+                    if matches!(request, script_kit_gpui::ShowWindowRequest::AnimationReplay { .. }) {
+                        let view = app_entity_inner.read(cx);
+                        if !script_kit_gpui::ShowWindowRequest::is_current(request,
+                        script_kit_gpui::main_window_visibility_generation(),
+                        script_kit_gpui::is_main_window_visible(),
+                        view.animation_replay_generation,
+                        view.main_preferences.animation.preset.number(),) {
+                            logging::log("VISIBILITY", "Skipped stale animation replay show request");
+                            return;
+                        }
+                    }
                     show_main_window_helper(window_inner, app_entity_inner, cx);
                 });
             }

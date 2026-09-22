@@ -129,6 +129,42 @@ pub(crate) fn main_window_detached_footer_regions_appkit(
     }
 }
 
+/// Placement-only preview: keep the calibrated stage and host dimensions intact.
+pub(crate) fn main_window_footer_overlay_preview() -> bool {
+    static ENABLED: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+        std::env::var("SCRIPT_KIT_MAIN_FOOTER_OVER_CONTENT").as_deref() == Ok("1")
+    });
+    *ENABLED && glass_scroll_bands_active()
+}
+
+pub(crate) fn main_window_footer_bounds_gpui(
+    width: f32,
+    host_height: f32,
+    footer_height: f32,
+    gap_height: f32,
+    backing_scale: f32,
+    over_content: bool,
+) -> crate::protocol::LayoutBounds {
+    let regions = main_window_detached_footer_regions_gpui(
+        width,
+        host_height,
+        footer_height,
+        gap_height,
+        backing_scale,
+    );
+    let mut footer = regions.footer;
+    if over_content {
+        let side_inset =
+            round_footer_region_value(crate::ui::chrome::LIQUID_GLASS_DENSE_GAP_PX, backing_scale)
+                .min(footer.width / 2.0);
+        footer.x = side_inset;
+        footer.width -= side_inset * 2.0;
+        footer.y =
+            (regions.main_content.height - footer.height - regions.transparent_gap.height).max(0.0);
+    }
+    footer
+}
+
 /// Height of the fully transparent strip the main window reserves below its
 /// glass container so the footer capsules float over the bare desktop.
 /// Both the GPUI root (bottom padding) and the native NSGlassEffectView
@@ -248,16 +284,20 @@ unsafe fn ensure_main_window_footer_glass_container(gpui_view: id, ns_window: id
     }
     let content_bounds: NSRect = msg_send![content_view, bounds];
     let backing_scale: f64 = msg_send![ns_window, backingScaleFactor];
-    let regions = main_window_detached_footer_regions_appkit(
+    let footer_bounds = main_window_footer_bounds_gpui(
         content_bounds.size.width as f32,
         content_bounds.size.height as f32,
         footer_height() as f32,
         FLOAT_FOOTER_CONTAINER_GAP_PX,
         backing_scale as f32,
+        main_window_footer_overlay_preview(),
     );
     let footer_frame = NSRect::new(
-        NSPoint::new(regions.footer.x as f64, regions.footer.y as f64),
-        NSSize::new(regions.footer.width as f64, regions.footer.height as f64),
+        NSPoint::new(
+            footer_bounds.x as f64,
+            content_bounds.size.height - (footer_bounds.y + footer_bounds.height) as f64,
+        ),
+        NSSize::new(footer_bounds.width as f64, footer_bounds.height as f64),
     );
 
     let existing = MAIN_WINDOW_FOOTER_GLASS_HOSTS.with(|hosts| {
@@ -320,13 +360,17 @@ static FLOAT_FOOTER_WINDOWS: std::sync::Mutex<Vec<(usize, u64, usize)>> =
 /// Find the floating-footer window registered for `ns_window`, if any.
 #[cfg(target_os = "macos")]
 unsafe fn float_footer_child_window(ns_window: id) -> id {
-    let Some((_, binding, _)) = native_footer_binding(ns_window) else { return nil; };
+    let Some((_, binding, _)) = native_footer_binding(ns_window) else {
+        return nil;
+    };
     let guard = FLOAT_FOOTER_WINDOWS
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
     guard
         .iter()
-        .find(|(parent, generation, _)| *parent == ns_window as usize && *generation == binding.host_generation)
+        .find(|(parent, generation, _)| {
+            *parent == ns_window as usize && *generation == binding.host_generation
+        })
         .map(|(_, _, footer)| *footer as id)
         .unwrap_or(nil)
 }
@@ -351,8 +395,14 @@ unsafe fn ensure_float_footer_child_window(ns_window: id) -> id {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
 
-    if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeVisibility).is_err() { return nil; }
-    let Some((_, binding, _)) = native_footer_binding(ns_window) else { return nil; };
+    if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeVisibility)
+        .is_err()
+    {
+        return nil;
+    }
+    let Some((_, binding, _)) = native_footer_binding(ns_window) else {
+        return nil;
+    };
     let existing = float_footer_child_window(ns_window);
     if existing != nil {
         return existing;
@@ -419,11 +469,22 @@ unsafe fn ensure_float_footer_child_window(ns_window: id) -> id {
 #[cfg(target_os = "macos")]
 unsafe fn remove_float_footer_child_window(ns_window: id) {
     use objc::{msg_send, sel, sel_impl};
-    let generation = FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).values()
-        .find(|host| host.native_window == ns_window as usize).map(|host| host.host_generation);
-    let Some(generation) = generation else { return; };
-    let mut windows = FLOAT_FOOTER_WINDOWS.lock().unwrap_or_else(|p| p.into_inner());
-    if let Some(index) = windows.iter().position(|(parent, lifetime, _)| *parent == ns_window as usize && *lifetime == generation) {
+    let generation = FOOTER_HOSTS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .values()
+        .find(|host| host.native_window == ns_window as usize)
+        .map(|host| host.host_generation);
+    let Some(generation) = generation else {
+        return;
+    };
+    let mut windows = FLOAT_FOOTER_WINDOWS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    if let Some(index) = windows
+        .iter()
+        .position(|(parent, lifetime, _)| *parent == ns_window as usize && *lifetime == generation)
+    {
         let (_, _, child) = windows.remove(index);
         let child = child as id;
         let _: () = msg_send![child, orderOut: nil];
@@ -437,7 +498,11 @@ unsafe fn remove_float_footer_child_window(ns_window: id) {
 /// will not hide it for us). Keeps the registration for the next show.
 #[cfg(target_os = "macos")]
 pub(crate) fn hide_float_footer_for_window(ns_window: id) {
-    if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeVisibility).is_err() { return; }
+    if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeVisibility)
+        .is_err()
+    {
+        return;
+    }
     use objc::{msg_send, sel, sel_impl};
 
     // SAFETY: called on the main thread from the platform hide paths; the
@@ -461,7 +526,11 @@ unsafe fn sync_float_footer_child_frame(ns_window: id) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{msg_send, sel, sel_impl};
 
-    if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeVisibility).is_err() { return; }
+    if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeVisibility)
+        .is_err()
+    {
+        return;
+    }
     let child = float_footer_child_window(ns_window);
     if child == nil {
         return;

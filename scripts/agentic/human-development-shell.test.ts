@@ -18,7 +18,7 @@ function fixture() {
   const bin = join(root, "fixture-bin"), localScripts = join(root, "scripts/agentic");
   const events = join(root, "development-events.jsonl");
   copyFileSync(join(scripts, "../../dev.sh"), join(root, "dev.sh"));
-  for (const name of ["dev-cycle.sh", "dev-relaunch.sh", "compiler-input-paths.txt"]) copyFileSync(join(scripts, name), join(localScripts, name));
+  for (const name of ["dev-cycle.sh", "dev-relaunch.sh", "dev-watcher-lease.py", "compiler-input-paths.txt"]) copyFileSync(join(scripts, name), join(localScripts, name));
   mkdirSync(join(root, ".cargo"));
   copyFileSync(join(scripts, "../../.cargo/config.toml"), join(root, ".cargo/config.toml"));
   for (const key of Object.keys(env)) {
@@ -33,6 +33,33 @@ function fixture() {
     SCRIPT_KIT_DEV_FORCE_RELAUNCH: "1", SCRIPT_KIT_DEV_STAMP_FILE: "",
     SCRIPT_KIT_DEV_STAMP_DIR: join(root, "stamps"),
   });
+  // Shell integration uses fake storage and compiler owners; the real storage
+  // admission/volume policy is exercised by dev-storage_test.py.
+  env.SCRIPT_KIT_DEV_STORAGE_ROOT = join(root, "ssd with spaces");
+  writeFileSync(join(localScripts, "dev-storage.py"), `import json, os, pathlib, shlex, sys
+root = pathlib.Path(os.environ["SCRIPT_KIT_DEV_STORAGE_ROOT"])
+target = root / "target"
+if os.environ.get("CARGO_TARGET_DIR") not in (None, str(target)):
+    print("[dev-storage] REFUSED conflicting CARGO_TARGET_DIR", file=sys.stderr)
+    sys.exit(78)
+values = {
+    "CARGO_TARGET_DIR": str(target),
+    "SCRIPT_KIT_DEV_PI_DIR": str(root / "pi-sidecar"),
+    "SCRIPT_KIT_GPUI_BINARY": str(target / "debug/script-kit-gpui"),
+    "SCRIPT_KIT_GHOST_LLM_HELPER": str(target / "debug/script-kit-ghost-llm-helper"),
+    "SCRIPT_KIT_METAL_MODULE_CACHE_DIR": str(root / "clang-modules"),
+    "CLANG_MODULE_CACHE_PATH": str(root / "clang-modules"),
+    "SCCACHE_DIR": str(root / "sccache"),
+    "TMPDIR": str(root / "tmp") + "/",
+}
+if "--shell" in sys.argv:
+    for path in (root, root / "tmp"):
+        path.mkdir(parents=True, exist_ok=True)
+    for key, value in values.items():
+        print("export " + key + "=" + shlex.quote(value))
+else:
+    print(json.dumps(values))
+`);
   mkdirSync(env.HOME!, { recursive: true });
   mkdirSync(env.TMPDIR!, { recursive: true });
   writeFileSync(events, "");
@@ -40,7 +67,16 @@ function fixture() {
   writeFileSync(join(localScripts, "session.sh"), `#!/bin/bash
 printf '{"kind":"session","action":"%s","binary":"%s"}\\n' "$1" "$SCRIPT_KIT_GPUI_BINARY" >> "$WATCHER_EVENTS"
 if [[ "$1" == "stop" && "\${FIXTURE_SESSION_STOP_REFUSED:-0}" == "1" ]]; then exit 78; fi
-printf '{"session":"fixture-dev-watch","status":"started","ready":true}\\n'
+dir="$SCRIPT_KIT_SESSION_DIR/$2"
+mkdir -p "$dir"
+printf '%s\\n' "$PPID" > "$dir/pid"
+printf 'fixture-generation\\n' > "$dir/generation"
+if [[ "\${FIXTURE_HOTKEY_REGISTER_FAILED:-0}" == "1" ]]; then
+  printf 'BUILTIN_HOTKEY_REGISTER_FAILED action=Main launcher display=cmd+; id=1\\n' > "$dir/app.log"
+else
+  printf 'BUILTIN_HOTKEY_REGISTERED action=Main launcher display=cmd+; id=1\\n' > "$dir/app.log"
+fi
+printf '{"session":"%s","status":"ok","ready":true,"pid":%s,"sessionGeneration":"fixture-generation","log":"%s/app.log","binary":"%s"}\\n' "$2" "$PPID" "$dir" "$SCRIPT_KIT_GPUI_BINARY"
 `);
   const prelude = `#!${process.execPath}
 import { appendFileSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
@@ -49,6 +85,7 @@ const args = process.argv.slice(2), env = process.env;
 const record = (kind, fields = {}) => appendFileSync(env.WATCHER_EVENTS, JSON.stringify({ kind, ...fields }) + "\\n");
 `;
   writeFileSync(join(bin, "cargo-watch"), "#!/bin/bash\nexit 97\n", { mode: 0o755 });
+  writeFileSync(join(bin, "ninja"), "#!/bin/bash\nexit 96\n", { mode: 0o755 });
   writeFileSync(join(bin, "cargo"), `${prelude}
 record("cargo", { args, target: env.CARGO_TARGET_DIR, binary: env.SCRIPT_KIT_GPUI_BINARY });
 if (args[0] === "watch") {
@@ -161,6 +198,13 @@ sys.exit(124 if timed_out else child.returncode if child.returncode >= 0 else 12
 }
 
 describe("human development shell behavior", () => {
+  test("SSD storage admission preserves mounted-volume and ownership boundaries", () => {
+    const result = Bun.spawnSync(["python3", "-B", join(scripts, "dev-storage_test.py")], {
+      stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 20_000,
+    });
+    expect(result.exitCode, result.stdout.toString() + result.stderr.toString()).toBe(0);
+  });
+
   test.each(["0", "1"])("authorized fake watcher preserves default sidecar, dev binary, sccache and root linker flags (lld=%s)", (lld) => {
     const workspace = fixture();
     Object.assign(workspace.env, { SCRIPT_KIT_USE_LLD: lld!, SCRIPT_KIT_USE_SCCACHE: "1" });
@@ -175,9 +219,9 @@ describe("human development shell behavior", () => {
     expect(watcher.start).not.toBe("");
     const builds = records.filter(record => record.kind === "cargo" && record.args[0] === "build");
     expect(builds).toHaveLength(2);
-    for (const build of builds) expect(build).toMatchObject({ target: join(workspace.root, "target"), binary: join(workspace.root, "target/debug/script-kit-gpui") });
+    for (const build of builds) expect(build).toMatchObject({ target: join(workspace.env.SCRIPT_KIT_DEV_STORAGE_ROOT!, "target"), binary: join(workspace.env.SCRIPT_KIT_DEV_STORAGE_ROOT!, "target/debug/script-kit-gpui") });
     expect(builds[1].args).toEqual(["build", "--locked", "--bin", "script-kit-gpui", "--features", "local-llm", "--message-format=short"]);
-    expect(records.filter(record => record.kind === "session")).toEqual(["stop", "start"].map(action => ({ kind: "session", action, binary: join(workspace.root, "target/debug/script-kit-gpui") })));
+    expect(records.filter(record => record.kind === "session")).toEqual(["stop", "start"].map(action => ({ kind: "session", action, binary: join(workspace.env.SCRIPT_KIT_DEV_STORAGE_ROOT!, "target/debug/script-kit-gpui") })));
     expect(records.filter(record => record.kind === "sccache")).toHaveLength(2);
     const compilers = records.filter(record => record.kind === "compiler");
     expect(compilers).toHaveLength(2);
@@ -188,6 +232,8 @@ describe("human development shell behavior", () => {
     const links = records.filter(record => record.kind === "linker");
     expect(links).toHaveLength(2);
     for (const link of links) expect(link.args).toEqual([...(lld === "1" ? [`-fuse-ld=${workspace.llvm}/bin/ld64.lld`] : []), "-Wl,-dead_strip", "fixture.o", "-o", "fixture-output"]);
+    expect(existsSync(join(workspace.root, "target/debug/script-kit-gpui"))).toBe(false);
+    expect(existsSync(join(workspace.env.HOME!, ".scriptkit/bin/script-kit-ghost-llm-helper"))).toBe(false);
     expect(existsSync(lockPath(workspace.root))).toBe(false);
   }, 30_000);
 
@@ -227,7 +273,7 @@ describe("human development shell behavior", () => {
     expect(result.status, result.stdout + result.stderr).toBe(0);
     const builds = workspace.records().filter(record => record.kind === "cargo" && record.args[0] === "build");
     expect(builds).toHaveLength(1);
-    expect(builds[0]).toMatchObject({ args: ["build", "--locked", "--bin", "script-kit-gpui", "--message-format=short"], target: join(workspace.root, "target"), binary: join(workspace.root, "target/debug/script-kit-gpui") });
+    expect(builds[0]).toMatchObject({ args: ["build", "--locked", "--bin", "script-kit-gpui", "--message-format=short"], target: join(workspace.env.SCRIPT_KIT_DEV_STORAGE_ROOT!, "target"), binary: join(workspace.env.SCRIPT_KIT_DEV_STORAGE_ROOT!, "target/debug/script-kit-gpui") });
     expect(workspace.records().filter(record => record.kind === "session").map(record => record.action)).toEqual(["stop", "start"]);
     expect(existsSync(lockPath(workspace.root))).toBe(false);
   }, 30_000);
@@ -250,6 +296,58 @@ describe("human development shell behavior", () => {
     expect(workspace.records().filter(record => record.kind === "session").map(record => record.action)).toEqual(["stop"]);
   });
 
+  test("a ready app that cannot register the global shortcut is not a successful dev relaunch", () => {
+    const workspace = fixture();
+    workspace.env.FIXTURE_HOTKEY_REGISTER_FAILED = "1";
+    const result = run(workspace, "scripts/agentic/dev-cycle.sh");
+    expect(result.status, result.stdout + result.stderr).toBe(78);
+    const receipt = JSON.parse(result.stdout.trim());
+    expect(receipt.ready).toBe(false);
+    expect(receipt.mainHotkeyRegistered).toBe(false);
+    expect(receipt.error.code).toBe("dev_main_hotkey_registration_failed");
+  });
+
+
+  test("explicit takeover recovers a root-only stale registration and preserves its evidence", () => {
+    const workspace = fixture(), lock = lockPath(workspace.root);
+    Object.assign(workspace.env, { FIXTURE_WATCH_ONLY: "1" });
+    mkdirSync(lock);
+    writeFileSync(join(lock, "root"), `${workspace.root}\n`);
+    try {
+      const ordinary = run(workspace, "dev.sh", [], true);
+      expect(ordinary.status).toBe(78);
+      expect(workspace.records()).toEqual([]);
+      expect(readFileSync(join(lock, "root"), "utf8")).toBe(`${workspace.root}\n`);
+      const recovered = run(workspace, "dev.sh", ["--takeover"], true);
+      expect(recovered.status, recovered.stdout + recovered.stderr).toBe(0);
+      expect(workspace.records().find(record => record.kind === "watcher").lock).toBe(lock);
+      expect(existsSync(lock)).toBe(false);
+      const preserved = (recovered.stdout + recovered.stderr).match(/preserved at ([^\r\n]+)/)?.[1];
+      expect(preserved).toBeDefined();
+      roots.push(preserved!);
+      expect(readFileSync(join(preserved!, "root"), "utf8")).toBe(`${workspace.root}\n`);
+    } finally { rmSync(lock, { recursive: true, force: true }); }
+  }, 30_000);
+
+  test("a complete dead watcher lease recovers without takeover", async () => {
+    const workspace = fixture(), lock = lockPath(workspace.root);
+    Object.assign(workspace.env, { FIXTURE_WATCH_ONLY: "1" });
+    const child = await spawnOwnedProcess({ argv: ["/bin/cat"], cwd: workspace.root, env: workspace.env, timeoutMs: 30_000, maxOutputBytes: 4096 });
+    const start = Bun.spawnSync(["/bin/ps", "-p", String(child.pid), "-o", "lstart="], { env: { ...workspace.env, LC_ALL: "C" }, stdout: "pipe", stderr: "pipe" });
+    await child.close();
+    mkdirSync(lock);
+    const old = { pid: `${child.pid}\n`, "process-start": `${start.stdout.toString().trim()}\n`, generation: "dead-owner\n", root: `${workspace.root}\n`, session: "dead-owner\n" };
+    for (const [name, value] of Object.entries(old)) writeFileSync(join(lock, name), value);
+    try {
+      const recovered = run(workspace, "dev.sh", [], true);
+      expect(recovered.status, recovered.stdout + recovered.stderr).toBe(0);
+      expect(existsSync(lock)).toBe(false);
+      const preserved = (recovered.stdout + recovered.stderr).match(/preserved at ([^\r\n]+)/)?.[1];
+      expect(preserved).toBeDefined();
+      roots.push(preserved!);
+      expect(readFileSync(join(preserved!, "generation"), "utf8")).toBe(old.generation);
+    } finally { rmSync(lock, { recursive: true, force: true }); }
+  }, 30_000);
   test("repo-scoped duplicate refusal preserves the owner while explicit multi cleans only its own lease", async () => {
     const workspace = fixture(), lock = lockPath(workspace.root);
     const child = await spawnOwnedProcess({ argv: ["/bin/cat"], cwd: workspace.root, env: workspace.env, timeoutMs: 30_000, maxOutputBytes: 4096 });

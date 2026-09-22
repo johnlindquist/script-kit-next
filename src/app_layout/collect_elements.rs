@@ -2527,7 +2527,7 @@ impl ScriptListApp {
 
     pub(crate) fn script_list_visible_row_labels_from_cache(&self) -> (Vec<String>, Option<usize>) {
         let selected = self
-            .resolved_main_menu_selected_subject()
+            .painted_main_menu_selected_subject()
             .map(|subject| match subject {
                 ResolvedMainMenuSelection::SearchResult { row, .. }
                 | ResolvedMainMenuSelection::Calculator { row, .. } => row.grouped_index,
@@ -2565,11 +2565,13 @@ impl ScriptListApp {
         let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
         let source_statuses = self.cached_source_statuses_snapshot();
         let selected_grouped_index =
-            self.resolved_main_menu_selected_subject()
+            self.painted_main_menu_selected_subject()
                 .map(|subject| match subject {
                     ResolvedMainMenuSelection::SearchResult { row, .. }
                     | ResolvedMainMenuSelection::Calculator { row, .. } => row.grouped_index,
                 });
+        let pending_query = !self.root_search.query_is_current()
+            || self.main_menu_committed_query_stamp() != self.root_search.computed_query_stamp();
         let total_rows = self.main_menu_committed_rows().len();
         let handler_form = self
             .menu_syntax_main_hint_snapshot(&self.filter_text, false)
@@ -2775,6 +2777,12 @@ impl ScriptListApp {
                         element.kind = Some("calculator".to_string());
                         element.role = Some("row".to_string());
                         element.selectable = Some(row.eligibility.selectable);
+                        element.action_disabled = pending_query
+                            .then(|| "main_menu_query_pending".to_string())
+                            .or_else(|| {
+                                (!row.eligibility.activatable)
+                                    .then(|| "main_menu_row_not_activatable".to_string())
+                            });
                         elements.push(element);
                         row_index += 1;
                         continue;
@@ -2842,8 +2850,12 @@ impl ScriptListApp {
                     element.semantic_id = row.semantic_id.clone();
                     element.index = row.selectable_ordinal;
                     element.selectable = Some(row.eligibility.selectable);
-                    element.action_disabled = (!row.eligibility.activatable)
-                        .then(|| "main_menu_row_not_activatable".to_string());
+                    element.action_disabled = pending_query
+                        .then(|| "main_menu_query_pending".to_string())
+                        .or_else(|| {
+                            (!row.eligibility.activatable)
+                                .then(|| "main_menu_row_not_activatable".to_string())
+                        });
                     if let scripts::SearchResult::File(file_match) = result {
                         element.kind =
                             Some(root_file_semantic_kind(file_match.file.file_type).to_string());

@@ -1599,6 +1599,40 @@ export interface ThemeSelectionPreferences {
   presetId?: string;
 }
 
+/** Persisted main-launcher entry experiment; unchanged secondary-window animations. */
+export type MainWindowAnimationPreset =
+  | "coherent"
+  | "brisk"
+  | "swift"
+  | "leisurely"
+  | "cinematic"
+  | "fixed_frame"
+  | "grow_in"
+  | "shallow"
+  | "bounce"
+  | "deep_squish"
+  | "present"
+  | "soft_fade"
+  | "late_content"
+  | "early_content"
+  | "luminous"
+  | "razor"
+  | "soft_focus"
+  | "diffuse"
+  | "foreground_focus"
+  | "material_haze"
+  | "previous_calibration"
+  | "quick_grow"
+  | "velvet_bounce"
+  | "sharp_presence"
+  | "dreamy_glide"
+  | "brisk_material_haze";
+
+export interface AnimationPreferences {
+  /** Default: coherent. Previous calibration is the exact former 298 ms entry. */
+  preset?: MainWindowAnimationPreset;
+}
+
 /**
  * Dictation runtime preferences stored in `~/.scriptkit/config.ts`.
  */
@@ -2291,6 +2325,9 @@ export interface Config {
    * @default undefined
    */
   theme?: ThemeSelectionPreferences;
+
+  /** Main-window entry animation experiment (default: coherent). */
+  animation?: AnimationPreferences;
 
   /**
    * Design picker preferences and per-design token overrides.

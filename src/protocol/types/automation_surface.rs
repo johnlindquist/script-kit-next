@@ -125,6 +125,9 @@ pub struct ActiveFooterSnapshot {
     pub active_surface: Option<String>,
     pub native_footer_host_installed: bool,
     pub gpui_fallback_visible: bool,
+    /// Whether the installed main-window glass footer overlays the content.
+    #[serde(default)]
+    pub over_content_preview: bool,
     pub left_info: Option<ActiveFooterLeftInfoSnapshot>,
     pub button_count: usize,
     pub action_slot_count: usize,

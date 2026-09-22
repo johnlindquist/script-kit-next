@@ -5,8 +5,6 @@ use crate::error::ErrorSeverity;
 
 /// Canonical max width for toasts.
 pub const TOAST_MAX_WIDTH_PX: f32 = 400.0;
-/// Canonical left border width for variant indicator (subtle accent line).
-pub const TOAST_BORDER_WIDTH_PX: f32 = 2.0;
 /// Canonical toast corner radius.
 pub const TOAST_RADIUS_PX: f32 = 8.0;
 /// Canonical gap between toast icon and content column.

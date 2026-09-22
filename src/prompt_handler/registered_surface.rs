@@ -301,6 +301,34 @@ pub(crate) fn apply_registered_surface_command(
                 _ => return Err(unsupported_batch_command_error(kind, command).into()),
             }
         }
+        protocol::AutomationWindowKind::Dictation => {
+            if let protocol::BatchCommand::SelectBySemanticId {
+                semantic_id,
+                submit,
+            } = command
+            {
+                let actions =
+                    crate::dictation::dictation_recording_actions_for_instance(generation, cx)
+                        .ok_or_else(|| anyhow::anyhow!("dictation_owner_stale"))?;
+                anyhow::ensure!(
+                    actions.iter().any(|action| &action.id == semantic_id
+                        && matches!(
+                            action.id.as_str(),
+                            "dictation_microphone" | "dictation_jump_latest"
+                        )),
+                    "dictation_action_unavailable"
+                );
+                if *submit {
+                    crate::dictation::execute_dictation_overlay_action_for_instance(
+                        generation,
+                        semantic_id,
+                        cx,
+                    )?;
+                }
+                return Ok(Some(semantic_id.clone()));
+            }
+            return Err(unsupported_batch_command_error(kind, command).into());
+        }
         protocol::AutomationWindowKind::ActionsDialog => {
             let entity = crate::windows::automation_surface_collector::exact_actions_dialog_entity(
                 &target, cx,
@@ -492,6 +520,7 @@ pub(crate) fn registered_surface_state_result(
         ghost_prediction: None,
         flow_ux: None,
         backgrounded_sessions: None,
+        main_window_animation: None,
     })
 }
 
@@ -503,6 +532,31 @@ impl ScriptListApp {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
+        if semantic_id.starts_with("agent_chat_queue:") {
+            let AppView::AgentChatView { entity } = &self.current_view else {
+                anyhow::bail!("queue_target_not_agent_chat");
+            };
+            let entity = entity.clone();
+            anyhow::ensure!(
+                entity
+                    .read(cx)
+                    .ai_recovery_actions(cx)
+                    .iter()
+                    .any(|action| action.id == semantic_id),
+                "queue_action_stale"
+            );
+            if submit {
+                anyhow::ensure!(
+                    entity.update(cx, |view, cx| view.execute_queue_action(
+                        semantic_id,
+                        window,
+                        cx
+                    )),
+                    "queue_action_rejected"
+                );
+            }
+            return Ok(semantic_id.to_string());
+        }
         if matches!(self.current_view, AppView::ScriptList)
             && self.spine_projection_owns_main_list()
         {
@@ -518,6 +572,40 @@ impl ScriptListApp {
 
         if let AppView::DayPage { entity } = &self.current_view {
             let entity = entity.clone();
+            if semantic_id == "day-page-clipboard-shelf-toggle"
+                || semantic_id.starts_with("day-page-clipboard-shelf-item-")
+            {
+                return entity.update(cx, |view, cx| {
+                    anyhow::ensure!(
+                        !view.clipboard_shelf.is_empty() && view.kit_resource_preview.is_none(),
+                        "clipboard_shelf_not_visible"
+                    );
+                    if semantic_id == "day-page-clipboard-shelf-toggle" {
+                        if submit {
+                            view.toggle_clipboard_shelf(cx);
+                        }
+                    } else {
+                        let id = semantic_id
+                            .strip_prefix("day-page-clipboard-shelf-item-")
+                            .unwrap();
+                        anyhow::ensure!(
+                            view.clipboard_shelf_expanded
+                                && view
+                                    .clipboard_shelf
+                                    .iter()
+                                    .any(|entry| entry.item.entry_id == id),
+                            "clipboard_shelf_entry_stale"
+                        );
+                        if submit {
+                            anyhow::ensure!(
+                                view.open_clipboard_shelf_entry(id, window, cx),
+                                "clipboard_shelf_open_rejected"
+                            );
+                        }
+                    }
+                    Ok(semantic_id.to_string())
+                });
+            }
             if semantic_id == script_kit_gpui::day_page::FRAGMENT_BACK_ID {
                 return entity.update(cx, |view, cx| {
                     if !view.session.is_viewing_fragment() {

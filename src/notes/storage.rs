@@ -2171,14 +2171,31 @@ fn search_root_notes_meta_like(
 
 /// Permanently delete a note
 pub fn delete_note_permanently(id: NoteId) -> Result<()> {
+    delete_note_permanently_checked(id, false)
+}
+
+/// Delete a confirmed Trash target only while its current stored state is deleted.
+pub fn delete_trashed_note_permanently(id: NoteId) -> Result<()> {
+    delete_note_permanently_checked(id, true)
+}
+
+fn delete_note_permanently_checked(id: NoteId, require_deleted: bool) -> Result<()> {
     let substrate = notes_substrate()?;
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
 
-    let slug = lookup_note_slug(&conn, id)?;
-    conn.execute("DELETE FROM notes WHERE id = ?1", params![id.as_str()])
-        .context("Failed to delete note")?;
+    if require_deleted {
+        let is_deleted = conn
+            .query_row(
+                "SELECT deleted_at IS NOT NULL FROM notes WHERE id = ?1",
+                params![id.as_str()],
+                |row| row.get::<_, bool>(0),
+            )
+            .optional()?;
+        anyhow::ensure!(is_deleted == Some(true), "confirmed_trash_target_changed");
+    }
 
+    let slug = lookup_note_slug(&conn, id)?;
     if let Some(slug) = slug {
         let active_path = substrate.paths().note_file(&slug);
         if active_path.exists() {
@@ -2188,44 +2205,30 @@ pub fn delete_note_permanently(id: NoteId) -> Result<()> {
         delete_trashed_note_file(&substrate, &slug)?;
     }
 
+    conn.execute("DELETE FROM notes WHERE id = ?1", params![id.as_str()])
+        .context("Failed to delete note")?;
+
     forget_note_hash(id);
     info!(note_id = %id, "Note permanently deleted");
     invalidate_root_notes_search_cache();
     Ok(())
 }
 
-/// Permanently delete all soft-deleted notes in a single batch operation.
+/// Delete a frozen batch of Trash identities, preserving failed targets for retry.
 pub fn delete_all_deleted_notes() -> Result<()> {
-    let substrate = notes_substrate()?;
-    let db = get_db()?;
-    let mut conn = db.lock().map_err(db_lock_err)?;
-
-    let slugs: Vec<String> = conn
-        .prepare(
-            "SELECT file_slug FROM notes WHERE deleted_at IS NOT NULL AND file_slug IS NOT NULL",
-        )?
-        .query_map([], |row| row.get(0))?
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let tx = conn
-        .transaction()
-        .context("Failed to start delete_all_deleted_notes transaction")?;
-
-    let count = tx
-        .execute("DELETE FROM notes WHERE deleted_at IS NOT NULL", [])
-        .context("Failed to delete all soft-deleted notes")?;
-
-    tx.commit()
-        .context("Failed to commit delete_all_deleted_notes transaction")?;
-
-    for slug in slugs {
-        delete_trashed_note_file(&substrate, &slug)?;
+    let ids: Vec<NoteId> = get_deleted_notes()?
+        .into_iter()
+        .map(|note| note.id)
+        .collect();
+    let mut failed = 0;
+    for id in &ids {
+        if let Err(error) = delete_trashed_note_permanently(*id) {
+            let safe = crate::logging::log_private_user_value(&error.to_string());
+            tracing::error!(note_id = %id, diagnostic_fingerprint = %safe.sha256, "Trash target deletion failed");
+            failed += 1;
+        }
     }
-
-    info!(deleted_count = count, "Deleted all soft-deleted notes");
-    if count > 0 {
-        invalidate_root_notes_search_cache();
-    }
+    anyhow::ensure!(failed == 0, "trash_delete_incomplete:{failed}");
     Ok(())
 }
 

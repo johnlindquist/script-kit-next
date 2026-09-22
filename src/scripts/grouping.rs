@@ -415,7 +415,11 @@ pub(crate) fn prepend_root_brain_inbox_section(
 
     let mut section = Vec::with_capacity(shift + 1);
     section.push(GroupedListItem::SectionHeader(
-        "Brain Inbox".to_string(),
+        format!(
+            "Brain Inbox · {} of {} · All in Actions",
+            shift,
+            items.len()
+        ),
         Some("inbox".to_string()),
     ));
     section.extend((0..shift).map(GroupedListItem::Item));

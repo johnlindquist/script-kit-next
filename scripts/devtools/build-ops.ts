@@ -43,7 +43,7 @@ const noncompilerContracts = [
   { owners: ["scripts/agentic/owned-process.ts", "scripts/agentic/session-supervisor.py"], tests: ["scripts/agentic/owned-process.test.ts", "scripts/agentic/session-stop-ownership.test.ts"] },
   { owners: ["scripts/agentic/session.sh"], tests: ["scripts/agentic/session-stop-ownership.test.ts"] },
   { owners: ["scripts/agentic/agent-cargo.sh", "scripts/agentic/cargo-cache-locks.sh", "scripts/agentic/reuse-rust-test-binary.sh", compilerInputOwner], tests: ["scripts/agentic/cargo-build-policy.test.ts"] },
-  { owners: ["dev.sh", "scripts/agentic/dev-cycle.sh", "scripts/agentic/dev-relaunch.sh"], tests: ["scripts/agentic/human-development-shell.test.ts"] },
+  { owners: ["dev.sh", "scripts/agentic/dev-cycle.sh", "scripts/agentic/dev-relaunch.sh", "scripts/agentic/dev-watcher-lease.py", "scripts/agentic/dev-storage.py", "scripts/agentic/dev-storage_test.py", "scripts/agentic/ensure-pi-sidecar.sh", "scripts/prepare-pi-sidecar.sh"], tests: ["scripts/agentic/human-development-shell.test.ts"] },
   { owners: ["scripts/devtools/lib/build-ops-inventory.ts"], tests: ["scripts/devtools/lib/build-ops-inventory.test.ts"] },
   { owners: ["scripts/devtools/driver.ts"], tests: ["scripts/devtools/driver-lifecycle.test.ts", "scripts/devtools/driver-protocol.test.ts"] },
   { owners: ["scripts/devtools/lib/receipt-schema.ts"], tests: ["scripts/devtools/receipt-schema.test.ts", "scripts/devtools/receipt-output.test.ts"] },

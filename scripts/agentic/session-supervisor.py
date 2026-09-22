@@ -553,6 +553,194 @@ def session_mode(argv):
     return 0 if exited and group_exited else 70
 
 
+def process_start_result(pid):
+    try:
+        result = subprocess.run(["ps", "-p", str(pid), "-o", "lstart="], capture_output=True,
+                                text=True, timeout=1, env={**os.environ, "LC_ALL": "C"})
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise RuntimeError("process_start_unavailable") from error
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    if result.returncode == 1 and not result.stdout.strip():
+        return None
+    raise RuntimeError("process_start_unavailable")
+
+
+def supervisor_is_absent(pid):
+    # A failed ps lookup is not proof the supervisor died.
+    try:
+        return process_start_result(pid) is None
+    except RuntimeError:
+        return False
+
+
+def process_parent(pid):
+    try:
+        result = subprocess.run(["ps", "-p", str(pid), "-o", "ppid="], capture_output=True,
+                                text=True, timeout=1, env={**os.environ, "LC_ALL": "C"})
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        raise RuntimeError("process_parent_unavailable") from error
+    text = result.stdout.strip()
+    if result.returncode or not text:
+        raise RuntimeError("process_parent_unavailable")
+    return int(text)
+
+
+def require_orphan_registry(path, identity, generation):
+    names = ("process-identity.json", "pid", "generation")
+    if path.is_symlink() or any((path / name).is_symlink() for name in names):
+        raise RuntimeError("session_identity_symlink")
+    if (path / "generation").read_text(encoding="utf-8").strip() != generation:
+        raise RuntimeError("session_generation_changed")
+    if json.loads((path / "process-identity.json").read_text(encoding="utf-8")) != identity:
+        raise RuntimeError("session_orphan_identity_changed")
+    if (path / "pid").read_text(encoding="utf-8").strip() != str(identity.get("pid")):
+        raise RuntimeError("session_orphan_identity_changed")
+
+
+def assert_exact_descendants(members, leader):
+    allowed = set(members)
+    if leader not in allowed:
+        raise RuntimeError("session_orphan_group_changed")
+    for member in members:
+        current = member
+        seen = set()
+        while current != leader:
+            if current in seen:
+                raise RuntimeError("session_orphan_member_changed")
+            seen.add(current)
+            try:
+                parent = process_parent(current)
+            except (RuntimeError, ValueError) as error:
+                raise RuntimeError("session_orphan_members_unavailable") from error
+            if parent not in allowed:
+                raise RuntimeError("session_orphan_member_changed")
+            current = parent
+
+
+def snapshot_owned_group(identity):
+    pid = identity.get("pid")
+    group = identity.get("processGroupId")
+    start = identity.get("processStartTime")
+    if (type(pid) is not int or type(group) is not int or pid <= 1 or group != pid
+            or not isinstance(start, str) or not start
+            or type(identity.get("supervisorPid")) is not int or not identity.get("supervisorStartTime")):
+        raise RuntimeError("session_orphan_group_changed")
+    try:
+        observed_group = os.getpgid(pid)
+    except ProcessLookupError as error:
+        raise RuntimeError("session_orphan_group_changed") from error
+    except OSError as error:
+        raise RuntimeError("session_orphan_members_unavailable") from error
+    if observed_group != group:
+        raise RuntimeError("session_orphan_group_changed")
+    members = group_members(group)
+    if members is None:
+        raise RuntimeError("session_orphan_members_unavailable")
+    if pid not in members:
+        raise RuntimeError("session_orphan_group_changed")
+    assert_exact_descendants(members, pid)
+    snapshot = {}
+    for member in members:
+        try:
+            member_start = process_start_result(member)
+        except RuntimeError as error:
+            raise RuntimeError("session_orphan_members_unavailable") from error
+        if member_start is None:
+            raise RuntimeError("session_orphan_members_unavailable")
+        snapshot[member] = member_start
+    if snapshot.get(pid) != start:
+        raise RuntimeError("session_orphan_pid_reused")
+    return snapshot
+
+
+def group_still_exact(group, snapshot, leader, leader_start):
+    try:
+        leader_now = process_start_result(leader)
+    except RuntimeError as error:
+        raise RuntimeError("session_orphan_members_unavailable") from error
+    if leader_now is not None and leader_now != leader_start:
+        raise RuntimeError("session_orphan_pid_reused")
+    members = group_members(group)
+    if members is None:
+        raise RuntimeError("session_orphan_members_unavailable")
+    for member in members:
+        try:
+            member_start = process_start_result(member)
+            member_group = os.getpgid(member)
+        except ProcessLookupError:
+            continue
+        except (RuntimeError, OSError) as error:
+            raise RuntimeError("session_orphan_members_unavailable") from error
+        if member_start is None:
+            continue
+        if snapshot.get(member) != member_start or member_group != group:
+            raise RuntimeError("session_orphan_member_changed")
+    if leader_now is not None and leader not in members:
+        raise RuntimeError("session_orphan_group_changed")
+    return leader_now, members
+
+
+def lifetimes_cleared(snapshot):
+    for pid, start in snapshot.items():
+        try:
+            live = process_start_result(pid)
+        except RuntimeError as error:
+            raise RuntimeError("session_orphan_members_unavailable") from error
+        if live == start:
+            raise RuntimeError("session_orphan_cleanup_unproved")
+
+
+def wait_until_group_clear(leader, leader_start, group):
+    deadline = time.monotonic() + 1
+    while time.monotonic() < deadline:
+        try:
+            leader_now = process_start_result(leader)
+            current = group_members(group)
+        except RuntimeError:
+            return False
+        if leader_now != leader_start and current == []:
+            return True
+        time.sleep(0.025)
+    return False
+
+
+def reap_living_orphan(path, identity, generation):
+    require_orphan_registry(path, identity, generation)
+    snapshot = snapshot_owned_group(identity)
+    leader = identity["pid"]
+    group = identity["processGroupId"]
+    leader_start = identity["processStartTime"]
+    signalled = False
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        require_orphan_registry(path, identity, generation)
+        leader_now, members = group_still_exact(group, snapshot, leader, leader_start)
+        if leader_now is None and members == []:
+            break
+        try:
+            os.killpg(group, sig)
+        except ProcessLookupError:
+            pass
+        except OSError as error:
+            raise RuntimeError("session_orphan_cleanup_unproved") from error
+        else:
+            signalled = True
+        if wait_until_group_clear(leader, leader_start, group):
+            break
+    try:
+        leader_now = process_start_result(leader)
+    except RuntimeError as error:
+        raise RuntimeError("session_orphan_members_unavailable") from error
+    if leader_now == leader_start or group_members(group) != []:
+        raise RuntimeError("session_orphan_cleanup_unproved")
+    lifetimes_cleared(snapshot)
+    require_orphan_registry(path, identity, generation)
+    append_lifecycle(path / "lifecycle.ndjson", {
+        "schemaVersion": 1, "event": "session_orphan_reaped", "sessionGeneration": generation,
+        "pid": leader, "supervisorPid": identity["supervisorPid"],
+        "appPidReused": leader_now is not None, "appSignalled": signalled, "timestamp": utc_now()})
+
+
 def stop_session(directory):
     path = Path(directory)
     if path.is_symlink() or (path / "process-identity.json").is_symlink():
@@ -571,14 +759,16 @@ def stop_session(directory):
             raise RuntimeError("session_supervisor_pid_reused")
         os.kill(supervisor, signal.SIGTERM)
     elif not (path / "app-exit.json").exists():
-        # The supervisor died without writing its exit receipt (kill -9, OOM,
-        # spawn refusal). The session is provably dead only when the app PID is
-        # gone or belongs to a different process AND its dedicated process group
-        # has no live members. Record the orphan reap; never fabricate app-exit.json.
+        # Recover only the recorded dedicated group when its supervisor is proved
+        # gone. Keep a truthful orphan lifecycle receipt; never fabricate app-exit.json.
         try:
             app_start = process_start(identity["pid"])
         except RuntimeError:
             app_start = None
+        proved_absent = supervisor_is_absent(supervisor)
+        if proved_absent and app_start == identity["processStartTime"]:
+            reap_living_orphan(path, identity, generation)
+            return 0
         if app_start is None or app_start != identity["processStartTime"]:
             if group_members(identity["processGroupId"]) == []:
                 append_lifecycle(path / "lifecycle.ndjson", {
@@ -587,6 +777,8 @@ def stop_session(directory):
                     "appPidReused": app_start is not None,
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
                 return 0
+        if proved_absent:
+            raise RuntimeError("session_exact_cleanup_unproved")
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         try:

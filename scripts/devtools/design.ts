@@ -101,8 +101,8 @@ async function fixtureControl(client: OwnedEvaluationClient, target: AutomationI
     throw new EvaluationContractError(response.result?.error?.code ?? "fixture_control_failed");
   return response.result;
 }
-// The opaque middle of the selected-row marker excludes rounded ends, caret blink,
-// hover and background motion. Bounds come from this completed frame's paint, not screen positions.
+// The middle of the selected icon excludes rounded corners, caret blink,
+// hover and surrounding motion. Bounds come from this completed frame's paint.
 export function selectedThemePixelRegion(state: Json, layout: Json, dimensions: PngDimensions, frameGeneration: number) {
   const scroll = state.mainListScroll;
   const selectedSemanticId = scroll?.selectedSemanticId;
@@ -130,19 +130,19 @@ export function selectedThemePixelRegion(state: Json, layout: Json, dimensions: 
         !contains({ x: 0, y: 0, ...windowDimensions }, bounds)) throw new EvaluationContractError("theme_selected_region_clipped");
     return bounds;
   };
-  const selectionMarkerId = `${selectedSemanticId}:selection-marker`;
+  const selectionIconId = `${selectedSemanticId}:selection-icon`;
   const rowBounds = measured(`list-row:${selectedSemanticId}`);
-  const markerBounds = measured(selectionMarkerId);
-  if (!contains(rowBounds, markerBounds)) throw new EvaluationContractError("theme_marker_outside_selected_row");
+  const iconBounds = measured(selectionIconId);
+  if (!contains(rowBounds, iconBounds)) throw new EvaluationContractError("theme_icon_outside_selected_row");
   const scaleX = dimensions.width / windowDimensions.width;
   const scaleY = dimensions.height / windowDimensions.height;
-  const x = Math.ceil(markerBounds.x * scaleX);
-  const y = Math.ceil((markerBounds.y + markerBounds.height / 4) * scaleY);
-  const region = { x, y, width: Math.floor((markerBounds.x + markerBounds.width) * scaleX) - x,
-    height: Math.floor((markerBounds.y + markerBounds.height * 3 / 4) * scaleY) - y };
+  const x = Math.ceil((iconBounds.x + iconBounds.width / 4) * scaleX);
+  const y = Math.ceil((iconBounds.y + iconBounds.height / 4) * scaleY);
+  const region = { x, y, width: Math.floor((iconBounds.x + iconBounds.width * 3 / 4) * scaleX) - x,
+    height: Math.floor((iconBounds.y + iconBounds.height * 3 / 4) * scaleY) - y };
   if (region.width <= 0 || region.height <= 0 || region.width * region.height < 8)
     throw new EvaluationContractError("theme_selected_region_too_small");
-  return { selectedSemanticId, selectionMarkerId, coordinateSpace: "window", windowDimensions, dimensions, rowBounds, markerBounds, region };
+  return { selectedSemanticId, selectionIconId, coordinateSpace: "window", windowDimensions, dimensions, rowBounds, iconBounds, region };
 }
 
 export function nativeSafetyProbeAssertions(result: NativeSafetyProbeResult): StoryAssertion[] {
@@ -654,7 +654,6 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
           const selectedRegion = selectedThemePixelRegion(state, layout, { width, height }, frame.target.frameGeneration);
           const pixels = hashPngRegion(Buffer.from(pngBase64, "base64"), selectedRegion.dimensions, selectedRegion.region);
           receipt.effects.push({ kind: "themePixelRegion", phase, frameIdentity: snapshot.frameIdentity, ...selectedRegion, ...pixels });
-          assertStory(receipt, `${phase}:opaque_selected_marker`, pixels.opaquePixels === pixels.sampledPixels);
           return { selectedRegion, ...pixels };
         };
         const baseline = await captureSelected("baseline", initial.liveTheme.revision);

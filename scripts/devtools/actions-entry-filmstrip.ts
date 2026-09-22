@@ -287,6 +287,8 @@ function pinMainWindowId(windows: NativeWindowRow[]): number {
 
 const driver = await Driver.launch({
   binary,
+  sessionDir: join(outDir, "session"),
+  sharedModels: false,
   sandboxHome: true,
   themeFixturePath: themeFixture,
   sessionName: `actions-entry-filmstrip-${process.pid}`,

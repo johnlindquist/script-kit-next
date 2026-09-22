@@ -92,12 +92,12 @@ function validBundle(runOffset = 0): SpotlightSyncBundle {
   const onsetBlurRadius = 12 + runOffset * 0.02;
   const entryGeometry = [
     geometryFrame(0, 0, onsetWidthScale, 0.85),
-    geometryFrame(1, 18, 1.012, 0.85),
-    geometryFrame(2, 44, 1.012, 0.85),
-    geometryFrame(3, 60, 0.999, 0.97),
-    geometryFrame(4, 79, 0.987, 0.99),
-    geometryFrame(5, 114, 0.995, 0.995),
-    geometryFrame(6, 149, 1, 1),
+    geometryFrame(1, 36, 1.012, 0.85),
+    geometryFrame(2, 88, 1.012, 0.85),
+    geometryFrame(3, 120, 0.999, 0.97),
+    geometryFrame(4, 158, 0.987, 0.99),
+    geometryFrame(5, 228, 0.995, 0.995),
+    geometryFrame(6, 298, 1, 1),
   ];
   const exitGeometry = [
     geometryFrame(20, 0, 1, 1),
@@ -148,20 +148,20 @@ function validBundle(runOffset = 0): SpotlightSyncBundle {
             footerBlurRadius: onsetBlurRadius,
             footerBlurToRadius: 0,
             footerBlurScope: "per_capsule",
-            footerBlurDurationNs: 44_000_000,
+            footerBlurDurationNs: 88_000_000,
             footerCapsuleCount: 2,
             footerBlurredCapsuleCount: 2,
             footerMaterialRampCount: 2,
             footerForegroundFadeCount: 2,
             footerEnrolled: false,
-            entryBlurDurationNs: 44_000_000,
+            entryBlurDurationNs: 88_000_000,
             onsetStartWidthScale: onsetWidthScale,
             tailStartWidthScale: 1.012,
-            onsetGeometryDurationNs: 18_000_000,
-            onsetDurationNs: 44_000_000,
+            onsetGeometryDurationNs: 36_000_000,
+            onsetDurationNs: 88_000_000,
             contentRootCount: 4,
             contentHoldNs: 0,
-            contentFadeNs: 44_000_000,
+            contentFadeNs: 88_000_000,
             contentStartAlpha: 0.21,
             windowAlpha: 0.85,
             errors: [],
@@ -248,7 +248,7 @@ describe("Spotlight-sync filmstrip contract", () => {
       expect(grade.failures).toEqual([]);
       expect(grade.coverage.entryOnsetReceiptPresent).toBe(true);
       expect(grade.coverage.entryDistinctWidthCount).toBeGreaterThanOrEqual(5);
-      expect(grade.coverage.entryOnsetTailAtMs).toBe(18);
+      expect(grade.coverage.entryOnsetTailAtMs).toBe(36);
       expect(grade.coverage.entryOnsetTailWidthScale).toBeCloseTo(1.012, 6);
       expect(grade.coverage.capsuleIds).toEqual([LEFT, RIGHT]);
       expect(grade.measurements.onset).toMatchObject({
@@ -256,7 +256,7 @@ describe("Spotlight-sync filmstrip contract", () => {
         footerBlurRadius: 12 + runOffset * 0.02,
         footerBlurToRadius: 0,
         footerBlurScope: "per_capsule",
-        footerBlurDurationNs: 44_000_000,
+        footerBlurDurationNs: 88_000_000,
         footerCapsuleCount: 2,
         footerBlurredCapsuleCount: 2,
         footerEnrolled: false,
@@ -309,7 +309,7 @@ describe("Spotlight-sync filmstrip contract", () => {
   const bundle = clonedBundle();
   const onset = scenario(bundle, "main-entry").nativeGlassOnset as JsonRecord;
   onset.entryBlurRadius = 8;
-  onset.entryBlurDurationNs = 149_000_000;
+  onset.entryBlurDurationNs = 298_000_000;
   onset.pass = false;
   onset.errors = ["stale onset blur"];
   const grade = gradeSpotlightSyncBundle(bundle);
@@ -331,7 +331,7 @@ test("rejects stale, container-scoped, or incomplete footer onset defocus", () =
   const onset = scenario(bundle, "main-entry").nativeGlassOnset as JsonRecord;
   onset.footerBlurRadius = 0;
   onset.footerBlurScope = "container";
-  onset.footerBlurDurationNs = 149_000_000;
+  onset.footerBlurDurationNs = 298_000_000;
   onset.footerBlurredCapsuleCount = 1;
   onset.footerEnrolled = true;
   onset.pass = false;

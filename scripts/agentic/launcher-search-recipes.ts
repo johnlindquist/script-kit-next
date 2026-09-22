@@ -207,9 +207,16 @@ export function naturalEvidenceIssues(capture: OwnedFrameCapture, expected: Sche
   return issues;
 }
 export function selectionPixelIssues(samples: readonly PixelProbeResult[] | undefined, color: number): string[] {
-  if (!samples?.length || !Number.isSafeInteger(color) || color < 0 || color > 0xffffff) return ["missing-capability:selection-pixels"];
-  const expected = [color >>> 16 & 255, color >>> 8 & 255, color & 255];
-  return samples.every(pixel => pixel.a === 255 && [pixel.r, pixel.g, pixel.b].every((v, i) => Math.abs(v - expected[i]!) <= 2)) ? [] : ["selected-marker-pixels-disagree"];
+  if (!samples?.length || !Number.isSafeInteger(color) || color < 0 || color > 0xffffffff || !(color & 255)) return ["missing-capability:selection-pixels"];
+  const alpha = color & 255;
+  const expected = [color >>> 24, color >>> 16 & 255, color >>> 8 & 255];
+  // A translucent tile can composite over any underlying pixel. Qualify its
+  // source contribution without pretending the framebuffer equals opaque RGB.
+  return samples.every(pixel => [pixel.r, pixel.g, pixel.b, pixel.a].every(v => Number.isSafeInteger(v) && v >= 0 && v <= 255) &&
+    pixel.a >= alpha - 2 && [pixel.r, pixel.g, pixel.b].every((v, i) => {
+      const contribution = expected[i]! * alpha / 255;
+      return v >= contribution - 2 && v <= contribution + 255 - alpha + 2;
+    })) ? [] : ["selected-icon-pixels-disagree"];
 }
 function rankingFacts(search: SearchObservation): Json {
   return { rawInput: search.rawInput, computedInput: search.computedInput, rows: search.committedRows.map(row => ({ semanticId: row.semanticId, contentFingerprint: row.contentFingerprint,
@@ -681,7 +688,7 @@ class SearchRecipe {
         row.value?.rawContentReturned === false && row.value.fingerprint === expectedNoteSubtitleFingerprint));
     }
     const preflight = state.mainWindowPreflight;
-    this.assert(`${id}:preflight-selection`, Boolean(preflight) && (preflight.selectedResultKey ?? null) === (selected(snapshot.search)?.stableKey ?? null));
+    this.assert(`${id}:preflight-selection`, Boolean(preflight) && (preflight.selectedResultKey ?? null) === (snapshot.search.pending ? null : selected(snapshot.search)?.stableKey ?? null));
     this.retainedState = state;
     return snapshot;
   }
@@ -708,18 +715,18 @@ class SearchRecipe {
     this.lastFrame = frame;
     const nativeSamples = frame.frameEvidence?.pixelEvidence;
     if (!Array.isArray(nativeSamples)) throw new EvaluationContractError("missing-capability:native-pixel-evidence");
-    this.assert(`${id}:single-painted-marker`, nativeSamples.filter((sample: Json) => sample.kind === "selectionMarker").length <= 1);
+    this.assert(`${id}:single-painted-selection-icon`, nativeSamples.filter((sample: Json) => sample.kind === "selectionIcon").length <= 1);
     let pixels: Json = {};
     if (nativeSamples.length) {
       const probes = nativeSamples.map((sample: Json) => ({ x: sample.probe.x, y: sample.probe.y }));
       const sampled = await this.request(() => this.client.probePixels(this.target, frame.frame.target, probes));
       this.assert(`${id}:retained-pixel-join`, sampled.pixelProbes?.length === nativeSamples.length && sampled.pixelProbes.every((pixel, index) =>
         ["x", "y", "r", "g", "b", "a"].every(channel => pixel[channel as keyof PixelProbeResult] === nativeSamples[index].probe[channel])));
-      for (const sample of nativeSamples) if (sample.kind === "selectionMarker") {
-        this.assert(`${id}:marker-subject`, sample.semanticId === search.selectedSemanticId);
+      for (const sample of nativeSamples) if (sample.kind === "selectionIcon") {
+        this.assert(`${id}:selection-icon-subject`, sample.semanticId === search.selectedSemanticId);
         const a = sample.visibleBounds; const b = sample.bounds;
-        if (a.x <= b.x && a.y <= b.y && a.x + a.width >= b.x + b.width && a.y + a.height >= b.y + b.height)
-          for (const issue of selectionPixelIssues([sample.probe], frame.frameEvidence!.search.selectionMarkerColor)) this.assert(`${id}:${issue}`, false);
+        if (sample.selectedSurfaceColor !== null && a.x <= b.x && a.y <= b.y && a.x + a.width >= b.x + b.width && a.y + a.height >= b.y + b.height)
+          for (const issue of selectionPixelIssues([sample.probe], sample.selectedSurfaceColor)) this.assert(`${id}:${issue}`, false);
       }
       pixels = { ...pixels, sampled: sampled.pixelProbes };
     }
@@ -1024,10 +1031,10 @@ async function arrivalRecipe(recipe: SearchRecipe): Promise<void> {
   if (id === "automatic-higher-arrival") {
     recipe.assert("late-arrival-visible", arrived);
     recipe.assert("automatic-anchor-preserved", current?.stableKey === anchor.stableKey);
-    const markerBefore = pointerFrame.frameEvidence?.pixelEvidence?.find((sample: Json) => sample.kind === "selectionMarker");
-    const markerAfter = recipe.lastFrame?.frameEvidence?.pixelEvidence?.find((sample: Json) => sample.kind === "selectionMarker");
-    recipe.assert("selected-position-preserved", Boolean(markerBefore && markerAfter) &&
-      markerAfter.semanticId === anchor.semanticId && Math.abs(markerAfter.bounds.y - markerBefore.bounds.y) <= 0.5);
+    const iconBefore = pointerFrame.frameEvidence?.pixelEvidence?.find((sample: Json) => sample.kind === "selectionIcon");
+    const iconAfter = recipe.lastFrame?.frameEvidence?.pixelEvidence?.find((sample: Json) => sample.kind === "selectionIcon");
+    recipe.assert("selected-position-preserved", Boolean(iconBefore && iconAfter) &&
+      iconAfter.semanticId === anchor.semanticId && Math.abs(iconAfter.bounds.y - iconBefore.bounds.y) <= 0.5);
   } else if (id === "keyboard-anchor-arrival") {
     recipe.assert("late-arrival-visible", arrived); recipe.assert("anchor-preserved", current?.stableKey === anchor.stableKey);
     recipe.assert("ordinal-preserved", current?.selectableOrdinal === anchor.selectableOrdinal && after.search.publication?.source === "tabs" && after.search.publication?.sourceGeneration === run.generation);
@@ -1090,6 +1097,9 @@ async function pendingQueryRecipe(recipe: SearchRecipe): Promise<void> {
     const old = await awaitWork(recipe, source); const before = recipe.latest;
     const pending = await recipe.input(`${recipe.plan(source).input}x`, "gpui-text", false);
     recipe.assert("controlled-coalescer", pending.search.pending && !sameQuery(pending.search.query, pending.search.computedQuery));
+    recipe.assert("pending-keeps-painted-selection", pending.search.selectedSemanticId === before.search.selectedSemanticId);
+    const pendingFrame = await recipe.capture("pending-highlight-retained");
+    recipe.assert("pending-highlight-retained", pendingFrame.search.pending && pendingFrame.search.selectedSemanticId === before.search.selectedSemanticId);
     if (recipe.contract.id === "query-aba") {
       await recipe.input(recipe.plan(source).input, "gpui-text", false);
       recipe.assert("aba-intent-distinct", recipe.latest.search.query.revision > before.search.query.revision && recipe.latest.search.rawInput === before.search.rawInput);
@@ -1642,7 +1652,7 @@ async function emptyRecipe(recipe: SearchRecipe): Promise<void> {
   await recipe.release([await awaitWork(recipe, "windows"), await awaitWork(recipe, "icons")], "empty-source-terminal");
   const before = recipe.latest;
   recipe.assert("no-selection", before.search.selectedSemanticId === null && before.search.selectedOrdinal === null);
-  recipe.assert("no-marker", !(recipe.lastFrame?.layout.components ?? []).some((node: Json) => node.name?.endsWith(":selection-marker")));
+  recipe.assert("no-selection-highlight", !(recipe.lastFrame?.layout.components ?? []).some((node: Json) => node.name?.endsWith(":selection-icon")));
   recipe.assert("no-preview", !(recipe.lastFrame?.frameEvidence?.paintBindings ?? []).some((binding: Json) => binding.kind === "mainSearchPreview"));
   const effect = await recipe.action({ type: "key", key: "enter" });
   const after = await recipe.observe("empty-enter");

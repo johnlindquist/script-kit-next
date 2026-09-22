@@ -25,7 +25,15 @@ if [[ "${SCRIPT_KIT_NONINTERACTIVE:-0}" == "1" ]]; then
 fi
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$PROJECT_ROOT"
-export SCRIPT_KIT_GPUI_BINARY="${PROJECT_ROOT}/target/debug/script-kit-gpui"
+DEV_STORAGE_ENV="$(python3 -B scripts/agentic/dev-storage.py --repo "$PROJECT_ROOT" prepare --shell)"
+eval "$DEV_STORAGE_ENV"
+unset DEV_STORAGE_ENV
+export SCRIPT_KIT_PI_BINARY="${SCRIPT_KIT_PI_BINARY:-${SCRIPT_KIT_DEV_PI_DIR}/pi}"
+export CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
+if [[ "$CMAKE_GENERATOR" == "Ninja" ]] && ! command -v ninja >/dev/null 2>&1; then
+    echo "[dev.sh] REFUSED: Ninja is required for native dev builds (brew install ninja)" >&2
+    exit 78
+fi
 
 # Track heartbeat so exit cannot leave a spinner loop running.
 # Do not trap INT/TERM here — that would swallow Ctrl+C before it reaches the
@@ -45,7 +53,7 @@ trap 'dev_cycle_status=$?; dev_cycle_cleanup; exit "$dev_cycle_status"' EXIT
 SESSION_NAME="${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}"
 SESSION_SCRIPT="scripts/agentic/session.sh"
 RELAUNCH_SCRIPT="scripts/agentic/dev-relaunch.sh"
-BIN_PATH="target/debug/script-kit-gpui"
+BIN_PATH="$SCRIPT_KIT_GPUI_BINARY"
 
 ts() {
     date '+%Y-%m-%dT%H:%M:%S%z'
@@ -99,22 +107,6 @@ run_with_heartbeat() {
     return "$status"
 }
 
-session_healthy() {
-    local name="$1"
-    local result
-    result="$(bash "$SESSION_SCRIPT" status "$name" 2>/dev/null || true)"
-    RESULT_JSON="$result" python3 - <<'PY'
-import json, os, sys
-try:
-    data = json.loads(os.environ.get("RESULT_JSON", ""))
-except Exception:
-    raise SystemExit(1)
-healthy = data.get("healthy")
-if healthy is None:
-    healthy = data.get("status") in ("ready", "running", "started")
-raise SystemExit(0 if healthy else 1)
-PY
-}
 
 run_relaunch() {
     local start=$SECONDS
@@ -147,11 +139,6 @@ PY
     return "$status"
 }
 
-if [[ -n "${CARGO_TARGET_DIR:-}" && "$CARGO_TARGET_DIR" != "${PROJECT_ROOT}/target" ]]; then
-    echo "[dev.sh] REFUSED conflicting inherited CARGO_TARGET_DIR=${CARGO_TARGET_DIR}" >&2
-    exit 78
-fi
-export CARGO_TARGET_DIR="${PROJECT_ROOT}/target"
 
 # --- Suggestion 1: stale launcher ------------------------------------------
 # If dev.sh / dev-cycle.sh / dev-relaunch.sh have changed since the running
@@ -164,9 +151,9 @@ suggest_restart_if_launcher_stale() {
     local recorded current
     recorded="$(cat "$stamp_file" 2>/dev/null || true)"
     if command -v shasum >/dev/null 2>&1; then
-        current="$(shasum -a 1 dev.sh scripts/agentic/dev-cycle.sh scripts/agentic/dev-relaunch.sh 2>/dev/null | awk '{print $1}' | paste -sd, -)"
+        current="$(shasum -a 1 dev.sh scripts/agentic/dev-cycle.sh scripts/agentic/dev-relaunch.sh scripts/agentic/dev-storage.py 2>/dev/null | awk '{print $1}' | paste -sd, -)"
     else
-        current="$(md5 -q dev.sh scripts/agentic/dev-cycle.sh scripts/agentic/dev-relaunch.sh 2>/dev/null | paste -sd, -)"
+        current="$(md5 -q dev.sh scripts/agentic/dev-cycle.sh scripts/agentic/dev-relaunch.sh scripts/agentic/dev-storage.py 2>/dev/null | paste -sd, -)"
     fi
     if [ -n "$current" ] && [ "$current" != "$recorded" ]; then
         echo "[dev.sh] SUGGEST launcher scripts changed since this cargo-watch started." >&2
@@ -223,17 +210,6 @@ build_start=$SECONDS
 if [[ " ${SCRIPT_KIT_CARGO_FEATURES:-} " == *"local-llm"* ]]; then
     run_with_heartbeat helper-build \
         cargo build --locked -p script-kit-ghost-llm-helper --bin script-kit-ghost-llm-helper --message-format="${SCRIPT_KIT_CARGO_MESSAGE_FORMAT:-short}"
-    # Install the helper to a stable, non-purged location so the running app can
-    # always find it. target/ and target-agent/pools/* are reclaimed under disk
-    # pressure; ~/.scriptkit/bin survives, and resolve_helper_path() checks it.
-    helper_src="target/debug/script-kit-ghost-llm-helper"
-    helper_dst="$HOME/.scriptkit/bin/script-kit-ghost-llm-helper"
-    if [ -f "$helper_src" ]; then
-        mkdir -p "$HOME/.scriptkit/bin"
-        if [ "$helper_src" -nt "$helper_dst" ] || [ ! -f "$helper_dst" ]; then
-            cp -f "$helper_src" "$helper_dst" && echo "[dev.sh] installed ghost-llm helper → $helper_dst"
-        fi
-    fi
 fi
 run_with_heartbeat build \
     cargo "${build_args[@]}"
@@ -270,7 +246,7 @@ fi
 
 if [ "${SCRIPT_KIT_DEV_FORCE_RELAUNCH:-0}" != "1" ] \
     && [ "$before_mtime" = "$after_mtime" ] \
-    && session_healthy "$SESSION_NAME"; then
+    && bash "$RELAUNCH_SCRIPT" --check-hotkey "$SESSION_NAME" >/dev/null 2>&1; then
     echo "[dev.sh] relaunch skipped: binary unchanged and session healthy" >&2
     exit 0
 fi

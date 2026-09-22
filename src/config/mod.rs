@@ -32,7 +32,7 @@ pub use defaults::DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 #[allow(unused_imports)]
 pub use types::{
     AgentChatBackend, AgentChatPathPolicyConfig, AgentChatProfile, AgentChatToolPolicyConfig,
-    AiPreferences, AiVaultProvider, AiVaultResumeTerminal, BrainRemoteConfig,
+    AiPreferences, AiVaultProvider, AiVaultResumeTerminal, AnimationPreferences, BrainRemoteConfig,
     BrowserHistoryProvider, BrowserTabProvider, BuiltInConfig, ClaudeCodeConfig, Config,
     DictationPreferences, DictationTargetMode, EffectsPreferences, HotkeyConfig, LayoutConfig,
     McpConfig, McpHttpServerConfig, McpServerConfig, McpStdioServerConfig, RootFilePromotionConfig,
@@ -48,8 +48,8 @@ pub use types::{
 pub(crate) use loader::with_user_preference_write_lock;
 #[allow(unused_imports)]
 pub use loader::{
-    current_config_fingerprint_receipt, load_config, load_user_preferences, save_user_preferences,
-    ConfigFingerprintReceipt,
+    current_config_fingerprint_receipt, load_config, load_user_preferences,
+    save_animation_preferences, save_user_preferences, ConfigFingerprintReceipt,
 };
 
 // Re-export editor types for safe config writes (public API for other modules)

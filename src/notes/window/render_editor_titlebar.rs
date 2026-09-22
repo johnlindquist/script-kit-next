@@ -111,14 +111,19 @@ impl NotesApp {
                 .last_save_confirmed
                 .map(|t| t.elapsed() < Duration::from_millis(SAVED_FLASH_MS))
                 .unwrap_or(false);
-        let status_glyph = if has_unsaved {
+        let save_failed = self.save_failure.is_some();
+        let status_glyph = if save_failed {
+            "Save failed"
+        } else if has_unsaved {
             "●"
         } else if show_saved {
             "✓"
         } else {
             ""
         };
-        let status_color = if has_unsaved {
+        let status_color = if save_failed {
+            cx.theme().danger
+        } else if has_unsaved {
             accent_color
         } else {
             accent_color.opacity(OPACITY_MUTED)

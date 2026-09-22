@@ -225,18 +225,25 @@ pub fn open_inbox_items(limit: usize) -> Result<Vec<InboxItem>> {
              ORDER BY created_at DESC, id DESC LIMIT ?1",
         )?;
         let rows = stmt
-            .query_map(params![limit as i64], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, i64>(6)?,
-                    row.get::<_, Option<i64>>(7)?,
-                ))
-            })?
+            .query_map(
+                params![if limit == usize::MAX {
+                    -1_i64
+                } else {
+                    i64::try_from(limit).unwrap_or(i64::MAX)
+                }],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, i64>(6)?,
+                        row.get::<_, Option<i64>>(7)?,
+                    ))
+                },
+            )?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows
             .into_iter()

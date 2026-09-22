@@ -528,7 +528,7 @@ impl NotesApp {
                     target: "script_kit::tab_ai",
                     event = "notes_ai_handoff_cart_load_failed",
                     note_id = %note_id,
-                    error = %error,
+                    diagnostic = %crate::logging::log_private_user_value(&error.to_string()).sha256,
                 );
                 NotesAiHandoffError::CartLoadFailed
             })?;
@@ -627,7 +627,7 @@ impl NotesApp {
                     event = "notes_ai_handoff_cart_consume_failed",
                     note_id = %note_id,
                     attempted_count = consumable_ids.len(),
-                    error = %error,
+                    diagnostic = %crate::logging::log_private_user_value(&error.to_string()).sha256,
                 );
                 (NotesAiHandoffStatus::StagedCartRetained, 0)
             }
@@ -648,7 +648,7 @@ impl NotesApp {
                 NotesAiHandoffStatus::Failed,
                 Some(NotesAiHandoffError::MainStagingFailed.code()),
             );
-            self.show_action_feedback("Agent unavailable", true);
+            self.show_action_error("Agent Chat is unavailable. Your note is still open.");
             tracing::warn!(
                 target: "script_kit::tab_ai",
                 event = "notes_ai_handoff_outcome_request_mismatch",
@@ -666,7 +666,7 @@ impl NotesApp {
                 NotesAiHandoffStatus::Failed,
                 Some(NotesAiHandoffError::MainStagingFailed.code()),
             );
-            self.show_action_feedback("Agent unavailable", true);
+            self.show_action_error("Agent Chat is unavailable. Your note is still open.");
             return false;
         }
         let (status, consumed_count) = Self::consume_staged_cart_rows(payload, outcome);
@@ -683,13 +683,13 @@ impl NotesApp {
                 self.show_action_feedback("Opened in main Agent Chat", false)
             }
             NotesAiHandoffStatus::StagedPartial => {
-                self.show_action_feedback("Opened in Agent Chat; some attachments remain", true)
+                self.show_action_error("Opened in Agent Chat; some attachments remain in Notes.")
             }
             NotesAiHandoffStatus::StagedCartRetained => {
-                self.show_action_feedback("Opened in Agent Chat; cart was not cleared", true)
+                self.show_action_error("Opened in Agent Chat; context remains in Notes.")
             }
             NotesAiHandoffStatus::Blocked | NotesAiHandoffStatus::Failed => {
-                self.show_action_feedback("Agent unavailable", true)
+                self.show_action_error("Agent Chat is unavailable. Your note is still open.")
             }
         }
         tracing::info!(
@@ -726,7 +726,7 @@ impl NotesApp {
                     NotesAiHandoffStatus::Blocked,
                     Some(error.code()),
                 );
-                self.show_action_feedback("Nothing to send", true);
+                self.show_action_error("Nothing to send");
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "notes_ai_handoff_blocked",
@@ -773,7 +773,7 @@ impl NotesApp {
                     NotesAiHandoffStatus::Failed,
                     Some(NotesAiHandoffError::MainStagingFailed.code()),
                 );
-                self.show_action_feedback("Agent unavailable", true);
+                self.show_action_error("Agent Chat is unavailable. Your note is still open.");
                 tracing::warn!(
                     target: "script_kit::tab_ai",
                     event = "notes_ai_handoff_dispatch_failed",
@@ -824,7 +824,7 @@ impl NotesApp {
                                 NotesAiHandoffStatus::Failed,
                                 Some(NotesAiHandoffError::MainWindowUnavailable.code()),
                             );
-                            app.show_action_feedback("Agent unavailable", true);
+                            app.show_action_error("Agent Chat is unavailable. Your note is still open.");
                             tracing::warn!(
                                 target: "script_kit::tab_ai",
                                 event = "notes_ai_handoff_retry_failed",

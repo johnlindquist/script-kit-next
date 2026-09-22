@@ -438,7 +438,8 @@ impl ScriptListApp {
 
         cx.spawn(async move |this, cx| {
             cx.update(|cx| {
-                let result = placement.parent_window_handle
+                let result = placement
+                    .parent_window_handle
                     .update(cx, |_, window, _| {
                         if window.is_owned_hidden() {
                             crate::runtime_policy::WindowHostPolicy::OwnedHidden
@@ -1017,6 +1018,7 @@ impl ScriptListApp {
                 }
             };
 
+            let brain_inbox_route = self.brain_inbox_actions_route();
             // Create the dialog entity HERE in main app (for keyboard routing)
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
@@ -1072,6 +1074,19 @@ impl ScriptListApp {
                         theme_arc,
                     )
                 };
+
+                if let Some(route) = &brain_inbox_route {
+                    dialog.prepend_root_route_actions(vec![crate::actions::Action::new(
+                        "brain_inbox_all",
+                        "Open Brain Inbox",
+                        Some(format!(
+                            "{} open items · browse and search the full inbox",
+                            route.actions.len()
+                        )),
+                        crate::actions::ActionCategory::ScriptContext,
+                    )]);
+                    dialog.register_drill_down_route("brain_inbox_all", route.clone());
+                }
 
                 // Mini mode: input at top, anchor top (collapses from bottom up)
                 if is_mini {

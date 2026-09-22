@@ -14,7 +14,27 @@ impl AgentChatView {
 
     pub(crate) fn ai_recovery_actions(&self, cx: &App) -> Vec<crate::actions::Action> {
         let thread = self.live_thread().read(cx);
-        Self::recovery_action_specs(thread.recovery_card_spec().as_ref())
+        let mut actions = Self::recovery_action_specs(thread.recovery_card_spec().as_ref());
+        actions.extend(self.queue_actions(cx));
+        if let Some(failure) = thread.brain_decision_failure() {
+            for (operation, label) in [
+                ("memoryInspect", "Review Held Question"),
+                ("memoryRetry", "Retry Memory"),
+                ("memoryContinue", "Continue Without Memory"),
+            ] {
+                let payload = serde_json::json!({"thread":thread.ui_thread_id(),"operation":operation,"target":thread.brain_decision_generation().to_string()});
+                actions.push(
+                    crate::actions::Action::new(
+                        format!("agent_chat_queue:{payload}"),
+                        label,
+                        Some(format!("Memory unavailable. {} Use the original held question; any edited composer draft stays open.", failure.primary_message())),
+                        crate::actions::ActionCategory::ScriptContext,
+                    )
+                    .with_section("Memory Recovery"),
+                );
+            }
+        }
+        actions
     }
 
     fn recovery_action_specs(
@@ -337,142 +357,262 @@ impl AgentChatView {
     }
 
     fn render_message_queue_strip(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let (queued, paused) = {
-            let thread = self.live_thread().read(cx);
-            (
-                thread.queued_messages().iter().cloned().collect::<Vec<_>>(),
-                thread.queue_paused(),
-            )
+        let thread = self.live_thread().read(cx);
+        let count = thread.queued_messages().len();
+        let label = if thread.queue_paused() {
+            format!("{count} queued · paused · Review in Actions")
+        } else {
+            format!("{count} queued · Review in Actions")
         };
-
-        if queued.is_empty() {
-            return div()
-                .id("agent_chat-message-queue-empty")
-                .into_any_element();
-        }
-
-        let theme = theme::get_cached_theme();
-        let border = theme.colors.ui.border;
-        let accent = theme.colors.accent.selected;
-        let expanded = self.message_queue_expanded;
-        let count = queued.len();
-        let mut container = div()
-            .id("agent_chat-message-queue-strip")
-            .w_full()
-            .px(px(12.0))
-            .pb(px(6.0));
-
-        let header = div()
+        div()
             .id("agent_chat-message-queue-header")
+            .w_full()
+            .h_full()
             .flex()
             .items_center()
-            .justify_between()
-            .gap(px(8.0))
-            .px(px(8.0))
-            .py(px(5.0))
-            .rounded(px(6.0))
-            .bg(rgba((border << 8) | 0x10))
-            .border_1()
-            .border_color(rgba((border << 8) | 0x28))
+            .px(px(
+                crate::components::conversation_style::CONVERSATION_INPUT_PADDING_X,
+            ))
+            .text_xs()
+            .text_color(rgb(theme::get_cached_theme().colors.text.primary))
             .cursor_pointer()
-            .on_click(cx.listener(|this, _event, _window, cx| {
-                this.message_queue_expanded = !this.message_queue_expanded;
-                this.notify_semantic_change(cx);
-            }))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .child(div().text_xs().text_color(rgb(accent)).child("↑"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(theme.colors.text.muted))
-                            .child(if paused {
-                                format!("{count} queued · paused")
-                            } else {
-                                format!("{count} queued")
-                            }),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .opacity(0.45)
-                    .child(if expanded { "Hide" } else { "Show" }),
-            );
+            .on_click(cx.listener(|this, _, window, cx| this.trigger_toggle_actions(window, cx)))
+            .child(label)
+            .into_any_element()
+    }
 
-        container = container.child(header);
-
-        if expanded {
-            let mut list = div()
-                .mt(px(4.0))
-                .rounded(px(6.0))
-                .border_1()
-                .border_color(rgba((border << 8) | 0x22))
-                .bg(rgba((theme.colors.text.primary << 8) | 0x04));
-
-            for (index, message) in queued.into_iter().enumerate() {
-                let text = message.text.trim().replace('\n', " ");
-                list = list.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.0))
-                        .px(px(8.0))
-                        .py(px(5.0))
-                        .child(
-                            div()
-                                .flex_grow()
-                                .min_w(px(0.0))
-                                .text_xs()
-                                .text_color(rgb(theme.colors.text.dimmed))
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .child(text),
-                        )
-                        .child(
-                            div()
-                                .id(ElementId::Name(SharedString::from(format!(
-                                    "agent_chat-queue-remove-{index}"
-                                ))))
-                                .cursor_pointer()
-                                .text_xs()
-                                .px(px(5.0))
-                                .py(px(1.0))
-                                .rounded(px(999.0))
-                                .text_color(rgba((theme.colors.text.muted << 8) | 0x70))
-                                .hover(|d| d.bg(rgba((border << 8) | 0x18)))
-                                .on_click(cx.listener(move |this, _event, _window, cx| {
-                                    this.live_thread().update(cx, |thread, cx| {
-                                        thread.remove_queued_message(index, cx);
-                                    });
-                                }))
-                                .child("×"),
-                        ),
-                );
-            }
-
-            list = list.child(
-                div()
-                    .id("agent_chat-message-queue-clear")
-                    .px(px(8.0))
-                    .py(px(5.0))
-                    .text_xs()
-                    .text_color(rgb(theme.colors.text.muted))
-                    .cursor_pointer()
-                    .hover(|d| d.bg(rgba((border << 8) | 0x12)))
-                    .on_click(cx.listener(|this, _event, _window, cx| {
-                        this.live_thread()
-                            .update(cx, |thread, cx| thread.clear_queued_messages(cx));
-                    }))
-                    .child("Clear"),
-            );
-            container = container.child(list);
+    pub(crate) fn queue_actions(&self, cx: &App) -> Vec<crate::actions::Action> {
+        use crate::actions::{Action, ActionCategory};
+        let thread = self.live_thread().read(cx);
+        if thread.queued_messages().is_empty() {
+            return Vec::new();
         }
+        let revision = thread.queue_revision();
+        let make = |operation: &str, target: &str, title: String, description: String| {
+            let payload = serde_json::json!({"thread": thread.ui_thread_id(), "operation": operation, "target": target});
+            Action::new(
+                format!("agent_chat_queue:{payload}"),
+                title,
+                Some(description),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Queued Messages")
+        };
+        let mut actions = vec![
+            make(
+                if thread.queue_paused() {
+                    "resume"
+                } else {
+                    "pause"
+                },
+                &revision,
+                if thread.queue_paused() {
+                    "Resume Queue"
+                } else {
+                    "Keep Queue Paused"
+                }
+                .to_string(),
+                "Sending resumes only when you choose Resume Queue.".to_string(),
+            ),
+            make(
+                "clear",
+                &revision,
+                "Clear Queued Messages".to_string(),
+                "Remove this exact queue snapshot; the current response continues.".to_string(),
+            ),
+        ];
+        if thread.brain_decision_failure().is_some() {
+            actions.remove(0);
+        }
+        for message in thread.queued_messages() {
+            let preview: String = message.text.chars().take(64).collect();
+            let context = message
+                .context_items
+                .iter()
+                .map(|item| {
+                    format!(
+                        "{} ({:?}; {})",
+                        item.part.label(),
+                        item.part.source_kind(),
+                        item.id.as_str()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            actions.push(make(
+                "inspect",
+                &message.id,
+                format!("Inspect: {preview}"),
+                format!(
+                    "{} frozen context items · {context}",
+                    message.context_items.len()
+                ),
+            ));
+            actions.push(make(
+                "remove",
+                &message.id,
+                format!("Remove: {preview}"),
+                "Remove only this message. Already dispatched messages cannot be removed."
+                    .to_string(),
+            ));
+        }
+        actions
+    }
 
-        container.into_any_element()
+    pub(crate) fn queue_semantic_elements(&self, cx: &App) -> Vec<crate::protocol::ElementInfo> {
+        let mut elements = Vec::new();
+        let thread = self.live_thread().read(cx);
+        if let Some(failure) = thread.brain_decision_failure() {
+            let mut failure_element =
+                crate::protocol::ElementInfo::panel("agent_chat.memoryUnavailable");
+            failure_element.text = Some(format!(
+                "Memory unavailable · {} · Retry Memory or Continue Without Memory in Actions",
+                failure.primary_message()
+            ));
+            failure_element.status_kind = Some("unavailable".to_string());
+            failure_element.value =
+                Some(serde_json::to_string(&failure.failure).unwrap_or_default());
+            elements.push(failure_element);
+        }
+        if thread.queued_messages().is_empty() && thread.brain_decision_failure().is_none() {
+            return elements;
+        }
+        let mut panel = crate::protocol::ElementInfo::panel("agent_chat.queue");
+        panel.text = Some(format!(
+            "{} queued · {}",
+            thread.queued_messages().len(),
+            if thread.queue_paused() {
+                "paused"
+            } else {
+                "ready"
+            }
+        ));
+        panel.value = Some(thread.queue_revision());
+        elements.push(panel);
+        for (index, action) in self
+            .ai_recovery_actions(cx)
+            .into_iter()
+            .filter(|action| action.id.starts_with("agent_chat_queue:"))
+            .enumerate()
+        {
+            let mut element = crate::protocol::ElementInfo::button(index, &action.title);
+            element.semantic_id = action.id.clone();
+            element.source = Some(action.id);
+            element.value = action.description;
+            element.selectable = Some(true);
+            elements.push(element);
+        }
+        elements
+    }
+
+    pub(crate) fn execute_queue_action(
+        &mut self,
+        action_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(payload) = action_id.strip_prefix("agent_chat_queue:") else {
+            return false;
+        };
+        let Ok(payload) = serde_json::from_str::<serde_json::Value>(payload) else {
+            return false;
+        };
+        let operation = payload["operation"].as_str().unwrap_or("");
+        let target = payload["target"].as_str().unwrap_or("");
+        let thread = self.live_thread();
+        if payload["thread"].as_str() != Some(thread.read(cx).ui_thread_id()) {
+            return false;
+        }
+        if operation == "memoryRetry" || operation == "memoryContinue" {
+            return target.parse::<u64>().ok().is_some_and(|generation| {
+                thread.update(cx, |thread, cx| {
+                    thread.resolve_brain_decision(operation == "memoryRetry", generation, cx)
+                })
+            });
+        }
+        if operation == "inspect" || operation == "memoryInspect" {
+            let message = if operation == "memoryInspect" {
+                target
+                    .parse::<u64>()
+                    .ok()
+                    .and_then(|generation| thread.read(cx).held_brain_request(generation))
+            } else {
+                thread
+                    .read(cx)
+                    .queued_messages()
+                    .iter()
+                    .find(|message| message.id == target)
+                    .cloned()
+            };
+            let Some(message) = message else {
+                self.command_status = Some("This request changed or has already dispatched. Review the current requests in Actions.");
+                self.notify_semantic_change(cx);
+                return false;
+            };
+            let parts: Vec<_> = message
+                .context_items
+                .iter()
+                .map(|item| &item.part)
+                .collect();
+            let body = format!(
+                "{}\n\nFrozen context ({}):\n{}",
+                message.text,
+                parts.len(),
+                serde_json::to_string_pretty(&parts).unwrap_or_default()
+            );
+            let owner = cx.entity().downgrade();
+            crate::confirm::open_parent_confirm_dialog_for_entity(
+                window,
+                cx,
+                owner,
+                crate::confirm::ParentConfirmOptions {
+                    title: if operation == "memoryInspect" {
+                        "Held Question"
+                    } else {
+                        "Queued Message"
+                    }
+                    .into(),
+                    body: body.into(),
+                    confirm_text: "Copy request text".into(),
+                    cancel_text: "Dismiss".into(),
+                    confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                    width: px(crate::confirm::PARENT_MODAL_WIDTH_PX),
+                },
+                move |window, cx| {
+                    use gpui_component::WindowExt as _;
+                    let notification = match crate::platform::copy_text(&message.text) {
+                        Ok(receipt) => gpui_component::notification::Notification::info(
+                            receipt.feedback("Copied request text".to_string()),
+                        ),
+                        Err(error) => {
+                            let diagnostic =
+                                crate::logging::log_private_user_value(&error.to_string());
+                            tracing::warn!(diagnostic_fingerprint = %diagnostic.sha256, "Request text copy failed");
+                            gpui_component::notification::Notification::error(
+                                "Couldn't copy this request. Review it in Actions and try again.",
+                            )
+                            .autohide(false)
+                        }
+                    };
+                    window.push_notification(notification.id1::<AgentChatView>("request-copy"), cx);
+                },
+                |_, _| {},
+            );
+            return true;
+        }
+        let executed = thread.update(cx, |thread, cx| match operation {
+            "remove" => thread.remove_queued_message(target, cx),
+            "clear" => thread.clear_queued_messages(target, cx),
+            "resume" | "pause" if thread.queue_revision() == target => {
+                thread.set_queue_paused(operation == "pause", cx).is_ok()
+            }
+            _ => false,
+        });
+        if !executed {
+            self.command_status = Some("The queue changed or this message was already dispatched. Review it again in Actions.");
+        }
+        self.notify_semantic_change(cx);
+        executed
     }
 
     fn render_context_bootstrap_note(&self, cx: &mut Context<Self>) -> gpui::AnyElement {

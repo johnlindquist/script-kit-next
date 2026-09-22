@@ -121,11 +121,19 @@ pub struct DayPageView {
     /// Monotonic host-return generation; delayed callbacks must match it.
     pub(crate) host_return_generation: u64,
     pub(crate) session: DayPageDocumentSession,
+    pub(crate) save_failure: Option<crate::components::document_status::DocumentSaveFailure>,
+    pub(crate) pending_feedback: Option<(
+        String,
+        crate::components::document_status::DocumentFeedbackKind,
+    )>,
+    pub(crate) agent_chat_handoff_generation: u64,
+    pub(crate) handoff_failure: Option<crate::ai::reliability::AppFailureRecord>,
     pub(crate) clock_now: Option<chrono::DateTime<chrono::Utc>>,
     pub(crate) fixture_shelf_previews: Option<std::collections::HashMap<String, String>>,
     pub(crate) theme_revision_seen: u64,
     pub(crate) document_revision: u64,
-    pub(crate) loaded_document: Option<(script_kit_gpui::day_page::DayPageBinding, Option<PathBuf>)>,
+    pub(crate) loaded_document:
+        Option<(script_kit_gpui::day_page::DayPageBinding, Option<PathBuf>)>,
     pub(crate) notes_editor: Entity<NotesEditor>,
     pub(crate) editor_state: Entity<InputState>,
     pub(crate) editor_subscription: Subscription,

@@ -73,6 +73,7 @@ impl AgentChatThread {
                     manual_max: 2,
                 },
             ),
+            pending_brain_decision: None,
             context_resolution_id: 0,
             pasted_image_preparations: std::collections::HashMap::new(),
             pending_permission: None,

@@ -3,6 +3,54 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[test]
+    fn confirmed_trash_delete_refuses_a_restored_note() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().unwrap();
+        let mut note = Note::with_content(unique_test_token("restored_trash_target"));
+        note.soft_delete();
+        save_note(&note).unwrap();
+        note.restore();
+        save_note(&note).unwrap();
+        let result = delete_trashed_note_permanently(note.id);
+        let retained = get_note(note.id).unwrap().unwrap();
+        delete_note_permanently(note.id).unwrap();
+        assert!(result.is_err());
+        assert!(!retained.is_deleted());
+        assert_eq!(retained.content, note.content);
+    }
+
+    #[test]
+    fn failed_permanent_delete_preserves_metadata_for_retry() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().unwrap();
+        let note = Note::with_content(format!("# {}\nBody", unique_test_token("delete_failure")));
+        save_note(&note).unwrap();
+        let path = note_file_path(note.id).unwrap().unwrap();
+        let backup = path.with_extension("delete-fixture-backup");
+        fs::rename(&path, &backup).unwrap();
+        fs::create_dir(&path).unwrap();
+        let failed = delete_note_permanently(note.id);
+        let retained: i64 = {
+            let db = get_db().unwrap();
+            let conn = db.lock().unwrap();
+            conn.query_row(
+                "SELECT COUNT(*) FROM notes WHERE id = ?1",
+                rusqlite::params![note.id.as_str()],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+        fs::remove_dir(&path).unwrap();
+        fs::rename(&backup, &path).unwrap();
+        delete_note_permanently(note.id).unwrap();
+        assert!(failed.is_err());
+        assert_eq!(
+            retained, 1,
+            "failed file removal must preserve the note identity for retry"
+        );
+    }
+
     fn root_owned_notes_options() -> RootNotesSectionOptions {
         RootNotesSectionOptions {
             enabled: true,

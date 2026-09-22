@@ -54,7 +54,7 @@ export const SEARCH_CASES: readonly SearchCase[] = [
   entry("directory-scope", "gpui-text", ["directory"], "scope-bound", "directory-browse", "automatic-top", "leading", ["fragment-scope-correct", "stale-directory-rejected", "hidden-option-rejected", "selection-valid"]),
   entry("brain-lexical-semantic", "setInput", ["brain-lexical", "brain-semantic"], "visible", "brain-replacement", "both", "preserve", ["different-semantic-batch-consumed", "selection-policy"]),
   entry("provider-terminal-errors", "setInput", SEARCH_PROVIDERS, "scope-bound", "error", "both", "preserve", ["error-unavailable-disconnect-distinct", "last-good-or-empty-policy", "no-source-broadening"]),
-  entry("empty-inert-rows", "setInput", ["windows", "icons"], "visible", "empty", "none", "leading", ["no-selection", "no-marker", "no-preview", "no-row-submission"]),
+  entry("empty-inert-rows", "setInput", ["windows", "icons"], "visible", "empty", "none", "leading", ["no-selection", "no-selection-highlight", "no-preview", "no-row-submission"]),
   entry("selected-row-removal", "semantic", ["tabs", "notes"], "visible", "removal", "explicit-anchor", "preserve", ["anchor-removed-no-fallback", "removed-target-enter-inert", "old-target-refused"]),
   entry("metadata-same-identity", "semantic", ["tabs"], "visible", "metadata", "explicit-anchor", "preserve", ["content-revision-advanced", "new-content-painted", "anchor-preserved"]),
   entry("same-count-replacement", "semantic", ["tabs", "notes"], "visible", "replacement", "explicit-anchor", "preserve", ["real-list-replacement", "row-preview-footer-agree"]),

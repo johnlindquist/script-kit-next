@@ -2336,7 +2336,7 @@ fn resolve_selected_input_device_returns_none_for_empty_list() {
 }
 
 #[test]
-fn build_device_menu_items_marks_system_default_when_saved_device_is_missing() {
+fn build_device_menu_items_reports_missing_device_without_pretending_it_is_selected() {
     let devices = vec![
         device("builtin", "MacBook Pro Microphone", true),
         device("usb", "USB Microphone", false),
@@ -2344,7 +2344,8 @@ fn build_device_menu_items_marks_system_default_when_saved_device_is_missing() {
     let items = build_device_menu_items(&devices, Some("missing"));
     assert_eq!(items.len(), 3);
     assert_eq!(items[0].title, "System Default");
-    assert!(items[0].is_selected);
+    assert!(!items[0].is_selected);
+    assert!(items[0].subtitle.contains("unavailable"));
     assert!(!items[1].is_selected);
     assert!(!items[2].is_selected);
 }
@@ -4567,13 +4568,13 @@ fn dictation_elapsed_is_exported() {
 }
 
 #[test]
-fn overlay_phase_copy_confirming_uses_stop_continue() {
+fn overlay_phase_copy_confirming_explains_live_recording_and_resume() {
     use super::types::DictationSessionPhase;
     use super::window::overlay_phase_copy;
 
     let (headline, action_label) = overlay_phase_copy(&DictationSessionPhase::Confirming);
-    assert_eq!(headline, "Stop dictation?");
-    assert_eq!(action_label, "Continue");
+    assert_eq!(headline, "Recording is still live · Stop or discard?");
+    assert_eq!(action_label, "Resume Recording");
 }
 
 #[test]
@@ -5268,7 +5269,12 @@ fn dictation_footer_stop_button_tracks_armed_state() {
         .find(|button| button.action == FooterAction::Actions)
         .expect("recording footer must expose all destinations");
     assert_eq!(destination_action.key.as_ref(), "⌘K");
-    assert_eq!(destination_action.label.as_ref(), "Destinations");
+    assert_eq!(destination_action.label.as_ref(), "Actions");
+    assert_eq!(recording_footer.buttons.len(), 3);
+    assert!(!recording_footer
+        .buttons
+        .iter()
+        .any(|button| button.action == FooterAction::Ai));
 
     let confirming_footer = super::window::dictation_native_footer_config(
         &DictationSessionPhase::Confirming,
@@ -5310,11 +5316,22 @@ fn dictation_footer_stop_button_tracks_armed_state() {
             .expect("confirming primary");
         assert_eq!(
             recording_primary.label.as_ref(),
-            format!("Stop & {}", target.descriptor().delivery_verb)
+            format!(
+                "Stop & {}",
+                match target {
+                    crate::dictation::DictationTarget::DayPageToday => "Save to Today",
+                    crate::dictation::DictationTarget::QuickAiQuestion => "Ask",
+                    _ => target.descriptor().delivery_verb,
+                }
+            )
         );
         assert_eq!(
             confirming_primary.label.as_ref(),
-            target.descriptor().delivery_verb
+            match target {
+                crate::dictation::DictationTarget::DayPageToday => "Save to Today",
+                crate::dictation::DictationTarget::QuickAiQuestion => "Ask",
+                _ => target.descriptor().delivery_verb,
+            }
         );
     }
 }
@@ -5337,7 +5354,10 @@ fn dictation_chip_tooltips_describe_selection_without_delivery() {
     ] {
         assert_eq!(
             chip_tooltip_label(target).as_ref(),
-            target.descriptor().description
+            format!(
+                "Destination: {} · delivered only when you choose Stop",
+                target.descriptor().description
+            )
         );
     }
 }

@@ -1305,6 +1305,7 @@ pub fn automation_state() -> serde_json::Value {
         "quickTargetIds": quick_target_ids,
         "elapsedMs": elapsed_ms,
         "audioLevels": audio_levels,
+        "canFinishCapturedAudio": captured_audio_can_finish(),
         "setup": {
             "ready": setup_state.ready,
             "model": {
@@ -1901,4 +1902,16 @@ pub(crate) fn resolve_preferred_device_info() -> Result<Option<DictationDeviceIn
             Ok(None)
         }
     }
+}
+
+/// Passive readiness from captured audio, independent of delayed live captions.
+pub(crate) fn captured_audio_can_finish() -> bool {
+    SESSION.lock().as_ref().is_some_and(|session| {
+        session
+            .chunks
+            .iter()
+            .map(|chunk| chunk.samples.len())
+            .sum::<usize>()
+            >= DictationTranscriptionConfig::default().minimum_samples
+    })
 }

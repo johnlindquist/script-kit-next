@@ -1,11 +1,8 @@
 # Flows: the Script Kit GPUI agent roster
 
-One markdown agent per job. Run one with `md flows/<name>.md "request"`.
-Every run costs one engine turn. Dry runs are free:
-`md flows/<name>.md --_dry-run`.
-
-All flows run on codex (see ../.mdflow.yaml) at gpt-5.6-sol, medium reasoning.
-Sandbox mode is pinned per flow in frontmatter.
+Flows are disabled by the owner; these files document area ownership, not
+dispatch instructions. Follow the current root `AGENTS.md` and do not execute
+`md flows/...` routes.
 
 Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 
@@ -38,6 +35,16 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
   focused regression tests. `src/atomic_file.rs` temporarily re-exports that
   domain for existing app callers; storage tests must not depend on the app,
   GPUI, Metal shaders, Whisper, or ONNX.
+
+## Main-window animation ownership
+
+- `src/theme/animation.rs` owns the 25 main-entry preset specs and stable IDs;
+  configuration owns explicit `animation.preset` persistence.
+- Built-ins/launcher own selection and next/previous/replay. `ShowWindowRequest`
+  in `src/lib.rs` owns replay currency; the native glass animation/lifecycle
+  files own bounded effects and restoration. Other surfaces/exits stay locked.
+- The old calibration remains the explicit `PreviousCalibration` alternative;
+  preset/model status is not composited visual acceptance.
 
 ## Roster
 

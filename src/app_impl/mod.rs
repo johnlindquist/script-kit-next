@@ -16,8 +16,6 @@ mod app_impl_state_sync_tests;
 mod attachment_portal;
 #[path = "automation_surface.rs"]
 mod automation_surface;
-#[path = "main_revision_observers.rs"]
-mod main_revision_observers;
 mod background_effects;
 #[path = "chat_actions.rs"]
 mod chat_actions;
@@ -33,12 +31,14 @@ mod filter_input_change;
 mod filter_input_core;
 #[path = "filter_input_updates.rs"]
 mod filter_input_updates;
-#[path = "../launch_filter_policy.rs"]
-mod launch_filter_policy;
 #[path = "filtering_cache.rs"]
 mod filtering_cache;
+#[path = "../launch_filter_policy.rs"]
+mod launch_filter_policy;
 #[path = "lifecycle_reset.rs"]
 mod lifecycle_reset;
+#[path = "main_revision_observers.rs"]
+mod main_revision_observers;
 pub(crate) use lifecycle_reset::MainWindowPostHide;
 #[path = "main_list_loading.rs"]
 pub(crate) mod main_list_loading;
@@ -93,9 +93,9 @@ mod simulate_key_dispatch;
 mod startup;
 #[path = "startup_data.rs"]
 mod startup_data;
-pub(crate) use startup_data::{MainInitialData, MainServices};
 #[cfg(any(test, feature = "owned-ui-evaluation"))]
 pub(crate) use startup_data::OwnedMainSources;
+pub(crate) use startup_data::{MainInitialData, MainServices};
 #[path = "submit_diagnostics.rs"]
 mod submit_diagnostics;
 #[path = "theme_focus.rs"]

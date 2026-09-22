@@ -851,7 +851,7 @@ impl ScriptListApp {
         let flat_results = flat_results.clone();
 
         let spine_selection_render_index = self
-            .resolved_main_menu_selected_subject()
+            .painted_main_menu_selected_subject()
             .map(|subject| match subject {
                 ResolvedMainMenuSelection::SearchResult { row, .. }
                 | ResolvedMainMenuSelection::Calculator { row, .. } => row.grouped_index,

@@ -12,6 +12,10 @@ use crate::designs::icon_variations::IconName;
 pub enum NotesAction {
     /// Create a new note
     NewNote,
+    /// Retry persistence of the current editable document.
+    RetrySave,
+    /// Copy safe save diagnostics without private document content.
+    CopySaveDetails,
     /// Duplicate the current note
     DuplicateNote,
     /// Open the note browser/picker
@@ -137,6 +141,8 @@ impl NotesAction {
     pub fn label(&self) -> &'static str {
         match self {
             NotesAction::NewNote => "New Note",
+            NotesAction::RetrySave => "Retry Save",
+            NotesAction::CopySaveDetails => "Copy Save Details",
             NotesAction::DuplicateNote => "Duplicate Note",
             NotesAction::BrowseNotes => "Switch Note",
             NotesAction::TogglePreview => "Toggle Preview",
@@ -172,6 +178,8 @@ impl NotesAction {
     pub fn shortcut_hint(&self) -> Option<&'static str> {
         match self {
             NotesAction::NewNote => Some("cmd+n"),
+            NotesAction::RetrySave => Some("cmd+s"),
+            NotesAction::CopySaveDetails => None,
             NotesAction::DuplicateNote => Some("cmd+d"),
             NotesAction::BrowseNotes => Some("cmd+p"),
             NotesAction::TogglePreview => Some("shift+cmd+p"),
@@ -216,6 +224,8 @@ impl NotesAction {
     pub fn icon(&self) -> IconName {
         match self {
             NotesAction::NewNote => IconName::Plus,
+            NotesAction::RetrySave => IconName::Refresh,
+            NotesAction::CopySaveDetails => IconName::Copy,
             NotesAction::DuplicateNote => IconName::Copy,
             NotesAction::BrowseNotes => IconName::FolderOpen,
             NotesAction::TogglePreview => IconName::Code,
@@ -248,6 +258,8 @@ impl NotesAction {
     pub fn id(&self) -> &'static str {
         match self {
             NotesAction::NewNote => "new_note",
+            NotesAction::RetrySave => "retry_save",
+            NotesAction::CopySaveDetails => "copy_save_details",
             NotesAction::DuplicateNote => "duplicate_note",
             NotesAction::BrowseNotes => "browse_notes",
             NotesAction::TogglePreview => "toggle_preview",
@@ -279,6 +291,8 @@ impl NotesAction {
     pub const fn catalog() -> &'static [NotesAction] {
         &[
             NotesAction::NewNote,
+            NotesAction::RetrySave,
+            NotesAction::CopySaveDetails,
             NotesAction::DuplicateNote,
             NotesAction::BrowseNotes,
             NotesAction::TogglePreview,
@@ -357,7 +371,9 @@ fn notes_action_is_visible(action: NotesAction, context: NotesActionContext) -> 
             NewNote | BrowseNotes | TogglePreview | HistoryBack | HistoryForward
             | CycleSortMode | OpenTrash | EnableAutoSizing | ResetWindowPosition => true,
             DuplicateNote | DeleteNote | CopyNoteAs | CopyDeeplink | CreateQuicklink
-            | CopyBacklinks | Export | SendToAi => context.has_current_note,
+            | CopyBacklinks | Export | SendToAi | RetrySave | CopySaveDetails => {
+                context.has_current_note
+            }
             FindInNote | MoveListItemUp | MoveListItemDown | Format => {
                 context.has_current_note && context.surface == Editor
             }
@@ -369,6 +385,8 @@ fn notes_action_is_visible(action: NotesAction, context: NotesActionContext) -> 
 pub fn notes_action_descriptors(context: NotesActionContext) -> Vec<NotesActionDescriptor> {
     const DISPLAY_ORDER: &[NotesAction] = &[
         NotesAction::NewNote,
+        NotesAction::RetrySave,
+        NotesAction::CopySaveDetails,
         NotesAction::RestoreNote,
         NotesAction::PermanentlyDeleteNote,
         NotesAction::DuplicateNote,

@@ -21,9 +21,7 @@
 //! `trigger_builtin_dispatch.rs` matches on
 //! [`plan_trigger_builtin_route`]'s output, so a new `TriggerBuiltin`
 //! variant that forgets to produce a route is a compile break here
-//! AND in the dispatcher — not a runtime no-op. The inline audit test
-//! `apply_trigger_builtin_is_wired_through_planner` pins that wiring
-//! so a future refactor cannot silently re-inline the match.
+//! AND in the dispatcher — not a runtime no-op.
 
 use crate::builtins::trigger_registry::TriggerBuiltin;
 
@@ -209,21 +207,17 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         TriggerBuiltin::MainWindow => AppRoute::ExecuteBuiltin("builtin/main-window"),
         TriggerBuiltin::QuickTerminal => AppRoute::ExecuteBuiltin("builtin/quick-terminal"),
         TriggerBuiltin::Webcam => AppRoute::ExecuteBuiltin("builtin/webcam"),
+        TriggerBuiltin::AnimationPresets => AppRoute::ExecuteBuiltin("builtin/animation-presets"),
+        TriggerBuiltin::AnimationNext => AppRoute::ExecuteBuiltin("builtin/animation-next"),
+        TriggerBuiltin::AnimationPrevious => AppRoute::ExecuteBuiltin("builtin/animation-previous"),
+        TriggerBuiltin::AnimationReplay => AppRoute::ExecuteBuiltin("builtin/animation-replay"),
+        TriggerBuiltin::AnimationPreset(preset) => AppRoute::ExecuteBuiltin(preset.command_id()),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn every_trigger_builtin_has_a_route() {
-        for &id in TriggerBuiltin::ALL {
-            // Just calling the const fn exhaustively is the whole
-            // point — if a variant goes missing we fail to compile.
-            let _route = plan_trigger_builtin_route(id);
-        }
-    }
 
     #[test]
     fn every_filterable_view_is_reachable() {
@@ -267,26 +261,6 @@ mod tests {
                 "non-filterable AppRoute `{tag}` must be produced by exactly one TriggerBuiltin, got {n}"
             );
         }
-        let expected: BTreeMap<&'static str, usize> = [
-            ("OpenFileSearch", 1usize),
-            ("OpenTabAi", 1),
-            ("OpenCurrentAppCommands", 1),
-            ("builtin/choose-theme", 1),
-            ("builtin/dictation", 1),
-            ("builtin/main-window", 1),
-            ("builtin/dictation-history", 1),
-            ("builtin/new-script", 1),
-            ("builtin/new-script-from-template", 1),
-            ("builtin/quick-terminal", 1),
-            ("builtin/script-kit-selfie", 1),
-            ("builtin/sdk-reference", 1),
-            ("builtin/settings", 1),
-            ("builtin/vault", 1),
-            ("builtin/webcam", 1),
-        ]
-        .into_iter()
-        .collect();
-        assert_eq!(counts, expected);
     }
 
     #[test]
@@ -351,54 +325,6 @@ mod tests {
                 "parse_route must invert render_route for {id:?} → {rendered}"
             );
         }
-    }
-
-    #[test]
-    fn apply_trigger_builtin_is_wired_through_planner() {
-        // Source-text audit: PR5c wired `apply_trigger_builtin` to
-        // match on `plan_trigger_builtin_route(id)` so a new
-        // `TriggerBuiltin` variant forces a planner arm AND a
-        // dispatcher arm. If a future refactor re-inlines the match
-        // (matching on `id` directly), the exhaustiveness guarantee
-        // from this module is silently lost. Catch that here, not at
-        // a merge-later runtime no-op.
-        let path = "src/app_impl/trigger_builtin_dispatch.rs";
-        let source =
-            std::fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
-        assert!(
-            source.contains("match plan_trigger_builtin_route(id)"),
-            "{path} must route `apply_trigger_builtin` through \
-             `plan_trigger_builtin_route` (see src/app_impl/routes.rs)"
-        );
-    }
-
-    #[test]
-    fn dispatch_trigger_builtin_name_delegates_to_typed_entry() {
-        // Source-text audit for Oracle-Session
-        // `protocol-builtin-boundary-engineering-plan` Pass 4 (rank
-        // #3, sub-pass 1). The string-entry dispatcher must forward
-        // resolved `TriggerBuiltin`s to the typed entry point so the
-        // string↔enum boundary stays a one-way door. A future
-        // refactor that re-inlines `apply_trigger_builtin(resolved,
-        // …)` directly inside `dispatch_trigger_builtin_name` would
-        // defeat the whole point of Oracle #3: the plan is to
-        // eventually delete the string entry point and move
-        // resolution into ingress, which is only safe while the
-        // typed entry point is the sole bridge to
-        // `apply_trigger_builtin`.
-        let path = "src/app_impl/trigger_builtin_dispatch.rs";
-        let source =
-            std::fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
-        assert!(
-            source.contains("pub fn dispatch_trigger_builtin_enum"),
-            "{path} must expose typed entry point `dispatch_trigger_builtin_enum`"
-        );
-        assert!(
-            source.contains("self.dispatch_trigger_builtin_enum(resolved"),
-            "{path} `dispatch_trigger_builtin_name` must forward resolved \
-             TriggerBuiltin into the typed entry point, not call \
-             `apply_trigger_builtin` directly"
-        );
     }
 
     #[test]

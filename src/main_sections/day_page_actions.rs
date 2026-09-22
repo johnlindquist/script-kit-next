@@ -131,7 +131,6 @@ impl DayPageAgentHandoffMode {
 struct DayPageAgentHandoffPacket {
     scope: crate::notes::ai_scope::NotesAiScope,
     parts: Vec<crate::ai::message_parts::AiContextPart>,
-    prompt_seed: String,
     receipt: serde_json::Value,
 }
 
@@ -140,11 +139,15 @@ struct DayPageAgentHandoffDocument<'a> {
     canonical_path: Option<&'a str>,
 }
 
-fn save_today_action() -> crate::actions::Action {
+fn save_today_action(view: &DayPageView) -> crate::actions::Action {
     crate::actions::Action::new(
         "day_page:save",
-        "Save Today",
-        Some("Write the day page to disk now".to_string()),
+        if view.save_failure.is_some() {
+            "Retry Save".to_string()
+        } else {
+            format!("Save {}", view.document_label())
+        },
+        Some("Save the current document without changing its binding".to_string()),
         crate::actions::ActionCategory::ScriptContext,
     )
     .with_shortcut("cmd+s")
@@ -211,7 +214,7 @@ pub(crate) fn day_page_host_actions_section(
             .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
         );
         if view.is_dirty() {
-            actions.push(save_today_action());
+            actions.push(save_today_action(view));
         }
         return actions;
     }
@@ -236,7 +239,7 @@ pub(crate) fn day_page_host_actions_section(
             Action::new(
                 "day_page:open_in_notes_window",
                 "Open in Notes Window",
-                Some("Move this note from the Day Page surface to the Notes window".to_string()),
+                Some("Open this document in the Notes window".to_string()),
                 ActionCategory::ScriptContext,
             )
             .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
@@ -244,7 +247,45 @@ pub(crate) fn day_page_host_actions_section(
     }
 
     if view.is_dirty() {
-        actions.push(save_today_action());
+        actions.push(save_today_action(view));
+    }
+
+    if view.save_failure.is_some() {
+        actions.push(
+            Action::new(
+                "day_page:copy_save_details",
+                "Copy Save Details",
+                Some("Copy only the save code and diagnostic fingerprint".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+        );
+    }
+    if !view.clipboard_shelf.is_empty() {
+        actions.push(
+            Action::new(
+                "day_page:clipboard_toggle",
+                if view.clipboard_shelf_expanded {
+                    "Collapse Kept Clipboard Entries"
+                } else {
+                    "Expand Kept Clipboard Entries"
+                },
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
+        );
+        for entry in &view.clipboard_shelf {
+            actions.push(
+                Action::new(
+                    format!("day_page:clipboard_open:{}", entry.item.entry_id),
+                    format!("Open Kept Entry · {}", entry.item.timestamp),
+                    Some(entry.preview.clone()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_section("Kept Clipboard Entries"),
+            );
+        }
     }
 
     actions.push(
@@ -258,18 +299,14 @@ pub(crate) fn day_page_host_actions_section(
             Some(if view.read_mode {
                 "Return to the editable Day Page notes editor".to_string()
             } else {
-                "Read Today's markdown with the shared Notes preview renderer".to_string()
+                "Preview this document with the shared Notes Markdown renderer".to_string()
             }),
             ActionCategory::ScriptContext,
         )
         .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
     );
 
-    let viewing_today = view
-        .session
-        .bound_date()
-        .is_some_and(|date| date == view.local_today());
-    if !view.session.is_viewing_fragment() && viewing_today {
+    if view.session.path().is_some() {
         let selection = view.notes_editor.read(cx).selection(cx);
         let has_selection = selection.start < selection.end;
         actions.push(
@@ -281,10 +318,9 @@ pub(crate) fn day_page_host_actions_section(
                     "Ask AI About Current Line"
                 },
                 Some(if has_selection {
-                    "Attach only the selected Today text and references inside that selection"
-                        .to_string()
+                    "Attach only the selected text and references inside that selection".to_string()
                 } else {
-                    "Attach only the active Today line and references on that line".to_string()
+                    "Attach only the current line and its references".to_string()
                 }),
                 ActionCategory::ScriptContext,
             )
@@ -294,8 +330,11 @@ pub(crate) fn day_page_host_actions_section(
         actions.push(
             Action::new(
                 DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID,
-                "Ask Agent Chat About Today",
-                Some("Attach Today's brain to Agent Chat and start a question".to_string()),
+                format!("Ask AI About {}", view.document_label()),
+                Some(
+                    "Stage this whole document and its references in Agent Chat without sending"
+                        .to_string(),
+                ),
                 ActionCategory::ScriptContext,
             )
             .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
@@ -369,7 +408,7 @@ impl DayPageView {
         let scope = crate::notes::ai_scope::NotesAiScope::Resource {
             uri_identity: part.source().to_string(),
         };
-        self.last_agent_chat_handoff_receipt = Some(serde_json::json!({
+        let receipt = serde_json::json!({
             "schemaVersion": 1,
             "receiptKind": "dayPage.agentChatHandoff",
             "redacted": true,
@@ -381,36 +420,23 @@ impl DayPageView {
             "destination": "agentChat",
             "stagingOutcome": "composerOnly",
             "contextPartCount": 1,
-        }));
-        let prompt = String::new();
-        let Some(app) = self.app.upgrade() else {
-            return false;
-        };
-
-        window.defer(cx, move |_window, cx| {
-            app.update(cx, |app, cx| {
-                app.clear_actions_popup_state();
-                if crate::actions::is_actions_window_open() {
-                    crate::actions::close_actions_window(cx);
-                }
-                app.open_tab_ai_agent_chat_with_context_part(
-                    part,
-                    DAY_PAGE_PREVIEW_AGENT_CHAT_CONTEXT_SOURCE,
-                    cx,
-                );
-                if let AppView::AgentChatView { entity } = &app.current_view {
-                    let entity = entity.clone();
-                    entity.update(cx, |chat, cx| {
-                        chat.set_input(prompt.clone(), cx);
-                    });
-                }
-            });
         });
+        self.dispatch_agent_chat_packet(
+            DayPageAgentHandoffPacket {
+                scope,
+                parts: vec![part],
+                receipt,
+            },
+            DAY_PAGE_PREVIEW_AGENT_CHAT_CONTEXT_SOURCE,
+            window,
+            cx,
+        );
         true
     }
 
     fn today_agent_chat_context_part(&self, cx: &App) -> crate::ai::message_parts::AiContextPart {
         let content = self.notes_editor.read(cx).content(cx);
+        let content = self.canonical_content_with_shelf(&content);
         let date_label = self
             .session
             .bound_date()
@@ -423,10 +449,10 @@ impl DayPageView {
             .unwrap_or_else(|| format!("brain://days/{date_label}"));
 
         crate::ai::message_parts::AiContextPart::TextBlock {
-            label: format!("Today's brain - {date_label}"),
+            label: self.document_label(),
             source,
             text: if content.trim().is_empty() {
-                "(Today's brain is empty.)".to_string()
+                "(This document is empty.)".to_string()
             } else {
                 content
             },
@@ -438,9 +464,18 @@ impl DayPageView {
         let date_label = self.day_page_agent_chat_date_label();
         let canonical_path = self.day_page_agent_chat_canonical_path(&date_label);
         let scope = crate::notes::ai_scope::NotesAiScope::WholeNote {
-            document_id: format!("day:{date_label}"),
+            document_id: self.document_semantic_id(),
         };
-        let parts = vec![self.today_agent_chat_context_part(cx)];
+        let mut parts = vec![self.today_agent_chat_context_part(cx)];
+        for entry in &self.clipboard_shelf {
+            push_unique_day_page_context_part(
+                &mut parts,
+                crate::ai::message_parts::AiContextPart::ResourceUri {
+                    uri: crate::clipboard_history::entry_resource_uri(&entry.item.entry_id),
+                    label: "Kept clipboard entry".to_string(),
+                },
+            );
+        }
         let receipt = self.build_agent_chat_handoff_receipt(
             DayPageAgentHandoffMode::ExplicitWholeDay,
             &scope,
@@ -456,7 +491,6 @@ impl DayPageView {
         DayPageAgentHandoffPacket {
             scope,
             parts,
-            prompt_seed: String::new(),
             receipt,
         }
     }
@@ -466,7 +500,7 @@ impl DayPageView {
         let selection = self.notes_editor.read(cx).selection(cx);
         let date_label = self.day_page_agent_chat_date_label();
         let canonical_path = self.day_page_agent_chat_canonical_path(&date_label);
-        let document_id = format!("day:{date_label}");
+        let document_id = self.document_semantic_id();
         let (scope, scoped_text) = crate::notes::ai_scope::selected_or_current_line_scope(
             document_id,
             &content,
@@ -492,8 +526,10 @@ impl DayPageView {
             scope.kind(),
         );
         let label = match mode {
-            DayPageAgentHandoffMode::Selection => format!("Today selection - {date_label}"),
-            DayPageAgentHandoffMode::CurrentLine => format!("Today current line - {date_label}"),
+            DayPageAgentHandoffMode::Selection => format!("{} selection", self.document_label()),
+            DayPageAgentHandoffMode::CurrentLine => {
+                format!("{} current line", self.document_label())
+            }
             DayPageAgentHandoffMode::ExplicitWholeDay => unreachable!(),
         };
 
@@ -537,7 +573,6 @@ impl DayPageView {
         DayPageAgentHandoffPacket {
             scope,
             parts,
-            prompt_seed: String::new(),
             receipt,
         }
     }
@@ -631,52 +666,12 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let packet = self.build_whole_day_agent_chat_packet(cx);
-        self.last_agent_chat_handoff_receipt = Some(packet.receipt.clone());
-        tracing::info!(
-            target: "script_kit::day_page",
-            event = "day_page_agent_chat_handoff_receipt",
-            receipt_json = %packet.receipt,
+        self.dispatch_agent_chat_packet(
+            self.build_whole_day_agent_chat_packet(cx),
+            DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE,
+            window,
+            cx,
         );
-        let parts = packet.parts.clone();
-        let prompt_seed = packet.prompt_seed.clone();
-        let part = parts[0].clone();
-        let Some(app) = self.app.upgrade() else {
-            return;
-        };
-
-        window.defer(cx, move |_window, cx| {
-            app.update(cx, |app, cx| {
-                if app.has_day_page_context_round_trip_pending() {
-                    tracing::warn!(
-                        target: "script_kit::day_page",
-                        event = "day_page_agent_chat_open_blocked",
-                        reason = "context_round_trip_pending",
-                    );
-                    return;
-                }
-                app.clear_actions_popup_state();
-                if crate::actions::is_actions_window_open() {
-                    crate::actions::close_actions_window(cx);
-                }
-                app.open_tab_ai_agent_chat_with_context_part(
-                    part,
-                    DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE,
-                    cx,
-                );
-                if let AppView::AgentChatView { entity } = &app.current_view {
-                    let entity = entity.clone();
-                    entity.update(cx, |chat, cx| {
-                        let _ = chat.stage_inline_context_parts_from_host(
-                            parts.clone(),
-                            DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE,
-                            cx,
-                        );
-                        chat.set_input(prompt_seed.clone(), cx);
-                    });
-                }
-            });
-        });
     }
 
     pub(crate) fn open_agent_chat_about_current_line(
@@ -684,52 +679,140 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let packet = self.build_current_line_agent_chat_packet(cx);
-        self.last_agent_chat_handoff_receipt = Some(packet.receipt.clone());
-        tracing::info!(
-            target: "script_kit::day_page",
-            event = "day_page_agent_chat_handoff_receipt",
-            receipt_json = %packet.receipt,
+        self.dispatch_agent_chat_packet(
+            self.build_current_line_agent_chat_packet(cx),
+            DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE,
+            window,
+            cx,
         );
-        let parts = packet.parts.clone();
-        let prompt_seed = packet.prompt_seed.clone();
-        let Some(part) = parts.first().cloned() else {
-            return;
-        };
-        let Some(app) = self.app.upgrade() else {
-            return;
-        };
+    }
 
-        window.defer(cx, move |_window, cx| {
-            app.update(cx, |app, cx| {
+    fn dispatch_agent_chat_packet(
+        &mut self,
+        packet: DayPageAgentHandoffPacket,
+        source: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use gpui_component::WindowExt as _;
+        self.agent_chat_handoff_generation = self.agent_chat_handoff_generation.wrapping_add(1);
+        let generation = self.agent_chat_handoff_generation;
+        let mut receipt = packet.receipt.clone();
+        receipt["generation"] = serde_json::json!(generation);
+        receipt["state"] = serde_json::json!("prepared");
+        receipt["opened"] = serde_json::json!(false);
+        receipt["acceptedPartCount"] = serde_json::json!(0);
+        self.last_agent_chat_handoff_receipt = Some(receipt);
+        self.handoff_failure = None;
+        let origin = cx.entity();
+        let Some(app) = self.app.upgrade() else {
+            let failure = crate::ai::reliability::context_unavailable_failure(
+                "Day Page host disappeared before handoff",
+            );
+            self.handoff_failure = Some(failure.clone());
+            if let Some(receipt) = self.last_agent_chat_handoff_receipt.as_mut() {
+                receipt["state"] = serde_json::json!("failed");
+            }
+            self.pending_feedback = Some((
+                failure.primary_message().to_string(),
+                crate::components::document_status::DocumentFeedbackKind::Error,
+            ));
+            cx.notify();
+            return;
+        };
+        window.defer(cx, move |window, cx| {
+            // A later handoff owns the destination; a superseded request must
+            // not open a chat or replace its composer.
+            if origin.read(cx).agent_chat_handoff_generation != generation {
+                return;
+            }
+            let (opened, result) = app.update(cx, |app, cx| {
                 if app.has_day_page_context_round_trip_pending() {
-                    tracing::warn!(
-                        target: "script_kit::day_page",
-                        event = "day_page_agent_chat_open_blocked",
-                        reason = "context_round_trip_pending",
+                    return (
+                        false,
+                        Err(crate::ai::reliability::context_unavailable_failure(
+                            "Day Page context round trip is still pending",
+                        )),
                     );
-                    return;
                 }
+                let Some(part) = packet.parts.first().cloned() else {
+                    return (
+                        false,
+                        Err(crate::ai::reliability::context_unavailable_failure(
+                            "Day Page handoff contains no context",
+                        )),
+                    );
+                };
                 app.clear_actions_popup_state();
                 if crate::actions::is_actions_window_open() {
                     crate::actions::close_actions_window(cx);
                 }
-                app.open_tab_ai_agent_chat_with_context_part(
-                    part,
-                    DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE,
-                    cx,
-                );
-                if let AppView::AgentChatView { entity } = &app.current_view {
-                    let entity = entity.clone();
-                    entity.update(cx, |chat, cx| {
-                        let _ = chat.stage_inline_context_parts_from_host(
-                            parts.clone(),
-                            DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE,
-                            cx,
-                        );
-                        chat.set_input(prompt_seed.clone(), cx);
-                    });
+                app.open_tab_ai_agent_chat_with_context_part(part, source, cx);
+                let AppView::AgentChatView { entity } = &app.current_view else {
+                    return (
+                        false,
+                        Err(crate::ai::reliability::context_unavailable_failure(
+                            "Agent Chat did not open for the Day Page handoff",
+                        )),
+                    );
+                };
+                let result = entity.clone().update(cx, |chat, cx| {
+                    chat.stage_inline_context_parts_from_host(packet.parts.clone(), source, cx)
+                        .map_err(|detail| {
+                            crate::ai::reliability::context_unavailable_failure(&detail)
+                        })
+                });
+                (true, result)
+            });
+            origin.update(cx, |view, cx| {
+                if view.agent_chat_handoff_generation != generation {
+                    return;
                 }
+                let accepted = if result.is_ok() {
+                    packet.parts.len()
+                } else {
+                    0
+                };
+                let state = if result.is_ok() {
+                    "staged"
+                } else if opened {
+                    "openedWithoutContext"
+                } else {
+                    "failed"
+                };
+                if let Some(receipt) = view.last_agent_chat_handoff_receipt.as_mut() {
+                    receipt["state"] = serde_json::json!(state);
+                    receipt["opened"] = serde_json::json!(opened);
+                    receipt["acceptedPartCount"] = serde_json::json!(accepted);
+                    receipt["submitted"] = serde_json::json!(false);
+                }
+                if let Err(failure) = result {
+                    if let Some(receipt) = view.last_agent_chat_handoff_receipt.as_mut() {
+                        receipt["failureCode"] = serde_json::json!(failure.failure.code);
+                        receipt["diagnostic"] = serde_json::json!(failure.failure.diagnostic);
+                    }
+                    window.push_notification(
+                        gpui_component::notification::Notification::error(
+                            failure.primary_message(),
+                        )
+                        .autohide(false)
+                        .id1::<DayPageView>("day-page-handoff"),
+                        cx,
+                    );
+                    view.handoff_failure = Some(failure);
+                } else {
+                    window.push_notification(
+                        gpui_component::notification::Notification::info(format!(
+                            "{} context staged in Agent Chat",
+                            packet.scope.kind()
+                        ))
+                        .autohide_after(std::time::Duration::from_millis(2000))
+                        .id1::<DayPageView>("day-page-handoff"),
+                        cx,
+                    );
+                }
+                view.document_revision = view.document_revision.wrapping_add(1);
+                cx.notify();
             });
         });
     }
@@ -742,7 +825,9 @@ impl DayPageView {
         if response.is_empty() {
             anyhow::bail!("empty Agent Chat response");
         }
-        let local = self.now().with_timezone(&self.session.substrate().timezone());
+        let local = self
+            .now()
+            .with_timezone(&self.session.substrate().timezone());
         let timestamp = local.format("%H:%M").to_string();
         self.session
             .append_external_line_to_bound_file(&format!("{timestamp} Agent Chat\n\n{response}"))?;
@@ -803,7 +888,28 @@ impl ScriptListApp {
             return false;
         };
         let entity = entity.clone();
+        if let Some(entry_id) = action_id.strip_prefix("day_page:clipboard_open:") {
+            entity.update(cx, |view, cx| {
+                view.open_clipboard_shelf_entry(entry_id, window, cx)
+            });
+            return true;
+        }
         let handled = match action_id {
+            "day_page:clipboard_toggle" => {
+                entity.update(cx, |view, cx| view.toggle_clipboard_shelf(cx));
+                true
+            }
+            "day_page:copy_save_details" => {
+                let details = entity
+                    .read(cx)
+                    .save_failure
+                    .as_ref()
+                    .map(|failure| failure.details());
+                if let Some(details) = details {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(details));
+                }
+                true
+            }
             "day_page:save" => {
                 entity.update(cx, |view, cx| {
                     view.save_and_sync_footer(window, cx);

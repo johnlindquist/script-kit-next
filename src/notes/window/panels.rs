@@ -222,6 +222,20 @@ impl NotesApp {
         debug!(?action, "Handling notes action");
         match action {
             NotesAction::NewNote => self.create_note(window, cx),
+            NotesAction::RetrySave => {
+                if self.save_current_note() {
+                    self.show_action_feedback("Saved", false);
+                }
+                cx.notify();
+            }
+            NotesAction::CopySaveDetails => {
+                let details = self
+                    .save_failure
+                    .as_ref()
+                    .map(|failure| failure.details())
+                    .unwrap_or_else(|| "No current save failure".to_string());
+                self.copy_text_to_clipboard(&details, "Copied save details", cx);
+            }
             NotesAction::DuplicateNote => self.duplicate_selected_note(window, cx),
             NotesAction::BrowseNotes => {
                 // Close actions panel first, then open browse panel.

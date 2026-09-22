@@ -232,12 +232,10 @@ pub fn search_root_brain_direct(
 
     // The synchronous pass stays lexical-only; the asynchronous pass upgrades it.
     let fetch_limit = options.max_results.saturating_mul(2);
-    let mut hits = map_root_brain_hits(super::search::brain_search_proximity(
-        query.trim(),
-        None,
-        None,
-        fetch_limit,
-    )?);
+    let mut hits = map_root_brain_hits_for_query(
+        super::search::brain_search_proximity(query.trim(), None, None, fetch_limit)?,
+        query,
+    );
     hits.truncate(options.max_results);
     Ok(hits)
 }
@@ -265,12 +263,15 @@ pub fn search_root_brain_semantic(
         return Ok(None);
     };
     let fetch_limit = options.max_results.saturating_mul(2);
-    let mut hits = map_root_brain_hits(super::search::brain_search_proximity(
+    let mut hits = map_root_brain_hits_for_query(
+        super::search::brain_search_proximity(
+            query,
+            Some(&query_vec),
+            Some(&model_id),
+            fetch_limit,
+        )?,
         query,
-        Some(&query_vec),
-        Some(&model_id),
-        fetch_limit,
-    )?);
+    );
     hits.truncate(options.max_results);
     Ok(Some(hits))
 }
@@ -294,7 +295,7 @@ pub fn recent_root_brain_hits(max_results: usize) -> anyhow::Result<Vec<RootBrai
     Ok(map_root_brain_hits(
         super::store::recent_docs(max_results.saturating_mul(3).max(8))?
             .into_iter()
-            .filter(|doc| seen.insert(super::store::content_hash(&doc.title, &doc.content)))
+            .filter(|doc| seen.insert((doc.source, doc.source_id.clone())))
             .take(max_results)
             .map(|doc| super::search::BrainHit { doc, score: 0.0 })
             .collect(),
@@ -325,12 +326,26 @@ pub fn semantic_root_brain_hits_for_query(
 /// Map full brain hits down to launcher rows. Shared by the sync lexical and
 /// async semantic passes so both produce identical row shapes.
 pub(crate) fn map_root_brain_hits(hits: Vec<super::search::BrainHit>) -> Vec<RootBrainSearchHit> {
+    map_root_brain_hits_for_query(hits, "")
+}
+
+fn map_root_brain_hits_for_query(
+    hits: Vec<super::search::BrainHit>,
+    query: &str,
+) -> Vec<RootBrainSearchHit> {
     let mut seen_rendered = std::collections::HashSet::new();
     hits.into_iter()
         .map(|hit| {
-            let excerpt = match hit.doc.source {
-                DocSource::Activity => excerpt_for_activity_content(&hit.doc.content),
-                _ => excerpt_for_content(&hit.doc.content),
+            let (line, location) = matching_excerpt_line(&hit.doc.content, query);
+            let line = if hit.doc.source == DocSource::Activity {
+                strip_activity_stamp(line)
+            } else {
+                line
+            };
+            let excerpt = if query.trim().is_empty() {
+                truncate_excerpt(line)
+            } else {
+                format!("Line {location} · {}", query_excerpt(line, query))
             };
             let title = if hit.doc.title.trim().is_empty() {
                 hit.doc.source.label().to_string()
@@ -345,7 +360,7 @@ pub(crate) fn map_root_brain_hits(hits: Vec<super::search::BrainHit>) -> Vec<Roo
                 source_id: hit.doc.source_id.clone(),
             }
         })
-        .filter(|hit| seen_rendered.insert((hit.title.clone(), hit.excerpt.clone())))
+        .filter(|hit| seen_rendered.insert((hit.source, hit.source_id.clone())))
         .collect()
 }
 
@@ -395,6 +410,7 @@ fn excerpt_for_content(content: &str) -> String {
 /// Activity-journal variant: journal lines are stamped "HH:MM — detail". The
 /// stamp is useful inside the journal but reads like plumbing in a launcher
 /// row (audit F11) — show only the detail.
+#[cfg(test)]
 fn excerpt_for_activity_content(content: &str) -> String {
     truncate_excerpt(strip_activity_stamp(first_non_empty_line(content)))
 }
@@ -440,7 +456,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mapping_dedupes_rendered_identity_and_keeps_best_ranked_hit() {
+    fn mapping_preserves_distinct_sources_and_dedupes_canonical_identity() {
         let hit = |id: i64, source_id: &str| super::super::search::BrainHit {
             doc: super::super::store::BrainDoc {
                 id,
@@ -454,9 +470,9 @@ mod tests {
             },
             score: 1.0 / id as f64,
         };
-        let mapped = map_root_brain_hits(vec![hit(1, "best"), hit(2, "lower")]);
+        let mapped = map_root_brain_hits(vec![hit(1, "best"), hit(2, "lower"), hit(3, "best")]);
 
-        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped.len(), 2);
         assert_eq!(mapped[0].source_id, "best", "first ranked hit must win");
     }
 
@@ -819,5 +835,73 @@ mod tests {
         assert!(search_root_brain_direct("ab", &options)
             .expect("short query does not read IO")
             .is_empty());
+    }
+}
+
+fn matching_excerpt_line<'a>(content: &'a str, query: &str) -> (&'a str, usize) {
+    let terms: Vec<_> = query.split_whitespace().map(str::to_lowercase).collect();
+    content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .max_by_key(|(index, line)| {
+            let lower = line.to_lowercase();
+            (
+                terms
+                    .iter()
+                    .filter(|term| lower.contains(term.as_str()))
+                    .count(),
+                std::cmp::Reverse(*index),
+            )
+        })
+        .map(|(index, line)| (line.trim(), index + 1))
+        .unwrap_or(("", 1))
+}
+
+fn query_excerpt(line: &str, query: &str) -> String {
+    let chars: Vec<_> = line.chars().collect();
+    let mut lower = String::new();
+    let mut original_indices = Vec::new();
+    for (index, character) in chars.iter().enumerate() {
+        for folded in character.to_lowercase() {
+            lower.push(folded);
+            original_indices.push(index);
+        }
+    }
+    let matched_byte = query
+        .split_whitespace()
+        .filter_map(|term| lower.find(&term.to_lowercase()))
+        .min()
+        .unwrap_or(0);
+    let matched_char = original_indices
+        .get(lower[..matched_byte].chars().count())
+        .copied()
+        .unwrap_or(0);
+    let start = matched_char.saturating_sub(ROOT_BRAIN_EXCERPT_MAX_CHARS / 3);
+    let end = (start + ROOT_BRAIN_EXCERPT_MAX_CHARS).min(chars.len());
+    format!(
+        "{}{}{}",
+        if start > 0 { "…" } else { "" },
+        chars[start..end].iter().collect::<String>(),
+        if end < chars.len() { "…" } else { "" }
+    )
+}
+
+#[cfg(test)]
+mod excerpt_regression_tests {
+    use super::*;
+    #[test]
+    fn deep_match_uses_relevant_line_and_location() {
+        let content = "# A generic title\n\nUnrelated introduction\nThe rendezvous port is 49217.\nA later unrelated line";
+        let (line, location) = matching_excerpt_line(content, "rendezvous port");
+        assert_eq!(location, 4);
+        assert!(query_excerpt(line, "rendezvous port").contains("49217"));
+    }
+    #[test]
+    fn long_unicode_line_keeps_match_inside_bounded_excerpt() {
+        let line = format!("{} rendezvous café {}", "α".repeat(200), "β".repeat(200));
+        let excerpt = query_excerpt(&line, "rendezvous");
+        assert!(excerpt.contains("rendezvous café"));
+        assert!(excerpt.chars().count() <= ROOT_BRAIN_EXCERPT_MAX_CHARS + 2);
     }
 }

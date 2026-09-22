@@ -4595,6 +4595,20 @@ fn read_trigger_builtins_resource() -> Result<ResourceContent, String> {
         ));
     }
     body.push_str("<!-- drift-audit:trigger-builtin-ids:end -->\n");
+    body.push_str(
+        "\n## Main-window animation presets\n\n\
+         `builtin/animation-presets` browses the 25 named main-window entry presets. \
+         Run a discovered `builtin/animation-<slug>` ID to persist that choice and \
+         request one launcher replay. `builtin/animation-next`, \
+         `builtin/animation-previous`, and `builtin/animation-replay` use the same \
+         launcher operations. Other windows and exits are unchanged.\n\n\
+         Query `getState` for `mainWindowAnimation`: `selectedId`, `selectedNumber`, \
+         `selectedSpec`, and the `presets` catalog describe the selection; \
+         `nativeLifecycle` describes the captured native entry separately. \
+         A successful command is not proof that a queued replay has completed. \
+         Hidden evaluation fixtures apply choices in memory without native replay \
+         or operator-config writes.\n",
+    );
 
     Ok(ResourceContent {
         uri: TRIGGER_BUILTINS_REFERENCE_URI.to_string(),

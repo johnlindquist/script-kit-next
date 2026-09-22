@@ -1408,6 +1408,50 @@ fn dispatch_detached_action(
         "Selected Agent Chat Actions Menu item"
     );
 
+    if action_id.starts_with("agent_chat_queue:") {
+        let handle = CHAT_WINDOW
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .as_ref()
+            .and_then(|state| {
+                let view = state.view_entity.as_ref()?.upgrade()?;
+                let requested = entity_weak.upgrade()?;
+                if view != requested {
+                    return None;
+                }
+                let id = state.automation_id.as_ref()?;
+                if crate::windows::get_runtime_window_handle_for_generation(
+                    id,
+                    state.automation_generation,
+                ) != Some(state.handle)
+                {
+                    return None;
+                }
+                Some((state.handle, id.clone(), state.automation_generation))
+            });
+        let weak = entity_weak.clone();
+        let action_id = action_id.to_string();
+        cx.defer(move |cx| {
+            if let Some((handle, id, generation)) = handle {
+                let Some(expected) = get_agent_chat_view_for_instance(&id, generation) else {
+                    return;
+                };
+                if weak.upgrade().as_ref() != Some(&expected) {
+                    return;
+                }
+                let _ = handle.update(cx, |_, window, cx| {
+                    if let Some(entity) = weak.upgrade() {
+                        entity.update(cx, |view, cx| {
+                            view.execute_queue_action(&action_id, window, cx);
+                        });
+                    }
+                });
+            }
+        });
+        return;
+    }
+
     let model_id = crate::actions::agent_chat_switch_model_id_from_action(action_id)
         .or_else(|| action_id.strip_prefix("chat:select_model_"));
     if let Some(model_id) = model_id {

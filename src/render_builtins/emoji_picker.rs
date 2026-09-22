@@ -242,7 +242,10 @@ impl ScriptListApp {
                                 let receipt = match crate::platform::copy_text(emoji.emoji) {
                                     Ok(receipt) => receipt,
                                     Err(error) => {
-                                        this.show_error_toast(format!("Failed to copy emoji: {error}"), cx);
+                                        this.show_error_toast(
+                                            format!("Failed to copy emoji: {error}"),
+                                            cx,
+                                        );
                                         cx.stop_propagation();
                                         return;
                                     }
@@ -256,7 +259,9 @@ impl ScriptListApp {
                                         "failed to record emoji usage"
                                     );
                                 }
-                                if receipt.destination() == crate::runtime_policy::CopyDestination::OwnedProcessLocal {
+                                if receipt.destination()
+                                    == crate::runtime_policy::CopyDestination::OwnedProcessLocal
+                                {
                                     this.show_hud(
                                         receipt.feedback(format!("Copied {}", emoji.emoji)),
                                         Some(HUD_SHORT_MS),
@@ -485,6 +490,7 @@ impl ScriptListApp {
                     },
                     None,
                     list_colors,
+                    self.current_main_menu_theme,
                 ),
             )
             .child(

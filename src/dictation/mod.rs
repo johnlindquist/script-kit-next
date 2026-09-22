@@ -142,6 +142,9 @@ pub(crate) use window::{
     open_dictation_overlay_with_policy, overlay_recovery_callback_installed,
     set_dictation_overlay_fixture_mode,
 };
+pub(crate) use window::{
+    dictation_recording_actions_for_instance, execute_dictation_overlay_action_for_instance,
+};
 
 #[cfg(test)]
 mod tests;

@@ -143,7 +143,7 @@ impl DictationOverlay {
 
         let _ = self.dismiss_microphone_popup_top_layer("open_destination_actions", cx);
         self.destination_command_bar
-            .set_actions(dictation_target_actions(), cx);
+            .set_actions(self.recording_actions(), cx);
         self.destination_command_bar.open_centered(window, cx);
         self.wire_destination_actions_activation(window, cx);
     }
@@ -350,6 +350,13 @@ impl DictationOverlay {
                         };
                         overlay.update(cx, |overlay, cx| {
                             overlay.destination_command_bar.mark_closed_externally();
+                            if action_id == "dictation_microphone" {
+                                overlay.open_microphone_picker(window, cx);
+                            }
+                            if action_id == "dictation_jump_latest" {
+                                overlay.caption_scroll.scroll_to_bottom();
+                                cx.notify();
+                            }
                             if let Some(target) = dictation_target_from_action_id(&action_id) {
                                 overlay.select_destination(target, cx);
                             }
@@ -359,5 +366,39 @@ impl DictationOverlay {
                 });
             }));
         });
+    }
+}
+
+impl DictationOverlay {
+    pub(crate) fn recording_actions(&self) -> Vec<crate::actions::Action> {
+        let mut actions = dictation_target_actions();
+        if self.state.phase == DictationSessionPhase::Recording {
+            actions.push(
+                crate::actions::Action::new(
+                    "dictation_microphone",
+                    "Choose Microphone",
+                    Some(format!(
+                        "Current: {} · changes apply to the next recording",
+                        active_microphone_footer_label()
+                    )),
+                    crate::actions::ActionCategory::ScriptContext,
+                )
+                .with_section("Recording"),
+            );
+        }
+        if !crate::components::list_scroll_affordance::scroll_handle_is_at_bottom(
+            &self.caption_scroll,
+        ) {
+            actions.push(
+                crate::actions::Action::new(
+                    "dictation_jump_latest",
+                    "Jump to Latest",
+                    Some("Resume following live captions".to_string()),
+                    crate::actions::ActionCategory::ScriptContext,
+                )
+                .with_section("Recording"),
+            );
+        }
+        actions
     }
 }

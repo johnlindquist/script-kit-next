@@ -138,7 +138,11 @@ pub(crate) fn chip_tooltip_label(target: crate::dictation::DictationTarget) -> S
             .unwrap_or_else(|| target.descriptor().description.into());
     }
 
-    target.descriptor().description.into()
+    format!(
+        "Destination: {} · delivered only when you choose Stop",
+        target.descriptor().description
+    )
+    .into()
 }
 
 /// Estimate how many lines `text` wraps to at ~`chars_per_line` characters,
@@ -286,7 +290,9 @@ fn render_static_header_row(state: &DictationOverlayState) -> impl IntoElement {
         .gap(px(6.));
     for descriptor in crate::dictation::DictationTarget::quick_chip_descriptors() {
         chip_row = chip_row.child(destination_chip_base(
-            descriptor.delivery_verb,
+            descriptor
+                .quick_chip_label
+                .unwrap_or(descriptor.selector_label),
             descriptor.icon,
             state.target == descriptor.target,
             !live,
@@ -404,13 +410,16 @@ impl DictationOverlay {
             .track_scroll(&self.caption_scroll)
     }
 
-    /// Keep the caption scrolled to the newest text: fires once per caption
-    /// change so a user scrolling back is not fought mid-read, but every new
-    /// word snaps the view back to the live tail.
+    /// Follow new caption text only while the current viewport is at the bottom.
+    /// Deliberate scrolling keeps the reader's position until Jump to Latest.
     fn sync_caption_follow(&mut self) {
         if self.caption.generation() != self.caption_scrolled_generation {
             self.caption_scrolled_generation = self.caption.generation();
-            self.caption_scroll.scroll_to_bottom();
+            if crate::components::list_scroll_affordance::scroll_handle_is_at_bottom(
+                &self.caption_scroll,
+            ) {
+                self.caption_scroll.scroll_to_bottom();
+            }
         }
     }
 

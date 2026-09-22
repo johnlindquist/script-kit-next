@@ -19,58 +19,58 @@ const mainTailFrames = [
   },
   {
     sequence: 1,
-    displayTimeNs: 1_018_000_000,
+    displayTimeNs: 1_036_000_000,
     windowAlpha: 0.85,
     windowBounds: [[377, 166], [759, 480]],
   },
   {
     sequence: 2,
-    displayTimeNs: 1_044_000_000,
+    displayTimeNs: 1_088_000_000,
     windowAlpha: 0.85,
     windowBounds: [[377, 166], [759, 480]],
   },
   {
     sequence: 3,
-    displayTimeNs: 1_060_000_000,
+    displayTimeNs: 1_120_000_000,
     windowAlpha: 0.97,
     windowBounds: [[380, 166], [750.5, 480]],
   },
   {
     sequence: 4,
-    displayTimeNs: 1_079_000_000,
+    displayTimeNs: 1_158_000_000,
     windowAlpha: 0.99,
     windowBounds: [[382, 166], [740.5, 480]],
   },
   {
     sequence: 5,
-    displayTimeNs: 1_096_000_000,
+    displayTimeNs: 1_192_000_000,
     windowAlpha: 0.99,
     windowBounds: [[382, 166], [741.5, 480]],
   },
   {
     sequence: 6,
-    displayTimeNs: 1_114_000_000,
+    displayTimeNs: 1_228_000_000,
     windowAlpha: 0.995,
     windowBounds: [[381, 166], [745, 480]],
   },
   {
     sequence: 7,
-    displayTimeNs: 1_132_000_000,
+    displayTimeNs: 1_264_000_000,
     windowAlpha: 1.0,
     windowBounds: [[381, 166], [748, 480]],
   },
   {
     sequence: 8,
-    displayTimeNs: 1_149_000_000,
+    displayTimeNs: 1_298_000_000,
     windowAlpha: 1.0,
     windowBounds: [[381, 166], [750, 480]],
   },
 ] as const;
 
 const NEW_MAIN_LOG =
-  "event=glass_morph window=Main window variant=window_frame phase=enter duration=0.10s inset=0.006 start_alpha=0.85 start_alpha_bits=3feb333333333333 settle_duration_ns=104999996 configured_at_host_time_ns=1 expected_settle_deadline_ns=104999997 frames=759x480->740x480->750x480 start_scale_x=1.012000 start_scale_y=1.000000 squish_scale_x=0.987000 squish_scale_y=1.000000 phase1_ns=34999999 hold_ns=0 phase2_ns=69999998 alpha_phase1_target=0.990000 alpha_ramp_ns=18000000 alpha_finish_ns=26000000 geometry_curve=easeOut rebound_curve=easeInEaseOut alpha_curve=easeOut";
+  "event=glass_morph window=Main window variant=window_frame phase=enter duration=0.21s inset=0.006 start_alpha=0.85 start_alpha_bits=3feb333333333333 settle_duration_ns=209999992 configured_at_host_time_ns=1 expected_settle_deadline_ns=209999993 frames=759x480->740x480->750x480 start_scale_x=1.012000 start_scale_y=1.000000 squish_scale_x=0.987000 squish_scale_y=1.000000 phase1_ns=69999998 hold_ns=0 phase2_ns=139999996 alpha_phase1_target=0.990000 alpha_ramp_ns=36000000 alpha_finish_ns=52000000 geometry_curve=easeOut rebound_curve=easeInEaseOut alpha_curve=easeOut";
 const NEW_MAIN_ONSET_LOG =
-  "event=native_glass_entry_onset primitive=material_parameters supported=true entry_blur_radius=12.00 entry_blur_to_radius=0.00 footer_blur_radius=12.00 footer_blur_to_radius=0.00 footer_blur_scope=per_capsule footer_blur_duration_ns=44000000 footer_capsule_count=4 footer_blurred_capsule_count=4 footer_material_ramp_count=4 footer_foreground_fade_count=4 footer_enrolled=false entry_blur_duration_ns=44000000 onset_start_width_scale=1.030500 tail_start_width_scale=1.012000 onset_geometry_duration_ns=18000000 from_style=clear to_style=regular duration_ns=44000000 content_root_count=4 content_hold_ns=0 content_fade_ns=44000000 content_start_alpha=0.21 window_alpha=0.85";
+  "event=native_glass_entry_onset primitive=material_parameters supported=true entry_blur_radius=12.00 entry_blur_to_radius=0.00 footer_blur_radius=12.00 footer_blur_to_radius=0.00 footer_blur_scope=per_capsule footer_blur_duration_ns=88000000 footer_capsule_count=4 footer_blurred_capsule_count=4 footer_material_ramp_count=4 footer_foreground_fade_count=4 footer_enrolled=false entry_blur_duration_ns=88000000 onset_start_width_scale=1.030500 tail_start_width_scale=1.012000 onset_geometry_duration_ns=36000000 from_style=clear to_style=regular duration_ns=88000000 content_root_count=4 content_hold_ns=0 content_fade_ns=88000000 content_start_alpha=0.21 window_alpha=0.85";
 
 describe("visible-tail glass entry motion contract", () => {
   test("accepts the predicted main visible-tail frames", () => {
@@ -194,7 +194,7 @@ describe("native soft-materialize onset receipt", () => {
     expect(result.footerBlurRadius).toBe(12);
     expect(result.footerBlurToRadius).toBe(0);
     expect(result.footerBlurScope).toBe("per_capsule");
-    expect(result.footerBlurDurationNs).toBe(44_000_000);
+    expect(result.footerBlurDurationNs).toBe(88_000_000);
     expect(result.footerBlurredCapsuleCount).toBe(result.footerCapsuleCount);
     expect(result.footerMaterialRampCount).toBe(result.footerCapsuleCount);
     expect(result.footerForegroundFadeCount).toBe(result.footerCapsuleCount);
@@ -222,7 +222,7 @@ describe("native soft-materialize onset receipt", () => {
   test("rejects the stale eight-point full-entry blur and old first frame", () => {
     const stale = NEW_MAIN_ONSET_LOG
       .replace("entry_blur_radius=12.00", "entry_blur_radius=8.00")
-      .replace("entry_blur_duration_ns=44000000", "entry_blur_duration_ns=149000000")
+      .replace("entry_blur_duration_ns=88000000", "entry_blur_duration_ns=298000000")
       .replace("onset_start_width_scale=1.030500", "onset_start_width_scale=1.012000");
     const result = analyzeOnsetReceipt([stale]);
     expect(result.pass).toBe(false);
@@ -235,7 +235,7 @@ describe("native soft-materialize onset receipt", () => {
     const stale = NEW_MAIN_ONSET_LOG
       .replace("footer_blur_radius=12.00", "footer_blur_radius=0.00")
       .replace("footer_blur_scope=per_capsule", "footer_blur_scope=container")
-      .replace("footer_blur_duration_ns=44000000", "footer_blur_duration_ns=149000000")
+      .replace("footer_blur_duration_ns=88000000", "footer_blur_duration_ns=298000000")
       .replace("footer_blurred_capsule_count=4", "footer_blurred_capsule_count=3")
       .replace("footer_enrolled=false", "footer_enrolled=true");
     const result = analyzeOnsetReceipt([stale]);
@@ -292,7 +292,7 @@ describe("exact runtime geometry receipt", () => {
       analyzeLoggedEntryGeometry([held], MAIN_GLASS_ENTRY_EXPECTATION).pass,
     ).toBe(false);
     const shortRebound = NEW_MAIN_LOG.replace(
-      "phase2_ns=69999998",
+      "phase2_ns=139999996",
       "phase2_ns=90000000",
     );
     expect(

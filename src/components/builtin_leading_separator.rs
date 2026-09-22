@@ -10,6 +10,8 @@ pub(crate) const BUILTIN_LEADING_SEPARATOR_ID: &str = "builtin-leading-separator
 ///
 /// The row is always present. Transient status belongs in its label so status
 /// changes cannot add floating chrome or shift the list below it (OF-15).
+/// Its slot uses the active launcher's first-section budget, not the legacy
+/// section label's intrinsic height, so switching browsers cannot shift rows.
 #[allow(
     dead_code,
     reason = "the separately compiled launcher calls this from seven builtin renderers"
@@ -18,11 +20,16 @@ pub(crate) fn render_builtin_leading_separator(
     label: &str,
     status: Option<&str>,
     colors: crate::list_item::ListItemColors,
+    main_menu_theme: crate::designs::MainMenuThemeVariant,
 ) -> impl IntoElement {
     let text = status.map_or_else(|| label.to_string(), |status| format!("{label} · {status}"));
     div()
         .debug_selector(|| BUILTIN_LEADING_SEPARATOR_ID.to_string())
         .w_full()
+        .h(gpui::px(
+            crate::list_item::effective_first_section_header_height_for_theme(main_menu_theme),
+        ))
+        .flex_shrink_0()
         .child(crate::list_item::render_section_header(
             &text, None, colors, true,
         ))
@@ -50,7 +57,7 @@ pub(crate) fn builtin_leading_separator_element(
 
 #[cfg(test)]
 mod tests {
-    use gpui::AppContext;
+    use gpui::{div, AppContext, InteractiveElement, ParentElement, Styled};
 
     struct TestBuiltinLeadingSeparator;
 
@@ -61,11 +68,26 @@ mod tests {
             _cx: &mut gpui::Context<Self>,
         ) -> impl gpui::IntoElement {
             let theme = crate::theme::Theme::default();
-            super::render_builtin_leading_separator(
-                "Files",
-                Some("Indexing files"),
-                crate::list_item::ListItemColors::from_theme(&theme),
-            )
+            div()
+                .debug_selector(|| "test-builtin-browser".to_string())
+                .w_full()
+                .h_full()
+                .flex()
+                .flex_col()
+                .child(super::render_builtin_leading_separator(
+                    "Files",
+                    Some("Indexing files"),
+                    crate::list_item::ListItemColors::from_theme(&theme),
+                    crate::designs::MainMenuThemeVariant::default(),
+                ))
+                .child(
+                    div()
+                        .debug_selector(|| "test-builtin-results".to_string())
+                        .w_full()
+                        .h_full()
+                        .flex_1()
+                        .min_h(gpui::px(0.0)),
+                )
         }
     }
 
@@ -84,14 +106,16 @@ mod tests {
     }
 
     #[gpui::test]
-    fn rendered_leading_separator_records_non_zero_paint_bounds(cx: &mut gpui::TestAppContext) {
+    fn leading_section_keeps_launcher_slot_under_results_content_pressure(
+        cx: &mut gpui::TestAppContext,
+    ) {
         use gpui::px;
 
         let window = cx.update(|cx| {
             let mut options = gpui::WindowOptions::default();
             options.window_bounds = Some(gpui::WindowBounds::Windowed(gpui::Bounds::new(
                 gpui::point(px(0.0), px(0.0)),
-                gpui::size(px(480.0), px(160.0)),
+                gpui::size(px(480.0), px(120.0)),
             )));
             cx.open_window(options, |_, cx| cx.new(|_| TestBuiltinLeadingSeparator))
                 .unwrap()
@@ -101,14 +125,20 @@ mod tests {
 
         window
             .update(cx, |_, window, _| {
-                let measurement = window
-                    .debug_bounds_entries()
-                    .iter()
-                    .find(|entry| entry.selector == super::BUILTIN_LEADING_SEPARATOR_ID)
-                    .expect("builtin leading separator should record paint bounds");
+                let bounds = window.debug_bounds();
+                let browser = bounds.get("test-builtin-browser").unwrap();
+                let separator = bounds.get(super::BUILTIN_LEADING_SEPARATOR_ID).unwrap();
+                let results = bounds.get("test-builtin-results").unwrap();
+                let launcher_slot = px(
+                    crate::list_item::effective_first_section_header_height_for_theme(
+                        crate::designs::MainMenuThemeVariant::default(),
+                    ),
+                );
 
-                assert!(measurement.bounds.size.width > px(0.0));
-                assert!(measurement.bounds.size.height > px(0.0));
+                assert_eq!(separator.size.height, launcher_slot);
+                assert_eq!(separator.origin.y, browser.origin.y);
+                assert_eq!(results.origin.y - browser.origin.y, launcher_slot);
+                assert_eq!(results.bottom(), browser.bottom());
             })
             .unwrap();
     }

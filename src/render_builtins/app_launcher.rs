@@ -399,6 +399,7 @@ impl ScriptListApp {
                     },
                     None,
                     list_colors,
+                    self.current_main_menu_theme,
                 ),
             )
             .child(

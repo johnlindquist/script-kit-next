@@ -3,7 +3,7 @@
  * and re-run the exporter; Rust is the single authority.
  */
 :root {
-  /* bundleHash: sha256:a072c5b63993c7524dfa6e4f0f3cdf58f612cc86aa90d78c898c30f7b2276704 */
+  /* bundleHash: sha256:c1135582ce88090192127b0326b8a7805ee97f974b5698043348919f9eccacca */
   --sk-actions-dialog-list-padding-bottom: 6px;
   --sk-actions-dialog-list-padding-top: 0px;
   --sk-actions-dialog-row-height: 36px;
@@ -164,11 +164,6 @@
   --sk-main-menu-row-outer-padding-x: 4px;
   --sk-main-menu-row-outer-padding-y: 0px;
   --sk-main-menu-row-radius: 14px;
-  --sk-main-menu-row-selected-marker-height: 16px;
-  --sk-main-menu-row-selected-marker-inset-x: 6px;
-  --sk-main-menu-row-selected-marker-opacity: 1;
-  --sk-main-menu-row-selected-marker-radius: 1px;
-  --sk-main-menu-row-selected-marker-width: 2px;
   --sk-main-menu-search-font-size: 20px;
   --sk-main-menu-search-font-weight: 430;
   --sk-main-menu-search-height: 26px;
@@ -305,7 +300,6 @@
   --sk-main-menu-icon-tile-radius: 7px;
   --sk-main-menu-row-hover-background: rgb(255 255 255 / 0.0705882353);
   --sk-main-menu-row-selected-background: rgb(255 255 255 / 0.1254901961);
-  --sk-main-menu-row-selected-marker: rgb(251 191 36);
   --sk-main-view-content-right-inset-x: 2px;
   --sk-notes-editor-font-size: 16px;
   --sk-notes-caret-color: rgb(255 255 255);

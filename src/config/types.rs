@@ -1049,6 +1049,13 @@ impl EffectsPreferences {
     }
 }
 
+/// Selected main-window entry experiment, stored under `animation` in config.ts.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct AnimationPreferences {
+    pub preset: crate::theme::animation::MainWindowAnimationPreset,
+}
+
 /// Projection of config-backed runtime preferences.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -1071,6 +1078,9 @@ pub struct ScriptKitUserPreferences {
     /// Background shader-effect settings.
     #[serde(default)]
     pub effects: EffectsPreferences,
+    /// Main-window entry animation selection.
+    #[serde(default)]
+    pub animation: AnimationPreferences,
 }
 
 /// Agent Chat backend selected for a profile or runtime preference.
@@ -2023,6 +2033,9 @@ pub struct Config {
     /// Theme preset selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<ThemeSelectionPreferences>,
+    /// Main-window entry animation selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub animation: Option<AnimationPreferences>,
     /// Design picker preferences and per-design token overrides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub designs: Option<DesignsConfig>,
@@ -2131,6 +2144,7 @@ impl Default for Config {
             watcher: None,          // Will use WatcherConfig::default() via getter
             layout: None,           // Will use LayoutConfig::default() via getter
             theme: None,            // Will use ThemeSelectionPreferences::default() via getter
+            animation: None,        // Will use AnimationPreferences::default() via getter
             designs: None,          // No design overrides by default
             dictation: None,        // Will use DictationPreferences::default() via getter
             ai: None,               // Will use AiPreferences::default() via getter

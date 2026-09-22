@@ -31,7 +31,7 @@ static BRAIN_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 static BRAIN_DB_READ: OnceLock<Option<Arc<Mutex<Connection>>>> = OnceLock::new();
 
 /// A document source. Stable string keys — stored in sqlite.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DocSource {
     Note,
     ChatTurn,

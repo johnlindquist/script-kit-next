@@ -31,6 +31,7 @@ import {
 } from './config-schema';
 import type {
   CommandId,
+  AnimationPreferences,
   ConfigChange,
   ValidateConfigChangeResult,
 } from './config-schema';
@@ -350,6 +351,7 @@ interface Config {
   watcher?: WatcherConfig;
   layout?: LayoutConfig;
   theme?: ThemeSelectionPreferences;
+  animation?: AnimationPreferences;
   designs?: DesignsConfig;
   dictation?: DictationPreferences;
   ai?: AiPreferences;
@@ -456,6 +458,7 @@ const DEFAULTS: Config & Record<string, unknown> = {
     maxHeight: 700
   },
   theme: undefined,
+  animation: undefined,
   designs: undefined,
   dictation: undefined,
   ai: undefined,
@@ -771,6 +774,12 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "string | undefined",
     default: undefined,
     description: "Theme preset ID to apply before theme.json overrides"
+  },
+  {
+    key: "animation.preset",
+    type: "string | undefined",
+    default: undefined,
+    description: "Main-window entry animation preset (25 choices; previous_calibration restores the former entry)"
   },
   {
     key: "dictation.selectedDeviceId",

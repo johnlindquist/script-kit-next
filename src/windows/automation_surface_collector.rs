@@ -678,6 +678,7 @@ pub(crate) fn collect_agent_chat_conversation_elements(
             let mut elements =
                 collect_agent_chat_thread_conversation_elements(thread.read(cx), command_status);
             elements.extend(view.spine_hint_semantic_elements());
+            elements.extend(view.queue_semantic_elements(cx));
             elements
         }
         _ => {
@@ -1449,6 +1450,18 @@ pub(crate) fn collect_notes_elements(
     elements.extend(titlebar_elements);
     elements.push(editor);
     elements.push(identity);
+    let save_status = notes.document_save_status();
+    let mut save = element(
+        "notes.saveStatus",
+        ElementType::Panel,
+        Some(save_status.label().to_string()),
+        None,
+        None,
+        None,
+        None,
+    );
+    save.status_kind = Some(format!("{save_status:?}").to_lowercase());
+    elements.push(save);
     let total_count = elements.len();
     elements.truncate(limit);
 

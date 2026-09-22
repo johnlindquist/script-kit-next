@@ -134,20 +134,8 @@ pub struct ListItemMetricsOverride {
     pub row_inner_padding_x: f32,
     pub row_inner_padding_y: f32,
     pub row_radius: f32,
-    pub row_selected_border_width: f32,
-    pub row_selected_border_alpha: u32,
     pub row_selected_fill_alpha: u32,
     pub row_hover_fill_alpha: u32,
-    pub row_selected_name_underline_width: f32,
-    pub row_selected_name_underline_padding_bottom: f32,
-    pub row_selected_marker_width: f32,
-    pub row_selected_marker_height: f32,
-    pub row_selected_marker_inset_x: f32,
-    pub row_selected_marker_radius: f32,
-    pub row_selected_marker_alpha: u32,
-    /// Host row height used only to vertically center the absolute marker.
-    /// Compact launcher-family hosts may override this without changing ListItem content geometry.
-    pub row_selected_marker_center_height: f32,
     pub icon_text_gap: f32,
     pub name_desc_gap: f32,
     pub accessory_gap: f32,
@@ -194,18 +182,8 @@ impl ListItemMetricsOverride {
             row_inner_padding_x: ITEM_PADDING_X,
             row_inner_padding_y: ITEM_PADDING_Y,
             row_radius: LIST_ITEM_ROW_RADIUS_PX,
-            row_selected_border_width: 0.0,
-            row_selected_border_alpha: 0x00,
             row_selected_fill_alpha: 0x20,
             row_hover_fill_alpha: 0x12,
-            row_selected_name_underline_width: 0.0,
-            row_selected_name_underline_padding_bottom: 0.0,
-            row_selected_marker_width: 2.0,
-            row_selected_marker_height: 16.0,
-            row_selected_marker_inset_x: 6.0,
-            row_selected_marker_radius: 1.0,
-            row_selected_marker_alpha: 0xFF,
-            row_selected_marker_center_height: LIST_ITEM_HEIGHT,
             icon_text_gap: ITEM_ICON_TEXT_GAP,
             name_desc_gap: ITEM_NAME_DESC_GAP,
             accessory_gap: ITEM_ACCESSORIES_GAP,
@@ -259,20 +237,8 @@ impl ListItemMetricsOverride {
             row_inner_padding_x: def.row.inner_padding_x,
             row_inner_padding_y: def.row.inner_padding_y,
             row_radius: def.row.radius,
-            row_selected_border_width: def.row.selected_border_width,
-            row_selected_border_alpha: def.row.selected_border_alpha,
             row_selected_fill_alpha: def.row.selected_fill_alpha,
             row_hover_fill_alpha: def.row.hover_fill_alpha,
-            row_selected_name_underline_width: def.row.selected_name_underline_width,
-            row_selected_name_underline_padding_bottom: def
-                .row
-                .selected_name_underline_padding_bottom,
-            row_selected_marker_width: def.row.selected_marker_width,
-            row_selected_marker_height: def.row.selected_marker_height,
-            row_selected_marker_inset_x: def.row.selected_marker_inset_x,
-            row_selected_marker_radius: def.row.selected_marker_radius,
-            row_selected_marker_alpha: def.row.selected_marker_alpha,
-            row_selected_marker_center_height: def.list.item_height,
             icon_text_gap: def.row.icon_text_gap,
             name_desc_gap: def.row.name_desc_gap,
             accessory_gap: def.row.accessory_gap,
@@ -295,35 +261,6 @@ impl ListItemMetricsOverride {
             desc_quiet_alpha: def.metadata.metadata_alpha,
         }
     }
-}
-
-/// Geometry for the launcher-family selected-row marker overlay.
-///
-/// These coordinates are relative to the outer row container. The marker is
-/// deliberately independent from flex layout so it cannot move row content,
-/// alter hit bounds, or participate in scroll measurement.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ListItemSelectionMarkerGeometry {
-    pub left: f32,
-    pub top: f32,
-    pub width: f32,
-    pub height: f32,
-    pub radius: f32,
-    pub alpha: u32,
-}
-
-pub fn list_item_selection_marker_geometry(
-    metrics: ListItemMetricsOverride,
-    selected: bool,
-) -> Option<ListItemSelectionMarkerGeometry> {
-    selected.then(|| ListItemSelectionMarkerGeometry {
-        left: metrics.row_outer_padding_x + metrics.row_selected_marker_inset_x,
-        top: (metrics.row_selected_marker_center_height - metrics.row_selected_marker_height) / 2.0,
-        width: metrics.row_selected_marker_width,
-        height: metrics.row_selected_marker_height,
-        radius: metrics.row_selected_marker_radius,
-        alpha: metrics.row_selected_marker_alpha,
-    })
 }
 
 pub use crate::theme::MainMenuRowFillBase;
@@ -1602,18 +1539,13 @@ impl RenderOnce for ListItem {
         // Disabled explanatory rows remain selectable but never brighten on hover.
         let hover_visible = self.hovered && !disabled && !window.last_input_was_keyboard();
 
-        // Live main-menu theme exploration. Every variation shares the token-owned
-        // leading selection marker, then coordinates row, icon, text, and metadata.
+        // Live main-menu theme exploration coordinates row fill, highlighted
+        // icons, text, and metadata without selection lines or outlines.
         use crate::designs::MainMenuRowKind;
         let row_kind = self.main_menu_theme.def().row_kind;
         // Pack the theme accent (0xRRGGBB) into an rgba color at the given alpha.
         let accent_at = |alpha: u32| rgba((colors.accent_selected << 8) | alpha);
         let selected = self.selected;
-        let selection_marker_geometry = list_item_selection_marker_geometry(metrics, selected);
-        let selection_marker_id = semantic_id
-            .as_deref()
-            .map(|id| format!("{id}:selection-marker"))
-            .unwrap_or_else(|| format!("list-item:{item_index}:selection-marker"));
 
         let on_accent_text = matches!(
             row_kind,
@@ -1635,18 +1567,6 @@ impl RenderOnce for ListItem {
             row_kind,
             MainMenuRowKind::Smoke
                 | MainMenuRowKind::GraphitePill
-                | MainMenuRowKind::OperatorMonoGlass
-        ) && selected
-            && !disabled;
-        let ring = matches!(
-            row_kind,
-            MainMenuRowKind::BlueGlass
-                | MainMenuRowKind::LiquidPrism
-                | MainMenuRowKind::AuroraSlate
-                | MainMenuRowKind::ProConsole
-                | MainMenuRowKind::OceanGlass
-                | MainMenuRowKind::CarbonNeon
-                | MainMenuRowKind::StudioPaperGlass
                 | MainMenuRowKind::OperatorMonoGlass
         ) && selected
             && !disabled;
@@ -1783,6 +1703,43 @@ impl RenderOnce for ListItem {
             icon_element
         };
 
+        #[cfg(feature = "owned-ui-evaluation")]
+        let icon_element =
+            if crate::runtime_policy::is_owned_evaluation() && selected && self.icon.is_some() {
+                let id = semantic_id
+                    .as_deref()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| format!("list-item:{item_index}"));
+                let metadata = std::rc::Rc::new(serde_json::json!({
+                    "selectedSurfaceColor": icon_tile.then(||
+                        (colors.accent_selected << 8) | icon_tile_alpha),
+                }));
+                icon_element
+                    .relative()
+                    .debug_selector(|| format!("{id}:selection-icon"))
+                    .child(
+                        gpui::canvas(
+                            |_, _, _| (),
+                            move |bounds, _, window, _| {
+                                if window.owned_frame_observation_active() {
+                                    window.record_owned_paint_binding(
+                                        "selectionIcon",
+                                        id.clone(),
+                                        bounds,
+                                        metadata.clone(),
+                                    );
+                                }
+                            },
+                        )
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .size_full(),
+                    )
+            } else {
+                icon_element
+            };
+
         // Progressive disclosure: detect if search/filter is active
         // Used to conditionally show descriptions and accessories
         let is_filtering =
@@ -1884,17 +1841,6 @@ impl RenderOnce for ListItem {
                 .child(self.name)
         };
 
-        // Accent Name: optional underline beneath the bright-accent title.
-        let name_underline_selected =
-            selected && !disabled && metrics.row_selected_name_underline_width > 0.0;
-        let name_element = if name_underline_selected {
-            name_element
-                .border_b(px(metrics.row_selected_name_underline_width))
-                .border_color(accent_at(0xFF))
-                .pb(px(metrics.row_selected_name_underline_padding_bottom))
-        } else {
-            name_element
-        };
         item_content = item_content.child(name_element);
 
         // Description - progressive disclosure pattern (Spotlight/Raycast style)
@@ -2197,39 +2143,8 @@ impl RenderOnce for ListItem {
             ElementId::NamedInteger("list-item".into(), item_index as u64)
         };
 
-        // Selection styling is governed by the main-menu theme explorer.
-
-        // Accent Ring: outline the selected row with a thick accent border.
-        if ring || metrics.row_selected_border_width > 0.0 {
-            let border_width = metrics
-                .row_selected_border_width
-                .max(if ring { 2.0 } else { 0.0 });
-            let border_alpha =
-                metrics
-                    .row_selected_border_alpha
-                    .max(if ring { 0xE6 } else { 0x00 });
-            inner_content = inner_content
-                .border(px(border_width))
-                .border_color(accent_at(border_alpha));
-        }
-
-        let selection_marker = selection_marker_geometry.map(|marker| {
-            let debug_id = selection_marker_id.clone();
-            div()
-                .id(ElementId::Name(selection_marker_id.into()))
-                .debug_selector(move || debug_id.clone())
-                .absolute()
-                .left(px(marker.left))
-                .top(px(marker.top))
-                .w(px(marker.width))
-                .h(px(marker.height))
-                .rounded(px(marker.radius))
-                .bg(rgba((colors.accent_selected << 8) | marker.alpha))
-        });
-
-        // Base container with ID for stateful interactivity. `relative()` is
-        // solely the positioning context for the absolute selection marker;
-        // it does not alter row geometry, flex participation, or hit bounds.
+        // Base row container anchors the nonpainting attention probe and
+        // retains a stable ID for stateful interactivity.
         let mut container = div()
             .relative()
             .w_full()
@@ -2268,13 +2183,7 @@ impl RenderOnce for ListItem {
             ));
         }
 
-        // Add content first, then paint the absolute marker above the selected
-        // surface without participating in flex or changing the row hit box.
-        container = container.child(inner_content);
-        if let Some(selection_marker) = selection_marker {
-            container = container.child(selection_marker);
-        }
-        container
+        container.child(inner_content)
     }
 }
 /// Decode PNG bytes to GPUI RenderImage

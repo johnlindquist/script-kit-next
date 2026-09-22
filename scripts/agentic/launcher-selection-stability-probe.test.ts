@@ -235,7 +235,7 @@ function retainedFrame(generation: number, offset = 0) {
     localInputFocused: true, nativeWindowActive: false, nativeWindow: { visible: false },
     search: { selectedSemanticId: "private selected subject", query: { lifetime: 2, revision: 7, scopeRevision: 1 } },
     paintFailures: [], pixelEvidenceComplete: true, pendingResources: 0, failedResources: 0,
-    pixelEvidence: [{ kind: "selectionMarker", bounds, probe: { x: 4, y: 20 + offset, r: 114, g: 193, b: 168, a: 255 } }],
+    pixelEvidence: [{ kind: "selectionIcon", bounds, probe: { x: 4, y: 20 + offset, r: 114, g: 193, b: 168, a: 255 } }],
     paintBindings: [{ id: "row", kind: "mainSearchRow", bounds, visibleBounds: bounds, clipBounds: { x: 0, y: 0, width: 800, height: 600 },
       metadata: { stableKey: "private row key", selected: true, description: "private metadata ".repeat(512) } },
       { id: "fixed", kind: "mainSearchPreview", bounds: { x: 400, y: 0, width: 300, height: 600 }, metadata: { text: "private preview" } }] };
@@ -786,10 +786,16 @@ test("a returned same-number stamp from another owner or trace cannot replace th
   expect(naturalEvidenceIssues(oldTrace, expectation)).toContain("completed-stamp-missing");
 });
 
-test("selection evidence rejects empty, transparent or wrong-color retained pixels", () => {
-  expect(selectionPixelIssues([{ x: 3, y: 4, r: 0x72, g: 0xc1, b: 0xa8, a: 255 }], 0x72c1a8)).toEqual([]);
-  expect(selectionPixelIssues([], 0x72c1a8)).toContain("missing-capability:selection-pixels");
-  expect(selectionPixelIssues([{ x: 3, y: 4, r: 0, g: 0, b: 0, a: 0 }], 0x72c1a8)).toContain("selected-marker-pixels-disagree");
+test("selection icon evidence rejects empty, transparent or wrong-color retained pixels", () => {
+  expect(selectionPixelIssues([{ x: 3, y: 4, r: 0x72, g: 0xc1, b: 0xa8, a: 255 }], 0x72c1a8ff)).toEqual([]);
+  expect(selectionPixelIssues([], 0x72c1a8ff)).toContain("missing-capability:selection-pixels");
+  expect(selectionPixelIssues([{ x: 3, y: 4, r: 0, g: 0, b: 0, a: 0 }], 0x72c1a8ff)).toContain("selected-icon-pixels-disagree");
+});
+
+test("translucent selection icons qualify source color without assuming an opaque backdrop", () => {
+  expect(selectionPixelIssues([{ x: 3, y: 4, r: 108, g: 183, b: 159, a: 242 }], 0x72c1a8f2)).toEqual([]);
+  expect(selectionPixelIssues([{ x: 3, y: 4, r: 114, g: 193, b: 168, a: 255 }], 0x72c1a8f2)).toEqual([]);
+  expect(selectionPixelIssues([{ x: 3, y: 4, r: 0, g: 0, b: 0, a: 255 }], 0x72c1a8f2)).toContain("selected-icon-pixels-disagree");
 });
 
 test("admission reserves lifecycle resources and keeps actual comparison identities in one runtime", () => {

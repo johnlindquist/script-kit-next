@@ -401,10 +401,13 @@ impl ScriptListApp {
             root_search.finish_named_provider(source, generation, terminal);
         }
 
+        crate::theme::animation::set_current_preset(preferences.animation.preset);
+
         let mut app = ScriptListApp {
             main_services: services,
             prompt_completion: None,
             main_preferences: preferences,
+            animation_replay_generation: 0,
             main_revisions: MainRevisionFacts::default(),
             main_revision_input_text: String::new(),
             main_revision_input_selection: 0..0,

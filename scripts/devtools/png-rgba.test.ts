@@ -118,32 +118,32 @@ test("region hash consumes only declared RGBA pixels and changes/restores with t
 function selectedFixture() {
   const state: Json = { mainListScroll: { selectedSemanticId: "script:fixture", selectedRowVisible: true, selectedRowTop: 84, selectedRowBottom: 128 } };
   const rowBounds = { x: 20, y: 84, width: 350, height: 44 };
-  const markerBounds = { x: 34, y: 98, width: 2, height: 16 };
+  const iconBounds = { x: 34, y: 96, width: 20, height: 20 };
   const layout: Json = { windowWidth: 750, windowHeight: 520, components: [
     { name: "list-row:script:fixture", measurementProvenance: "paint-time", coordinateSpace: "window", measurementFrameGeneration: 7,
       bounds: rowBounds, visibleBounds: rowBounds, clipBounds: rowBounds },
-    { name: "script:fixture:selection-marker", measurementProvenance: "paint-time", coordinateSpace: "window", measurementFrameGeneration: 7,
-      bounds: markerBounds, visibleBounds: markerBounds, clipBounds: rowBounds },
+    { name: "script:fixture:selection-icon", measurementProvenance: "paint-time", coordinateSpace: "window", measurementFrameGeneration: 7,
+      bounds: iconBounds, visibleBounds: iconBounds, clipBounds: rowBounds },
   ] };
   return { state, layout };
 }
 
-test("selected marker region maps actual window-space paint into capture pixels, not list-relative offsets", () => {
+test("selected icon region maps actual window-space paint into capture pixels, not list-relative offsets", () => {
   const { state, layout } = selectedFixture();
   const selected = selectedThemePixelRegion(state, layout, { width: 750, height: 520 }, 7);
-  expect(selected.region).toEqual({ x: 34, y: 102, width: 2, height: 8 });
+  expect(selected.region).toEqual({ x: 39, y: 101, width: 10, height: 10 });
   const hiDpi = selectedThemePixelRegion(state, layout, { width: 1500, height: 1040 }, 7);
-  expect(hiDpi.region).toEqual({ x: 68, y: 204, width: 4, height: 16 });
+  expect(hiDpi.region).toEqual({ x: 78, y: 202, width: 20, height: 20 });
   // Local paint coordinates are authoritative even when a list has a window-space origin.
   state.mainListScroll.selectedRowTop = 0; state.mainListScroll.selectedRowBottom = 44;
   expect(selectedThemePixelRegion(state, layout, { width: 750, height: 520 }, 7)).toEqual(selected);
-  layout.components[1].bounds = { x: 34.25, y: 98.25, width: 2, height: 16 };
+  layout.components[1].bounds = { x: 34.25, y: 96.25, width: 20, height: 20 };
   layout.components[1].visibleBounds = layout.components[1].bounds;
   expect(selectedThemePixelRegion(state, layout, { width: 1500, height: 1040 }, 7).region)
-    .toEqual({ x: 69, y: 205, width: 3, height: 15 });
+    .toEqual({ x: 79, y: 203, width: 19, height: 19 });
 });
 
-test("selected marker proof rejects stale, ambiguous, clipped, hidden and invalid geometry", () => {
+test("selected icon proof rejects stale, ambiguous, clipped, hidden and invalid geometry", () => {
   const mutations: Array<(state: Json, layout: Json) => void> = [
     state => { state.mainListScroll.selectedRowVisible = false; },
     state => { state.mainListScroll.selectedSemanticId = "script:other"; },
@@ -151,8 +151,8 @@ test("selected marker proof rejects stale, ambiguous, clipped, hidden and invali
     (_state, layout) => { layout.components[1].measurementProvenance = "model"; },
     (_state, layout) => { layout.components[1].coordinateSpace = "screen"; },
     (_state, layout) => { layout.components.push(layout.components[1]); },
-    (_state, layout) => { layout.components[1].visibleBounds = { x: 34, y: 98, width: 1, height: 16 }; },
-    (_state, layout) => { layout.components[1].bounds = { x: 400, y: 98, width: 2, height: 16 }; layout.components[1].visibleBounds = layout.components[1].bounds; },
+    (_state, layout) => { layout.components[1].visibleBounds = { x: 34, y: 96, width: 10, height: 20 }; },
+    (_state, layout) => { layout.components[1].bounds = { x: 400, y: 96, width: 20, height: 20 }; layout.components[1].visibleBounds = layout.components[1].bounds; },
     (_state, layout) => { layout.components[1].bounds.width = NaN; },
     (_state, layout) => { layout.windowWidth = 0; },
   ];

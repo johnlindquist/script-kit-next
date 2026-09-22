@@ -8,7 +8,7 @@ use crate::theme::opacity::{OPACITY_ICON_MUTED, OPACITY_MUTED, OPACITY_NEAR_FULL
 use crate::ui::chrome::alpha_from_opacity;
 
 use super::types::{
-    TOAST_ACTIONS_GAP_PX, TOAST_ACTIONS_MARGIN_TOP_PX, TOAST_BORDER_WIDTH_PX, TOAST_CONTENT_GAP_PX,
+    TOAST_ACTIONS_GAP_PX, TOAST_ACTIONS_MARGIN_TOP_PX, TOAST_CONTENT_GAP_PX,
     TOAST_CONTENT_PADDING_X_PX, TOAST_CONTENT_PADDING_Y_PX, TOAST_ICON_SIZE_PX, TOAST_MAX_WIDTH_PX,
     TOAST_MESSAGE_COLUMN_GAP_PX, TOAST_RADIUS_PX,
 };
@@ -44,8 +44,6 @@ impl RenderOnce for Toast {
                 crate::ui_foundation::get_vibrancy_background(&theme),
                 |d, bg| d.bg(bg),
             )
-            .border_l(px(TOAST_BORDER_WIDTH_PX))
-            .border_color(rgb(colors.border))
             .rounded(px(TOAST_RADIUS_PX));
 
         // Only apply shadow when vibrancy is disabled - shadows block blur

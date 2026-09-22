@@ -38,7 +38,6 @@ impl DictationOverlay {
         );
         Ok(())
     }
-
 }
 
 pub(crate) fn dictation_overlay_revision_facts(
@@ -98,7 +97,6 @@ pub(crate) fn open_dictation_microphone_popup_fixture(cx: &mut App) -> anyhow::R
         })
         .map_err(|error| anyhow::anyhow!("Failed to open Dictation microphone fixture: {error}"))
 }
-
 
 fn dictation_automation_bounds(
     bounds: gpui::Bounds<gpui::Pixels>,
@@ -448,4 +446,51 @@ fn automation_layout_info_with_radius(
         handler_form: None,
         timestamp: chrono::Utc::now().to_rfc3339(),
     }
+}
+
+#[allow(unused)]
+pub(crate) fn dictation_recording_actions_for_instance(
+    generation: u64,
+    cx: &App,
+) -> Option<Vec<crate::actions::Action>> {
+    dictation_overlay_revision_facts(generation, None, cx)?;
+    let handle = (*DICTATION_OVERLAY_WINDOW.get()?.lock())?;
+    handle
+        .read_with(cx, |view, _| view.recording_actions())
+        .ok()
+}
+
+#[allow(
+    dead_code,
+    reason = "the separately compiled binary owns registered Dictation action dispatch"
+)]
+pub(crate) fn execute_dictation_overlay_action_for_instance(
+    generation: u64,
+    action_id: &str,
+    cx: &mut App,
+) -> anyhow::Result<()> {
+    dictation_overlay_revision_facts(generation, None, cx)
+        .ok_or_else(|| anyhow::anyhow!("dictation_owner_stale"))?;
+    let handle = (*DICTATION_OVERLAY_WINDOW
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("dictation_owner_missing"))?
+        .lock())
+    .ok_or_else(|| anyhow::anyhow!("dictation_owner_missing"))?;
+    handle.update(cx, |view, window, cx| {
+        anyhow::ensure!(
+            view.recording_actions()
+                .iter()
+                .any(|action| action.id == action_id),
+            "dictation_action_unavailable"
+        );
+        match action_id {
+            "dictation_microphone" => view.open_microphone_picker(window, cx),
+            "dictation_jump_latest" => {
+                view.caption_scroll.scroll_to_bottom();
+                cx.notify();
+            }
+            _ => anyhow::bail!("dictation_action_unsupported"),
+        }
+        Ok(())
+    })?
 }

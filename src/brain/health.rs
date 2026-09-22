@@ -36,3 +36,39 @@ pub fn read_health() -> Option<BrainHealth> {
     let json = store::meta_get("health").ok().flatten()?;
     serde_json::from_str(&json).ok()
 }
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum BrainHealthRead {
+    NotYetIndexed,
+    Available {
+        snapshot: BrainHealth,
+    },
+    Unavailable {
+        code: &'static str,
+        diagnostic: String,
+    },
+}
+
+pub fn read_health_checked() -> BrainHealthRead {
+    let result = store::meta_get("health").and_then(|value| {
+        value
+            .map(|json| serde_json::from_str::<BrainHealth>(&json).map_err(anyhow::Error::from))
+            .transpose()
+    });
+    match result {
+        Ok(None) => BrainHealthRead::NotYetIndexed,
+        Ok(Some(mut snapshot)) => {
+            if let Some(error) = snapshot.last_error.take() {
+                let diagnostic = crate::logging::log_private_user_value(&error).sha256;
+                snapshot.last_error =
+                    Some(format!("Brain indexing failed. Diagnostic: {diagnostic}"));
+            }
+            BrainHealthRead::Available { snapshot }
+        }
+        Err(error) => BrainHealthRead::Unavailable {
+            code: "brain_health_unavailable",
+            diagnostic: crate::logging::log_private_user_value(&error.to_string()).sha256,
+        },
+    }
+}

@@ -2020,6 +2020,24 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    fn open_animation_preset_search(&mut self, cx: &mut Context<Self>) {
+        self.animation_replay_generation = self.animation_replay_generation.wrapping_add(1);
+        self.open_main_window(cx);
+        // Existing type qualifier keeps unrelated provider rows out; only
+        // preset rows carry the exact gallery keyword.
+        let query = "type:builtin animation gallery".to_string();
+        self.filter_text = query.clone();
+        self.computed_filter_text = query.clone();
+        self.pending_programmatic_filter_echo = Some(query);
+        self.pending_filter_sync = true;
+        self.flush_pending_main_menu_query(cx);
+        self.sync_list_state();
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        self.selected_index =
+            crate::list_item::GroupedListState::from_items(&grouped_items).first_selectable;
+        cx.notify();
+    }
+
     fn open_ai_vault_source_filter(&mut self, cx: &mut Context<Self>) {
         let filter_text = "vault: ".to_string();
         self.cancel_history_filter_render_pending_if_obsolete(&filter_text);
@@ -2322,6 +2340,65 @@ impl ScriptListApp {
         let _outcome = self.execute_builtin(&entry, cx);
     }
 
+    fn apply_animation_preset(
+        &mut self,
+        preset: crate::theme::animation::MainWindowAnimationPreset,
+        change_selection: bool,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        if change_selection {
+            let animation = crate::config::AnimationPreferences { preset };
+            if self.main_services.is_production() {
+                if let Err(error) = crate::config::save_animation_preferences(&animation) {
+                    let message = format!(
+                        "Could not save Animation {:02} — {}: {error}",
+                        preset.number(),
+                        preset.name()
+                    );
+                    self.show_error_toast(message.clone(), cx);
+                    return Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        message,
+                        "animation_preset_save_failed",
+                    );
+                }
+                self.config.animation = Some(animation);
+            }
+            self.main_preferences.animation = animation;
+            crate::theme::animation::set_current_preset(preset);
+            self.mark_main_data_changed();
+        }
+        if self.main_services.is_production() {
+            if !self.replay_main_window_entry(preset, cx) {
+                let message = format!(
+                    "Animation {:02} — {} selected, but main-window replay could not start",
+                    preset.number(),
+                    preset.name()
+                );
+                self.show_error_toast(message.clone(), cx);
+                return Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    "animation_replay_not_started",
+                );
+            }
+        } else {
+            self.animation_replay_generation = self.animation_replay_generation.wrapping_add(1);
+            self.toast_manager.push(
+                components::toast::Toast::success(
+                    format!("Animation {:02} — {}", preset.number(), preset.name()),
+                    &self.theme,
+                )
+                .duration_ms(Some(1800)),
+            );
+            cx.notify();
+        }
+        Self::builtin_success(dctx, format!("animation::{}", preset.id()))
+    }
+
     /// Inner builtin executor — runs the actual action logic.
     /// Called from both the normal path (after confirmation check) and the
     /// confirmed path (after modal approval), ensuring a single implementation.
@@ -2453,6 +2530,38 @@ impl ScriptListApp {
                         .duration_ms(Some(1500)),
                 );
                 Self::builtin_success(dctx, "background_effect::off")
+            }
+
+            // Main-window entry animations share one persistence-first setter.
+            builtins::BuiltInFeature::AnimationPresets => {
+                self.open_animation_preset_search(cx);
+                Self::builtin_success(dctx, "animation::catalog")
+            }
+            builtins::BuiltInFeature::AnimationNext => {
+                let next = crate::theme::animation::MainWindowAnimationPreset::ALL[self
+                    .main_preferences
+                    .animation
+                    .preset
+                    .number()
+                    % crate::theme::animation::MainWindowAnimationPreset::ALL.len()];
+                self.apply_animation_preset(next, true, dctx, cx)
+            }
+            builtins::BuiltInFeature::AnimationPrevious => {
+                let previous = crate::theme::animation::MainWindowAnimationPreset::ALL[(self
+                    .main_preferences
+                    .animation
+                    .preset
+                    .number()
+                    + crate::theme::animation::MainWindowAnimationPreset::ALL.len()
+                    - 2)
+                    % crate::theme::animation::MainWindowAnimationPreset::ALL.len()];
+                self.apply_animation_preset(previous, true, dctx, cx)
+            }
+            builtins::BuiltInFeature::AnimationReplay => {
+                self.apply_animation_preset(self.main_preferences.animation.preset, false, dctx, cx)
+            }
+            builtins::BuiltInFeature::AnimationPreset(preset) => {
+                self.apply_animation_preset(*preset, true, dctx, cx)
             }
 
             // =========================================================================

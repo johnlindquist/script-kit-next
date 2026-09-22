@@ -19,7 +19,7 @@ use crate::design_evaluation::search_fixtures as F;
 /// Cap on inbox items loaded into the snapshot per refresh. The grouped view
 /// renders at most the configured max (default 3, clamped to 5); loading a
 /// few extra keeps the section populated when items resolve between reloads.
-const ROOT_BRAIN_INBOX_LOAD_LIMIT: usize = 8;
+const ROOT_BRAIN_INBOX_LOAD_LIMIT: usize = usize::MAX;
 
 /// How long a loaded snapshot stays fresh before the next hook re-reads it.
 const ROOT_BRAIN_INBOX_TTL: std::time::Duration = std::time::Duration::from_secs(30);
@@ -142,5 +142,68 @@ impl ScriptListApp {
             }
             changed
         });
+    }
+}
+
+impl ScriptListApp {
+    pub(crate) fn brain_inbox_actions_route(&self) -> Option<crate::actions::ActionsDialogRoute> {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return None;
+        }
+        let items = self.root_search.root_brain_inbox_items();
+        if items.is_empty() {
+            return None;
+        }
+        let epoch = self.root_search.root_brain_inbox_epoch();
+        Some(crate::actions::ActionsDialogRoute {
+            id: "brain-inbox".to_string(),
+            context_title: Some(format!("Brain Inbox · {} open", items.len())),
+            search_placeholder: Some("Search all open inbox items".to_string()),
+            initial_selected_action_id: None,
+            actions: items
+                .iter()
+                .map(|item| {
+                    crate::actions::Action::new(
+                        format!("brain_inbox_open:{epoch}:{}", item.id),
+                        item.title.clone(),
+                        Some(item.detail.clone()),
+                        crate::actions::ActionCategory::ScriptContext,
+                    )
+                    .with_section("Brain Inbox")
+                })
+                .collect(),
+        })
+    }
+
+    pub(crate) fn open_brain_inbox_action(
+        &mut self,
+        action_id: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(target) = action_id.strip_prefix("brain_inbox_open:") else {
+            return false;
+        };
+        let Some((epoch, id)) = target.split_once(':') else {
+            return false;
+        };
+        if epoch.parse::<u64>().ok() != Some(self.root_search.root_brain_inbox_epoch())
+            || !matches!(self.current_view, AppView::ScriptList)
+        {
+            return false;
+        }
+        let Ok(id) = id.parse::<i64>() else {
+            return false;
+        };
+        let Some(item) = self
+            .root_search
+            .root_brain_inbox_items()
+            .iter()
+            .find(|item| item.id == id)
+            .cloned()
+        else {
+            return false;
+        };
+        self.execute_root_brain_inbox_open(item, cx);
+        true
     }
 }

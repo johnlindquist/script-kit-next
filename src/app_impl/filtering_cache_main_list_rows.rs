@@ -2,8 +2,18 @@ impl ScriptListApp {
     pub(crate) fn resolved_main_menu_selected_subject(
         &self,
     ) -> Option<ResolvedMainMenuSelection<'_>> {
+        if !self.root_search.query_is_current() {
+            return None;
+        }
+        self.painted_main_menu_selected_subject()
+    }
+
+    /// Keep the committed row and its highlight together while a new query coalesces.
+    /// This is presentation only: dispatch must use the current-query resolver above.
+    pub(crate) fn painted_main_menu_selected_subject(
+        &self,
+    ) -> Option<ResolvedMainMenuSelection<'_>> {
         if !matches!(self.current_view, AppView::ScriptList)
-            || !self.root_search.query_is_current()
             || self.main_menu_committed_query_stamp() != self.root_search.computed_query_stamp()
             || self.spine_empty_subsearch_selection_suppressed()
             || self.menu_syntax_capture_form_owns_input()

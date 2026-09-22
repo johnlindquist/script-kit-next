@@ -359,9 +359,8 @@ impl AgentChatView {
         let deny_colors = crate::theme::DangerActionColors::from_theme(&theme);
         let option_id = option.option_id.clone();
 
-        let (accent, bg, hover_bg, caption) = if option.is_reject() {
+        let (bg, hover_bg, caption) = if option.is_reject() {
             (
-                rgba(deny_colors.border_rgba),
                 rgba(if is_selected {
                     deny_colors.hover_rgba
                 } else {
@@ -372,7 +371,6 @@ impl AgentChatView {
             )
         } else if option.is_persistent_allow() {
             (
-                rgb(chrome.accent_hex),
                 rgba(if is_selected {
                     chrome.accent_badge_border_rgba
                 } else {
@@ -383,7 +381,6 @@ impl AgentChatView {
             )
         } else {
             (
-                rgb(chrome.accent_hex),
                 rgba(if is_selected {
                     chrome.accent_badge_bg_rgba
                 } else {
@@ -400,12 +397,6 @@ impl AgentChatView {
             .pl(px(10.0))
             .pr(px(6.0))
             .py(px(6.0))
-            .border_l_2()
-            .border_color(if is_selected {
-                accent
-            } else {
-                rgba(0x00000000)
-            })
             .cursor_pointer()
             .bg(bg)
             .hover(move |d| d.bg(hover_bg))
@@ -472,11 +463,6 @@ impl AgentChatView {
             "\u{2318}Y Allow \u{00b7} \u{2318}\u{2325}Z Deny \u{00b7} Esc Cancel"
         };
 
-        let accent = preview
-            .as_ref()
-            .map(|preview| rgba(Self::permission_preview_chrome(preview.kind, &theme).accent_rgba))
-            .unwrap_or_else(|| rgb(theme.colors.accent.selected));
-
         let allow_request = request.clone();
         let allow_view = view.clone();
         let deny_request = request.clone();
@@ -492,8 +478,6 @@ impl AgentChatView {
             .pl(px(10.0))
             .pr(px(8.0))
             .py(px(8.0))
-            .border_l_2()
-            .border_color(accent)
             .bg(rgba((theme.colors.text.primary << 8) | 0x04))
             .child(
                 div()
@@ -541,8 +525,6 @@ impl AgentChatView {
                                     .px(px(10.0))
                                     .py(px(6.0))
                                     .cursor_pointer()
-                                    .border_l_2()
-                                    .border_color(rgb(theme.colors.accent.selected))
                                     .bg(rgba((theme.colors.accent.selected << 8) | 0x12))
                                     .hover(|d| {
                                         d.bg(rgba((theme.colors.accent.selected << 8) | 0x1C))
@@ -579,8 +561,6 @@ impl AgentChatView {
                                     .px(px(10.0))
                                     .py(px(6.0))
                                     .cursor_pointer()
-                                    .border_l_2()
-                                    .border_color(rgba(deny_colors.border_rgba))
                                     .bg(rgba(deny_colors.rest_rgba))
                                     .hover(move |d| d.bg(rgba(deny_colors.hover_rgba)))
                                     .on_click(move |_event, _window, cx| {
@@ -618,12 +598,6 @@ impl AgentChatView {
                                 .px(px(10.0))
                                 .py(px(6.0))
                                 .cursor_pointer()
-                                .border_l_2()
-                                .border_color(if options_open {
-                                    rgb(theme.colors.accent.selected)
-                                } else {
-                                    rgba(0x00000000)
-                                })
                                 .bg(rgba((theme.colors.text.primary << 8) | 0x06))
                                 .hover(|this| {
                                     this.bg(rgba((theme.colors.text.primary << 8) | 0x0C))

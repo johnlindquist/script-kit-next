@@ -408,6 +408,7 @@ impl DayPageDocumentSession {
             note.set_content(content);
             crate::notes::save_note(&note)
                 .with_context(|| format!("saving note from day page {note_id}"))?;
+            crate::notes::verify_saved_note_content(note.id, content)?;
             let saved_path = crate::notes::note_file_path(note.id)?
                 .with_context(|| format!("resolving saved note path {note_id}"))?;
             if let DayPageBinding::Note { title, .. } = &mut self.binding {
@@ -449,20 +450,20 @@ impl DayPageDocumentSession {
             let Some(disk_now) = io::read_private_document_if_present(&path)? else {
                 // A missing file has no conflicting bytes to preserve. Keep
                 // unsafe targets as errors rather than treating them as absent.
-                io::atomic_write(&path, content)
+                write_verified_document(&path, content)
                     .with_context(|| format!("recreating day page {}", path.display()))?;
                 return Ok(Written::clean(content.to_string()));
             };
 
             if disk_now == self.base_disk_content {
-                io::atomic_write(&path, content)
+                write_verified_document(&path, content)
                     .with_context(|| format!("writing day page {}", path.display()))?;
                 return Ok(Written::clean(content.to_string()));
             }
 
             if let Some(suffix) = external_append_suffix(&disk_now, &self.base_disk_content) {
                 let merged = merge_editor_with_external_appends(content, suffix, &disk_now);
-                io::atomic_write(&path, &merged)
+                write_verified_document(&path, &merged)
                     .with_context(|| format!("writing merged day page {}", path.display()))?;
                 return Ok(Written::merged(merged));
             }
@@ -482,7 +483,7 @@ impl DayPageDocumentSession {
                 conflict_sha256 = %safe_conflict.sha256,
                 "day page diverged on disk in a non-append way; kept editor buffer and copied the disk version to trash"
             );
-            io::atomic_write(&path, content)
+            write_verified_document(&path, content)
                 .with_context(|| format!("writing day page {}", path.display()))?;
             Ok(Written::merged(content.to_string()))
         })?;
@@ -1395,4 +1396,13 @@ mod tests {
             "readback must not trust the in-memory saved baseline"
         );
     }
+}
+
+fn write_verified_document(path: &std::path::Path, content: &str) -> anyhow::Result<()> {
+    io::atomic_write(path, content)?;
+    anyhow::ensure!(
+        io::read_private_document(path)? == content,
+        "saved canonical document differs from the editor"
+    );
+    Ok(())
 }

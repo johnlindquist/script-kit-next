@@ -684,6 +684,7 @@ pub struct NotesApp {
 
     /// Debounce: Whether the current note has unsaved changes
     has_unsaved_changes: bool,
+    save_failure: Option<crate::components::document_status::DocumentSaveFailure>,
 
     /// Which NotesApp generation this is; guards Drop's global cleanup.
     instance_id: u64,
@@ -726,7 +727,10 @@ pub struct NotesApp {
 
     /// Brief action feedback message shown in footer (e.g. "Deleted", "Pinned", "Duplicated")
     /// Tuple of (message, accent_colored, timestamp). Clears after 2 seconds.
-    action_feedback: Option<(String, bool, Instant)>,
+    action_feedback: Option<(
+        String,
+        crate::components::document_status::DocumentFeedbackKind,
+    )>,
     /// Privacy-safe execution receipt shared by pointer, Actions, and shortcut routes.
     last_notes_action_id: Option<&'static str>,
     notes_action_execution_generation: u64,

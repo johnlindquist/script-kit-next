@@ -181,6 +181,10 @@ fn notes_action_description(action: crate::notes::NotesAction) -> &'static str {
     use crate::notes::NotesAction;
     match action {
         NotesAction::NewNote => "Creates a new note",
+        NotesAction::RetrySave => {
+            "Saves the current draft again and verifies its persisted content"
+        }
+        NotesAction::CopySaveDetails => "Copies the save failure code and diagnostic fingerprint",
         NotesAction::DuplicateNote => "Creates a copy of the current note",
         NotesAction::BrowseNotes => "Opens the note switcher",
         NotesAction::TogglePreview => "Toggles Markdown preview mode",

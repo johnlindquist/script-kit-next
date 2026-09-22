@@ -47,10 +47,19 @@ mod tests {
             custom.colors.background.main = 0x1B_22_33;
             crate::theme::presets::write_theme_to_disk(&custom).unwrap();
 
-            assert!(crate::config::load_user_preferences().theme.preset_id.is_none());
+            assert!(crate::config::load_user_preferences()
+                .theme
+                .preset_id
+                .is_none());
             let restarted = try_load_theme_with_appearance(|| true).unwrap();
-            assert_eq!(restarted.colors.accent.selected, custom.colors.accent.selected);
-            assert_eq!(restarted.colors.background.main, custom.colors.background.main);
+            assert_eq!(
+                restarted.colors.accent.selected,
+                custom.colors.accent.selected
+            );
+            assert_eq!(
+                restarted.colors.background.main,
+                custom.colors.background.main
+            );
             assert!(!root.join(".theme-save-transaction.json").exists());
         });
     }
@@ -69,7 +78,10 @@ mod tests {
             attempted.colors.accent.selected = 0xAC_68_24;
             assert!(crate::theme::presets::write_theme_to_disk(&attempted).is_err());
             let restarted = try_load_theme_with_appearance(|| true).unwrap();
-            assert_eq!(restarted.colors.accent.selected, saved.colors.accent.selected);
+            assert_eq!(
+                restarted.colors.accent.selected,
+                saved.colors.accent.selected
+            );
             assert!(Arc::ptr_eq(&publication, &get_theme_snapshot()));
 
             std::fs::write(root.join("theme.json"), "{").unwrap();
@@ -84,7 +96,9 @@ mod tests {
             let mut guard = cache.lock().expect("theme cache lock should succeed");
             guard.snapshot = Arc::new(super::super::live_edit::PublishedTheme {
                 revision: guard.snapshot.revision + 1,
-                resolved: Arc::new(super::super::live_edit::ResolvedLiveTheme::from_theme(&theme)),
+                resolved: Arc::new(super::super::live_edit::ResolvedLiveTheme::from_theme(
+                    &theme,
+                )),
                 theme: Arc::new(theme),
             });
             panic!("intentional poison for theme cache recovery test");
@@ -101,7 +115,6 @@ mod tests {
             .expect("theme cache lock should be healthy after clear_poison");
         *guard = ThemeCache::default();
     }
-
 
     #[test]
     fn test_default_text_opacity_ladder_is_liquid_glass_quiet() {
@@ -135,6 +148,7 @@ mod tests {
             ai: Default::default(),
             window_management: Default::default(),
             effects: Default::default(),
+            animation: Default::default(),
         }
     }
 
@@ -211,16 +225,25 @@ mod tests {
         let baseline = get_theme_snapshot();
         let prepared = super::super::live_edit::prepare_theme(Theme::light_default()).unwrap();
         let mut bridge_calls = 0;
-        let publication = commit_prepared_theme(baseline.revision, prepared, |_| bridge_calls += 1).unwrap();
+        let publication =
+            commit_prepared_theme(baseline.revision, prepared, |_| bridge_calls += 1).unwrap();
         assert_eq!(bridge_calls, 1);
         assert_eq!(publication.revision, baseline.revision + 1);
-        assert_eq!(get_theme_snapshot().theme.colors.background.main, Theme::light_default().colors.background.main);
+        assert_eq!(
+            get_theme_snapshot().theme.colors.background.main,
+            Theme::light_default().colors.background.main
+        );
         let prepared = super::super::live_edit::prepare_theme(Theme::dark_default()).unwrap();
-        assert!(matches!(commit_prepared_theme(baseline.revision, prepared, |_| bridge_calls += 1),
-            Err(super::super::service::ThemePublishError::StaleRevision { .. })));
+        assert!(matches!(
+            commit_prepared_theme(baseline.revision, prepared, |_| bridge_calls += 1),
+            Err(super::super::service::ThemePublishError::StaleRevision { .. })
+        ));
         assert_eq!(bridge_calls, 1);
         assert!(Arc::ptr_eq(&publication, &get_theme_snapshot()));
-        assert_eq!(baseline.theme.colors.background.main, Theme::dark_default().colors.background.main);
+        assert_eq!(
+            baseline.theme.colors.background.main,
+            Theme::dark_default().colors.background.main
+        );
         clear_theme_cache_poison_and_restore();
     }
 
@@ -228,11 +251,17 @@ mod tests {
     fn malformed_reload_decoding_never_changes_the_publication() {
         let _guard = lock_theme_cache_test();
         let baseline = get_theme_snapshot();
-        for invalid in ["{", "[]", r##"{"colors":{"background":{"main":"bad-color"}}}"##] {
+        for invalid in [
+            "{",
+            "[]",
+            r##"{"colors":{"background":{"main":"bad-color"}}}"##,
+        ] {
             assert!(decode_theme_json(invalid, true).is_err());
             assert!(Arc::ptr_eq(&baseline, &get_theme_snapshot()));
         }
-        let decoded = decode_theme_json(r##"{"appearance":"light","opacity":{"hover":-0.1}}"##, true).unwrap();
+        let decoded =
+            decode_theme_json(r##"{"appearance":"light","opacity":{"hover":-0.1}}"##, true)
+                .unwrap();
         assert_eq!(decoded.get_opacity().hover, 0.0);
         assert!(matches!(decoded.appearance, AppearanceMode::Light));
     }

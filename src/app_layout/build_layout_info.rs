@@ -101,11 +101,12 @@ impl ScriptListApp {
             } else {
                 ArgPresentationMode::Full
             };
-            let choice_count = if layout_view_type == crate::window_resize::ViewType::ArgPromptWithChoices {
-                layout_item_count.max(1)
-            } else {
-                layout_item_count
-            };
+            let choice_count =
+                if layout_view_type == crate::window_resize::ViewType::ArgPromptWithChoices {
+                    layout_item_count.max(1)
+                } else {
+                    layout_item_count
+                };
             let inputs = arg_layout::current_arg_layout_inputs(mode, choice_count, window_height);
             let recorded = self.arg_prompt_geometry.get();
             let current = recorded.filter(|geometry| {
@@ -120,7 +121,11 @@ impl ScriptListApp {
             let Some(geometry) = current else {
                 // A cold or invalidated receipt must not claim rows at the
                 // warning-free origin while the real shell has not repainted.
-                let status = if recorded.is_some() { "stale" } else { "unavailable" };
+                let status = if recorded.is_some() {
+                    "stale"
+                } else {
+                    "unavailable"
+                };
                 return LayoutInfo {
                     window_width,
                     window_height,
@@ -144,11 +149,13 @@ impl ScriptListApp {
             None
         };
         let (main_x, main_y, main_width) = arg_geometry
-            .map(|geometry| (
-                f32::from(geometry.shell_bounds.origin.x),
-                f32::from(geometry.shell_bounds.origin.y),
-                f32::from(geometry.shell_bounds.size.width),
-            ))
+            .map(|geometry| {
+                (
+                    f32::from(geometry.shell_bounds.origin.x),
+                    f32::from(geometry.shell_bounds.origin.y),
+                    f32::from(geometry.shell_bounds.size.width),
+                )
+            })
             .unwrap_or((0.0, 0.0, window_width));
 
         // Layout constants (same as build_component_bounds)
@@ -393,10 +400,31 @@ impl ScriptListApp {
         // honest because `native_footer_surface()` returns `None` for them.
         if self.current_view.native_footer_surface().is_some() {
             let footer_height = footer_metrics.height_px;
-            let footer_y = window_height - footer_height;
+            let footer_bounds = if crate::footer_popup::main_window_footer_overlay_preview() {
+                crate::footer_popup::main_window_footer_bounds_gpui(
+                    window_width,
+                    window_height,
+                    footer_height,
+                    crate::footer_popup::FLOAT_FOOTER_CONTAINER_GAP_PX,
+                    1.0,
+                    true,
+                )
+            } else {
+                crate::protocol::LayoutBounds {
+                    x: 0.0,
+                    y: window_height - footer_height,
+                    width: window_width,
+                    height: footer_height,
+                }
+            };
             components.push(
                 LayoutComponentInfo::new("MainViewFooter", LayoutComponentType::Panel)
-                    .with_bounds(0.0, footer_y, window_width, footer_height)
+                    .with_bounds(
+                        footer_bounds.x,
+                        footer_bounds.y,
+                        footer_bounds.width,
+                        footer_bounds.height,
+                    )
                     .with_visual_style(
                         chrome_tokens::CHROME_LAYER_FUNCTIONAL,
                         chrome_tokens::MATERIAL_SOLID_THEME_TOKEN,
@@ -2188,7 +2216,6 @@ impl ScriptListApp {
             timestamp: chrono::Utc::now().to_rfc3339(),
         }
     }
-
 }
 
 include!("build_layout_info_handler_form.rs");

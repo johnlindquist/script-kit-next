@@ -13,14 +13,19 @@
 #   Or use:        RUST_LOG=debug ./dev.sh         (debug-level verbose logs)
 #
 # Flags:
-#   --takeover | --force | -f  Kill any previous ./dev.sh watcher (and orphaned
-#                              cargo-watch processes for this repo), then start.
+#   --takeover | --force | -f  Stop the exact registered watcher, or recover a
+#                              stale incomplete registration, then start.
 #                              Env equivalent: SCRIPT_KIT_DEV_TAKEOVER=1
 #   --stop                     Stop the running watcher for this repo and exit.
 #                              The app itself is left running; the next dev.sh
 #                              build relaunches it via the session contract.
 #   --status                   Show lock holder + orphaned watcher state, exit.
 #   -h | --help                Show usage.
+#
+# Build storage:
+#   Uses /Volumes/OMEGA SSD by default (SCRIPT_KIT_DEV_VOLUME overrides it).
+#   Refuses missing/replaced volumes and conflicting target/cache overrides.
+#   Inspect without building: python3 -B scripts/agentic/dev-storage.py --repo "$PWD" inspect
 
 set -e
 
@@ -114,15 +119,6 @@ dev_sh_repo_watcher_pids() {
     done
     return 0
 }
-dev_sh_write_lock() {
-    printf '%s\n' "$$" > "$SCRIPT_KIT_DEV_LOCK_DIR/pid"
-    printf '%s\n' "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" > "$SCRIPT_KIT_DEV_LOCK_DIR/session"
-    printf '%s\n' "$1" > "$SCRIPT_KIT_DEV_LOCK_DIR/root"
-    LC_ALL=C ps -p "$$" -o lstart= | sed 's/^ *//;s/ *$//' > "$SCRIPT_KIT_DEV_LOCK_DIR/process-start"
-    python3 -c 'import uuid; print(uuid.uuid4())' > "$SCRIPT_KIT_DEV_LOCK_DIR/generation"
-    SCRIPT_KIT_DEV_LOCK_GENERATION="$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/generation")"
-    export SCRIPT_KIT_DEV_LOCK_GENERATION
-}
 # Stop only a registered lifetime. Name/CWD census is diagnostic, never authority.
 dev_sh_stop_existing() {
     local repo_root="$1" lock_dir="$2" old_pid expected_generation i
@@ -154,29 +150,25 @@ dev_sh_acquire_lock() {
         SCRIPT_KIT_DEV_LOCK_DIR="${lock_root}/$(dev_sh_lock_key "$repo_root")-$$.lock"
     fi
 
-    if mkdir "$SCRIPT_KIT_DEV_LOCK_DIR" 2>/dev/null; then
-        dev_sh_write_lock "$repo_root"
+    local generation status
+    generation="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+    if SCRIPT_KIT_DEV_LOCK_GENERATION="$(python3 -B scripts/agentic/dev-watcher-lease.py \
+        claim "$repo_root" "$$" "$generation" "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" \
+        "${SCRIPT_KIT_DEV_TAKEOVER:-0}" "${SCRIPT_KIT_DEV_ALLOW_MULTI:-0}")"; then
+        export SCRIPT_KIT_DEV_LOCK_GENERATION
         return 0
-    fi
-
-    local old_pid=""
-    old_pid="$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/pid" 2>/dev/null || true)"
-    if dev_sh_pid_alive "$old_pid" && dev_sh_pid_is_dev_sh "$old_pid"; then
-        if [ "${SCRIPT_KIT_DEV_TAKEOVER:-0}" = "1" ]; then
-            dev_sh_stop_existing "$repo_root" "$SCRIPT_KIT_DEV_LOCK_DIR"
-        else
-            echo "[dev.sh] ERROR another ./dev.sh is already running for this repo: pid=${old_pid} session=$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/session" 2>/dev/null || echo '?')" >&2
-            echo "[dev.sh] Take it over with: ./dev.sh --takeover   (or stop it: ./dev.sh --stop)" >&2
-            echo "[dev.sh] Or set SCRIPT_KIT_DEV_ALLOW_MULTI=1 if you intentionally want multiple watchers." >&2
-            exit 2
-        fi
     else
-        echo "[dev.sh] REFUSED: incomplete or stale watcher registration remains protected: ${SCRIPT_KIT_DEV_LOCK_DIR}" >&2
-        exit 78
+        status=$?
     fi
-
-    mkdir "$SCRIPT_KIT_DEV_LOCK_DIR"
-    dev_sh_write_lock "$repo_root"
+    if [[ "$status" == "2" && "${SCRIPT_KIT_DEV_TAKEOVER:-0}" == "1" ]]; then
+        dev_sh_stop_existing "$repo_root" "$SCRIPT_KIT_DEV_LOCK_DIR"
+        SCRIPT_KIT_DEV_LOCK_GENERATION="$(python3 -B scripts/agentic/dev-watcher-lease.py \
+            claim "$repo_root" "$$" "$generation" "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" \
+            1 "${SCRIPT_KIT_DEV_ALLOW_MULTI:-0}")"
+        export SCRIPT_KIT_DEV_LOCK_GENERATION
+    else
+        exit "$status"
+    fi
 }
 dev_sh_cleanup() {
     if [ "$DEV_SH_CLEANED_UP" = "1" ]; then
@@ -203,8 +195,10 @@ dev_sh_cleanup() {
     if [[ -n "${SCRIPT_KIT_DEV_LOCK_DIR:-}" && -n "${SCRIPT_KIT_DEV_LOCK_GENERATION:-}" ]] \
         && dev_sh_pid_is_dev_sh "$$" "$SCRIPT_KIT_DEV_LOCK_DIR" \
         && [[ "$(cat "$SCRIPT_KIT_DEV_LOCK_DIR/generation")" == "$SCRIPT_KIT_DEV_LOCK_GENERATION" ]]; then
-        rm -f "$SCRIPT_KIT_DEV_LOCK_DIR/pid" "$SCRIPT_KIT_DEV_LOCK_DIR/root" "$SCRIPT_KIT_DEV_LOCK_DIR/session" "$SCRIPT_KIT_DEV_LOCK_DIR/process-start" "$SCRIPT_KIT_DEV_LOCK_DIR/generation"
-        rmdir "$SCRIPT_KIT_DEV_LOCK_DIR" 2>/dev/null || true
+        python3 -B scripts/agentic/dev-watcher-lease.py \
+            release "$(pwd -P)" "$$" "$SCRIPT_KIT_DEV_LOCK_GENERATION" \
+            "${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}" 0 "${SCRIPT_KIT_DEV_ALLOW_MULTI:-0}" \
+            || echo "[dev.sh] watcher cleanup record retained" >&2
     fi
 
     if [ "$DEV_SH_EXIT_CODE" -ne 0 ]; then
@@ -229,7 +223,7 @@ if [ "$DEV_SH_MODE" != "run" ]; then
             if [ -n "$DEV_SH_LOCK_PID" ] && dev_sh_pid_alive "$DEV_SH_LOCK_PID" && dev_sh_pid_is_dev_sh "$DEV_SH_LOCK_PID"; then
                 echo "[dev.sh] RUNNING pid=${DEV_SH_LOCK_PID} session=$(cat "$DEV_SH_LOCK_DIR/session" 2>/dev/null || echo '?') tty=$(ps -p "$DEV_SH_LOCK_PID" -o tty= 2>/dev/null | tr -d ' ')"
             elif [ -d "$DEV_SH_LOCK_DIR" ]; then
-                echo "[dev.sh] STALE lock present but pid ${DEV_SH_LOCK_PID:-?} is not a live dev.sh (next start clears it)"
+                echo "[dev.sh] STALE or incomplete registration for pid ${DEV_SH_LOCK_PID:-?}; complete dead leases recover on start, incomplete leases require --takeover"
             else
                 echo "[dev.sh] NOT RUNNING (no lock)"
             fi
@@ -290,6 +284,16 @@ if [ "${SCRIPT_KIT_DEV_ALLOW_MULTI:-0}" = "1" ]; then
 fi
 dev_sh_acquire_lock
 
+# Resolve every dev build destination before provisioning or invoking Cargo.
+# The child emits quoted exports only after mounted-volume and ownership checks.
+DEV_STORAGE_ENV="$(python3 -B scripts/agentic/dev-storage.py --repo "$(pwd -P)" prepare --shell)"
+eval "$DEV_STORAGE_ENV"
+unset DEV_STORAGE_ENV
+# Apple make stalled in the native helper build; Ninja handles this SSD lane.
+export CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
+echo "[dev.sh] SSD storage: ${SCRIPT_KIT_DEV_STORAGE_ROOT}"
+echo "[dev.sh] Cargo target: ${CARGO_TARGET_DIR}"
+
 # --- Launcher self-update stamp ---------------------------------------------
 # Record a digest of the launcher + helper scripts at start. dev-cycle.sh will
 # compare this against the live files each iteration and suggest a restart if
@@ -304,17 +308,13 @@ shasum_of() {
         md5 -q "$@" 2>/dev/null | paste -sd, -
     fi
 }
-shasum_of dev.sh scripts/agentic/dev-cycle.sh scripts/agentic/dev-relaunch.sh > "$SCRIPT_KIT_DEV_STAMP_FILE"
+shasum_of dev.sh scripts/agentic/dev-cycle.sh scripts/agentic/dev-relaunch.sh scripts/agentic/dev-storage.py > "$SCRIPT_KIT_DEV_STAMP_FILE"
 export SCRIPT_KIT_DEV_STAMP_FILE
 
-# --- Async cache-size reporter -----------------------------------------------
-# Reporting target/ size synchronously can take 10+ seconds with a 77 GB
-# target/, which is the bulk of the "frozen" silence. Run it in the background
-# so the heartbeat starts immediately. Result lands on stderr when ready.
-SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB="${SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB:-50}"
-SCRIPT_KIT_TARGET_AGENT_THRESHOLD_GB="${SCRIPT_KIT_TARGET_AGENT_THRESHOLD_GB:-50}"
+# Report the same mounted storage that this watcher actually uses, not the
+# independent managed-agent pool or the retired internal development target.
 if [ "${SCRIPT_KIT_REPORT_CACHE_SIZE:-1}" = "1" ]; then
-    bun scripts/devtools/devtools.ts build-ops query storage >&2 &
+    python3 -B scripts/agentic/dev-storage.py --repo "$(pwd -P)" inspect >&2 &
     SCRIPT_KIT_DEV_CACHE_PID=$!
 fi
 
@@ -326,6 +326,8 @@ fi
 if [ "${SCRIPT_KIT_DEV_ENSURE_PI_SIDECAR:-1}" = "1" ]; then
     bash scripts/agentic/ensure-pi-sidecar.sh
 fi
+# Pin runtime lookup to the sidecar checked above; preserve explicit overrides.
+export SCRIPT_KIT_PI_BINARY="${SCRIPT_KIT_PI_BINARY:-${SCRIPT_KIT_DEV_PI_DIR}/pi}"
 
 # --- Crash watchdog -----------------------------------------------------------
 # Optional supervisor for the session app pid: loud banner + exact relaunch on

@@ -125,6 +125,7 @@ fn render_theme_chooser_browser_main(
     empty_body: gpui::AnyElement,
     preview_panel: gpui::AnyElement,
     list_colors: crate::list_item::ListItemColors,
+    main_menu_theme: crate::designs::MainMenuThemeVariant,
 ) -> gpui::AnyElement {
     let browser_body = if filtered_count == 0 {
         empty_body
@@ -153,6 +154,7 @@ fn render_theme_chooser_browser_main(
                         },
                         None,
                         list_colors,
+                        main_menu_theme,
                     ),
                 )
                 .child(browser_body),
@@ -4725,6 +4727,7 @@ impl ScriptListApp {
             empty_body,
             preview_panel.into_any_element(),
             list_colors,
+            self.current_main_menu_theme,
         );
 
         crate::components::main_view_chrome::render_main_view_chrome_footer_flush(

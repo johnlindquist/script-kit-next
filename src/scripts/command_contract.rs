@@ -272,6 +272,14 @@ impl MainMenuContentDigest {
             BuiltInFeature::BackgroundEffectNext => self.text("BackgroundEffectNext"),
             BuiltInFeature::BackgroundEffectPrevious => self.text("BackgroundEffectPrevious"),
             BuiltInFeature::BackgroundEffectOff => self.text("BackgroundEffectOff"),
+            BuiltInFeature::AnimationPresets => self.text("AnimationPresets"),
+            BuiltInFeature::AnimationNext => self.text("AnimationNext"),
+            BuiltInFeature::AnimationPrevious => self.text("AnimationPrevious"),
+            BuiltInFeature::AnimationReplay => self.text("AnimationReplay"),
+            BuiltInFeature::AnimationPreset(preset) => {
+                self.text("AnimationPreset");
+                self.text(preset.id());
+            }
             BuiltInFeature::NewFlow => self.text("NewFlow"),
             BuiltInFeature::AiChatVariant(value) => {
                 self.text("AiChatVariant");

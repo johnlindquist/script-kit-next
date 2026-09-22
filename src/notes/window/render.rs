@@ -62,10 +62,33 @@ impl NotesApp {
         // and the next keystroke doesn't overwrite them.
         if let Some(merged) = self.pending_day_editor_reconcile.take() {
             self.editor_state.update(cx, |state, cx| {
-                let len = merged.len();
-                state.set_value(&merged, window, cx);
-                state.set_selection(len, len, window, cx);
+                state.set_value_preserving_selection_and_scroll(&merged, window, cx);
             });
+        }
+
+        if let Some((message, kind)) = self.action_feedback.take() {
+            use crate::components::document_status::{
+                DocumentFeedbackKind, DocumentSaveFailureNotification,
+            };
+            if kind == DocumentFeedbackKind::SaveRecovered {
+                window.remove_notification::<DocumentSaveFailureNotification>(cx);
+            }
+            let notification = if kind.is_error() {
+                gpui_component::notification::Notification::error(message).autohide(false)
+            } else {
+                gpui_component::notification::Notification::info(message)
+                    .autohide_after(Duration::from_millis(ACTION_FEEDBACK_MS))
+            };
+            let notification = if kind == DocumentFeedbackKind::SaveFailure {
+                notification.id::<DocumentSaveFailureNotification>()
+            } else {
+                notification.id1::<NotesApp>(if kind.is_error() {
+                    "notes-action-error"
+                } else {
+                    "notes-action-feedback"
+                })
+            };
+            window.push_notification(notification, cx);
         }
     }
 }

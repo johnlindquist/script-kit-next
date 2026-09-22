@@ -8,34 +8,14 @@ mod tests {
         displayed_action_keybinding_specs, first_selectable_index, is_destructive_action,
         last_selectable_index, matching_action_id_for_keystroke,
         matching_filtered_action_id_for_keystroke, resolve_visible_action_shortcut,
-        resolved_actions_dialog_row_metrics, selectable_index_at_or_after,
-        selectable_index_at_or_before, should_render_section_separator,
-        visible_action_shortcut_bindings, ActionsDialog, ActionsDialogChromeAudit,
-        ActionsDialogRuntimeAudit, GroupedActionItem, MainListDisplayedActionShortcut,
+        selectable_index_at_or_after, selectable_index_at_or_before,
+        should_render_section_separator, visible_action_shortcut_bindings, ActionsDialog,
+        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit, GroupedActionItem,
+        MainListDisplayedActionShortcut,
     };
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
     use crate::menu_syntax::{MenuSyntaxAction, MenuSyntaxActionKind};
     use crate::menu_syntax_actions::{PowerSyntaxActionSection, SectionMode};
-
-    #[test]
-    fn actions_marker_centers_in_compact_host_without_changing_list_item_content_geometry() {
-        let popup = crate::designs::base_actions_popup_theme();
-        let main = crate::designs::MainMenuThemeVariant::InfoBarBase.def();
-        let baseline = crate::list_item::ListItemMetricsOverride::from_main_menu_def(main);
-        let metrics = resolved_actions_dialog_row_metrics(&popup, main);
-        let marker = crate::list_item::list_item_selection_marker_geometry(metrics, true)
-            .expect("selected Actions row has a marker");
-
-        assert_eq!(metrics.item_height, baseline.item_height);
-        assert_eq!(metrics.row_inner_padding_x, baseline.row_inner_padding_x);
-        assert_eq!(metrics.icon_text_gap, baseline.icon_text_gap);
-        assert_eq!(metrics.accessory_gap, baseline.accessory_gap);
-        assert_eq!(
-            metrics.row_selected_marker_center_height,
-            popup.list.row_height
-        );
-        assert_eq!(marker.top, (popup.list.row_height - marker.height) / 2.0);
-    }
 
     #[test]
     fn selectable_index_helpers_skip_section_headers_directionally() {
@@ -1178,16 +1158,28 @@ mod owned_surface_revision_tests {
     #[gpui::test]
     fn semantic_ids_and_revisions_follow_real_selection(cx: &mut gpui::TestAppContext) {
         use gpui::AppContext as _;
-        let entity = cx.new(|cx| ActionsDialog::with_config(cx.focus_handle(), Arc::new(|_| {}), vec![
-            Action::new("first", "First", None, ActionCategory::GlobalOps),
-            Action::new("second", "Second", None, ActionCategory::GlobalOps),
-        ], Arc::new(theme::Theme::default()), ActionsDialogConfig::default()));
+        let entity = cx.new(|cx| {
+            ActionsDialog::with_config(
+                cx.focus_handle(),
+                Arc::new(|_| {}),
+                vec![
+                    Action::new("first", "First", None, ActionCategory::GlobalOps),
+                    Action::new("second", "Second", None, ActionCategory::GlobalOps),
+                ],
+                Arc::new(theme::Theme::default()),
+                ActionsDialogConfig::default(),
+            )
+        });
         entity.update(cx, |dialog, cx| {
             let original = dialog.revision_facts();
             assert_eq!(dialog.revision_facts(), original);
-            assert!(dialog.select_action_by_semantic_id("choice:99:second", cx).is_none());
+            assert!(dialog
+                .select_action_by_semantic_id("choice:99:second", cx)
+                .is_none());
             assert_eq!(dialog.revision_facts(), original);
-            assert!(dialog.select_action_by_semantic_id("choice:1:second", cx).is_some());
+            assert!(dialog
+                .select_action_by_semantic_id("choice:1:second", cx)
+                .is_some());
             assert_eq!(dialog.get_selected_action_id().as_deref(), Some("second"));
             assert!(dialog.revision_facts().0 > original.0);
             assert_eq!(dialog.revision_facts().1, original.1);

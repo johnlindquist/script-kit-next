@@ -451,6 +451,7 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
         watcher: parse_optional_field(object, "watcher", correlation_id),
         layout: parse_optional_field(object, "layout", correlation_id),
         theme: parse_optional_field(object, "theme", correlation_id),
+        animation: parse_optional_field(object, "animation", correlation_id),
         designs: parse_optional_field(object, "designs", correlation_id),
         dictation: parse_optional_field(object, "dictation", correlation_id),
         ai: parse_optional_field(object, "ai", correlation_id),
@@ -509,6 +510,7 @@ fn recover_user_preferences_fields(value: Value, correlation_id: &str) -> Script
     ScriptKitUserPreferences {
         layout: parse_required_field(object, "layout", defaults.layout, correlation_id),
         theme: parse_required_field(object, "theme", defaults.theme, correlation_id),
+        animation: parse_required_field(object, "animation", defaults.animation, correlation_id),
         dictation: parse_required_field(object, "dictation", defaults.dictation, correlation_id),
         ai: parse_required_field(object, "ai", defaults.ai, correlation_id),
         window_management: parse_required_field(
@@ -551,6 +553,7 @@ fn preferences_from_config(config: &Config) -> ScriptKitUserPreferences {
     ScriptKitUserPreferences {
         layout: config.layout.clone().unwrap_or_default(),
         theme: config.get_theme_selection(),
+        animation: config.animation.unwrap_or_default(),
         dictation: config.get_dictation_preferences(),
         ai: config.get_ai_preferences(),
         window_management: config.get_window_management_preferences(),
@@ -568,6 +571,9 @@ fn overlay_legacy_preferences_if_missing(
     }
     if config.theme.is_none() {
         prefs.theme = legacy.theme;
+    }
+    if config.animation.is_none() {
+        prefs.animation = legacy.animation;
     }
     if config.dictation.is_none() {
         prefs.dictation = legacy.dictation;
@@ -660,7 +666,14 @@ fn cleanup_legacy_settings_file_if_safe(correlation_id: &str) {
         return;
     };
 
-    let known_keys = ["layout", "theme", "dictation", "ai", "windowManagement"];
+    let known_keys = [
+        "layout",
+        "theme",
+        "animation",
+        "dictation",
+        "ai",
+        "windowManagement",
+    ];
     if object.keys().all(|key| known_keys.contains(&key.as_str())) {
         if let Err(error) = fs::remove_file(&path) {
             warn!(
@@ -685,12 +698,13 @@ fn write_preference_group<T: Serialize + PartialEq>(
     current_exists: bool,
     value: &T,
     default_value: &T,
+    write_default_value: bool,
 ) -> anyhow::Result<()> {
-    if value == default_value && !current_exists {
+    if !write_default_value && value == default_value && !current_exists {
         return Ok(());
     }
 
-    let property = if value == default_value {
+    let property = if !write_default_value && value == default_value {
         super::editor::ConfigProperty::new(property_name, "undefined")
     } else {
         super::editor::ConfigProperty::new(
@@ -730,6 +744,29 @@ pub(crate) fn with_user_preference_write_lock<T>(
     operation()
 }
 
+/// Persist only the animation group under the shared preference write lock.
+/// Re-reading inside the lock avoids overwriting concurrent edits to other groups.
+pub fn save_animation_preferences(
+    animation: &super::types::AnimationPreferences,
+) -> anyhow::Result<()> {
+    with_user_preference_write_lock(|| {
+        let config_path = config_ts_path();
+        let current = if crate::runtime_policy::is_owned_evaluation() {
+            load_static_config(&config_path)?
+        } else {
+            load_config()
+        };
+        write_preference_group(
+            &config_path,
+            "animation",
+            current.animation.is_some(),
+            animation,
+            &super::types::AnimationPreferences::default(),
+            true,
+        )
+    })
+}
+
 /// Persist runtime preference groups back into `config.ts`.
 pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result<()> {
     with_user_preference_write_lock(|| save_user_preferences_locked(prefs))
@@ -749,6 +786,7 @@ fn save_user_preferences_locked(prefs: &ScriptKitUserPreferences) -> anyhow::Res
         current.layout.is_some(),
         &prefs.layout,
         &super::types::LayoutConfig::default(),
+        false,
     )?;
     write_preference_group(
         &config_path,
@@ -756,6 +794,15 @@ fn save_user_preferences_locked(prefs: &ScriptKitUserPreferences) -> anyhow::Res
         current.theme.is_some(),
         &prefs.theme,
         &super::types::ThemeSelectionPreferences::default(),
+        false,
+    )?;
+    write_preference_group(
+        &config_path,
+        "animation",
+        current.animation.is_some(),
+        &prefs.animation,
+        &super::types::AnimationPreferences::default(),
+        true,
     )?;
     write_preference_group(
         &config_path,
@@ -763,6 +810,7 @@ fn save_user_preferences_locked(prefs: &ScriptKitUserPreferences) -> anyhow::Res
         current.dictation.is_some(),
         &prefs.dictation,
         &super::types::DictationPreferences::default(),
+        false,
     )?;
     write_preference_group(
         &config_path,
@@ -770,6 +818,7 @@ fn save_user_preferences_locked(prefs: &ScriptKitUserPreferences) -> anyhow::Res
         current.ai.is_some(),
         &prefs.ai,
         &super::types::AiPreferences::default(),
+        false,
     )?;
     write_preference_group(
         &config_path,
@@ -777,6 +826,7 @@ fn save_user_preferences_locked(prefs: &ScriptKitUserPreferences) -> anyhow::Res
         current.window_management.is_some(),
         &prefs.window_management,
         &super::types::WindowManagementPreferences::default(),
+        false,
     )?;
     write_preference_group(
         &config_path,
@@ -784,6 +834,7 @@ fn save_user_preferences_locked(prefs: &ScriptKitUserPreferences) -> anyhow::Res
         current.effects.is_some(),
         &prefs.effects,
         &super::types::EffectsPreferences::default(),
+        false,
     )?;
 
     let correlation_id = format!("config_prefs_save:{}", uuid::Uuid::new_v4());
@@ -1469,5 +1520,61 @@ mod tests {
         crate::atomic_file::write_private_atomic(&path,
             b"export default { theme: (() => { throw new Error('must not execute'); })() } satisfies Config;").unwrap();
         assert!(load_static_config(&path).is_err());
+    }
+    #[test]
+    fn animation_selection_survives_reload_without_replacing_other_preferences() {
+        let _lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        struct RestoreSkPath(Option<std::ffi::OsString>);
+        impl Drop for RestoreSkPath {
+            fn drop(&mut self) {
+                match &self.0 {
+                    Some(path) => std::env::set_var(crate::setup::SK_PATH_ENV, path),
+                    None => std::env::remove_var(crate::setup::SK_PATH_ENV),
+                }
+            }
+        }
+        let directory = tempfile::tempdir().expect("temporary user configuration");
+        let path = directory.path().join("config.ts");
+        crate::atomic_file::write_private_atomic(
+            &path,
+            br#"export default {
+            hotkey: { modifiers: ['meta'], key: 'Semicolon' },
+            layout: { standardHeight: 640, maxHeight: 920 },
+            theme: { presetId: 'nord' },
+            effects: { background: 'aurora', intensity: 0.7 },
+            commands: { 'builtin/notes': { shortcut: { modifiers: ['meta', 'shift'], key: 'KeyN' } } }
+        };"#,
+        )
+        .expect("seed user preferences");
+        crate::atomic_file::write_private_atomic(
+            &directory.path().join("settings.json"),
+            br#"{"animation":{"preset":"previous_calibration"},"dictation":{"selectedDeviceId":"kept-mic"}}"#,
+        ).expect("seed unrelated legacy preferences and an older animation choice");
+        let _restore = RestoreSkPath(std::env::var_os(crate::setup::SK_PATH_ENV));
+        std::env::set_var(crate::setup::SK_PATH_ENV, directory.path());
+        let mut expected = serde_json::to_value(load_static_config(&path).unwrap()).unwrap();
+        expected.as_object_mut().unwrap().remove("animation");
+        for preset in [
+            crate::theme::animation::MainWindowAnimationPreset::PreviousCalibration,
+            crate::theme::animation::MainWindowAnimationPreset::Coherent,
+        ] {
+            super::save_animation_preferences(&crate::config::AnimationPreferences { preset })
+                .expect("save chosen entry animation");
+            let reloaded = load_user_preferences();
+            assert_eq!(reloaded.animation.preset, preset);
+            assert_eq!(
+                reloaded.dictation.selected_device_id.as_deref(),
+                Some("kept-mic")
+            );
+            let mut actual = serde_json::to_value(load_static_config(&path).unwrap()).unwrap();
+            actual.as_object_mut().unwrap().remove("animation");
+            assert_eq!(
+                actual, expected,
+                "animation selection changed unrelated settings"
+            );
+        }
     }
 }

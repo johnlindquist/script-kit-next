@@ -13,12 +13,27 @@ native_workers="${CMAKE_BUILD_PARALLEL_LEVEL:-1}"
 export CMAKE_BUILD_PARALLEL_LEVEL=1
 PI_AGENT_RUST_URL="${PI_AGENT_RUST_URL:-https://github.com/Dicklesworthstone/pi_agent_rust.git}"
 PI_AGENT_RUST_REF="3d1a3950c16ffdb10cd81780b26921c75c180770"
-CACHE_ROOT="${PI_AGENT_RUST_CACHE_DIR:-${REPO_ROOT}/target/pi-sidecar/cache}"
+if [[ -n "${SCRIPT_KIT_DEV_STORAGE_ROOT:-}" ]]; then
+  _dev_storage_exports="$(python3 -B "${REPO_ROOT}/scripts/agentic/dev-storage.py" --repo "${REPO_ROOT}" prepare --shell)" || exit $?
+  eval "${_dev_storage_exports}"
+  unset _dev_storage_exports
+  if [[ -z "${SCRIPT_KIT_DEV_STORAGE_ROOT:-}" || -z "${SCRIPT_KIT_DEV_PI_DIR:-}" || -z "${PI_AGENT_RUST_CACHE_DIR:-}" || -z "${PI_AGENT_RUST_TARGET_DIR:-}" ]]; then
+    echo 'pi_sidecar helper prepare did not export required storage paths' >&2
+    exit 78
+  fi
+  CACHE_ROOT="${PI_AGENT_RUST_CACHE_DIR}"
+  PI_TARGET_DIR="${PI_AGENT_RUST_TARGET_DIR}"
+  DEST_DIR="${SCRIPT_KIT_DEV_PI_DIR}"
+  lease="${SCRIPT_KIT_DEV_STORAGE_ROOT}/.locks/pi-sidecar-source.lock"
+else
+  CACHE_ROOT="${PI_AGENT_RUST_CACHE_DIR:-${REPO_ROOT}/target/pi-sidecar/cache}"
+  PI_TARGET_DIR="${PI_AGENT_RUST_TARGET_DIR:-${CACHE_ROOT}/cargo-target}"
+  DEST_DIR="${REPO_ROOT}/target/pi-sidecar"
+  lease="${REPO_ROOT}/target-agent/.locks/pi-sidecar-source.lock"
+fi
 OBJECT_CACHE="${CACHE_ROOT}/pi_agent_rust.git"
 SOURCE_DIR="${CACHE_ROOT}/source-${PI_AGENT_RUST_REF}"
-PI_TARGET_DIR="${PI_AGENT_RUST_TARGET_DIR:-${CACHE_ROOT}/cargo-target}"
 PI_BIN="${PI_TARGET_DIR}/release/pi"
-DEST_DIR="${REPO_ROOT}/target/pi-sidecar"
 DEST="${DEST_DIR}/pi"
 
 log() { echo "pi_sidecar $*"; }
@@ -32,7 +47,6 @@ for path in "$CACHE_ROOT" "$OBJECT_CACHE" "$SOURCE_DIR" "$PI_TARGET_DIR" "$DEST_
   [[ ! -L "$path" ]] || { echo 'pi_sidecar refuses symlink ownership' >&2; exit 78; }
 done
 source "${REPO_ROOT}/scripts/agentic/cargo-cache-locks.sh"
-lease="${REPO_ROOT}/target-agent/.locks/pi-sidecar-source.lock"
 generation="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 cargo_cache_lease acquire "$lease" "$$" "$generation" 600000 >/dev/null
 source_tmp=""; candidate=""
@@ -85,8 +99,17 @@ log "build source=${SOURCE_DIR} ref=${actual_ref} target_dir=${PI_TARGET_DIR}"
 if [[ "${SCRIPT_KIT_NONINTERACTIVE:-0}" == "1" ]]; then
   bash "${REPO_ROOT}/scripts/agentic/agent-cargo.sh" pi-sidecar-build
 else
-  CARGO_TARGET_DIR="${PI_TARGET_DIR}" cargo build \
-    --manifest-path "${SOURCE_DIR}/Cargo.toml" --locked --release --bin pi
+  if [[ -n "${SCRIPT_KIT_DEV_STORAGE_ROOT:-}" ]]; then
+    # Inherited CARGO_TARGET_DIR from human/helper is the app target.
+    # Helper already refuses conflicting Cargo storage flags.
+    CARGO_TARGET_DIR="${PI_AGENT_RUST_TARGET_DIR}" cargo build \
+      --manifest-path "${SOURCE_DIR}/Cargo.toml" \
+      --target-dir "${PI_AGENT_RUST_TARGET_DIR}" \
+      --locked --release --bin pi
+  else
+    CARGO_TARGET_DIR="${PI_TARGET_DIR}" cargo build \
+      --manifest-path "${SOURCE_DIR}/Cargo.toml" --locked --release --bin pi
+  fi
 fi
 
 # Probe a candidate in the destination directory, then use same-directory

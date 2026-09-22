@@ -42,7 +42,7 @@ export const SPOTLIGHT_SYNC_CONTRACT = {
     minimumDistinctWidths: 5,
     // 2026-08-13 soft-materialize retune: the first visible frame is the
     // 103.05% first photon; a timestamped prefix frame must converge to the
-    // preserved 101.2% tail start near 18ms, before the 44ms material onset
+    // preserved 101.2% tail start near 36ms, before the 88ms material onset
     // completes.
     firstVisibleWidthScale: MAIN_GLASS_ENTRY_EXPECTATION.firstVisibleWidthScale,
     tailStartWidthScale: MAIN_GLASS_ENTRY_EXPECTATION.startWidthScale,
@@ -736,7 +736,7 @@ function gradeEntryGeometry(failures: SpotlightFailure[], scenario: JsonRecord) 
       ? [{ row, elapsedMs }]
       : [];
   });
-  // Damage-driven ~60Hz capture samples the 18ms convergence ease sparsely
+  // Damage-driven ~60Hz capture samples the convergence ease sparsely
   // and with jitter: the prefix may hold only the wide photon, a mid-ease
   // frame, or a converged frame depending on where damage lands. Convergence
   // is therefore proven by EITHER a converged frame inside the material
@@ -821,7 +821,7 @@ function gradeEntryGeometry(failures: SpotlightFailure[], scenario: JsonRecord) 
   const timing = [
     ["entry.timing.firstVisibleToSettledMs", total, SPOTLIGHT_SYNC_CONTRACT.entry.totalMs,
       SPOTLIGHT_SYNC_CONTRACT.entry.totalToleranceMs, final.frame,
-      "entry rendered duration diverged from the locked 44ms onset plus 105ms visible tail"],
+      "entry rendered duration diverged from the locked 88ms onset plus 210ms visible tail"],
     ["entry.timing.firstVisibleToExtremeMs", extremeAt, SPOTLIGHT_SYNC_CONTRACT.entry.extremeAtMs,
       SPOTLIGHT_SYNC_CONTRACT.entry.extremeToleranceMs, extreme.frame,
       "entry compression turn occurred outside the locked onset-plus-compression window"],
@@ -1034,7 +1034,7 @@ function validateColorCoverage(
       // 0.0178 → 0.003 purely from seam sampling. The median gate remains the
       // washout catch on every comparable frame EXCEPT materializing entry
       // frames: since the 2026-08-13 capsule material parity retune, every
-      // capsule runs the main backdrop's Clear→Regular ramp across the 44ms
+      // capsule runs the main backdrop's Clear→Regular ramp across the 88ms
       // prefix, so low boundary contrast while the window alpha is still at
       // the 0.85 prefix floor is the AUTHORIZED bloom, not washout (measured:
       // left-info median 0.0123 at entry seq 2 on a healthy build). The

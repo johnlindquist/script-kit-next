@@ -304,6 +304,7 @@ fn test_thread_with_profile(
                 manual_max: 2,
             },
         ),
+        pending_brain_decision: None,
         context_resolution_id: 0,
         pasted_image_preparations: std::collections::HashMap::new(),
         pending_permission: None,
@@ -566,7 +567,11 @@ fn brain_profile_prepends_recall_and_records_ask_signal() {
 
     let prepared = thread.prepare_turn_blocks_with_receipt_using(
         "What is the handoff port?",
-        |_| Some("Brain recall\n- [Note] The handoff port is 49217.".to_string()),
+        |_| {
+            Ok(Some(
+                "Brain recall\n- [Note] The handoff port is 49217.".to_string(),
+            ))
+        },
         |_| signal_calls.set(signal_calls.get() + 1),
     );
 
@@ -598,6 +603,242 @@ fn non_brain_profile_does_not_call_recall_or_record_ask_signal() {
 }
 
 #[test]
+fn brain_retrieval_failure_is_distinct_from_successful_empty_recall() {
+    let mut thread = test_thread_with_profile(
+        crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID,
+        Vec::new(),
+        false,
+    );
+    let empty =
+        thread.prepare_turn_blocks_with_receipt_using("remember this", |_| Ok(None), |_| {});
+    assert!(empty.brain_failure.is_none());
+    let failed = thread.prepare_turn_blocks_with_receipt_using(
+        "remember this",
+        |_| Err(anyhow::anyhow!("private fixture retrieval error")),
+        |_| {},
+    );
+    let failure = failed
+        .brain_failure
+        .expect("retrieval failure must survive preparation");
+    assert!(!failure
+        .primary_message()
+        .contains("private fixture retrieval error"));
+}
+
+#[gpui::test]
+fn held_memory_request_survives_a_rejected_start_and_preserves_an_edited_draft(
+    cx: &mut gpui::TestAppContext,
+) {
+    let entity = cx.new(|_| {
+        test_thread_with_profile(
+            crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID,
+            Vec::new(),
+            false,
+        )
+    });
+    entity.update(cx, |thread, cx| {
+        thread.input.set_text("original held question");
+        let prepared = thread.prepare_turn_blocks_with_receipt_using(
+            "original held question",
+            |_| Err(anyhow::anyhow!("fixture memory is unavailable")),
+            |_| {},
+        );
+        thread.pending_brain_decision = Some(PendingBrainDecision {
+            display_text: "original held question".into(),
+            prepared,
+            context_job: None,
+            clear_composer: true,
+            composer_revision: thread.input.revision(),
+            queued_message: None,
+        });
+        thread.queue_paused = true;
+        thread.input.set_text("edited draft for later");
+        let generation = thread.context_resolution_id;
+        assert_eq!(
+            thread.held_brain_request(generation).unwrap().text,
+            "original held question"
+        );
+        assert!(thread
+            .held_brain_request(generation.wrapping_add(1))
+            .is_none());
+        assert!(!thread.resolve_brain_decision(false, generation.wrapping_add(1), cx));
+        assert!(thread.pending_brain_decision.is_some());
+        assert!(
+            !thread.resolve_brain_decision(false, generation, cx),
+            "fixture provider rejects the turn"
+        );
+        let held = thread.pending_brain_decision.as_ref().unwrap();
+        assert_eq!(held.display_text, "original held question");
+        assert!(!held.clear_composer);
+        assert_eq!(thread.input.text(), "edited draft for later");
+        thread.reset_pending_context_for_new_entry_intent();
+        assert!(thread.pending_brain_decision.is_none());
+        assert_ne!(thread.context_resolution_id, generation);
+    });
+}
+
+#[gpui::test]
+fn rejected_queue_resume_preserves_the_message_identity_and_pause(cx: &mut gpui::TestAppContext) {
+    let entity = cx.new(|_| test_thread(Vec::new(), true));
+    entity.update(cx, |thread, cx| {
+        let message = AgentChatQueuedMessage::new("keep this request".into(), Vec::new());
+        let id = message.id.clone();
+        thread.queued_messages.push_back(message);
+        thread.queue_paused = true;
+        assert!(thread.set_queue_paused(false, cx).is_err());
+        assert!(thread.queue_paused);
+        assert_eq!(thread.queued_messages.len(), 1);
+        assert_eq!(thread.queued_messages[0].id, id);
+        assert_eq!(thread.queued_messages[0].text, "keep this request");
+    });
+}
+
+#[gpui::test]
+async fn rejected_queue_preparation_restores_frozen_context_and_provider_failure(
+    cx: &mut gpui::TestAppContext,
+) {
+    let entity = cx.new(|_| test_thread(Vec::new(), true));
+    let (frozen, expected_code) = entity.update(cx, |thread, _| {
+        thread.input.set_text("question with frozen context");
+        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::TextBlock {
+            label: "Frozen text".into(),
+            source: "fixture".into(),
+            text: "frozen attachment body".into(),
+            mime_type: None,
+        });
+        thread.queue_current_composer("question with frozen context".into());
+        thread.queue_paused = true;
+        let code = thread
+            .connection
+            .start_turn(thread.turn_request(Vec::new()))
+            .unwrap_err()
+            .failure
+            .failure
+            .code;
+        (thread.queued_messages[0].clone(), code)
+    });
+    entity.update(cx, |thread, cx| {
+        assert!(thread.set_queue_paused(false, cx).is_ok());
+        assert!(!thread.queue_paused);
+    });
+    cx.condition(&entity, |thread, _| thread.queue_paused).await;
+    entity.update(cx, |thread, _| {
+        assert_eq!(thread.queued_messages.len(), 1);
+        assert_eq!(thread.queued_messages[0].id, frozen.id);
+        assert_eq!(
+            thread.queued_messages[0].context_items[0].id,
+            frozen.context_items[0].id
+        );
+        assert_eq!(
+            thread.queued_messages[0].context_items[0].part,
+            frozen.context_items[0].part
+        );
+        let AiPhase::AwaitingRecovery { failure, .. } = &thread.reliability_state.phase else {
+            panic!("provider rejection must retain its recovery state");
+        };
+        assert_eq!(
+            failure.code, expected_code,
+            "runtime failure must not be replaced by a generic spawn failure"
+        );
+    });
+    entity.update(cx, |thread, cx| {
+        assert!(thread.set_queue_paused(false, cx).is_ok());
+        assert!(
+            !thread.queue_paused,
+            "explicit Resume must dispatch again after a rejected start"
+        );
+    });
+    cx.condition(&entity, |thread, _| thread.queue_paused).await;
+    entity.update(cx, |thread, _| {
+        assert_eq!(thread.queued_messages.len(), 1);
+        assert_eq!(thread.queued_messages[0].id, frozen.id);
+    });
+}
+
+#[gpui::test]
+fn queue_element_projection_exposes_frozen_context_and_retires_dispatched_controls(
+    cx: &mut gpui::TestAppContext,
+) {
+    let thread = cx.new(|_| test_thread(Vec::new(), true));
+    let original_id = thread.update(cx, |thread, _| {
+        thread.input.set_text("original queued question");
+        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::TextBlock {
+            label: "Frozen text".into(),
+            source: "fixture".into(),
+            text: "frozen body".into(),
+            mime_type: None,
+        });
+        thread.queue_current_composer("original queued question".into());
+        let id = thread.queued_messages[0].id.clone();
+        thread
+            .queued_messages
+            .push_back(AgentChatQueuedMessage::new(
+                "next question".into(),
+                Vec::new(),
+            ));
+        id
+    });
+    let view = cx.new(|cx| crate::ai::agent_chat::ui::AgentChatView::new(thread.clone(), cx));
+    let elements = cx.update(|app| {
+        crate::windows::automation_surface_collector::collect_agent_chat_conversation_elements(
+            &view, app,
+        )
+    });
+    let find_action = |operation: &str| {
+        elements
+            .iter()
+            .find(|element| {
+                element
+                    .semantic_id
+                    .strip_prefix("agent_chat_queue:")
+                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+                    .is_some_and(|payload| {
+                        payload["operation"] == operation && payload["target"] == original_id
+                    })
+            })
+            .unwrap()
+    };
+    let inspect = find_action("inspect");
+    assert_eq!(inspect.selectable, Some(true));
+    assert!(inspect.value.as_deref().unwrap().contains("Frozen text"));
+    let old_remove = find_action("remove").semantic_id.clone();
+    thread.update(cx, |thread, cx| {
+        thread.queued_messages.pop_front();
+        assert!(!thread.remove_queued_message(&original_id, cx));
+        assert_eq!(thread.queued_messages[0].text, "next question");
+    });
+    let updated = cx.update(|app| {
+        crate::windows::automation_surface_collector::collect_agent_chat_conversation_elements(
+            &view, app,
+        )
+    });
+    assert!(!updated
+        .iter()
+        .any(|element| element.semantic_id == old_remove));
+}
+
+#[gpui::test]
+fn queued_identity_survives_dispatch_and_stale_clear_is_rejected(cx: &mut gpui::TestAppContext) {
+    let entity = cx.new(|_| test_thread(Vec::new(), true));
+    entity.update(cx, |thread, cx| {
+        for text in ["first", "second", "third"] {
+            thread
+                .queued_messages
+                .push_back(AgentChatQueuedMessage::new(text.to_string(), Vec::new()));
+        }
+        let second = thread.queued_messages[1].id.clone();
+        let third = thread.queued_messages[2].id.clone();
+        let revision = thread.queue_revision();
+        thread.queued_messages.pop_front();
+        assert!(thread.remove_queued_message(&second, cx));
+        assert_eq!(thread.queued_messages[0].id, third);
+        assert!(!thread.remove_queued_message(&second, cx));
+        assert!(!thread.clear_queued_messages(&revision, cx));
+        assert_eq!(thread.queued_messages.len(), 1);
+    });
+}
+
+#[test]
 fn brain_recall_sits_before_pending_context_and_user_request() {
     let mut thread = test_thread_with_profile(
         crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID,
@@ -607,7 +848,11 @@ fn brain_recall_sits_before_pending_context_and_user_request() {
 
     let prepared = thread.prepare_turn_blocks_with_receipt_using(
         "Summarize this",
-        |_| Some("Brain recall\n- [Day page] remembered context".to_string()),
+        |_| {
+            Ok(Some(
+                "Brain recall\n- [Day page] remembered context".to_string(),
+            ))
+        },
         |_| {},
     );
 
@@ -1228,7 +1473,6 @@ fn submit_while_streaming_queues_and_clears_composer() {
     });
 
     let text = thread.input.text().trim().to_string();
-    thread.resume_queue_for_manual_submit();
     thread.queue_current_composer(text);
 
     assert_eq!(thread.queued_messages().len(), 1);
@@ -1287,13 +1531,12 @@ fn paused_queue_does_not_auto_send_on_turn_finished() {
 }
 
 #[test]
-fn manual_submit_clears_queue_pause() {
+fn adding_another_message_keeps_queue_paused() {
     let mut thread = test_thread(Vec::new(), true);
     thread.queue_paused = true;
 
-    thread.resume_queue_for_manual_submit();
-
-    assert!(!thread.queue_paused());
+    thread.queue_current_composer("another message".to_string());
+    assert!(thread.queue_paused());
 }
 
 #[test]
@@ -2356,8 +2599,11 @@ fn reset_pending_context_for_new_entry_intent_preserves_messages_but_clears_cont
     thread.context_bootstrap_state = AgentChatContextBootstrapState::Preparing;
     thread.context_bootstrap_note = Some("Capturing Current Context…".into());
     thread.queued_submit_while_bootstrapping = true;
+    let previous_generation = thread.context_resolution_id;
 
     thread.reset_pending_context_for_new_entry_intent();
+    assert_ne!(thread.context_resolution_id, previous_generation);
+    assert!(thread.pending_brain_decision.is_none());
 
     assert_eq!(thread.messages.len(), 1, "transcript history should remain");
     assert!(

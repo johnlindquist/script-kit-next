@@ -202,22 +202,8 @@ pub struct MainMenuRowTokens {
     pub name_desc_gap: f32,
     pub icon_text_gap: f32,
     pub accessory_gap: f32,
-    pub selected_border_width: f32,
-    pub selected_border_alpha: u32,
     pub selected_fill_alpha: u32,
     pub hover_fill_alpha: u32,
-    pub selected_name_underline_width: f32,
-    pub selected_name_underline_padding_bottom: f32,
-    /// Width of the launcher-family selected-row marker overlay.
-    pub selected_marker_width: f32,
-    /// Height of the launcher-family selected-row marker overlay.
-    pub selected_marker_height: f32,
-    /// Horizontal inset from the selected row surface's left edge.
-    pub selected_marker_inset_x: f32,
-    /// Radius of the launcher-family selected-row marker overlay.
-    pub selected_marker_radius: f32,
-    /// Accent alpha of the launcher-family selected-row marker overlay.
-    pub selected_marker_alpha: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -416,11 +402,6 @@ pub struct MainMenuGeometrySignature {
     pub row_height: u32,
     pub row_padding_x: u32,
     pub row_radius: u32,
-    pub selected_marker_width: u32,
-    pub selected_marker_height: u32,
-    pub selected_marker_inset_x: u32,
-    pub selected_marker_radius: u32,
-    pub selected_marker_alpha: u32,
     pub icon_container_size: u32,
     pub icon_tile_size: u32,
     pub name_font_size: u32,
@@ -676,11 +657,6 @@ impl MainMenuThemeVariant {
             row_height: q(def.list.item_height),
             row_padding_x: q(def.row.inner_padding_x),
             row_radius: q(def.row.radius),
-            selected_marker_width: q(def.row.selected_marker_width),
-            selected_marker_height: q(def.row.selected_marker_height),
-            selected_marker_inset_x: q(def.row.selected_marker_inset_x),
-            selected_marker_radius: q(def.row.selected_marker_radius),
-            selected_marker_alpha: def.row.selected_marker_alpha,
             icon_container_size: q(def.icon.container_size),
             icon_tile_size: q(def.icon.tile_size),
             name_font_size: q(def.typography.name_font_size),
@@ -740,8 +716,8 @@ fn header_info_bar_tokens(
     }
 }
 
-fn main_menu_row_tokens(row_kind: MainMenuRowKind) -> MainMenuRowTokens {
-    let mut row = MainMenuRowTokens {
+fn main_menu_row_tokens() -> MainMenuRowTokens {
+    MainMenuRowTokens {
         outer_padding_x: 4.0,
         outer_padding_y: 0.0,
         inner_padding_x: 14.0,
@@ -750,25 +726,9 @@ fn main_menu_row_tokens(row_kind: MainMenuRowKind) -> MainMenuRowTokens {
         name_desc_gap: (40.0_f32 / 18.0).clamp(1.5, 3.5),
         icon_text_gap: (20.0_f32 * 0.42).clamp(7.0, 12.0),
         accessory_gap: (14.0_f32 * 0.45).clamp(5.0, 9.0),
-        selected_border_width: 0.0,
-        selected_border_alpha: 0x00,
         selected_fill_alpha: 0x20,
         hover_fill_alpha: 0x12,
-        selected_name_underline_width: 0.0,
-        selected_name_underline_padding_bottom: 0.0,
-        selected_marker_width: 2.0,
-        selected_marker_height: 16.0,
-        selected_marker_inset_x: 6.0,
-        selected_marker_radius: 1.0,
-        selected_marker_alpha: 0xFF,
-    };
-
-    if matches!(row_kind, MainMenuRowKind::CarbonNeon) {
-        row.selected_name_underline_width = 2.0;
-        row.selected_name_underline_padding_bottom = 1.0;
     }
-
-    row
 }
 
 fn base_main_menu_theme_def(
@@ -921,7 +881,7 @@ fn base_main_menu_theme_def(
             inline_calc_selected_hint_alpha: 0xD9,
             inline_calc_hint_alpha: 0x8C,
         },
-        row: main_menu_row_tokens(row_kind),
+        row: main_menu_row_tokens(),
         icon: MainMenuIconTokens {
             container_size: 20.0,
             svg_size: 16.0,
@@ -1028,18 +988,6 @@ mod tests {
                 base,
                 "{theme:?} changed base geometry"
             );
-        }
-    }
-
-    #[test]
-    fn every_variant_uses_the_approved_launcher_selection_marker() {
-        for theme in MainMenuThemeVariant::all() {
-            let marker = theme.def().row;
-            assert_eq!(marker.selected_marker_width, 2.0, "{theme:?} width");
-            assert_eq!(marker.selected_marker_height, 16.0, "{theme:?} height");
-            assert_eq!(marker.selected_marker_inset_x, 6.0, "{theme:?} inset");
-            assert_eq!(marker.selected_marker_radius, 1.0, "{theme:?} radius");
-            assert_eq!(marker.selected_marker_alpha, 0xFF, "{theme:?} alpha");
         }
     }
 

@@ -271,7 +271,7 @@ fn brain_search_with_lexical_mode(
         }
     }
     let docs = store::get_docs_by_ids(&candidate_ids)?;
-    let signals = store::recent_signals(SIGNAL_WINDOW).unwrap_or_default();
+    let signals = store::recent_signals(SIGNAL_WINDOW)?;
     let signal_topics = aggregate_signals(&signals);
     // Rank the full candidate pool, then dedupe by content before taking the
     // top `limit`: the same text captured via clipboard, a note, and a chat
@@ -282,7 +282,7 @@ fn brain_search_with_lexical_mode(
     Ok(ranked
         .into_iter()
         .filter_map(|(id, score)| by_id.get(&id).cloned().map(|doc| BrainHit { doc, score }))
-        .filter(|hit| seen_content.insert(store::content_hash(&hit.doc.title, &hit.doc.content)))
+        .filter(|hit| seen_content.insert((hit.doc.source, hit.doc.source_id.clone())))
         .take(limit)
         .collect())
 }

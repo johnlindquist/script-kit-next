@@ -169,10 +169,16 @@ pub fn build_device_menu_items(
             .iter()
             .find(|d| d.is_default)
             .map(|d| format!("Use macOS default microphone ({})", d.name))
-            .unwrap_or_else(|| "Use macOS default microphone".to_string()),
+            .unwrap_or_else(|| "No macOS default input is available".to_string()),
         action: DictationDeviceSelectionAction::UseSystemDefault,
-        is_selected: selected_device_id.is_none() || !saved_exists,
+        is_selected: selected_device_id.is_none() && !devices.is_empty(),
     });
+
+    if selected_device_id.is_some() && !saved_exists {
+        items[0].subtitle =
+            "Selected microphone is unavailable · choose a microphone for the next recording"
+                .to_string();
+    }
 
     for device in devices {
         items.push(DictationDeviceMenuItem {
@@ -203,6 +209,9 @@ pub fn list_input_device_menu_items(
     selected_device_id: Option<&str>,
 ) -> Result<Vec<DictationDeviceMenuItem>> {
     let devices = list_input_devices().context("failed to enumerate microphones")?;
+    if devices.is_empty() {
+        return Ok(Vec::new());
+    }
     Ok(build_device_menu_items(&devices, selected_device_id))
 }
 

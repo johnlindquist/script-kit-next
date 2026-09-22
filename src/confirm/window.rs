@@ -1067,6 +1067,7 @@ fn resolve_confirm_popup_parent_automation_id(
 pub(crate) struct ConfirmPopupWindow {
     title: SharedString,
     body: SharedString,
+    body_scroll: gpui::ScrollHandle,
     confirm_text: SharedString,
     cancel_text: SharedString,
     secondary_text: Option<SharedString>,
@@ -1115,6 +1116,7 @@ impl ConfirmPopupWindow {
         Self {
             title: options.title,
             body: options.body,
+            body_scroll: gpui::ScrollHandle::new(),
             confirm_text: options.confirm_text,
             cancel_text: options.cancel_text,
             secondary_text: options.secondary_text,
@@ -1496,10 +1498,15 @@ impl Render for ConfirmPopupWindow {
             stack = stack
                 .child(
                     div()
+                        .id("confirm-modal-body-scroll")
                         .debug_selector(|| "confirm-modal-body".to_string())
                         .w_full()
                         .min_h(px(0.))
-                        .overflow_hidden()
+                        .max_h(px(
+                            CONFIRM_BODY_MAX_LINES as f32 * confirm_body_line_height()
+                        ))
+                        .overflow_y_scroll()
+                        .track_scroll(&self.body_scroll)
                         .text_xs()
                         .line_height(px(confirm_body_line_height()))
                         .text_color(body_color)

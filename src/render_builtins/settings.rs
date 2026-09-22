@@ -657,6 +657,7 @@ impl ScriptListApp {
                     },
                     None,
                     list_colors,
+                    self.current_main_menu_theme,
                 ),
             )
             .child(div().relative().flex_1().min_h(px(0.)).child(list_element));

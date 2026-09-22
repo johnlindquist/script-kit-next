@@ -193,6 +193,7 @@ enum AutomationReadTarget {
 enum AutomationBatchTargetKind {
     Main,
     AgentChatDetached,
+    Dictation,
     Notes,
     ActionsDialog,
     PromptPopup,
@@ -228,6 +229,12 @@ impl BatchTargetCapabilities {
                 display_name: "Detached Agent Chat",
                 unsupported_target_name: "detached Agent Chat",
                 supported_commands: &["setInput", "waitFor", "selectByValue", "selectBySemanticId"],
+                concise_unsupported_message: true,
+            },
+            AutomationBatchTargetKind::Dictation => Self {
+                display_name: "Dictation",
+                unsupported_target_name: "Dictation",
+                supported_commands: &["selectBySemanticId", "waitFor"],
                 concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::Notes => Self {
@@ -273,6 +280,7 @@ fn registered_batch_target_kind(
             AutomationBatchTargetKind::AgentChatDetached
         }
         protocol::AutomationWindowKind::Notes => AutomationBatchTargetKind::Notes,
+        protocol::AutomationWindowKind::Dictation => AutomationBatchTargetKind::Dictation,
         protocol::AutomationWindowKind::ActionsDialog => AutomationBatchTargetKind::ActionsDialog,
         _ => AutomationBatchTargetKind::PromptPopup,
     }
@@ -2144,14 +2152,14 @@ impl ScriptListApp {
                             self.script_list_visible_row_labels_from_cache();
                         let selected_value =
                             selected_row_index.and_then(|index| visible_rows.get(index).cloned());
-                        let selected_grouped_index = self
-                            .resolved_main_menu_selected_subject()
-                            .map(|subject| match subject {
+                        let selected_grouped_index = self.painted_main_menu_selected_subject().map(
+                            |subject| match subject {
                                 ResolvedMainMenuSelection::SearchResult { row, .. }
                                 | ResolvedMainMenuSelection::Calculator { row, .. } => {
                                     row.grouped_index
                                 }
-                            });
+                            },
+                        );
                         (
                             "none".to_string(),
                             None,
@@ -3394,7 +3402,7 @@ impl ScriptListApp {
                 };
 
                 // Create the response
-                let response = Message::state_result(
+                let mut response = Message::state_result(
                     request_id.clone(),
                     prompt_type,
                     prompt_id,
@@ -3440,6 +3448,17 @@ impl ScriptListApp {
                     Some(self.flow_ux_automation_snapshot(cx)),
                     Some(self.conversations.snapshot()),
                 );
+                if let Message::StateResult {
+                    main_window_animation,
+                    ..
+                } = &mut response
+                {
+                    let mut animation =
+                        self.main_preferences.animation.preset.automation_snapshot();
+                    animation["nativeLifecycle"] =
+                        crate::platform::main_glass_entry_lifecycle_receipt();
+                    *main_window_animation = Some(animation);
+                }
 
                 tracing::info!(
                     category = "UI",
@@ -6975,6 +6994,9 @@ impl ScriptListApp {
             active_surface: host.installed_surface.map(str::to_string),
             native_footer_host_installed: native_ready,
             gpui_fallback_visible: crate::footer_popup::main_footer_gpui_overlay_visible(),
+            over_content_preview: native_ready
+                && target.kind == crate::protocol::AutomationWindowKind::Main
+                && crate::footer_popup::main_window_footer_overlay_preview(),
             left_info,
             button_count: buttons.len(),
             action_slot_count,

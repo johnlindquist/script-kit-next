@@ -5,9 +5,9 @@
  * frame (NSWindow alpha 0.85) is phase-aligned to Spotlight's measured
  * materialized state (101.2% width), ease-out compression, no hold,
  * ease-in-out rebound at a 1:2 ratio, alpha 0.85 → 0.99 → 1.0.
- * Every duration was then HALVED on 2026-07-27 at explicit user request
- * ("2x faster"): 35ms compression, 70ms rebound, 18ms alpha ramp, 26ms
- * alpha finish. Reference shape: https://eager-hollow-dyyf.here.now/
+ * The 2026-07-27 2x speed-up was removed on 2026-09-15 at the user's
+ * request: 70ms compression, 140ms rebound, 36ms alpha ramp, 52ms
+ * alpha finish. Reference: https://eager-hollow-dyyf.here.now/
  *
  * The analyzers verify the EXACT floating-point runtime scale fields logged
  * by the morph (integer `frames=` values are diagnostics only — far too
@@ -28,17 +28,17 @@ type EntryFrame = {
 
 // 2026-08-13 soft-materialize retune (user-supplied 57fps Spotlight
 // reference): the FIRST VISIBLE frame is 103.05% of settled width and eases
-// to the preserved 101.2% visible-tail start over 18ms inside the 44ms
+// to the preserved 101.2% visible-tail start over 36ms inside the 88ms
 // material prefix; main's onset defocus is 12pt resolving to 0 across that
 // prefix. Actions/popups stay tail-aligned with the historical 8pt/full-entry
 // ramp.
 export const MAIN_GLASS_ENTRY_EXPECTATION = {
-  durationMs: 105,
-  materialOnsetMs: 44,
-  compressionMs: 35,
+  durationMs: 210,
+  materialOnsetMs: 88,
+  compressionMs: 70,
   holdMs: 0,
-  reboundMs: 70,
-  onsetGeometryMs: 18,
+  reboundMs: 140,
+  onsetGeometryMs: 36,
   onsetGeometryToleranceMs: 18,
   firstVisibleWidthScale: 1.0305,
   startWidthScale: 1.012,
@@ -48,20 +48,20 @@ export const MAIN_GLASS_ENTRY_EXPECTATION = {
   extremeHeightScale: 1,
   startAlpha: 0.85,
   phase1Alpha: 0.99,
-  alphaRampMs: 18,
-  alphaFinishMs: 26,
+  alphaRampMs: 36,
+  alphaFinishMs: 52,
   contentHoldMs: 0,
-  contentFadeMs: 44,
+  contentFadeMs: 88,
   // 2026-08-13 empty-window retune: content roots seed at Spotlight's
   // measured first-photon presence (~21% of settled) instead of alpha 0.
   contentStartAlpha: 0.21,
   entryBlurRadius: 12,
   entryBlurToRadius: 0,
-  entryBlurDurationMs: 44,
+  entryBlurDurationMs: 88,
   footerBlurRadius: 12,
   footerBlurToRadius: 0,
   footerBlurScope: "per_capsule",
-  footerBlurDurationMs: 44,
+  footerBlurDurationMs: 88,
   footerMinimumCapsuleCount: 1,
   footerEnrolled: false,
   // 2026-08-13 capsule parity retune: every capsule runs the main backdrop's
@@ -78,7 +78,7 @@ export const ACTIONS_GLASS_ENTRY_EXPECTATION = {
   startWidthScale: 0.988,
   extremeWidthScale: 1.013,
   entryBlurRadius: 8,
-  entryBlurDurationMs: 149,
+  entryBlurDurationMs: 298,
   footerBlurRadius: 0,
   footerMinimumCapsuleCount: 0,
   footerMaterialRamp: false,
@@ -164,8 +164,8 @@ export function analyzeEntryMotionEnvelope(
   }
 
   // Soft-materialize convergence: a timestamped frame inside the material
-  // prefix must reach the preserved visible-tail start width near the 18ms
-  // onset-geometry duration (2026-08-13 retune).
+  // prefix must reach the preserved visible-tail start width near the 36ms
+  // onset-geometry duration (1:1 tempo restored 2026-09-15).
   let onsetTailVisible: (typeof measured)[number] | null = null;
   if (first != null && expectation.onsetGeometryMs > 0) {
     const firstTime = typeof first.displayTimeNs === "number"
@@ -208,8 +208,8 @@ export function analyzeEntryMotionEnvelope(
     const minimum = measured.length
       ? Math.min(...measured.map((frame) => frame.widthScale))
       : null;
-    // Upper edge 0.995: damage-frame sampling of the 35ms compression can
-    // land its deepest frame at ~0.9947; a missing compression reads ~1.0.
+    // Upper edge 0.995 tolerates damage-frame samples landing at ~0.9947;
+    // a missing compression reads ~1.0.
     if (minimum !== null && (minimum < 0.981 || minimum > 0.995)) {
       errors.push(
         `shrink-in minimum width scale ${minimum.toFixed(4)} outside 0.981–0.995`,

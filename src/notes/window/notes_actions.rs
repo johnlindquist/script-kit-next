@@ -31,7 +31,7 @@ impl NotesApp {
             notes_len = self.notes.len(),
             "notes_action_selected_note_not_found",
         );
-        self.show_action_feedback(Self::SELECTED_NOTE_NOT_FOUND_FEEDBACK, true);
+        self.show_action_error(Self::SELECTED_NOTE_NOT_FOUND_FEEDBACK);
         cx.notify();
     }
 
@@ -557,6 +557,7 @@ impl NotesApp {
 
     pub(super) fn request_empty_trash(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let count = self.deleted_notes.len();
+        let confirmed_ids: Vec<NoteId> = self.deleted_notes.iter().map(|note| note.id).collect();
         if count == 0 {
             self.show_action_feedback("Trash is already empty", false);
             cx.notify();
@@ -584,7 +585,7 @@ impl NotesApp {
             },
             move |_window, cx| {
                 if let Some(entity) = weak_notes.upgrade() {
-                    entity.update(cx, |this, cx| this.empty_trash(cx));
+                    entity.update(cx, |this, cx| this.empty_trash_targets(&confirmed_ids, cx));
                 }
             },
             move |window, cx| {
@@ -601,14 +602,37 @@ impl NotesApp {
     /// Empty the entire trash — permanently deletes all trashed notes after confirmation.
     pub(super) fn empty_trash(&mut self, cx: &mut Context<Self>) {
         let ids: Vec<NoteId> = self.deleted_notes.iter().map(|n| n.id).collect();
-        for id in &ids {
-            if let Err(e) = storage::delete_note_permanently(*id) {
-                tracing::error!(error = %e, note_id = %id, "Failed to permanently delete note");
+        self.empty_trash_targets(&ids, cx);
+    }
+
+    fn empty_trash_targets(&mut self, ids: &[NoteId], cx: &mut Context<Self>) {
+        let mut deleted = std::collections::HashSet::new();
+        for id in ids {
+            match storage::delete_trashed_note_permanently(*id) {
+                Ok(()) => {
+                    deleted.insert(*id);
+                }
+                Err(e) => {
+                    let safe = crate::logging::log_private_user_value(&e.to_string());
+                    tracing::error!(error_bytes = safe.raw_bytes, error_sha256 = %safe.sha256, note_id = %id, "Failed to permanently delete note");
+                }
             }
         }
-        self.deleted_notes.clear();
-        self.selected_note_id = None;
-        info!(count = ids.len(), "Emptied trash");
+        self.deleted_notes
+            .retain(|note| !deleted.contains(&note.id));
+        if self
+            .selected_note_id
+            .is_some_and(|id| deleted.contains(&id))
+        {
+            self.selected_note_id = None;
+        }
+        let failed = ids.len() - deleted.len();
+        if failed == 0 {
+            self.show_action_feedback(format!("Emptied trash · {} deleted", deleted.len()), false);
+        } else {
+            self.show_action_error(format!("{} deleted · {failed} couldn't be deleted and remain in Trash. Use Empty Trash to retry.", deleted.len()));
+        }
+        info!(deleted = deleted.len(), failed, "Trash deletion completed");
         cx.notify();
     }
 
@@ -634,8 +658,9 @@ impl NotesApp {
                 self.show_action_feedback(receipt.feedback(success_message.to_owned()), false);
             }
             Err(error) => {
-                tracing::warn!(%error, "Failed to copy note text");
-                self.show_action_feedback(format!("Failed to copy: {error}"), true);
+                let diagnostic = crate::logging::log_private_user_value(&error.to_string());
+                tracing::warn!(diagnostic = %diagnostic.sha256, "Failed to copy note text");
+                self.show_action_error("Couldn't copy the note. Your text is still open.");
             }
         }
         cx.notify();
@@ -681,15 +706,15 @@ impl NotesApp {
                     self.create_note_with_content(format!("{target}\n\n"), window, cx)
                 {
                     tracing::warn!(error = %error, target, "Failed to create note from wiki link");
-                    self.show_action_feedback("Could not create linked note", true);
+                    self.show_action_error("Could not create linked note");
                 }
             }
             Ok(storage::NoteRefResolution::Ambiguous) => {
-                self.show_action_feedback(format!("Multiple notes match \"{target}\""), true);
+                self.show_action_error(format!("Multiple notes match \"{target}\""));
             }
             Err(error) => {
                 tracing::warn!(error = %error, target, "Failed to resolve wiki link");
-                self.show_action_feedback("Could not resolve link", true);
+                self.show_action_error("Could not resolve link");
             }
         }
         cx.notify();
@@ -776,7 +801,7 @@ impl NotesApp {
             }
             Err(error) => {
                 tracing::warn!(error = %error, note_id = %id, "Failed to copy note backlinks");
-                self.show_action_feedback("Backlinks unavailable", true);
+                self.show_action_error("Backlinks unavailable");
             }
         }
 
@@ -784,14 +809,23 @@ impl NotesApp {
     }
 
     pub(super) fn duplicate_selected_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.has_unsaved_changes && !self.save_current_note() {
+            cx.notify();
+            return;
+        }
         let Some((_id, note)) = self.selected_note_for_action("duplicate_selected_note", cx) else {
             return;
         };
 
         let content = note.content.clone();
         let duplicate = Note::with_content(content);
-        if let Err(e) = storage::save_note(&duplicate) {
-            tracing::error!(error = %e, "Failed to duplicate note");
+        if let Err(e) = storage::save_note(&duplicate)
+            .and_then(|()| storage::verify_saved_note_content(duplicate.id, &duplicate.content))
+        {
+            let safe = crate::logging::log_private_user_value(&e.to_string());
+            tracing::error!(error_bytes = safe.raw_bytes, error_sha256 = %safe.sha256, "Failed to duplicate note");
+            self.show_action_error("Couldn't duplicate the note. Your original is still open.");
+            cx.notify();
             return;
         }
 

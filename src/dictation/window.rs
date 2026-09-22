@@ -436,14 +436,12 @@ static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 const ACTION_STOP_LABEL: &str = "Stop";
 /// Opens the microphone picker; the live session keeps its opened mic.
 const ACTION_MIC_LABEL: &str = "Select Mic";
-/// Opens the complete descriptor-backed destination Actions menu.
-const ACTION_DESTINATIONS_LABEL: &str = "Destinations";
-/// Single-word action label for discarding the current recording.
-const ACTION_CANCEL_LABEL: &str = "Cancel";
+/// Open the review state while keeping recording live.
+const ACTION_CANCEL_LABEL: &str = "Review / Stop…";
 /// Single-word action label for discarding from the confirmation state.
 const ACTION_DISCARD_LABEL: &str = "Discard";
 /// Single-word action label for resuming from confirmation.
-const ACTION_CONTINUE_LABEL: &str = "Continue";
+const ACTION_CONTINUE_LABEL: &str = "Resume Recording";
 /// Single-word action label for closing terminal overlay states.
 const ACTION_CLOSE_LABEL: &str = "Close";
 /// Keycap shown for Escape.
@@ -454,9 +452,6 @@ const ENTER_KEYCAP: &str = "\u{21b5}";
 const BACKSPACE_KEYCAP: &str = "\u{232b}";
 /// Keycap shown for the complete destination menu.
 const DESTINATIONS_KEYCAP: &str = "⌘K";
-/// Keycap token rendered as a Lucide microphone glyph by footer chrome.
-const MIC_KEYCAP: &str = crate::components::footer_chrome::FOOTER_MIC_ICON_TOKEN;
-
 /// Interval between animation ticks for the transcribing dot pulse (ms).
 const TRANSCRIBING_TICK_MS: u64 = 50;
 
@@ -487,7 +482,10 @@ pub(crate) enum GlobalKeyProcessResult {
 pub(crate) fn overlay_phase_copy(phase: &DictationSessionPhase) -> (&'static str, &'static str) {
     match phase {
         DictationSessionPhase::Recording => ("Listening\u{2026}", ACTION_CANCEL_LABEL),
-        DictationSessionPhase::Confirming => ("Stop dictation?", ACTION_CONTINUE_LABEL),
+        DictationSessionPhase::Confirming => (
+            "Recording is still live · Stop or discard?",
+            ACTION_CONTINUE_LABEL,
+        ),
         DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", ACTION_CLOSE_LABEL),
         DictationSessionPhase::Delivering => ("Delivering\u{2026}", ACTION_CLOSE_LABEL),
         DictationSessionPhase::Finished => ("Done", ACTION_CLOSE_LABEL),
@@ -705,6 +703,7 @@ impl DictationOverlay {
 
     fn transcript_armed(&self) -> bool {
         !self.caption.visible_text().trim().is_empty()
+            || crate::dictation::runtime::captured_audio_can_finish()
     }
 
     fn ensure_native_footer_action_listener(&mut self, window: &Window, cx: &mut Context<Self>) {
@@ -854,6 +853,13 @@ impl DictationOverlay {
         } else {
             crate::dictation::DictationMicrophonePopupSelectionMode::Production
         };
+        if selection_mode == crate::dictation::DictationMicrophonePopupSelectionMode::Production
+            && crate::dictation::microphone_permission_status()
+                == crate::dictation::DictationMicrophonePermissionStatus::Denied
+        {
+            self.show_microphone_unavailable("Microphone permission is denied in macOS. Allow microphone access in System Settings, then refresh the device list.", "microphone_permission_denied", window, cx);
+            return;
+        }
         let menu_items = if selection_mode
             == crate::dictation::DictationMicrophonePopupSelectionMode::FixtureNoPersistence
         {
@@ -885,14 +891,13 @@ impl DictationOverlay {
                         category = "DICTATION",
                         "Microphone selector found no input devices"
                     );
+                    self.show_microphone_unavailable("No input microphones are available. Connect a microphone, then refresh the device list.", "no_input_devices", window, cx);
                     return;
                 }
                 Err(error) => {
-                    tracing::warn!(
-                        category = "DICTATION",
-                        error = %error,
-                        "Failed to list microphones from overlay selector"
-                    );
+                    let diagnostic = crate::logging::log_private_user_value(&error.to_string());
+                    tracing::warn!(category = "DICTATION", diagnostic = %diagnostic.sha256, "Failed to list microphones from overlay selector");
+                    self.show_microphone_unavailable("Couldn’t load microphones. Recording keeps using its current device. Refresh the device list to try again.", &diagnostic.sha256, window, cx);
                     return;
                 }
             }
@@ -1496,6 +1501,8 @@ impl DictationOverlay {
             .items_center()
             .w_full()
             .h(px(OVERLAY_HEADER_ROW_HEIGHT_PX))
+            .id("dictation-header")
+            .tooltip({ let label = format!("Destination selection · Microphone setting: {} · changes apply to the next recording", active_microphone_footer_label()); move |window, cx| gpui_component::tooltip::Tooltip::new(label.clone()).build(window, cx) })
             // Left: timer, same slot width as the badge so the chips center.
             .child(
                 div()
@@ -1885,21 +1892,21 @@ impl Render for DictationOverlay {
                     )
                     .into_any_element()
             }
-            DictationSessionPhase::Failed(failure) => {
-                let err_text: SharedString = failure.safe_message().into();
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(STATUS_TEXT_SIZE_PX))
-                    .font_family(FONT_SYSTEM_UI)
-                    .text_color(muted_text)
-                    .overflow_hidden()
-                    .child(err_text)
-                    .into_any_element()
-            }
+            DictationSessionPhase::Failed(failure) => div()
+                .id("dictation-failure-guidance")
+                .w_full()
+                .h_full()
+                .min_h(px(0.))
+                .overflow_y_scroll()
+                .child(crate::components::info_state::render_info_state(
+                    crate::components::info_state::InfoStateSpec::new("dictation.failure")
+                        .layout(crate::components::info_state::InfoStateLayout::InlineRow)
+                        .tone(crate::components::info_state::InfoStateTone::Recovery)
+                        .body(failure.safe_message()),
+                    &theme,
+                    cx,
+                ))
+                .into_any_element(),
             DictationSessionPhase::Idle => div().into_any_element(),
         };
 
@@ -1928,13 +1935,16 @@ impl Render for DictationOverlay {
                 .child(
                     div()
                         .debug_selector(|| "dictation-signal-band".to_string())
+                        .relative()
                         .flex_1()
+                        .min_h(px(0.))
                         .w_full()
                         .flex()
                         .flex_row()
                         .items_center()
                         .justify_center()
-                        .child(render_glass_signal_band(center)),
+                        .child(render_glass_signal_band(center).when(matches!(phase, DictationSessionPhase::Failed(_)), |div| div.h_full().min_h(px(0.)).overflow_hidden()))
+                        .when(matches!(phase, DictationSessionPhase::Recording | DictationSessionPhase::Confirming) && !crate::components::list_scroll_affordance::scroll_handle_is_at_bottom(&self.caption_scroll), |div| div.child(crate::components::list_scroll_affordance::render_jump_to_latest_pill("dictation-jump-latest", "Jump to latest", &theme, cx.listener(|this, _, _, cx| { this.caption_scroll.scroll_to_bottom(); cx.notify(); })))),
                 )
         };
 
@@ -2072,23 +2082,16 @@ pub(crate) fn dictation_native_footer_config(
 
     let buttons = match phase {
         DictationSessionPhase::Recording => {
-            let mut buttons = vec![
-                FooterButtonConfig::new(
-                    FooterAction::Ai,
-                    MIC_KEYCAP,
-                    active_microphone_footer_label(),
-                ),
-                FooterButtonConfig::new(
-                    FooterAction::Actions,
-                    DESTINATIONS_KEYCAP,
-                    ACTION_DESTINATIONS_LABEL,
-                ),
-            ];
+            let mut buttons = vec![FooterButtonConfig::new(
+                FooterAction::Actions,
+                DESTINATIONS_KEYCAP,
+                "Actions",
+            )];
             if armed {
                 buttons.push(FooterButtonConfig::new(
                     FooterAction::Stop,
                     dictation_stop_keycap(),
-                    format!("Stop & {}", target.descriptor().delivery_verb),
+                    format!("Stop & {}", dictation_delivery_label(target)),
                 ));
             }
             buttons.push(FooterButtonConfig::new(
@@ -2104,7 +2107,7 @@ pub(crate) fn dictation_native_footer_config(
                 buttons.push(FooterButtonConfig::new(
                     FooterAction::Stop,
                     ENTER_KEYCAP,
-                    target.descriptor().delivery_verb,
+                    dictation_delivery_label(target),
                 ));
             }
             buttons.push(FooterButtonConfig::new(
@@ -2171,7 +2174,7 @@ fn native_footer_spacer() -> impl IntoElement {
         .min_h(px(rail_chrome.height_px))
 }
 
-fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
+fn render_glass_signal_band(body: AnyElement) -> gpui::Div {
     div()
         .w_full()
         .flex()
@@ -3208,3 +3211,43 @@ pub fn overlay_generation() -> u64 {
 include!("window_visual_primitives.rs");
 include!("window_actions.rs");
 include!("window_automation.rs");
+
+fn dictation_delivery_label(target: crate::dictation::DictationTarget) -> &'static str {
+    match target {
+        crate::dictation::DictationTarget::DayPageToday => "Save to Today",
+        crate::dictation::DictationTarget::QuickAiQuestion => "Ask",
+        _ => target.descriptor().delivery_verb,
+    }
+}
+
+impl DictationOverlay {
+    fn show_microphone_unavailable(
+        &mut self,
+        message: &'static str,
+        diagnostic: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let owner = cx.entity().downgrade();
+        let refresh_owner = owner.clone();
+        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
+            window,
+            cx,
+            DICTATION_OVERLAY_AUTOMATION_ID,
+            crate::confirm::ParentConfirmOptions {
+                title: "Microphones Unavailable".into(),
+                body: format!("{message}\n\nDiagnostic: {diagnostic}").into(),
+                confirm_text: "Refresh device list".into(),
+                cancel_text: "Dismiss".into(),
+                confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                width: px(crate::confirm::PARENT_MODAL_WIDTH_PX),
+            },
+            move |window, cx| {
+                if let Some(owner) = refresh_owner.upgrade() {
+                    owner.update(cx, |this, cx| this.open_microphone_picker(window, cx));
+                }
+            },
+            |_, _| {},
+        );
+    }
+}

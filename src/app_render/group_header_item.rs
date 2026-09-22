@@ -62,6 +62,11 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::BackgroundEffectNext
         | builtins::BuiltInFeature::BackgroundEffectPrevious
         | builtins::BuiltInFeature::BackgroundEffectOff => "Background Effect".to_string(),
+        builtins::BuiltInFeature::AnimationPresets => "Animation Preset Catalog".to_string(),
+        builtins::BuiltInFeature::AnimationNext
+        | builtins::BuiltInFeature::AnimationPrevious
+        | builtins::BuiltInFeature::AnimationReplay => "Entry Animation Control".to_string(),
+        builtins::BuiltInFeature::AnimationPreset(_) => "Main-Window Entry Animation".to_string(),
     }
 }
 

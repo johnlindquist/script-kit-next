@@ -1801,6 +1801,78 @@ mod tests {
     }
 
     #[gpui::test]
+    fn typing_keeps_committed_highlight_without_arming_stale_results(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let app = main_menu_selection_test_app(cx);
+        app.update(cx, |app, cx| {
+            app.scripts = vec![
+                main_menu_selection_test_script("zzstable alpha"),
+                main_menu_selection_test_script("zzstable beta"),
+            ];
+            app.scriptlets.clear();
+            app.skills.clear();
+            app.apps.clear();
+            commit_selection_test_query(app, "zzstable", cx);
+
+            // Include backspace and a new ranking, not just an unchanged result set.
+            for query in [
+                "zzstable a",
+                "zzstable al",
+                "zzstable alpha",
+                "zzstable al",
+                "zzstable b",
+            ] {
+                let before = match app
+                    .painted_main_menu_selected_subject()
+                    .expect("selected row")
+                {
+                    ResolvedMainMenuSelection::SearchResult { row, .. }
+                    | ResolvedMainMenuSelection::Calculator { row, .. } => row.semantic_id.clone(),
+                };
+                app.filter_text = query.to_string();
+                app.queue_filter_compute(query.to_string(), cx);
+                assert!(!app.root_search.query_is_current());
+                assert!(app.resolved_main_menu_selected_subject().is_none());
+                assert!(app.resolve_main_menu_semantic_row(&before).is_none());
+
+                let painted = match app
+                    .painted_main_menu_selected_subject()
+                    .expect("no blank highlight frame")
+                {
+                    ResolvedMainMenuSelection::SearchResult { row, .. }
+                    | ResolvedMainMenuSelection::Calculator { row, .. } => row,
+                };
+                assert_eq!(painted.semantic_id, before);
+                let (elements, _) = app.collect_visible_elements(100, cx);
+                let selected: Vec<_> = elements
+                    .iter()
+                    .filter(|element| element.selected == Some(true))
+                    .collect();
+                assert_eq!(selected.len(), 1);
+                assert_eq!(selected[0].semantic_id, before);
+                assert_eq!(
+                    selected[0].action_disabled.as_deref(),
+                    Some("main_menu_query_pending")
+                );
+
+                app.flush_pending_main_menu_query(cx);
+                assert!(app.root_search.query_is_current());
+                assert_eq!(
+                    selected_main_menu_stable_key(app),
+                    first_selectable_main_menu_stable_key(app)
+                );
+                let (elements, _) = app.collect_visible_elements(100, cx);
+                let selected = elements
+                    .iter()
+                    .find(|element| element.selected == Some(true))
+                    .expect("replacement selected");
+                assert!(selected.action_disabled.is_none());
+            }
+        });
+    }
+
+    #[gpui::test]
     fn query_change_discards_root_file_handoff_selection(cx: &mut gpui::TestAppContext) {
         let app = main_menu_selection_test_app(cx);
         app.update(cx, |app, cx| {

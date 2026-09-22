@@ -163,7 +163,35 @@ impl<'a> TransactionStateProvider for DetachedAgentChatTransactionProvider<'a> {
     }
 
     fn select_by_semantic_id(&mut self, semantic_id: &str, submit: bool) -> Result<Option<String>> {
-        self.current_target()?;
+        let target = self.current_target()?;
+        if semantic_id.starts_with("agent_chat_queue:") {
+            if !self
+                .entity
+                .read(self.cx)
+                .ai_recovery_actions(self.cx)
+                .iter()
+                .any(|action| action.id == semantic_id)
+            {
+                return Ok(None);
+            }
+            if submit {
+                let handle = crate::windows::get_runtime_window_handle_for_generation(
+                    &target.id,
+                    target
+                        .generation
+                        .ok_or_else(|| anyhow!("chat_generation_missing"))?,
+                )
+                .ok_or_else(|| anyhow!("chat_owner_missing"))?;
+                let entity = self.entity.clone();
+                let accepted = handle.update(self.cx, |_, window, cx| {
+                    entity.update(cx, |view, cx| {
+                        view.execute_queue_action(semantic_id, window, cx)
+                    })
+                })?;
+                anyhow::ensure!(accepted, "queue_action_rejected");
+            }
+            return Ok(Some(semantic_id.to_string()));
+        }
         let mut parts = semantic_id.splitn(3, ':');
         if parts.next() != Some("choice") {
             return Ok(None);

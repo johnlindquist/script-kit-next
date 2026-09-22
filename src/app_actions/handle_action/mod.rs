@@ -1124,6 +1124,16 @@ impl ScriptListApp {
         };
         let entity = entity.clone();
 
+        if action_id.starts_with("agent_chat_queue:") {
+            return if entity.update(cx, |view, cx| {
+                view.execute_queue_action(action_id, window, cx)
+            }) {
+                DispatchOutcome::success()
+            } else {
+                DispatchOutcome::not_handled()
+            };
+        }
+
         if entity.update(cx, |view, cx| {
             view.dispatch_ai_recovery_action(action_id, cx)
         }) {
@@ -2261,6 +2271,16 @@ impl ScriptListApp {
     }
 
     fn handle_action(&mut self, action_id: String, window: &mut Window, cx: &mut Context<Self>) {
+        if action_id.starts_with("brain_inbox_open:") {
+            if !self.open_brain_inbox_action(&action_id, cx) {
+                self.show_error_toast(
+                    "The inbox changed. Open Brain Inbox in Actions and choose again.",
+                    cx,
+                );
+            }
+            return;
+        }
+
         let start = std::time::Instant::now();
 
         let action_id_stripped = action_id

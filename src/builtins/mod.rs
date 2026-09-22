@@ -308,6 +308,12 @@ pub enum BuiltInFeature {
     BackgroundEffectPrevious,
     /// Turn off the background shader effect.
     BackgroundEffectOff,
+    /// Browse all main-window entry experiments via launcher search.
+    AnimationPresets,
+    AnimationNext,
+    AnimationPrevious,
+    AnimationReplay,
+    AnimationPreset(crate::theme::animation::MainWindowAnimationPreset),
     /// Flow UX exploration surfaces (hidden, query-only): main-window
     /// variations for finding/launching mdflow flows. See
     /// docs/ai/flow-ux-protocol.md.
@@ -547,6 +553,11 @@ impl BuiltInEntry {
                 "Cycle Background Effect"
             }
             BuiltInFeature::BackgroundEffectOff => "Turn Off Background Effect",
+            BuiltInFeature::AnimationPresets => "Browse Animation Presets",
+            BuiltInFeature::AnimationNext => "Next Animation Preset",
+            BuiltInFeature::AnimationPrevious => "Previous Animation Preset",
+            BuiltInFeature::AnimationReplay => "Replay Current Animation",
+            BuiltInFeature::AnimationPreset(_) => "Apply Animation Preset",
             BuiltInFeature::FlowUxVariant(_) => "Open Flow Launcher",
             BuiltInFeature::NewFlow => "Create Flow",
         }
@@ -666,6 +677,11 @@ impl BuiltInEntry {
             BuiltInFeature::BackgroundEffectNext => "Next Effect",
             BuiltInFeature::BackgroundEffectPrevious => "Previous Effect",
             BuiltInFeature::BackgroundEffectOff => "Effect Off",
+            BuiltInFeature::AnimationPresets => "Browse Presets",
+            BuiltInFeature::AnimationNext => "Next Preset",
+            BuiltInFeature::AnimationPrevious => "Previous Preset",
+            BuiltInFeature::AnimationReplay => "Replay",
+            BuiltInFeature::AnimationPreset(_) => "Apply Preset",
             BuiltInFeature::FlowUxVariant(_) => "Flows",
             BuiltInFeature::NewFlow => "New Flow",
         }
@@ -1613,6 +1629,62 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
             "palette",
         ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/animation-presets",
+            "Animation Presets",
+            "Browse 25 main-window entry animations",
+            vec!["animation", "preset", "fade", "blur", "motion", "demo"],
+            BuiltInFeature::AnimationPresets,
+            "clapperboard",
+        ));
+        for (id, name, description, feature) in [
+            (
+                "builtin/animation-next",
+                "Next Animation Preset",
+                "Apply and replay the next animation",
+                BuiltInFeature::AnimationNext,
+            ),
+            (
+                "builtin/animation-previous",
+                "Previous Animation Preset",
+                "Apply and replay the previous animation",
+                BuiltInFeature::AnimationPrevious,
+            ),
+            (
+                "builtin/animation-replay",
+                "Replay Current Animation",
+                "Replay the selected animation without changing your preference",
+                BuiltInFeature::AnimationReplay,
+            ),
+        ] {
+            entries.push(BuiltInEntry::new_with_icon(
+                id,
+                name,
+                description,
+                vec!["animation", "preset", "fade", "blur", "motion", "demo"],
+                feature,
+                "play",
+            ));
+        }
+        for preset in crate::theme::animation::MainWindowAnimationPreset::ALL {
+            entries.push(BuiltInEntry::new_with_icon(
+                preset.command_id(),
+                format!("Animation {:02} — {}", preset.number(), preset.name()),
+                preset.description(),
+                vec![
+                    "animation",
+                    "preset",
+                    "fade",
+                    "blur",
+                    "motion",
+                    "demo",
+                    "animation gallery",
+                ],
+                BuiltInFeature::AnimationPreset(preset),
+                "play",
+            ));
+        }
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/background-effect-next",

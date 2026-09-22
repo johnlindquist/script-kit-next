@@ -161,6 +161,7 @@ impl Message {
             ghost_prediction,
             flow_ux,
             backgrounded_sessions,
+            main_window_animation: None,
         }
     }
 

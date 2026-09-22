@@ -255,25 +255,12 @@ impl NotesApp {
 
     /// Create a new note
     pub(super) fn create_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let note = Note::new();
-        let id = note.id;
-
-        // Save to storage
-        if let Err(e) = storage::save_note(&note) {
-            let safe_error = crate::logging::log_private_user_value(&e.to_string());
-            tracing::error!(
-                error_bytes = safe_error.raw_bytes,
-                error_sha256 = %safe_error.sha256,
-                "Failed to create note"
-            );
-            return;
+        if let Err(error) = self.create_note_with_content(String::new(), window, cx) {
+            let safe = crate::logging::log_private_user_value(&error.to_string());
+            tracing::error!(error_bytes = safe.raw_bytes, error_sha256 = %safe.sha256, "Failed to create note");
+            self.show_action_error("Couldn't create a note. Your current document is still open.");
+            cx.notify();
         }
-
-        // Add to cache and select it
-        self.notes.insert(0, note);
-        self.select_note(id, window, cx);
-
-        info!(note_id = %id, "New note created");
     }
 
     /// Create a new note pre-filled with the given content.
@@ -285,23 +272,27 @@ impl NotesApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
-        if content.is_empty() {
-            self.create_note(window, cx);
-            return Ok(());
+        if self.has_unsaved_changes && !self.save_current_note() {
+            anyhow::bail!("Current document could not be saved before note creation");
         }
-
-        let note = Note::with_content(content);
+        let note = if content.is_empty() {
+            Note::new()
+        } else {
+            Note::with_content(content)
+        };
         let id = note.id;
 
-        storage::save_note(&note).map_err(|e| {
-            let safe_error = crate::logging::log_private_user_value(&e.to_string());
-            tracing::error!(
-                error_bytes = safe_error.raw_bytes,
-                error_sha256 = %safe_error.sha256,
-                "Failed to create note with content"
-            );
-            anyhow::anyhow!("Failed to create note with content: {e}")
-        })?;
+        storage::save_note(&note)
+            .and_then(|()| storage::verify_saved_note_content(note.id, &note.content))
+            .map_err(|e| {
+                let safe_error = crate::logging::log_private_user_value(&e.to_string());
+                tracing::error!(
+                    error_bytes = safe_error.raw_bytes,
+                    error_sha256 = %safe_error.sha256,
+                    "Failed to create note with content"
+                );
+                anyhow::anyhow!("Failed to create note with content: {e}")
+            })?;
 
         self.notes.insert(0, note);
         self.select_note(id, window, cx);
@@ -317,29 +308,12 @@ impl NotesApp {
         cx: &mut Context<Self>,
     ) {
         let clipboard_content = Self::read_clipboard(cx);
-        if clipboard_content.is_empty() {
-            // Nothing on clipboard, just create an empty note
-            self.create_note(window, cx);
-            return;
+        if let Err(error) = self.create_note_with_content(clipboard_content, window, cx) {
+            let safe = crate::logging::log_private_user_value(&error.to_string());
+            tracing::error!(error_bytes = safe.raw_bytes, error_sha256 = %safe.sha256, "Failed to create note from clipboard");
+            self.show_action_error("Couldn't create a note. Your current document is still open.");
+            cx.notify();
         }
-
-        let note = Note::with_content(clipboard_content);
-        let id = note.id;
-
-        if let Err(e) = storage::save_note(&note) {
-            let safe_error = crate::logging::log_private_user_value(&e.to_string());
-            tracing::error!(
-                error_bytes = safe_error.raw_bytes,
-                error_sha256 = %safe_error.sha256,
-                "Failed to create note from clipboard"
-            );
-            return;
-        }
-
-        self.notes.insert(0, note);
-        self.select_note(id, window, cx);
-
-        info!(note_id = %id, "New note created from clipboard");
     }
 
     /// Read text from system clipboard
@@ -458,6 +432,7 @@ impl NotesApp {
             base_disk_content: content.clone(),
         });
         self.has_unsaved_changes = false;
+        self.save_failure = None;
         self.history_forward.clear();
         self.editor_state.update(cx, |state, cx| {
             state.set_value(&content, window, cx);
@@ -838,7 +813,7 @@ impl NotesApp {
             return false;
         };
 
-        if let Err(e) = storage::delete_note_permanently(id) {
+        if let Err(e) = storage::delete_trashed_note_permanently(id) {
             let safe_error = crate::logging::log_private_user_value(&e.to_string());
             tracing::error!(
                 error_bytes = safe_error.raw_bytes,
@@ -950,7 +925,7 @@ impl NotesApp {
                 // and render the content as preformatted text
                 format!(
                     "<!DOCTYPE html>\n<html>\n<head><title>{}</title></head>\n<body>\n<h1>{}</h1>\n<pre>{}</pre>\n</body>\n</html>",
-                    title, title, note_content
+                    escape_literal_html(&title), escape_literal_html(&title), escape_literal_html(&note_content)
                 )
             }
         };
@@ -959,8 +934,30 @@ impl NotesApp {
     }
 }
 
+fn escape_literal_html(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            other => escaped.push(other),
+        }
+    }
+    escaped
+}
+
 #[cfg(test)]
 mod notes_search_and_delete_regression_tests {
+    #[test]
+    fn literal_html_export_preserves_text_without_executable_markup() {
+        assert_eq!(
+            super::escape_literal_html("<script>\"don't\" & 東京</script>"),
+            "&lt;script&gt;&quot;don&#39;t&quot; &amp; 東京&lt;/script&gt;"
+        );
+    }
     use std::fs;
     use std::sync::{Arc, Mutex};
     use tracing_subscriber::fmt::MakeWriter;

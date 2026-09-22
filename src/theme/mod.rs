@@ -42,6 +42,7 @@
 //! the default theme-driven path.
 
 pub mod alpha;
+pub mod animation;
 mod audit;
 mod chrome;
 mod color_resolver;

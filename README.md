@@ -54,6 +54,7 @@ New to Script Kit GPUI? Start with the user guides:
 - **macOS** (Linux/Windows support planned)
 - **Rust 1.98.0** - Pinned by `rust-toolchain.toml`; install with https://rustup.rs
 - **Bun** - Install from https://bun.sh
+- **Python 3, CMake, and Ninja** for development storage admission and native builds (`brew install cmake ninja`).
 - **cargo-watch** (optional, for hot reload):
   ```bash
   cargo install cargo-watch
@@ -319,6 +320,33 @@ Customize the look and feel:
 
 See `kit-init/theme.example.json` for all available options.
 
+### Main-window animation presets
+
+Search **Animation Presets** in the launcher to browse 26 numbered choices.
+Pick a row to save it and replay the actual launcher once; no restart or rebuild
+is required. Search **Animation 01** through **Animation 26** for direct access.
+**Next Animation Preset**, **Previous Animation Preset**, and
+**Replay Current Animation** make repeated comparisons available from the same menu.
+The selection persists independently of color themes in `config.ts`:
+`animation: { preset: "sharp_presence" }`.
+
+The choices cover brisk/cinematic timing, fixed-frame/grow/shallow/deep motion,
+strong/soft/early/late presence, sharp/diffuse/foreground focus, and combinations.
+**Animation 21 — Previous Calibration** restores the preserved Spotlight-derived
+entry. The default, **Sharp Presence** (Animation 24), keeps the window at its
+settled size with no width morph or defocus; its existing fast presence fade is unchanged.
+Only main-window entry changes; Actions, Notes, Dictation, and exits retain their
+calibrated behavior. This is a real-use comparison catalog, not a claim of
+Spotlight visual parity.
+
+Agents use the same operations through `triggerBuiltin` with the catalog's
+canonical `builtin/animation-<slug>` IDs, plus `builtin/animation-presets`,
+`builtin/animation-next`, `builtin/animation-previous`, and `builtin/animation-replay`.
+Read `getState.mainWindowAnimation` for selection/catalog and captured
+`nativeLifecycle` separately; a dispatched replay is not a completed animation.
+Native model samples are not WindowServer pixels. Hidden fixtures apply choices
+in memory without native replay or operator preference writes.
+
 ## Development
 
 ### Standalone Spotlight glass demo
@@ -511,6 +539,57 @@ Changes to Rust code trigger a rebuild (~2-5 seconds). Theme and script changes 
 
 Operator development retains `./dev.sh`'s default `local-llm` feature. Owned evaluations above are a separate opt-in build and do not change it.
 
+For a placement-only native glass footer preview, launch with
+`SCRIPT_KIT_MAIN_FOOTER_OVER_CONTENT=1`. The existing capsules float over the
+bottom of the main content, with an 8pt bottom inset and 8pt outer side gaps.
+Stage/window dimensions, capsule materials, glyphs, and motion stay unchanged;
+the original transparent host strip remains reserved below the panel. Launcher
+selection reveal reserves the overlaid footer area, but unselected rows can
+scroll behind the capsules. `getState.activeFooter.overContentPreview` reports
+whether the installed main-window footer is using the preview. Unset the flag
+or set it to `0` and relaunch to restore the default detached placement.
+
+The operator watcher uses a real SSD workspace under `/Volumes/OMEGA SSD/sk/<repo-id>/`, not the repository's internal `target/`. App and local-LLM helper Cargo targets, Pi provisioning targets/source cache, Metal/Clang caches, optional sccache storage, and build temporary files stay in that workspace. The app launches directly from its SSD target; `local-llm` and the `dev-fast` startup profile remain enabled. Native CMake builds default to Ninja; an explicit `CMAKE_GENERATOR` is preserved.
+
+Admission requires a mounted, writable external APFS/HFS+ volume with at least 25 GiB available. Startup and each rebuild check the volume UUID, workspace ownership, symlink redirection, and conflicting inherited target/cache paths. Missing or unsuitable storage fails before building; there is no internal-disk fallback. These are admission checks, not a filesystem quota.
+
+```bash
+# Read-only JSON state, paths, mount identity, and available space
+python3 -B scripts/agentic/dev-storage.py --repo "$PWD" inspect
+
+# Select another mounted external APFS/HFS+ volume
+SCRIPT_KIT_DEV_VOLUME="/Volumes/My Build SSD" ./dev.sh
+
+./dev.sh --status
+./dev.sh --stop
+```
+
+Watcher registration is serialized and published atomically. A complete lease
+whose process is dead recovers on startup; an incomplete lease requires
+`./dev.sh --takeover`. Recovery preserves the stale record instead of deleting
+it. Live or reused PIDs, foreign ownership, and untrusted records remain
+protected; takeover never kills a process identified only by name or CWD.
+
+If a session supervisor dies while its app remains alive, exact stop can reap
+the recorded dedicated app group after revalidating its generation, process
+start times, and membership before each signal. Reused PIDs or changed members
+remain protected. Recovery records `session_orphan_reaped` rather than
+fabricating a supervisor-owned `app-exit.json` receipt.
+
+A dev relaunch is successful only after the new app registers the main global
+shortcut. Its JSON receipt includes `mainHotkeyRegistered`, `mainHotkeyDisplay`,
+and `mainHotkeyId`; a registration conflict fails readiness rather than leaving
+an apparently successful but shortcut-inaccessible app. The unchanged-build
+skip checks this same owner and the expected dev binary. Read-only inspection:
+`bash scripts/agentic/dev-relaunch.sh --check-hotkey dev-watch`.
+
+UI delivery for operator testing means updating the actual `dev-watch` app and
+proving native shortcut ingress there, not just opening a separate preview.
+`session.sh status dev-watch` identifies its PID, binary, and generation;
+the app's `GLOBAL_HOTKEY_EVENT ... action=Main launcher` proves OS ingress.
+
+`prepare --shell` is the script-facing operation that admits/creates the workspace and emits quoted environment exports; `inspect --shell` emits the same routes without mutation. Neither relocates Cargo/Rustup homes, credentials, user data, or existing build directories. The separate managed `target-agent` lane retains its resource policy and accepts only an explicitly pinned root link as described in the owned native agent workflow.
+
 ### Project Structure
 
 ```
@@ -549,8 +628,9 @@ make verify
 # Full local ship check (includes macOS bundle build + sanity check)
 make ship-check
 
-# SDK tests via stdin protocol
-echo '{"type":"run","path":"'$(pwd)'/tests/smoke/hello-world.ts"}' | ./target/debug/script-kit-gpui
+# SDK smoke command against the running operator ./dev.sh session
+bash scripts/agentic/session.sh send dev-watch \
+  '{"type":"run","path":"'"$(pwd)"'/tests/smoke/hello-world.ts"}' --await-parse
 ```
 
 ### Building for Release

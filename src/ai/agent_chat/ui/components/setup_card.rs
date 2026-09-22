@@ -273,11 +273,6 @@ impl AgentChatSetupCard {
                     .py(px(5.0))
                     .when(is_selected, |d| {
                         d.bg(rgba((theme.colors.accent.selected << 8) | 0x14))
-                            .border_l_2()
-                            .border_color(rgb(theme.colors.accent.selected))
-                    })
-                    .when(!is_selected, |d| {
-                        d.border_l_2().border_color(gpui::transparent_black())
                     })
                     .child(
                         div()

@@ -71,7 +71,6 @@ impl AgentChatView {
         self.permission_index.hash(&mut hash);
         self.permission_options_open.hash(&mut hash);
         self.attach_menu_open.hash(&mut hash);
-        self.message_queue_expanded.hash(&mut hash);
         self.search_state.hash(&mut hash);
         self.expanded_composer.hash(&mut hash);
         self.scope_input.hash(&mut hash);

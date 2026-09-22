@@ -87,8 +87,8 @@ struct PaintPixelEvidence {
     bounds: PaintBounds,
     visible_bounds: PaintBounds,
     probe: PixelProbeResult,
-    /// Calculator overlays are translucent: retain the real paint color, never
-    /// pretend it is the expected composited framebuffer color.
+    /// Translucent icon tiles and calculator overlays retain the source paint
+    /// color, never pretend it is the expected composited framebuffer color.
     selected_surface_color: Option<u32>,
 }
 
@@ -193,7 +193,7 @@ impl crate::ScriptListApp {
     pub(crate) fn owned_search_observation(&self) -> Value {
         let rows = self.main_menu_committed_rows();
         let selected = self
-            .resolved_main_menu_selected_subject()
+            .painted_main_menu_selected_subject()
             .map(|subject| match subject {
                 crate::ResolvedMainMenuSelection::SearchResult { row, .. }
                 | crate::ResolvedMainMenuSelection::Calculator { row, .. } => row,
@@ -227,7 +227,6 @@ impl crate::ScriptListApp {
             "providers":self.root_search.provider_observation(),
             "dispatch":self.main_menu_dispatch_observation(),
             "previewWork":self.main_menu_preview_work_observations(),
-            "selectionMarkerColor":self.theme.colors.accent.selected,
             "committedRows":rows.iter().map(|row| json!({
                 "semanticId":row.semantic_id,"stableKey":row.stable_key,"contentFingerprint":row.content_fingerprint,
                 "groupedIndex":row.grouped_index,"selectableOrdinal":row.selectable_ordinal,
@@ -270,7 +269,6 @@ impl crate::ScriptListApp {
             "presentation":match presentation { crate::FileSearchPresentation::Full => "Full", crate::FileSearchPresentation::Mini => "Mini" },
             "selectedPath":selected.map(|file| file.path.as_str()),"selectedOrdinal":selection.map(|selection| selection.display_index),
             "selectedSemanticId":selection.map(|selection| format!("file-search-row:{}",selection.display_index)),
-            "selectionMarkerColor":self.theme.colors.accent.selected,
             "rows":self.file_search_display_indices.iter().enumerate().filter_map(|(display_index, &result_index)| {
                 self.cached_file_results.get(result_index).map(|file| json!({"semanticId":format!("file-search-row:{display_index}"),
                     "displayIndex":display_index,"resultIndex":result_index,"path":file.path,"name":file.name}))
@@ -494,59 +492,56 @@ fn sample_painted_selection(
         origin: gpui::point(gpui::px(0.0), gpui::px(0.0)),
         size: window.viewport_size(),
     });
-    for marker in window
-        .debug_bounds_entries()
+    for icon in bindings
         .iter()
-        .filter(|entry| entry.selector.ends_with(":selection-marker"))
+        .filter(|binding| binding.kind == "selectionIcon")
     {
-        let Some(id) = marker.selector.strip_suffix(":selection-marker") else {
-            continue;
-        };
+        let id: &str = icon.id.as_ref();
         let Some(row) = bindings.iter().find(|binding| {
             matches!(binding.kind, "mainSearchRow" | "fileSearchRow") && binding.id.as_ref() == id
         }) else {
             continue;
         };
-        let bounds = PaintBounds::from(marker.bounds);
-        let visible_bounds = PaintBounds::from(marker.visible_bounds);
+        let bounds = icon.bounds;
+        let visible_bounds = icon.visible_bounds;
         if !visible_bounds.visible() {
             continue;
         }
         if search["selectedSemanticId"].as_str() != Some(id) {
-            failures.push("unexpected_visible_selection_marker");
+            failures.push("unexpected_visible_selection_icon");
         }
         if !row.bounds.contains(bounds)
-            || !PaintBounds::from(marker.clip_bounds).contains(visible_bounds)
+            || !icon.clip_bounds.contains(visible_bounds)
             || !viewport.contains(visible_bounds)
         {
-            failures.push("selection_marker_bounds_invalid");
+            failures.push("selection_icon_bounds_invalid");
             continue;
         }
+        let selected_surface_color = icon.metadata["selectedSurfaceColor"]
+            .as_u64()
+            .and_then(|value| u32::try_from(value).ok());
+        // Sample the tile's filled left edge, clear of its glyph and corners.
+        let probe_x_fraction = if selected_surface_color.is_some() {
+            0.05
+        } else {
+            0.5
+        };
         let probe = PixelProbe {
-            x: ((visible_bounds.x + visible_bounds.width / 2.0) * frame.scale_factor).floor()
-                as u32,
+            x: ((visible_bounds.x + visible_bounds.width * probe_x_fraction) * frame.scale_factor)
+                .floor() as u32,
             y: ((visible_bounds.y + visible_bounds.height / 2.0) * frame.scale_factor).floor()
                 as u32,
         };
         ensure!(samples.len() < 64, "pixel_probe_budget_exhausted");
         let sampled =
             crate::computer_use::owned_render_capture::sample_retained_pixel(frame, &probe)?;
-        if visible_bounds.contains(bounds) {
-            if let Some(color) = search["selectionMarkerColor"].as_u64() {
-                if [sampled.r, sampled.g, sampled.b, sampled.a]
-                    != [(color >> 16) as u8, (color >> 8) as u8, color as u8, 255]
-                {
-                    failures.push("selected_marker_pixel_mismatch");
-                }
-            }
-        }
         samples.push(PaintPixelEvidence {
-            kind: "selectionMarker",
+            kind: "selectionIcon",
             semantic_id: id.into(),
             bounds,
             visible_bounds,
             probe: sampled,
-            selected_surface_color: None,
+            selected_surface_color,
         });
     }
     for calculator in bindings.iter().filter(|binding| {
@@ -610,7 +605,7 @@ fn sample_painted_selection(
             if row.metadata["subjectKind"] != "calculator"
                 && !samples.iter().any(|sample| sample.semantic_id == selected)
             {
-                failures.push("visible_selected_marker_missing");
+                failures.push("visible_selected_icon_missing");
             }
         }
     }

@@ -151,6 +151,10 @@ impl DayPageView {
             instance_id: cx.entity().entity_id().as_u64(),
             host_return_generation: 0,
             session: initial.session,
+            save_failure: None,
+            pending_feedback: None,
+            agent_chat_handoff_generation: 0,
+            handoff_failure: None,
             clock_now: initial.now,
             fixture_shelf_previews: initial.shelf_previews,
             theme_revision_seen: published_theme.revision,
@@ -192,7 +196,11 @@ impl DayPageView {
     }
 
     pub(crate) fn semantic_revision(&self, cx: &App) -> u64 {
-        self.notes_editor.read(cx).semantic_revision(cx)
+        self.notes_editor
+            .read(cx)
+            .semantic_revision(cx)
+            .saturating_add(self.document_revision)
+            .saturating_add(self.agent_chat_handoff_generation)
     }
 
     pub(crate) fn document_revision(&self) -> u64 {
@@ -575,7 +583,7 @@ impl DayPageView {
     }
 
     fn maybe_autosave(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.session.is_dirty() {
+        if !self.session.is_dirty() || self.save_failure.is_some() {
             return;
         }
         let due = self.last_autosave.is_none_or(|at| {
@@ -650,13 +658,31 @@ impl DayPageView {
         self.session.apply_editor_content(&content);
         match self.session.save_content(&content, self.now()) {
             Ok(()) => {
+                if self.save_failure.take().is_some() {
+                    self.pending_feedback = Some((
+                        "Saved".to_string(),
+                        crate::components::document_status::DocumentFeedbackKind::SaveRecovered,
+                    ));
+                }
                 if !crate::runtime_policy::is_owned_evaluation() {
                     wake_indexer();
                 }
                 true
             }
             Err(error) => {
-                tracing::error!(error = %error, "Failed to save day page");
+                let failure =
+                    crate::components::document_status::DocumentSaveFailure::capture(&error);
+                tracing::error!(code = failure.code, diagnostic = %failure.diagnostic_fingerprint, "Failed to save day page");
+                if self
+                    .save_failure
+                    .as_ref()
+                    .map(|old| &old.diagnostic_fingerprint)
+                    != Some(&failure.diagnostic_fingerprint)
+                {
+                    self.pending_feedback = Some(("Couldn't save this document. Your changes are still open. Use Retry Save in Actions.".to_string(), crate::components::document_status::DocumentFeedbackKind::SaveFailure));
+                }
+                self.save_failure = Some(failure);
+                self.document_revision = self.document_revision.wrapping_add(1);
                 false
             }
         }
@@ -702,6 +728,74 @@ impl DayPageView {
 
     pub fn is_dirty(&self) -> bool {
         self.session.is_dirty()
+    }
+
+    pub(crate) fn document_label(&self) -> String {
+        match self.session.binding() {
+            DayPageBinding::Note { title, .. } => {
+                if title.trim().is_empty() {
+                    "This Note".to_string()
+                } else {
+                    title.clone()
+                }
+            }
+            DayPageBinding::Fragment { fragment_path, .. } => fragment_path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "This Fragment".to_string()),
+            DayPageBinding::Day => self
+                .session
+                .bound_date()
+                .map(|date| {
+                    if date == self.local_today() {
+                        "Today".to_string()
+                    } else {
+                        date.to_string()
+                    }
+                })
+                .unwrap_or_else(|| "This Document".to_string()),
+        }
+    }
+
+    pub(crate) fn document_semantic_id(&self) -> String {
+        match self.session.binding() {
+            DayPageBinding::Note { note_id, .. } => format!("note:{note_id}"),
+            DayPageBinding::Fragment { fragment_path, .. } => format!(
+                "fragment:{}",
+                day_page_context_round_trip_fingerprint(&fragment_path.display().to_string())
+            ),
+            DayPageBinding::Day => self
+                .session
+                .bound_date()
+                .map(|date| format!("day:{date}"))
+                .unwrap_or_else(|| "document:unbound".to_string()),
+        }
+    }
+
+    pub(crate) fn toggle_clipboard_shelf(&mut self, cx: &mut Context<Self>) {
+        self.clipboard_shelf_expanded = !self.clipboard_shelf_expanded;
+        self.document_revision = self.document_revision.wrapping_add(1);
+        cx.notify();
+    }
+
+    pub(crate) fn open_clipboard_shelf_entry(
+        &mut self,
+        entry_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self
+            .clipboard_shelf
+            .iter()
+            .any(|entry| entry.item.entry_id == entry_id)
+        {
+            self.pending_feedback = Some(("This kept entry is no longer in the current document. Refresh the shelf and choose it again.".to_string(), crate::components::document_status::DocumentFeedbackKind::Error));
+            cx.notify();
+            return false;
+        }
+        let uri = crate::clipboard_history::entry_resource_uri(entry_id);
+        self.open_kit_resource_preview(uri, true, window, cx);
+        true
     }
 
     pub(crate) fn automation_input_value(&self, cx: &App) -> String {
@@ -776,6 +870,9 @@ impl DayPageView {
             "inputLength": input.chars().count(),
             "inputFingerprint": day_page_context_round_trip_fingerprint(&input),
             "dirty": self.session.is_dirty(),
+            "saveStatus": crate::components::document_status::DocumentSaveStatus::from_facts(self.session.is_dirty(), self.save_failure.as_ref()),
+            "handoffFailure": self.handoff_failure.as_ref().map(|failure| serde_json::json!({"message": failure.primary_message(), "failure": failure.failure})),
+            "saveFailure": self.save_failure,
             "selectionRange": [selection.start, selection.end],
             "selectionLength": selection.end.saturating_sub(selection.start),
             "editorScroll": editor_scroll,
@@ -1058,8 +1155,7 @@ impl DayPageView {
             .cursor_pointer()
             .hover(move |style| style.text_color(hover_fg))
             .on_click(cx.listener(|this, _, _window, cx| {
-                this.clipboard_shelf_expanded = !this.clipboard_shelf_expanded;
-                cx.notify();
+                this.toggle_clipboard_shelf(cx);
             }))
             .child(if expanded { "▾" } else { "▸" })
             .child(format!(
@@ -1083,8 +1179,8 @@ impl DayPageView {
                 .h(px(list_height))
                 .max_h(px(list_height))
                 .overflow_y_scroll();
-            for (index, entry) in self.clipboard_shelf.iter().enumerate() {
-                let uri = crate::clipboard_history::entry_resource_uri(&entry.item.entry_id);
+            for entry in &self.clipboard_shelf {
+                let entry_id = entry.item.entry_id.clone();
                 list = list.child(
                     div()
                         .h(px(DAY_PAGE_CLIPBOARD_SHELF_ROW_HEIGHT_PX))
@@ -1093,14 +1189,15 @@ impl DayPageView {
                             crate::components::resource_preview::render_compact_resource_row(
                                 crate::components::resource_preview::CompactResourceRow {
                                     id: gpui::SharedString::from(format!(
-                                        "day-page-clipboard-shelf-item-{index}"
+                                        "day-page-clipboard-shelf-item-{}",
+                                        entry.item.entry_id
                                     )),
                                     meta: entry.item.timestamp.clone().into(),
                                     preview: entry.preview.clone().into(),
                                 },
                                 cx,
                                 cx.listener(move |this, _, window, cx| {
-                                    this.open_kit_resource_preview(uri.clone(), true, window, cx);
+                                    this.open_clipboard_shelf_entry(&entry_id, window, cx);
                                 }),
                             ),
                         ),

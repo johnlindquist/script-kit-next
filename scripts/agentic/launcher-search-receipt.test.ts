@@ -221,7 +221,7 @@ test.each(["forward", "chain", "cross-kind", "mixed"])("%s observation aliases a
 function pixelReferenceShard(): SearchShardEvidence {
   const shard = rawShard(0, true, true);
   const evidence = shard.results[0]!.evidence as Json;
-  evidence.framePool.frames[0].facts.pixelEvidence = [{ kind: "selectionMarker", rgba: [1, 2, 3, 255], label: "private-sample" }];
+  evidence.framePool.frames[0].facts.pixelEvidence = [{ kind: "selectionIcon", rgba: [1, 2, 3, 255], label: "private-sample" }];
   evidence.phases = [{ id: "capture", frameEvidence: { frameRef: 0 },
     capture: { mimeType: "image/png", hiDpi: true, width: 1, height: 1, byteLength: 1, sha256: "a".repeat(64) },
     pixels: { nativeSamplesFrame: { frameRef: 0 }, sampled: [{ r: 1, g: 2, b: 3, a: 255 }] } }];

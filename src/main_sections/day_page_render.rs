@@ -5,6 +5,31 @@ impl Render for DayPageView {
         self.poll_external_disk_changes(window, cx);
         self.maybe_rebind_after_midnight(window, cx);
         self.maybe_autosave(window, cx);
+        if let Some((message, kind)) = self.pending_feedback.take() {
+            use crate::components::document_status::{
+                DocumentFeedbackKind, DocumentSaveFailureNotification,
+            };
+            use gpui_component::WindowExt as _;
+            if kind == DocumentFeedbackKind::SaveRecovered {
+                window.remove_notification::<DocumentSaveFailureNotification>(cx);
+            }
+            let notification = if kind.is_error() {
+                gpui_component::notification::Notification::error(message).autohide(false)
+            } else {
+                gpui_component::notification::Notification::info(message)
+                    .autohide_after(std::time::Duration::from_millis(2000))
+            };
+            let notification = if kind == DocumentFeedbackKind::SaveFailure {
+                notification.id::<DocumentSaveFailureNotification>()
+            } else {
+                notification.id1::<DayPageView>(if kind.is_error() {
+                    "day-page-error"
+                } else {
+                    "day-page-feedback"
+                })
+            };
+            window.push_notification(notification, cx);
+        }
 
         let Some(app) = self.app.upgrade() else {
             tracing::warn!("day_page.render_abandoned_after_host_dropped");
@@ -84,7 +109,8 @@ impl Render for DayPageView {
         let viewing_fragment = self.session.is_viewing_fragment();
         let theme = app_state.theme.clone();
 
-        let local_today = self.now()
+        let local_today = self
+            .now()
             .with_timezone(&self.session.substrate().timezone())
             .date_naive();
         let viewing_past_day = !viewing_fragment

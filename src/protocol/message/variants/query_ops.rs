@@ -287,6 +287,14 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         backgrounded_sessions: Option<serde_json::Value>,
+        /// Selected main-window entry preset and its runnable catalog.
+        /// Omitted for non-main targets; never contains operator data.
+        #[serde(
+            rename = "mainWindowAnimation",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        main_window_animation: Option<serde_json::Value>,
     },
 
     // ============================================================

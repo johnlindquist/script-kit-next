@@ -211,8 +211,9 @@ impl AgentChatView {
                 AgentChatThreadStatus::WaitingForPermission
             ),
             context_preparing: self.context_capture_pending_for_thread(thread),
-            context_failed: thread.pasted_image_preparation()
-                == Some(crate::pasted_image::PastedImagePreparation::Failed),
+            context_failed: thread.brain_decision_failure().is_some()
+                || thread.pasted_image_preparation()
+                    == Some(crate::pasted_image::PastedImagePreparation::Failed),
             composer_has_text: !thread.input.text().trim().is_empty()
                 || !thread.pending_context_items().is_empty(),
             retry_available: Self::retryable_recovery_active(thread),

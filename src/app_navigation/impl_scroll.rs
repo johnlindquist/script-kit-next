@@ -1,9 +1,12 @@
 #[inline]
 fn main_list_footer_overlay_height() -> gpui::Pixels {
-    // Floating footer chrome: the capsules live below the container in the
-    // transparent window strip, so the list keeps only the reveal clearance
-    // as its resting bottom inset instead of reserving footer height.
-    if crate::footer_popup::glass_scroll_bands_active() {
+    // The placement preview occludes the bottom of the existing glass stage.
+    if crate::footer_popup::main_window_footer_overlay_preview() {
+        gpui::px(
+            crate::components::footer_chrome::current_main_menu_footer_height()
+                + crate::footer_popup::FLOAT_FOOTER_CONTAINER_GAP_PX,
+        )
+    } else if crate::footer_popup::glass_scroll_bands_active() {
         gpui::px(0.0)
     } else {
         gpui::px(crate::components::footer_chrome::current_main_menu_footer_height())

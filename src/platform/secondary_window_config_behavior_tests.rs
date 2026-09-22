@@ -14,7 +14,7 @@ fn glass_morph_tuning_drives_matching_frame_and_layer_geometry() {
     // phase-aligned to Spotlight's measured t≈88ms state — 101.2% width
     // at the 0.85 alpha floor — with a 70ms ease-out compression, no
     // hold, and a 140ms ease-in-out rebound. Height participation is 0.
-    let tuning = super::glass_morph_tuning_from(0.105, 0.006).expect("morph enabled");
+    let tuning = super::glass_morph_tuning_from(0.210, 0.006).expect("morph enabled");
     let epsilon = 1e-12;
     assert!((tuning.start_scale_x - 1.012).abs() < epsilon);
     assert!((tuning.start_scale_y - 1.0).abs() < epsilon);
@@ -24,26 +24,24 @@ fn glass_morph_tuning_drives_matching_frame_and_layer_geometry() {
     assert!((tuning.start_alpha - 0.85).abs() < epsilon);
     assert!((tuning.squish_scale_x - 0.987).abs() < epsilon);
     assert!((tuning.squish_scale_y - 1.0).abs() < epsilon);
-    assert!((tuning.phase1 - 0.035).abs() < epsilon);
-    assert!((tuning.phase2 - 0.07).abs() < epsilon);
+    assert!((tuning.phase1 - 0.070).abs() < epsilon);
+    assert!((tuning.phase2 - 0.140).abs() < epsilon);
     assert!((tuning.phase1_alpha_target - 0.99).abs() < epsilon);
-    assert!((tuning.alpha_ramp_duration - 0.018).abs() < epsilon);
-    assert!((tuning.alpha_finish_duration - 0.026).abs() < epsilon);
-    // Material onset prefix (glass-entry-onset-v2, 2x tempo): 44ms
-    // Clear→Regular ramp before the 105ms tail — 149ms total. Content
-    // fades from the first photon (2026-08-13 content-timing retune):
-    // hold 0ms, fade 44ms, ending exactly at tail start.
-    assert!((tuning.material_onset_duration - 0.044).abs() < epsilon);
+    assert!((tuning.alpha_ramp_duration - 0.036).abs() < epsilon);
+    assert!((tuning.alpha_finish_duration - 0.052).abs() < epsilon);
+    // Original Spotlight tempo restored on 2026-09-15: 88ms Clear→Regular
+    // onset before the 210ms tail — 298ms total. Content fades from the
+    // first photon: hold 0ms, fade 88ms, ending exactly at tail start.
+    assert!((tuning.material_onset_duration - 0.088).abs() < epsilon);
     assert!((tuning.content_hold_duration - 0.0).abs() < epsilon);
-    assert!((tuning.content_fade_duration - 0.044).abs() < epsilon);
-    assert!((tuning.visible_tail_duration() - 0.105).abs() < epsilon);
-    assert!((tuning.total_entry_duration() - 0.149).abs() < epsilon);
-    assert_eq!(tuning.visible_tail_start_delay_ms(), 44);
-    // Geometry crossing is TAIL-relative (23ms after tail start = 111ms
-    // absolute); the reveal anchor is ABSOLUTE from configure:
-    // 88 + max(23, 35) = 123ms.
-    assert_eq!(super::settled_size_crossing_delay_ms(tuning), 11);
-    assert_eq!(super::entry_content_reveal_delay_ms(tuning), 62);
+    assert!((tuning.content_fade_duration - 0.088).abs() < epsilon);
+    assert!((tuning.visible_tail_duration() - 0.210).abs() < epsilon);
+    assert!((tuning.total_entry_duration() - 0.298).abs() < epsilon);
+    assert_eq!(tuning.visible_tail_start_delay_ms(), 88);
+    // Geometry crossing is tail-relative; the reveal anchor is absolute:
+    // 88 + max(23, 36) = 124ms.
+    assert_eq!(super::settled_size_crossing_delay_ms(tuning), 23);
+    assert_eq!(super::entry_content_reveal_delay_ms(tuning), 124);
 }
 
 #[cfg(target_os = "macos")]
@@ -96,7 +94,7 @@ fn glass_motion_fixture_matches_the_measured_production_calibration() {
     // frame is phase-aligned to Spotlight's measured t≈88ms state (see
     // https://eager-hollow-dyyf.here.now/). Start alpha stays at the
     // 0.85 wallpaper-bleed floor (HITL 98cab5e5-6f15-4311-8d49-
-    // 83e31602e641); it ramps to 0.99 over 35ms and finishes to 1.0
+    // 83e31602e641); it ramps to 0.99 over 36ms and finishes to 1.0
     // over 52ms from rebound start — never fully opaque while wider
     // than natural size. Hidden parking keeps 0.0.
     assert_eq!(super::GLASS_MORPH_ENTRY_START_ALPHA, 0.85);
@@ -108,22 +106,22 @@ fn glass_motion_fixture_matches_the_measured_production_calibration() {
     assert_eq!(super::GLASS_MORPH_SQUISH_HOLD, 0.0);
     assert_eq!(super::GLASS_MORPH_PHASE1_FRACTION, 1.0 / 3.0);
     assert_eq!(super::GLASS_MORPH_PHASE1_ALPHA_TARGET, 0.99);
-    assert_eq!(super::GLASS_MORPH_ALPHA_RAMP_DURATION, 0.018);
-    assert_eq!(super::GLASS_MORPH_ALPHA_FINISH_DURATION, 0.026);
+    assert_eq!(super::GLASS_MORPH_ALPHA_RAMP_DURATION, 0.036);
+    assert_eq!(super::GLASS_MORPH_ALPHA_FINISH_DURATION, 0.052);
     assert_eq!(super::GLASS_MORPH_FADE_FRACTION, 2.0 / 3.0);
-    assert_eq!(super::GLASS_MATERIAL_ONSET_DURATION, 0.044);
+    assert_eq!(super::GLASS_MATERIAL_ONSET_DURATION, 0.088);
     assert_eq!(super::GLASS_MAIN_ONSET_START_WIDTH_SCALE, 1.0305);
-    assert_eq!(super::GLASS_MAIN_ONSET_GEOMETRY_DURATION, 0.018);
+    assert_eq!(super::GLASS_MAIN_ONSET_GEOMETRY_DURATION, 0.036);
     assert_eq!(super::GLASS_ENTRY_CONTENT_HOLD_DURATION, 0.0);
-    assert_eq!(super::GLASS_ENTRY_CONTENT_FADE_DURATION, 0.044);
+    assert_eq!(super::GLASS_ENTRY_CONTENT_FADE_DURATION, 0.088);
     assert_eq!(super::GLASS_ENTRY_BLUR_RADIUS, 8.0);
     assert_eq!(super::GLASS_MAIN_ENTRY_BLUR_RADIUS, 12.0);
     let tuning =
         super::glass_morph_tuning_from(duration, inset).expect("fixture enables glass morph");
-    assert_eq!(super::settled_size_crossing_delay_ms(tuning), 11);
-    assert_eq!(super::entry_content_reveal_delay_ms(tuning), 62);
-    assert_eq!(tuning.visible_tail_start_delay_ms(), 44);
-    assert!((tuning.total_entry_duration() - 0.149).abs() < 1e-9);
+    assert_eq!(super::settled_size_crossing_delay_ms(tuning), 23);
+    assert_eq!(super::entry_content_reveal_delay_ms(tuning), 124);
+    assert_eq!(tuning.visible_tail_start_delay_ms(), 88);
+    assert!((tuning.total_entry_duration() - 0.298).abs() < 1e-9);
     assert_eq!(super::GLASS_EXIT_DURATION, 0.12);
     assert_eq!(super::GLASS_EXIT_REMOVE_DELAY_MS, 135);
     assert_eq!(super::GLASS_EXIT_GROW_X, 0.03);
@@ -296,7 +294,7 @@ fn child_popup_remains_tail_aligned_grow_in() {
 #[cfg(target_os = "macos")]
 #[test]
 fn main_entry_restores_the_spotlight_soft_materialize_prefix() {
-    let tuning = super::glass_morph_tuning_from(0.105, 0.006).expect("morph enabled");
+    let tuning = super::glass_morph_tuning_from(0.210, 0.006).expect("morph enabled");
     let main = super::glass_entry_policy(super::GlassEntrySurface::Main);
     assert_eq!(
         super::glass_entry_surface_for_window_frame(true),
@@ -320,9 +318,9 @@ fn main_entry_restores_the_spotlight_soft_materialize_prefix() {
     );
     assert!((onset_start_scale - 1.0305).abs() < epsilon);
     assert!((tail_start_scale - 1.012).abs() < epsilon);
-    assert!((main.onset_geometry.duration() - 0.018).abs() < epsilon);
+    assert!((main.onset_geometry.duration() - 0.036).abs() < epsilon);
     assert_eq!(super::GLASS_MAIN_ENTRY_BLUR_RADIUS, 12.0);
-    assert!((super::GlassEntrySurface::Main.entry_blur_duration(tuning) - 0.044).abs() < epsilon);
+    assert!((super::GlassEntrySurface::Main.entry_blur_duration(tuning) - 0.088).abs() < epsilon);
     let footer = super::main_footer_entry_material_policy();
     assert_eq!(
         footer.defocus_scope,
@@ -332,8 +330,8 @@ fn main_entry_restores_the_spotlight_soft_materialize_prefix() {
         footer.defocus_radius,
         super::GlassEntrySurface::Main.entry_blur_radius()
     );
-    assert!((tuning.material_onset_duration - 0.044).abs() < epsilon);
-    assert!((tuning.total_entry_duration() - 0.149).abs() < epsilon);
+    assert!((tuning.material_onset_duration - 0.088).abs() < epsilon);
+    assert!((tuning.total_entry_duration() - 0.298).abs() < epsilon);
 
     for surface in [
         super::GlassEntrySurface::ChildPopup,
@@ -345,7 +343,7 @@ fn main_entry_restores_the_spotlight_soft_materialize_prefix() {
             super::GlassEntryOnsetGeometry::TailAligned
         );
         assert_eq!(policy.onset_geometry.duration(), 0.0);
-        assert!((surface.entry_blur_duration(tuning) - 0.149).abs() < epsilon);
+        assert!((surface.entry_blur_duration(tuning) - 0.298).abs() < epsilon);
     }
 }
 

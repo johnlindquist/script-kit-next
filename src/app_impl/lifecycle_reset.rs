@@ -26,6 +26,12 @@ pub(crate) enum MainWindowPostHide {
     ResetPreparedAgentChat { reason: &'static str },
     /// Keep the view state exactly as-is (focus-loss / escape preserve hides).
     PreserveState { reason: &'static str },
+    /// Native hide completed; reset the root menu, then queue one guarded re-show.
+    AnimationReplay {
+        reason: &'static str,
+        replay_generation: u64,
+        preset_number: usize,
+    },
 }
 
 impl MainWindowPostHide {
@@ -33,7 +39,8 @@ impl MainWindowPostHide {
         match self {
             Self::ResetScriptList { reason, .. }
             | Self::ResetPreparedAgentChat { reason }
-            | Self::PreserveState { reason } => reason,
+            | Self::PreserveState { reason }
+            | Self::AnimationReplay { reason, .. } => reason,
         }
     }
 }
@@ -444,6 +451,9 @@ impl ScriptListApp {
         geometry_cycle_id: Option<u64>,
         post_hide: MainWindowPostHide,
     ) {
+        if !matches!(post_hide, MainWindowPostHide::AnimationReplay { .. }) {
+            self.animation_replay_generation = self.animation_replay_generation.wrapping_add(1);
+        }
         let app_entity = cx.entity().downgrade();
         let fade_started = platform::begin_main_window_exit_dematerialize();
         let delay = if fade_started {
@@ -469,6 +479,25 @@ impl ScriptListApp {
                         ),
                     );
                     return;
+                }
+                if let MainWindowPostHide::AnimationReplay {
+                    replay_generation,
+                    preset_number,
+                    ..
+                } = post_hide
+                {
+                    let Some(app) = app_entity.upgrade() else { return };
+                    if !script_kit_gpui::ShowWindowRequest::is_current(script_kit_gpui::ShowWindowRequest::AnimationReplay {
+                        visibility_generation: expected_visibility_generation,
+                        replay_generation,
+                        preset_number,
+                    },
+                    script_kit_gpui::main_window_visibility_generation(),
+                    script_kit_gpui::is_main_window_visible(),
+                    app.read(cx).animation_replay_generation,
+                    app.read(cx).main_preferences.animation.preset.number(),) {
+                        return;
+                    }
                 }
                 let completion = move |outcome: crate::platform::MainWindowHideCompletion,
                                        cx: &mut gpui::AsyncApp| {
@@ -515,6 +544,57 @@ impl ScriptListApp {
                                         }
                                     });
                                 }
+                                MainWindowPostHide::AnimationReplay {
+                                    reason,
+                                    replay_generation,
+                                    preset_number,
+                                } => {
+                                    let request = HiddenMainWindowResetRequest {
+                                        _native_hidden: native_hidden,
+                                        visibility_generation: expected_visibility_generation,
+                                        reason,
+                                        reset_mini_bounds_after_hidden_reset: false,
+                                    };
+                                    cx.update(|cx| {
+                                        if let Some(app_entity) = app_entity.upgrade() {
+                                            app_entity.update(cx, |app, cx| {
+                                                if app.animation_replay_generation != replay_generation
+                                                    || app.main_preferences.animation.preset.number() != preset_number
+                                                {
+                                                    return;
+                                                }
+                                                app.complete_hidden_main_window_script_list_reset(request, cx);
+                                                if script_kit_gpui::ShowWindowRequest::is_current(script_kit_gpui::ShowWindowRequest::AnimationReplay {
+                                                    visibility_generation: expected_visibility_generation,
+                                                    replay_generation,
+                                                    preset_number,
+                                                },
+                                                script_kit_gpui::main_window_visibility_generation(),
+                                                script_kit_gpui::is_main_window_visible(),
+                                                app.animation_replay_generation,
+                                                app.main_preferences.animation.preset.number(),) {
+                                                    match script_kit_gpui::request_show_main_window_for_animation_replay(
+                                                        expected_visibility_generation,
+                                                        replay_generation,
+                                                        preset_number,
+                                                    ) {
+                                                        Ok(()) => {
+                                                            app.toast_manager.push(
+                                                                components::toast::Toast::success(
+                                                                    format!("Animation {:02} — {}", preset_number, app.main_preferences.animation.preset.name()),
+                                                                    &app.theme,
+                                                                )
+                                                                .duration_ms(Some(1800)),
+                                                            );
+                                                            cx.notify();
+                                                        }
+                                                        Err(error) => app.show_error_toast(format!("Animation replay could not reopen the launcher: {error}"), cx),
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    });
+                                }
                             }
                         }
                         failure => {
@@ -545,6 +625,33 @@ impl ScriptListApp {
             });
         })
         .detach();
+    }
+
+    /// Re-enter only after AppKit confirms the ordinary main-only hide.
+    pub(crate) fn replay_main_window_entry(
+        &mut self,
+        preset: crate::theme::animation::MainWindowAnimationPreset,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.animation_replay_generation = self.animation_replay_generation.wrapping_add(1);
+        let replay_generation = self.animation_replay_generation;
+        platform::reset_main_glass_entry_replay();
+        let Some(visibility_generation) =
+            self.prepare_main_window_close(cx, "animation_replay", false, false)
+        else {
+            return false;
+        };
+        self.defer_calibrated_main_window_hide(
+            cx,
+            visibility_generation,
+            None,
+            MainWindowPostHide::AnimationReplay {
+                reason: "animation_replay",
+                replay_generation,
+                preset_number: preset.number(),
+            },
+        );
+        true
     }
 
     pub(crate) fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {

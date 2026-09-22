@@ -290,16 +290,37 @@ unsafe fn cancel_pending_glass_window_selectors(window: id) {
     if let Ok(mut targets) = GLASS_MORPH_TAIL_TARGETS.lock() {
         targets.remove(&(window as usize));
     }
-    // Restore any onset-held GPUI content roots exactly once.
-    if let Some(content) = GLASS_ENTRY_CONTENT_TARGETS
+    let coherent_active = GLASS_COHERENT_ENTRY_STATES
         .lock()
-        .ok()
-        .and_then(|mut guard| guard.remove(&(window as usize)))
-    {
-        for (view_ptr, original_alpha) in content {
-            let view = view_ptr as id;
-            if view != nil {
-                let _: () = msg_send![view, setAlphaValue: original_alpha];
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .contains_key(&(window as usize));
+    let visible: bool = msg_send![window, isVisible];
+    let content = GLASS_ENTRY_CONTENT_TARGETS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&(window as usize));
+    if !coherent_active || !visible {
+        if let Some(content) = content {
+            for (view_ptr, original_alpha) in content.views {
+                let view = view_ptr as id;
+                if view != nil {
+                    let _: () = msg_send![view, setAlphaValue: original_alpha];
+                }
+            }
+        }
+        finish_coherent_glass_entry(window, "interrupted");
+    } else {
+        // A fixed-frame fade exit must not briefly expose a full, sharp,
+        // natural-sized stage while the window is still visible. Invalidate
+        // selectors now; the retained state is restored after orderOut.
+        let mut receipt = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(receipt) = receipt.as_mut() {
+            if receipt.window_key == window as usize && receipt.outcome == "in_flight" {
+                receipt.outcome = "pending_hidden_restore";
+                receipt.cancelled_at_host_time_ns =
+                    Some(crate::platform::host_clock::host_time_ns());
             }
         }
     }
@@ -320,6 +341,7 @@ unsafe fn cancel_pending_glass_window_selectors(window: id) {
     for selector in [
         sel!(revealOwnWindowEntryContent),
         sel!(beginOwnWindowEntryTail),
+        sel!(finishOwnWindowEntry),
     ] {
         let _: () = msg_send![
             class!(NSObject),
@@ -404,14 +426,584 @@ static GLASS_MORPH_TAIL_TARGETS: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashMap<usize, GlassMorphTailTarget>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
-/// GPUI content roots hidden during the onset: (view ptr, original alpha).
+/// Scheduled content reveal owns its duration and view list. A live preset
+/// change cannot alter a previously armed window's delayed reveal.
 #[cfg(target_os = "macos")]
-type GlassEntryContentTargetMap = std::collections::HashMap<usize, Vec<(usize, f64)>>;
+struct GlassEntryContentTarget {
+    duration: f64,
+    views: Vec<(usize, f64)>,
+}
 
 #[cfg(target_os = "macos")]
 static GLASS_ENTRY_CONTENT_TARGETS: std::sync::LazyLock<
-    std::sync::Mutex<GlassEntryContentTargetMap>,
+    std::sync::Mutex<std::collections::HashMap<usize, GlassEntryContentTarget>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+/// A coherent entry owns every native object it temporarily changes. Object
+/// pointers in the maps are only keys; retained objects are released exactly
+/// once by the finish callback or the synchronous interruption path.
+#[cfg(target_os = "macos")]
+struct GlassEntryLayerSnapshot {
+    layer: usize,
+    filters: usize,
+    mask: usize,
+    masks_to_bounds: bool,
+    prior_blur_animation: usize,
+    original_animation_keys: usize,
+    owned_filters: usize,
+    owned_mask: usize,
+    owned_clip: Option<bool>,
+    owned_animation_keys: Vec<usize>,
+}
+
+#[cfg(target_os = "macos")]
+struct GlassEntryStyleSnapshot {
+    view: usize,
+    style: isize,
+    tint: usize,
+}
+
+#[cfg(target_os = "macos")]
+struct GlassCoherentEntryState {
+    backdrop_key: usize,
+    window_number: i64,
+    final_frame: [f64; 4],
+    alpha_views: Vec<(usize, f64)>,
+    layers: Vec<GlassEntryLayerSnapshot>,
+    styles: Vec<GlassEntryStyleSnapshot>,
+}
+
+#[cfg(target_os = "macos")]
+static GLASS_COHERENT_ENTRY_STATES: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<usize, GlassCoherentEntryState>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+#[cfg(target_os = "macos")]
+unsafe fn retain_entry_object(object: id) -> usize {
+    if object == nil {
+        0
+    } else {
+        let retained: id = msg_send![object, retain];
+        retained as usize
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn release_entry_object(object: usize) {
+    if object != 0 {
+        let _: () = msg_send![object as id, release];
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl GlassCoherentEntryState {
+    fn new(frame: cocoa::foundation::NSRect, backdrop: id, window_number: i64) -> Self {
+        Self {
+            backdrop_key: backdrop as usize,
+            window_number,
+            final_frame: [
+                frame.origin.x,
+                frame.origin.y,
+                frame.size.width,
+                frame.size.height,
+            ],
+            alpha_views: Vec::new(),
+            layers: Vec::new(),
+            styles: Vec::new(),
+        }
+    }
+
+    unsafe fn capture_alpha(&mut self, view: id) -> Option<f64> {
+        if view == nil {
+            return None;
+        }
+        if let Some((_, alpha)) = self
+            .alpha_views
+            .iter()
+            .find(|(pointer, _)| *pointer == view as usize)
+        {
+            return Some(*alpha);
+        }
+        let alpha: f64 = msg_send![view, alphaValue];
+        self.alpha_views.push((retain_entry_object(view), alpha));
+        Some(alpha)
+    }
+
+    unsafe fn capture_layer(&mut self, view: id) -> bool {
+        if view == nil {
+            return false;
+        }
+        let layer: id = msg_send![view, layer];
+        if layer == nil {
+            return false;
+        }
+        if self
+            .layers
+            .iter()
+            .any(|snapshot| snapshot.layer == layer as usize)
+        {
+            return true;
+        }
+        let filters: id = msg_send![layer, filters];
+        let mask: id = msg_send![layer, mask];
+        let masks_to_bounds: bool = msg_send![layer, masksToBounds];
+        let key = tahoe_ns_string("entryBlurRamp");
+        let prior_animation: id = msg_send![layer, animationForKey: key];
+        let animation_keys: id = msg_send![layer, animationKeys];
+        self.layers.push(GlassEntryLayerSnapshot {
+            layer: retain_entry_object(layer),
+            filters: retain_entry_object(filters),
+            mask: retain_entry_object(mask),
+            masks_to_bounds,
+            prior_blur_animation: retain_entry_object(prior_animation),
+            original_animation_keys: retain_entry_object(animation_keys),
+            owned_filters: 0,
+            owned_mask: 0,
+            owned_clip: None,
+            owned_animation_keys: Vec::new(),
+        });
+        true
+    }
+
+    unsafe fn mark_owned_filter(&mut self, view: id) {
+        let layer: id = msg_send![view, layer];
+        if let Some(snapshot) = self
+            .layers
+            .iter_mut()
+            .find(|snapshot| snapshot.layer == layer as usize)
+        {
+            release_entry_object(snapshot.owned_filters);
+            let filters: id = msg_send![layer, filters];
+            snapshot.owned_filters = retain_entry_object(filters);
+        }
+    }
+
+    unsafe fn mark_owned_mask(&mut self, view: id) {
+        let layer: id = msg_send![view, layer];
+        if let Some(snapshot) = self
+            .layers
+            .iter_mut()
+            .find(|snapshot| snapshot.layer == layer as usize)
+        {
+            release_entry_object(snapshot.owned_mask);
+            let mask: id = msg_send![layer, mask];
+            snapshot.owned_mask = retain_entry_object(mask);
+        }
+    }
+
+    unsafe fn mark_owned_clip(&mut self, view: id) {
+        let layer: id = msg_send![view, layer];
+        if let Some(snapshot) = self
+            .layers
+            .iter_mut()
+            .find(|snapshot| snapshot.layer == layer as usize)
+        {
+            snapshot.owned_clip = Some(msg_send![layer, masksToBounds]);
+        }
+    }
+
+    unsafe fn mark_added_animations(&mut self) {
+        for snapshot in &mut self.layers {
+            let layer = snapshot.layer as id;
+            let keys: id = msg_send![layer, animationKeys];
+            if keys == nil {
+                continue;
+            }
+            let count: usize = msg_send![keys, count];
+            for index in 0..count {
+                let key: id = msg_send![keys, objectAtIndex: index];
+                let was_present: bool = snapshot.original_animation_keys != 0
+                    && msg_send![snapshot.original_animation_keys as id, containsObject: key];
+                if !was_present {
+                    snapshot.owned_animation_keys.push(retain_entry_object(key));
+                }
+            }
+        }
+    }
+
+    unsafe fn capture_style(&mut self, view: id) {
+        if view == nil || self.styles.iter().any(|style| style.view == view as usize) {
+            return;
+        }
+        let style: isize = msg_send![view, style];
+        let tint: id = msg_send![view, tintColor];
+        self.styles.push(GlassEntryStyleSnapshot {
+            view: retain_entry_object(view),
+            style,
+            tint: retain_entry_object(tint),
+        });
+    }
+
+    /// A physically destroyed NSWindow has no model state to restore; the
+    /// pending selector still owns the tagged backdrop until dispatch, so
+    /// release all entry retains without messaging an invalid window.
+    unsafe fn discard(self) {
+        for (view, _) in self.alpha_views {
+            release_entry_object(view);
+        }
+        for style in self.styles {
+            release_entry_object(style.tint);
+            release_entry_object(style.view);
+        }
+        for layer in self.layers {
+            for key in layer.owned_animation_keys {
+                release_entry_object(key);
+            }
+            release_entry_object(layer.owned_filters);
+            release_entry_object(layer.owned_mask);
+            release_entry_object(layer.original_animation_keys);
+            release_entry_object(layer.prior_blur_animation);
+            release_entry_object(layer.filters);
+            release_entry_object(layer.mask);
+            release_entry_object(layer.layer);
+        }
+    }
+
+    unsafe fn restore(self, window: id, restore_frame: bool) -> ([f64; 4], f64, bool) {
+        use cocoa::foundation::{NSPoint, NSRect, NSSize};
+        let Self {
+            final_frame,
+            alpha_views,
+            layers,
+            styles,
+            ..
+        } = self;
+        let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
+        let context: id = msg_send![class!(NSAnimationContext), currentContext];
+        let _: () = msg_send![context, setDuration: 0.0f64];
+        let _: () = msg_send![context, setAllowsImplicitAnimation: false];
+        let mut effects_restored = true;
+        for snapshot in layers {
+            let layer = snapshot.layer as id;
+            let current_filters: id = msg_send![layer, filters];
+            let current_mask: id = msg_send![layer, mask];
+            let owns_filters = snapshot.owned_filters != 0
+                && (current_filters == snapshot.owned_filters as id
+                    || (current_filters != nil
+                        && msg_send![current_filters, isEqual: snapshot.owned_filters as id]));
+            let owns_mask = snapshot.owned_mask != 0 && current_mask == snapshot.owned_mask as id;
+            let current_clip: bool = msg_send![layer, masksToBounds];
+            let owns_clip = snapshot
+                .owned_clip
+                .is_some_and(|clip| clip == current_clip && clip != snapshot.masks_to_bounds);
+            for key in snapshot.owned_animation_keys {
+                let _: () = msg_send![layer, removeAnimationForKey: key as id];
+                release_entry_object(key);
+            }
+            if owns_filters {
+                let _: () = msg_send![layer, setFilters: snapshot.filters as id];
+                if snapshot.prior_blur_animation != 0 {
+                    let _: () = msg_send![layer,
+                        addAnimation: snapshot.prior_blur_animation as id
+                        forKey: tahoe_ns_string("entryBlurRamp")];
+                }
+            }
+            if owns_mask {
+                let _: () = msg_send![layer, setMask: snapshot.mask as id];
+            }
+            if (owns_filters || owns_mask || owns_clip)
+                && (snapshot.owned_filters == 0 || owns_filters)
+                && (snapshot.owned_mask == 0 || owns_mask)
+            {
+                let _: () = msg_send![layer, setMasksToBounds: snapshot.masks_to_bounds];
+            }
+            // A refresh that replaced an owned filter or mask wins. Only
+            // compare restored entry-owned channels, not newer theme state.
+            if owns_filters {
+                let actual_filters: id = msg_send![layer, filters];
+                effects_restored &= actual_filters == snapshot.filters as id
+                    || (actual_filters != nil
+                        && snapshot.filters != 0
+                        && msg_send![actual_filters, isEqual: snapshot.filters as id]);
+            }
+            if owns_mask {
+                let actual_mask: id = msg_send![layer, mask];
+                effects_restored &= actual_mask == snapshot.mask as id;
+            }
+            if owns_clip {
+                let actual_clip: bool = msg_send![layer, masksToBounds];
+                effects_restored &= actual_clip == snapshot.masks_to_bounds;
+            }
+            release_entry_object(snapshot.owned_filters);
+            release_entry_object(snapshot.owned_mask);
+            release_entry_object(snapshot.original_animation_keys);
+            release_entry_object(snapshot.prior_blur_animation);
+            release_entry_object(snapshot.filters);
+            release_entry_object(snapshot.mask);
+            release_entry_object(snapshot.layer);
+        }
+        for (view, alpha) in alpha_views {
+            let _: () = msg_send![view as id, setAlphaValue: alpha];
+            let actual: f64 = msg_send![view as id, alphaValue];
+            effects_restored &= (actual - alpha).abs() < 0.000_001;
+            release_entry_object(view);
+        }
+        for snapshot in styles {
+            // The T=0 animator already returned the model to its natural
+            // style/tint. Replaying the old snapshot here would overwrite a
+            // newer authoritative theme refresh during the entry.
+            release_entry_object(snapshot.tint);
+            release_entry_object(snapshot.view);
+        }
+        if restore_frame {
+            let [x, y, width, height] = final_frame;
+            let frame = NSRect::new(NSPoint::new(x, y), NSSize::new(width, height));
+            let _: () = msg_send![window, setFrame: frame display: true];
+        }
+        let _: () = msg_send![window, setAlphaValue: 1.0f64];
+        let _: () = msg_send![class!(NSAnimationContext), endGrouping];
+        let actual_frame: NSRect = msg_send![window, frame];
+        let actual_alpha: f64 = msg_send![window, alphaValue];
+        let actual = [
+            actual_frame.origin.x,
+            actual_frame.origin.y,
+            actual_frame.size.width,
+            actual_frame.size.height,
+        ];
+        effects_restored &=
+            (!restore_frame || actual == final_frame) && (actual_alpha - 1.0).abs() < 0.000_001;
+        (actual, actual_alpha, effects_restored)
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn finish_coherent_glass_entry(window: id, outcome: &'static str) {
+    if window == nil {
+        return;
+    }
+    let state = GLASS_COHERENT_ENTRY_STATES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&(window as usize));
+    let Some(state) = state else {
+        return;
+    };
+    let visible: bool = msg_send![window, isVisible];
+    let restore_frame = outcome == "completed" || !visible;
+    let (actual_frame, actual_alpha, effects_restored) = state.restore(window, restore_frame);
+    let now = crate::platform::host_clock::host_time_ns();
+    let mut receipt = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(receipt) = receipt.as_mut() {
+        if receipt.window_key == window as usize
+            && matches!(receipt.outcome, "in_flight" | "pending_hidden_restore")
+        {
+            receipt.outcome = outcome;
+            receipt.actual_frame = Some(actual_frame);
+            receipt.actual_alpha = Some(actual_alpha);
+            receipt.effects_restored = Some(effects_restored);
+            receipt.frame_restored = Some(restore_frame && actual_frame == receipt.expected_frame);
+            if outcome == "interrupted" && receipt.cancelled_at_host_time_ns.is_none() {
+                receipt.cancelled_at_host_time_ns = Some(now);
+            }
+            receipt.actual_end_host_time_ns = Some(now);
+            logging::log("PANEL", &format!(
+                "event=main_glass_entry_end preset={} outcome={} actual_end_host_time_ns={} actual_frame={:.3},{:.3},{:.3},{:.3} actual_alpha={:.6} effects_restored={}",
+                receipt.preset_id, outcome, now, actual_frame[0], actual_frame[1],
+                actual_frame[2], actual_frame[3], actual_alpha, effects_restored,
+            ));
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn discard_closed_coherent_glass_entry(backdrop: id) {
+    let (window_key, state) = {
+        let mut states = GLASS_COHERENT_ENTRY_STATES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let window_key = states
+            .iter()
+            .find(|(_, state)| state.backdrop_key == backdrop as usize)
+            .map(|(window_key, _)| *window_key);
+        let Some(window_key) = window_key else {
+            return;
+        };
+        (window_key, states.remove(&window_key))
+    };
+    let Some(state) = state else {
+        return;
+    };
+    GLASS_MORPH_SETTLE_TARGETS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&window_key);
+    GLASS_MORPH_TAIL_TARGETS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&window_key);
+    GLASS_ENTRY_CONTENT_TARGETS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&window_key);
+    let window_number = state.window_number;
+    state.discard();
+    let now = crate::platform::host_clock::host_time_ns();
+    let mut receipt = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(receipt) = receipt.as_mut() {
+        if receipt.window_key == window_key
+            && receipt.window_number == window_number
+            && matches!(receipt.outcome, "in_flight" | "pending_hidden_restore")
+        {
+            receipt.outcome = "closed";
+            receipt.actual_end_host_time_ns = Some(now);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn tahoe_glass_backdrop_finish_coherent_entry(
+    this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+) {
+    unsafe {
+        let view = this as *const objc::runtime::Object as id;
+        let window: id = msg_send![view, window];
+        if window == nil {
+            discard_closed_coherent_glass_entry(view);
+        } else {
+            finish_coherent_glass_entry(window, "completed");
+        }
+    }
+}
+
+/// Native main bounds are authoritative for the foreground clip. Convert the
+/// already bounded backdrop into the root's own coordinates; never mask the
+/// common contentView or the gap-spanning footer host.
+#[cfg(target_os = "macos")]
+unsafe fn clip_entry_defocus_to_backdrop(
+    root: id,
+    backdrop: id,
+    spec: crate::theme::animation::MainWindowAnimationSpec,
+) -> bool {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGPathCreateWithRoundedRect(
+            rect: NSRect,
+            corner_width: f64,
+            corner_height: f64,
+            transform: *const std::ffi::c_void,
+        ) -> *mut std::ffi::c_void;
+        fn CGPathRelease(path: *mut std::ffi::c_void);
+    }
+    let layer: id = msg_send![root, layer];
+    let glass_bounds: NSRect = msg_send![backdrop, bounds];
+    let backdrop_clip: NSRect = msg_send![root, convertRect: glass_bounds fromView: backdrop];
+    let root_bounds: NSRect = msg_send![root, bounds];
+    let left = backdrop_clip.origin.x.max(root_bounds.origin.x);
+    let bottom = backdrop_clip.origin.y.max(root_bounds.origin.y);
+    let right = (backdrop_clip.origin.x + backdrop_clip.size.width)
+        .min(root_bounds.origin.x + root_bounds.size.width);
+    let top = (backdrop_clip.origin.y + backdrop_clip.size.height)
+        .min(root_bounds.origin.y + root_bounds.size.height);
+    if layer == nil || right <= left || top <= bottom {
+        return false;
+    }
+    let start_clip = NSRect::new(
+        NSPoint::new(left, bottom),
+        NSSize::new(right - left, top - bottom),
+    );
+    let start_width = start_clip.size.width;
+    let extreme_width = start_width * spec.squish_width_scale / spec.start_width_scale;
+    let final_width = start_width / spec.start_width_scale;
+    let width_max = start_width.max(extreme_width).max(final_width);
+    let Some(mask_class) = objc::runtime::Class::get("CAShapeLayer") else {
+        return false;
+    };
+    let Some(animation_class) = objc::runtime::Class::get("CAKeyframeAnimation") else {
+        return false;
+    };
+    let mask: id = msg_send![mask_class, layer];
+    if mask == nil {
+        return false;
+    }
+    let radius_supported: bool = msg_send![backdrop, respondsToSelector: sel!(cornerRadius)];
+    let corner_radius: f64 = if radius_supported {
+        msg_send![backdrop, cornerRadius]
+    } else {
+        0.0
+    };
+    let radius = corner_radius
+        .max(0.0)
+        .min(start_clip.size.height * 0.5)
+        .min(start_width.min(extreme_width).min(final_width) * 0.5);
+    let stages = [start_width, extreme_width, final_width];
+    let mut paths = [std::ptr::null_mut(); 3];
+    for (index, width) in stages.into_iter().enumerate() {
+        paths[index] = CGPathCreateWithRoundedRect(
+            NSRect::new(
+                NSPoint::new(left, bottom),
+                NSSize::new(width, start_clip.size.height),
+            ),
+            radius,
+            radius,
+            std::ptr::null(),
+        );
+    }
+    if paths.iter().any(|path| path.is_null()) {
+        for path in paths {
+            if !path.is_null() {
+                CGPathRelease(path);
+            }
+        }
+        return false;
+    }
+    // A mask layer does not inherit ordinary sibling autoresizing. Animate
+    // its path with the same two phase timings as the NSWindow frame, so
+    // narrow->wide presets retain the rounded stage boundary throughout.
+    let mask_frame = NSRect::new(
+        root_bounds.origin,
+        NSSize::new(
+            root_bounds.size.width.max(width_max),
+            root_bounds.size.height,
+        ),
+    );
+    let _: () = msg_send![mask, setFrame: mask_frame];
+    let _: () = msg_send![mask, setPath: paths[2]];
+    let animation_key = tahoe_ns_string("path");
+    let animation: id = msg_send![animation_class, animationWithKeyPath: animation_key];
+    if animation == nil {
+        for path in paths {
+            CGPathRelease(path);
+        }
+        return false;
+    }
+    let path_objects = [paths[0] as id, paths[1] as id, paths[2] as id];
+    let values: id =
+        msg_send![class!(NSArray), arrayWithObjects: path_objects.as_ptr() count: 3usize];
+    let phase_ratio = f64::from(spec.compression_ms) / f64::from(spec.duration_ms);
+    let times: [id; 3] = [
+        msg_send![class!(NSNumber), numberWithDouble: 0.0f64],
+        msg_send![class!(NSNumber), numberWithDouble: phase_ratio],
+        msg_send![class!(NSNumber), numberWithDouble: 1.0f64],
+    ];
+    let key_times: id = msg_send![class!(NSArray), arrayWithObjects: times.as_ptr() count: 3usize];
+    let _: () = msg_send![animation, setValues: values];
+    let _: () = msg_send![animation, setKeyTimes: key_times];
+    let _: () = msg_send![animation, setDuration: f64::from(spec.duration_ms) / 1000.0];
+    if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
+        let ease_out: id = msg_send![timing_class, functionWithName: tahoe_ns_string("easeOut")];
+        let rebound: id =
+            msg_send![timing_class, functionWithName: tahoe_ns_string("easeInEaseOut")];
+        if ease_out != nil && rebound != nil {
+            let curves = [ease_out, rebound];
+            let functions: id =
+                msg_send![class!(NSArray), arrayWithObjects: curves.as_ptr() count: 2usize];
+            let _: () = msg_send![animation, setTimingFunctions: functions];
+        }
+    }
+    let _: () = msg_send![animation, setRemovedOnCompletion: true];
+    let _: () = msg_send![mask, addAnimation: animation forKey: tahoe_ns_string("entryStageMask")];
+    let _: () = msg_send![layer, setMasksToBounds: true];
+    let _: () = msg_send![layer, setMask: mask];
+    for path in paths {
+        CGPathRelease(path);
+    }
+    true
+}
 
 /// T=53ms: fade the held GPUI content roots to their original alpha over
 /// 35ms (ease-out). Transparent GPUI pixels reveal the already-present
@@ -432,14 +1024,10 @@ extern "C" fn tahoe_glass_backdrop_reveal_entry_content(
             .lock()
             .ok()
             .and_then(|mut guard| guard.remove(&(window as usize)));
-        let Some(targets) = targets else { return };
+        let Some(target) = targets else { return };
         let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
         let ctx: id = msg_send![class!(NSAnimationContext), currentContext];
-        // Must resolve the SAME way `glass_morph_tuning_from` does. This used
-        // the bare constant while the tuning used the clamped value; they were
-        // both 18ms so nothing diverged, but an override would have applied to
-        // the receipt and not to the actual animation.
-        let _: () = msg_send![ctx, setDuration: glass_entry_content_fade_duration()];
+        let _: () = msg_send![ctx, setDuration: target.duration];
         let _: () = msg_send![ctx, setAllowsImplicitAnimation: true];
         if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
             let name = tahoe_ns_string("easeOut");
@@ -450,7 +1038,7 @@ extern "C" fn tahoe_glass_backdrop_reveal_entry_content(
                 }
             }
         }
-        for (view_ptr, original_alpha) in targets {
+        for (view_ptr, original_alpha) in target.views {
             let view = view_ptr as id;
             if view != nil {
                 let animator: id = msg_send![view, animator];
@@ -760,6 +1348,47 @@ unsafe fn ramp_entry_defocus(target_view: id, duration: f64, radius: f64, log_ta
     radius
 }
 
+#[cfg(target_os = "macos")]
+static MAIN_COHERENT_ENTRY_PREPARING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(target_os = "macos")]
+unsafe fn main_has_coherent_entry_receipt(window: id) -> bool {
+    if window == nil || crate::window_manager::get_main_window() != Some(window) {
+        return false;
+    }
+    let window_number: i64 = msg_send![window, windowNumber];
+    let receipt = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let matching = receipt.as_ref().filter(|receipt| {
+        receipt.window_key == window as usize && receipt.window_number == window_number
+    });
+    if let Some(receipt) = matching {
+        return receipt.preset_id != "previous_calibration";
+    }
+    // Before the first coherent receipt exists, preserve unrelated native
+    // filters already installed on rounded capsules. The arm site sets this
+    // flag using its captured spec, not a new live preference read.
+    MAIN_COHERENT_ENTRY_PREPARING.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn record_main_coherent_hidden_alpha(window: id) {
+    if !main_has_coherent_entry_receipt(window) {
+        return;
+    }
+    let alpha: f64 = msg_send![window, alphaValue];
+    let mut receipt = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(receipt) = receipt.as_mut() {
+        if receipt.window_key == window as usize {
+            receipt.post_hide_alpha = Some(alpha);
+        }
+    }
+}
+
 /// Remove any exit-dematerialize blur left on the window's content view
 /// layer (a superseded exit, or post-hide cleanup before the next show).
 #[cfg(target_os = "macos")]
@@ -773,7 +1402,12 @@ unsafe fn clear_exit_dematerialize_blur(window: id) {
             let _: () = msg_send![layer, removeAllAnimations];
         }
     }
-    crate::footer_popup::clear_main_window_footer_entry_capsule_effects(window);
+    // The coherent finish restored each capsule's original filters/mask.
+    // The old blanket clear would erase unrelated pre-entry CA filters on
+    // a hide/reopen; legacy and non-main profiles keep their old clear.
+    if !main_has_coherent_entry_receipt(window) {
+        crate::footer_popup::clear_main_window_footer_entry_capsule_effects(window);
+    }
 }
 
 /// Spotlight-style exit dematerialize for the main window, measured from a
@@ -1136,9 +1770,23 @@ unsafe fn park_hidden_window_for_glass_morph(window: id) {
     if window.is_null() {
         return;
     }
-    // Post-hide cleanup: drop any exit-dematerialize blur so the next show
-    // starts crisp.
+    // Instant/fallback hides may not have begun a native exit. Cancel every
+    // coherent settle/reveal callback before restoring its state while
+    // hidden, or an old rebound can resize the next show's settled frame.
+    let hidden: bool = !msg_send![window, isVisible];
+    if hidden
+        && GLASS_COHERENT_ENTRY_STATES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_key(&(window as usize))
+    {
+        cancel_pending_glass_window_selectors(window);
+    }
+    // Post-hide cleanup: drop any exit blur so the next show starts crisp.
     clear_exit_dematerialize_blur(window);
+    if hidden {
+        record_main_coherent_hidden_alpha(window);
+    }
     if !(tahoe_native_glass_composition_available()
         && crate::theme::get_cached_theme().is_vibrancy_enabled())
     {
@@ -1167,6 +1815,7 @@ unsafe fn park_hidden_window_for_glass_morph(window: id) {
         return;
     }
     let _: () = msg_send![window, setAlphaValue: GLASS_HIDDEN_PARK_ALPHA];
+    record_main_coherent_hidden_alpha(window);
 }
 
 /// True when a morph started within the last 700ms. Rapid re-shows would
@@ -1192,6 +1841,29 @@ static GLASS_MORPH_LAST_START_MS: std::sync::atomic::AtomicU64 =
 #[cfg(target_os = "macos")]
 static GLASS_MORPH_LAST_DURATION_MS: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
+
+/// Called after a menu selection has been persisted and before its guarded
+/// hide/show replay. It bypasses only the main entry's recent-start gate,
+/// and invalidates old callbacks. An in-flight visible exit retains its
+/// model until orderOut; hidden parking restores the exact settled state.
+#[cfg(target_os = "macos")]
+pub fn reset_main_glass_entry_replay() {
+    if require_main_thread("reset_main_glass_entry_replay") {
+        return;
+    }
+    let Some(window) = crate::window_manager::get_main_window() else {
+        return;
+    };
+    unsafe {
+        cancel_ns_window_exit_dematerialize_impl(window, false);
+    }
+    GLASS_MORPH_LAST_START_MS.store(u64::MAX, std::sync::atomic::Ordering::Relaxed);
+    GLASS_MORPH_LAST_DURATION_MS.store(0, std::sync::atomic::Ordering::Relaxed);
+    logging::log("PANEL", "event=glass_morph_replay_reset window=Main window");
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn reset_main_glass_entry_replay() {}
 
 #[cfg(target_os = "macos")]
 fn glass_morph_now_ms() -> u64 {

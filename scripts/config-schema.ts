@@ -732,6 +732,8 @@ export type {
   BuiltInConfig,
   ProcessLimits,
   ClipboardHistorySecretRejectionConfig,
+  AnimationPreferences,
+  MainWindowAnimationPreset,
   EffectsPreferences,
   SpineStyleConfig,
   SpineCommandConfig,

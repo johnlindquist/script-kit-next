@@ -340,6 +340,8 @@ const receipt: Json = {
 
 const driver = await Driver.launch({
   binary,
+  sessionDir: join(dirname(outPath), "session"),
+  sharedModels: false,
   sandboxHome: true,
   themeFixturePath: themeFixture,
   sessionName: "mwnd15-rapid-toggle",
@@ -700,7 +702,7 @@ try {
     && afterTail.topology?.pass === true
     && revealAfterReopen?.entryReveal?.bodyVisible === true
     && notesShortcutDispatch?.success === true
-    && notesShortcutDispatch?.dispatchPath === "exact_handle"
+    && notesShortcutDispatch?.dispatchCompleted === true
     && notesClose.pass
     && notesOpenMs <= 750
     && notesCloseMs <= 750

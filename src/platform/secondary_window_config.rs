@@ -52,6 +52,150 @@ pub(crate) struct NativeGlassEntryReceipt {
     pub(crate) configured_at_unix_ms: u64,
 }
 
+/// The main-entry receipt is native-observed state, separate from the
+/// catalog's selected spec. It survives a hide/reopen until the next entry.
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy)]
+struct MainGlassEntryRuntimeReceipt {
+    window_key: usize,
+    window_number: i64,
+    preset_id: &'static str,
+    duration_ms: u32,
+    compression_ms: u32,
+    reveal_ms: u32,
+    start_width_scale: f64,
+    squish_width_scale: f64,
+    window_start_alpha: f64,
+    material_start_alpha: f64,
+    backdrop_start_alpha_effective: f64,
+    content_start_alpha: f64,
+    main_content_start_alpha_effective_range: Option<[f64; 2]>,
+    capsule_label_start_alpha_effective_range: Option<[f64; 2]>,
+    capsule_label_count: usize,
+    capsule_inner_start_fraction: f64,
+    backdrop_blur_radius: f64,
+    capsule_blur_radius: f64,
+    foreground_blur_radius: f64,
+    foreground_root_count: usize,
+    foreground_blurred_root_count: usize,
+    capsule_count: usize,
+    capsule_blurred_count: usize,
+    capsule_material_count: usize,
+    material_supported: bool,
+    expected_frame: [f64; 4],
+    actual_frame: Option<[f64; 4]>,
+    actual_alpha: Option<f64>,
+    post_hide_alpha: Option<f64>,
+    effects_restored: Option<bool>,
+    frame_restored: Option<bool>,
+    outcome: &'static str,
+    configured_at_host_time_ns: u64,
+    cancelled_at_host_time_ns: Option<u64>,
+    actual_end_host_time_ns: Option<u64>,
+}
+
+#[cfg(target_os = "macos")]
+static MAIN_GLASS_ENTRY_RUNTIME_RECEIPT: std::sync::Mutex<Option<MainGlassEntryRuntimeReceipt>> =
+    std::sync::Mutex::new(None);
+
+/// Actual native main-window entry, not the live catalog preference. The
+/// selected preset may change while this previously captured entry is in
+/// flight; this receipt continues describing the entry that really ran.
+#[cfg(target_os = "macos")]
+pub fn main_glass_entry_lifecycle_receipt() -> serde_json::Value {
+    let receipt = {
+        let guard = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *guard
+    };
+    let Some(receipt) = receipt else {
+        return serde_json::json!({"scope":"main_window_entry","outcome":"not_started"});
+    };
+    // Only the main AppKit thread may read NSWindow properties. Registry
+    // lookup checks NSApp's live window inventory before returning a pointer;
+    // number AND pointer must match this captured entry, not a reopen.
+    let sample = if is_main_thread() {
+        unsafe {
+            crate::window_manager::get_main_window().and_then(|window| {
+                let number: i64 = msg_send![window, windowNumber];
+                if number != receipt.window_number || window as usize != receipt.window_key {
+                    return None;
+                }
+                let at_ns = crate::platform::host_clock::host_time_ns();
+                let frame: cocoa::foundation::NSRect = msg_send![window, frame];
+                let alpha: f64 = msg_send![window, alphaValue];
+                Some((
+                    at_ns,
+                    [
+                        frame.origin.x,
+                        frame.origin.y,
+                        frame.size.width,
+                        frame.size.height,
+                    ],
+                    alpha,
+                ))
+            })
+        }
+    } else {
+        None
+    };
+    let sample_host_time_ns = sample.map(|(at_ns, _, _)| at_ns);
+    let current_native_frame = sample.map(|(_, frame, _)| frame);
+    let current_native_alpha = sample.map(|(_, _, alpha)| alpha);
+    serde_json::json!({
+        "scope": "main_window_entry",
+        "windowNumber": receipt.window_number,
+        "sampleKind": "nswindow_model_properties_not_pixels",
+        "sampleHostTimeNs": sample_host_time_ns,
+        "currentNativeFrame": current_native_frame,
+        "currentNativeAlpha": current_native_alpha,
+        "liveWindowIdentityMatched": sample.is_some(),
+        "presetId": receipt.preset_id,
+        "outcome": receipt.outcome,
+        "durationMs": receipt.duration_ms,
+        "compressionMs": receipt.compression_ms,
+        "reboundMs": receipt.duration_ms - receipt.compression_ms,
+        "revealMs": receipt.reveal_ms,
+        "startWidthScale": receipt.start_width_scale,
+        "squishWidthScale": receipt.squish_width_scale,
+        "windowStartAlpha": receipt.window_start_alpha,
+        "materialStartAlpha": receipt.material_start_alpha,
+        "backdropStartAlphaEffective": receipt.backdrop_start_alpha_effective,
+        "contentStartAlpha": receipt.content_start_alpha,
+        "presenceSampleKind": "nsview_model_alpha_and_capsule_content_product_not_pixels",
+        "mainContentStartAlphaEffectiveRange": receipt.main_content_start_alpha_effective_range,
+        "capsuleLabelStartAlphaEffectiveRange": receipt.capsule_label_start_alpha_effective_range,
+        "capsuleLabelCount": receipt.capsule_label_count,
+        "capsuleInnerStartFraction": receipt.capsule_inner_start_fraction,
+        "backdropBlurRadius": receipt.backdrop_blur_radius,
+        "capsuleBlurRadius": receipt.capsule_blur_radius,
+        "foregroundBlurRadius": receipt.foreground_blur_radius,
+        "foregroundRootCount": receipt.foreground_root_count,
+        "foregroundBlurredRootCount": receipt.foreground_blurred_root_count,
+        "capsuleCount": receipt.capsule_count,
+        "capsuleBlurredCount": receipt.capsule_blurred_count,
+        "capsuleMaterialCount": receipt.capsule_material_count,
+        "materialSupported": receipt.material_supported,
+        "expectedFinalFrame": receipt.expected_frame,
+        "actualFinalFrame": receipt.actual_frame,
+        "actualFinalAlpha": receipt.actual_alpha,
+        "postHideAlpha": receipt.post_hide_alpha,
+        "frameRestored": receipt.frame_restored,
+        "effectsRestored": receipt.effects_restored,
+        "configuredAtHostTimeNs": receipt.configured_at_host_time_ns,
+        "expectedSettleDeadlineNs": receipt.configured_at_host_time_ns
+            .saturating_add(u64::from(receipt.duration_ms) * 1_000_000),
+        "cancelledAtHostTimeNs": receipt.cancelled_at_host_time_ns,
+        "actualEndHostTimeNs": receipt.actual_end_host_time_ns,
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn main_glass_entry_lifecycle_receipt() -> serde_json::Value {
+    serde_json::json!({"scope":"main_window_entry","outcome":"not_available"})
+}
+
 #[cfg(target_os = "macos")]
 #[derive(Clone, Copy, Debug)]
 struct TahoeGlassBackdropResult {
@@ -540,8 +684,8 @@ const GLASS_MORPH_MAX_SQUISH: f64 = 0.015;
 /// rebound gets a full ~140ms.)
 #[cfg(target_os = "macos")]
 const GLASS_MORPH_SQUISH_HOLD: f64 = 0.0;
-/// Compression is one third of the visible tail (35ms at the 0.105s
-/// default), leaving two thirds (70ms) for the rebound.
+/// Compression is one third of the visible tail (70ms at the 0.210s
+/// default), leaving two thirds (140ms) for the rebound.
 #[cfg(target_os = "macos")]
 const GLASS_MORPH_PHASE1_FRACTION: f64 = 1.0 / 3.0;
 #[cfg(target_os = "macos")]
@@ -560,29 +704,29 @@ const GLASS_MORPH_PHASE1_ALPHA_TARGET: f64 = 0.99;
 /// is at 0.99 well before max compression. Clamped to phase one for short
 /// custom durations.
 #[cfg(target_os = "macos")]
-const GLASS_MORPH_ALPHA_RAMP_DURATION: f64 = 0.018;
+const GLASS_MORPH_ALPHA_RAMP_DURATION: f64 = 0.036;
 /// Duration of the 0.99 → 1.0 finishing leg (ease-out) starting at rebound.
 /// Clamped to phase two for short custom durations.
 #[cfg(target_os = "macos")]
-const GLASS_MORPH_ALPHA_FINISH_DURATION: f64 = 0.026;
+const GLASS_MORPH_ALPHA_FINISH_DURATION: f64 = 0.052;
 /// Material-onset prefix (glass-entry-onset-v2, measured from the
 /// 2026-07-27 Spotlight footage): Spotlight materializes presence
-/// 0.04→0.86 over its prefix BEFORE the visible geometry tail (44ms
-/// here — Spotlight's ~88ms halved by the 2026-07-27 2x request). Script Kit
+/// 0.04→0.86 over its ~88ms prefix BEFORE the visible geometry tail.
+/// The original Spotlight wall clock was restored on 2026-09-15. Script Kit
 /// reproduces it as a glass material ramp (Clear→Regular + tint) at a
 /// constant 0.85 NSWindow alpha — never sub-0.85 window alpha.
 #[cfg(target_os = "macos")]
-const GLASS_MATERIAL_ONSET_DURATION: f64 = 0.044;
+const GLASS_MATERIAL_ONSET_DURATION: f64 = 0.088;
 /// The main window's FIRST PHOTON width scale (2026-08-13 soft-materialize
 /// retune, measured from the user-supplied 57fps Spotlight reference:
 /// first photon 1.0305 of settled width).
 #[cfg(target_os = "macos")]
 const GLASS_MAIN_ONSET_START_WIDTH_SCALE: f64 = 1.0305;
 /// How long the first-photon frame eases into the calibrated 101.2%
-/// visible-tail start (reference: converged by ~35ms at 1:1; 18ms at the
-/// authorized 2x tempo, matching the content-fade cadence).
+/// visible-tail start (reference: converged by ~35ms at 1:1; 36ms here,
+/// matching the restored content/material cadence).
 #[cfg(target_os = "macos")]
-const GLASS_MAIN_ONSET_GEOMETRY_DURATION: f64 = 0.018;
+const GLASS_MAIN_ONSET_GEOMETRY_DURATION: f64 = 0.036;
 /// GPUI content roots fade in WITH the material from the first photon
 /// (2026-08-13 content-timing retune: the user-supplied 57fps Spotlight
 /// reference shows the bar's content faintly present from the very first
@@ -593,7 +737,7 @@ const GLASS_ENTRY_CONTENT_HOLD_DURATION: f64 = 0.0;
 /// Content fade spans the full material prefix, finishing exactly when the
 /// tail begins (clamped to onset − hold in glass_entry_content_fade_duration).
 #[cfg(target_os = "macos")]
-const GLASS_ENTRY_CONTENT_FADE_DURATION: f64 = 0.044;
+const GLASS_ENTRY_CONTENT_FADE_DURATION: f64 = 0.088;
 /// Onset timing curve reproducing the measured normalized presence samples
 /// (~0.294/0.535/0.761/1.0, sampled proportionally across the onset).
 #[cfg(target_os = "macos")]
@@ -678,16 +822,16 @@ fn glass_main_entry_blur_radius() -> f64 {
 ///
 /// THE DEFAULT IS THE THING THAT MAKES THE ENTRY FEEL UNFADED. The stock value
 /// is `GLASS_ENTRY_CONTENT_FADE_DURATION` clamped so the fade ENDS at the
-/// material-onset boundary: `0.044.min(0.044 - 0.0)` = 44ms. The content is
-/// therefore fully opaque at t=44ms, before the 105ms geometry tail begins — so
+/// material-onset boundary: `0.088.min(0.088 - 0.0)` = 88ms. The content is
+/// therefore fully opaque at t=88ms, before the 210ms geometry tail begins — so
 /// across the whole visible tail nothing is fading, and the entry reads as a
 /// solid panel doing a 1.2% width wiggle rather than something materializing.
 ///
 /// `SCRIPT_KIT_GLASS_CONTENT_FADE=<ms>` overrides it and is INTENTIONALLY
 /// UNCLAMPED, so the fade may run concurrently with the geometry tail (the
-/// shape Spotlight actually has). Try 90 or 105 to make the fade span the tail.
+/// shape Spotlight actually has). Try 180 or 210 to make the fade span the tail.
 /// Total entry duration is unchanged either way — this overlaps existing time
-/// rather than adding any, so it does not fight the authorized 2x tempo.
+/// rather than adding any; the 1:1 reference tempo stays fixed.
 #[cfg(target_os = "macos")]
 fn glass_entry_content_fade_duration() -> f64 {
     if let Some(seconds) = std::env::var("SCRIPT_KIT_GLASS_CONTENT_FADE")
@@ -808,6 +952,33 @@ fn glass_morph_tuning_from(duration: f64, inset_fraction: f64) -> Option<GlassMo
         content_hold_duration: GLASS_ENTRY_CONTENT_HOLD_DURATION,
         content_fade_duration: glass_entry_content_fade_duration(),
     })
+}
+/// The catalog's total wall clock is one uninterrupted main-window morph.
+/// Legacy tuning remains exclusively in `glass_morph_tuning`.
+#[cfg(target_os = "macos")]
+fn main_glass_morph_tuning(
+    spec: crate::theme::animation::MainWindowAnimationSpec,
+) -> GlassMorphTuning {
+    let duration = f64::from(spec.duration_ms) / 1000.0;
+    let phase1 = f64::from(spec.compression_ms) / 1000.0;
+    let phase2 = duration - phase1;
+    GlassMorphTuning {
+        duration,
+        inset_fraction: (spec.start_width_scale - 1.0).abs() * 0.5,
+        start_alpha: spec.window_start_alpha,
+        start_scale_x: spec.start_width_scale,
+        start_scale_y: 1.0,
+        squish_scale_x: spec.squish_width_scale,
+        squish_scale_y: 1.0,
+        phase1,
+        phase2,
+        phase1_alpha_target: GLASS_MORPH_PHASE1_ALPHA_TARGET,
+        alpha_ramp_duration: (f64::from(spec.reveal_ms) / 1000.0).min(phase1),
+        alpha_finish_duration: GLASS_MORPH_ALPHA_FINISH_DURATION.min(phase2),
+        material_onset_duration: 0.0,
+        content_hold_duration: 0.0,
+        content_fade_duration: f64::from(spec.reveal_ms) / 1000.0,
+    }
 }
 
 // SAFETY: Caller must pass a valid NSWindow pointer on the main thread.

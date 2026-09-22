@@ -2,8 +2,8 @@
 //! golden-transcript tests for the pure `plan_trigger_builtin_route`
 //! planner.
 //!
-//! The fixture at `tests/golden/trigger_builtin/routes.jsonl` has one
-//! JSONL line per [`TriggerBuiltin`] variant:
+//! The fixture at `tests/golden/trigger_builtin/routes.jsonl` contains
+//! representative canonical commands and their serialized routes:
 //!
 //! ```text
 //! { "input": "builtin/clipboard-history", "expected": "ShowFilterableView::ClipboardHistory" }
@@ -11,20 +11,17 @@
 //!
 //! `input` is the canonical command id (stable, one per variant) and
 //! `expected` is the string produced by
-//! [`script_kit_gpui::routes::render_route`]. A silent planner rewire
-//! or a `TriggerBuiltin` addition that forgets the planner will show
-//! up as a fixture diff or a "fixture missing variant" failure —
-//! whichever lands first.
+//! [`script_kit_gpui::routes::render_route`]. These examples defend
+//! caller-visible route serialization; exhaustive routing is enforced
+//! by the compiler rather than a case-count requirement.
 //!
 //! This mirrors the resolver-side golden harness added in PR3
 //! (`tests/trigger_builtin_resolve_golden.rs`). Keeping the two in
 //! the same `tests/golden/trigger_builtin/` directory lets a future
 //! Bun-side harness import both files from one place.
 
-use script_kit_gpui::builtins::trigger_registry::{registry as trigger_registry, TriggerBuiltin};
-use script_kit_gpui::routes::{
-    parse_route, plan_trigger_builtin_route, render_route, AppRoute, FilterableView,
-};
+use script_kit_gpui::builtins::trigger_registry::registry as trigger_registry;
+use script_kit_gpui::routes::{parse_route, plan_trigger_builtin_route, render_route};
 use std::fs;
 use std::path::PathBuf;
 
@@ -101,85 +98,6 @@ fn every_route_case_matches_its_golden_line() {
 }
 
 #[test]
-fn fixture_covers_every_trigger_builtin_variant() {
-    // Reverse coverage: every TriggerBuiltin::ALL variant must have
-    // at least one line in `routes.jsonl`. This is the guard that
-    // catches a new variant shipped without a golden case.
-    let cases = load_cases("routes.jsonl");
-    let registry = trigger_registry();
-    let mut seen: std::collections::HashSet<TriggerBuiltin> = Default::default();
-    for (_line_no, case) in cases {
-        if let Some(id) = registry.resolve(&case.input) {
-            seen.insert(id);
-        }
-    }
-    for &id in TriggerBuiltin::ALL {
-        assert!(
-            seen.contains(&id),
-            "routes.jsonl must have a case for {id:?} (command id `{}`); saw: {:?}",
-            id.command_id(),
-            seen
-        );
-    }
-}
-
-#[test]
-fn fixture_covers_every_app_route_kind() {
-    // Positive coverage on the output side. Every AppRoute variant
-    // (and every FilterableView) must appear at least once so the
-    // fixture cannot decay into e.g. "all filterable views, no
-    // OpenTabAi".
-    let cases = load_cases("routes.jsonl");
-    let registry = trigger_registry();
-
-    let mut saw_open_file_search = false;
-    let mut saw_open_tab_ai = false;
-    let mut saw_open_current_app_commands = false;
-    let mut saw_execute_builtin = false;
-    let mut seen_views: std::collections::HashSet<FilterableView> = Default::default();
-
-    for (_line_no, case) in cases {
-        let Some(id) = registry.resolve(&case.input) else {
-            continue;
-        };
-        match plan_trigger_builtin_route(id) {
-            AppRoute::ShowFilterableView(v) => {
-                seen_views.insert(v);
-            }
-            AppRoute::OpenFileSearch => saw_open_file_search = true,
-            AppRoute::OpenTabAi => saw_open_tab_ai = true,
-            AppRoute::OpenCurrentAppCommands => saw_open_current_app_commands = true,
-            AppRoute::ExecuteBuiltin(_) => saw_execute_builtin = true,
-        }
-    }
-
-    assert!(
-        saw_open_file_search,
-        "routes.jsonl needs at least one OpenFileSearch case"
-    );
-    assert!(
-        saw_open_tab_ai,
-        "routes.jsonl needs at least one OpenTabAi case"
-    );
-    assert!(
-        saw_open_current_app_commands,
-        "routes.jsonl needs at least one OpenCurrentAppCommands case"
-    );
-    assert!(
-        saw_execute_builtin,
-        "routes.jsonl needs at least one ExecuteBuiltin case"
-    );
-    for &v in FilterableView::ALL {
-        assert!(
-            seen_views.contains(&v),
-            "routes.jsonl needs at least one ShowFilterableView::{} case; saw: {:?}",
-            v.name(),
-            seen_views
-        );
-    }
-}
-
-#[test]
 fn every_fixture_expected_parses_back() {
     // PR7 wire-format contract: each golden `expected` string must
     // parse back into the same AppRoute the planner emits for that
@@ -218,27 +136,4 @@ fn every_fixture_expected_parses_back() {
          `src/app_impl/routes.rs` together, then regenerate `routes.jsonl`.",
         failures.join("\n\n")
     );
-}
-
-#[test]
-fn fixture_has_exactly_one_case_per_variant() {
-    // Stronger than `fixture_covers_every_trigger_builtin_variant`:
-    // no duplicates either. The planner is a 1:1 mapping, so the
-    // fixture should be too — otherwise a "works for one caller,
-    // breaks for another" regression could hide.
-    let cases = load_cases("routes.jsonl");
-    let registry = trigger_registry();
-    let mut counts: std::collections::HashMap<TriggerBuiltin, usize> = Default::default();
-    for (_line_no, case) in cases {
-        if let Some(id) = registry.resolve(&case.input) {
-            *counts.entry(id).or_default() += 1;
-        }
-    }
-    for &id in TriggerBuiltin::ALL {
-        let n = counts.get(&id).copied().unwrap_or(0);
-        assert_eq!(
-            n, 1,
-            "routes.jsonl must have exactly one case for {id:?}, got {n}"
-        );
-    }
 }

@@ -648,8 +648,13 @@ private func writeReceipt(_ receipt: Receipt, to path: URL) throws {
 }
 
 @main
+@MainActor
 private enum Main {
     static func main() async {
+        // NSScreen/CoreGraphics queries require AppKit's WindowServer connection.
+        // Keep this observer headless: never activate it or create a window.
+        let application = NSApplication.shared
+        application.setActivationPolicy(.prohibited)
         let arguments = parseArguments()
         guard arguments.windowID != nil || arguments.pid != nil,
               let outputDirectory = arguments.outputDirectory else {
@@ -668,6 +673,7 @@ private enum Main {
         var resolvedWindowID = arguments.windowID ?? 0
         var resolvedDisplayID: CGDirectDisplayID?
         var resolvedCaptureFrame = CGRect.zero
+        var resolvedDisplayFrame = CGRect.zero
         var resolvedCaptureMode = "unresolved"
         var refreshRateHz = Double(max(1, arguments.frameRate))
         let captureScale = 2.0
@@ -738,6 +744,7 @@ private enum Main {
                     ? "display-region-armed-before-owner"
                     : "display-pinned-window-bounds"
                 resolvedDisplayID = display.displayID
+                resolvedDisplayFrame = display.frame
                 filter = SCContentFilter(display: display, excludingWindows: [])
             } else {
                 let window = try await resolveWindow(arguments)
@@ -780,7 +787,9 @@ private enum Main {
             configuration.queueDepth = 8
             configuration.pixelFormat = kCVPixelFormatType_32BGRA
             if arguments.displayStream {
-                let displayFrame = filter.contentRect
+                // ScreenCaptureKit sourceRect is display-local; window bounds
+                // are global Quartz coordinates and may be negative on other displays.
+                let displayFrame = resolvedDisplayFrame
                 configuration.sourceRect = CGRect(
                     x: captureFrame.minX - displayFrame.minX,
                     y: captureFrame.minY - displayFrame.minY,
