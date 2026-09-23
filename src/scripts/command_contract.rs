@@ -357,14 +357,14 @@ impl MainMenuContentDigest {
     }
     fn spine(&mut self, row: &crate::spine::SpineListRow) {
         use crate::spine::{SpineListAction, SpineListRowKind};
-        self.optional_text(row.meta.as_deref().map(|value| &**value));
-        self.optional_text(row.icon.as_deref().map(|value| &**value));
+        self.optional_text(row.meta.as_deref());
+        self.optional_text(row.icon.as_deref());
         self.number(row.badges.len() as u64);
         for badge in &row.badges {
             self.text(badge);
         }
         self.flag(row.is_selectable);
-        self.optional_text(row.action_label.as_deref().map(|value| &**value));
+        self.optional_text(row.action_label.as_deref());
         match &row.kind {
             SpineListRowKind::ContextBuiltin { context_type } => {
                 self.text("ContextBuiltin");

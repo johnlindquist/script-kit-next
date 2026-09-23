@@ -395,6 +395,7 @@ impl ScriptListApp {
             offset: point(px(shadow_config.offset_x), px(shadow_config.offset_y)),
             blur_radius: px(shadow_config.blur_radius),
             spread_radius: px(shadow_config.spread_radius),
+            inset: false,
         }]
     }
 

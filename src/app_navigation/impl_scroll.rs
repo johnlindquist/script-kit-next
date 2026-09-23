@@ -554,7 +554,7 @@ impl ScriptListApp {
                     gpui::TouchPhase::Moved => {
                         crate::scrolling::boundary_affordance::PreciseTouchPhase::Moved
                     }
-                    gpui::TouchPhase::Ended => {
+                    gpui::TouchPhase::Ended | gpui::TouchPhase::Cancelled => {
                         crate::scrolling::boundary_affordance::PreciseTouchPhase::Ended
                     }
                 };

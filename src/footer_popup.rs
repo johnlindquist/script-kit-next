@@ -597,10 +597,7 @@ impl MainWindowFooterConfig {
                 FooterActionDispatchAuthorization::PresentedButton
             } else {
                 FooterActionDispatchAuthorization::Disabled {
-                    reason: descriptor
-                        .disabled_reason
-                        .as_deref()
-                        .map(|reason| &**reason),
+                    reason: descriptor.disabled_reason.as_deref(),
                 }
             };
         }

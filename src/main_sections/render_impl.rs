@@ -924,7 +924,7 @@ impl Render for ScriptListApp {
         });
 
         // Capture mouse_cursor_hidden for use in div builder
-        let mouse_cursor_hidden = self.mouse_cursor_hidden;
+        let _mouse_cursor_hidden = self.mouse_cursor_hidden;
 
         // Get themed border color with 25% opacity (0x40 = 64/255)
         let border_color = rgba((self.theme.colors.ui.border << 8) | 0x40);
@@ -1250,8 +1250,9 @@ impl Render for ScriptListApp {
                     // setting stops at the content boundary and the detached
                     // gutter remains physically empty.
                     .bg(cx.theme().background)
-                    // Hide mouse cursor while typing
-                    .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))
+                    // Hide mouse cursor while typing: GPUI 0.3 removed
+                    // CursorStyle::None; its default CursorHideMode
+                    // (OnTypingAndAction) hides the pointer on keystrokes.
                     // Hide cursor and clear hover on any keyboard interaction
                     .capture_key_down(cx.listener(|this, _: &KeyDownEvent, _window, cx| {
                         this.input_mode = InputMode::Keyboard;

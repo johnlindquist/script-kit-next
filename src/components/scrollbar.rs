@@ -434,7 +434,7 @@ impl RenderOnce for Scrollbar {
             scrollbar = scrollbar
                 .child(
                     div()
-                        .flex_grow()
+                        .flex_grow_1()
                         .flex_shrink_0()
                         .min_h_0()
                         .map(move |d: Div| {
@@ -448,7 +448,7 @@ impl RenderOnce for Scrollbar {
                 .child(
                     div()
                         .id("scrollbar-thumb-flex")
-                        .flex_grow()
+                        .flex_grow_1()
                         .flex_shrink_0()
                         .min_h(px(MIN_THUMB_HEIGHT))
                         .flex_basis(relative(thumb_flex))
@@ -462,7 +462,7 @@ impl RenderOnce for Scrollbar {
                 )
                 .child(
                     div()
-                        .flex_grow()
+                        .flex_grow_1()
                         .flex_shrink_0()
                         .min_h_0()
                         .map(move |d: Div| {

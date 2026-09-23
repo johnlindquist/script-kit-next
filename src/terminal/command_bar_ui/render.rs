@@ -21,12 +21,14 @@ impl TerminalCommandBar {
                 offset: gpui::point(px(0.), px(4.)),
                 blur_radius: px(16.),
                 spread_radius: px(0.),
+                inset: false,
             },
             BoxShadow {
                 color: Hsla::from(secondary_shadow_color),
                 offset: gpui::point(px(0.), px(2.)),
                 blur_radius: px(8.),
                 spread_radius: px(0.),
+                inset: false,
             },
         ]
     }

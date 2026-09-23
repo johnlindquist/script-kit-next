@@ -5,9 +5,9 @@
 
 use anyhow::Result;
 use gpui::{
-    div, prelude::*, px, rgba, size, AnyElement, App, Context, CursorStyle, Entity, FocusHandle,
-    Focusable, IntoElement, KeyDownEvent, MouseDownEvent, MouseMoveEvent, ParentElement, Render,
-    Styled, Subscription, Window, WindowBounds, WindowOptions,
+    div, prelude::*, px, rgba, size, AnyElement, App, Context, Entity, FocusHandle, Focusable,
+    IntoElement, KeyDownEvent, MouseDownEvent, MouseMoveEvent, ParentElement, Render, Styled,
+    Subscription, Window, WindowBounds, WindowOptions,
 };
 
 use chrono::NaiveDate;

@@ -31,8 +31,10 @@ gpui-component = { path = "vendor/gpui-component/crates/ui", version = "0.5.0" }
 gpui-component-macros = { path = "vendor/gpui-component/crates/macros", version = "0.5.0" }
 gpui-component-assets = { path = "vendor/gpui-component/crates/assets", version = "0.5.0" }
 story = { path = "vendor/gpui-component/crates/story" }
-gpui = { path = "vendor/gpui", features = ["test-support"] }
-gpui-macros = { path = "vendor/gpui_macros", package = "gpui_macros" }
+# GPUI is the gpui-pre 0.3.6 snapshot (zed@bcf6582) published with gpui-kit;
+# Script Kit patches live in vendor/gpui* and are applied via [patch.crates-io].
+gpui = { package = "gpui-pre", version = "=0.3.6", features = ["test-support"] }
+gpui-macros = { package = "gpui-pre-macros", version = "=0.3.6" }
 sum-tree = { version = "0.2.0", package = "zed-sum-tree" }
 reqwest = { git = "https://github.com/zed-industries/reqwest.git", rev = "c15662463bda39148ba154100dd44d3fba5873a4", default-features = false, features = ["charset", "http2", "macos-system-configuration", "multipart", "rustls-tls-native-roots", "socks", "stream"], package = "zed-reqwest", version = "0.12.15-zed" }
 anyhow = "1"
@@ -95,10 +97,10 @@ test = false  # Standalone visual proof-of-concept, no test surface
 sk-clipboard = { path = "crates/sk-clipboard" }
 sk-protocol = { path = "crates/sk-protocol" }
 sk-storage = { path = "crates/sk-storage" }
-gpui = { path = "vendor/gpui", features = ["test-support"] }
-gpui_platform = { path = "vendor/gpui_platform", features = ["font-kit"] }
-gpui_macos = { path = "vendor/gpui_macos" }
-gpui_macros = { path = "vendor/gpui_macros" }
+gpui = { package = "gpui-pre", version = "=0.3.6", features = ["test-support"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.6", features = ["font-kit"] }
+gpui_macos = { package = "gpui-pre-macos", version = "=0.3.6" }
+gpui_macros = { package = "gpui-pre-macros", version = "=0.3.6" }
 global-hotkey = "0.7"
 notify = "8.0"
 # System notifications (Notification Center on macOS via mac-notification-sys).
@@ -249,14 +251,15 @@ foreign-types = "0.5"
 # macOS launch-at-login via SMAppService
 smappservice-rs = "0.1"
 
-[patch."https://github.com/zed-industries/zed"]
-# Features on a [patch] entry are ignored by cargo (they come from the
-# dependency declaration above), so omit them here to avoid the unused-field warning.
-gpui = { path = "vendor/gpui" }
-gpui_platform = { path = "vendor/gpui_platform" }
-gpui_macos = { path = "vendor/gpui_macos" }
-gpui_macros = { path = "vendor/gpui_macros" }
-gpui_util = { path = "vendor/gpui_util" }
+[patch.crates-io]
+# Script Kit's GPUI patch set, ported onto gpui-pre 0.3.6 (zed@bcf6582). Every
+# crate in the graph that asks for gpui-pre (gpui-component, gpui-ai) links
+# these patched copies, so there is exactly one GPUI in the binary.
+gpui-pre = { path = "vendor/gpui" }
+gpui-pre-macos = { path = "vendor/gpui_macos" }
+gpui-pre-apple = { path = "vendor/gpui_apple" }
+gpui-pre-platform = { path = "vendor/gpui_platform" }
+gpui-pre-macros = { path = "vendor/gpui_macros" }
 
 [features]
 default = ["ocr"]
@@ -298,19 +301,19 @@ codegen-units = 256
 [profile.dev.package."*"]
 opt-level = 2
 
-[profile.dev.package.gpui]
+[profile.dev.package.gpui-pre]
 opt-level = 2
 
 [profile.dev.package.gpui-component]
 opt-level = 2
 
-[profile.dev.package.gpui_util]
+[profile.dev.package.gpui-pre-util]
 opt-level = 2
 
-[profile.dev.package.gpui_macos]
+[profile.dev.package.gpui-pre-macos]
 opt-level = 2
 
-[profile.dev.package.gpui_platform]
+[profile.dev.package.gpui-pre-platform]
 opt-level = 2
 
 [profile.test]
@@ -326,19 +329,19 @@ codegen-units = 256
 [profile.test.package."*"]
 opt-level = 0
 
-[profile.test.package.gpui]
+[profile.test.package.gpui-pre]
 opt-level = 0
 
 [profile.test.package.gpui-component]
 opt-level = 0
 
-[profile.test.package.gpui_util]
+[profile.test.package.gpui-pre-util]
 opt-level = 0
 
-[profile.test.package.gpui_macos]
+[profile.test.package.gpui-pre-macos]
 opt-level = 0
 
-[profile.test.package.gpui_platform]
+[profile.test.package.gpui-pre-platform]
 opt-level = 0
 
 [profile.release]

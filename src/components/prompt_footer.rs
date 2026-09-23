@@ -655,6 +655,7 @@ impl RenderOnce for PromptFooter {
                 offset: point(px(0.), px(PROMPT_FOOTER_SHADOW_OFFSET_Y_PX)),
                 blur_radius: px(PROMPT_FOOTER_SHADOW_BLUR_PX),
                 spread_radius: px(0.),
+                inset: false,
             }]);
 
         // Left side: Logo + helper text

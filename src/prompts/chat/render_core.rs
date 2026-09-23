@@ -581,8 +581,13 @@ impl Render for ChatPrompt {
                         );
 
                         let has_turns = !this.conversation_turns_cache.is_empty();
-                        this.turns_list_state
-                            .set_follow_tail(has_turns && !this.user_has_scrolled_up);
+                        this.turns_list_state.set_follow_mode(
+                            if has_turns && !this.user_has_scrolled_up {
+                                gpui::FollowMode::Tail
+                            } else {
+                                gpui::FollowMode::Normal
+                            },
+                        );
                         cx.stop_propagation();
                     }),
                 )

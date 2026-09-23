@@ -146,7 +146,8 @@ impl ChatPrompt {
             self.sync_turns_list_state();
         }
         if !self.user_has_scrolled_up {
-            self.turns_list_state.set_follow_tail(true);
+            self.turns_list_state
+                .set_follow_mode(gpui::FollowMode::Tail);
         }
         cx.notify();
         Ok(())
@@ -160,7 +161,8 @@ impl ChatPrompt {
     ) {
         self.ensure_conversation_turns_cache();
         self.user_has_scrolled_up = true;
-        self.turns_list_state.set_follow_tail(false);
+        self.turns_list_state
+            .set_follow_mode(gpui::FollowMode::Normal);
         self.turns_list_state.scroll_to(gpui::ListOffset {
             item_ix: item_ix.min(self.conversation_turns_cache.len().saturating_sub(1)),
             offset_in_item: px(offset_px.max(0.0)),
@@ -438,7 +440,8 @@ impl ChatPrompt {
         self.ensure_conversation_turns_cache();
         let item_count = self.conversation_turns_cache.len();
         if item_count == 0 {
-            self.turns_list_state.set_follow_tail(false);
+            self.turns_list_state
+                .set_follow_mode(gpui::FollowMode::Normal);
             return;
         }
 
@@ -453,7 +456,11 @@ impl ChatPrompt {
         }
 
         self.turns_list_state
-            .set_follow_tail(!self.user_has_scrolled_up);
+            .set_follow_mode(if !self.user_has_scrolled_up {
+                gpui::FollowMode::Tail
+            } else {
+                gpui::FollowMode::Normal
+            });
     }
 
     pub(super) fn force_scroll_turns_to_bottom(&mut self) {
@@ -466,7 +473,11 @@ impl ChatPrompt {
             reason = "force",
             item_count,
         );
-        self.turns_list_state.set_follow_tail(item_count > 0);
+        self.turns_list_state.set_follow_mode(if item_count > 0 {
+            gpui::FollowMode::Tail
+        } else {
+            gpui::FollowMode::Normal
+        });
     }
 
     /// Classify a raw SDK/protocol error string the moment the message

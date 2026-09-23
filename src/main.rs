@@ -10,9 +10,9 @@
 
 use gpui::{
     div, hsla, list, point, prelude::*, px, rgb, rgba, size, uniform_list, AnyElement, App,
-    BoxShadow, Context, CursorStyle, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight,
-    KeyDownEvent, ListAlignment, ListOffset, ListSizingBehavior, ListState, MouseMoveEvent, Render,
-    ScrollHandle, ScrollStrategy, SharedString, Subscription, UniformListScrollHandle, Window,
+    BoxShadow, Context, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight, KeyDownEvent,
+    ListAlignment, ListOffset, ListSizingBehavior, ListState, MouseMoveEvent, Render, ScrollHandle,
+    ScrollStrategy, SharedString, Subscription, UniformListScrollHandle, Window,
     WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 

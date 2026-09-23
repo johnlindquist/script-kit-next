@@ -391,6 +391,7 @@ fn simulated_scroll_wheel_to_gpui(
                 gpui::TouchPhase::Started => gpui::ScrollPhase::Began,
                 gpui::TouchPhase::Moved => gpui::ScrollPhase::Changed,
                 gpui::TouchPhase::Ended => gpui::ScrollPhase::Ended,
+                gpui::TouchPhase::Cancelled => gpui::ScrollPhase::Cancelled,
             }),
         momentum_phase: momentum_phase
             .map(simulated_scroll_phase_to_gpui)

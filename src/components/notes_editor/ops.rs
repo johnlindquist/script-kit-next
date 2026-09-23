@@ -108,7 +108,7 @@ impl NotesEditor {
             if let Some(focused) = focused {
                 focused.focus(window, cx);
             } else {
-                window.blur();
+                window.blur(cx);
             }
             toggled = true;
         });

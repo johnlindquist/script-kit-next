@@ -58,7 +58,7 @@ target-agent-prompt-container/
 # Per-agent Cargo target dirs (scripts/agentic/agent-cargo.sh)
 target-agent/
 /target-agent
-.agent-cargo-storage.json
+.agent-cargo-storage.json*
 
 # External repos / proof-of-concept clones
 gpui-vibrancy-poc/
@@ -124,3 +124,4 @@ scripts/devtools/bin/
 tests/__pycache__/
 scripts/agentic/__pycache__/
 scripts/agentic/fixtures/flow-ux-project/.mdflow/.cache/
+/target-agent.*-link

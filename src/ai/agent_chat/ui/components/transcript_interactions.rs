@@ -71,7 +71,7 @@ impl AgentChatTranscript {
     pub fn scroll_to_reveal_item(&self, index: usize) {
         // Revealing a specific item is a manual navigation: stop following the
         // tail so a later stream chunk does not snap the reader away.
-        self.list_state.set_follow_tail(false);
+        self.list_state.set_follow_mode(gpui::FollowMode::Normal);
         self.list_state.scroll_to_reveal_item(index);
         self.advance_interaction_revision();
     }
@@ -81,7 +81,7 @@ impl AgentChatTranscript {
     }
 
     pub fn scroll_to(&self, offset: ListOffset) {
-        self.list_state.set_follow_tail(false);
+        self.list_state.set_follow_mode(gpui::FollowMode::Normal);
         self.list_state.scroll_to(offset);
         self.advance_interaction_revision();
     }
@@ -92,6 +92,6 @@ impl AgentChatTranscript {
         if !self.list_state.is_following_tail() {
             self.advance_interaction_revision();
         }
-        self.list_state.set_follow_tail(true);
+        self.list_state.set_follow_mode(gpui::FollowMode::Tail);
     }
 }

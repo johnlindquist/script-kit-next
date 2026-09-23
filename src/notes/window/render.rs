@@ -95,7 +95,7 @@ impl NotesApp {
 
 impl Render for NotesApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mouse_cursor_hidden = self.mouse_cursor_hidden;
+        let _mouse_cursor_hidden = self.mouse_cursor_hidden;
         let body_visible = self.entry_reveal.body_visible;
         let body_reveal_generation = self.entry_reveal.generation;
 
@@ -162,7 +162,8 @@ impl Render for NotesApp {
             .relative()
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
-            .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))
+            // GPUI 0.3 dropped CursorStyle::None; Notes hides the pointer via
+            // hide_cursor_until_mouse_moves() in vibrancy.rs instead.
             .on_any_mouse_down(cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                 // The custom bottom-edge resize handoff is intentionally NOT
                 // wired here anymore: the 2026-07-26 notes-live-resize probe

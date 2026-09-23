@@ -98,6 +98,7 @@ impl ChatPrompt {
                                     offset: gpui::point(px(0.), px(0.)),
                                     blur_radius: px(4.),
                                     spread_radius: px(-1.),
+                                    inset: false,
                                 }])
                             })
                             .hover(|s| s.bg(accent_25))
@@ -156,6 +157,7 @@ impl ChatPrompt {
                                     offset: gpui::point(px(0.), px(0.)),
                                     blur_radius: px(4.),
                                     spread_radius: px(-1.),
+                                    inset: false,
                                 }])
                             })
                             .hover(|s| s.bg(muted_bg_hover))

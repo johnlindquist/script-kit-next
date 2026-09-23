@@ -1,3 +1,4 @@
+// Modified for gpui-pre (snapshot of zed@bcf6582): the gpui sources it reads are vendored under `vendor/gpui`.
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
 
 fn main() {
@@ -96,12 +97,20 @@ mod macos_build {
         output_path
     }
 
-    /// Locate the gpui crate directory relative to this crate.
+    /// Locate the gpui crate directory relative to this crate. Resolved at
+    /// build-script runtime against this crate's manifest dir, so no checkout
+    /// path is baked into a compiled artifact (which corgi rejects).
     fn find_gpui_crate_dir() -> PathBuf {
-        PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
-            .parent()
-            .expect("gpui_macos must remain next to its vendored gpui crate")
-            .join("gpui")
+        // Script Kit: shader bindings must come from the patched sibling 
+        // (vendor/gpui), not the stock snapshot bundled in this package, so the
+        // shader-effect Background fields stay in lockstep with the Rust side.
+        let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let sibling = manifest_dir.join("../gpui");
+        if sibling.join("src/scene.rs").exists() {
+            sibling
+        } else {
+            manifest_dir.join("vendor/gpui")
+        }
     }
 
     /// To enable runtime compilation, we need to "stitch" the shaders file with the generated header
@@ -120,23 +129,24 @@ mod macos_build {
         let shader_source_path = "./src/shaders.metal";
         let shader_path = PathBuf::from(shader_source_path);
         stitch_header(header_path, &shader_path).unwrap();
-        println!("cargo:rerun-if-changed={}", &shader_source_path);
+        println!("cargo:rerun-if-changed={shader_source_path}");
     }
 
     #[cfg(not(feature = "runtime_shaders"))]
     fn compile_metal_shaders(header_path: &Path) {
         use std::process::{self, Command};
         let shader_path = "./src/shaders.metal";
-        let output_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-        let air_output_path = output_dir.join("shaders.air");
-        let metallib_output_path = output_dir.join("shaders.metallib");
-        let module_cache_path = env::var_os("SCRIPT_KIT_METAL_MODULE_CACHE_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| output_dir.join("clang-module-cache"));
-        std::fs::create_dir_all(&module_cache_path)
-            .expect("Metal module cache must be writable inside the Cargo build workspace");
+        let air_output_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.air");
+        let metallib_output_path =
+            PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.metallib");
         println!("cargo:rerun-if-changed={}", shader_path);
-        println!("cargo:rerun-if-env-changed=SCRIPT_KIT_METAL_MODULE_CACHE_DIR");
+
+        // The metal compiler records the resolved absolute path of its input
+        // unconditionally. Compile a copy staged in OUT_DIR so the recorded
+        // location is the build's canonical output directory, never the
+        // checkout (corgi rejects artifacts that embed the build path).
+        let staged_shader_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.metal");
+        std::fs::copy(shader_path, &staged_shader_path).unwrap();
 
         let output = Command::new("xcrun")
             .args([
@@ -147,16 +157,10 @@ mod macos_build {
                 "-mmacosx-version-min=10.15.7",
                 "-MO",
                 "-c",
-                shader_path,
-                "-include",
-                (header_path.to_str().unwrap()),
-                "-o",
             ])
+            .arg(&staged_shader_path)
+            .args(["-include", header_path.to_str().unwrap(), "-o"])
             .arg(&air_output_path)
-            .arg(format!(
-                "-fmodules-cache-path={}",
-                module_cache_path.display()
-            ))
             .output()
             .unwrap();
 
@@ -170,7 +174,7 @@ mod macos_build {
 
         let output = Command::new("xcrun")
             .args(["-sdk", "macosx", "metallib"])
-            .arg(air_output_path)
+            .arg(&air_output_path)
             .arg("-o")
             .arg(metallib_output_path)
             .output()
@@ -183,5 +187,11 @@ mod macos_build {
             );
             process::exit(1);
         }
+
+        // The .air intermediate records the compiler's working directory in
+        // its debug info; the metallib built from it does not. Nothing reads
+        // the .air after this point, so drop it rather than leave a
+        // checkout-path-bearing file in OUT_DIR.
+        std::fs::remove_file(&air_output_path).unwrap();
     }
 }

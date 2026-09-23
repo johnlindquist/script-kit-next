@@ -14275,7 +14275,7 @@ impl Render for AgentChatView {
                         .items_center()
                         .gap(px(8.0))
                         .child(div().text_xs().opacity(0.50).child("\u{1F50D}"))
-                        .child(div().flex_grow().text_sm().child(if query.is_empty() {
+                        .child(div().flex_grow_1().text_sm().child(if query.is_empty() {
                             "Search conversation\u{2026}".to_string()
                         } else {
                             query.clone()
@@ -14464,7 +14464,7 @@ impl Render for AgentChatView {
                     .items_center()
                     .gap(px(8.0))
                     .child(div().text_xs().opacity(0.50).child("\u{1F50D}"))
-                    .child(div().flex_grow().text_sm().child(if query.is_empty() {
+                    .child(div().flex_grow_1().text_sm().child(if query.is_empty() {
                         "Search conversation\u{2026}".to_string()
                     } else {
                         query.clone()

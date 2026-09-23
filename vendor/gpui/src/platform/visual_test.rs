@@ -7,10 +7,10 @@
 
 use crate::ScreenCaptureSource;
 use crate::{
-    AnyWindowHandle, BackgroundExecutor, ClipboardItem, CursorStyle, ForegroundExecutor, Keymap,
-    Menu, MenuItem, OwnedMenu, PathPromptOptions, Platform, PlatformDisplay,
-    PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem, PlatformWindow, Task,
-    TestDispatcher, WindowAppearance, WindowParams,
+    ActivityGuard, AnyWindowHandle, BackgroundExecutor, ClipboardItem, CursorStyle,
+    ForegroundExecutor, Keymap, Menu, MenuItem, OwnedMenu, PathPromptOptions, Platform,
+    PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem,
+    PlatformWindow, Task, TestDispatcher, WindowAppearance, WindowParams,
 };
 use anyhow::Result;
 use futures::channel::oneshot;
@@ -146,7 +146,7 @@ impl Platform for VisualTestPlatform {
 
     fn quit(&self) {}
 
-    fn restart(&self, _binary_path: Option<PathBuf>) {
+    fn restart(&self, _binary_path: Option<PathBuf>, _arguments: Vec<std::ffi::OsString>) {
         let _ = self.refusal("restart");
     }
 
@@ -291,9 +291,13 @@ impl Platform for VisualTestPlatform {
         self.platform.open_with_system(path)
     }
 
-    fn on_quit(&self, _callback: Box<dyn FnMut()>) {}
+    fn on_quit(&self, _callback: Box<dyn FnMut() -> bool>) {}
 
     fn on_reopen(&self, _callback: Box<dyn FnMut()>) {}
+
+    fn on_system_sleep(&self, _callback: Box<dyn FnMut()>) {}
+
+    fn on_system_wake(&self, _callback: Box<dyn FnMut()>) {}
 
     fn set_menus(&self, _menus: Vec<Menu>, _keymap: &Keymap) {}
 
@@ -323,6 +327,14 @@ impl Platform for VisualTestPlatform {
             return;
         }
         self.platform.set_cursor_style(style)
+    }
+
+    fn hide_cursor_until_mouse_moves(&self) {
+        self.platform.hide_cursor_until_mouse_moves();
+    }
+
+    fn is_cursor_visible(&self) -> bool {
+        self.platform.is_cursor_visible()
     }
 
     fn should_auto_hide_scrollbars(&self) -> bool {
@@ -386,6 +398,12 @@ impl Platform for VisualTestPlatform {
     }
 
     fn on_thermal_state_change(&self, _callback: Box<dyn FnMut()>) {}
+
+    fn prevent_idle_sleep(&self, reason: &str) -> Task<Result<ActivityGuard>> {
+        Task::ready(Err(anyhow::anyhow!(
+            "Idle sleep prevention for {reason:?} is not supported in visual tests"
+        )))
+    }
 }
 
 #[cfg(test)]

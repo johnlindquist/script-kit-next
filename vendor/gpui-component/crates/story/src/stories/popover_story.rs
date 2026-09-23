@@ -1,5 +1,5 @@
 use gpui::{
-    Action, App, AppContext, Context, Corner, DismissEvent, Entity, EventEmitter, FocusHandle,
+    Action, App, AppContext, Context, Anchor, DismissEvent, Entity, EventEmitter, FocusHandle,
     Focusable, InteractiveElement, IntoElement, KeyBinding, MouseButton, ParentElement as _,
     Render, Styled as _, Window, actions, div, px,
 };
@@ -354,7 +354,7 @@ impl Render for PopoverStory {
                                 )
                                 .child(
                                     Popover::new("anchor1")
-                                        .anchor(Corner::TopRight)
+                                        .anchor(Anchor::TopRight)
                                         .trigger(Button::new("btn").outline().label("TopRight"))
                                         .child("This is a Popover on the Top Right."),
                                 ),
@@ -368,12 +368,12 @@ impl Render for PopoverStory {
                                 .child(
                                     Popover::new("anchor2")
                                         .trigger(Button::new("btn").outline().label("BottomLeft"))
-                                        .anchor(Corner::BottomLeft)
+                                        .anchor(Anchor::BottomLeft)
                                         .child("This is a Popover on the Bottom Left."),
                                 )
                                 .child(
                                     Popover::new("anchor3")
-                                        .anchor(Corner::BottomRight)
+                                        .anchor(Anchor::BottomRight)
                                         .trigger(Button::new("btn").outline().label("BottomRight"))
                                         .child("This is a Popover on the Bottom Right."),
                                 ),

@@ -47,6 +47,7 @@ pub fn render_terminal_header(
         offset: point(px(0.), px(0.)),
         blur_radius: px(4.),
         spread_radius: px(0.),
+        inset: false,
     }];
 
     div()
@@ -89,6 +90,7 @@ pub fn render_terminal_preview_panel(content: &str, colors: TerminalColors) -> i
         offset: point(px(0.), px(0.)),
         blur_radius: px(12.),
         spread_radius: px(0.),
+        inset: false,
     }];
 
     div()
@@ -176,6 +178,7 @@ pub fn render_terminal_log_panel(logs: &[String], colors: TerminalColors) -> imp
         offset: point(px(0.), px(0.)),
         blur_radius: px(8.),
         spread_radius: px(0.),
+        inset: false,
     }];
 
     div()

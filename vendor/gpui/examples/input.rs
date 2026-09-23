@@ -1,5 +1,8 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+#[path = "example_support/fonts.rs"]
+mod example_support;
+
 use std::ops::Range;
 
 use gpui::{
@@ -85,14 +88,24 @@ impl TextInput {
 
     fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected_range.is_empty() {
-            self.select_to(self.previous_boundary(self.cursor_offset()), cx)
+            let prev = self.previous_boundary(self.cursor_offset());
+            if self.cursor_offset() == prev {
+                window.play_system_bell();
+                return;
+            }
+            self.select_to(prev, cx)
         }
         self.replace_text_in_range(None, "", window, cx)
     }
 
     fn delete(&mut self, _: &Delete, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected_range.is_empty() {
-            self.select_to(self.next_boundary(self.cursor_offset()), cx)
+            let next = self.next_boundary(self.cursor_offset());
+            if self.cursor_offset() == next {
+                window.play_system_bell();
+                return;
+            }
+            self.select_to(next, cx)
         }
         self.replace_text_in_range(None, "", window, cx)
     }
@@ -686,6 +699,9 @@ impl Render for InputExample {
 
 fn run_example() {
     application().run(|cx: &mut App| {
+        if !example_support::load_fonts(cx) {
+            return;
+        }
         let bounds = Bounds::centered(None, size(px(300.0), px(300.0)), cx);
         cx.bind_keys([
             KeyBinding::new("backspace", Backspace, None),

@@ -187,7 +187,7 @@ impl AgentChatTranscript {
         let total = messages.len() + 1;
         let list_state =
             ListState::new(total, Self::list_alignment_for(anchor), px(200.0)).measure_all();
-        list_state.set_follow_tail(true);
+        list_state.set_follow_mode(gpui::FollowMode::Tail);
         // WP-B3: opt the transcript list into the chat hot-counters so its
         // all-row `measure_all` passes are attributable (WP8's red baseline).
         list_state.set_hot_metered(true);
@@ -242,7 +242,11 @@ impl AgentChatTranscript {
             px(200.0),
         )
         .measure_all();
-        next.set_follow_tail(was_following);
+        next.set_follow_mode(if was_following {
+            gpui::FollowMode::Tail
+        } else {
+            gpui::FollowMode::Normal
+        });
         next.set_hot_metered(true);
         if !was_following {
             next.scroll_to(old_offset);
@@ -1330,7 +1334,7 @@ impl AgentChatTranscript {
                         // so the subject tracks the code-block size, one step under body.
                         .text_size(px(style_def.markdown.code_block_font_size))
                         .min_w(px(0.0))
-                        .flex_shrink()
+                        .flex_shrink_1()
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()

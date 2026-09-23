@@ -1,3 +1,6 @@
+// Modified for gpui-pre (snapshot of zed@bcf6582): the proc-macro entry points resolve gpui through a facade.
+mod gpui_pre_facade_paths;
+mod bench;
 mod derive_action;
 mod derive_app_context;
 mod derive_into_element;
@@ -17,6 +20,10 @@ use syn::{DeriveInput, Ident};
 /// `Action` derive macro - see the trait documentation for details.
 #[proc_macro_derive(Action, attributes(action))]
 pub fn derive_action(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_derive_action(input))
+}
+
+fn __gpui_pre_derive_action(input: TokenStream) -> TokenStream {
     derive_action::derive_action(input)
 }
 
@@ -25,19 +32,31 @@ pub fn derive_action(input: TokenStream) -> TokenStream {
 /// instead.
 #[proc_macro]
 pub fn register_action(ident: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_register_action(ident))
+}
+
+fn __gpui_pre_register_action(ident: TokenStream) -> TokenStream {
     register_action::register_action(ident)
 }
 
-/// #[derive(IntoElement)] is used to create a Component out of anything that implements
-/// the `RenderOnce` trait.
+/// #[derive(IntoElement)] generates an `IntoElement` impl for any `RenderOnce`
+/// type, wrapping it in a `ViewElement` so it can be used as a child.
 #[proc_macro_derive(IntoElement)]
 pub fn derive_into_element(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_derive_into_element(input))
+}
+
+fn __gpui_pre_derive_into_element(input: TokenStream) -> TokenStream {
     derive_into_element::derive_into_element(input)
 }
 
 #[proc_macro_derive(Render)]
 #[doc(hidden)]
 pub fn derive_render(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_derive_render(input))
+}
+
+fn __gpui_pre_derive_render(input: TokenStream) -> TokenStream {
     derive_render::derive_render(input)
 }
 
@@ -56,6 +75,10 @@ pub fn derive_render(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_derive(AppContext, attributes(app))]
 pub fn derive_app_context(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_derive_app_context(input))
+}
+
+fn __gpui_pre_derive_app_context(input: TokenStream) -> TokenStream {
     derive_app_context::derive_app_context(input)
 }
 
@@ -89,6 +112,10 @@ pub fn derive_app_context(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_derive(VisualContext, attributes(window, app))]
 pub fn derive_visual_context(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_derive_visual_context(input))
+}
+
+fn __gpui_pre_derive_visual_context(input: TokenStream) -> TokenStream {
     derive_visual_context::derive_visual_context(input)
 }
 
@@ -96,54 +123,90 @@ pub fn derive_visual_context(input: TokenStream) -> TokenStream {
 #[proc_macro]
 #[doc(hidden)]
 pub fn style_helpers(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_style_helpers(input))
+}
+
+fn __gpui_pre_style_helpers(input: TokenStream) -> TokenStream {
     styles::style_helpers(input)
 }
 
 /// Generates methods for visibility styles.
 #[proc_macro]
 pub fn visibility_style_methods(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_visibility_style_methods(input))
+}
+
+fn __gpui_pre_visibility_style_methods(input: TokenStream) -> TokenStream {
     styles::visibility_style_methods(input)
 }
 
 /// Generates methods for margin styles.
 #[proc_macro]
 pub fn margin_style_methods(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_margin_style_methods(input))
+}
+
+fn __gpui_pre_margin_style_methods(input: TokenStream) -> TokenStream {
     styles::margin_style_methods(input)
 }
 
 /// Generates methods for padding styles.
 #[proc_macro]
 pub fn padding_style_methods(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_padding_style_methods(input))
+}
+
+fn __gpui_pre_padding_style_methods(input: TokenStream) -> TokenStream {
     styles::padding_style_methods(input)
 }
 
 /// Generates methods for position styles.
 #[proc_macro]
 pub fn position_style_methods(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_position_style_methods(input))
+}
+
+fn __gpui_pre_position_style_methods(input: TokenStream) -> TokenStream {
     styles::position_style_methods(input)
 }
 
 /// Generates methods for overflow styles.
 #[proc_macro]
 pub fn overflow_style_methods(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_overflow_style_methods(input))
+}
+
+fn __gpui_pre_overflow_style_methods(input: TokenStream) -> TokenStream {
     styles::overflow_style_methods(input)
 }
 
 /// Generates methods for cursor styles.
 #[proc_macro]
 pub fn cursor_style_methods(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_cursor_style_methods(input))
+}
+
+fn __gpui_pre_cursor_style_methods(input: TokenStream) -> TokenStream {
     styles::cursor_style_methods(input)
 }
 
 /// Generates methods for border styles.
 #[proc_macro]
 pub fn border_style_methods(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_border_style_methods(input))
+}
+
+fn __gpui_pre_border_style_methods(input: TokenStream) -> TokenStream {
     styles::border_style_methods(input)
 }
 
 /// Generates methods for box shadow styles.
 #[proc_macro]
 pub fn box_shadow_style_methods(input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_box_shadow_style_methods(input))
+}
+
+fn __gpui_pre_box_shadow_style_methods(input: TokenStream) -> TokenStream {
     styles::box_shadow_style_methods(input)
 }
 
@@ -186,7 +249,30 @@ pub fn box_shadow_style_methods(input: TokenStream) -> TokenStream {
 /// - `ITERATIONS`: forces the value of the `iterations` argument
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, function: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_test(args, function))
+}
+
+fn __gpui_pre_test(args: TokenStream, function: TokenStream) -> TokenStream {
     test::test(args, function)
+}
+
+/// `#[gpui::bench]` annotates a Criterion benchmark that runs with GPUI support.
+///
+/// Use `#[gpui::bench(inputs = some_iterable())]` on benchmarks that take an
+/// additional input argument; the generated benchmark uses Criterion's
+/// `bench_with_input`. `group`, `input_name`, and `sample_size` can customize
+/// the generated input benchmark group.
+///
+/// The benchmark crate must add `criterion` and `gpui_platform` (with its
+/// `test-support` feature) to its dev-dependencies and enable gpui's `bench`
+/// feature, since the generated code references all three.
+#[proc_macro_attribute]
+pub fn bench(args: TokenStream, function: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_bench(args, function))
+}
+
+fn __gpui_pre_bench(args: TokenStream, function: TokenStream) -> TokenStream {
+    bench::bench(args, function)
 }
 
 /// A variant of `#[gpui::test]` that supports property-based testing.
@@ -259,6 +345,10 @@ pub fn test(args: TokenStream, function: TokenStream) -> TokenStream {
 /// [`Strategy`]: https://docs.rs/proptest/latest/proptest/strategy/trait.Strategy.html
 #[proc_macro_attribute]
 pub fn property_test(args: TokenStream, function: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_property_test(args, function))
+}
+
+fn __gpui_pre_property_test(args: TokenStream, function: TokenStream) -> TokenStream {
     property_test::test(args.into(), function.into()).into()
 }
 
@@ -281,6 +371,11 @@ pub fn property_test(args: TokenStream, function: TokenStream) -> TokenStream {
 #[cfg(any(feature = "inspector", debug_assertions))]
 #[proc_macro_attribute]
 pub fn derive_inspector_reflection(_args: TokenStream, input: TokenStream) -> TokenStream {
+    gpui_pre_facade_paths::rewrite(__gpui_pre_derive_inspector_reflection(_args, input))
+}
+
+#[cfg(any(feature = "inspector", debug_assertions))]
+fn __gpui_pre_derive_inspector_reflection(_args: TokenStream, input: TokenStream) -> TokenStream {
     derive_inspector_reflection::derive_inspector_reflection(_args, input)
 }
 
