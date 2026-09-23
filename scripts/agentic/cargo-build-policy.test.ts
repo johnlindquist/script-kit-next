@@ -2347,10 +2347,11 @@ describe("development, correctness-test, and CI profile separation", () => {
   test("keeps interactive rendering optimized while correctness harnesses remain unoptimized", () => {
     const manifest = Bun.TOML.parse(readFileSync(join(scripts, "..", "..", "Cargo.toml"), "utf8"));
     expect(manifest).toHaveProperty(["profile", "dev", "package", "*", "opt-level"], 2);
-    expect(manifest).toHaveProperty(["profile", "dev", "package", "gpui", "opt-level"], 2);
+    // GPUI is the crates.io gpui-pre snapshot (patched from vendor/gpui).
+    expect(manifest).toHaveProperty(["profile", "dev", "package", "gpui-pre", "opt-level"], 2);
     expect(manifest).toHaveProperty(["profile", "dev", "package", "gpui-component", "opt-level"], 2);
     expect(manifest).toHaveProperty(["profile", "test", "package", "*", "opt-level"], 0);
-    expect(manifest).toHaveProperty(["profile", "test", "package", "gpui", "opt-level"], 0);
+    expect(manifest).toHaveProperty(["profile", "test", "package", "gpui-pre", "opt-level"], 0);
     expect(manifest).toHaveProperty(["profile", "test", "package", "gpui-component", "opt-level"], 0);
   });
 
@@ -2372,8 +2373,9 @@ describe("development, correctness-test, and CI profile separation", () => {
   });
 
   test("Metal shader bindings never rebuild the entire GPUI crate as a build dependency", () => {
+    // gpui-pre 0.3 moved the Metal shader build (cbindgen) into gpui_apple.
     const manifest = Bun.TOML.parse(
-      readFileSync(join(scripts, "..", "..", "vendor", "gpui_macos", "Cargo.toml"), "utf8"),
+      readFileSync(join(scripts, "..", "..", "vendor", "gpui_apple", "Cargo.toml"), "utf8"),
     );
     expect(manifest).toHaveProperty(["target", 'cfg(target_os = "macos")', "build-dependencies", "cbindgen"]);
     expect(manifest).not.toHaveProperty(["target", 'cfg(target_os = "macos")', "build-dependencies", "gpui"]);
