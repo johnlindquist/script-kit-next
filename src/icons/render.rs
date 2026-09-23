@@ -25,9 +25,7 @@ pub fn render_icon(
     let color = resolve_color(&style.color, theme_colors, window);
 
     match icon {
-        IconRef::Lucide(lucide_icon) => {
-            render_lucide(lucide_icon.clone(), size_px, color, style.opacity)
-        }
+        IconRef::Lucide(lucide_icon) => render_lucide(*lucide_icon, size_px, color, style.opacity),
         IconRef::Embedded(embedded) => render_embedded(*embedded, size_px, color, style.opacity),
         IconRef::AssetSvg(path) => render_asset_svg(path, size_px, color, style.opacity),
         IconRef::SFSymbol(_) | IconRef::File(_) | IconRef::Url(_) | IconRef::AppBundle(_) => {

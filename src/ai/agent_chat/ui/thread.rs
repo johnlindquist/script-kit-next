@@ -4199,7 +4199,9 @@ impl AgentChatThread {
         };
         let clear_composer =
             decision.clear_composer && self.input.revision() == decision.composer_revision;
-        let mut decision = self.pending_brain_decision.take().unwrap();
+        let Some(mut decision) = self.pending_brain_decision.take() else {
+            return false;
+        };
         decision.clear_composer = clear_composer;
         let retained = decision.clone();
         self.context_bootstrap_note = None;

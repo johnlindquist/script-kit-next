@@ -131,9 +131,10 @@ impl DayPageView {
         let editor_subscription = cx.subscribe_in(
             &editor_state,
             window,
-            |this, _, event: &InputEvent, window, cx| match event {
-                InputEvent::Change => this.on_editor_change(window, cx),
-                _ => {}
+            |this, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.on_editor_change(window, cx);
+                }
             },
         );
         // Selection moves arrive on the Script Kit extension event stream.
@@ -141,7 +142,10 @@ impl DayPageView {
             &editor_state,
             window,
             |this, _, event: &gpui_component::input::ScriptKitInputEvent, _window, cx| {
-                if matches!(event, gpui_component::input::ScriptKitInputEvent::SelectionChange) {
+                if matches!(
+                    event,
+                    gpui_component::input::ScriptKitInputEvent::SelectionChange
+                ) {
                     this.notes_editor
                         .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
                 }

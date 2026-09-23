@@ -448,13 +448,11 @@ impl AgentChatTranscript {
                     if text_changed {
                         // WP-B3: a row re-parsed because its display text changed.
                         crate::chat_hot_counters::record_transcript_row_changed(display_text.len());
-                        entry.get().update(cx, |state, cx| {
-                            if parse_immediately {
-                                state.set_text(&display_text, cx);
-                            } else {
-                                state.set_text(&display_text, cx);
-                            }
-                        });
+                        // gpui-kit parses small full replacements synchronously
+                        // inside `set_text`, so one call covers both paths.
+                        entry
+                            .get()
+                            .update(cx, |state, cx| state.set_text(&display_text, cx));
                         self.message_texts.insert(msg.id, display_text);
                     }
                 }

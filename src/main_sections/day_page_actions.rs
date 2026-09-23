@@ -687,6 +687,8 @@ impl DayPageView {
         );
     }
 
+    // Carries the full AppFailureRecord (rules/AI_RELIABILITY.md); do not box/downgrade.
+    #[allow(clippy::result_large_err)]
     fn dispatch_agent_chat_packet(
         &mut self,
         packet: DayPageAgentHandoffPacket,

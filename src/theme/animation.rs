@@ -54,6 +54,7 @@ pub struct MainWindowAnimationSpec {
 }
 
 impl MainWindowAnimationSpec {
+    #[allow(clippy::too_many_arguments)] // positional calibration table; values locked
     const fn new(
         duration_ms: u32,
         compression_ms: u32,

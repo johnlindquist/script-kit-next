@@ -587,7 +587,9 @@ impl ScriptListApp {
                     } else {
                         let id = semantic_id
                             .strip_prefix("day-page-clipboard-shelf-item-")
-                            .unwrap();
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("day_page_clipboard_shelf_item_id_invalid")
+                            })?;
                         anyhow::ensure!(
                             view.clipboard_shelf_expanded
                                 && view
