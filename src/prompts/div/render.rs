@@ -109,12 +109,17 @@ impl Render for DivPrompt {
             content_base
         };
 
-        // Add ID to make it Stateful, then enable tracked scrolling and visible vertical scrollbar
-        // overflow_y_scrollbar requires ScrollableElement trait (needs .id() first)
+        // Add ID to make it Stateful, then scroll the element itself with the
+        // prompt's own handle and overlay a scrollbar driven by that handle.
+        // (gpui-kit's `overflow_y_scrollbar()` wraps the element in a scroll
+        // area with its own private handle: the content collapsed to zero
+        // height under this host and keyboard scrolling lost its handle.)
         let content_container = content_styled
             .id(gpui::ElementId::Name(panel_semantic_id.into()))
+            .relative()
             .track_scroll(&self.scroll_handle)
-            .overflow_y_scrollbar()
+            .overflow_y_scroll()
+            .vertical_scrollbar(&self.scroll_handle)
             .p(px(container_padding));
 
         // SDK container padding belongs to the authored inner content plane;
