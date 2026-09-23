@@ -1138,7 +1138,7 @@ mod script_issue_diagnostics_behavior_tests {
             related: Vec::new(),
         };
         let report = ValidationReport {
-            schema_version: crate::scripts::validation::VALIDATION_SCHEMA_VERSION,
+            schema_version: crate::scripts::VALIDATION_SCHEMA_VERSION,
             total_candidates: 1,
             valid_count: 0,
             fatal_count: 1,

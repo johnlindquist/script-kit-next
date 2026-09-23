@@ -544,7 +544,9 @@ mod agent_chat_spine_dispatch_tests {
                 config.built_ins = Some(built_ins);
                 let app = cx.new(|cx| ScriptListApp::new(config, false, window, cx));
                 *app_slot_for_window.lock().expect("store OF-35b test app") = Some(app);
-                cx.new(|_| crate::MainMenuSelectionTestHost)
+                cx.new(|_| crate::MainMenuSelectionTestHost {
+                    _response_receiver: std::sync::mpsc::sync_channel(1).1,
+                })
             })
             .expect("open OF-35b dispatch test window")
         });
@@ -762,7 +764,9 @@ mod modal_backdrop_policy_tests {
                 config.built_ins = Some(built_ins);
                 let app = cx.new(|cx| ScriptListApp::new(config, false, window, cx));
                 *app_slot_for_window.lock().expect("store backdrop test app") = Some(app);
-                cx.new(|_| crate::MainMenuSelectionTestHost)
+                cx.new(|_| crate::MainMenuSelectionTestHost {
+                    _response_receiver: std::sync::mpsc::sync_channel(1).1,
+                })
             })
             .expect("open backdrop policy test window")
         });

@@ -1844,7 +1844,7 @@ mod tests {
                     | ResolvedMainMenuSelection::Calculator { row, .. } => row,
                 };
                 assert_eq!(painted.semantic_id, before);
-                let (elements, _) = app.collect_visible_elements(100, cx);
+                let elements = app.collect_visible_elements(100, cx).elements;
                 let selected: Vec<_> = elements
                     .iter()
                     .filter(|element| element.selected == Some(true))
@@ -1862,7 +1862,7 @@ mod tests {
                     selected_main_menu_stable_key(app),
                     first_selectable_main_menu_stable_key(app)
                 );
-                let (elements, _) = app.collect_visible_elements(100, cx);
+                let elements = app.collect_visible_elements(100, cx).elements;
                 let selected = elements
                     .iter()
                     .find(|element| element.selected == Some(true))

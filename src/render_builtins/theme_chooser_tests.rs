@@ -24,6 +24,7 @@ mod theme_chooser_zero_match_paint_tests {
                     .into_any_element(),
                 div().w_1_2().child("Theme Preview").into_any_element(),
                 list_colors,
+                crate::designs::MainMenuThemeVariant::default(),
             )
         }
     }
