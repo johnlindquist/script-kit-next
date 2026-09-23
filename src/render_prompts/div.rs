@@ -69,6 +69,11 @@ impl ScriptListApp {
                     .flex_1()
                     .w_full()
                     .min_h(px(0.)) // Critical: allows flex children to size properly
+                    // Flex column so `prompt_shell_content`'s flex_1 resolves
+                    // to this definite height (gpui-pre 0.3 / taffy 0.13 left
+                    // the block child auto-height and the body collapsed).
+                    .flex()
+                    .flex_col()
                     .overflow_hidden()
                     .child(crate::components::prompt_shell_content(entity.clone())),
             )

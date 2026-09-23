@@ -10237,7 +10237,17 @@ crate::components::main_view_chrome::MainViewInputShellIds::new(
                     .overflow_hidden()
                     .border_b_1()
                     .border_color(rgba(chrome.divider_rgba))
-                    .child(div().size_full().overflow_hidden().child(transcript))
+                    // Flex column so the transcript viewport's `flex_1` fills
+                    // the fixed preview height (a block wrapper resolved it
+                    // to 0 under gpui-pre 0.3 layout; the result was clipped).
+                    .child(
+                        div()
+                            .size_full()
+                            .flex()
+                            .flex_col()
+                            .overflow_hidden()
+                            .child(transcript),
+                    )
                     .with_animation(
                         "focused-text-mini-preview-enter",
                         Animation::new(Duration::from_millis(160)),
