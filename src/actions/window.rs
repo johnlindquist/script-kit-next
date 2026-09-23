@@ -1642,6 +1642,13 @@ pub fn open_actions_window(
         opening_shell_basis.max_height_px,
         opening_shell_basis.row_height_px,
     );
+    let fixed_height = top_anchored_popup_height_above_floating_footer(
+        fixed_height,
+        f32::from(main_window_bounds.size.height),
+        position,
+        crate::footer_popup::main_window_footer_over_content(),
+        crate::footer_popup::main_window_bottom_popup_clearance(FOOTER_HEIGHT),
+    );
 
     // Calculate window position:
     // - X: Right edge of main window, minus actions width, minus margin
@@ -2121,6 +2128,62 @@ mod request_close_ordering_tests {
 mod actions_popup_origin_tests {
     use super::*;
     use gpui::{px, Bounds, Point, Size};
+
+    /// Measured live on the 480pt main menu: floating capsules start 80pt above
+    /// the window bottom (strip 40 + gap 8 + capsule 32) and a 360pt TopCenter
+    /// popup anchored at +44 ended 4pt inside them. The cap keeps an 8pt gap.
+    #[test]
+    fn top_anchored_popup_ends_above_floating_footer_capsules() {
+        let tokens = crate::designs::current_actions_popup_theme();
+        let top = tokens.shell.titlebar_offset_y + tokens.shell.margin_y;
+        let clearance = 80.0;
+        let capped = top_anchored_popup_height_above_floating_footer(
+            360.0,
+            480.0,
+            WindowPosition::TopCenter,
+            true,
+            clearance,
+        );
+        let capsule_top = 480.0 - clearance;
+        assert_eq!(top + capped + tokens.shell.margin_y, capsule_top);
+        assert!(capped < 360.0);
+
+        // Detached footers and bottom-anchored popups keep their height.
+        for (position, floats) in [
+            (WindowPosition::TopCenter, false),
+            (WindowPosition::TopRight, false),
+            (WindowPosition::BottomRight, true),
+        ] {
+            assert_eq!(
+                top_anchored_popup_height_above_floating_footer(
+                    360.0, 480.0, position, floats, clearance
+                ),
+                360.0
+            );
+        }
+        // A short popup that already fits is untouched.
+        assert_eq!(
+            top_anchored_popup_height_above_floating_footer(
+                200.0,
+                480.0,
+                WindowPosition::TopCenter,
+                true,
+                clearance
+            ),
+            200.0
+        );
+        // A tiny main window never collapses the popup below a usable floor.
+        assert_eq!(
+            top_anchored_popup_height_above_floating_footer(
+                360.0,
+                200.0,
+                WindowPosition::TopCenter,
+                true,
+                clearance
+            ),
+            160.0
+        );
+    }
 
     #[test]
     fn top_center_centers_inside_main_window() {

@@ -69,6 +69,33 @@ pub(crate) fn resolved_actions_popup_height(
     items_height + search_box_height + header_height + footer_height + border_height
 }
 
+/// Cap a top-anchored Actions popup so it ends above the floating footer
+/// capsules. With the main-menu footer floating inside the glass stage, a
+/// full-height TopCenter/TopRight popup (272 + 360 on a 480pt window) covered
+/// the capsules' top edge; detached footers sit below the stage and are
+/// untouched. `bottom_clearance` is the distance from the main window's
+/// bottom edge to the capsules' top edge.
+pub(crate) fn top_anchored_popup_height_above_floating_footer(
+    popup_height: f32,
+    main_window_height: f32,
+    position: WindowPosition,
+    footer_floats_over_content: bool,
+    bottom_clearance: f32,
+) -> f32 {
+    /// Never shrink a popup below a usable search + a few rows.
+    const MIN_TOP_ANCHORED_POPUP_HEIGHT: f32 = 160.0;
+    if !footer_floats_over_content || matches!(position, WindowPosition::BottomRight) {
+        return popup_height;
+    }
+    let tokens = crate::designs::current_actions_popup_theme();
+    let available = main_window_height
+        - tokens.shell.titlebar_offset_y
+        - tokens.shell.margin_y
+        - bottom_clearance
+        - tokens.shell.margin_y;
+    popup_height.min(available.max(MIN_TOP_ANCHORED_POPUP_HEIGHT.min(popup_height)))
+}
+
 /// Compute the origin point for the actions popup window.
 ///
 /// Pure helper that encapsulates all position-dependent origin math so it can
