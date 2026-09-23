@@ -1046,9 +1046,10 @@ impl<M: InputModeKind> TextElement<M> {
             );
 
             empty_line_number.width + LINE_NUMBER_RIGHT_MARGIN
-        } else if state.is_code_editor() {
-            LINE_NUMBER_RIGHT_MARGIN
         } else {
+            // Script Kit: no gutter without line numbers (fork parity) — a
+            // code editor with `line_number(false)` keeps its text at the
+            // caller's `editor_paddings` inset instead of +10px.
             px(0.)
         };
 

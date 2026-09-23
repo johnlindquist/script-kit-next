@@ -20,6 +20,7 @@ when upgrading.
 | Editor inline completion | `input/editor/lsp/completions.rs`, `input/base/script_kit.rs` | `has/clear_inline_completion` public; `EditorState::set_inline_completion_text`, `rows`. |
 | Input line fidelity | `input/editor/display_map/text_wrapper.rs`, `input/base/element.rs`, `input/base/script_kit.rs` | `fidelity_scope(scope)`: during a devtools fidelity capture each soft-wrapped line paints inside a `TextLine` scope `<scope>.line.<row>.<wrap>` with hashed text/layout evidence (never raw text). |
 | Scrollbar fidelity | `scrollbar.rs` | `Scrollbar::fidelity_scope`: capture freezes the bar fully shown (no hover/drag/fade) and records axis ⊃ layer, track, thumb scopes with real prepaint geometry. |
+| Line-number gutter | `input/base/element.rs` | A code editor with `line_number(false)` reserves no 10px gutter (fork parity; Notes/editor prompt text sits at its `editor_paddings` inset). |
 | Slider drag state | `slider.rs` | `SliderState::is_dragging` (theme chooser skips syncing into a held slider). |
 | Text view | `text/state.rs`, `text/text_view.rs`, `text/format/markdown.rs`, `text/markdown_ext.rs`, `text/style.rs`, `text/node.rs` | WP-B3 hot counters (`set_hot_metered`), `markdown_immediate`, `source_text`, `TextView::fidelity_source`, compact long bare HTTP link labels, blockquote style refinement. |
 
