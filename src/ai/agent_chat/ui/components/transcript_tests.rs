@@ -260,7 +260,7 @@ mod tests {
         ) -> Entity<AgentChatTranscript> {
             // `TextViewState` (built during message reconciliation) reads the
             // gpui-component `Theme` global, so install component defaults first.
-            cx.update(|cx| gpui_component::init(cx));
+            cx.update(|cx| crate::theme::gpui_kit_bridge::init_component_libraries(cx));
             cx.new(|cx| {
                 AgentChatTranscript::new(conversation(count), cx).with_ui_variant(variant, cx)
             })

@@ -16,7 +16,7 @@ pub use column::*;
 pub use delegate::*;
 pub use state::*;
 
-actions!(table, [SelectPrevColumn, SelectNextColumn]);
+actions!(sk_table, [SelectPrevColumn, SelectNextColumn]);
 
 const CONTEXT: &'static str = "Table";
 pub(crate) fn init(cx: &mut App) {

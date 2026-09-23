@@ -263,7 +263,7 @@ mod tests {
     ) {
         let def = crate::designs::current_main_menu_theme().def();
         let spacing = get_tokens(DesignVariant::Default).spacing();
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let window = cx.update(|cx| {
             let mut options = gpui::WindowOptions::default();
             options.window_bounds = Some(gpui::WindowBounds::Windowed(gpui::Bounds::new(

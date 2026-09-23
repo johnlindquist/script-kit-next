@@ -10,7 +10,7 @@ use crate::{
 
 use super::{Input, InputState};
 
-actions!(number_input, [Increment, Decrement]);
+actions!(sk_number_input, [Increment, Decrement]);
 
 const CONTEXT: &str = "NumberInput";
 pub fn init(cx: &mut App) {

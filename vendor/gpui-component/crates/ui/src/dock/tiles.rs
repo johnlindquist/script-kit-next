@@ -22,7 +22,7 @@ use gpui::{
     px, size,
 };
 
-actions!(tiles, [Undo, Redo]);
+actions!(sk_tiles, [Undo, Redo]);
 
 const MINIMUM_SIZE: Size<Pixels> = size(px(100.), px(100.));
 const DRAG_BAR_HEIGHT: Pixels = px(30.);

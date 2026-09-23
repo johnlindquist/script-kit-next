@@ -753,7 +753,7 @@ mod chat_prompt_host_mode_lifecycle {
     /// second order silently converted the host back to Standalone.)
     #[gpui::test]
     fn both_builder_orders_stay_transcript_only(cx: &mut gpui::TestAppContext) {
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let (host_first, mini_first) = cx.update(|cx| {
             let host_first = ChatPrompt::new(
                 "order-a".to_string(),
@@ -799,7 +799,7 @@ mod chat_prompt_host_mode_lifecycle {
     /// per-message replay would — without the per-message rebuild amplification.
     #[gpui::test]
     fn flow_history_restore_bulk_rebuilds_once(cx: &mut gpui::TestAppContext) {
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let window = cx.update(|cx| {
             cx.open_window(window_options(), |_, cx| {
                 let focus_handle = cx.focus_handle();
@@ -852,7 +852,7 @@ mod chat_prompt_host_mode_lifecycle {
     /// only the typed failure plus safe display copy.
     #[gpui::test]
     fn set_message_error_classifies_and_never_stores_raw(cx: &mut gpui::TestAppContext) {
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let window = cx.update(|cx| {
             cx.open_window(window_options(), |_, cx| {
                 let focus_handle = cx.focus_handle();
@@ -920,7 +920,7 @@ mod chat_prompt_host_mode_lifecycle {
     #[gpui::test]
     fn recovery_actions_appear_only_when_the_host_can_perform_them(cx: &mut gpui::TestAppContext) {
         use sk_protocol::ai_reliability::RecoveryActionKind;
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let build = |with_callbacks: bool, cx: &mut gpui::App| {
             let focus_handle = cx.focus_handle();
             let prompt = ChatPrompt::new(
@@ -999,7 +999,7 @@ mod chat_prompt_host_mode_lifecycle {
     /// classified at ingestion — no render path ever sees the raw string.
     #[gpui::test]
     fn raw_sdk_error_strings_classify_at_ingestion(cx: &mut gpui::TestAppContext) {
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let window = cx.update(|cx| {
             cx.open_window(window_options(), |_, cx| {
                 let focus_handle = cx.focus_handle();
@@ -1059,7 +1059,7 @@ mod chat_prompt_host_mode_lifecycle {
     /// focus its internal input across a real render pass.
     #[gpui::test]
     fn transcript_only_render_runs_no_input_lifecycle(cx: &mut gpui::TestAppContext) {
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let submits = Arc::new(AtomicUsize::new(0));
         let submits_cb = submits.clone();
         let window = cx.update(|cx| {

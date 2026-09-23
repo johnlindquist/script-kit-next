@@ -31,7 +31,11 @@ impl gpui::AssetSource for AppAssets {
         if let Some(file) = ScriptKitEmbeddedAssets::get(path) {
             return Ok(Some(file.data));
         }
-        gpui::AssetSource::load(&gpui_component_assets::Assets, path)
+        if let Some(bytes) = gpui::AssetSource::load(&gpui_component_assets::Assets, path)? {
+            return Ok(Some(bytes));
+        }
+        // gpui-kit / gpui-ai icons that the forked 0.5 asset set predates.
+        gpui::AssetSource::load(&gpui_kit_assets::Assets, path)
     }
 
     fn list(&self, path: &str) -> anyhow::Result<Vec<gpui::SharedString>> {
@@ -43,6 +47,7 @@ impl gpui::AssetSource for AppAssets {
             &gpui_component_assets::Assets,
             path,
         )?);
+        entries.extend(gpui::AssetSource::list(&gpui_kit_assets::Assets, path)?);
         entries.sort();
         entries.dedup();
         Ok(entries)

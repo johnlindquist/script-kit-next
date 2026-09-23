@@ -4,7 +4,7 @@ use super::*;
 /// A failed save must retain draft identity through view changes and refuse closing.
 #[gpui::test]
 fn failed_save_keeps_notes_open_for_escape_and_cmd_w(cx: &mut gpui::TestAppContext) {
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let app_slot = std::rc::Rc::new(std::cell::RefCell::new(None));
     let app_slot_for_window = app_slot.clone();
     let draft = "# Unsaved note\n\nKeep these edits.\n";
@@ -83,7 +83,7 @@ fn failed_save_keeps_notes_open_for_escape_and_cmd_w(cx: &mut gpui::TestAppConte
 /// A removed backing day file must not strand the last editable copy in memory.
 #[gpui::test]
 fn missing_day_file_is_recreated_from_the_notes_editor(cx: &mut gpui::TestAppContext) {
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let directory = tempfile::tempdir().expect("private day fixture");
     let path = directory.path().join("2026-08-28.md");
     let base = "# Today\n\nExisting capture.\n";
@@ -138,7 +138,7 @@ fn missing_day_file_is_recreated_from_the_notes_editor(cx: &mut gpui::TestAppCon
 
 #[gpui::test]
 fn injected_notes_preserve_reveal_and_real_editor_mutations(cx: &mut gpui::TestAppContext) {
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let handle = cx.update(|cx| {
         cx.open_window(
             WindowOptions {
@@ -258,7 +258,7 @@ fn injected_notes_preserve_reveal_and_real_editor_mutations(cx: &mut gpui::TestA
 fn theme_recolors_existing_links_without_manufacturing_a_data_revision(
     cx: &mut gpui::TestAppContext,
 ) {
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let handle = cx.update(|cx| {
         cx.open_window(
             WindowOptions {

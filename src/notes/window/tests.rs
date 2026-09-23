@@ -484,7 +484,7 @@ fn test_save_note_with_content_activates_existing_notes_window() {
 #[gpui::test]
 fn test_notes_window_registers_automation_parent_for_actions_popup(cx: &mut gpui::TestAppContext) {
     use gpui::{AppContext as _, WindowOptions};
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     cx.update(|cx| {
         let mount = |cx: &mut gpui::App| {
             let handle = cx

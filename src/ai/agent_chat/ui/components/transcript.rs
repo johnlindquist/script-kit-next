@@ -810,6 +810,7 @@ impl AgentChatTranscript {
                     ui_variant,
                     show_pending_activity,
                     thread_status,
+                    is_latest: messages.last().is_some_and(|last| last.id == msg.id),
                 },
                 msg,
                 colors,
@@ -818,26 +819,25 @@ impl AgentChatTranscript {
                 presentation,
                 style_def,
             ),
-            AgentChatThreadMessageRole::Thought => Self::render_collapsible_block(
+            // gpui-ai grammar: reasoning is a `Thinking` disclosure and every
+            // tool invocation is a `ToolCall` card (see gpui_ai_blocks.rs).
+            AgentChatThreadMessageRole::Thought => super::gpui_ai_blocks::render_thinking(
                 msg,
-                colors,
-                &theme,
                 is_collapsed,
-                false,
-                text_view_state,
-                style_def,
+                matches!(thread_status, AgentChatThreadStatus::Streaming)
+                    && messages.last().is_some_and(|last| last.id == msg.id),
                 entity,
             ),
-            AgentChatThreadMessageRole::Tool => Self::render_collapsible_block(
-                msg,
-                colors,
-                &theme,
-                is_collapsed,
-                true,
-                text_view_state,
-                style_def,
-                entity,
-            ),
+            AgentChatThreadMessageRole::Tool => match msg.tool_meta.as_ref() {
+                Some(meta) => super::gpui_ai_blocks::render_tool_call(
+                    msg,
+                    meta,
+                    &Self::display_body(msg),
+                    is_collapsed,
+                    entity,
+                ),
+                None => super::gpui_ai_blocks::render_plain_tool(msg, is_collapsed, entity),
+            },
             AgentChatThreadMessageRole::Error => {
                 Self::render_error_message(msg, colors, text_view_state, style_def)
             }
@@ -865,18 +865,10 @@ impl AgentChatTranscript {
                 },
             );
 
+        let _ = (dot, resolved);
         div()
             .debug_selector(|| "agent-chat-transcript-pending".to_string())
-            .flex()
-            .items_center()
-            .gap(px(style_contract::CONVERSATION_ACTIVITY_GAP))
-            .child(dot)
-            .child(
-                div()
-                    .text_size(px(style_def.markdown.body_font_size))
-                    .text_color(rgba(resolved.activity_label_rgba))
-                    .child("Thinking\u{2026}"),
-            )
+            .child(gpui_ai::prelude::LoadingState::new().label("Thinking\u{2026}"))
             .into_any()
     }
 
@@ -1014,34 +1006,32 @@ impl AgentChatTranscript {
                 },
             )
             .rounded(px(user_style.radius))
-            .bg(rgba(
-                resolved_agent_chat_transcript_colors(style_def, theme).user_bg_rgba,
-            ))
+            .bg(super::gpui_ai_blocks::user_bubble_colors(theme).0)
+            .text_color(super::gpui_ai_blocks::user_bubble_colors(theme).1)
             .when(
                 matches!(presentation, AgentChatTranscriptPresentation::UserBold),
                 |d| d.font_weight(FontWeight::BOLD),
             )
             .when_some(attachment_receipts, |d, receipts| d.child(receipts))
-            .child(Self::selectable_markdown_view(
-                text_view_state,
-                theme,
-                _colors,
-                rgb(_colors.text_primary),
-                style_def,
-                Self::message_text_fidelity_scope(msg),
-            ))
+            // gpui-ai renders the human turn as plain text in its bubble.
+            .child({
+                let _ = text_view_state;
+                let selector = Self::message_text_fidelity_scope(msg).to_string();
+                div()
+                    .debug_selector(move || selector.clone())
+                    .text_size(px(style_def.markdown.body_font_size))
+                    .child(SharedString::from(msg.body.to_string()))
+            })
             .when_some(edit_button, |d, button| d.child(button));
 
-        if matches!(presentation, AgentChatTranscriptPresentation::RoleSplit) {
-            div()
-                .w_full()
-                .flex()
-                .justify_end()
-                .child(div().max_w(px(user_style.max_width)).child(bubble))
-                .into_any_element()
-        } else {
-            bubble.into_any_element()
-        }
+        // gpui-ai places the human turn on the right in every layout.
+        let _ = presentation;
+        div()
+            .w_full()
+            .flex()
+            .justify_end()
+            .child(div().max_w(px(user_style.max_width)).child(bubble))
+            .into_any_element()
     }
 
     fn render_assistant_message(
@@ -1057,20 +1047,16 @@ impl AgentChatTranscript {
             ui_variant,
             show_pending_activity,
             thread_status,
+            is_latest,
         } = runtime;
         let content = if show_pending_activity {
             Self::render_pending_activity(_theme, style_def)
         } else {
-            Self::selectable_markdown_view_with_policy(
-                text_view_state,
-                _theme,
-                _colors,
-                rgb(_colors.text_primary),
-                style_def,
-                Self::message_text_fidelity_scope(msg),
-                Self::markdown_link_policy_for(ui_variant, msg),
+            let _ = (text_view_state, ui_variant);
+            super::gpui_ai_blocks::render_assistant_text(
+                msg,
+                is_latest && matches!(thread_status, AgentChatThreadStatus::Streaming),
             )
-            .into_any_element()
         };
 
         let shell =

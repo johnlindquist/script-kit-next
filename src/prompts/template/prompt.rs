@@ -493,7 +493,7 @@ mod seeded_behavior_tests {
         template: &str,
         on_submit: SubmitCallback,
     ) -> WindowHandle<TemplatePrompt> {
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let window = cx.update(|cx| {
             cx.open_window(Default::default(), |_, cx| {
                 cx.new(|cx| {
@@ -562,7 +562,7 @@ mod seeded_behavior_tests {
     fn template_traversal_preserves_values_and_validates_before_submit(cx: &mut TestAppContext) {
         let submitted = Arc::new(parking_lot::Mutex::new(Vec::new()));
         let output = submitted.clone();
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let (window, prompt) = cx.update(|cx| {
             let prompt = cx.new(|cx| {
                 TemplatePrompt::new(

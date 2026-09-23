@@ -1002,7 +1002,7 @@ fn main_menu_selection_test_app(cx: &mut gpui::TestAppContext) -> gpui::Entity<S
     let app_for_window = app.clone();
     let (response_sender, response_receiver) = mpsc::sync_channel(100);
     cx.update(|cx| {
-        gpui_component::init(cx);
+        crate::theme::gpui_kit_bridge::init_component_libraries(cx);
         cx.open_window(Default::default(), |window, cx| {
             let mut config = crate::config::Config::default();
             let mut built_ins = config.get_builtins();

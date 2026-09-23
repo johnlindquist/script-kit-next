@@ -27,7 +27,7 @@ pub(crate) fn init(cx: &mut App) {
     PanelRegistry::init(cx);
 }
 
-actions!(dock, [ToggleZoom, ClosePanel]);
+actions!(sk_dock, [ToggleZoom, ClosePanel]);
 
 pub enum DockEvent {
     /// The layout of the dock has changed, subscribers this to save the layout.

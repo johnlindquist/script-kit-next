@@ -137,7 +137,7 @@ mod paint_measurement_component_type_tests {
         });
         cx.update(|cx| {
             gpui::AnyWindowHandle::from(handle)
-                .update(cx, |_, window, cx| window.draw(cx).clear())
+                .update(cx, |_, window, cx| window.draw(cx).clear(cx))
                 .unwrap()
         });
         let info = cx.update(|cx| {

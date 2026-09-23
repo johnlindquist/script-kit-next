@@ -24,7 +24,7 @@ use crate::{
 
 const CONTEXT: &'static str = "SearchPanel";
 
-actions!(input, [Tab]);
+actions!(sk_input, [Tab]);
 
 pub(super) fn init(cx: &mut App) {
     cx.bind_keys(vec![KeyBinding::new(

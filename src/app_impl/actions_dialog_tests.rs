@@ -536,7 +536,7 @@ mod agent_chat_spine_dispatch_tests {
         let app_slot = Arc::new(Mutex::new(None));
         let app_slot_for_window = Arc::clone(&app_slot);
         let window = cx.update(|cx| {
-            gpui_component::init(cx);
+            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
             cx.open_window(Default::default(), |window, cx| {
                 let mut config = crate::config::Config::default();
                 let mut built_ins = config.get_builtins();
@@ -754,7 +754,7 @@ mod modal_backdrop_policy_tests {
         let app_slot = Arc::new(Mutex::new(None));
         let app_slot_for_window = Arc::clone(&app_slot);
         let window = cx.update(|cx| {
-            gpui_component::init(cx);
+            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
             cx.open_window(Default::default(), |window, cx| {
                 let mut config = crate::config::Config::default();
                 let mut built_ins = config.get_builtins();

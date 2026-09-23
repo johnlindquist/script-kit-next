@@ -450,7 +450,7 @@ mod registered_root_layer_tests {
     fn registered_layer_selection_validates_then_dismisses_only_current_owners(
         cx: &mut TestAppContext,
     ) {
-        cx.update(gpui_component::init);
+        cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
         let root = cx.update(|cx| {
             cx.open_window(
                 gpui::WindowOptions {

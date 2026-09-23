@@ -181,7 +181,10 @@ const AGENT_CHAT_FOOTER_LEADING_SLOT_WIDTH_PX: f32 =
 const AGENT_CHAT_TRANSIENT_QUEUE_LANE_HEIGHT_PX: f32 = 36.0;
 const AGENT_CHAT_TRANSIENT_BOOTSTRAP_LANE_HEIGHT_PX: f32 = 34.0;
 const AGENT_CHAT_TRANSIENT_PLAN_LANE_HEIGHT_PX: f32 = 84.0;
-const AGENT_CHAT_TRANSIENT_PERMISSION_LANE_HEIGHT_PX: f32 = 156.0;
+/// Reserved height of the fallback permission lane. Sized for gpui-ai's
+/// `ApprovalCard` (title, preview header, allow/deny row, shortcut note)
+/// measured in the owned `agent-chat.sidecar.permission-pending` frame.
+const AGENT_CHAT_TRANSIENT_PERMISSION_LANE_HEIGHT_PX: f32 = 216.0;
 const AGENT_CHAT_SEND_BUTTON_FIDELITY_ID: &str = "agent-chat-send-button";
 
 fn agent_chat_transient_lane_height(height_px: f32, active: bool) -> f32 {

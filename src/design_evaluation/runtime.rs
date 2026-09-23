@@ -88,7 +88,7 @@ impl Evaluator {
         );
         {
             let mut app = cx.app.borrow_mut();
-            gpui_component::init(&mut app);
+            crate::theme::gpui_kit_bridge::init_component_libraries(&mut app);
             crate::register_bundled_fonts(&mut app);
             crate::theme::service::initialize_theme(&mut app)?;
         }

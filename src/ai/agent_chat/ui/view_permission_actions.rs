@@ -443,216 +443,132 @@ impl AgentChatView {
         options_open: bool,
         view: WeakEntity<AgentChatView>,
     ) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-        let deny_colors = crate::theme::DangerActionColors::from_theme(&theme);
+        use gpui_ai::prelude::{ApprovalCard, ApprovalEvent, ApprovalTone};
+
         let preview = request.preview.clone();
         let selected_index = selected_index.min(request.options.len().saturating_sub(1));
-        let show_options_button = request.options.len() > 2
-            || request
-                .options
-                .iter()
-                .any(|option| option.is_persistent_allow());
-        let selected_option_label = request
+        let has_persistent_allow = request
             .options
-            .get(selected_index)
-            .map(|option| option.name.clone())
-            .unwrap_or_else(|| "Options".to_string());
-        let shortcut_hint = if show_options_button {
+            .iter()
+            .any(|option| option.is_persistent_allow());
+        let show_options_button = request.options.len() > 2;
+        let shortcut_hint = if has_persistent_allow || show_options_button {
             "\u{2318}Y Allow \u{00b7} \u{2318}\u{2325}A Options \u{00b7} \u{2318}\u{2325}Z Deny"
         } else {
             "\u{2318}Y Allow \u{00b7} \u{2318}\u{2325}Z Deny \u{00b7} Esc Cancel"
         };
+        let allow_label = Self::preferred_allow_label(request, selected_index);
+        let reject_label = Self::first_reject_option(request)
+            .map(|(_, option)| option.name.clone())
+            .unwrap_or_else(|| "Deny".to_string());
 
-        let allow_request = request.clone();
-        let allow_view = view.clone();
-        let deny_request = request.clone();
-        let deny_view = view.clone();
-        let options_request = request.clone();
-        let options_view = view.clone();
+        let event_request = request.clone();
+        let event_view = view.clone();
+        let mut card = ApprovalCard::new("agent_chat-inline-permission-card", request.title.clone())
+            .tone(ApprovalTone::Default)
+            .allow_always(has_persistent_allow)
+            .approve_label(allow_label)
+            .reject_label(reject_label)
+            .note(shortcut_hint)
+            .on_event(move |event, _window, cx| {
+                let Some(entity) = event_view.upgrade() else {
+                    return;
+                };
+                let request = event_request.clone();
+                entity.update(cx, |this, cx| match event {
+                    ApprovalEvent::Approved { .. } => {
+                        let _ = this.approve_preferred_allow_option(&request, cx);
+                    }
+                    ApprovalEvent::ApprovedAlways { .. } => {
+                        let _ = this.approve_persistent_allow_option(&request, cx);
+                    }
+                    ApprovalEvent::Rejected { .. } => {
+                        let _ = this.approve_reject_option(&request, cx);
+                    }
+                });
+            });
+
+        if let Some(preview) = preview.clone() {
+            if let Some(summary) = preview.summary.clone() {
+                card = card.description(summary);
+            }
+            card = card.child(Self::render_permission_header(&preview));
+            if let Some(input) = preview.input_preview {
+                card = card.child(Self::render_permission_section("Input", input));
+            }
+            if let Some(output) = preview.output_preview {
+                card = card.child(Self::render_permission_section("Output", output));
+            }
+        } else {
+            card = card.description(request.body.clone());
+        }
+
+        if show_options_button {
+            let options_request = request.clone();
+            let options_view = view.clone();
+            card = card.child(
+                div()
+                    .id("agent_chat-inline-permission-options")
+                    .pt(px(6.0))
+                    .text_xs()
+                    .opacity(0.72)
+                    .cursor_pointer()
+                    .on_click(move |_event, _window, cx| {
+                        if let Some(entity) = options_view.upgrade() {
+                            entity.update(cx, |this, cx| {
+                                let _ = this.toggle_permission_options(&options_request, cx);
+                            });
+                        }
+                    })
+                    .child(if options_open {
+                        "More options \u{2318}\u{2325}A \u{25BE}"
+                    } else {
+                        "More options \u{2318}\u{2325}A \u{25B8}"
+                    }),
+            );
+        }
+        if options_open && request.options.len() > 1 {
+            card = card.child(div().pt(px(6.0)).children(request.options.iter().enumerate().map(
+                |(i, option)| {
+                    Self::render_permission_option_row(option, i, i == selected_index, view.clone())
+                },
+            )));
+        }
 
         div()
-            .id("agent_chat-inline-permission-card")
+            .debug_selector(|| "agent_chat-inline-permission-card".to_string())
             .w_full()
             .mt(px(6.0))
-            .ml(px(12.0))
-            .pl(px(10.0))
-            .pr(px(8.0))
-            .py(px(8.0))
-            .bg(rgba((theme.colors.text.primary << 8) | 0x04))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .opacity(0.48)
-                    .child(request.title.clone()),
-            )
-            .when_some(preview.clone(), |d, preview| {
-                d.child(Self::render_permission_header(&preview))
-                    .when_some(preview.summary, |d, summary| {
-                        d.child(div().pt(px(6.0)).text_sm().opacity(0.72).child(summary))
-                    })
-                    .when_some(preview.input_preview, |d, input| {
-                        d.child(Self::render_permission_section("Input", input))
-                    })
-                    .when_some(preview.output_preview, |d, output| {
-                        d.child(Self::render_permission_section("Output", output))
-                    })
-            })
-            .when(preview.is_none(), |d| {
-                d.child(
-                    div()
-                        .pt(px(6.0))
-                        .text_sm()
-                        .opacity(0.72)
-                        .child(request.body.clone()),
-                )
-            })
-            .child(
-                div()
-                    .pt(px(8.0))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(
-                                div()
-                                    .id("agent_chat-inline-permission-allow")
-                                    .px(px(10.0))
-                                    .py(px(6.0))
-                                    .cursor_pointer()
-                                    .bg(rgba((theme.colors.accent.selected << 8) | 0x12))
-                                    .hover(|d| {
-                                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x1C))
-                                    })
-                                    .on_click(move |_event, _window, cx| {
-                                        if let Some(entity) = allow_view.upgrade() {
-                                            entity.update(cx, |this, cx| {
-                                                let _ = this.approve_preferred_allow_option(
-                                                    &allow_request,
-                                                    cx,
-                                                );
-                                            });
-                                        }
-                                    })
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(8.0))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .child("Allow"),
-                                            )
-                                            .child(
-                                                div().text_xs().opacity(0.42).child("\u{2318}Y"),
-                                            ),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .id("agent_chat-inline-permission-deny")
-                                    .px(px(10.0))
-                                    .py(px(6.0))
-                                    .cursor_pointer()
-                                    .bg(rgba(deny_colors.rest_rgba))
-                                    .hover(move |d| d.bg(rgba(deny_colors.hover_rgba)))
-                                    .on_click(move |_event, _window, cx| {
-                                        if let Some(entity) = deny_view.upgrade() {
-                                            entity.update(cx, |this, cx| {
-                                                let _ =
-                                                    this.approve_reject_option(&deny_request, cx);
-                                            });
-                                        }
-                                    })
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(8.0))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .child("Deny"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .opacity(0.42)
-                                                    .child("\u{2318}\u{2325}Z"),
-                                            ),
-                                    ),
-                            ),
-                    )
-                    .when(show_options_button, |d| {
-                        d.child(
-                            div()
-                                .id("agent_chat-inline-permission-options")
-                                .px(px(10.0))
-                                .py(px(6.0))
-                                .cursor_pointer()
-                                .bg(rgba((theme.colors.text.primary << 8) | 0x06))
-                                .hover(|this| {
-                                    this.bg(rgba((theme.colors.text.primary << 8) | 0x0C))
-                                })
-                                .on_click(move |_event, _window, cx| {
-                                    if let Some(entity) = options_view.upgrade() {
-                                        entity.update(cx, |this, cx| {
-                                            let _ = this
-                                                .toggle_permission_options(&options_request, cx);
-                                        });
-                                    }
-                                })
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(8.0))
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .child(selected_option_label.clone()),
-                                        )
-                                        .child(div().text_xs().opacity(0.42).child(
-                                            if options_open {
-                                                "\u{2318}\u{2325}A \u{25BE}"
-                                            } else {
-                                                "\u{2318}\u{2325}A \u{25B8}"
-                                            },
-                                        )),
-                                ),
-                        )
-                    }),
-            )
-            .when(options_open && request.options.len() > 1, |d| {
-                d.child(
-                    div()
-                        .pt(px(6.0))
-                        .children(request.options.iter().enumerate().map(|(i, option)| {
-                            Self::render_permission_option_row(
-                                option,
-                                i,
-                                i == selected_index,
-                                view.clone(),
-                            )
-                        })),
-                )
-            })
-            .child(
-                div()
-                    .pt(px(8.0))
-                    .text_xs()
-                    .opacity(0.42)
-                    .child(shortcut_hint),
-            )
+            .child(card)
             .into_any_element()
+    }
+
+    fn preferred_allow_label(request: &AgentChatApprovalRequest, selected_index: usize) -> String {
+        request
+            .options
+            .get(selected_index)
+            .filter(|option| !option.is_reject() && !option.is_persistent_allow())
+            .or_else(|| Self::first_allow_once_option(request).map(|(_, option)| option))
+            .map(|option| option.name.clone())
+            .unwrap_or_else(|| "Allow".to_string())
+    }
+
+    fn approve_persistent_allow_option(
+        &mut self,
+        request: &AgentChatApprovalRequest,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if let Some((index, option)) = request
+            .options
+            .iter()
+            .enumerate()
+            .find(|(_, option)| option.is_persistent_allow())
+        {
+            self.permission_index = index;
+            self.approve_permission(Some(option.option_id.clone()), cx);
+            true
+        } else {
+            self.approve_preferred_allow_option(request, cx)
+        }
     }
 }

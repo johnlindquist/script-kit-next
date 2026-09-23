@@ -598,7 +598,6 @@ mod tests {
         theme.drop_shadow = Some(DropShadow {
             blur_radius: -4.0,
             spread_radius: -2.5,
-            inset: false,
             ..DropShadow::default()
         });
 
@@ -614,7 +613,6 @@ mod tests {
             enabled: false,
             blur_radius: 12.0,
             spread_radius: 3.0,
-            inset: false,
             offset_x: 6.0,
             offset_y: 4.0,
             color: 0x11_22_33,

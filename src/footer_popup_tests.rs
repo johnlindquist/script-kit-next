@@ -426,7 +426,7 @@ mod footer_layout_tests {
         let _theme_guard = crate::test_utils::lock_theme_cache_test();
         let _registry_guard = crate::windows::automation_registry::tests::registry_guard();
         let (parent, info, overlay) = cx.update(|cx| {
-            gpui_component::init(cx);
+            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
             let (parent, info) = footer_test_parent(cx);
             let mut config = super::MainWindowFooterConfig::new(
                 "agent_chat",
@@ -913,7 +913,7 @@ mod footer_layout_tests {
         let _theme_guard = crate::test_utils::lock_theme_cache_test();
         let _registry_guard = crate::windows::automation_registry::tests::registry_guard();
         let observations = cx.update(|cx| {
-            gpui_component::init(cx);
+            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
             let baseline = crate::theme::get_theme_snapshot();
             let config = super::MainWindowFooterConfig::new(
                 "about",
@@ -1043,7 +1043,7 @@ mod footer_layout_tests {
         let _registry_guard = crate::windows::automation_registry::tests::registry_guard();
         let (first, first_info, first_overlay, second, second_info, second_overlay) =
             cx.update(|cx| {
-                gpui_component::init(cx);
+                crate::theme::gpui_kit_bridge::init_component_libraries(cx);
                 let (first, first_info) = footer_test_parent(cx);
                 let (second, second_info) = footer_test_parent(cx);
                 let config = super::MainWindowFooterConfig::new(

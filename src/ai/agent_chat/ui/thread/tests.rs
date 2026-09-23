@@ -3291,7 +3291,7 @@ fn agent_fork_forces_full_reset_without_stale_append() {
 #[gpui::test]
 fn text_append_updates_logical_and_parsed_source(cx: &mut gpui::TestAppContext) {
     use gpui::AppContext as _;
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let state = cx.new(|cx| gpui_component::text::TextViewState::markdown_immediate("Hello ", cx));
     state.update(cx, |state, cx| {
         state.push_str_immediate("brave ", cx);
@@ -3303,7 +3303,7 @@ fn text_append_updates_logical_and_parsed_source(cx: &mut gpui::TestAppContext) 
 #[gpui::test]
 fn text_full_then_append_coalescing_does_not_duplicate_source(cx: &mut gpui::TestAppContext) {
     use gpui::AppContext as _;
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let state = cx.new(|cx| gpui_component::text::TextViewState::markdown_immediate("", cx));
     state.update(cx, |state, cx| {
         // A full replacement, then a streaming append — the prefix must appear
@@ -3320,7 +3320,7 @@ fn text_full_then_append_coalescing_does_not_duplicate_source(cx: &mut gpui::Tes
 #[gpui::test]
 fn text_append_then_full_replacement_wins(cx: &mut gpui::TestAppContext) {
     use gpui::AppContext as _;
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let state = cx.new(|cx| gpui_component::text::TextViewState::markdown_immediate("start", cx));
     state.update(cx, |state, cx| {
         state.push_str_immediate(" appended", cx);

@@ -47,6 +47,7 @@ mod audit;
 mod chrome;
 mod color_resolver;
 pub(crate) mod gpui_integration;
+pub mod gpui_kit_bridge;
 mod helpers;
 pub mod hex_color;
 pub mod live_edit;

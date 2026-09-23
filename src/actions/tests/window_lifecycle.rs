@@ -6,7 +6,7 @@ use super::*;
 fn parent_forwarded_edits_stay_in_actions_search(cx: &mut gpui::TestAppContext) {
     use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let popup_slot = Rc::new(RefCell::new(None));
     let popup_slot_for_window = Rc::clone(&popup_slot);
     let window = cx.update(|cx| {

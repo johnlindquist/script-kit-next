@@ -464,7 +464,7 @@ mod semantic_epoch_tests {
     #[gpui::test]
     fn detached_mutations_reject_prior_exact_frame_before_paint(cx: &mut gpui::TestAppContext) {
         cx.update(|cx| {
-            gpui_component::init(cx);
+            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
             let (thread, _) = crate::ai::agent_chat::ui::mock_fixture::create_mock_fixture_thread(
                 "detached-epoch",
                 AgentChatSessionPolicy::Full,
@@ -518,7 +518,7 @@ mod semantic_epoch_tests {
         }
 
         let (view, origin, other, mut images, original_text) = cx.update(|cx| {
-            gpui_component::init(cx);
+            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
             let (origin, _) = crate::ai::agent_chat::ui::mock_fixture::create_mock_fixture_thread(
                 "paste-origin",
                 AgentChatSessionPolicy::Full,
@@ -634,7 +634,7 @@ mod semantic_epoch_tests {
         cx: &mut gpui::TestAppContext,
     ) {
         cx.update(|cx| {
-            gpui_component::init(cx);
+            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
             let (thread, _) = crate::ai::agent_chat::ui::mock_fixture::create_mock_fixture_thread(
                 "detached-child-epoch",
                 AgentChatSessionPolicy::Full,

@@ -25,7 +25,7 @@ use crate::{
     v_flex,
 };
 
-actions!(inspector, [ToggleInspector]);
+actions!(sk_inspector, [ToggleInspector]);
 
 /// Initialize the inspector and register the action to toggle it.
 pub(crate) fn init(cx: &mut App) {

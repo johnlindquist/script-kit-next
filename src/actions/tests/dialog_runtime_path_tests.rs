@@ -253,7 +253,7 @@ fn empty_actions_dialog_has_no_selected_row_and_cannot_activate(cx: &mut gpui::T
 fn actions_search_edits_use_input_state_cursor_selection_and_history(
     cx: &mut gpui::TestAppContext,
 ) {
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let dialog_slot = Rc::new(RefCell::new(None));
     let dialog_slot_for_window = Rc::clone(&dialog_slot);
     let window = cx.update(|cx| {
@@ -393,7 +393,7 @@ fn ux13_opening_shell_uses_root_unfiltered_actions_through_filter_and_routes(
 
 #[gpui::test]
 fn ux13_hidden_search_never_installs_or_focuses_input(cx: &mut gpui::TestAppContext) {
-    cx.update(gpui_component::init);
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let dialog_slot = Rc::new(RefCell::new(None));
     let dialog_slot_for_window = Rc::clone(&dialog_slot);
     let window = cx.update(|cx| {

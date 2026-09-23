@@ -160,7 +160,7 @@ fn production_story_prompt_action_selection() {
     });
     let test = gpui::TestAppContext::single();
     let dialog = test.update(|cx| {
-        gpui_component::init(cx);
+        crate::theme::gpui_kit_bridge::init_component_libraries(cx);
         cx.new(|cx| {
             ActionsDialog::from_actions_with_context(
                 cx.focus_handle(),
@@ -563,7 +563,7 @@ fn production_story_notes_edit_and_selection() {
 
     let mut test = gpui::TestAppContext::single();
     let window = test.update(|cx| {
-        gpui_component::init(cx);
+        crate::theme::gpui_kit_bridge::init_component_libraries(cx);
         cx.open_window(Default::default(), |window, cx| {
             cx.new(|cx| {
                 let (_, editor) = NotesEditor::new_markdown_pair(

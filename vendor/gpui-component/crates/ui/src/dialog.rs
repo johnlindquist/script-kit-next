@@ -7,7 +7,7 @@ use gpui::{
     actions, anchored, div, hsla, point, prelude::FluentBuilder, px, relative,
 };
 
-actions!(dialog, [FocusNext, FocusPrev]);
+actions!(sk_dialog, [FocusNext, FocusPrev]);
 use rust_i18n::t;
 
 use crate::{

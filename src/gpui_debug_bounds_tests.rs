@@ -309,7 +309,7 @@ fn fidelity_paint_telemetry_is_opt_in_nested_and_payload_sensitive(cx: &mut Test
 #[gpui::test]
 fn fidelity_scrollbar_capture_uses_real_frozen_prepaint_state(cx: &mut TestAppContext) {
     let window = cx.update(|cx| {
-        gpui_component::init(cx);
+        crate::theme::gpui_kit_bridge::init_component_libraries(cx);
         cx.open_window(Default::default(), |_, cx| {
             cx.new(|_| FidelityScrollbarView {
                 scrollbar_handle: FidelityScrollbarHandle::new(),
@@ -375,7 +375,7 @@ fn fidelity_textview_capture_hashes_exact_source_without_retaining_it(cx: &mut T
     const SOURCE_SHA256: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
     let window = cx.update(|cx| {
-        gpui_component::init(cx);
+        crate::theme::gpui_kit_bridge::init_component_libraries(cx);
         cx.open_window(Default::default(), |_, cx| {
             let state = cx.new(|cx| {
                 gpui_component::text::TextViewState::markdown_for_fidelity_test(SOURCE, cx)

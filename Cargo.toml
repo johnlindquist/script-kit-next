@@ -200,6 +200,14 @@ meval = "0.2"
 # gpui-component - Community UI component library for GPUI (FORKED)
 # Local vendored fork keeps Script Kit-specific input APIs while adapting to gpui rev 03416097.
 gpui-component = { path = "vendor/gpui-component/crates/ui", package = "gpui-component", features = ["fidelity"] }
+# gpui-kit (Longbridge gpui-component 0.6) and gpui-ai, both linked against the
+# single patched gpui-pre above. gpui-ai reads gpui-kit's active theme, which
+# src/theme/gpui_kit_bridge.rs keeps synced from the Script Kit theme. The
+# dependency key renames the crate to `gpui_kit_component` so it can coexist
+# with the forked 0.5 `gpui_component` while surfaces migrate.
+gpui-kit-component = { package = "gpui-component", version = "=0.6.6" }
+gpui-kit-assets = { version = "=0.6.6" }
+gpui-ai = { version = "=0.8.0" }
 # Embedded Lucide icon SVGs for gpui-component's IconName paths ("icons/monitor.svg").
 # Registered as the app AssetSource fallback in src/utils/assets.rs — without an
 # asset source, every svg().path(...) icon silently renders nothing.

@@ -466,6 +466,9 @@ impl PreparedComponentTheme {
         theme.mono_font_size = gpui::px(self.fonts.mono_size);
         theme.font_family = self.fonts.ui_family.into();
         theme.font_size = gpui::px(self.fonts.ui_size);
+        // gpui-kit (gpui-component 0.6) + gpui-ai read their own theme global;
+        // mirror the freshly synced palette so both layers stay identical.
+        super::gpui_kit_bridge::sync_kit_theme_from_fork(cx);
     }
 }
 

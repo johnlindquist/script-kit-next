@@ -881,7 +881,7 @@ mod dictation_history_paint_tests {
         let ratified_offset_x = px(4.0);
 
         let window = cx.update(|cx| {
-            gpui_component::init(cx);
+            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
             let mut options = gpui::WindowOptions::default();
             options.window_bounds = Some(gpui::WindowBounds::Windowed(gpui::Bounds::new(
                 gpui::point(px(0.0), px(0.0)),

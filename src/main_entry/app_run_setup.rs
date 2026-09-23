@@ -259,7 +259,7 @@ app.run(move |cx: &mut App| {
 
         // Initialize gpui-component (theme, context providers)
         // Must be called before opening windows that use Root wrapper
-        gpui_component::init(cx);
+        crate::theme::gpui_kit_bridge::init_component_libraries(cx);
 
         // Publish theme, component colors, and revision together before roots exist.
         if let Err(error) = theme::service::initialize_theme(cx) {

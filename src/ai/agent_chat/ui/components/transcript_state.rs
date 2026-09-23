@@ -35,6 +35,8 @@ pub(super) struct AssistantMessageRuntime {
     pub(super) ui_variant: AgentChatUiVariant,
     pub(super) show_pending_activity: bool,
     pub(super) thread_status: AgentChatThreadStatus,
+    /// Only the newest assistant turn can still be streaming.
+    pub(super) is_latest: bool,
 }
 
 pub(super) fn pending_activity_placement(
