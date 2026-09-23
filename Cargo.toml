@@ -310,14 +310,6 @@ opt-level = 2
 [profile.dev.package.gpui-pre-platform]
 opt-level = 2
 
-# gpui-kit's headless engine (inputs, text, scrollbars) and GPUI's Apple
-# layer are path workspace members too, so they need explicit entries.
-[profile.dev.package.gpui-base]
-opt-level = 2
-
-[profile.dev.package.gpui-pre-apple]
-opt-level = 2
-
 [profile.test]
 debug = 1
 incremental = true
@@ -344,12 +336,6 @@ opt-level = 0
 opt-level = 0
 
 [profile.test.package.gpui-pre-platform]
-opt-level = 0
-
-[profile.test.package.gpui-base]
-opt-level = 0
-
-[profile.test.package.gpui-pre-apple]
 opt-level = 0
 
 [profile.release]
