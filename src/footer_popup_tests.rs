@@ -255,6 +255,33 @@ mod footer_layout_tests {
         assert_eq!(tiny.y, 0.0);
     }
 
+    /// Tahoe floating chrome is main-menu-only: other surfaces keep the
+    /// detached footer, and bottom-anchored popups clear whichever placement
+    /// is active.
+    #[test]
+    fn over_content_follows_main_menu_surface_only() {
+        super::set_main_footer_surface(Some("select_prompt"));
+        assert!(!super::main_window_footer_over_content());
+        assert_eq!(super::main_window_bottom_popup_clearance(30.0), 30.0);
+        super::set_main_footer_surface(None);
+        assert!(!super::main_window_footer_over_content());
+        super::set_main_footer_surface(Some("script_list"));
+        assert_eq!(
+            super::main_window_footer_over_content(),
+            super::main_window_footer_over_content_enabled()
+        );
+        if super::main_window_footer_over_content() {
+            let clearance = super::main_window_bottom_popup_clearance(30.0);
+            assert_eq!(
+                clearance,
+                super::main_window_float_footer_strip_height()
+                    + crate::ui::chrome::LIQUID_GLASS_DENSE_GAP_PX
+                    + crate::components::footer_chrome::current_main_menu_footer_height()
+            );
+        }
+        super::set_main_footer_surface(None);
+    }
+
     #[test]
     fn detached_footer_regions_preserve_main_top_edge() {
         let short = main_window_detached_footer_regions_appkit(750.0, 480.0, 32.0, 8.0, 2.0);

@@ -400,7 +400,9 @@ impl ScriptListApp {
         // honest because `native_footer_surface()` returns `None` for them.
         if self.current_view.native_footer_surface().is_some() {
             let footer_height = footer_metrics.height_px;
-            let footer_bounds = if crate::footer_popup::main_window_footer_overlay_preview() {
+            let footer_bounds = if matches!(self.current_view, AppView::ScriptList)
+                && crate::footer_popup::main_window_footer_over_content_enabled()
+            {
                 crate::footer_popup::main_window_footer_bounds_gpui(
                     window_width,
                     window_height,

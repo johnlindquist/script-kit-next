@@ -1505,6 +1505,9 @@ pub(crate) fn sync_main_footer_popup(
     // separate GPUI overlay NSWindow does not, so glass mode keeps only the
     // native host active and always closes the overlay.
     let requested_surface = config.map(|cfg| cfg.surface);
+    // Decide floating (main menu) vs detached placement before the native
+    // host recomputes its frame below.
+    set_main_footer_surface(requested_surface);
     update_main_window_footer_host_state(requested_surface, None, false);
     let parent_window_handle = window.window_handle();
     let parent_bounds = window.bounds();

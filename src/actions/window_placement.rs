@@ -88,7 +88,7 @@ fn actions_popup_origin(
         WindowPosition::BottomRight => {
             main_window_bounds.origin.y + main_window_bounds.size.height
                 - window_height
-                - px(FOOTER_HEIGHT)
+                - px(crate::footer_popup::main_window_bottom_popup_clearance(FOOTER_HEIGHT))
                 - px(tokens.shell.margin_y)
         }
         WindowPosition::TopRight | WindowPosition::TopCenter => {
@@ -157,7 +157,7 @@ fn actions_popup_placement_receipt(
         WindowPosition::BottomRight => (
             main_window_bounds.origin.x + main_window_bounds.size.width - px(tokens.shell.margin_x),
             main_window_bounds.origin.y + main_window_bounds.size.height
-                - px(FOOTER_HEIGHT)
+                - px(crate::footer_popup::main_window_bottom_popup_clearance(FOOTER_HEIGHT))
                 - px(tokens.shell.margin_y),
             "bottom",
         ),

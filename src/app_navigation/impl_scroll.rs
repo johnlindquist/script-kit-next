@@ -1,7 +1,9 @@
 #[inline]
 fn main_list_footer_overlay_height() -> gpui::Pixels {
-    // The placement preview occludes the bottom of the existing glass stage.
-    if crate::footer_popup::main_window_footer_overlay_preview() {
+    // On the main menu the floating capsules occlude the bottom of the glass
+    // stage; reserve them so keyboard selection stays above the capsules
+    // while unselected rows still scroll behind them.
+    if crate::footer_popup::main_window_footer_over_content_enabled() {
         gpui::px(
             crate::components::footer_chrome::current_main_menu_footer_height()
                 + crate::footer_popup::FLOAT_FOOTER_CONTAINER_GAP_PX,

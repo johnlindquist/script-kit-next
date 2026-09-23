@@ -129,12 +129,47 @@ pub(crate) fn main_window_detached_footer_regions_appkit(
     }
 }
 
-/// Placement-only preview: keep the calibrated stage and host dimensions intact.
-pub(crate) fn main_window_footer_overlay_preview() -> bool {
+/// Tahoe floating chrome: on the main menu the footer capsules float INSIDE the
+/// glass stage, over the bottom of the list (8pt side and bottom insets),
+/// instead of in the detached strip below it. Stage and host dimensions stay
+/// unchanged; only the capsules move up. Default on; set
+/// `SCRIPT_KIT_MAIN_FOOTER_OVER_CONTENT=0` to restore the detached placement.
+pub(crate) fn main_window_footer_over_content_enabled() -> bool {
     static ENABLED: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
-        std::env::var("SCRIPT_KIT_MAIN_FOOTER_OVER_CONTENT").as_deref() == Ok("1")
+        std::env::var("SCRIPT_KIT_MAIN_FOOTER_OVER_CONTENT").as_deref() != Ok("0")
     });
     *ENABLED && glass_scroll_bands_active()
+}
+
+/// Native footer surface currently synced into the main window is the main
+/// menu (`script_list`). Only the main menu floats its capsules over content;
+/// every other surface keeps the detached footer.
+static MAIN_FOOTER_SURFACE_IS_MAIN_MENU: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn set_main_footer_surface(surface: Option<&str>) {
+    MAIN_FOOTER_SURFACE_IS_MAIN_MENU.store(
+        surface == Some("script_list"),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+/// The installed main-window footer floats over the content right now.
+pub(crate) fn main_window_footer_over_content() -> bool {
+    main_window_footer_over_content_enabled()
+        && MAIN_FOOTER_SURFACE_IS_MAIN_MENU.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Distance from the main window's bottom edge to a bottom-anchored popup's
+/// bottom edge (Actions / Cmd+K): above the capsules wherever they sit.
+pub(crate) fn main_window_bottom_popup_clearance(detached_footer_height: f32) -> f32 {
+    if main_window_footer_over_content() {
+        main_window_float_footer_strip_height()
+            + crate::ui::chrome::LIQUID_GLASS_DENSE_GAP_PX
+            + crate::components::footer_chrome::current_main_menu_footer_height()
+    } else {
+        detached_footer_height
+    }
 }
 
 pub(crate) fn main_window_footer_bounds_gpui(
@@ -290,7 +325,7 @@ unsafe fn ensure_main_window_footer_glass_container(gpui_view: id, ns_window: id
         footer_height() as f32,
         FLOAT_FOOTER_CONTAINER_GAP_PX,
         backing_scale as f32,
-        main_window_footer_overlay_preview(),
+        main_window_footer_over_content(),
     );
     let footer_frame = NSRect::new(
         NSPoint::new(
