@@ -13,17 +13,19 @@
 //! `pub(super)` upstream, so they cannot be imported without editing the
 //! vendor; this module is the app-side single mirror and its tests are the
 //! tripwire):
-//! - line box: `Input::render` sets `line_height(Rems(1.25))`
-//!   (vendor/gpui-component/crates/ui/src/input/input.rs:243,361), resolved
-//!   against GPUI's default 16px window rem size.
+//! - line box: `NotesEditor::render_input_state` sets
+//!   `line_height(rems(1.25))` over gpui-kit `Editor`'s `1.5×` default,
+//!   resolved against GPUI's default 16px window rem size.
 //! - caret width: `blink_cursor::CURSOR_WIDTH = px(2.)`
-//!   (vendor/gpui-component/crates/ui/src/input/blink_cursor.rs:32).
+//!   (vendor/gpui-kit/gpui-base/src/input/base/blink_cursor.rs).
 //! - caret height: `Size::Medium` factor `0.85 × line_height`, vertically
-//!   centered (vendor/gpui-component/crates/ui/src/input/element.rs:283-294).
+//!   centered (vendor/gpui-kit/gpui-base/src/input/base/element.rs).
 //!
-//! Inner Input padding is NOT mirrored: `gpui_component::Size` exposes the
-//! real `input_px()`/`input_py()` accessors, so this module reads the actual
-//! vendored `Size::Medium` decision instead of copying `12`/`8`.
+//! Inner editor padding is Script Kit-owned: gpui-kit paints multi-line
+//! editors with no inner padding (the old fork applied `Size::Medium`
+//! 12/8 to every Input), so the Notes editor applies
+//! [`NOTES_EDITOR_INPUT_PADDING_X_PX`]/[`NOTES_EDITOR_INPUT_PADDING_Y_PX`]
+//! itself and the renderer and this contract read the same constants.
 //!
 //! Colors resolve through `map_scriptkit_to_gpui_theme` — the SAME Script
 //! Kit theme → gpui-component theme bridge `sync_gpui_component_theme`
@@ -40,8 +42,9 @@ use super::component::{
     markdown_link_destination_rest_color, MARKDOWN_LINK_DESTINATION_COMPACT_OPACITY,
 };
 
-/// `Input`'s multi-line line height in rems (vendored, see module docs).
-const INPUT_LINE_HEIGHT_REMS: f32 = 1.25;
+/// Editor line height in rems — the value the renderer applies.
+const INPUT_LINE_HEIGHT_REMS: f32 =
+    crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_LINE_HEIGHT_REMS;
 /// GPUI default window rem size in px; the Notes window never overrides it.
 const WINDOW_REM_SIZE_PX: f32 = 16.0;
 /// Vendored `blink_cursor::CURSOR_WIDTH`.
@@ -97,6 +100,14 @@ pub(crate) struct ResolvedNotesEditorMetrics {
 /// `get_fonts()` bridge and `map_scriptkit_to_gpui_theme` conversion
 /// `sync_gpui_component_theme` feeds into gpui-component. Pure: safe for the
 /// checked-in design-contract exporter.
+/// Horizontal inner inset of the editable Notes text (preserved from the
+/// fork's `Size::Medium` Input padding when adopting gpui-kit).
+pub(crate) const NOTES_EDITOR_INPUT_PADDING_X_PX: f32 =
+    crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_X_PX;
+/// Vertical inner inset of the editable Notes text.
+pub(crate) const NOTES_EDITOR_INPUT_PADDING_Y_PX: f32 =
+    crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_Y_PX;
+
 pub(crate) fn resolved_notes_editor_metrics(
     sk_theme: &crate::theme::Theme,
 ) -> ResolvedNotesEditorMetrics {
@@ -106,13 +117,12 @@ pub(crate) fn resolved_notes_editor_metrics(
         sk_theme,
         sk_theme.is_dark_mode(),
     );
-    let medium = gpui_component::Size::Medium;
     ResolvedNotesEditorMetrics {
         base_font_family: fonts.mono_family,
         base_font_size: fonts.mono_size,
         line_box_height,
-        input_padding_x: f32::from(medium.input_px()),
-        input_padding_y: f32::from(medium.input_py()),
+        input_padding_x: NOTES_EDITOR_INPUT_PADDING_X_PX,
+        input_padding_y: NOTES_EDITOR_INPUT_PADDING_Y_PX,
         caret_width: INPUT_CARET_WIDTH_PX,
         caret_height: INPUT_CARET_MEDIUM_HEIGHT_FACTOR * line_box_height,
         text_color: crate::theme::gpui_integration::hex_to_hsla(sk_theme.colors.text.primary),
@@ -143,7 +153,7 @@ mod tests {
         assert_eq!(metrics.line_box_height, 20.0);
         assert_eq!(metrics.caret_width, 2.0);
         assert_eq!(metrics.caret_height, 17.0);
-        // Real vendored Size::Medium accessors, not mirrored literals.
+        // The inset the renderer applies (render_input_state).
         assert_eq!(metrics.input_padding_x, 12.0);
         assert_eq!(metrics.input_padding_y, 8.0);
     }

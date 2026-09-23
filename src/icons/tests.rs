@@ -172,7 +172,7 @@ mod icon_ref_conversions {
 
     #[test]
     fn from_gpui_component_icon_name() {
-        let icon: IconRef = gpui_component::IconName::Check.into();
+        let icon: IconRef = crate::icons::LucideIcon::Check.into();
         assert!(matches!(icon, IconRef::Lucide(_)));
     }
 
@@ -257,7 +257,7 @@ mod fallback_policy {
 
     #[test]
     fn lucide_has_no_fallback() {
-        let icon = IconRef::Lucide(gpui_component::IconName::Check);
+        let icon = IconRef::Lucide(crate::icons::LucideIcon::Check);
         assert!(icon.fallback().is_none());
     }
 }
@@ -268,7 +268,7 @@ mod icon_category {
     #[test]
     fn is_tintable() {
         // Vector icons should be tintable
-        assert!(IconRef::Lucide(gpui_component::IconName::Check).is_tintable());
+        assert!(IconRef::Lucide(crate::icons::LucideIcon::Check).is_tintable());
         assert!(IconRef::Embedded(EmbeddedIcon::Terminal).is_tintable());
         assert!(IconRef::SFSymbol("gear".into()).is_tintable());
 
@@ -285,34 +285,34 @@ mod lucide_name_mapping {
     fn parse_common_lucide_names() {
         // Test that we can parse common Lucide icon names
         let mappings = [
-            ("check", gpui_component::IconName::Check),
-            ("arrow-down", gpui_component::IconName::ArrowDown),
-            ("arrow-up", gpui_component::IconName::ArrowUp),
-            ("arrow-left", gpui_component::IconName::ArrowLeft),
-            ("arrow-right", gpui_component::IconName::ArrowRight),
-            ("chevron-down", gpui_component::IconName::ChevronDown),
-            ("chevron-up", gpui_component::IconName::ChevronUp),
-            ("chevron-left", gpui_component::IconName::ChevronLeft),
-            ("chevron-right", gpui_component::IconName::ChevronRight),
-            ("plus", gpui_component::IconName::Plus),
-            ("minus", gpui_component::IconName::Minus),
-            ("close", gpui_component::IconName::Close),
-            ("copy", gpui_component::IconName::Copy),
-            ("delete", gpui_component::IconName::Delete),
-            ("search", gpui_component::IconName::Search),
-            ("settings", gpui_component::IconName::Settings),
-            ("star", gpui_component::IconName::Star),
-            ("file", gpui_component::IconName::File),
-            ("folder", gpui_component::IconName::Folder),
-            ("folder-open", gpui_component::IconName::FolderOpen),
-            ("eye", gpui_component::IconName::Eye),
-            ("eye-off", gpui_component::IconName::EyeOff),
-            ("info", gpui_component::IconName::Info),
-            ("menu", gpui_component::IconName::Menu),
-            ("user", gpui_component::IconName::User),
-            ("globe", gpui_component::IconName::Globe),
-            ("calendar", gpui_component::IconName::Calendar),
-            ("bell", gpui_component::IconName::Bell),
+            ("check", crate::icons::LucideIcon::Check),
+            ("arrow-down", crate::icons::LucideIcon::ArrowDown),
+            ("arrow-up", crate::icons::LucideIcon::ArrowUp),
+            ("arrow-left", crate::icons::LucideIcon::ArrowLeft),
+            ("arrow-right", crate::icons::LucideIcon::ArrowRight),
+            ("chevron-down", crate::icons::LucideIcon::ChevronDown),
+            ("chevron-up", crate::icons::LucideIcon::ChevronUp),
+            ("chevron-left", crate::icons::LucideIcon::ChevronLeft),
+            ("chevron-right", crate::icons::LucideIcon::ChevronRight),
+            ("plus", crate::icons::LucideIcon::Plus),
+            ("minus", crate::icons::LucideIcon::Minus),
+            ("close", crate::icons::LucideIcon::Close),
+            ("copy", crate::icons::LucideIcon::Copy),
+            ("delete", crate::icons::LucideIcon::Delete),
+            ("search", crate::icons::LucideIcon::Search),
+            ("settings", crate::icons::LucideIcon::Settings),
+            ("star", crate::icons::LucideIcon::Star),
+            ("file", crate::icons::LucideIcon::File),
+            ("folder", crate::icons::LucideIcon::Folder),
+            ("folder-open", crate::icons::LucideIcon::FolderOpen),
+            ("eye", crate::icons::LucideIcon::Eye),
+            ("eye-off", crate::icons::LucideIcon::EyeOff),
+            ("info", crate::icons::LucideIcon::Info),
+            ("menu", crate::icons::LucideIcon::Menu),
+            ("user", crate::icons::LucideIcon::User),
+            ("globe", crate::icons::LucideIcon::Globe),
+            ("calendar", crate::icons::LucideIcon::Calendar),
+            ("bell", crate::icons::LucideIcon::Bell),
         ];
 
         for (name, expected) in mappings {

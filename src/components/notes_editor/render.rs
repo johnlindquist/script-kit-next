@@ -1,6 +1,6 @@
 use gpui::{div, prelude::*, px, AnyElement, App, Entity, IntoElement, ParentElement, Styled};
 use gpui_component::{
-    input::{Input, InputState},
+    input::{Editor as Input, EditorState as InputState},
     scroll::ScrollableElement,
     theme::{ActiveTheme, Theme},
 };
@@ -72,8 +72,16 @@ impl NotesEditor {
         let editor = Input::new(input_state)
             .h_full()
             .appearance(false)
+            // gpui-kit gives multi-line editors no inner padding; keep the
+            // Notes text inset the contract publishes.
+            .px(px(super::contract::NOTES_EDITOR_INPUT_PADDING_X_PX))
+            .py(px(super::contract::NOTES_EDITOR_INPUT_PADDING_Y_PX))
             .font_family(cx.theme().mono_font_family.clone())
-            .text_size(cx.theme().mono_font_size);
+            .text_size(cx.theme().mono_font_size)
+            // Keep the fork's 20pt line box (gpui-kit Editor defaults to 1.5×).
+            .line_height(gpui::rems(
+                crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_LINE_HEIGHT_REMS,
+            ));
 
         div()
             .debug_selector(|| "notes-editor-input-viewport".to_string())

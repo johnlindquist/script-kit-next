@@ -684,7 +684,7 @@ impl NotesApp {
     ) -> bool {
         let (value, cursor) = {
             let state = self.editor_state.read(cx);
-            (state.value().to_string(), state.selection().start)
+            (state.value().to_string(), state.selected_range().start)
         };
 
         let Some(target) = Self::wiki_link_target_at(&value, cursor) else {

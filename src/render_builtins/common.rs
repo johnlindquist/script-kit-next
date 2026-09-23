@@ -1694,7 +1694,7 @@ impl ScriptListApp {
             return div().into_any_element();
         }
         gpui_component::scroll::Scrollbar::vertical(handle)
-            .scrollbar_show(gpui_component::scroll::ScrollbarShow::Always)
+            .mode(gpui_component::scroll::ScrollbarMode::Always)
             .into_any_element()
     }
 }
@@ -1710,7 +1710,7 @@ mod builtin_scrollbar_contract {
             "builtin uniform list scrollbars should be the GPUI vendor scrollbar bound to the real handle"
         );
         assert!(
-            SOURCE.contains(".scrollbar_show(gpui_component::scroll::ScrollbarShow::Always)"),
+            SOURCE.contains(".mode(gpui_component::scroll::ScrollbarMode::Always)"),
             "builtin uniform list scrollbars should stay visible for launcher-family surfaces"
         );
     }

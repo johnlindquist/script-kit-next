@@ -718,17 +718,18 @@ pub(crate) fn mount_main_overlay_fixture(
         "main-overlay.root-dialog" => {
             app.pending_focus = None;
             let app_weak = cx.entity().downgrade();
-            window.open_dialog(cx, move |dialog, _, _| {
+            // gpui-kit: a confirm (OK + Cancel) dialog is an AlertDialog.
+            window.open_alert_dialog(cx, move |dialog, _, _| {
                 let accept = app_weak.clone();
                 let cancel = app_weak.clone();
                 dialog
                     .title("Review local change")
-                    .child("This action completes only the owned fixture.")
-                    .confirm()
+                    .description("This action completes only the owned fixture.")
                     .button_props(
                         gpui_component::dialog::DialogButtonProps::default()
                             .ok_text("OK")
-                            .cancel_text("Cancel"),
+                            .cancel_text("Cancel")
+                            .show_cancel(true),
                     )
                     .on_ok(move |_, _, cx| {
                         accept.upgrade().is_some_and(|app| {

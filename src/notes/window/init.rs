@@ -121,13 +121,23 @@ impl NotesApp {
         let focus_handle = cx.focus_handle();
 
         // Subscribe to editor changes - passes window for auto-resize
-        let editor_sub = cx.subscribe_in(&editor_state, window, {
-            move |this, _, ev: &InputEvent, window, cx| match ev {
-                InputEvent::Change => this.on_editor_change(window, cx),
-                InputEvent::SelectionChange => {
+        // Caret/selection moves re-derive link highlights (selection-aware).
+        let editor_selection_sub = cx.subscribe_in(
+            &editor_state,
+            window,
+            |this, _, ev: &gpui_component::input::ScriptKitInputEvent, _window, cx| {
+                if matches!(
+                    ev,
+                    gpui_component::input::ScriptKitInputEvent::SelectionChange
+                ) {
                     this.notes_editor
                         .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
                 }
+            },
+        );
+        let editor_sub = cx.subscribe_in(&editor_state, window, {
+            move |this, _, ev: &InputEvent, window, cx| match ev {
+                InputEvent::Change => this.on_editor_change(window, cx),
                 InputEvent::Focus if this.search_was_last_focused => {
                     this.search_was_last_focused = false;
                     cx.notify();
@@ -224,7 +234,12 @@ impl NotesApp {
             native_resize_phase: resize::NotesNativeResizePhase::EntryLocked,
             last_automation_synced_bounds: None,
             focus_handle,
-            _subscriptions: vec![editor_sub, editor_hover_observation, search_sub],
+            _subscriptions: vec![
+                editor_sub,
+                editor_selection_sub,
+                editor_hover_observation,
+                search_sub,
+            ],
             last_deeplink_hover_hint: None,
             // Initialize CommandBar with notes-specific actions
             command_bar: CommandBar::new(
@@ -729,7 +744,7 @@ impl NotesApp {
 
         let (editor_text, selection) = {
             let editor = self.editor_state.read(cx);
-            (editor.value().to_string(), editor.selection())
+            (editor.value().to_string(), editor.selected_range())
         };
 
         let clipboard_texts = self.collect_notes_ghost_clipboard_texts();
@@ -931,7 +946,7 @@ impl NotesApp {
                     // and the line prefix must be unchanged.
                     let (value, selection) = {
                         let editor = app.editor_state.read(cx);
-                        (editor.value().to_string(), editor.selection())
+                        (editor.value().to_string(), editor.selected_range())
                     };
                     let current_line = crate::notes::ghost::current_line_prefix(&value, selection);
                     if !crate::notes::ghost_llm::should_apply_llm_result(
@@ -1086,7 +1101,7 @@ impl NotesApp {
     ) {
         self.editor_state.update(cx, |state, inner_cx| {
             state.set_value(text.clone(), window, inner_cx);
-            state.set_selection(text.len(), text.len(), window, inner_cx);
+            state.set_selection_focused(text.len(), text.len(), window, inner_cx);
         });
         self.on_editor_change(window, cx);
 

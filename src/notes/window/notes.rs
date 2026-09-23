@@ -370,7 +370,7 @@ impl NotesApp {
                 // accent-colored H1 off the top — the reported "stray yellow dot"
                 // was the sliver of that title line peeking above the fold.
                 // (select_day_note deliberately lands at the end for append.)
-                state.set_selection(0, 0, window, cx);
+                state.set_selection_focused(0, 0, window, cx);
             });
         }
 
@@ -437,7 +437,7 @@ impl NotesApp {
         self.editor_state.update(cx, |state, cx| {
             state.set_value(&content, window, cx);
             let content_len = content.len();
-            state.set_selection(content_len, content_len, window, cx);
+            state.set_selection_focused(content_len, content_len, window, cx);
             state.focus(window, cx);
         });
         self.recompute_notes_ghost(cx);

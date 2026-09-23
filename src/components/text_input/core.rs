@@ -27,7 +27,7 @@ const TEXT_INPUT_UNDO_STACK_LIMIT: usize = 100;
 /// padding.
 ///
 /// This must stay in step with `flatten_line_breaks_for_single_line` in
-/// `vendor/gpui-component/crates/ui/src/input/state.rs`, which applies the same
+/// `vendor/gpui-kit/gpui-base/src/input/base/state.rs`, which applies the same
 /// rule on the paste path. The two are separate because a vendored crate must
 /// not depend on app code; the shared expectations are pinned by tests on both
 /// sides.
@@ -722,7 +722,7 @@ mod single_line_normalization_tests {
     use super::normalize_single_line_text;
 
     /// Mirrors `single_line_paste_tests` in
-    /// `vendor/gpui-component/crates/ui/src/input/state.rs`. The two
+    /// `vendor/gpui-kit/gpui-base/src/input/base/state.rs`. The two
     /// implementations are separate — a vendored crate must not depend on app
     /// code — so these expectations are what keep them in step. If one side
     /// changes its rule, the other side's copy of these cases fails.

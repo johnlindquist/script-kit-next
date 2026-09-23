@@ -1,7 +1,7 @@
 //! Unified Icon System
 //!
 //! This module provides a unified icon API that works across all icon sources:
-//! - gpui_component::IconName (Lucide icons from the component library)
+//! - crate::icons::LucideIcon (Lucide icons from the component library)
 //! - Embedded SVGs (Script Kit's custom icons)
 //! - SF Symbols (macOS 11+)
 //! - App bundle icons (macOS app icons by bundle ID)
@@ -10,7 +10,7 @@
 //!
 //! # Design Principles
 //!
-//! 1. **Don't duplicate enums**: Use gpui_component::IconName directly for Lucide
+//! 1. **Don't duplicate enums**: Use crate::icons::LucideIcon directly for Lucide
 //! 2. **Type erasure for render**: Return AnyElement to unify vector and raster icons
 //! 3. **Tintable vs full-color**: Vector icons are tintable, app icons are not
 //! 4. **Leverage gpui-component**: Route vectors through gpui_component::Icon
@@ -31,7 +31,7 @@
 //! use crate::icons::{IconRef, IconStyle, IconColor};
 //!
 //! // From gpui_component IconName
-//! let icon = IconRef::from(gpui_component::IconName::Check);
+//! let icon = IconRef::from(crate::icons::LucideIcon::Check);
 //!
 //! // From string (scripts)
 //! let icon = IconRef::parse("lucide:trash");
@@ -44,6 +44,7 @@
 //! });
 //! ```
 
+mod lucide_catalog;
 mod render;
 mod types;
 

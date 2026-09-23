@@ -34,7 +34,7 @@ impl NotesEditor {
     pub fn toggle_checklist(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -57,7 +57,7 @@ impl NotesEditor {
             let new_value = format!("{}{}{}", &value[..line_start], new_line, &value[line_end..]);
             let new_cursor = (cursor as isize + cursor_delta).max(0) as usize;
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!("Toggled checklist on current line");
         cx.notify();
@@ -98,13 +98,13 @@ impl NotesEditor {
 
             let replacement = if currently_checked { "[ ]" } else { "[x]" };
             let abs = start + offset;
-            let selection = state.selection();
+            let selection = state.selected_range();
             // Selection edits focus InputState, but preview replaces that input in
             // the dispatch tree. Keep the caller's keyboard owner after the edit.
             let focused = window.focused(cx);
-            state.set_selection(abs, abs + len, window, cx);
+            state.set_selection_focused(abs, abs + len, window, cx);
             state.replace(replacement, window, cx);
-            state.set_selection(selection.start, selection.end, window, cx);
+            state.set_selection_focused(selection.start, selection.end, window, cx);
             if let Some(focused) = focused {
                 focused.focus(window, cx);
             } else {
@@ -123,7 +123,7 @@ impl NotesEditor {
     pub fn insert_horizontal_rule(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let needs_newline =
@@ -137,7 +137,7 @@ impl NotesEditor {
             let new_value = format!("{}{}{}", &value[..cursor], rule, &value[cursor..]);
             let new_cursor = cursor + rule.len();
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!("Inserted horizontal rule");
         cx.notify();
@@ -146,7 +146,7 @@ impl NotesEditor {
     pub fn cycle_heading(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -169,7 +169,7 @@ impl NotesEditor {
             let new_value = format!("{}{}{}", &value[..line_start], new_line, &value[line_end..]);
             let new_cursor = (cursor as isize + cursor_delta).max(line_start as isize) as usize;
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!("Cycled heading level on current line");
         cx.notify();
@@ -178,7 +178,7 @@ impl NotesEditor {
     pub fn move_line_up(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -207,7 +207,7 @@ impl NotesEditor {
             let new_cursor = prev_line_start + offset_in_line;
 
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         cx.notify();
     }
@@ -215,7 +215,7 @@ impl NotesEditor {
     pub fn move_line_down(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -247,12 +247,7 @@ impl NotesEditor {
             let new_cursor = new_line_start + offset_in_line;
 
             state.set_value(&new_value, window, cx);
-            state.set_selection(
-                new_cursor.min(new_value.len()),
-                new_cursor.min(new_value.len()),
-                window,
-                cx,
-            );
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         cx.notify();
     }
@@ -260,7 +255,7 @@ impl NotesEditor {
     pub fn select_current_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -268,7 +263,7 @@ impl NotesEditor {
                 .find('\n')
                 .map_or(value.len(), |p| cursor + p);
 
-            state.set_selection(line_start, line_end, window, cx);
+            state.set_selection_focused(line_start, line_end, window, cx);
         });
         cx.notify();
     }
@@ -285,7 +280,7 @@ impl NotesEditor {
             return false;
         }
 
-        let selection = self.input_state.read(cx).selection();
+        let selection = self.input_state.read(cx).selected_range();
         if selection.start == selection.end {
             return false;
         }
@@ -305,7 +300,7 @@ impl NotesEditor {
 
         self.input_state.update(cx, |state, cx| {
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!("Smart paste: wrapped selection as markdown link");
         cx.notify();
@@ -315,7 +310,7 @@ impl NotesEditor {
     pub fn toggle_blockquote(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let sel_start = selection.start.min(value.len());
             let sel_end = selection.end.min(value.len());
             let (sel_start, sel_end) = if sel_start > sel_end {
@@ -353,7 +348,7 @@ impl NotesEditor {
 
             let new_cursor = region_start + new_region.len();
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!("Toggled blockquote on selected lines");
         cx.notify();
@@ -367,7 +362,7 @@ impl NotesEditor {
     ) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -390,12 +385,7 @@ impl NotesEditor {
             };
 
             state.set_value(&new_value, window, cx);
-            state.set_selection(
-                new_cursor.min(new_value.len()),
-                new_cursor.min(new_value.len()),
-                window,
-                cx,
-            );
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!(
             direction = if direction_down { "down" } else { "up" },
@@ -407,7 +397,7 @@ impl NotesEditor {
     pub fn delete_current_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -426,7 +416,7 @@ impl NotesEditor {
             let new_value = format!("{}{}", &value[..remove_start], &value[remove_end..]);
             let new_cursor = remove_start.min(new_value.len());
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!("Deleted current line");
         cx.notify();
@@ -435,13 +425,13 @@ impl NotesEditor {
     pub fn indent_at_cursor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
             let indent = "  ";
             let new_value = format!("{}{}{}", &value[..cursor], indent, &value[cursor..]);
             let new_cursor = cursor + indent.len();
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         cx.notify();
     }
@@ -449,7 +439,7 @@ impl NotesEditor {
     pub fn outdent_line(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -470,7 +460,7 @@ impl NotesEditor {
             );
             let new_cursor = cursor.saturating_sub(remove_count).max(line_start);
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         cx.notify();
     }
@@ -478,7 +468,7 @@ impl NotesEditor {
     pub fn toggle_bullet_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -501,7 +491,7 @@ impl NotesEditor {
             let new_value = format!("{}{}{}", &value[..line_start], new_line, &value[line_end..]);
             let new_cursor = (cursor as isize + cursor_delta).max(line_start as isize) as usize;
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!("Toggled bullet list on current line");
         cx.notify();
@@ -510,7 +500,7 @@ impl NotesEditor {
     pub fn toggle_numbered_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_start = value[..cursor].rfind('\n').map_or(0, |p| p + 1);
@@ -534,7 +524,7 @@ impl NotesEditor {
             let new_value = format!("{}{}{}", &value[..line_start], new_line, &value[line_end..]);
             let new_cursor = (cursor as isize + cursor_delta).max(line_start as isize) as usize;
             state.set_value(&new_value, window, cx);
-            state.set_selection(new_cursor, new_cursor, window, cx);
+            state.set_selection_focused(new_cursor, new_cursor, window, cx);
         });
         info!("Toggled numbered list on current line");
         cx.notify();
@@ -587,7 +577,7 @@ impl NotesEditor {
     pub fn join_lines(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let cursor = selection.start.min(value.len());
 
             let line_end = value[cursor..]
@@ -617,7 +607,7 @@ impl NotesEditor {
             };
 
             state.set_value(&new_value, window, cx);
-            state.set_selection(join_cursor, join_cursor, window, cx);
+            state.set_selection_focused(join_cursor, join_cursor, window, cx);
         });
         info!("Joined current line with next");
         cx.notify();
@@ -626,7 +616,7 @@ impl NotesEditor {
     pub fn transform_case(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let start = selection.start.min(value.len());
             let end = selection.end.min(value.len());
             let (start, end) = if start > end {
@@ -652,7 +642,7 @@ impl NotesEditor {
             let new_value = format!("{}{}{}", &value[..start], transformed, &value[end..]);
             let new_end = start + transformed.len();
             state.set_value(&new_value, window, cx);
-            state.set_selection(start, new_end, window, cx);
+            state.set_selection_focused(start, new_end, window, cx);
         });
         info!("Transformed case of selected text");
         cx.notify();

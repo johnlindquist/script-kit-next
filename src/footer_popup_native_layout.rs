@@ -1406,10 +1406,10 @@ fn footer_hint_item_gap(glass_active: bool, ordinary_gap: f64) -> f64 {
 
 #[cfg(target_os = "macos")]
 const FOOTER_MIC_ICON_SVG: &str =
-    include_str!("../vendor/gpui-component/crates/assets/assets/icons/mic.svg");
+    include_str!("../vendor/script-kit-lucide-assets/assets/icons/mic.svg");
 #[cfg(target_os = "macos")]
 const FOOTER_PROFILE_ICON_SVG: &str =
-    include_str!("../vendor/gpui-component/crates/assets/assets/icons/bot.svg");
+    include_str!("../vendor/script-kit-lucide-assets/assets/icons/bot.svg");
 
 #[cfg(target_os = "macos")]
 fn footer_icon_png_from_svg(svg: &str) -> Option<Vec<u8>> {

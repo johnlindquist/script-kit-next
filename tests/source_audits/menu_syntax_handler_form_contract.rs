@@ -145,12 +145,7 @@ fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
     );
     assert!(
         read("src/app_impl/menu_syntax_main_hint.rs")
-            .contains("state.set_tab_navigation(handler_form_owns_input, window, cx)")
-            && read("src/app_impl/menu_syntax_main_hint.rs").contains(
-                "state.set_tab_navigation_space_as_tab(false, window, cx)"
-            )
-            && read("vendor/gpui-component/crates/ui/src/input/state.rs")
-                .contains("InputEvent::PressTab { secondary: false }")
+            .contains("state.set_tab_navigation(handler_form_owns_input, cx)")
             && read("src/app_impl/filter_input_updates.rs")
                 .contains("self.sync_menu_syntax_form_inputs_from_filter(window, cx);")
             && render.contains("sk_is_key_tab(key_str)")
@@ -216,12 +211,12 @@ fn snippet_form_multiline_input_uses_chat_pattern_and_enter_routing() {
         "multiline row bounds should come from shared form metrics"
     );
     assert!(
-        app.contains("InputEvent::PressEnter { secondary }")
+        app.contains("InputEvent::PressEnter { secondary, shift }")
             && app.contains("submit_menu_syntax_form_enter")
-            && app.contains("if *secondary")
+            && app.contains("if *secondary || *shift")
             && app.contains("input.read(cx).value().to_string()")
-            && app.contains("this.menu_syntax_form_syncing_from_input = true;")
-            && app.contains("update_menu_syntax_form_field(\n                                        Some(&field_id),"),
+            && app.contains("self.menu_syntax_form_syncing_from_input = true;")
+            && app.contains("self.update_menu_syntax_form_field(Some(field_id), value, window, cx)"),
         "multiline field Enter events should submit on plain Enter and sync secondary Enter newline insertion from InputState"
     );
     assert!(
@@ -404,9 +399,10 @@ fn stdin_can_edit_menu_syntax_form_fields_for_runtime_proof() {
 fn tab_routes_to_handler_form_before_tab_ai_paths() {
     let form_owner = read("src/app_impl/menu_syntax_main_hint.rs");
     assert!(
-        form_owner.contains("gpui_component::input::InputState::new(window, cx)")
+        form_owner.contains("InputState::new(window, cx)")
+            && form_owner.contains("TextareaState::new(window, cx)")
             && form_owner.contains(".tab_navigation(true)")
-            && form_owner.contains("state.set_selection(len, len, window, cx)")
+            && form_owner.contains("state.set_selection_focused(len, len, window, cx)")
             && form_owner.contains("state.focus(window, cx)")
             && form_owner.contains("actual_menu_syntax_form_focused_index"),
         "Tab routing must create real focusable handler field inputs, place the cursor at the end, and move actual focus handles"

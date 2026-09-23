@@ -1,0 +1,15 @@
+[package]
+name = "script-kit-lucide-assets"
+description = "Script Kit's bundled Lucide icon SVGs (names Script Kit scripts and themes accept)."
+license = "Apache-2.0"
+edition = "2024"
+publish = false
+version = "0.1.0"
+
+[lib]
+doctest = false
+
+[dependencies]
+anyhow = "1"
+gpui = { package = "gpui-pre", version = "=0.3.6" }
+rust-embed = { version = "8.7.2", features = ["interpolate-folder-path", "debug-embed", "include-exclude"] }

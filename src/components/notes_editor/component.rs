@@ -1,5 +1,5 @@
 use gpui::{App, AppContext, Context, Entity, FocusHandle, Focusable, Hsla, ScrollHandle, Window};
-use gpui_component::input::InputState;
+use gpui_component::input::EditorState as InputState;
 use gpui_component::theme::ActiveTheme;
 use std::ops::Range;
 
@@ -58,19 +58,23 @@ impl NotesEditor {
         let measurement_surface = editor_config.measurement_surface.clone();
         let sizing = config.sizing;
         let input_state = cx.new(|cx| {
+            // gpui-kit EditorState (source-code editor mode) with markdown
+            // highlighting; the host sizes the window from soft-wrapped rows.
             let state = InputState::new(window, cx)
-                .code_editor("markdown")
+                .language("markdown")
                 .fidelity_scope(measurement_surface)
-                .code_editor_dynamic_bottom_margin(false)
+                // No trailing scroll space (the fork's
+                // `code_editor_dynamic_bottom_margin(false)`).
+                .scroll_beyond_last_line(Some(0))
+                // gpui-kit editors fold by default; the Notes surface never did.
+                .folding(false)
                 .line_number(false)
                 .searchable(true)
                 .placeholder(placeholder)
                 .default_value(initial_content);
             match sizing {
                 NotesEditorInputSizing::Rows(rows) => state.rows(rows),
-                NotesEditorInputSizing::AutoGrow { min_rows, max_rows } => {
-                    state.auto_grow(min_rows, max_rows)
-                }
+                NotesEditorInputSizing::AutoGrow { min_rows, .. } => state.rows(min_rows),
             }
         });
         let notes_editor = cx.new(|_| NotesEditor::new(input_state.clone(), editor_config));
@@ -123,7 +127,7 @@ impl NotesEditor {
     pub(crate) fn focus_with_cursor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.input_state.update(cx, |state, cx| {
             let cursor = state.value().len();
-            state.set_selection(cursor, cursor, window, cx);
+            state.set_selection_focused(cursor, cursor, window, cx);
             // `set_selection`'s scroll_to is a no-op until the element has
             // painted (last_layout/last_bounds are None on the load/mount
             // frame), so the Day Page would land at the top on open/reopen.
@@ -174,7 +178,7 @@ impl NotesEditor {
         let cursor = value.len();
         self.input_state.update(cx, |state, cx| {
             state.set_value(value, window, cx);
-            state.set_selection(cursor, cursor, window, cx);
+            state.set_selection_focused(cursor, cursor, window, cx);
             state.scroll_to_bottom_after_layout(cx);
             state.scroll_to_bottom(cx);
         });
@@ -231,7 +235,7 @@ impl NotesEditor {
         cx: &mut Context<Self>,
     ) {
         self.input_state.update(cx, |state, cx| {
-            state.set_selection(start, end, window, cx);
+            state.set_selection_focused(start, end, window, cx);
         });
     }
 
@@ -240,7 +244,7 @@ impl NotesEditor {
     }
 
     pub fn selection(&self, cx: &App) -> std::ops::Range<usize> {
-        self.input_state.read(cx).selection()
+        self.input_state.read(cx).selected_range()
     }
 
     pub fn soft_wrapped_lines_len(&self, cx: &App) -> usize {
@@ -275,7 +279,7 @@ impl NotesEditor {
 
     pub(crate) fn activation_href_at_cursor(&self, cx: &App) -> Option<String> {
         self.read_input(cx, |state| {
-            activation_href_at_cursor_in_text(&state.value(), state.selection().start)
+            activation_href_at_cursor_in_text(&state.value(), state.selected_range().start)
         })
     }
 
@@ -364,7 +368,7 @@ impl NotesEditor {
     pub fn sync_markdown_link_highlights(&mut self, cx: &mut Context<Self>) {
         let (text, selection) = {
             let state = self.input_state.read(cx);
-            (state.value().to_string(), state.selection())
+            (state.value().to_string(), state.selected_range())
         };
         let content_changed = text != self.last_markdown_link_highlight_text
             || selection != self.last_markdown_link_highlight_selection;

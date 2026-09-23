@@ -1,5 +1,23 @@
 use super::*;
 
+/// Run `$body` against whichever text state backs a menu-syntax form field.
+macro_rules! update_form_input {
+    ($input:expr, $cx:expr, |$state:ident, $icx:ident| $body:expr) => {
+        match $input {
+            gpui_component::input::AnyInputState::Input(entity) => {
+                entity.update($cx, |$state, $icx| $body)
+            }
+            gpui_component::input::AnyInputState::Textarea(entity) => {
+                entity.update($cx, |$state, $icx| $body)
+            }
+            gpui_component::input::AnyInputState::Editor(entity) => {
+                entity.update($cx, |$state, $icx| $body)
+            }
+            gpui_component::input::AnyInputState::Otp(_) => {}
+        }
+    };
+}
+
 impl ScriptListApp {
     pub(crate) fn update_main_input_tab_navigation_for_menu_syntax_form(
         &mut self,
@@ -8,9 +26,9 @@ impl ScriptListApp {
     ) {
         let handler_form_owns_input = self.menu_syntax_capture_form_owns_input();
         self.gpui_input_state.update(cx, |state, cx| {
-            state.set_tab_navigation(handler_form_owns_input, window, cx);
-            state.set_tab_navigation_space_as_tab(false, window, cx);
+            state.set_tab_navigation(handler_form_owns_input, cx);
         });
+        let _ = window;
     }
 
     fn menu_syntax_form_signature(form: &crate::menu_syntax::MenuSyntaxFormSnapshot) -> String {
@@ -64,7 +82,7 @@ impl ScriptListApp {
     fn menu_syntax_form_input_for(
         &self,
         field_id: &str,
-    ) -> Option<Entity<gpui_component::input::InputState>> {
+    ) -> Option<gpui_component::input::AnyInputState> {
         self.menu_syntax_form_inputs
             .iter()
             .find_map(|(id, input)| (id == field_id).then(|| input.clone()))
@@ -74,26 +92,102 @@ impl ScriptListApp {
         field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Entity<gpui_component::input::InputState> {
+    ) -> gpui_component::input::AnyInputState {
+        use gpui_component::input::{AnyInputState, InputState, TextareaState};
         let placeholder = field.placeholder.clone();
         let value = field.value.clone();
-        let multiline = field.multiline;
-        cx.new(|cx| {
-            let state = gpui_component::input::InputState::new(window, cx)
-                .tab_navigation(true)
-                .placeholder(placeholder)
-                .default_value(value);
-            if multiline {
-                state
+        // gpui-kit makes multi-line a type: multiline fields are an
+        // auto-growing `TextareaState`, the rest a single-line `InputState`.
+        if field.multiline {
+            AnyInputState::Textarea(cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .tab_navigation(true)
+                    .placeholder(placeholder)
+                    .default_value(value)
                     .auto_grow(
                         crate::components::FormFieldMetrics::MULTILINE_MIN_ROWS,
                         crate::components::FormFieldMetrics::MULTILINE_MAX_ROWS,
                     )
                     .submit_on_enter(true)
-            } else {
-                state
+            }))
+        } else {
+            AnyInputState::Input(cx.new(|cx| {
+                InputState::new(window, cx)
+                    .tab_navigation(true)
+                    .placeholder(placeholder)
+                    .default_value(value)
+            }))
+        }
+    }
+
+    /// Menu-syntax form field event, shared by the single-line and textarea
+    /// states (`value`/`is_focused` are read by the caller from its state).
+    #[allow(clippy::too_many_arguments)]
+    fn handle_menu_syntax_form_input_event(
+        &mut self,
+        field_id: &str,
+        field_multiline: bool,
+        event: &gpui_component::input::InputEvent,
+        value: String,
+        is_focused: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            gpui_component::input::InputEvent::Change => {
+                if self.menu_syntax_form_syncing_from_input {
+                    return;
+                }
+                let is_active_field = self
+                    .menu_syntax_form_draft_field_id
+                    .as_deref()
+                    .is_some_and(|id| id == field_id);
+                if !is_active_field && !is_focused {
+                    return;
+                }
+                if is_active_field && self.menu_syntax_form_draft_value == value {
+                    return;
+                }
+                self.menu_syntax_form_syncing_from_input = true;
+                let _ = self.update_menu_syntax_form_field(Some(field_id), value, window, cx);
+                self.menu_syntax_form_syncing_from_input = false;
             }
-        })
+            gpui_component::input::InputEvent::PressEnter { secondary, shift } => {
+                if !field_multiline {
+                    if !*secondary {
+                        self.submit_menu_syntax_form_enter(window, cx);
+                    }
+                    return;
+                }
+                // Textarea: Shift+Enter inserted a newline, Cmd+Enter did not;
+                // both commit the draft (the fork treated either as secondary).
+                if *secondary || *shift {
+                    self.menu_syntax_form_draft_field_id = Some(field_id.to_string());
+                    self.menu_syntax_form_draft_value = value.clone();
+                    self.menu_syntax_form_syncing_from_input = true;
+                    let _ = self.update_menu_syntax_form_field(Some(field_id), value, window, cx);
+                    self.menu_syntax_form_syncing_from_input = false;
+                } else {
+                    self.submit_menu_syntax_form_enter(window, cx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_menu_syntax_form_input_ext_event(
+        &mut self,
+        event: &gpui_component::input::ScriptKitInputEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let gpui_component::input::ScriptKitInputEvent::PressTab { secondary } = event {
+            if *secondary {
+                self.focus_previous_menu_syntax_form_field(window, cx);
+            } else {
+                self.focus_next_menu_syntax_form_field(window, cx);
+            }
+        }
     }
 
     fn ensure_menu_syntax_form_inputs(
@@ -111,71 +205,41 @@ impl ScriptListApp {
                 let input = Self::new_menu_syntax_form_input(field, window, cx);
                 let field_id = field.id.clone();
                 let field_multiline = field.multiline;
-                let subscription = cx.subscribe_in(&input, window, {
-                    let field_id = field_id.clone();
-                    move |this, input, event: &gpui_component::input::InputEvent, window, cx| {
-                        match event {
-                            gpui_component::input::InputEvent::Change => {
-                                if this.menu_syntax_form_syncing_from_input {
-                                    return;
-                                }
-                                let is_active_field = this
-                                    .menu_syntax_form_draft_field_id
-                                    .as_deref()
-                                    .is_some_and(|id| id == field_id);
-                                let is_focused = input.read(cx).focus_handle(cx).is_focused(window);
-                                if !is_active_field && !is_focused {
-                                    return;
-                                }
+                macro_rules! subscribe_form_input {
+                    ($entity:expr) => {{
+                        let entity = $entity.clone();
+                        let event_field_id = field_id.clone();
+                        let change = cx.subscribe_in(&entity, window, {
+                            move |this, input, event: &gpui_component::input::InputEvent, window, cx| {
                                 let value = input.read(cx).value().to_string();
-                                if is_active_field && this.menu_syntax_form_draft_value == value {
-                                    return;
-                                }
-                                this.menu_syntax_form_syncing_from_input = true;
-                                let _ = this.update_menu_syntax_form_field(
-                                    Some(&field_id),
+                                let is_focused = input.read(cx).focus_handle(cx).is_focused(window);
+                                this.handle_menu_syntax_form_input_event(
+                                    &event_field_id,
+                                    field_multiline,
+                                    event,
                                     value,
+                                    is_focused,
                                     window,
                                     cx,
                                 );
-                                this.menu_syntax_form_syncing_from_input = false;
                             }
-                            gpui_component::input::InputEvent::PressTab { secondary } => {
-                                if *secondary {
-                                    this.focus_previous_menu_syntax_form_field(window, cx);
-                                } else {
-                                    this.focus_next_menu_syntax_form_field(window, cx);
-                                }
+                        });
+                        let ext = cx.subscribe_in(&entity, window, {
+                            move |this, _, event: &gpui_component::input::ScriptKitInputEvent, window, cx| {
+                                this.handle_menu_syntax_form_input_ext_event(event, window, cx);
                             }
-                            gpui_component::input::InputEvent::PressEnter { secondary } => {
-                                if !field_multiline {
-                                    if !*secondary {
-                                        this.submit_menu_syntax_form_enter(window, cx);
-                                    }
-                                    return;
-                                }
-                                if *secondary {
-                                    let value = input.read(cx).value().to_string();
-                                    this.menu_syntax_form_draft_field_id = Some(field_id.clone());
-                                    this.menu_syntax_form_draft_value = value.clone();
-                                    this.menu_syntax_form_syncing_from_input = true;
-                                    let _ = this.update_menu_syntax_form_field(
-                                        Some(&field_id),
-                                        value,
-                                        window,
-                                        cx,
-                                    );
-                                    this.menu_syntax_form_syncing_from_input = false;
-                                } else {
-                                    this.submit_menu_syntax_form_enter(window, cx);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                });
+                        });
+                        [change, ext]
+                    }};
+                }
+                let subscriptions = match &input {
+                    gpui_component::input::AnyInputState::Input(state) => subscribe_form_input!(state),
+                    gpui_component::input::AnyInputState::Textarea(state) => subscribe_form_input!(state),
+                    gpui_component::input::AnyInputState::Editor(state) => subscribe_form_input!(state),
+                    gpui_component::input::AnyInputState::Otp(_) => unreachable!("form fields are never OTP"),
+                };
                 self.menu_syntax_form_inputs.push((field_id, input));
-                self.menu_syntax_form_input_subscriptions.push(subscription);
+                self.menu_syntax_form_input_subscriptions.extend(subscriptions);
             }
         }
 
@@ -183,16 +247,16 @@ impl ScriptListApp {
             let Some(input) = self.menu_syntax_form_input_for(&field.id) else {
                 continue;
             };
-            let current = input.read(cx).value().to_string();
+            let current = input.value(cx).to_string();
             if current == field.value {
                 continue;
             }
-            let focused = input.read(cx).focus_handle(cx).is_focused(window);
+            let focused = input.focus_handle(cx).is_focused(window);
             if focused {
                 continue;
             }
             self.menu_syntax_form_syncing_from_input = true;
-            input.update(cx, |state, cx| {
+            update_form_input!(&input, cx, |state, cx| {
                 state.set_value(field.value.clone(), window, cx);
                 state.set_placeholder(field.placeholder.clone(), window, cx);
             });
@@ -205,11 +269,7 @@ impl ScriptListApp {
             .iter()
             .enumerate()
             .find_map(|(index, (_, input))| {
-                input
-                    .read(cx)
-                    .focus_handle(cx)
-                    .is_focused(window)
-                    .then_some(index)
+                input.focus_handle(cx).is_focused(window).then_some(index)
             })
     }
 
@@ -506,9 +566,7 @@ impl ScriptListApp {
         self.menu_syntax_form_input_active = true;
         self.menu_syntax_form_focused_index = index;
         self.reveal_menu_syntax_form_field_at(index, form, cx);
-        input.update(cx, |state, cx| {
-            state.focus(window, cx);
-        });
+        update_form_input!(&input, cx, |state, cx| state.focus(window, cx));
     }
 
     fn defer_menu_syntax_form_input_focus_restore(
@@ -582,9 +640,9 @@ impl ScriptListApp {
             self.close_menu_syntax_form_suggestions();
         }
         self.reveal_menu_syntax_form_field_at(index, form, cx);
-        input.update(cx, |state, cx| {
+        update_form_input!(&input, cx, |state, cx| {
             let len = state.value().len();
-            state.set_selection(len, len, window, cx);
+            state.set_selection_focused(len, len, window, cx);
             state.focus(window, cx);
         });
         self.sync_menu_syntax_form_trigger_picker_state(form, window, cx);

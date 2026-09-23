@@ -431,7 +431,7 @@ impl NotesApp {
     ) -> Result<(crate::ai::TabAiTargetContext, bool), NotesAiHandoffError> {
         let editor = self.editor_state.read(cx);
         let content = editor.value().to_string();
-        let selection = editor.selection();
+        let selection = editor.selected_range();
         let saved_note = self
             .selected_note_id
             .and_then(|id| self.notes.iter().find(|note| note.id == id))
@@ -464,7 +464,7 @@ impl NotesApp {
     ) -> NotesHostReturnSnapshot {
         let editor = self.editor_state.read(cx);
         let content = editor.value();
-        let selection = editor.selection();
+        let selection = editor.selected_range();
         let scroll = editor.automation_scroll_metrics();
         let mut alias_id_fingerprints = self
             .spine_runtime

@@ -135,8 +135,10 @@ pub struct DayPageView {
     pub(crate) loaded_document:
         Option<(script_kit_gpui::day_page::DayPageBinding, Option<PathBuf>)>,
     pub(crate) notes_editor: Entity<NotesEditor>,
-    pub(crate) editor_state: Entity<InputState>,
+    pub(crate) editor_state: Entity<gpui_component::input::EditorState>,
     pub(crate) editor_subscription: Subscription,
+    /// `ScriptKitInputEvent::SelectionChange` → markdown link highlight sync.
+    pub(crate) editor_selection_subscription: Subscription,
     /// Observes the editor `InputState` for deeplink hover changes, which
     /// arrive as plain `cx.notify` (no `InputEvent`) — required for the
     /// hover hint chip to appear/disappear live.

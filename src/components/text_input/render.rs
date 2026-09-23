@@ -17,7 +17,7 @@ const CURSOR_PULSE_DWELL: f32 = 0.12;
 /// Ease-in-out caret pulse with a brief dwell at both extremes.
 ///
 /// Keep in sync with the vendored copy for the gpui-component input caret in
-/// vendor/gpui-component/crates/ui/src/input/blink_cursor.rs.
+/// vendor/gpui-kit/gpui-base/src/input/base/blink_cursor.rs.
 fn caret_pulse_alpha(phase: f32) -> f32 {
     let fade = 0.5 - CURSOR_PULSE_DWELL;
     let smooth = |t: f32| t * t * (3.0 - 2.0 * t);

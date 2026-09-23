@@ -9698,7 +9698,7 @@ text_style.text_inset_left,
         } else {
             use gpui_component::IconNamed;
             gpui::svg()
-                .path(gpui_component::IconName::AppWindow.path())
+                .path(crate::icons::LucideIcon::AppWindow.path())
                 .size(px(14.0))
                 .text_color(rgb(theme.colors.text.muted))
                 .into_any_element()

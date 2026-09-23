@@ -40,7 +40,7 @@ impl ScriptListApp {
     fn flow_input_return_state(&self, cx: &App) -> FlowInputReturnState {
         FlowInputReturnState {
             value: self.filter_text.clone(),
-            selection: self.gpui_input_state.read(cx).selection(),
+            selection: self.gpui_input_state.read(cx).selected_range(),
             focused_input: self.focused_input,
             pending_focus: self.pending_focus,
         }
@@ -98,7 +98,7 @@ impl ScriptListApp {
         let placeholder = placeholder.to_string();
         self.gpui_input_state.update(cx, |input, cx| {
             input.set_value(value, window, cx);
-            input.set_selection(selection.start, selection.end, window, cx);
+            input.set_selection_focused(selection.start, selection.end, window, cx);
             input.set_placeholder(placeholder, window, cx);
         });
         self.focused_input = state.focused_input;
@@ -897,7 +897,7 @@ impl ScriptListApp {
                 self.gpui_input_state.update(cx, |state, cx| {
                     state.set_value(text.clone(), window, cx);
                     let len = text.len();
-                    state.set_selection(len, len, window, cx);
+                    state.set_selection_focused(len, len, window, cx);
                 });
                 self.suppress_filter_events = false;
                 self.start_flow_ux_tick(cx);

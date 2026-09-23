@@ -1187,7 +1187,7 @@ impl ScriptListApp {
             // Sync input and reset the root launcher discovery placeholder.
             self.gpui_input_state.update(cx, |state, cx| {
                 state.set_value("", window, cx);
-                state.set_selection(0, 0, window, cx);
+                state.set_selection_focused(0, 0, window, cx);
                 state.set_placeholder(crate::ROOT_LAUNCHER_PLACEHOLDER, window, cx);
             });
 

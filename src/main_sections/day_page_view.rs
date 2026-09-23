@@ -133,11 +133,18 @@ impl DayPageView {
             window,
             |this, _, event: &InputEvent, window, cx| match event {
                 InputEvent::Change => this.on_editor_change(window, cx),
-                InputEvent::SelectionChange => {
+                _ => {}
+            },
+        );
+        // Selection moves arrive on the Script Kit extension event stream.
+        let editor_selection_subscription = cx.subscribe_in(
+            &editor_state,
+            window,
+            |this, _, event: &gpui_component::input::ScriptKitInputEvent, _window, cx| {
+                if matches!(event, gpui_component::input::ScriptKitInputEvent::SelectionChange) {
                     this.notes_editor
                         .update(cx, |editor, cx| editor.sync_markdown_link_highlights(cx));
                 }
-                _ => {}
             },
         );
 
@@ -163,6 +170,7 @@ impl DayPageView {
             notes_editor,
             editor_state,
             editor_subscription,
+            editor_selection_subscription,
             editor_hover_observation,
             last_deeplink_hover_hint: None,
             focus_handle: cx.focus_handle(),

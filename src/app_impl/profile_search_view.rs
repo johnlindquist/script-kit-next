@@ -142,7 +142,7 @@ impl ScriptListApp {
         self.set_filter_text_and_cursor_immediate(value, selection.end, window, cx);
         if !selection.is_empty() {
             self.gpui_input_state.update(cx, |state, cx| {
-                state.set_selection(selection.start, selection.end, window, cx);
+                state.set_selection_focused(selection.start, selection.end, window, cx);
             });
         }
         self.focused_input = focused_input;

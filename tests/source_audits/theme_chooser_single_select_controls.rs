@@ -420,7 +420,6 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
     let collector = read_source("src/app_layout/collect_elements.rs");
     let prompt_handler = read_source("src/prompt_handler/mod.rs");
     let protocol = read_source("src/protocol/types/batch_wait.rs");
-    let color_picker = read_source("vendor/gpui-component/crates/ui/src/color_picker.rs");
 
     for (picker_control, hex_control, label) in [
         ("accent-color", "accent-color-hex", "Accent Color"),
@@ -505,13 +504,9 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
     assert!(prompt_handler.contains("\"setThemeControl\".to_string()"));
     assert!(prompt_handler.contains("setThemeControl requires ThemeChooserView"));
     assert!(!prompt_handler.contains(".set_theme_chooser_control_from_devtools(&control, &value, cx)\n                                                .ok()"));
-    assert!(
-        color_picker.contains("pub enum ColorPickerEvent")
-            && color_picker.contains("Change(Option<Hsla>)")
-            && color_picker.contains(".open(state.open)")
-            && color_picker.contains(".on_open_change("),
-        "Theme Designer should keep relying on gpui-component ColorPicker popup open/close and change semantics"
-    );
+    // ColorPicker change/open semantics come from gpui-kit and are matched by
+    // the app (`ColorPickerEvent::Change(Option<Hsla>)`), so the compiler
+    // enforces them.
 }
 
 #[test]
@@ -783,7 +778,6 @@ fn theme_chooser_native_footer_apply_label_routes_like_enter() {
 #[test]
 fn theme_chooser_native_slider_drag_is_not_parent_reconciled_until_release() {
     let chooser = read_source("src/render_builtins/theme_chooser.rs");
-    let slider = read_source("vendor/gpui-component/crates/ui/src/slider.rs");
     let new_slider = chooser
         .split("fn new_theme_chooser_slider(")
         .nth(1)
@@ -816,12 +810,6 @@ fn theme_chooser_native_slider_drag_is_not_parent_reconciled_until_release() {
         sync_slider.contains("slider.is_dragging()") && sync_slider.contains("return;"),
         "ThemeChooser must not sync model values into a slider while native drag is active"
     );
-    assert!(
-        slider.contains("Release(SliderValue)")
-            && slider.contains("dragging: bool")
-            && slider.contains("pub fn is_dragging(&self) -> bool")
-            && slider.contains("fn handle_release(&mut self")
-            && slider.contains(".on_mouse_up_out("),
-        "vendor slider must expose drag lifecycle and clear active drag on mouse-up/out"
-    );
+    // The slider drag lifecycle (`Release`, `is_dragging`) is gpui-kit API the
+    // chooser calls; the compiler enforces it.
 }

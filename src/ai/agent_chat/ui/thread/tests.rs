@@ -3294,9 +3294,9 @@ fn text_append_updates_logical_and_parsed_source(cx: &mut gpui::TestAppContext) 
     cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let state = cx.new(|cx| gpui_component::text::TextViewState::markdown_immediate("Hello ", cx));
     state.update(cx, |state, cx| {
-        state.push_str_immediate("brave ", cx);
-        state.push_str_immediate("new world", cx);
-        assert_eq!(state.source_string_for_test(), "Hello brave new world");
+        state.push_str("brave ", cx);
+        state.push_str("new world", cx);
+        assert_eq!(state.source_text().to_string(), "Hello brave new world");
     });
 }
 
@@ -3308,10 +3308,10 @@ fn text_full_then_append_coalescing_does_not_duplicate_source(cx: &mut gpui::Tes
     state.update(cx, |state, cx| {
         // A full replacement, then a streaming append — the prefix must appear
         // exactly once (the coalescer/transactional-append bug would duplicate).
-        state.set_markdown_text_immediate("Base document.", cx);
-        state.push_str_immediate(" Streamed tail.", cx);
+        state.set_text("Base document.", cx);
+        state.push_str(" Streamed tail.", cx);
         assert_eq!(
-            state.source_string_for_test(),
+            state.source_text().to_string(),
             "Base document. Streamed tail."
         );
     });
@@ -3323,9 +3323,9 @@ fn text_append_then_full_replacement_wins(cx: &mut gpui::TestAppContext) {
     cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
     let state = cx.new(|cx| gpui_component::text::TextViewState::markdown_immediate("start", cx));
     state.update(cx, |state, cx| {
-        state.push_str_immediate(" appended", cx);
+        state.push_str(" appended", cx);
         // A subsequent full replacement wins outright — no residue of the append.
-        state.set_markdown_text_immediate("completely replaced", cx);
-        assert_eq!(state.source_string_for_test(), "completely replaced");
+        state.set_text("completely replaced", cx);
+        assert_eq!(state.source_text().to_string(), "completely replaced");
     });
 }

@@ -489,8 +489,8 @@ mod registered_root_layer_tests {
         });
         handle
             .update(cx, |_, window, cx| {
-                window.open_dialog(cx, |dialog, _, _| dialog.title("Lower").confirm());
-                window.open_dialog(cx, |dialog, _, _| dialog.title("Current").confirm());
+                window.open_dialog(cx, |dialog, _, _| dialog.title("Lower"));
+                window.open_dialog(cx, |dialog, _, _| dialog.title("Current"));
             })
             .unwrap();
         let before = root

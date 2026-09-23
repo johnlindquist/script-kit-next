@@ -591,7 +591,7 @@ pub struct NotesApp {
     notes_editor: Entity<NotesEditor>,
 
     /// Editor input state (using gpui-component's Input)
-    pub(crate) editor_state: Entity<InputState>,
+    pub(crate) editor_state: Entity<gpui_component::input::EditorState>,
 
     /// Shared editor-spine runtime for safe Notes inline command rows.
     spine_runtime: NotesEditorSpineRuntime<crate::spine::SpineListRow>,

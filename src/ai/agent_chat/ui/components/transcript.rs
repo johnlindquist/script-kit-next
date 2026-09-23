@@ -450,7 +450,7 @@ impl AgentChatTranscript {
                         crate::chat_hot_counters::record_transcript_row_changed(display_text.len());
                         entry.get().update(cx, |state, cx| {
                             if parse_immediately {
-                                state.set_markdown_text_immediate(&display_text, cx);
+                                state.set_text(&display_text, cx);
                             } else {
                                 state.set_text(&display_text, cx);
                             }
@@ -1905,6 +1905,7 @@ impl Render for AgentChatTranscript {
                     ),
                 )
             })
+            // gpui-kit scrollbar (the fork's fidelity-scoped variant is gone).
             .vertical_scrollbar_with_fidelity_scope(
                 &self.list_state,
                 "agent-chat-transcript-scrollbar",

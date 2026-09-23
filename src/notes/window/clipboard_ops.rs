@@ -24,7 +24,7 @@ impl NotesApp {
                 self.notes_editor.read(cx).semantic_revision(cx),
                 super::ai_handoff::fnv1a64_fingerprint(&content)
             ),
-            insertion_anchor: editor.selection(),
+            insertion_anchor: editor.selected_range(),
         }
     }
 
@@ -81,7 +81,7 @@ impl NotesApp {
             &after,
             expected.insertion_anchor.clone(),
             text,
-            self.editor_state.read(cx).selection(),
+            self.editor_state.read(cx).selected_range(),
         )
         .ok_or_else(|| {
             "mutation_failed: Notes observed insertion differs from requested replacement"
@@ -127,7 +127,7 @@ impl NotesApp {
         cx: &mut Context<Self>,
     ) -> serde_json::Value {
         let insertion_range = self.editor_state.update(cx, |state, cx| {
-            let selection = state.selection();
+            let selection = state.selected_range();
             let value = state.value().to_string();
             let start = selection.start.min(value.len());
             let end = selection.end.min(value.len());
@@ -203,7 +203,7 @@ impl NotesApp {
     pub(super) fn insert_date_time(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let date_str = crate::formatting::format_absolute_datetime(self.now());
         self.editor_state.update(cx, |state, cx| {
-            let selection = state.selection();
+            let selection = state.selected_range();
             let value = state.value().to_string();
             let start = selection.start.min(value.len());
             let end = selection.end.min(value.len());

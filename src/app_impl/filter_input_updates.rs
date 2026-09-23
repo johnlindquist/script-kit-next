@@ -550,7 +550,7 @@ impl ScriptListApp {
             self.gpui_input_state.update(cx, |state, cx| {
                 state.set_highlight_ranges_with_roles(Vec::new());
                 state.set_value(text.clone(), window, cx);
-                state.set_selection(cursor, cursor, window, cx);
+                state.set_selection_focused(cursor, cursor, window, cx);
             });
             self.suppress_filter_events = false;
             self.pending_filter_sync = false;
@@ -565,7 +565,7 @@ impl ScriptListApp {
 
         let input_already_matches = self.gpui_input_state.read(cx).value() == text;
         let input_selection_matches =
-            self.gpui_input_state.read(cx).selection() == (cursor..cursor);
+            self.gpui_input_state.read(cx).selected_range() == (cursor..cursor);
         if matches!(self.current_view, AppView::ScriptList)
             && self.filter_text == text
             && self.computed_filter_text == text
@@ -595,7 +595,7 @@ impl ScriptListApp {
             if !input_already_matches {
                 state.set_value(text.clone(), window, cx);
             }
-            state.set_selection(cursor, cursor, window, cx);
+            state.set_selection_focused(cursor, cursor, window, cx);
         });
         // Change events are queued; bind input authority before the publication can paint.
         self.note_main_input_changed(cx);
@@ -1747,7 +1747,7 @@ impl ScriptListApp {
             state.set_value(desired.clone(), window, cx);
             // Ensure cursor is at end with no selection after programmatic set_value
             let len = desired.len();
-            state.set_selection(len, len, window, cx);
+            state.set_selection_focused(len, len, window, cx);
         });
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;

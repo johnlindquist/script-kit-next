@@ -380,12 +380,6 @@ const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("view.rs");
 const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("thread.rs");
 const AGENT_CHAT_TRANSCRIPT_SOURCE: &str = include_str!("components/transcript.rs");
 const AGENT_CHAT_UI_VARIANT_SOURCE: &str = include_str!("ui_variant.rs");
-const TEXT_VIEW_SOURCE: &str =
-    include_str!("../../../../vendor/gpui-component/crates/ui/src/text/text_view.rs");
-const TEXT_VIEW_STATE_SOURCE: &str =
-    include_str!("../../../../vendor/gpui-component/crates/ui/src/text/state.rs");
-const TEXT_VIEW_NODE_SOURCE: &str =
-    include_str!("../../../../vendor/gpui-component/crates/ui/src/text/node.rs");
 
 fn agent_chat_source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
     let start = source
@@ -2357,51 +2351,6 @@ fn agent_chat_transient_trigger_exit_on_empty_composer() {
     assert!(
         agent_handoff_source.contains("chat.opened_via_transient_trigger = trigger;"),
         "Agent Chat reuse path must set opened_via_transient_trigger"
-    );
-}
-
-/// Guards the VENDORED `TextView` plumbing that selectable conversation
-/// markdown depends on. Nothing here reads app renderer source.
-///
-/// History: this test used to also assert the literal strings
-/// `.selectable(crate::logging::agent_chat_markdown_selectable_enabled())`,
-/// `.text_size(px(style_def.markdown.body_font_size))`, and the whole
-/// `transcript_text_style` builder body out of `AGENT_CHAT_TRANSCRIPT_SOURCE`.
-/// Those assertions were deleted, not relocated, when the style contract and
-/// the `TextView` construction moved to `src/components/conversation_style.rs`
-/// and `src/components/conversation_text.rs` so Flow could share them.
-///
-/// Two reasons they are gone rather than repointed, per the repo's Source
-/// Audit Test Policy (source reads are rung 5 of 5, a last resort):
-///
-/// 1. They asserted the *presence of formatted source text* in one surface —
-///    exactly the shape that breaks on legitimate refactors. This move was the
-///    refactor that broke them.
-/// 2. Their real invariant is now enforced higher on the ladder: the style
-///    values and cache behavior are covered by behavior tests in
-///    `conversation_style.rs` / `conversation_text.rs`, and "the text is
-///    actually selectable on screen" is covered by a runtime probe — which is
-///    the only thing that could ever have proven it. A substring check could
-///    confirm the call was written; it could never confirm selection worked.
-///
-/// The assertions below survive because they concern vendor internals that
-/// the move did not touch, and no behavior test covers them.
-#[test]
-fn vendored_text_view_persists_style_into_parsed_nodes_for_selectable_markdown() {
-    assert!(
-        TEXT_VIEW_SOURCE.contains("state.set_text_view_style(self.text_view_style.clone(), cx);")
-            && TEXT_VIEW_STATE_SOURCE.contains("text_view_style: self.text_view_style.clone()")
-            && TEXT_VIEW_STATE_SOURCE.contains("style: options.text_view_style.clone()")
-            && TEXT_VIEW_STATE_SOURCE.contains("content.node_cx = node_cx;"),
-        "gpui-component TextView must persist TextViewStyle into parsed NodeContext so selectable markdown uses the requested chat styles"
-    );
-
-    assert!(
-        TEXT_VIEW_NODE_SOURCE.contains("highlight.font_family = Some(\"JetBrains Mono\");")
-            && TEXT_VIEW_NODE_SOURCE.contains("highlight.color = Some(cx.theme().accent);")
-            && !TEXT_VIEW_NODE_SOURCE
-                .contains("highlight.background_color = Some(cx.theme().accent);"),
-        "TextView inline code must render as selectable monospace accent text, not as an accent background chip"
     );
 }
 

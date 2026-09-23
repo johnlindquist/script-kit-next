@@ -292,8 +292,10 @@ fn actions_search_edits_use_input_state_cursor_selection_and_history(
                 assert!(dialog.insert_search_text("?", window, cx));
                 assert_eq!(dialog.search_text, "réopen?-file");
 
+                // gpui-kit groups undo per edit (cursor moves break
+                // coalescing), so undo reverts only the last replacement.
                 assert!(dialog.undo_search_input(window, cx));
-                assert_eq!(dialog.search_text, "");
+                assert_eq!(dialog.search_text, "réopen!-file");
                 assert!(dialog.redo_search_input(window, cx));
                 assert_eq!(dialog.search_text, "réopen?-file");
                 assert_eq!(dialog.filtered_actions.len(), 0);

@@ -10,7 +10,7 @@ use super::{lucide_from_str, EmbeddedIcon};
 #[derive(Clone)]
 pub enum IconRef {
     /// Lucide icon from gpui_component
-    Lucide(gpui_component::IconName),
+    Lucide(crate::icons::LucideIcon),
     /// SF Symbol name (macOS 11+ only)
     SFSymbol(SharedString),
     /// Script Kit's embedded icons
@@ -56,10 +56,10 @@ impl IconRef {
                 let lucide = sf_symbol_to_lucide(name.as_ref());
                 lucide.map(IconRef::Lucide)
             }
-            IconRef::AppBundle(_) => Some(IconRef::Lucide(gpui_component::IconName::Frame)),
-            IconRef::Url(_) => Some(IconRef::Lucide(gpui_component::IconName::ExternalLink)),
-            IconRef::File(_) => Some(IconRef::Lucide(gpui_component::IconName::File)),
-            IconRef::AssetSvg(_) => Some(IconRef::Lucide(gpui_component::IconName::File)),
+            IconRef::AppBundle(_) => Some(IconRef::Lucide(crate::icons::LucideIcon::Frame)),
+            IconRef::Url(_) => Some(IconRef::Lucide(crate::icons::LucideIcon::ExternalLink)),
+            IconRef::File(_) => Some(IconRef::Lucide(crate::icons::LucideIcon::File)),
+            IconRef::AssetSvg(_) => Some(IconRef::Lucide(crate::icons::LucideIcon::File)),
             IconRef::Lucide(_) | IconRef::Embedded(_) => None,
         }
     }
@@ -75,40 +75,40 @@ impl IconRef {
 }
 
 /// Map SF Symbol names to Lucide equivalents
-fn sf_symbol_to_lucide(name: &str) -> Option<gpui_component::IconName> {
+fn sf_symbol_to_lucide(name: &str) -> Option<crate::icons::LucideIcon> {
     match name {
-        "gear" | "gearshape" | "gearshape.fill" => Some(gpui_component::IconName::Settings),
-        "star" | "star.fill" => Some(gpui_component::IconName::Star),
-        "trash" | "trash.fill" => Some(gpui_component::IconName::Delete),
-        "doc" | "doc.fill" => Some(gpui_component::IconName::File),
-        "folder" | "folder.fill" => Some(gpui_component::IconName::Folder),
-        "magnifyingglass" => Some(gpui_component::IconName::Search),
-        "plus" => Some(gpui_component::IconName::Plus),
-        "minus" => Some(gpui_component::IconName::Minus),
-        "xmark" => Some(gpui_component::IconName::Close),
-        "checkmark" => Some(gpui_component::IconName::Check),
-        "arrow.up" => Some(gpui_component::IconName::ArrowUp),
-        "arrow.down" => Some(gpui_component::IconName::ArrowDown),
-        "arrow.left" => Some(gpui_component::IconName::ArrowLeft),
-        "arrow.right" => Some(gpui_component::IconName::ArrowRight),
-        "chevron.up" => Some(gpui_component::IconName::ChevronUp),
-        "chevron.down" => Some(gpui_component::IconName::ChevronDown),
-        "chevron.left" => Some(gpui_component::IconName::ChevronLeft),
-        "chevron.right" => Some(gpui_component::IconName::ChevronRight),
-        "bell" | "bell.fill" => Some(gpui_component::IconName::Bell),
-        "person" | "person.fill" => Some(gpui_component::IconName::User),
-        "globe" => Some(gpui_component::IconName::Globe),
-        "calendar" => Some(gpui_component::IconName::Calendar),
-        "eye" | "eye.fill" => Some(gpui_component::IconName::Eye),
-        "eye.slash" | "eye.slash.fill" => Some(gpui_component::IconName::EyeOff),
-        "info.circle" | "info.circle.fill" => Some(gpui_component::IconName::Info),
-        "line.3.horizontal" => Some(gpui_component::IconName::Menu),
-        _ => Some(gpui_component::IconName::File), // Generic fallback
+        "gear" | "gearshape" | "gearshape.fill" => Some(crate::icons::LucideIcon::Settings),
+        "star" | "star.fill" => Some(crate::icons::LucideIcon::Star),
+        "trash" | "trash.fill" => Some(crate::icons::LucideIcon::Delete),
+        "doc" | "doc.fill" => Some(crate::icons::LucideIcon::File),
+        "folder" | "folder.fill" => Some(crate::icons::LucideIcon::Folder),
+        "magnifyingglass" => Some(crate::icons::LucideIcon::Search),
+        "plus" => Some(crate::icons::LucideIcon::Plus),
+        "minus" => Some(crate::icons::LucideIcon::Minus),
+        "xmark" => Some(crate::icons::LucideIcon::Close),
+        "checkmark" => Some(crate::icons::LucideIcon::Check),
+        "arrow.up" => Some(crate::icons::LucideIcon::ArrowUp),
+        "arrow.down" => Some(crate::icons::LucideIcon::ArrowDown),
+        "arrow.left" => Some(crate::icons::LucideIcon::ArrowLeft),
+        "arrow.right" => Some(crate::icons::LucideIcon::ArrowRight),
+        "chevron.up" => Some(crate::icons::LucideIcon::ChevronUp),
+        "chevron.down" => Some(crate::icons::LucideIcon::ChevronDown),
+        "chevron.left" => Some(crate::icons::LucideIcon::ChevronLeft),
+        "chevron.right" => Some(crate::icons::LucideIcon::ChevronRight),
+        "bell" | "bell.fill" => Some(crate::icons::LucideIcon::Bell),
+        "person" | "person.fill" => Some(crate::icons::LucideIcon::User),
+        "globe" => Some(crate::icons::LucideIcon::Globe),
+        "calendar" => Some(crate::icons::LucideIcon::Calendar),
+        "eye" | "eye.fill" => Some(crate::icons::LucideIcon::Eye),
+        "eye.slash" | "eye.slash.fill" => Some(crate::icons::LucideIcon::EyeOff),
+        "info.circle" | "info.circle.fill" => Some(crate::icons::LucideIcon::Info),
+        "line.3.horizontal" => Some(crate::icons::LucideIcon::Menu),
+        _ => Some(crate::icons::LucideIcon::File), // Generic fallback
     }
 }
 
-impl From<gpui_component::IconName> for IconRef {
-    fn from(icon: gpui_component::IconName) -> Self {
+impl From<crate::icons::LucideIcon> for IconRef {
+    fn from(icon: crate::icons::LucideIcon) -> Self {
         IconRef::Lucide(icon)
     }
 }
@@ -119,7 +119,7 @@ impl From<EmbeddedIcon> for IconRef {
     }
 }
 
-// Manual Debug impl since gpui_component::IconName doesn't derive Debug
+// Manual Debug impl since crate::icons::LucideIcon doesn't derive Debug
 impl fmt::Debug for IconRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

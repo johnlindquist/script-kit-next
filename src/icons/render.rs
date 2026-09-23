@@ -77,7 +77,7 @@ fn resolve_color(
 
 /// Render a Lucide icon from gpui_component
 fn render_lucide(
-    icon: gpui_component::IconName,
+    icon: crate::icons::LucideIcon,
     size_px: f32,
     color: Option<Hsla>,
     opacity: f32,
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn icon_view_builder() {
-        let view = IconView::new(gpui_component::IconName::Check)
+        let view = IconView::new(crate::icons::LucideIcon::Check)
             .size(IconSize::Large)
             .color(IconColor::Token(ColorToken::Accent))
             .opacity(0.8);

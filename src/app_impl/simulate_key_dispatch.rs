@@ -472,7 +472,7 @@ impl ScriptListApp {
                                     view.gpui_input_state.update(ctx, |state, cx| {
                                         state.set_value("~/".to_string(), window, cx);
                                         let len = "~/".len();
-                                        state.set_selection(len, len, window, cx);
+                                        state.set_selection_focused(len, len, window, cx);
                                     });
                                     view.suppress_filter_events = false;
                                 } else if !has_shift
@@ -618,7 +618,7 @@ impl ScriptListApp {
                                     view.gpui_input_state.update(ctx, |state, cx| {
                                         state.set_value("~/".to_string(), window, cx);
                                         let len = "~/".len();
-                                        state.set_selection(len, len, window, cx);
+                                        state.set_selection_focused(len, len, window, cx);
                                     });
                                     view.suppress_filter_events = false;
                                 } else if !has_shift

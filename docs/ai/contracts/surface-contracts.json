@@ -1093,7 +1093,7 @@
         "Live providers, credentials, network and operator storage"
       ],
       "appViewVariant": "ScriptList",
-      "presentationOwner": "vendor/gpui-component/crates/ui/src/root.rs::Root::render_dialog_layer",
+      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
       "expectedSemanticSurface": "scriptList",
       "requiredSemanticIds": [
         "root-dialog:*"
@@ -1117,7 +1117,7 @@
         "Live providers, credentials, network and operator storage"
       ],
       "appViewVariant": "ScriptList",
-      "presentationOwner": "vendor/gpui-component/crates/ui/src/root.rs::Root::render_notification_layer",
+      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
       "expectedSemanticSurface": "scriptList",
       "requiredSemanticIds": [
         "root-notification:*"
@@ -1869,7 +1869,7 @@
         "System clipboard, device access, TCC and external-app insertion",
         "Live providers, credentials, network and operator storage"
       ],
-      "presentationOwner": "vendor/gpui-component/crates/ui/src/root.rs::Root::render_dialog_layer",
+      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
       "expectedSemanticSurface": "notes",
       "requiredSemanticIds": [
         "root-dialog:*"
@@ -1892,7 +1892,7 @@
         "System clipboard, device access, TCC and external-app insertion",
         "Live providers, credentials, network and operator storage"
       ],
-      "presentationOwner": "vendor/gpui-component/crates/ui/src/root.rs::Root::render_notification_layer",
+      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
       "expectedSemanticSurface": "notes",
       "requiredSemanticIds": [
         "root-notification:*"
@@ -2936,8 +2936,8 @@
         "src/main_sections/render_impl.rs::WarningBanner",
         "src/render_script_list",
         "src/render_script_list/mod.rs::log_panel",
-        "vendor/gpui-component/crates/ui/src/root.rs::Root::render_dialog_layer",
-        "vendor/gpui-component/crates/ui/src/root.rs::Root::render_notification_layer"
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -3600,8 +3600,8 @@
       ],
       "presentationOwners": [
         "src/notes/window/render.rs",
-        "vendor/gpui-component/crates/ui/src/root.rs::Root::render_dialog_layer",
-        "vendor/gpui-component/crates/ui/src/root.rs::Root::render_notification_layer"
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer"
       ],
       "proofBoundary": "owned-production-runtime"
     },

@@ -20,7 +20,7 @@ use gpui::{
 };
 #[cfg(test)]
 use gpui_component::input::Position;
-use gpui_component::input::{IndentInline, Input, InputEvent, InputState, OutdentInline};
+use gpui_component::input::{IndentInline, InputEvent, OutdentInline};
 use std::sync::Arc;
 /// Convert a character offset to a byte offset.
 ///
@@ -121,7 +121,7 @@ pub struct EditorPrompt {
     pub id: String,
 
     // gpui-component editor state (created on first render)
-    editor_state: Option<Entity<InputState>>,
+    editor_state: Option<Entity<gpui_component::input::EditorState>>,
 
     // Pending initialization data (consumed on first render)
     pending_init: Option<PendingInit>,
@@ -372,11 +372,12 @@ impl EditorPrompt {
         // Enable tab_navigation mode if we're in snippet mode (Tab moves between tabstops)
         let in_snippet = self.snippet_state.is_some();
         let editor_state = cx.new(|cx| {
-            InputState::new(window, cx)
-                .code_editor(&pending.language) // Sets up syntax highlighting
+            gpui_component::input::EditorState::new(window, cx)
+                .language(pending.language.clone()) // Sets up syntax highlighting
                 .searchable(true) // Enable Cmd+F find/replace
                 .line_number(false) // No line numbers - cleaner UI
                 .soft_wrap(false) // Code should not wrap by default
+                .folding(false) // gpui-kit folds by default; keep the fork's gutter-free look
                 .default_value(pending.content)
                 .tab_navigation(in_snippet) // Propagate Tab when in snippet mode
         });
@@ -387,15 +388,13 @@ impl EditorPrompt {
                 InputEvent::Change => {
                     cx.notify();
                 }
-                InputEvent::PressEnter { secondary } => {
+                InputEvent::PressEnter { secondary, .. } => {
                     // Input owns plain Enter/newlines and consumes Cmd+Enter before
                     // the parent key handler, so submit through its emitted event.
                     if *secondary && !this.suppress_keys {
                         this.submit(cx);
                     }
                 }
-                InputEvent::PressTab { .. } => {}
-                InputEvent::SelectionChange => {}
                 InputEvent::Focus => {
                     logging::log("EDITOR", "Editor focused");
                 }
@@ -606,7 +605,7 @@ impl EditorPrompt {
             usize,
             String,
         ) = editor_state.update(cx, |input_state, _cx| {
-            let selection = input_state.selection();
+            let selection = input_state.selected_range();
             let text = input_state.value();
 
             // Use cursor position (selection.end when collapsed, or end of selection)
@@ -790,7 +789,7 @@ impl EditorPrompt {
                 ),
             );
 
-            input_state.set_selection(start_bytes, end_bytes, window, cx);
+            input_state.set_selection_focused(start_bytes, end_bytes, window, cx);
         });
 
         // Update the last selection range and check for choices
@@ -841,7 +840,7 @@ impl EditorPrompt {
     }
 
     /// Exit snippet mode and restore normal Tab behavior
-    fn exit_snippet_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn exit_snippet_mode(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if self.snippet_state.is_some() {
             logging::log("EDITOR", "Exiting snippet mode");
             self.snippet_state = None;
@@ -851,7 +850,7 @@ impl EditorPrompt {
             // Disable tab navigation mode so Tab inserts tabs again
             if let Some(ref editor_state) = self.editor_state {
                 editor_state.update(cx, |state, cx| {
-                    state.set_tab_navigation(false, window, cx);
+                    state.set_tab_navigation(false, cx);
                 });
             }
         }
@@ -1225,7 +1224,17 @@ impl Render for EditorPrompt {
                     // No padding - editor fills the space completely
                     // The Input component from gpui-component
                     // appearance(false) removes border styling for seamless integration
-                    .child(Input::new(editor_state).size_full().appearance(false)),
+                    .child(
+                        gpui_component::input::Editor::new(editor_state)
+                            .size_full()
+                            .appearance(false)
+                            .line_height(gpui::rems(
+                                crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_LINE_HEIGHT_REMS,
+                            ))
+                            // Keep the fork's Medium inset (gpui-kit editors have none).
+                            .px(px(crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_X_PX))
+                            .py(px(crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_Y_PX)),
+                    ),
             );
         } else {
             // Show loading placeholder while initializing

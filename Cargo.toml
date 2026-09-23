@@ -6,20 +6,6 @@ members = [
     "crates/sk-protocol",
     "crates/sk-storage",
 ]
-exclude = [
-    "vendor/gpui-component/crates/macros",
-    "vendor/gpui-component/crates/story",
-    "vendor/gpui-component/crates/ui",
-    "vendor/gpui-component/crates/assets",
-    "vendor/gpui-component/crates/webview",
-    "vendor/gpui-component/examples/app_assets",
-    "vendor/gpui-component/examples/hello_world",
-    "vendor/gpui-component/examples/input",
-    "vendor/gpui-component/examples/window_title",
-    "vendor/gpui-component/examples/dialog_overlay",
-    "vendor/gpui-component/examples/webview",
-    "vendor/gpui-component/examples/system_monitor",
-]
 resolver = "2"
 
 [workspace.package]
@@ -27,10 +13,6 @@ publish = false
 edition = "2024"
 
 [workspace.dependencies]
-gpui-component = { path = "vendor/gpui-component/crates/ui", version = "0.5.0" }
-gpui-component-macros = { path = "vendor/gpui-component/crates/macros", version = "0.5.0" }
-gpui-component-assets = { path = "vendor/gpui-component/crates/assets", version = "0.5.0" }
-story = { path = "vendor/gpui-component/crates/story" }
 # GPUI is the gpui-pre 0.3.6 snapshot (zed@bcf6582) published with gpui-kit;
 # Script Kit patches live in vendor/gpui* and are applied via [patch.crates-io].
 gpui = { package = "gpui-pre", version = "=0.3.6", features = ["test-support"] }
@@ -197,21 +179,19 @@ open = "5"
 # Math expression evaluation for calculate fallback
 meval = "0.2"
 
-# gpui-component - Community UI component library for GPUI (FORKED)
-# Local vendored fork keeps Script Kit-specific input APIs while adapting to gpui rev 03416097.
-gpui-component = { path = "vendor/gpui-component/crates/ui", package = "gpui-component", features = ["fidelity"] }
+# gpui-component = gpui-kit (Longbridge gpui-component 0.6.6). Script Kit
+# extensions are patched into vendor/gpui-kit (see vendor/gpui-kit/SCRIPT_KIT_PATCHES.md).
+gpui-component = { version = "=0.6.6", features = ["tree-sitter-languages", "test-support"] }
 # gpui-kit (Longbridge gpui-component 0.6) and gpui-ai, both linked against the
 # single patched gpui-pre above. gpui-ai reads gpui-kit's active theme, which
-# src/theme/gpui_kit_bridge.rs keeps synced from the Script Kit theme. The
-# dependency key renames the crate to `gpui_kit_component` so it can coexist
-# with the forked 0.5 `gpui_component` while surfaces migrate.
-gpui-kit-component = { package = "gpui-component", version = "=0.6.6" }
-gpui-kit-assets = { version = "=0.6.6" }
+# src/theme/gpui_kit_bridge.rs keeps synced from the Script Kit theme.
 gpui-ai = { version = "=0.8.0" }
 # Embedded Lucide icon SVGs for gpui-component's IconName paths ("icons/monitor.svg").
 # Registered as the app AssetSource fallback in src/utils/assets.rs — without an
 # asset source, every svg().path(...) icon silently renders nothing.
-gpui-component-assets = { path = "vendor/gpui-component/crates/assets", package = "gpui-component-assets" }
+gpui-component-assets = { package = "gpui-kit-assets", version = "=0.6.6" }
+# Script Kit's Lucide SVG catalog (legacy names scripts/themes accept).
+script-kit-lucide-assets = { path = "vendor/script-kit-lucide-assets" }
 # Embed Script Kit's own assets/icons/*.svg (EmbeddedIcon paths) into the binary.
 # debug-embed: embed assets in debug builds too, so dev/driver binaries
 # exercise the exact embedded-asset loading the released .app uses
@@ -238,7 +218,7 @@ tokio-util = { version = "0.7", features = ["compat"] }
 
 # Secure temporary file creation (moved from dev-dependencies for production use)
 tempfile = "3"
-tree-sitter = "0.25"
+tree-sitter = "0.26"
 tree-sitter-typescript = "0.23.2"
 chrono-humanize = "0.2"
 
@@ -268,6 +248,12 @@ gpui-pre-macos = { path = "vendor/gpui_macos" }
 gpui-pre-apple = { path = "vendor/gpui_apple" }
 gpui-pre-platform = { path = "vendor/gpui_platform" }
 gpui-pre-macros = { path = "vendor/gpui_macros" }
+# gpui-kit 0.6.6 with Script Kit's component extensions (ported from the former
+# gpui-component 0.5 fork) so gpui-ai and the app share one patched library.
+gpui-component = { path = "vendor/gpui-kit/gpui-component" }
+gpui-base = { path = "vendor/gpui-kit/gpui-base" }
+gpui-component-macros = { path = "vendor/gpui-kit/gpui-component-macros" }
+gpui-kit-assets = { path = "vendor/gpui-kit/gpui-kit-assets" }
 
 [features]
 default = ["ocr"]
@@ -291,7 +277,7 @@ ocr = []
 # Run with: cargo build --features perf
 perf = []
 [dev-dependencies]
-tree-sitter-highlight = "0.25.4"
+tree-sitter-highlight = "0.26"
 temp-env = "0.3.6"
 jsonschema = { version = "0.29.1", default-features = false }
 
@@ -324,6 +310,14 @@ opt-level = 2
 [profile.dev.package.gpui-pre-platform]
 opt-level = 2
 
+# gpui-kit's headless engine (inputs, text, scrollbars) and GPUI's Apple
+# layer are path workspace members too, so they need explicit entries.
+[profile.dev.package.gpui-base]
+opt-level = 2
+
+[profile.dev.package.gpui-pre-apple]
+opt-level = 2
+
 [profile.test]
 debug = 1
 incremental = true
@@ -350,6 +344,12 @@ opt-level = 0
 opt-level = 0
 
 [profile.test.package.gpui-pre-platform]
+opt-level = 0
+
+[profile.test.package.gpui-base]
+opt-level = 0
+
+[profile.test.package.gpui-pre-apple]
 opt-level = 0
 
 [profile.release]

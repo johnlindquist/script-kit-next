@@ -34,6 +34,10 @@ impl FidelityScrollbarHandle {
 }
 
 impl gpui_component::scroll::ScrollbarHandle for FidelityScrollbarHandle {
+    fn viewport_bounds(&self) -> gpui::Bounds<gpui::Pixels> {
+        gpui::Bounds::new(point(px(0.), px(0.)), size(px(100.), px(120.)))
+    }
+
     fn offset(&self) -> gpui::Point<gpui::Pixels> {
         self.offset.get()
     }
@@ -76,7 +80,7 @@ impl Render for FidelityScrollbarView {
                 .h(px(120.))
                 .child(
                     gpui_component::scroll::Scrollbar::vertical(&self.scrollbar_handle)
-                        .scrollbar_show(gpui_component::scroll::ScrollbarShow::Hover)
+                        .mode(gpui_component::scroll::ScrollbarMode::Hover)
                         .fidelity_scope("agent-chat.test.scrollbar"),
                 ),
         )
@@ -377,9 +381,8 @@ fn fidelity_textview_capture_hashes_exact_source_without_retaining_it(cx: &mut T
     let window = cx.update(|cx| {
         crate::theme::gpui_kit_bridge::init_component_libraries(cx);
         cx.open_window(Default::default(), |_, cx| {
-            let state = cx.new(|cx| {
-                gpui_component::text::TextViewState::markdown_for_fidelity_test(SOURCE, cx)
-            });
+            let state =
+                cx.new(|cx| gpui_component::text::TextViewState::markdown_immediate(SOURCE, cx));
             cx.new(|_| FidelityTextView { state })
         })
         .unwrap()

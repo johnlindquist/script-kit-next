@@ -160,9 +160,6 @@ mod emoji_picker;
 #[path = "source_audits/paste_parity.rs"]
 mod paste_parity;
 
-#[path = "source_audits/dialog_tab_navigation.rs"]
-mod dialog_tab_navigation;
-
 #[path = "source_audits/no_popup_confirm_callers.rs"]
 mod no_popup_confirm_callers;
 

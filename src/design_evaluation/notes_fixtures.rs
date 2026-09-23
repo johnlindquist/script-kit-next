@@ -184,7 +184,7 @@ pub(crate) fn mount_notes_fixture_presentation(
     parent_handle: AnyWindowHandle,
     cx: &mut App,
 ) -> Result<crate::protocol::AutomationWindowInfo> {
-    use gpui::{ParentElement as _, Styled as _};
+    use gpui::Styled as _;
     use gpui_component::{Root, WindowExt as _};
     anyhow::ensure!(
         NOTES_AUXILIARY_FIXTURE_IDS.contains(&fixture_id),
@@ -212,10 +212,11 @@ pub(crate) fn mount_notes_fixture_presentation(
                 ))
             }
             "notes.root-dialog" => {
-                window.open_dialog(cx, |dialog, _, _| {
+                // gpui-kit: a confirm (OK + Cancel) dialog is an AlertDialog.
+                window.open_alert_dialog(cx, |dialog, _, _| {
                     dialog
                         .title("Review note")
-                        .child("Dismiss this dialog to continue editing the owned note.")
+                        .description("Dismiss this dialog to continue editing the owned note.")
                         .confirm()
                 });
                 anyhow::ensure!(

@@ -37,7 +37,7 @@ fn live_gpui_target_identity_from_main(
                 .checked_add(app.gpui_input_state.read(cx).revision())
                 .and_then(|revision| revision.checked_add(app.arg_input.revision()))
                 .and_then(|revision| revision.checked_add(app.owned_child_semantic_revision(cx)))
-                .and_then(|revision| revision.checked_add(root.layer_revision()))
+                .and_then(|revision| revision.checked_add(root.layer_revision_with(cx)))
                 .context("main_data_revision_exhausted")?;
             (
                 facts.surface_generation,

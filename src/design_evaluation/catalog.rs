@@ -241,11 +241,11 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         ),
         "main-overlay.root-dialog" => (
             "ScriptList",
-            "vendor/gpui-component/crates/ui/src/root.rs::Root::render_dialog_layer",
+            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
         ),
         "main-overlay.root-notification" => (
             "ScriptList",
-            "vendor/gpui-component/crates/ui/src/root.rs::Root::render_notification_layer",
+            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
         ),
         "main-overlay.warning" => (
             "ScriptList",
@@ -455,14 +455,14 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "notesAuxiliary",
             "notes",
             "src/notes/window/window_ops.rs",
-            "vendor/gpui-component/crates/ui/src/root.rs::Root::render_dialog_layer",
+            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
             Some("notes.editor"),
         ),
         "notes.root-notification" => (
             "notesAuxiliary",
             "notes",
             "src/notes/window/window_ops.rs",
-            "vendor/gpui-component/crates/ui/src/root.rs::Root::render_notification_layer",
+            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
             Some("notes.editor"),
         ),
         "agent-chat.detached.retryable-failure" => (
@@ -595,11 +595,9 @@ mod tests {
         for item in &catalogue {
             assert_eq!(item.proof_boundary, "owned-production-runtime");
             assert!(item.owner.starts_with("src/"));
-            assert!(item
-                .presentation_owner
-                .as_ref()
-                .is_some_and(|owner| owner.starts_with("src/")
-                    || owner.starts_with("vendor/gpui-component/")));
+            assert!(item.presentation_owner.as_ref().is_some_and(|owner| owner
+                .starts_with("src/")
+                || owner.starts_with("vendor/gpui-kit/")));
             assert!(!item.native_exclusions.is_empty());
             if let Some(parent) = &item.parent_fixture_id {
                 assert!(fixture(parent).is_some());

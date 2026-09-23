@@ -111,7 +111,7 @@ impl NotesApp {
 
         let (value, selection) = {
             let editor = self.editor_state.read(cx);
-            (editor.value().to_string(), editor.selection())
+            (editor.value().to_string(), editor.selected_range())
         };
 
         let Some(line) = crate::notes::ghost::current_line_prefix(&value, selection.clone()) else {
@@ -277,9 +277,9 @@ impl NotesApp {
             }
             if is_key_tab(key) && !modifiers.platform && !modifiers.control && !modifiers.alt {
                 if modifiers.shift {
-                    window.focus_prev_in_dialog(cx);
+                    window.focus_prev(cx);
                 } else {
-                    window.focus_next_in_dialog(cx);
+                    window.focus_next(cx);
                 }
                 cx.stop_propagation();
                 return;

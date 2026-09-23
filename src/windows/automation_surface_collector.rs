@@ -1046,7 +1046,8 @@ pub fn surface_revision_facts(
             let (entity, handle) =
                 crate::notes::get_notes_app_entity_and_handle_for_generation(generation, cx)?;
             let layer_revision =
-                read_window_root(handle, window, cx, |root, _| root.layer_revision()).ok()?;
+                read_window_root(handle, window, cx, |root, cx| root.layer_revision_with(cx))
+                    .ok()?;
             let view = entity.read(cx);
             Some((
                 view.document_revision().checked_add(layer_revision)?,

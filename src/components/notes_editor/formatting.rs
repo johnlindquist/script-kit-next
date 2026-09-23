@@ -50,12 +50,12 @@ impl NotesEditor {
 
         self.input_state.update(cx, |state, cx| {
             let value = state.value().to_string();
-            let selection = state.selection();
+            let selection = state.selected_range();
             let (replacement, new_selection) =
                 Self::formatting_replacement(&value, selection, prefix, suffix);
 
             state.replace(&replacement, window, cx);
-            state.set_selection(new_selection.start, new_selection.end, window, cx);
+            state.set_selection_focused(new_selection.start, new_selection.end, window, cx);
         });
 
         let _ = current_value;

@@ -347,7 +347,14 @@ impl ScriptListApp {
                         }
                     }
                 }
-                InputEvent::PressTab { secondary } => {
+            }
+        });
+        // Tab navigation and caret moves arrive on the Script Kit extension
+        // event stream (gpui-kit's `InputEvent` is matched exhaustively by
+        // gpui-ai, so extensions cannot live there).
+        let gpui_input_ext_subscription = cx.subscribe_in(&gpui_input_state, window, {
+            move |this, _, event: &gpui_component::input::ScriptKitInputEvent, window, cx| match event {
+                gpui_component::input::ScriptKitInputEvent::PressTab { secondary } => {
                     if matches!(this.current_view, AppView::ScriptList)
                         && this.menu_syntax_capture_form_owns_input()
                     {
@@ -358,7 +365,9 @@ impl ScriptListApp {
                         }
                     }
                 }
-                InputEvent::SelectionChange => this.note_main_input_changed(cx),
+                gpui_component::input::ScriptKitInputEvent::SelectionChange => {
+                    this.note_main_input_changed(cx)
+                }
             }
         });
 
@@ -464,7 +473,7 @@ impl ScriptListApp {
             ghost_llm_cache: std::collections::VecDeque::new(),
             launcher_context,
             launcher_context_generation: 0,
-            gpui_input_subscriptions: vec![gpui_input_subscription],
+            gpui_input_subscriptions: vec![gpui_input_subscription, gpui_input_ext_subscription],
             bounds_subscription: None,     // Set later after window setup
             appearance_subscription: None, // Set later after window setup
             frontmost_menu_subscription_task: None,
@@ -1015,7 +1024,7 @@ impl ScriptListApp {
                                         this.gpui_input_state.update(cx, |state, cx| {
                                             state.set_value(parent_path.clone(), window, cx);
                                             let len = parent_path.len();
-                                            state.set_selection(len, len, window, cx);
+                                            state.set_selection_focused(len, len, window, cx);
                                         });
                                         cx.notify();
                                     } else {
@@ -1182,7 +1191,7 @@ impl ScriptListApp {
                                 this.gpui_input_state.update(cx, |state, cx| {
                                     state.set_value("~/".to_string(), window, cx);
                                     let len = "~/".len();
-                                    state.set_selection(len, len, window, cx);
+                                    state.set_selection_focused(len, len, window, cx);
                                 });
                                 this.suppress_filter_events = false;
                                 cx.stop_propagation();

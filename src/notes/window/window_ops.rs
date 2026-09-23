@@ -883,7 +883,7 @@ fn open_notes_window_with_close_behavior(
                 app.editor_state.update(cx, |state, inner_cx| {
                     state.focus(window, inner_cx);
                     // Move cursor to end of text (same as select_note behavior)
-                    state.set_selection(content_len, content_len, window, inner_cx);
+                    state.set_selection_focused(content_len, content_len, window, inner_cx);
                 });
 
                 if std::env::var("SCRIPT_KIT_TEST_NOTES_HOVERED")

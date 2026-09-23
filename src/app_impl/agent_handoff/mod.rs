@@ -3845,7 +3845,7 @@ impl ScriptListApp {
         let placeholder = placeholder.to_string();
         self.gpui_input_state.update(cx, |input, cx| {
             input.set_value(value, window, cx);
-            input.set_selection(selection.start, selection.end, window, cx);
+            input.set_selection_focused(selection.start, selection.end, window, cx);
             input.set_placeholder(placeholder, window, cx);
         });
         self.focused_input = state.focused_input;
@@ -4223,7 +4223,7 @@ impl ScriptListApp {
     pub(super) fn agent_chat_input_return_state(&self, cx: &App) -> AgentChatInputReturnState {
         AgentChatInputReturnState {
             value: self.filter_text.clone(),
-            selection: self.gpui_input_state.read(cx).selection(),
+            selection: self.gpui_input_state.read(cx).selected_range(),
             focused_input: self.focused_input,
             pending_focus: self.pending_focus,
         }

@@ -184,15 +184,29 @@ fn render_menu_syntax_form_field(
     design_variant: DesignVariant,
     target: &str,
     field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
-    input: Option<Entity<gpui_component::input::InputState>>,
+    input: Option<gpui_component::input::AnyInputState>,
 ) -> AnyElement {
     let colors = crate::components::FormFieldColors::from_theme(theme);
     let metrics = crate::components::FormFieldMetrics::from_theme_and_design(theme, design_variant);
     let shell_spec = crate::components::menu_syntax_form_field_shell_spec(target, field, metrics);
     let shell_style = crate::components::resolve_form_field_shell_style(&shell_spec, colors);
 
-    let body = if let Some(input) = input {
-        let input_element = gpui_component::input::Input::new(&input)
+    let body = if let Some(gpui_component::input::AnyInputState::Textarea(textarea)) = input.as_ref() {
+        // Multiline fields are gpui-kit `Textarea`s (multi-line is a type).
+        gpui_component::input::Textarea::new(textarea)
+            .w_full()
+            .line_height(px(metrics.input_line_height))
+            .text_size(px(metrics.input_font_size))
+            .px(px(0.0))
+            .py(px(0.0))
+            .appearance(false)
+            .bordered(false)
+            .disabled(shell_spec.disabled)
+            .min_h(px(shell_spec.min_height))
+            .max_h(px(shell_spec.max_height.unwrap_or(shell_spec.min_height)))
+            .into_any_element()
+    } else if let Some(input) = input.as_ref().and_then(|input| input.as_input()) {
+        let input_element = gpui_component::input::Input::new(input)
             .w_full()
             .line_height(px(metrics.input_line_height))
             .px(px(0.0))
@@ -246,7 +260,7 @@ fn render_menu_syntax_form(
     theme: &crate::theme::Theme,
     design_variant: DesignVariant,
     form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
-    inputs: &[(String, Entity<gpui_component::input::InputState>)],
+    inputs: &[(String, gpui_component::input::AnyInputState)],
     field_bounds: std::rc::Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
     _cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
@@ -282,7 +296,7 @@ fn render_menu_syntax_form(
 }
 
 struct MenuSyntaxMainHintFormContext<'a> {
-    inputs: &'a [(String, Entity<gpui_component::input::InputState>)],
+    inputs: &'a [(String, gpui_component::input::AnyInputState)],
     field_bounds: std::rc::Rc<std::cell::RefCell<Vec<gpui::Bounds<gpui::Pixels>>>>,
 }
 

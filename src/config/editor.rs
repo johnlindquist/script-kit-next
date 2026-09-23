@@ -47,7 +47,7 @@ fn find_top_level_pair<'a>(
     property_name: &str,
 ) -> Option<tree_sitter::Node<'a>> {
     (0..object.named_child_count())
-        .filter_map(|i| object.named_child(i))
+        .filter_map(|i| object.named_child(i as u32))
         .find(|pair| {
             if pair.kind() != "pair" {
                 return false;
@@ -171,7 +171,7 @@ pub fn contains_property(content: &str, property_name: &str) -> bool {
 
     // Check only top-level pairs (direct children of the export object)
     for i in 0..object.named_child_count() {
-        if let Some(pair) = object.named_child(i) {
+        if let Some(pair) = object.named_child(i as u32) {
             if pair.kind() == "pair" {
                 if let Some(key) = pair.child_by_field_name("key") {
                     let key_text = &content[key.start_byte()..key.end_byte()];
@@ -215,7 +215,7 @@ fn parse_typescript(content: &str) -> Result<tree_sitter::Tree, String> {
 /// Find the `export_statement` node in the root of the AST.
 fn find_export_statement(root: tree_sitter::Node) -> Option<tree_sitter::Node> {
     (0..root.named_child_count())
-        .filter_map(|i| root.named_child(i))
+        .filter_map(|i| root.named_child(i as u32))
         .find(|n| n.kind() == "export_statement")
 }
 
@@ -230,12 +230,12 @@ fn find_object_in_export<'a>(
     _content: &str,
 ) -> Option<tree_sitter::Node<'a>> {
     for i in 0..export_node.named_child_count() {
-        if let Some(child) = export_node.named_child(i) {
+        if let Some(child) = export_node.named_child(i as u32) {
             match child.kind() {
                 "satisfies_expression" | "as_expression" => {
                     // The object is the first child of kind "object"
                     for j in 0..child.named_child_count() {
-                        if let Some(grandchild) = child.named_child(j) {
+                        if let Some(grandchild) = child.named_child(j as u32) {
                             if grandchild.kind() == "object" {
                                 return Some(grandchild);
                             }
@@ -267,7 +267,7 @@ fn collect_ast_errors(node: tree_sitter::Node, content: &str, out: &mut String) 
         ));
     }
     for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
+        if let Some(child) = node.child(i as u32) {
             collect_ast_errors(child, content, out);
         }
     }
@@ -293,7 +293,7 @@ fn find_object_end(content: &str) -> Option<InsertInfo> {
 
     // Collect pair children (actual properties, not comments)
     let pairs: Vec<_> = (0..object.named_child_count())
-        .filter_map(|i| object.named_child(i))
+        .filter_map(|i| object.named_child(i as u32))
         .filter(|n| n.kind() == "pair")
         .collect();
 
@@ -488,7 +488,9 @@ pub(crate) fn parse_static_config(content: &str) -> Result<serde_json::Value, St
     }
     let mut exports = 0;
     for index in 0..root.named_child_count() {
-        let child = root.named_child(index).ok_or("missing syntax node")?;
+        let child = root
+            .named_child(index as u32)
+            .ok_or("missing syntax node")?;
         match child.kind() {
             "import_statement" | "comment" | "type_alias_declaration" | "interface_declaration" => {
             }
@@ -501,7 +503,7 @@ pub(crate) fn parse_static_config(content: &str) -> Result<serde_json::Value, St
     }
     let export = find_export_statement(root).ok_or("missing default export")?;
     if !(0..export.child_count())
-        .filter_map(|i| export.child(i))
+        .filter_map(|i| export.child(i as u32))
         .any(|node| node.kind() == "default")
     {
         return Err("static config requires a default export".into());
@@ -556,7 +558,9 @@ fn decode_static_config_value(
             let mut object = serde_json::Map::new();
             let mut keys = std::collections::BTreeSet::new();
             for index in 0..node.named_child_count() {
-                let pair = node.named_child(index).ok_or("missing object member")?;
+                let pair = node
+                    .named_child(index as u32)
+                    .ok_or("missing object member")?;
                 if pair.kind() == "comment" {
                     continue;
                 }
@@ -597,7 +601,7 @@ fn decode_static_config_value(
             let mut values = Vec::new();
             let mut needs_value = true;
             for index in 0..node.child_count() {
-                let child = node.child(index).ok_or("missing array member")?;
+                let child = node.child(index as u32).ok_or("missing array member")?;
                 match child.kind() {
                     "[" | "]" | "comment" => {}
                     "," if needs_value => {

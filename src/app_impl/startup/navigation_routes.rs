@@ -120,7 +120,7 @@ impl ScriptListApp {
         self.gpui_input_state.update(cx, |state, cx| {
             state.set_value(query.to_string(), window, cx);
             let len = query.len();
-            state.set_selection(len, len, window, cx);
+            state.set_selection_focused(len, len, window, cx);
         });
         self.suppress_filter_events = false;
     }

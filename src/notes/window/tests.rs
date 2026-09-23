@@ -241,7 +241,7 @@ fn test_notes_automation_set_input_places_cursor_at_end_for_ghost_prefix() {
         .find("state.set_value(text.clone(), window, inner_cx);")
         .expect("automation setter should write the requested text");
     let set_selection = INIT_SOURCE
-        .find("state.set_selection(text.len(), text.len(), window, inner_cx);")
+        .find("state.set_selection_focused(text.len(), text.len(), window, inner_cx);")
         .expect("automation setter should park cursor at the end for editor-like input");
 
     assert!(
@@ -285,26 +285,24 @@ fn test_notes_editor_disables_dynamic_code_editor_bottom_margin() {
         .find("register_markdown_highlighter();")
         .expect("shared notes markdown constructor should register highlighting");
     let code_editor_idx = COMPONENT_SOURCE
-        .find(".code_editor(\"markdown\")")
-        .expect("shared notes markdown constructor should enable markdown code editor mode");
+        .find(".language(\"markdown\")")
+        .expect("shared notes markdown constructor should enable the markdown editor language");
     assert!(
         highlighter_idx < code_editor_idx,
-        "Shared notes markdown editor should register highlighting before enabling markdown code editor mode"
+        "Shared notes markdown editor should register highlighting before selecting the markdown language"
     );
-    // Structural (order-based) check, not exact adjacency: builder calls may
-    // gain unrelated links between them (e.g. `.fidelity_scope(...)`), but
-    // the markdown editor must still disable the dynamic code-editor bottom
-    // margin somewhere after entering markdown code-editor mode.
-    let dynamic_margin_idx = COMPONENT_SOURCE
-        .find(".code_editor_dynamic_bottom_margin(false)")
+    // gpui-kit editors default to a half-viewport "scroll beyond last line"
+    // margin; the Notes editor must opt out (a large margin lingered after
+    // trailing lines were deleted).
+    let bottom_margin_idx = COMPONENT_SOURCE
+        .find(".scroll_beyond_last_line(Some(0))")
         .expect(
             "Shared notes markdown editor should not reserve a large code-editor bottom \
              scroll margin after trailing lines are deleted",
         );
     assert!(
-        code_editor_idx < dynamic_margin_idx,
-        "The dynamic bottom margin opt-out should apply to the markdown code editor \
-         (called after .code_editor(\"markdown\"))"
+        code_editor_idx < bottom_margin_idx,
+        "The bottom-margin opt-out should apply to the markdown editor"
     );
     assert!(
         INIT_SOURCE.contains("NotesEditor::new_markdown_pair("),

@@ -249,31 +249,15 @@ fn stdin_setfilter_runs_menu_syntax_popup_state_machine() {
 fn launcher_input_accents_power_syntax_prefixes() {
     let render = fs::read_to_string("src/render_script_list/mod.rs")
         .expect("Failed to read src/render_script_list/mod.rs");
-    let input_state = fs::read_to_string("vendor/gpui-component/crates/ui/src/input/state.rs")
-        .expect("Failed to read vendored input state");
-    let input_element = fs::read_to_string("vendor/gpui-component/crates/ui/src/input/element.rs")
-        .expect("Failed to read vendored input element");
 
     assert!(
         render.contains("input_spans_for_input_with_targets(")
             && render.contains("state.set_highlight_ranges_with_roles(input_highlight_ranges)"),
         "ScriptList input should replace the rendered menu-syntax input chip set every render tick"
     );
-    assert!(
-        input_state.contains("highlight_ranges: Vec<(Range<usize>, Hsla)>")
-            && input_state.contains("pub fn set_highlight_ranges"),
-        "the input component should expose plain-text highlight ranges"
-    );
-    assert!(
-        input_state.contains("pub fn set_highlight_ranges_with_roles")
-            && input_state.contains("pub fn clear_highlight_ranges"),
-        "the input component should replace and clear rendered chip ranges, including empty sets"
-    );
-    assert!(
-        input_element.contains("fn custom_highlight_styles")
-            && input_element.contains("state.highlight_ranges"),
-        "plain input highlight ranges should be converted into text runs"
-    );
+    // The highlight-range API (`set_highlight_ranges_with_roles`,
+    // `clear_highlight_ranges`) is a gpui-kit Script Kit patch the app calls,
+    // so its existence is compiler-enforced; painting is runtime-proven.
 }
 
 #[test]

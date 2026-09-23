@@ -3049,7 +3049,7 @@ impl ActionsDialog {
             .then(|| {
                 self.search_input.as_ref().map(|input| {
                     let input = input.read(cx);
-                    let selection = input.selection();
+                    let selection = input.selected_range();
                     serde_json::json!({
                         "owner": "gpuiComponentInputState",
                         "valueLength": input.value().chars().count(),

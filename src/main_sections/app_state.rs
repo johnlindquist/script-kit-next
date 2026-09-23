@@ -1263,7 +1263,7 @@ impl ScriptListApp {
     }
     pub(crate) fn note_main_input_changed(&mut self, cx: &gpui::App) {
         let input = self.gpui_input_state.read(cx);
-        let selection = input.selection();
+        let selection = input.selected_range();
         if self.main_revision_input_text != input.value().as_ref()
             || self.main_revision_input_selection != selection
         {
@@ -1662,7 +1662,7 @@ pub(crate) struct ScriptListApp {
     /// field values change.
     menu_syntax_form_signature: Option<String>,
     /// Real focusable input entities for handler form fields.
-    menu_syntax_form_inputs: Vec<(String, Entity<InputState>)>,
+    menu_syntax_form_inputs: Vec<(String, gpui_component::input::AnyInputState)>,
     /// Subscriptions that sync real handler field edits back into the parser
     /// backed filter text.
     menu_syntax_form_input_subscriptions: Vec<Subscription>,

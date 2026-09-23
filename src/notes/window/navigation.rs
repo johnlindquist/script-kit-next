@@ -401,7 +401,7 @@ impl NotesApp {
     pub(crate) fn automation_state(&self, cx: &gpui::App) -> serde_json::Value {
         let editor = self.editor_state.read(cx);
         let editor_text = editor.value().to_string();
-        let selection = editor.selection();
+        let selection = editor.selected_range();
         let selected_note = self
             .selected_note_id
             .and_then(|id| self.get_visible_notes().iter().find(|note| note.id == id));
@@ -1241,7 +1241,7 @@ impl NotesApp {
         if value.is_empty() {
             return None;
         }
-        let selection = self.editor_state.read(cx).selection();
+        let selection = self.editor_state.read(cx).selected_range();
         let cursor = selection.start.min(value.len());
         let current_line = value[..cursor].matches('\n').count() + 1;
         // Count lines the same way as `current_line` (newlines + 1) so a cursor
@@ -1421,7 +1421,7 @@ impl NotesApp {
     /// Get the selected text range stats, if any text is selected
     /// Returns (selected_words, selected_chars) or None if no selection
     pub(super) fn get_selection_stats(&self, cx: &Context<Self>) -> Option<(usize, usize)> {
-        let selection = self.editor_state.read(cx).selection();
+        let selection = self.editor_state.read(cx).selected_range();
         if selection.start == selection.end {
             return None;
         }

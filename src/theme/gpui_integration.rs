@@ -460,6 +460,11 @@ impl PreparedComponentTheme {
     pub(super) fn apply(self, cx: &mut App) {
         let theme = GpuiTheme::global_mut(cx);
         theme.colors = self.colors;
+        // gpui-kit components (Button variants, gpui-ai cards) read the
+        // derived token layer, not `colors`; rebuild it from the palette or it
+        // keeps gpui-kit's init-time defaults (e.g. an unreadable primary
+        // button in the approval card).
+        theme.tokens = gpui_component::ThemeTokens::from(&self.colors);
         theme.mode = self.mode;
         theme.highlight_theme = self.highlight;
         theme.mono_font_family = self.fonts.mono_family.into();
