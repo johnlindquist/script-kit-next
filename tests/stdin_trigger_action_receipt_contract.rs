@@ -63,7 +63,8 @@ fn trigger_action_dispatcher_emits_request_correlated_receipt() {
         "receipt_ok",
         "popup_closed",
         "Some(\"no_host\".to_string())",
-        "view.response_sender",
+        // Receipts answer the automation client on the app stdout channel.
+        "view.default_response_sender",
     ] {
         assert!(
             APP_RUN_SETUP.contains(required),

@@ -26,7 +26,9 @@
 //! * `simulateKey` uses `externalCommandResult`, but snapshots the
 //!   request id + response sender BEFORE dispatch and sends the ack AFTER
 //!   dispatch. That ordering matters because the simulated key can mutate
-//!   route/session state before a post-dispatch sender lookup.
+//!   route/session state before a post-dispatch sender lookup. The live
+//!   dispatcher snapshots `default_response_sender` (the app's stdout), so a
+//!   running script's stdin never receives automation acks.
 //!
 //! Refactor threat: a well-meaning contributor "improves" the
 //! automation DX by adding a `showResult` / `hideResult` /
@@ -279,8 +281,12 @@ fn simulatekey_arm_snapshots_sender_before_dispatch_and_acks_after() {
         let capture_idx = arm
             .find("let simulate_key_response = request_id")
             .unwrap_or_else(|| panic!("{label} must snapshot request_id before dispatch"));
+        // The live dispatcher answers on `default_response_sender` (the app's
+        // stdout, never reassigned while a script runs); the orphan copies
+        // still name `response_sender`. Either way it is snapshotted first.
         let sender_capture_idx = arm
-            .find("view.response_sender")
+            .find("view.default_response_sender")
+            .or_else(|| arm.find("view.response_sender"))
             .unwrap_or_else(|| panic!("{label} must clone response_sender before dispatch"));
         let sender_clone_idx = arm[sender_capture_idx..]
             .find(".clone()")
@@ -317,7 +323,8 @@ fn simulatekey_arm_snapshots_sender_before_dispatch_and_acks_after() {
             "{label} must send from the pre-dispatch response snapshot"
         );
         assert!(
-            !arm[dispatch_idx..ack_idx].contains("view.response_sender"),
+            !arm[dispatch_idx..ack_idx].contains("view.response_sender")
+                && !arm[dispatch_idx..ack_idx].contains("view.default_response_sender"),
             "{label} must not look up view.response_sender after dispatch"
         );
     }

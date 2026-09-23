@@ -2097,7 +2097,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // `tool-window-mutator-rpcs-never-echo-response`
                                 // (Pass-12 finding).
                                 if let Some(ref rid) = request_id {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::window_visibility_ack(
                                                 rid.to_string(),
@@ -2190,7 +2190,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // `tool-window-mutator-rpcs-never-echo-response`
                                 // (Pass-12 finding).
                                 if let Some(ref rid) = request_id {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::window_visibility_ack(
                                                 rid.to_string(),
@@ -2247,7 +2247,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 let simulate_key_response = request_id
                                     .as_ref()
                                     .and_then(|rid| {
-                                        view.response_sender
+                                        view.default_response_sender
                                             .clone()
                                             .map(|sender| (rid.to_string(), sender))
                                     });
@@ -2291,7 +2291,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 } {
                                     hotkeys::inject_main_hotkey_phase_for_agentic(hotkey_phase);
                                     if let Some(rid) = request_id {
-                                        if let Some(sender) = view.response_sender.clone() {
+                                        if let Some(sender) = view.default_response_sender.clone() {
                                             let _ = sender.try_send(
                                                 crate::protocol::Message::external_command_result(
                                                     rid.to_string(),
@@ -2304,7 +2304,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         }
                                     }
                                 } else if let Some(rid) = request_id {
-                                    if let Some(sender) = view.response_sender.clone() {
+                                    if let Some(sender) = view.default_response_sender.clone() {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
@@ -2489,7 +2489,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                                 if let Some(ref rid) = request_id {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::trigger_action_result(
                                                 rid.to_string(),
@@ -2560,7 +2560,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     "clipboard capture fixture processed without NSPasteboard access"
                                 );
                                 if let (Some(request_id), Some(sender)) =
-                                    (request_id.as_ref(), view.response_sender.as_ref())
+                                    (request_id.as_ref(), view.default_response_sender.as_ref())
                                 {
                                     let _ = sender.try_send(
                                         crate::protocol::Message::external_command_result(
@@ -2635,7 +2635,23 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     ctx,
                                 );
                                 sync_main_automation_window(current_main_automation_bounds(), true, true);
-                                let (sender, _receiver) = async_channel::bounded(1);
+                                // The fixture has no SDK caller, so it owns the receiver:
+                                // dropping it closed the channel and turned every
+                                // Enter/Escape into "Unable to deliver confirmation"
+                                // with the dialog stuck open.
+                                let (sender, receiver) = async_channel::bounded::<bool>(1);
+                                ctx.background_executor()
+                                    .spawn(async move {
+                                        if let Ok(confirmed) = receiver.recv().await {
+                                            tracing::info!(
+                                                category = "STDIN",
+                                                event = "confirm_prompt_fixture_resolved",
+                                                confirmed,
+                                                "ConfirmPrompt fixture resolved"
+                                            );
+                                        }
+                                    })
+                                    .detach();
                                 let options = crate::confirm::ParentConfirmOptions {
                                     title: title.unwrap_or_else(|| "Delete saved item?".to_string()).into(),
                                     body: body.unwrap_or_else(|| "This action changes local Script Kit state. Confirm to continue or cancel to return to the launcher.".to_string()).into(),
@@ -2759,7 +2775,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     );
                                 }
                                 if let Some(rid) = request_id {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
                                                 rid.to_string(),
@@ -2811,7 +2827,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 };
                                 if let Some(rid) = request_id {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
                                                 rid.to_string(),
@@ -2864,7 +2880,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 };
                                 if let Some(rid) = request_id {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
                                                 rid.to_string(),
@@ -3069,7 +3085,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                                 if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
@@ -3180,7 +3196,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                                 if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
@@ -3225,7 +3241,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     _ => Err("Agent Chat view is not active".to_string()),
                                 };
                                 if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(
                                             crate::protocol::Message::external_command_result(
                                                 rid.to_string(),
@@ -3504,7 +3520,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     _ => Err("Agent Chat view is not active".to_string()),
                                 };
                                 if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(crate::protocol::Message::external_command_result(
                                             rid.to_string(), "setAgentChatScopeInput".to_string(), result.is_ok(),
                                             result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
@@ -3529,7 +3545,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     _ => Err("Agent Chat view is not active".to_string()),
                                 };
                                 if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(crate::protocol::Message::external_command_result(
                                             rid.to_string(), "selectAgentChatVariation".to_string(), result.is_ok(),
                                             result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
@@ -3555,7 +3571,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     _ => "not_agent_chat".to_string(),
                                 };
                                 if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(crate::protocol::Message::external_command_result(
                                             rid.to_string(), "getAgentChatVariations".to_string(), true, None, Some(summary),
                                         ));
@@ -3575,7 +3591,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     _ => Err("Agent Chat view is not active".to_string()),
                                 };
                                 if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.response_sender {
+                                    if let Some(ref sender) = view.default_response_sender {
                                         let _ = sender.try_send(crate::protocol::Message::external_command_result(
                                             rid.to_string(), "agent_chatEscape".to_string(), result.is_ok(),
                                             result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),

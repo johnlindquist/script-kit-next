@@ -165,6 +165,24 @@ fn convert_protocol_prompt_message(
     }
 }
 
+/// Stdin automation reads whose replies must reach the automation client even
+/// while a script owns `response_sender`. Each handler answers synchronously,
+/// mutates no prompt or script state, and captures no reply channel.
+fn is_read_only_automation_query(message: &crate::protocol::Message) -> bool {
+    use crate::protocol::Message;
+    matches!(
+        message,
+        Message::GetState { .. }
+            | Message::GetElements { .. }
+            | Message::GetLayoutInfo { .. }
+            | Message::GetAgentChatState { .. }
+            | Message::ListAutomationWindows { .. }
+            | Message::InspectAutomationWindow { .. }
+            | Message::CaptureScreenshot { .. }
+            | Message::GetLogs { .. }
+    )
+}
+
 fn prompt_message_from_protocol_message(
     message: crate::protocol::Message,
 ) -> Option<PromptMessage> {

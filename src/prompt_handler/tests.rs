@@ -2,7 +2,8 @@ mod prompt_handler_message_tests {
     use super::{
         build_script_error_agent_chat_prompt, build_script_error_report_markdown,
         classify_prompt_message_route, convert_protocol_prompt_message,
-        escape_windows_cmd_open_target, persist_script_error_agent_chat_context_bundle_in_dir,
+        escape_windows_cmd_open_target, is_read_only_automation_query,
+        persist_script_error_agent_chat_context_bundle_in_dir,
         prompt_coming_soon_warning, prompt_message_from_protocol_message,
         resolve_ai_start_chat_provider, should_restore_main_window_after_script_exit,
         unhandled_message_warning, PromptConversionSource, PromptMessageRoute,
@@ -10,6 +11,33 @@ mod prompt_handler_message_tests {
     use crate::ai::providers::OpenAiProvider;
     use crate::PromptMessage;
 
+
+    /// Stdin automation reads are answered on the app's stdout even while a
+    /// script owns `response_sender`; anything that can change prompt state or
+    /// capture a reply channel must keep answering the script.
+    #[test]
+    fn stdin_read_queries_reply_to_the_automation_client_while_scripts_run() {
+        let parse = |value: serde_json::Value| -> crate::protocol::Message {
+            serde_json::from_value(value).expect("protocol message")
+        };
+        for read in [
+            serde_json::json!({"type": "getState", "requestId": "r"}),
+            serde_json::json!({"type": "getElements", "requestId": "r"}),
+            serde_json::json!({"type": "getLayoutInfo", "requestId": "r"}),
+            serde_json::json!({"type": "listAutomationWindows", "requestId": "r"}),
+            serde_json::json!({"type": "captureScreenshot", "requestId": "r"}),
+            serde_json::json!({"type": "getLogs", "requestId": "r"}),
+        ] {
+            assert!(is_read_only_automation_query(&parse(read.clone())), "{read}");
+        }
+        for script_owned in [
+            serde_json::json!({"type": "submit", "id": "p", "value": "x"}),
+            serde_json::json!({"type": "arg", "id": "p", "placeholder": "Pick", "choices": []}),
+            serde_json::json!({"type": "div", "id": "p", "html": "<p>x</p>"}),
+        ] {
+            assert!(!is_read_only_automation_query(&parse(script_owned.clone())), "{script_owned}");
+        }
+    }
 
     #[test]
     fn test_handle_prompt_message_routes_confirm_request_to_confirm_window() {

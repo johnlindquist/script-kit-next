@@ -851,6 +851,30 @@ impl ScriptListApp {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
+        // Automation queries arrive on the app's own stdin, so their answers
+        // belong on the app's stdout. While a script prompt is active,
+        // `response_sender` is that script's stdin, and every getState /
+        // getElements / captureScreenshot reply vanished into the script.
+        // Only pure synchronous reads are redirected: they create no submit
+        // callbacks or prompt bindings (which clone `response_sender` and must
+        // keep pointing at the script) and never replace the script channel.
+        if is_read_only_automation_query(&message) {
+            if let Some(stdout_sender) = self.default_response_sender.clone() {
+                let script_sender = self.response_sender.replace(stdout_sender);
+                self.dispatch_stdin_protocol_message(message, window, cx);
+                self.response_sender = script_sender;
+                return;
+            }
+        }
+        self.dispatch_stdin_protocol_message(message, window, cx);
+    }
+
+    fn dispatch_stdin_protocol_message(
+        &mut self,
+        message: crate::protocol::Message,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(prompt_message) = prompt_message_from_protocol_message(message.clone()) {
             self.handle_prompt_message_in_window(prompt_message, window, cx);
             return;
