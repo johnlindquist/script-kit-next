@@ -72,10 +72,14 @@ impl NotesEditor {
         let editor = Input::new(input_state)
             .h_full()
             .appearance(false)
-            // gpui-kit gives multi-line editors no inner padding; keep the
-            // Notes text inset the contract publishes.
-            .px(px(super::contract::NOTES_EDITOR_INPUT_PADDING_X_PX))
-            .py(px(super::contract::NOTES_EDITOR_INPUT_PADDING_Y_PX))
+            // Pin the inner text inset the contract publishes (gpui-kit would
+            // derive 10×8 from Size::Medium; the fork's Medium was 12×8).
+            .editor_paddings(gpui::Edges {
+                top: px(super::contract::NOTES_EDITOR_INPUT_PADDING_Y_PX),
+                right: px(super::contract::NOTES_EDITOR_INPUT_PADDING_X_PX),
+                bottom: px(super::contract::NOTES_EDITOR_INPUT_PADDING_Y_PX),
+                left: px(super::contract::NOTES_EDITOR_INPUT_PADDING_X_PX),
+            })
             .font_family(cx.theme().mono_font_family.clone())
             .text_size(cx.theme().mono_font_size)
             // Keep the fork's 20pt line box (gpui-kit Editor defaults to 1.5×).

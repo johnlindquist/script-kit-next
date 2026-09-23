@@ -112,6 +112,8 @@ pub struct Input {
     id: Option<ElementId>,
     state: TextInputState,
     style: StyleRefinement,
+    /// Script Kit: explicit multi-line editor padding (overrides `Size`).
+    sk_editor_paddings: Option<gpui::Edges<gpui::Pixels>>,
     size: Size,
     prefix: Option<AnyElement>,
     suffix: Option<AnyElement>,
@@ -213,7 +215,15 @@ impl Input {
             aria_label: None,
             context_menu_builder: None,
             paste_handler: None,
+            sk_editor_paddings: None,
         }
+    }
+
+    /// Script Kit: set the multi-line editor's inner padding explicitly
+    /// instead of deriving it from [`Size`] (keeps a surface's text inset).
+    pub fn editor_paddings(mut self, paddings: gpui::Edges<gpui::Pixels>) -> Self {
+        self.sk_editor_paddings = Some(paddings);
+        self
     }
 
     /// Set the developer-assigned identifier exposed to accessibility clients.
@@ -529,7 +539,9 @@ impl RenderOnce for Input {
             cx,
         );
         state.set_editor_paddings(
-            if state.presentation(cx).is_multi_line() {
+            if let Some(paddings) = self.sk_editor_paddings.filter(|_| state.presentation(cx).is_multi_line()) {
+                paddings
+            } else if state.presentation(cx).is_multi_line() {
                 Edges {
                     top: self.size.input_py(),
                     right: self.size.input_px(),

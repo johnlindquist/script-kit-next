@@ -1231,9 +1231,13 @@ impl Render for EditorPrompt {
                             .line_height(gpui::rems(
                                 crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_LINE_HEIGHT_REMS,
                             ))
-                            // Keep the fork's Medium inset (gpui-kit editors have none).
-                            .px(px(crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_X_PX))
-                            .py(px(crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_Y_PX)),
+                            // Keep the fork's Medium inset (12×8; kit derives 10×8).
+                            .editor_paddings(gpui::Edges {
+                                top: px(crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_Y_PX),
+                                right: px(crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_X_PX),
+                                bottom: px(crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_Y_PX),
+                                left: px(crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_INSET_X_PX),
+                            }),
                     ),
             );
         } else {

@@ -21,11 +21,11 @@
 //! - caret height: `Size::Medium` factor `0.85 × line_height`, vertically
 //!   centered (vendor/gpui-kit/gpui-base/src/input/base/element.rs).
 //!
-//! Inner editor padding is Script Kit-owned: gpui-kit paints multi-line
-//! editors with no inner padding (the old fork applied `Size::Medium`
-//! 12/8 to every Input), so the Notes editor applies
-//! [`NOTES_EDITOR_INPUT_PADDING_X_PX`]/[`NOTES_EDITOR_INPUT_PADDING_Y_PX`]
-//! itself and the renderer and this contract read the same constants.
+//! Inner editor padding is Script Kit-owned: gpui-kit derives multi-line
+//! editor padding from `Size::Medium` (10×8, the old fork's was 12×8), so the
+//! Notes editor pins [`NOTES_EDITOR_INPUT_PADDING_X_PX`]/
+//! [`NOTES_EDITOR_INPUT_PADDING_Y_PX`] via the `editor_paddings` kit patch and
+//! the renderer and this contract read the same constants.
 //!
 //! Colors resolve through `map_scriptkit_to_gpui_theme` — the SAME Script
 //! Kit theme → gpui-component theme bridge `sync_gpui_component_theme`

@@ -33,9 +33,17 @@ pub struct Editor {
     context_menu_builder: Option<Rc<dyn Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu>>,
 
     paste_handler: Option<Rc<dyn Fn(&gpui::ClipboardItem, &mut Window, &mut App) -> bool>>,
+    /// Script Kit: explicit inner padding (see `Input::editor_paddings`).
+    sk_editor_paddings: Option<gpui::Edges<gpui::Pixels>>,
 }
 
 impl Editor {
+    /// Script Kit: set the editor's inner padding explicitly.
+    pub fn editor_paddings(mut self, paddings: gpui::Edges<gpui::Pixels>) -> Self {
+        self.sk_editor_paddings = Some(paddings);
+        self
+    }
+
     pub fn new(state: &Entity<EditorState>) -> Self {
         Self {
             state: state.clone(),
@@ -50,6 +58,7 @@ impl Editor {
             aria_label: None,
             context_menu_builder: None,
             paste_handler: None,
+            sk_editor_paddings: None,
         }
     }
 
@@ -156,6 +165,7 @@ impl RenderOnce for Editor {
             .when_some(self.paste_handler, |this, handler| {
                 this.on_paste(move |item, window, cx| handler(item, window, cx))
             })
+            .when_some(self.sk_editor_paddings, |this, paddings| this.editor_paddings(paddings))
             .refine_style(&self.style)
     }
 }

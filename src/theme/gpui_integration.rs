@@ -360,7 +360,44 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
         "map_scriptkit_to_gpui_theme exit"
     );
 
+    derive_kit_button_colors(&mut theme_color);
     theme_color
+}
+
+/// gpui-kit buttons read dedicated `button_*` fields the forked
+/// gpui-component never had; left at kit defaults they ignore the Script Kit
+/// palette (a white primary instead of the accent). Derive them the way the
+/// fork painted each variant: from the matching base color family, with the
+/// default variant being Secondary.
+fn derive_kit_button_colors(c: &mut ThemeColor) {
+    c.button = c.secondary;
+    c.button_foreground = c.secondary_foreground;
+    c.button_hover = c.secondary_hover;
+    c.button_active = c.secondary_active;
+    c.button_primary = c.primary;
+    c.button_primary_foreground = c.primary_foreground;
+    c.button_primary_hover = c.primary_hover;
+    c.button_primary_active = c.primary_active;
+    c.button_secondary = c.secondary;
+    c.button_secondary_foreground = c.secondary_foreground;
+    c.button_secondary_hover = c.secondary_hover;
+    c.button_secondary_active = c.secondary_active;
+    c.button_danger = c.danger;
+    c.button_danger_foreground = c.danger_foreground;
+    c.button_danger_hover = c.danger_hover;
+    c.button_danger_active = c.danger_active;
+    c.button_warning = c.warning;
+    c.button_warning_foreground = c.warning_foreground;
+    c.button_warning_hover = c.warning_hover;
+    c.button_warning_active = c.warning_active;
+    c.button_success = c.success;
+    c.button_success_foreground = c.success_foreground;
+    c.button_success_hover = c.success_hover;
+    c.button_success_active = c.success_active;
+    c.button_info = c.info;
+    c.button_info_foreground = c.info_foreground;
+    c.button_info_hover = c.info_hover;
+    c.button_info_active = c.info_active;
 }
 
 #[inline]
@@ -909,5 +946,15 @@ mod tests {
 
         let mapped = map_scriptkit_to_gpui_theme(&theme, true);
         assert_hsla_close(mapped.caret, hex_to_hsla(cursor_override.color));
+    }
+
+    #[test]
+    fn kit_button_variants_follow_script_kit_palette() {
+        let theme = crate::theme::Theme::default();
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+        assert_eq!(mapped.button_primary, mapped.primary);
+        assert_eq!(mapped.button_primary_foreground, mapped.primary_foreground);
+        assert_eq!(mapped.button, mapped.secondary);
+        assert_eq!(mapped.button_danger, mapped.danger);
     }
 }

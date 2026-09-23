@@ -14,9 +14,9 @@ use gpui_component::{Theme, ThemeRegistry};
 /// Inner inset of multi-line editors (Notes, Day Page, editor prompt).
 ///
 /// The Script Kit gpui-component fork applied `Size::Medium` input padding
-/// (12px × 8px) to every `Input`, including code-editor mode. gpui-kit paints
-/// multi-line editors with no inner padding, so surfaces that adopted
-/// `Editor` apply this inset themselves to keep their text where it was.
+/// (12px × 8px) to every `Input`, including code-editor mode. gpui-kit's
+/// Medium multi-line padding is 10px × 8px, so surfaces that adopted
+/// `Editor` pin this inset via the `editor_paddings` kit patch.
 pub(crate) const KIT_MULTILINE_EDITOR_INSET_X_PX: f32 = 12.0;
 /// Vertical counterpart of [`KIT_MULTILINE_EDITOR_INSET_X_PX`].
 pub(crate) const KIT_MULTILINE_EDITOR_INSET_Y_PX: f32 = 8.0;
@@ -37,6 +37,11 @@ pub(crate) fn sync_kit_theme_from_fork(cx: &mut App) {
 pub fn init_component_libraries(cx: &mut App) {
     // gpui_ai::init also initializes gpui-component (gpui-kit).
     gpui_ai::init(cx);
+    // gpui-ai's library-wide scrollbar policy defaults to `Always` and projects
+    // it onto the kit theme, which paints a permanent thumb on every overflow
+    // area. Script Kit follows the OS, as the forked gpui-component did:
+    // scrolling-only when macOS auto-hides scrollbars, otherwise on hover.
+    install_os_scrollbar_policy(cx);
     // gpui-kit re-applies its registry theme whenever the registry global
     // changes; put the Script Kit palette back afterwards. Registered after
     // gpui-kit's own observer, so it runs second.
@@ -45,4 +50,35 @@ pub fn init_component_libraries(cx: &mut App) {
         crate::theme::gpui_integration::PreparedComponentTheme::new(&theme).apply(cx);
     })
     .detach();
+}
+
+/// Install the Script Kit scrollbar policy (OS-following visibility).
+pub(crate) fn install_os_scrollbar_policy(cx: &mut App) {
+    use gpui_ai::scrolling::{ScrollbarTokens, ScrollbarVisibility};
+    let visibility = if cx.should_auto_hide_scrollbars() {
+        ScrollbarVisibility::Scrolling
+    } else {
+        ScrollbarVisibility::Hover
+    };
+    ScrollbarTokens::default()
+        .with_visibility(visibility)
+        .set(cx);
+}
+
+#[cfg(test)]
+mod scrollbar_policy_tests {
+    /// gpui-ai defaults every scrollbar to `Always`; Script Kit must keep the
+    /// OS-following behavior (a permanent thumb regressed builtin previews).
+    #[gpui::test]
+    fn component_libraries_follow_os_scrollbar_visibility(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            super::init_component_libraries(cx);
+            let expected = if cx.should_auto_hide_scrollbars() {
+                gpui_component::scroll::ScrollbarMode::Scrolling
+            } else {
+                gpui_component::scroll::ScrollbarMode::Hover
+            };
+            assert_eq!(gpui_component::Theme::global(cx).scrollbar_mode, expected);
+        });
+    }
 }

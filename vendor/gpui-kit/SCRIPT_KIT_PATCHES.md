@@ -29,6 +29,7 @@ when upgrading.
 | --- | --- | --- |
 | TextView compat | `text/compat.rs`, `text/style.rs`, `text/mod.rs` | `fidelity_scope` → `<scope>/document` `TextDocument` scope with exact-source hash + `selectable`/`scrollable` metadata (flow/agent-chat parity probes); link-label policy; code-block copy button; blockquote. |
 | Scrollable | `scroll/scrollable.rs` | `vertical_scrollbar_with_fidelity_scope` (Agent Chat transcript scrollbar). |
+| Editor padding | `input/input.rs`, `input/editor.rs` | `editor_paddings(Edges)` on `Input`/`Editor` overrides the `Size`-derived multi-line padding (Notes/editor prompt keep the fork's 12×8). |
 | Root layers | `root.rs`, `lib.rs` | `RootDialogId`, `RootLayerSnapshot`, `layer_revision_with`, `layer_snapshot`, `is_current_dialog`, `close_dialog_if_current`, `dismiss_notification_if_current`, `paint_background`, `new_transparent`; `Tab`/`TabPrev` re-export. |
 | Notifications | `notification.rs` | Layer snapshot/revision, `autohide_after`, `dismissible`, `content_only`, `dismiss_from_control`. |
 | Actions module | `lib.rs` | `pub mod actions` (namespaced `sk_*` actions avoid global GPUI action-name collisions). |
@@ -40,8 +41,12 @@ when upgrading.
   cards read tokens); `src/theme/gpui_kit_bridge.rs` mirrors into gpui-base
   (`Theme::sync_base`) and re-applies after registry resets.
 - Multi-line editors (Notes, Day Page, editor prompt) keep the fork look:
-  12×8 inset, `rems(1.25)` line box, no folding, no scroll-beyond-last-line
-  (`KIT_MULTILINE_EDITOR_*` in `gpui_kit_bridge.rs`).
+  12×8 inner inset via `editor_paddings`, `rems(1.25)` line box, no folding,
+  no scroll-beyond-last-line (`KIT_MULTILINE_EDITOR_*` in `gpui_kit_bridge.rs`).
+- Theme bridge: kit-only `button_*` families derive from the Script Kit
+  primary/secondary/danger/warning/success/info colors (fork variant parity);
+  gpui-ai's `Always` scrollbar policy is replaced by the OS-following policy
+  (`install_os_scrollbar_policy`).
 - Multi-line is a type in gpui-kit (`InputState` / `TextareaState` /
   `EditorState`); mixed collections use `AnyInputState`.
 - Lucide icons Script Kit names that gpui-kit dropped live in
