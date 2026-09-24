@@ -81,6 +81,10 @@ pub struct NotesActionContext {
     pub surface: NotesActionSurface,
     pub has_current_note: bool,
     pub auto_sizing_enabled: bool,
+    /// The last save of the current note failed. Retry Save and Copy Save
+    /// Details are recovery actions: offered only while there is a failure
+    /// to retry or report.
+    pub has_save_failure: bool,
 }
 
 impl NotesActionContext {
@@ -89,6 +93,7 @@ impl NotesActionContext {
             surface: NotesActionSurface::Editor,
             has_current_note,
             auto_sizing_enabled,
+            has_save_failure: false,
         }
     }
 }
@@ -371,9 +376,8 @@ fn notes_action_is_visible(action: NotesAction, context: NotesActionContext) -> 
             NewNote | BrowseNotes | TogglePreview | HistoryBack | HistoryForward
             | CycleSortMode | OpenTrash | EnableAutoSizing | ResetWindowPosition => true,
             DuplicateNote | DeleteNote | CopyNoteAs | CopyDeeplink | CreateQuicklink
-            | CopyBacklinks | Export | SendToAi | RetrySave | CopySaveDetails => {
-                context.has_current_note
-            }
+            | CopyBacklinks | Export | SendToAi => context.has_current_note,
+            RetrySave | CopySaveDetails => context.has_current_note && context.has_save_failure,
             FindInNote | MoveListItemUp | MoveListItemDown | Format => {
                 context.has_current_note && context.surface == Editor
             }
@@ -538,6 +542,7 @@ mod tests {
                 NotesAction::EmptyTrash
                     | NotesAction::BackToNotes
                     | NotesAction::CopyBacklinks
+                    | NotesAction::CopySaveDetails
                     | NotesAction::Format
                     | NotesAction::PermanentlyDeleteNote
                     | NotesAction::EnableAutoSizing
@@ -556,6 +561,8 @@ mod tests {
     fn catalog_is_complete_and_unique() {
         let expected = [
             NotesAction::NewNote,
+            NotesAction::RetrySave,
+            NotesAction::CopySaveDetails,
             NotesAction::DuplicateNote,
             NotesAction::BrowseNotes,
             NotesAction::TogglePreview,
@@ -605,31 +612,55 @@ mod tests {
         assert_eq!(NotesAction::Format.id(), "format");
     }
 
-    fn contexts() -> [NotesActionContext; 6] {
+    fn contexts() -> [NotesActionContext; 7] {
         [
             NotesActionContext::editor(false, false),
             NotesActionContext::editor(true, true),
             NotesActionContext {
+                has_save_failure: true,
+                ..NotesActionContext::editor(true, true)
+            },
+            NotesActionContext {
                 surface: NotesActionSurface::Preview,
-                has_current_note: true,
-                auto_sizing_enabled: true,
+                ..NotesActionContext::editor(true, true)
             },
             NotesActionContext {
                 surface: NotesActionSurface::Trash,
-                has_current_note: false,
-                auto_sizing_enabled: true,
+                ..NotesActionContext::editor(false, true)
             },
             NotesActionContext {
                 surface: NotesActionSurface::Trash,
-                has_current_note: true,
-                auto_sizing_enabled: true,
+                ..NotesActionContext::editor(true, true)
             },
             NotesActionContext {
                 surface: NotesActionSurface::ReadOnly,
-                has_current_note: true,
-                auto_sizing_enabled: true,
+                ..NotesActionContext::editor(true, true)
             },
         ]
+    }
+
+    /// Retry Save and Copy Save Details are recovery actions: offered only
+    /// while the current note has a failed save, never as standing menu items.
+    #[test]
+    fn save_recovery_actions_appear_only_after_a_failed_save() {
+        let recovery = [NotesAction::RetrySave, NotesAction::CopySaveDetails];
+        for action in recovery {
+            assert!(action
+                .descriptor(NotesActionContext::editor(true, true))
+                .is_none());
+            assert!(action
+                .descriptor(NotesActionContext {
+                    has_save_failure: true,
+                    ..NotesActionContext::editor(false, true)
+                })
+                .is_none());
+            assert!(action
+                .descriptor(NotesActionContext {
+                    has_save_failure: true,
+                    ..NotesActionContext::editor(true, true)
+                })
+                .is_some());
+        }
     }
 
     #[test]

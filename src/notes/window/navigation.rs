@@ -3,6 +3,12 @@ use itertools::Itertools;
 use super::*;
 use gpui::ScrollHandle;
 
+/// The one user-facing notice for a failed Notes save. Every path that reports
+/// the failure (autosave, view switch, close) shows this same notice under the
+/// shared `DocumentSaveFailureNotification` id, so repeats replace it.
+pub(super) const NOTES_SAVE_FAILURE_MESSAGE: &str =
+    "Couldn't save the note. Your changes are still open. Use Retry Save in Actions.";
+
 pub(super) fn active_notes_selection_id(
     selected_note_id: Option<NoteId>,
     active_day_date: Option<NaiveDate>,
@@ -1549,8 +1555,7 @@ impl NotesApp {
             != Some(&failure.diagnostic_fingerprint)
         {
             self.action_feedback = Some((
-                "Couldn't save the note. Your changes are still open. Use Retry Save in Actions."
-                    .to_string(),
+                NOTES_SAVE_FAILURE_MESSAGE.to_string(),
                 crate::components::document_status::DocumentFeedbackKind::SaveFailure,
             ));
         }

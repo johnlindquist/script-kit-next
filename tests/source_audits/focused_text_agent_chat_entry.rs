@@ -99,7 +99,8 @@ fn agent_chat_view_can_stage_focused_text_as_host_owned_context() {
         "stage_focused_text_from_host",
         "focused-text://",
         "Focused Text ·",
-        "replace_pending_context_parts(vec![part], source, cx)",
+        "thread.replace_pending_context_parts_with_provenance(",
+        "crate::ai::staged_context::ContextProvenance::HostHandoff",
         "focused_text_context_staged",
     ] {
         assert!(
@@ -315,7 +316,7 @@ fn focused_text_mini_window_animation_reveals_fixed_height_content() {
     let input_row = source_between(
         render_fn,
         ".id(\"focused-text-mini-input-row\")",
-        ".when_some(self.focused_text.as_ref()",
+        "let scope_row =",
     );
     let preview_block = source_between(
         render_fn,
@@ -412,7 +413,7 @@ fn focused_text_mini_reuses_app_icon_cache_and_focuses_composer_on_open() {
         "bundle_id.trim()",
         "crate::app_launcher::cached_app_icon_for_bundle",
         "crate::icons::render_image",
-        "gpui_component::IconName::AppWindow",
+        "crate::icons::LucideIcon::AppWindow.path()",
         "\"focused-text-context-badge\"",
     ] {
         assert!(
@@ -527,27 +528,26 @@ fn focused_text_mini_escape_hides_instead_of_returning_to_main_menu() {
             && AGENT_CHAT_VIEW.contains("self.trigger_close_window_requested(window, cx);"),
         "focused-text quick-prompt Escape must progressively unwind before requesting close/hide"
     );
+    // The host interceptors run before Agent Chat's own key handler, so every
+    // keyboard path must call the one Escape owner; a direct
+    // request_conversation_dismiss(Escape) skipped the focused-text unwind.
     assert!(
-        STARTUP.contains("agent_chat_escape_focused_text_origin")
-            && STARTUP.contains("focused_text_originated_from_quick_prompt")
-            && STARTUP.contains("!agent_chat_escape_focused_text_origin"),
-        "physical Escape from focused-text quick prompt origin must avoid generic streaming cancel before Agent Chat handles the key"
+        AGENT_CHAT_VIEW.contains("pub(crate) fn handle_conversation_escape(")
+            && AGENT_CHAT_VIEW.contains("self.handle_conversation_escape(window, cx);"),
+        "Agent Chat's own Escape must use the shared escape owner"
     );
-    assert!(
-        STARTUP_NEW_ACTIONS.contains("agent_chat_escape_focused_text_origin")
-            && STARTUP_NEW_ACTIONS.contains("focused_text_originated_from_quick_prompt")
-            && STARTUP_NEW_ACTIONS.contains("!agent_chat_escape_focused_text_origin"),
-        "startup_new_actions Escape interceptor must preserve focused-text quick prompt Agent Chat key handling"
-    );
-    assert!(
-        SIMULATE_KEY_DISPATCH.contains("chat.is_focused_text_mini()")
-            && SIMULATE_KEY_DISPATCH.contains("chat.focused_text_originated_from_quick_prompt()")
-            && SIMULATE_KEY_DISPATCH
-                .contains("SimulateKey: Escape - hide focused-text quick prompt Agent Chat")
-            && SIMULATE_KEY_DISPATCH
-                .contains("view.close_agent_chat_main_window_state_first(ctx);"),
-        "simulateKey Escape must match physical Escape for focused-text quick prompt origin"
-    );
+    for (path, source) in [
+        ("startup", STARTUP),
+        ("startup_new_actions", STARTUP_NEW_ACTIONS),
+        ("simulate_key_dispatch", SIMULATE_KEY_DISPATCH),
+    ] {
+        assert!(
+            source.contains("chat.handle_conversation_escape(window, cx);")
+                && !source.contains("ConversationDismissTrigger::Escape")
+                && !source.contains("cancel_streaming_from_escape"),
+            "{path}: Agent Chat Escape must route through handle_conversation_escape"
+        );
+    }
 }
 
 #[test]

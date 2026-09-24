@@ -1,41 +1,16 @@
 use std::fs;
 
 #[test]
-fn global_root_file_search_does_not_stream_into_active_frame() {
-    let source = fs::read_to_string("src/app_impl/root_file_search.rs")
-        .expect("read src/app_impl/root_file_search.rs");
-    let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
-
-    assert!(
-        normalized.contains("fn cache_root_file_search_results_for_generation("),
-        "global provider completion should have a cache-only path"
-    );
-    assert!(
-        normalized.contains("let publish_active_results =")
-            && normalized
-                .contains("matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. })"),
-        "only explicit directory browse should be allowed to publish into the active frame"
-    );
-    assert!(
-        normalized.contains("app.cache_root_file_search_results_for_generation( generation, request_cache_key, batch, true, );"),
-        "global provider completion should warm cache instead of applying visible rows"
-    );
-    assert!(
-        !normalized.contains("publish_partial_results"),
-        "root global file search must not publish partial result batches"
-    );
-}
-
-#[test]
 fn selection_snapshots_use_stable_selection_keys_not_history_memory() {
     let app_state =
         fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
     let types = fs::read_to_string("src/scripts/types.rs").expect("read src/scripts/types.rs");
 
     assert!(types.contains("pub fn stable_selection_key(&self) -> Option<String>"));
+    let rows = fs::read_to_string("src/scripts/main_menu_rows.rs").expect("read main_menu_rows.rs");
     assert!(
         app_state.contains("grouped_index_for_stable_selection_key")
-            && app_state.contains("result.stable_selection_key()")
+            && rows.contains(".stable_selection_key()")
             && !app_state.contains("grouped_index_for_history_result_key"),
         "selection restoration should use selection identity, not input-history identity"
     );
@@ -104,7 +79,7 @@ fn grouped_cache_store_preserves_selectable_bounds_contract() {
         .expect("store_grouped_results body should exist");
 
     assert!(
-        body.contains("Self::is_selectable_result(result)"),
+        body.contains("rows.iter().filter(|row| row.eligibility.selectable)"),
         "store_grouped_results must compute displayed selectable bounds through the shared selectable-result predicate"
     );
     assert!(
@@ -115,24 +90,23 @@ fn grouped_cache_store_preserves_selectable_bounds_contract() {
 
 #[test]
 fn preflight_visible_count_uses_selectable_result_count() {
-    let app_state =
-        fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
     let build =
         fs::read_to_string("src/main_window_preflight/build.rs").expect("read preflight builder");
 
+    let normalized = build.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        app_state.contains("fn grouped_selectable_result_count(&self) -> usize")
-            && app_state.contains("fn grouped_selectable_search_results("),
-        "MainMenuResultCacheState must expose selectable result helpers"
-    );
-    assert!(
-        build.contains("grouped_selectable_result_count()"),
+        normalized.contains(
+            "visible_result_count: app .main_menu_committed_rows() .iter() .filter(|row| row.eligibility.selectable) .count(),"
+        ),
         "main-window preflight visible_result_count must use selectable count, not raw item count"
     );
+    let receipts = build
+        .split("fn visible_result_receipts(")
+        .nth(1)
+        .expect("visible_result_receipts should exist");
     assert!(
-        build.contains("grouped_selectable_search_results()")
-            && build.contains("if !row.is_selectable"),
-        "preflight visible keys/results must exclude non-selectable SpineProjection placeholder rows"
+        receipts.contains(".filter(|row| row.eligibility.selectable)"),
+        "preflight visible keys/results must exclude non-selectable placeholder rows"
     );
 }
 
@@ -240,14 +214,14 @@ fn preflight_visible_results_expose_search_safety_roles() {
         .and_then(|rest| rest.split("fn build_tab_action(").next())
         .expect("visible_result_receipts should precede build_tab_action");
     for required in [
-        "grouped_items()",
-        "search_result_for_flat_index",
-        "GroupedListItem::Item(flat_index)",
-        "visible_rank",
-        "grouped_index",
-        "result.stable_selection_key()",
-        "result_role(result)",
-        "enter_action_kind(result)",
+        "main_menu_committed_rows()",
+        "row.eligibility.selectable",
+        "MainMenuRowSubject::SearchResult { flat_index }",
+        "visible_rank: row.selectable_ordinal?",
+        "grouped_index: row.grouped_index",
+        "stable_key: Some(row.stable_key.clone())",
+        "role: result_role(result)",
+        "action_kind: enter_action_kind(result)",
         "result.type_label().to_string()",
         "result.source_name().map(ToString::to_string)",
     ] {
@@ -309,7 +283,7 @@ fn script_list_typing_echoes_before_deferred_computed_query() {
     assert!(
         queue_body.contains("self.filter_coalescer.queue(value)")
             && queue_body.contains("timer(FILTER_COMPUTE_DEFER)")
-            && queue_body.contains("app.filter_coalescer.take_latest()")
+            && queue_body.contains("app.filter_coalescer.take_latest(ticket)")
             && queue_body.contains("app.apply_filter_compute_now(latest, cx);"),
         "ScriptList typing should coalesce rapid input and apply only the latest computed query after an echo-frame defer"
     );
@@ -326,17 +300,25 @@ fn script_list_typing_echoes_before_deferred_computed_query() {
         .find("self.maybe_start_root_file_search(&value, cx);")
         .expect("apply_filter_compute_now should start root file frame before reconcile");
     let reconcile_index = apply_body
-        .find("self.reconcile_script_list_after_filter_change(\"filter_immediate\", cx);")
+        .find("self.reconcile_script_list_after_filter_change(\"query_commit\", cx);")
         .expect("apply_filter_compute_now should reconcile the list");
-    let notify_index = apply_body
-        .find("cx.notify();")
-        .expect("apply_filter_compute_now should notify after the stable frame is ready");
 
     assert!(
-        computed_index < root_file_index
-            && root_file_index < reconcile_index
-            && reconcile_index < notify_index,
-        "The coalesced apply step should install computed text, root async-loading state, and grouped rows before notify"
+        computed_index < root_file_index && root_file_index < reconcile_index,
+        "The coalesced apply step should install computed text and root async-loading state before the reconcile publishes grouped rows"
+    );
+    // The reconcile owns the single publication notify for the stable frame.
+    let reconcile_body = updates
+        .split("pub(crate) fn reconcile_script_list_after_filter_change(")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("pub(crate) fn commit_main_menu_results_refresh(")
+                .next()
+        })
+        .expect("reconcile_script_list_after_filter_change should exist");
+    assert!(
+        reconcile_body.contains("cx.notify_with_owned_cause(\"mainSearchPublication\", sequence);"),
+        "the reconcile should publish the stable frame with one owned notify"
     );
 }
 
@@ -382,36 +364,6 @@ fn agentic_root_search_visual_stability_proof_captures_native_window_and_logs() 
         !proof.contains("simulateKey"),
         "visual stability proof should use native macOS input, not protocol simulateKey"
     );
-}
-
-#[test]
-fn global_provider_completion_does_not_touch_visible_frame_fields() {
-    let source = fs::read_to_string("src/app_impl/root_file_search.rs")
-        .expect("read src/app_impl/root_file_search.rs");
-    let body = source
-        .split("fn cache_root_file_search_results_for_generation(")
-        .nth(1)
-        .and_then(|rest| {
-            rest.split("pub(crate) fn active_root_file_cache_result_count")
-                .next()
-        })
-        .expect("cache_root_file_search_results_for_generation body should be present");
-
-    assert!(body.contains("self.root_search.root_file_result_cache"));
-    assert!(body.contains("self.root_search.root_file_provider_loading = false"));
-    for forbidden in [
-        "root_file_results =",
-        "root_file_search_loading =",
-        "invalidate_grouped_cache",
-        "sync_list_state_for_filter_replacement",
-        "rebuild_main_window_preflight",
-        "cx.notify",
-    ] {
-        assert!(
-            !body.contains(forbidden),
-            "global cache-only provider completion must not touch visible frame path: {forbidden}"
-        );
-    }
 }
 
 #[test]

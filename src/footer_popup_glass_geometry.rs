@@ -160,24 +160,57 @@ pub(crate) fn main_window_footer_reservation_height() -> f32 {
     }
 }
 
-/// Native footer surface currently synced into the main window is the main
-/// menu (`script_list`), whose list scrolls under the in-stage footer.
-static MAIN_FOOTER_SURFACE_IS_MAIN_MENU: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+const MAIN_FOOTER_SURFACE_NONE: u8 = 0;
+const MAIN_FOOTER_SURFACE_OTHER: u8 = 1;
+const MAIN_FOOTER_SURFACE_MAIN_MENU: u8 = 2;
+
+/// Which native footer surface the main window synced this frame: none, the
+/// main menu (`script_list`, whose list scrolls under the zone), or another
+/// view (which ends its content above the zone). Set by the footer sync
+/// before the root lays out, so both read the same frame's answer.
+static MAIN_FOOTER_SURFACE: std::sync::atomic::AtomicU8 =
+    std::sync::atomic::AtomicU8::new(MAIN_FOOTER_SURFACE_NONE);
 
 pub(crate) fn set_main_footer_surface(surface: Option<&str>) {
-    MAIN_FOOTER_SURFACE_IS_MAIN_MENU.store(
-        surface == Some("script_list"),
-        std::sync::atomic::Ordering::Relaxed,
-    );
+    let state = match surface {
+        None => MAIN_FOOTER_SURFACE_NONE,
+        Some("script_list") => MAIN_FOOTER_SURFACE_MAIN_MENU,
+        Some(_) => MAIN_FOOTER_SURFACE_OTHER,
+    };
+    MAIN_FOOTER_SURFACE.store(state, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn main_footer_surface_state() -> u8 {
+    MAIN_FOOTER_SURFACE.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// The main-menu list extends under the in-stage footer zone right now
 /// (fade, input blocker, and reveal clearance apply). Every other surface
 /// ends its content above the zone.
 pub(crate) fn main_list_scrolls_under_footer() -> bool {
-    main_window_footer_in_stage()
-        && MAIN_FOOTER_SURFACE_IS_MAIN_MENU.load(std::sync::atomic::Ordering::Relaxed)
+    main_window_footer_in_stage() && main_footer_surface_state() == MAIN_FOOTER_SURFACE_MAIN_MENU
+}
+
+/// Bottom space the root stage keeps free for the current view: the whole
+/// in-stage footer zone while a native footer is present on a non-menu view,
+/// otherwise nothing. The root is the single owner of this reservation.
+pub(crate) fn main_window_view_footer_zone_reserve() -> f32 {
+    if main_window_footer_in_stage() && main_footer_surface_state() == MAIN_FOOTER_SURFACE_OTHER {
+        main_window_footer_zone_height()
+    } else {
+        0.0
+    }
+}
+
+/// Footer space a view reserves inside its own layout (native-footer
+/// spacers, focused-text budgets). Zero in glass mode, where the root owns
+/// the in-stage zone; reserving here too would stack the two.
+pub(crate) fn view_owned_native_footer_height() -> f32 {
+    if main_window_footer_in_stage() {
+        0.0
+    } else {
+        crate::components::footer_chrome::current_main_menu_footer_height()
+    }
 }
 
 /// Distance from the main window's bottom edge to the in-stage capsules' top
@@ -469,8 +502,7 @@ pub(crate) unsafe fn sync_main_list_bottom_edge_fade(gpui_view: id, ns_window: i
         let superview: id = msg_send![container, superview];
         // GPUI's view is not flipped and backs its layer, so view space is
         // the layer's y-up space.
-        let footer: NSRect =
-            msg_send![gpui_view, convertRect: container_frame fromView: superview];
+        let footer: NSRect = msg_send![gpui_view, convertRect: container_frame fromView: superview];
         let tokens = crate::designs::current_main_menu_theme().def().list;
         // The band is the whole footer zone: from one gap above the capsules
         // (where keyboard reveal stops) down to the window bottom.
@@ -587,7 +619,9 @@ enum BottomEdgeFadeState {
 #[cfg(target_os = "macos")]
 fn log_main_list_bottom_edge_fade(state: BottomEdgeFadeState) {
     static LAST: std::sync::Mutex<Option<BottomEdgeFadeState>> = std::sync::Mutex::new(None);
-    let mut last = LAST.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut last = LAST
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if *last != Some(state) {
         tracing::info!(
             target: "script_kit::footer_popup",

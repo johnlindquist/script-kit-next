@@ -227,8 +227,7 @@ fn explicit_browser_sources_have_app_managed_refresh_completion() {
     // brain semantic landings must too (CLS audit).
     let brain_search = include_str!("../../src/app_impl/root_brain_search.rs");
     assert!(
-        brain_search.contains("main_menu_selection_snapshot")
-            && brain_search.contains("reconcile_script_list_after_results_refresh"),
+        brain_search.contains("self.commit_main_menu_results_refresh("),
         "brain semantic landings must use the shared identity-preserving reconcile"
     );
 
@@ -261,8 +260,6 @@ fn explicit_browser_sources_have_app_managed_refresh_completion() {
     for call in [
         "maybe_start_root_browser_tabs_refresh_for_query(&value, cx)",
         "maybe_start_root_browser_history_refresh_for_query(&value, cx)",
-        "maybe_start_root_browser_tabs_refresh_for_query(&text, cx)",
-        "maybe_start_root_browser_history_refresh_for_query(&text, cx)",
     ] {
         assert!(
             updates.contains(call),
@@ -306,7 +303,9 @@ fn implicit_browser_tabs_queries_start_app_managed_refresh_without_direct_lookup
         "browser tabs should have a query eligibility helper"
     );
     assert!(
-        filtering.contains("fn current_query_can_show_root_browser_tabs("),
+        filtering
+            .contains(".accepts_provider_request(&provider_request, &app.computed_filter_text)")
+            && filtering.contains("\"browser_tabs_refresh_complete\","),
         "refresh completion should re-check current query eligibility"
     );
     assert!(
@@ -322,7 +321,8 @@ fn implicit_browser_tabs_queries_start_app_managed_refresh_without_direct_lookup
         "implicit refresh should respect source-filter exclusions"
     );
     assert!(
-        refresh_fn.contains("current_query_can_show_root_browser_tabs(&app.computed_filter_text)"),
+        refresh_fn
+            .contains(".accepts_provider_request(&provider_request, &app.computed_filter_text)"),
         "completion should publish for ordinary queries, not only explicit tabs:"
     );
     assert!(

@@ -68,6 +68,26 @@ fn canonical_input_renderers() -> &'static [(&'static str, &'static str, &'stati
             "render_main_view_input_shell(",
         ),
         (
+            "ArgPrompt",
+            "src/render_prompts/arg/render.rs",
+            "MainViewHeaderChrome::canonical(",
+        ),
+        (
+            "MiniPrompt",
+            "src/render_prompts/mini.rs",
+            "MainViewHeaderChrome::canonical(",
+        ),
+        (
+            "PathPrompt",
+            "src/prompts/path/render.rs",
+            "MainViewHeaderChrome::canonical(",
+        ),
+        (
+            "SelectPrompt",
+            "src/prompts/select/render.rs",
+            "MainViewHeaderChrome::canonical(",
+        ),
+        (
             "ClipboardHistoryView",
             "src/render_builtins/clipboard.rs",
             "render_main_view_input_shell(",
@@ -278,13 +298,11 @@ fn searchable_main_window_surfaces_route_through_shared_input_chrome() {
 
 #[test]
 fn searchable_main_window_surfaces_have_shared_runtime_layout_context_zone() {
+    // build_layout_info is the single owner of main-view header geometry;
+    // component bounds only adds per-surface detail below it.
     let layout_info = read_source("src/app_layout/build_layout_info.rs");
-    let component_bounds = read_source("src/app_layout/build_component_bounds.rs");
 
-    for (name, model) in [
-        ("layout info", layout_info),
-        ("component bounds", component_bounds),
-    ] {
+    for (name, model) in [("layout info", layout_info)] {
         assert!(model.contains("resolved_main_view_header_input_policy"));
         assert!(model.contains("main_view_header_metrics(menu_def, input_height)"));
         for component in [

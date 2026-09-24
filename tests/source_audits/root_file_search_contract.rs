@@ -112,12 +112,12 @@ mod tests {
 
         assert!(
             normalized.contains(
-                "loop { if cancel.load(std::sync::atomic::Ordering::Relaxed) { return; }"
+                "Ok(MainFileWorkerEvent::Done) => { break if cancel.load(std::sync::atomic::Ordering::Relaxed) { Err(MainSearchWorkerFailure::Cancelled)"
             ),
             "root file receive loop should keep honoring cancellation after the worker starts"
         );
         assert!(
-            normalized.contains("Err(std::sync::mpsc::TryRecvError::Disconnected) => break"),
+            normalized.contains("Err(std::sync::mpsc::TryRecvError::Disconnected) => { break Err("),
             "root file receive loop should exit if the worker channel disconnects before Done"
         );
     }
@@ -141,10 +141,10 @@ mod tests {
             "config.ts should expose real unifiedSearch.files controls that map to root file section options"
         );
         assert!(
-            root_source.contains("root_file_options.files_enabled")
-                && root_source.contains("root_file_options.global_search_enabled")
-                && root_source.contains("root_file_options.directory_browse_enabled")
-                && root_source.contains("options.recent_files_enabled"),
+            root_source.contains("if !options.files_enabled")
+                && root_source.contains("if options.global_search_enabled")
+                && root_source.contains("if options.directory_browse_enabled")
+                && root_source.contains("|| !options.recent_files_enabled"),
             "root provider startup and recent hydration should honor unifiedSearch.files gates before launching work"
         );
         assert!(
@@ -175,19 +175,15 @@ mod tests {
             state_source.contains("struct MainMenuSelectionSnapshot")
                 && state_source.contains("main_menu_selection_snapshot")
                 && state_source.contains("restore_main_menu_selection_from_snapshot")
-                && state_source.contains("stable_selection_key()")
+                && state_source.contains(".map(|row| row.stable_key.clone())")
                 && state_source.contains("grouped_index_for_stable_selection_key"),
             "main menu selection preservation should snapshot and restore stable result keys, not grouped indexes"
         );
         assert!(
-            root_source.contains("let selection_before =")
-                && root_source.contains("self.main_menu_selection_snapshot()")
-                && root_source.contains("self.restore_main_menu_selection_from_snapshot(snapshot)")
-                && root_source.contains("self.sync_list_state_for_filter_replacement();")
-                && root_source.contains("self.validate_selection_bounds(cx);")
-                && root_source.contains("schedule_main_list_selection_reveal_above_footer(")
-                && root_source.contains("root_file_active_publish_deferred"),
-            "async root file publish path should rebuild rows, restore the previous key, validate bounds, then schedule the selected row reveal above the footer after viewport measurement"
+            root_source.contains("self.commit_main_menu_results_refresh(")
+                && !root_source.contains("self.main_menu_selection_snapshot()")
+                && !root_source.contains("self.sync_list_state_for_filter_replacement();"),
+            "async root file publishes must go through the shared results-refresh commit, not a hand-rolled selection/ListState sequence"
         );
     }
 
@@ -222,12 +218,8 @@ mod tests {
             movement_source.contains("fn maybe_expand_root_file_source_chip_page")
                 && movement_source.contains("const PRELOAD_THRESHOLD: usize = 3")
                 && movement_source.contains("ROOT_FILE_SOURCE_CHIP_PAGE_SIZE")
-                && movement_source.contains("restore_main_menu_selection_from_snapshot(snapshot)")
-                && movement_source.contains("self.sync_list_state();")
-                && movement_source.contains("schedule_main_list_selection_reveal_above_footer")
-                && movement_source.contains(
-                    "reveal_main_list_selection_above_footer(\"root_file_source_chip_page_expand\")"
-                ),
+                && movement_source.contains("\"root_file_source_chip_page_expand\"")
+                && movement_source.contains("self.commit_main_menu_results_refresh("),
             "selection near the bottom of explicit Files rows should increment the page, sync the ListState row count, preserve selection, and reveal it above the footer after viewport measurement"
         );
     }
@@ -261,7 +253,8 @@ mod tests {
             let source =
                 fs::read_to_string(path).unwrap_or_else(|err| panic!("read {path}: {err}"));
             assert!(
-                !source.contains("new_text == \"f:s\"") && !source.contains("filter_text == \"f:s\""),
+                !source.contains("new_text == \"f:s\"")
+                    && !source.contains("filter_text == \"f:s\""),
                 "{path} should route one-character Files source filters through parser/intent contracts, not f:s string checks"
             );
             assert!(
@@ -282,22 +275,12 @@ mod tests {
             "root global file search should not stream partial batches into the active root frame"
         );
         assert!(
-            normalized.contains("Ok(crate::file_search::SearchEvent::Result(result)) =>")
-                && !normalized.contains("app.apply_root_file_search_results_for_generation( generation, snapshot, true, false, cx, );"),
-            "SearchEvent::Result should collect into the batch without publishing a visible partial frame"
+            normalized.contains("Ok(MainFileWorkerEvent::Result(file)) => batch.push(file),"),
+            "streamed results should collect into the batch without publishing a visible partial frame"
         );
         assert!(
-            normalized.contains("Ok(crate::file_search::SearchEvent::Done) => break")
-                && normalized.contains("app.cache_root_file_search_results_for_generation( generation, request_cache_key, batch, true, );"),
-            "final global root file update should warm the cache instead of mutating the active frame"
-        );
-        assert!(
-            normalized.contains("let publish_active_results =")
-                && normalized.contains(
-                    "matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. })"
-                )
-                && normalized.contains("if publish_active_results"),
-            "only explicit directory browse may publish its final collected rows into the active frame"
+            normalized.contains("app.finish_root_file_worker( generation, &request, result,"),
+            "the collected batch is published once, by the worker finish owner"
         );
     }
 
@@ -356,7 +339,7 @@ mod tests {
             "directory-context ranking should stay below filename token tier 4 and bounded by term count"
         );
         assert!(
-            provider_source.contains("root_file_path_context_mdquery_branches(&terms)")
+            provider_source.contains("root_file_path_context_mdquery_branches(&query_terms)")
                 && provider_source.contains("kMDItemPath ==")
                 && provider_source.contains("kMDItemFSName ==")
                 && provider_source.contains("root_file_query_has_safe_global_length(term)"),
@@ -365,7 +348,8 @@ mod tests {
         assert!(
             rank_source.contains("root_file_path_context_matches_query(file, &q)")
                 && rank_source.contains("ROOT_FILE_PATH_CONTEXT_TIER")
-                && rank_source.contains("root_file_name_relevance_tier(&file.name, &q, name_matched).max"),
+                && rank_source
+                    .contains("root_file_name_relevance_tier(&file.name, &q, name_matched).max"),
             "root ranking should apply directory-context relevance without replacing filename-first relevance"
         );
     }
@@ -435,8 +419,8 @@ mod tests {
             "fallback matches should support dynamic display text without leaking static strings"
         );
         assert!(
-            fs::read_to_string("src/app_layout/collect_elements.rs")
-                .expect("read src/app_layout/collect_elements.rs")
+            fs::read_to_string("src/app_layout/prompt_and_script_list_collectors.rs")
+                .expect("read src/app_layout/prompt_and_script_list_collectors.rs")
                 .contains("scripts::SearchResult::Fallback(m) => m.display_label()"),
             "automation element labels should expose the handoff row's dynamic title"
         );
@@ -491,7 +475,9 @@ mod tests {
             .expect("Files group should still be spliced before fallback rows");
 
         assert!(
-            section_offset < file_offset && file_offset < handoff_offset && handoff_offset < splice_offset,
+            section_offset < file_offset
+                && file_offset < handoff_offset
+                && handoff_offset < splice_offset,
             "Files section should render real file rows, then the handoff row, before the group is inserted ahead of fallbacks"
         );
         assert!(
@@ -530,7 +516,8 @@ mod tests {
             "root file promotion should default to never and require exact filename/stem opt-in without primary launcher rows"
         );
         assert!(
-            production.contains("root_file_section_insertion_index(grouped, flat_results, promote)")
+            production
+                .contains("root_file_section_insertion_index(grouped, flat_results, promote)")
                 && production.contains("SearchResult::ScriptIssue(_)"),
             "promotion should route through a grouping insertion helper while preserving the script issue row"
         );
@@ -650,8 +637,7 @@ mod tests {
 
         assert!(
             file_search_production.contains("contains_at_root_file_token_boundary(name, query)")
-                && file_search_production
-                    .contains("fn root_file_name_token_matches_single_term(")
+                && file_search_production.contains("fn root_file_name_token_matches_single_term(")
                 && file_search_production
                     .contains("root_file_name_token_matches_query(name, query)"),
             "ranking, promotion, and recent seed gates should all share the developer filename token helper"
@@ -663,12 +649,12 @@ mod tests {
             "token matching should stay case-insensitive while preserving original casing for boundary classification"
         );
         assert!(
-            boundary_helper.contains("previous.is_ascii_lowercase() && current.is_ascii_uppercase()")
-                && boundary_helper.contains("previous.is_ascii_digit() && current.is_ascii_alphabetic()")
+            boundary_helper
+                .contains("previous.is_ascii_lowercase() && current.is_ascii_uppercase()")
                 && boundary_helper
-                    .contains("previous.is_ascii_uppercase()")
-                && boundary_helper
-                    .contains("next.is_some_and(|ch| ch.is_ascii_lowercase())"),
+                    .contains("previous.is_ascii_digit() && current.is_ascii_alphabetic()")
+                && boundary_helper.contains("previous.is_ascii_uppercase()")
+                && boundary_helper.contains("next.is_some_and(|ch| ch.is_ascii_lowercase())"),
             "root file token boundaries should include camel-case, digit-to-word, and acronym-to-word filename transitions"
         );
         for forbidden in [
@@ -712,7 +698,8 @@ mod tests {
         );
         assert!(
             root_normalized.contains("root_file_provider_query_for_user_query(&query)")
-                && root_normalized.contains("search_files_streaming_with_options( &provider_query,"),
+                && root_normalized
+                    .contains("search_files_streaming_with_options( &provider_query,"),
             "root global provider search should expand safe multi-word filename queries before launching Spotlight"
         );
 
@@ -845,8 +832,7 @@ mod tests {
             filtering_source.contains("self.root_search.root_file_search_mode")
                 && filtering_source.contains("self.root_search.root_file_search_loading")
                 && (filtering_source.contains("&self.root_search.root_file_results")
-                    || filtering_source
-                        .contains("self.root_search.root_file_results.as_slice()")),
+                    || filtering_source.contains("self.root_search.root_file_results.as_slice()")),
             "filtering cache should pass the root file source mode, loading state, and collected rows"
         );
     }
@@ -951,8 +937,10 @@ mod tests {
         );
         assert!(
             recent_seed_helper.contains("RootFileQueryIntent::OrdinaryRoot")
-                && recent_seed_helper.contains("root_file_global_query_is_eligible_for_intent(query, intent)")
-                && recent_seed_helper.contains("root_file_name_seed_matches_query(&file.name, query)")
+                && recent_seed_helper
+                    .contains("root_file_global_query_is_eligible_for_intent(query, intent)")
+                && recent_seed_helper
+                    .contains("root_file_name_seed_matches_query(&file.name, query)")
                 && recent_seed_helper.contains("root_file_path_context_matches_query(file, query)"),
             "recent seed eligibility should require a global query and allow filename-token or ordered directory-context matches"
         );
@@ -1025,7 +1013,8 @@ mod tests {
                 && normalized.contains("ROOT_FILE_COPY_PATH_ACTION_ID")
                 && normalized.contains("ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID")
                 && normalized.contains("selected_root_file_result_owned()")
-                && normalized.contains("self.execute_root_file_action(action_id, &file, window, cx)"),
+                && normalized
+                    .contains("self.execute_root_file_action(action_id, &file, window, cx)"),
             "root file direct shortcuts should route selected file rows through the shared root-file action executor"
         );
 
@@ -1098,16 +1087,17 @@ mod tests {
             "file search should expose a provider key based on directory plus hidden-file mode"
         );
         assert!(
-            active_source_body.contains("root_directory_browse_source_key(")
-                && active_source_body.contains("&self.root_search.root_file_search_query"),
+            active_source_body.contains(".root_file_browse_scope")
+                && active_source_body
+                    .contains("active_directory == directory && *active_hidden == show_hidden")
+                && !active_source_body.contains("root_file_search_query"),
             "root app layer should compare active directory-browse provider identity separately from the visible query"
         );
         assert!(
             normalized.contains(
-                "RootFileSearchRequest::DirectoryBrowse { query, directory, show_hidden, } if self.active_root_directory_browse_source_matches(directory, *show_hidden)"
-            ) && normalized.contains("self.root_search.root_file_search_query = query.clone();")
-                && normalized.contains("self.refresh_root_file_grouping_after_query_only_change(cx);"),
-            "directory child-fragment edits should only update the visible query and regroup cached rows"
+                "self.active_root_directory_browse_source_matches(directory, *show_hidden)"
+            ) && normalized.contains("self.root_search.named_provider_work_matches("),
+            "directory child-fragment edits should reuse the in-flight provider by work identity"
         );
         assert!(
             !normalized.contains("root_file_search_query != query_for_task"),
@@ -1171,22 +1161,11 @@ mod tests {
     fn fallback_mode_enter_prefers_visible_grouped_fallback_selection() {
         let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
             .expect("read src/app_impl/selection_fallback.rs");
-        let body = source
-            .split("pub fn execute_selected_fallback(")
-            .nth(1)
-            .and_then(|section| {
-                section
-                    .split("/// Execute a built-in fallback action without window reference")
-                    .next()
-            })
-            .expect("execute_selected_fallback source should be present");
-
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
-            body.contains("self.selected_main_list_search_result_owned()")
-                && body.contains("scripts::SearchResult::Fallback(fallback_match)")
-                && body.contains("self.execute_fallback_item(&fallback_match.fallback, cx);")
-                && body.contains("execute_selected_fallback.no_live_grouped_fallback")
-                && !body.contains("main_menu_fallback_state.selected_item()"),
+            normalized.contains("scripts::SearchResult::Fallback(fallback_match) => {")
+                && normalized.contains("self.execute_fallback_item(&fallback_match.fallback, cx);")
+                && !source.contains("main_menu_fallback_state.selected_item()"),
             "fallback-mode Enter should execute only the visible grouped fallback row"
         );
     }
@@ -1207,7 +1186,7 @@ mod tests {
             normalized.contains(
                 "ActionsDialogHost::MainList => { if let Some(result) = self.selected_main_list_search_result_owned()"
             ) && normalized.contains("root_unified_action_owner_for_result(&result)")
-                && normalized.contains("self.toggle_root_unified_result_actions(subject, window, cx);"),
+                && normalized.contains("self.toggle_root_unified_result_actions(*subject, window, cx);"),
             "MainList actions should branch to root-file actions for selected root file rows"
         );
         assert!(
@@ -1297,9 +1276,10 @@ mod tests {
         let record_body = function_body(&source, "fn record_root_file_open_use(");
         assert!(
             record_body.contains("root_file_open_frecency_keys(file)")
-                && record_body.contains("self.frecency_store.record_use(")
-                && record_body.contains("self.frecency_store.save()")
-                && record_body.contains("self.invalidate_grouped_cache();"),
+                && record_body.contains("app.frecency_store.record_use(")
+                && record_body.contains("app.frecency_store.save()")
+                && record_body
+                    .contains("self.commit_main_menu_results_refresh(\"root_file_open_recorded\""),
             "root-file recording should use the typed frecency-key plan, save, and invalidate"
         );
 
@@ -1316,7 +1296,7 @@ mod tests {
             .find("crate::file_search::open_file(&file.path)")
             .expect("execute_root_file_open should call open_file");
         let record_call = open_body
-            .find("self.record_root_file_open_use(file);")
+            .find("self.record_root_file_open_use(file, cx);")
             .expect("execute_root_file_open should record frecency after successful open");
         let close_call = open_body
             .find("self.close_and_reset_window(cx);")
@@ -1376,7 +1356,8 @@ mod tests {
         );
         assert!(
             normalized_actions.contains("pub(crate) fn execute_actions_route_action")
-                && normalized_actions.contains("ActionsDialogActivation::Executed { action_id, should_close, }")
+                && normalized_actions
+                    .contains("ActionsDialogActivation::Executed { action_id, should_close, }")
                 && normalized_actions.contains("self.handle_actions_dialog_activation("),
             "route executions should reuse the activation handler that captures root context before close"
         );
@@ -1389,8 +1370,8 @@ mod tests {
         assert!(
             normalized_stdin.contains("crate::ActionsRoute::Execute { action_id, should_close, }")
                 && normalized_stdin.contains(
-                "view.execute_actions_route_action( host, action_id, should_close, window, ctx,"
-            ),
+                    "view.execute_actions_route_action( host, action_id, should_close, window, ctx,"
+                ),
             "simulated Enter should use the same activation route as physical Enter"
         );
     }

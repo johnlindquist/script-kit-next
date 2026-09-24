@@ -59,14 +59,22 @@ fn main_view_header_owns_global_context_chips_once() {
         src.contains("pub(crate) fn agent_model_footer_label("),
         "global Agent·Model context helper must exist"
     );
-    let context_body = fn_body(
+    // The clickable zone renders the shared PromptHeaderContext, whose handler
+    // dispatches the cwd and Agent·Model actions.
+    let zone_body = fn_body(
         &src,
         "pub(crate) fn render_clickable_main_view_context_zone(",
     );
     assert!(
-        context_body.contains("render_main_view_context_zone_required"),
-        "shared main-view context zone must render cwd and Agent·Model together"
+        zone_body.contains("self.prompt_header_context(cx).render("),
+        "shared main-view context zone must render through PromptHeaderContext"
     );
+    let base = read("src/prompts/base.rs");
+    assert!(
+        base.contains("render_main_view_context_zone_required("),
+        "PromptHeaderContext must render cwd and Agent·Model together"
+    );
+    let context_body = fn_body(&src, "pub(crate) fn prompt_header_context(");
     assert!(
         context_body.contains("FooterAction::Cwd")
             && context_body.contains("FooterAction::AgentModel"),

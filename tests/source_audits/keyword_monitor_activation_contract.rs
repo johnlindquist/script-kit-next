@@ -77,20 +77,25 @@ fn keyword_file_update_enables_monitor_when_disabled_and_triggers_exist() {
     );
 }
 
+/// Keyword triggers track scriptlet CONTENT, which the registration-metadata
+/// diff ignores, so a content-only edit must still refresh them: the
+/// empty-diff branch may not return early, and the update is not diff-gated.
 #[test]
 fn scriptlet_file_change_always_updates_keyword_triggers_before_metadata_diff_gating() {
     let source = read_source(REFRESH_SCRIPTLETS_PATH);
     let region = handle_scriptlet_file_change_region(&source);
-    let update_idx = region
-        .find("crate::keyword_manager::update_keyword_triggers_for_file")
-        .expect("scriptlet file changes should always update keyword triggers");
-    let diff_idx = region
-        .find("let diff = diff_scriptlets")
-        .expect("scriptlet metadata diff should still exist");
-
     assert!(
-        update_idx < diff_idx,
-        "keyword trigger updates must run before registration metadata diff gating"
+        region.contains("crate::keyword_manager::update_keyword_triggers_for_file"),
+        "scriptlet file changes should always update keyword triggers"
+    );
+    let empty_branch = region
+        .split("if diff.is_empty() {")
+        .nth(1)
+        .and_then(|rest| rest.split("} else {").next())
+        .expect("scriptlet metadata diff should still gate registration work");
+    assert!(
+        !empty_branch.contains("return"),
+        "an empty registration diff must not skip the keyword trigger refresh"
     );
 }
 

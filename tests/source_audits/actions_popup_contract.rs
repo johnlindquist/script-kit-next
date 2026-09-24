@@ -13,12 +13,13 @@ fn actions_popup_event_enum_defined_in_window() {
         content.contains("pub(crate) enum ActionsPopupEvent"),
         "actions/window.rs must define ActionsPopupEvent enum"
     );
+    // Resized is gone: the popup freezes one fixed shell at open and
+    // search/route changes reflow inside it.
     for variant in [
         "OpenRequested",
         "OpenSucceeded",
         "OpenFailed",
         "RoutedKey",
-        "Resized",
         "Closed",
     ] {
         assert!(
@@ -66,20 +67,6 @@ fn close_actions_window_emits_closed_receipt() {
     assert!(
         close_fn.contains("ActionsPopupEvent::Closed"),
         "close_actions_window must emit Closed receipt"
-    );
-}
-
-#[test]
-fn resize_actions_window_direct_emits_resized_receipt() {
-    let content = read("src/actions/window.rs");
-    let resize_fn_start = content
-        .find("pub fn resize_actions_window_direct(")
-        .expect("resize_actions_window_direct function not found");
-    let resize_fn = &content[resize_fn_start..];
-
-    assert!(
-        resize_fn.contains("ActionsPopupEvent::Resized"),
-        "resize_actions_window_direct must emit Resized receipt"
     );
 }
 
@@ -170,62 +157,6 @@ fn spawn_open_emits_open_failed_on_error() {
 }
 
 #[test]
-fn actions_popup_search_uses_requested_typography_and_synced_cursor_height() {
-    let theme = read("src/designs/core/actions_popup_theme.rs");
-    let dialog = read("src/actions/dialog.rs");
-    let text_input = read("src/components/text_input/render.rs");
-
-    assert!(
-        theme.contains("height: 40.0"),
-        "actions popup search height must default to 40px"
-    );
-    assert!(
-        theme.contains("font_size: 14.0"),
-        "actions popup search font must match compact action-row typography"
-    );
-    assert!(
-        theme.contains("cursor_height: 14.0"),
-        "actions popup cursor height must default to the 14pt font height"
-    );
-    assert!(
-        theme.contains("def.search.cursor_height = def.search.font_size;"),
-        "actions popup cursor height must stay synced to search font size after overrides"
-    );
-    assert!(dialog.contains("render_compact_search_text("));
-    assert!(
-        dialog.contains("font_size: popup_theme.search.font_size")
-            && dialog.contains("cursor_height: popup_theme.search.cursor_height"),
-        "actions popup search text and cursor must use their shared popup tokens"
-    );
-    assert!(
-        text_input.contains(".line_height(px(config.font_size))"),
-        "shared compact search text must keep line height synced to its font size"
-    );
-}
-
-#[test]
-fn actions_popup_search_placeholder_and_typed_text_share_origin() {
-    let dialog = read("src/actions/dialog.rs");
-    let text_input = read("src/components/text_input/render.rs");
-
-    assert!(
-        dialog.contains("let build_search_content = |search_display: SharedString|")
-            && dialog.contains("render_compact_search_text("),
-        "top and bottom actions search fields must share one content builder"
-    );
-    assert!(
-        text_input.contains("fn render_compact_search_cursor(")
-            && text_input.contains(".relative()")
-            && text_input.contains(".w(px(0.0))"),
-        "shared compact search cursor must be zero-width so it cannot shift placeholder text"
-    );
-    assert!(
-        !text_input.contains(".mr(px(2.))") && !text_input.contains(".ml(px(2.))"),
-        "actions search cursor margins must not offset placeholder or typed text"
-    );
-}
-
-#[test]
 fn actions_popup_rows_use_shared_list_item_with_popup_font_override() {
     let theme = read("src/designs/core/actions_popup_theme.rs");
     let dialog = read("src/actions/dialog.rs");
@@ -242,7 +173,8 @@ fn actions_popup_rows_use_shared_list_item_with_popup_font_override() {
         "shared ListItem must expose an explicit metrics override hook"
     );
     assert!(
-        dialog.contains("actions_row_metrics.name_font_size =\n                                            popup_theme.row.title_font_size;")
+        dialog.contains("metrics.name_font_size = popup.row.title_font_size;")
+            && dialog.contains("resolved_actions_dialog_row_metrics(")
             && dialog.contains(".metrics_override(actions_row_metrics)"),
         "actions popup rows must keep shared ListItem anatomy while applying popup font tokens"
     );

@@ -41,16 +41,19 @@ fn sdk_computer_use_calls_script_kit_self_mcp_server() {
     let discovery_section = extract_section(
         &sdk,
         "async function loadScriptKitSelfMcpServerConfig",
-        1600,
+        4000,
     );
 
     assert!(
-        discovery_section.contains("'.scriptkit', 'server.json'"),
-        "computer helpers must discover the live Script Kit MCP server from ~/.scriptkit/server.json"
+        discovery_section.contains("nodePath.join(activeScriptKitRoot(), 'server.json')")
+            && extract_section(&sdk, "function activeScriptKitRoot", 400)
+                .contains("nodePath.join(os.homedir(), '.scriptkit')"),
+        "computer helpers must discover the live Script Kit MCP server from <kit root>/server.json (~/.scriptkit by default)"
     );
     assert!(
-        discovery_section.contains("endpoint: `${baseUrl}/rpc`"),
-        "computer helpers must call the app's /rpc endpoint"
+        discovery_section.contains("endpoint.pathname = '/rpc';")
+            && discovery_section.contains("endpoint.hostname === '127.0.0.1'"),
+        "computer helpers must call the app's loopback /rpc endpoint"
     );
     assert!(
         discovery_section.contains("authorization: `Bearer ${discovery.token}`"),

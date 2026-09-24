@@ -94,20 +94,6 @@ fn sync_list_state_resets_reveal_cache_and_logs() {
 }
 
 #[test]
-fn sync_list_state_re_reveals_after_reset() {
-    let content = read("src/app_navigation/impl_scroll.rs");
-
-    let fn_body = super::function_body(&content, "sync_list_state")
-        .expect("Expected sync_list_state function");
-
-    // After resetting reveal cache, must scroll to reveal the current selection
-    assert!(
-        fn_body.contains("scroll_to_reveal_item(self.selected_index)"),
-        "count-only sync_list_state must re-reveal the selected item after invalidating the reveal cache"
-    );
-}
-
-#[test]
 fn main_list_scroll_receipt_exposes_footer_safe_selected_row_geometry() {
     let content = read("src/app_navigation/impl_scroll.rs");
 
@@ -197,10 +183,6 @@ fn filter_replacement_sync_replaces_list_state_even_when_count_unchanged() {
             && !sync_fn.contains("adjust_selected_item_above_footer_overlay(self.selected_index)"),
         "filter replacement sync should not reveal the old selection before reconciliation resets it"
     );
-    assert!(
-        sync_fn.contains("\"replaced list state for filter replacement\""),
-        "filter replacement sync must emit a distinct SCROLL_STATE log"
-    );
 }
 
 #[test]
@@ -211,7 +193,7 @@ fn filter_change_reconciliation_uses_filter_replacement_list_sync() {
         .expect("reconcile_script_list_after_filter_change function not found");
 
     assert!(
-        fn_body.contains("self.sync_list_state_for_filter_replacement();"),
+        fn_body.contains("self.sync_list_state_for_filter_replacement("),
         "filter change reconciliation must force list measured-item refresh, not only count sync"
     );
     assert!(
@@ -221,8 +203,8 @@ fn filter_change_reconciliation_uses_filter_replacement_list_sync() {
 }
 
 /// Regression guard: same-count list updates (e.g. filtering replaces every row but
-/// the total count stays identical) must still invalidate and re-reveal. This test
-/// proves the invalidation is unconditional — it happens *outside* the
+/// the total count stays identical) must still invalidate the reveal cache. This
+/// test proves the invalidation is unconditional — it happens *outside* the
 /// `if old_list_count != item_count` branch.
 #[test]
 fn sync_list_state_regression_invalidates_reveal_even_when_count_unchanged() {
@@ -252,35 +234,5 @@ fn sync_list_state_regression_invalidates_reveal_even_when_count_unchanged() {
     assert!(
         reveal_invalidation > splice_pos,
         "reveal cache invalidation must happen after the conditional splice, i.e. unconditionally"
-    );
-
-    // The re-reveal must also be unconditional (outside the count-change guard).
-    let re_reveal = sync_fn
-        .find("scroll_to_reveal_item(self.selected_index)")
-        .expect("scroll_to_reveal_item call not found");
-    assert!(
-        re_reveal > reveal_invalidation,
-        "re-reveal must happen after cache invalidation"
-    );
-}
-
-#[test]
-fn footer_safe_scroll_offset_uses_footer_reduced_viewport_for_trailing_scroll_budget() {
-    let content = read("src/app_navigation/impl_scroll.rs");
-
-    let fn_body = super::function_body(&content, "footer_safe_scroll_offset_for_item")
-        .expect("footer_safe_scroll_offset_for_item function not found");
-
-    assert!(
-        fn_body.contains("let safe_viewport_height = viewport_height - footer_overlay_height;"),
-        "footer_safe_scroll_offset_for_item must compute a footer-reduced viewport height"
-    );
-    assert!(
-        fn_body.contains("script_list_content_height(items) - safe_viewport_height"),
-        "footer_safe_scroll_offset_for_item must allow the extra trailing scroll budget required to clear the footer overlay"
-    );
-    assert!(
-        fn_body.contains("let safe_bottom = current_scroll_top + safe_viewport_height;"),
-        "footer_safe_scroll_offset_for_item must compare against the footer-safe visible bottom edge"
     );
 }

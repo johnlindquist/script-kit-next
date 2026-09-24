@@ -247,13 +247,7 @@ impl ScriptListApp {
         let content_top = main_y + header_height;
         // Views end their content above the in-stage footer zone; only the
         // main-menu list extends under it (same rule as the root renderer).
-        let footer_zone_reserve = if crate::footer_popup::main_window_footer_in_stage()
-            && !matches!(self.current_view, AppView::ScriptList)
-        {
-            crate::footer_popup::main_window_footer_zone_height()
-        } else {
-            0.0
-        };
+        let footer_zone_reserve = crate::footer_popup::main_window_view_footer_zone_reserve();
         let content_height = arg_geometry
             .map(|geometry| geometry.resolved.viewport_height)
             .unwrap_or(window_height - footer_zone_reserve - header_height);

@@ -4,7 +4,9 @@ use super::read_source as read;
 
 #[test]
 fn mini_main_window_builtin_uses_shared_helper() {
-    let content = read("src/app_execute/builtin_execution.rs");
+    // The action enum lives in an `include!`d sibling of builtin_execution.rs.
+    let content = read("src/app_execute/builtin_execution.rs")
+        + &read("src/app_execute/builtin_execution_utility_actions.rs");
 
     for expected in [
         "enum UtilityOpenBuiltinAction",
@@ -24,10 +26,8 @@ fn mini_main_window_builtin_uses_shared_helper() {
 fn open_main_window_sets_mini_mode_contract() {
     let content = read("src/app_execute/builtin_execution.rs");
 
-    let fn_start = content
-        .find("fn open_main_window(&mut self, cx: &mut Context<Self>) {")
+    let body = super::function_body(&content, "open_main_window")
         .expect("Expected open_main_window helper");
-    let body = &content[fn_start..content.len().min(fn_start + 1800)];
 
     for expected in [
         "self.filter_text.clear();",
@@ -95,10 +95,8 @@ fn resize_to_view_sync_uses_width_aware_path() {
 #[test]
 fn lifecycle_resets_restore_full_main_window_mode_on_close_and_go_back() {
     let lifecycle = read("src/app_impl/lifecycle_reset.rs");
-    let close_start = lifecycle
-        .find("fn prepare_main_window_close(")
+    let close_body = super::function_body(&lifecycle, "prepare_main_window_close")
         .expect("Expected shared main-window close preparation helper");
-    let close_body = &lifecycle[close_start..lifecycle.len().min(close_start + 1400)];
     assert!(
         close_body.contains("if normalize_mode_before_hide")
             && close_body.contains(
@@ -121,76 +119,39 @@ fn lifecycle_resets_restore_full_main_window_mode_on_close_and_go_back() {
     );
 }
 
+/// Escape ordering (popup -> filter -> launch origin -> dismiss) is decided by
+/// the pure `plan_launcher_escape`, covered by unit tests in
+/// `window_orchestrator::interaction`. Both keyboard paths must route through
+/// that single plan so they cannot drift apart again.
 #[test]
 fn simulate_key_escape_delegates_to_go_back_when_opened_from_main_menu() {
-    // The SimulateKey escape handler in ScriptList must check opened_from_main_menu
-    // and delegate to go_back_or_close. Without this, ESC from mini main window
-    // via stdin protocol would hide the window instead of restoring full mode.
-    for path in ["src/app_impl/simulate_key_dispatch.rs"] {
-        let source = read(path);
-        let escape_start = source
-            .find("SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide")
-            .unwrap_or_else(|| panic!("SimulateKey escape handler must exist in {path}"));
-        let escape_body = &source[escape_start..source.len().min(escape_start + 1800)];
-        for marker in [
-            "menu_syntax_trigger_picker_owns_main_keyboard()",
-            "!view.filter_text.is_empty()",
-            "view.opened_from_main_menu",
-            "view.go_back_or_close(window, ctx)",
-        ] {
-            assert!(
-                escape_body.contains(marker),
-                "{path} SimulateKey escape branch missing `{marker}`"
-            );
-        }
-
-        let popup_ix = escape_body
-            .find("menu_syntax_trigger_picker_owns_main_keyboard()")
-            .unwrap();
-        let filter_ix = escape_body.find("!view.filter_text.is_empty()").unwrap();
-        let origin_ix = escape_body.find("view.opened_from_main_menu").unwrap();
-        assert!(
-            popup_ix < filter_ix && filter_ix < origin_ix,
-            "{path} SimulateKey Escape order must be popup -> filter -> launch origin"
-        );
-    }
+    let simulate = read("src/app_impl/simulate_key_dispatch.rs");
+    assert!(
+        simulate.contains("view.apply_shared_launcher_escape(\"simulate_key\", window, ctx)"),
+        "SimulateKey Escape must route through the shared launcher escape plan"
+    );
+    let script_list = read("src/render_script_list/mod.rs");
+    let decision = super::function_body(&script_list, "launcher_escape_decision")
+        .expect("launcher_escape_decision must build the shared plan facts");
+    assert!(
+        decision.contains("plan_launcher_escape(")
+            && decision.contains("return_to_origin: self.opened_from_main_menu"),
+        "the shared plan must receive the launch-origin fact"
+    );
+    let apply = super::function_body(&script_list, "apply_shared_launcher_escape")
+        .expect("apply_shared_launcher_escape must exist");
+    assert!(
+        apply.contains("LauncherEscapeDecision::ReturnToOrigin => {")
+            && apply.contains("self.go_back_or_close(window, cx);"),
+        "ReturnToOrigin must go back through go_back_or_close"
+    );
 }
 
 #[test]
 fn physical_script_list_escape_delegates_to_go_back_when_opened_from_main_menu() {
-    // Physical ScriptList Escape must keep the same launcher-origin layer as
-    // simulateKey: popup first, filter clear second, opened-from-menu back
-    // third, and only then window close.
     let source = read("src/render_script_list/mod.rs");
-    let escape_start = source
-        .find("Escape order on ScriptList:")
-        .expect("ScriptList physical Escape branch should document its order");
-    let escape_body = &source[escape_start..source.len().min(escape_start + 2600)];
-
-    for marker in [
-        "menu_syntax_trigger_picker_owns_main_keyboard()",
-        "!this.filter_text.is_empty()",
-        "this.opened_from_main_menu",
-        "this.close_and_reset_window(cx)",
-    ] {
-        assert!(
-            escape_body.contains(marker),
-            "ScriptList physical Escape branch missing `{marker}`"
-        );
-    }
-
-    let popup_ix = escape_body
-        .find("menu_syntax_trigger_picker_owns_main_keyboard()")
-        .unwrap();
-    let filter_ix = escape_body.find("!this.filter_text.is_empty()").unwrap();
-    let origin_ix = escape_body.find("this.opened_from_main_menu").unwrap();
-    let close_ix = escape_body.find("this.close_and_reset_window(cx)").unwrap();
     assert!(
-        popup_ix < filter_ix && filter_ix < origin_ix && origin_ix < close_ix,
-        "ScriptList physical Escape order must be popup -> filter -> launch origin -> close. Body was:\n{escape_body}"
-    );
-    assert!(
-        escape_body.contains("this.go_back_or_close(window, cx)"),
-        "ScriptList physical Escape must delegate opened-from-menu handling to go_back_or_close"
+        source.contains("this.apply_shared_launcher_escape(\"physical_bubble\", window, cx)"),
+        "physical ScriptList Escape must route through the shared launcher escape plan"
     );
 }

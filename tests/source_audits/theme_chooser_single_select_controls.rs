@@ -1,5 +1,19 @@
 use super::read_source;
 
+/// The Theme Chooser module is one file plus `include!`d state and controls
+/// parts; audits read the whole production module.
+fn theme_chooser_source() -> String {
+    [
+        "theme_chooser.rs",
+        "theme_chooser_state.rs",
+        "theme_chooser_controls.rs",
+    ]
+    .iter()
+    .map(|file| read_source(&format!("src/render_builtins/{file}")))
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
 /// Returns the parenthesized argument list of the
 /// `render_theme_chooser_management_button(` call whose first argument is the
 /// given button id, panicking when no such call exists in `section`.
@@ -43,7 +57,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 
 #[test]
 fn theme_chooser_customize_opacity_controls_are_single_select() {
-    let source = read_source("src/render_builtins/theme_chooser.rs");
+    let source = theme_chooser_source();
 
     assert!(!source.contains("OPACITY_MATCH_TOLERANCE"));
     assert!(source.contains("fn closest_float_preset_index("));
@@ -58,7 +72,7 @@ fn theme_chooser_customize_opacity_controls_are_single_select() {
 
 #[test]
 fn theme_chooser_customize_opacity_controls_cover_full_percent_range() {
-    let source = read_source("src/render_builtins/theme_chooser.rs");
+    let source = theme_chooser_source();
 
     assert!(source.contains(
         "const OPACITY_PRESETS: &'static [(f32, &'static str)] = &[\n        (0.00, \"0%\"),"
@@ -84,7 +98,7 @@ fn theme_chooser_customize_opacity_controls_cover_full_percent_range() {
 
 #[test]
 fn theme_chooser_exposes_user_theme_management_and_gradient_actions() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
     let actions = read_source("src/render_builtins/actions.rs");
     let user_themes = read_source("src/theme/user_themes.rs");
     let theme_types = read_source("src/theme/types.rs");
@@ -141,7 +155,7 @@ fn theme_chooser_exposes_user_theme_management_and_gradient_actions() {
 
 #[test]
 fn theme_chooser_exposes_management_status_and_safe_user_theme_actions() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
     let actions = read_source("src/render_builtins/actions.rs");
     let collector = read_source("src/app_layout/collect_elements.rs");
     let user_themes = read_source("src/theme/user_themes.rs");
@@ -215,7 +229,7 @@ fn theme_chooser_exposes_management_status_and_safe_user_theme_actions() {
 
 #[test]
 fn theme_chooser_management_buttons_use_theme_aware_hover_states() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
     let button = read_source("src/components/button/component.rs");
 
     assert!(
@@ -307,7 +321,7 @@ fn theme_chooser_management_buttons_use_theme_aware_hover_states() {
 
 #[test]
 fn theme_chooser_outer_input_uses_shared_main_view_chrome() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
 
     assert!(
         chooser.contains("render_builtin_main_input_header(")
@@ -323,7 +337,7 @@ fn theme_chooser_outer_input_uses_shared_main_view_chrome() {
 
 #[test]
 fn theme_chooser_customize_cards_use_whisper_tokens_not_panel_tokens() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
     let render_code = chooser
         .split("#[cfg(test)]")
         .next()
@@ -416,7 +430,7 @@ fn theme_gradients_propagate_to_secondary_windows() {
 
 #[test]
 fn theme_chooser_controls_are_devtools_visible_and_drivable() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
     let collector = read_source("src/app_layout/collect_elements.rs");
     let prompt_handler = read_source("src/prompt_handler/mod.rs");
     let protocol = read_source("src/protocol/types/batch_wait.rs");
@@ -511,7 +525,7 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
 
 #[test]
 fn theme_chooser_color_rows_use_single_picker_with_typed_hex_input() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
     let new_controls = source_between(
         &chooser,
         "fn new_theme_chooser_color_controls(",
@@ -537,7 +551,9 @@ fn theme_chooser_color_rows_use_single_picker_with_typed_hex_input() {
     assert!(chooser.contains("parse_theme_chooser_hex_input(text)"));
     assert!(chooser.contains("apply_theme_chooser_color_hex_change("));
     assert_eq!(
-        new_controls.matches("ColorPickerState::new(window, cx)").count(),
+        new_controls
+            .matches("ColorPickerState::new(window, cx)")
+            .count(),
         1,
         "each Theme Designer color control bundle should allocate exactly one gpui-component ColorPickerState"
     );
@@ -550,17 +566,14 @@ fn theme_chooser_color_rows_use_single_picker_with_typed_hex_input() {
     );
     assert!(
         new_controls.contains("ColorPickerEvent::Change(Some(color))")
-            && new_controls.contains(
-                "this.apply_theme_chooser_color_change(binding, *color, cx);"
-            )
+            && new_controls.contains("this.apply_theme_chooser_color_change(binding, *color, cx);")
             && new_controls.contains("ColorPickerEvent::Change(None) => {}"),
         "Theme Designer must route gpui-component ColorPickerEvent::Change through Theme Designer state"
     );
     assert!(
         new_controls.contains("gpui_component::input::InputEvent::Change")
-            && new_controls.contains(
-                "this.apply_theme_chooser_hex_text_if_valid(binding, &value, cx);"
-            )
+            && new_controls
+                .contains("this.apply_theme_chooser_hex_text_if_valid(binding, &value, cx);")
             && new_controls.contains("gpui_component::input::InputEvent::PressEnter { .. }")
             && new_controls.contains("gpui_component::input::InputEvent::Blur")
             && new_controls.contains("this.sync_theme_chooser_control_values(window, cx);"),
@@ -610,7 +623,7 @@ fn theme_chooser_color_rows_use_single_picker_with_typed_hex_input() {
 
 #[test]
 fn theme_chooser_edit_as_text_action_materializes_user_theme_before_opening_editor() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
     let actions = read_source("src/render_builtins/actions.rs");
     let collector = read_source("src/app_layout/collect_elements.rs");
 
@@ -631,10 +644,8 @@ fn theme_chooser_edit_as_text_action_materializes_user_theme_before_opening_edit
 
 #[test]
 fn theme_chooser_slider_drag_preview_does_not_resync_native_vibrancy() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
-    let gpui_integration = read_source("src/theme/gpui_integration.rs");
+    let chooser = theme_chooser_source();
     let theme_service = read_source("src/theme/service.rs");
-    let theme_types = read_source("src/theme/types.rs");
     let slider_change = chooser
         .split("fn apply_theme_chooser_slider_change(")
         .nth(1)
@@ -665,10 +676,10 @@ fn theme_chooser_slider_drag_preview_does_not_resync_native_vibrancy() {
         .and_then(|section| section.split("fn mutate_theme_chooser_theme(").next())
         .expect("missing apply_and_persist_theme");
     let service_reload = theme_service
-        .split("pub(crate) fn reload_theme_cache_sync_and_bump_revision(")
+        .split("pub fn publish_runtime_theme(")
         .nth(1)
-        .and_then(|section| section.split("/// Persist a theme to disk").next())
-        .expect("missing reload_theme_cache_sync_and_bump_revision");
+        .and_then(|section| section.split("pub(crate) fn reload_theme(").next())
+        .expect("missing publish_runtime_theme");
 
     assert!(
         slider_change.contains("self.apply_theme_chooser_slider_theme(")
@@ -697,53 +708,36 @@ fn theme_chooser_slider_drag_preview_does_not_resync_native_vibrancy() {
         "non-slider theme previews should keep native vibrancy synchronized"
     );
     assert!(
-        persist_helper.contains("self.apply_theme_chooser_theme(next_theme, reason, cx);")
-            && persist_helper.contains("persist_theme_and_sync_all_windows"),
+        persist_helper.contains("persist_theme_and_sync_all_windows(cx, &next_theme, reason)"),
         "explicit Theme Designer commits should preview through the native-sync path before persisting"
     );
     assert!(
-        service_reload.contains("sync_gpui_component_theme_for_theme_with_source("),
+        service_reload.contains("gpui_integration::sync_native_window_theme_for_theme(")
+            && theme_service.contains("publish_runtime_theme(cx, expected, prepared, source)"),
         "persisted themes should reload through the theme service path that syncs native window state"
     );
+    // Previews publish through the theme service with the native-sync flag
+    // carried in the publication source; the service skips native window
+    // reconfiguration for `ChooserPreview { sync_native: false }` (slider drags).
+    let preview_compact = preview_helper
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        preview_helper
-            .contains("sync_theme_chooser_preview(cx, &self.theme, reason, sync_native_vibrancy);")
-            && preview_helper.contains("if sync_native_vibrancy {")
-            && preview_helper
-                .contains("platform::configure_window_vibrancy_material_for_appearance")
-            && preview_helper.contains("notify_parent: bool")
-            && preview_helper.contains("if notify_parent {\n            cx.notify();"),
+        preview_compact.contains(
+            "crate::theme::service::ThemePublicationSource::ChooserPreview { sync_native: sync_native_vibrancy, }"
+        ) && preview_helper.contains("notify_parent: bool")
+            && preview_compact.contains("if notify_parent { cx.notify(); }"),
         "Theme Designer preview helper should honor the native-sync flag"
     );
+    let service_compact = service_reload
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        chooser.contains("Slider drags can skip native window material churn")
-            && !chooser.contains(
-                "applies both gpui-component colors and\n/// native vibrancy/material in one call"
-            ),
-        "Theme Designer preview sync comment should describe conditional native vibrancy ownership"
-    );
-    assert!(
-        chooser.contains(
-            "sync_gpui_component_theme_for_theme_with_source_and_native(\n        cx,\n        active_theme.as_ref(),\n        source,\n        sync_native_vibrancy,"
-        ),
-        "ThemeChooser preview sync must pass the slider native-sync flag into gpui theme integration"
-    );
-    assert!(
-        gpui_integration.contains("sync_native_window: bool")
-            && gpui_integration.contains("if sync_native_window {\n        sync_native_window_theme_for_theme(sk_theme, source);"),
-        "gpui theme integration must allow high-frequency previews to skip native window reconfiguration"
-    );
-    assert!(
-        theme_types.contains("fn set_cached_theme_for_preview(")
-            && preview_helper
-                .contains("crate::theme::types::set_cached_theme_for_preview(self.theme.as_ref());")
-            && source_between(
-                &chooser,
-                "fn restore_theme_chooser_theme(",
-                "fn preview_theme_chooser_catalog_entry("
-            )
-            .contains("crate::theme::types::set_cached_theme_for_preview(self.theme.as_ref());"),
-        "Theme Designer previews should update the in-memory theme cache so native footer chrome follows before persistence"
+        service_compact.contains("ThemePublicationSource::ChooserPreview { sync_native: false }")
+            && service_compact.contains("if native_refresh_requested {"),
+        "theme publication must skip native window reconfiguration for slider-drag previews"
     );
 }
 
@@ -766,18 +760,18 @@ fn theme_chooser_native_footer_apply_label_routes_like_enter() {
             && primary_label.contains("return \"Apply\".to_string();"),
         "Theme Designer native footer primary label should say Apply"
     );
+    let run_branch = run_branch.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        run_branch.contains("AppView::ThemeChooserView { .. }")
-            && run_branch.contains("self.submit_theme_chooser_from_input_enter(window, cx);")
-            && run_branch.find("submit_theme_chooser_from_input_enter")
-                < run_branch.find("execute_selected(cx)"),
+        run_branch.contains(
+            "} else if matches!(self.current_view, AppView::ThemeChooserView { .. }) { self.submit_theme_chooser_from_input_enter(window, cx); }"
+        ),
         "Theme Designer native footer Apply should commit through the Enter path before generic Run fallback"
     );
 }
 
 #[test]
 fn theme_chooser_native_slider_drag_is_not_parent_reconciled_until_release() {
-    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let chooser = theme_chooser_source();
     let new_slider = chooser
         .split("fn new_theme_chooser_slider(")
         .nth(1)

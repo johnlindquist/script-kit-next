@@ -19,7 +19,9 @@ const SCAN_ROOTS: &[&str] = &[
 const FORBIDDEN_SNIPPETS: &[&str] = &[
     "file:screenflow",
     "eggo-expression-grid",
-    "eggo-brand",
+    // The purged popup fixtures' literal URL (the bare domain may appear in
+    // unrelated sample transcripts).
+    "https://eggo-brand.wzrrd.sh/",
     "agent_chat-mention",
     "agent-chat-screenshot-mention",
     "agent_chat-context-root",

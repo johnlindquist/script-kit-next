@@ -38,17 +38,29 @@ fn fields_protocol_routes_to_real_form_prompt_state() {
         );
     }
 
+    // Production ShowFields and design evaluation share one seed constructor.
     let handler = read(PROMPT_HANDLER_PATH);
     assert!(
-        handler.contains("FormPromptState::from_fields"),
+        handler.contains("PromptSeed::Fields(FieldsPromptSeed {")
+            && handler.contains("self.construct_prompt_seed(seed, cx)"),
+        "ShowFields must construct through the shared prompt seed constructor"
+    );
+    let seeds = read("src/design_evaluation/prompt_fixtures.rs");
+    let fields_seed = seeds
+        .split("PromptSeed::Fields(seed) => {")
+        .nth(1)
+        .and_then(|rest| rest.split("PromptSeed::").next())
+        .expect("shared seed constructor must handle PromptSeed::Fields");
+    assert!(
+        fields_seed.contains("FormPromptState::from_fields"),
         "ShowFields must reuse FormPromptState through a fields constructor"
     );
     assert!(
-        handler.contains("self.current_view = AppView::FormPrompt"),
+        fields_seed.contains("AppView::FormPrompt"),
         "ShowFields must install the real form prompt app view"
     );
     assert!(
-        handler.contains("self.pending_focus = Some(FocusTarget::FormPrompt)"),
+        fields_seed.contains("FocusTarget::FormPrompt"),
         "ShowFields must keep keyboard focus inside the prompt surface"
     );
 }

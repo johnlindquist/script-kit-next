@@ -256,10 +256,8 @@ fn filterable_view_builtins_use_shared_helper() {
 fn open_builtin_filterable_view_sets_shared_focus_contract() {
     let content = read("src/app_execute/builtin_execution.rs");
 
-    let fn_start = content
-        .find("fn open_builtin_filterable_view(")
+    let body = super::function_body(&content, "open_builtin_filterable_view")
         .expect("Expected open_builtin_filterable_view");
-    let body = &content[fn_start..content.len().min(fn_start + 1200)];
 
     for expected in [
         "self.filter_text.clear();",
@@ -267,7 +265,6 @@ fn open_builtin_filterable_view_sets_shared_focus_contract() {
         "self.pending_placeholder = Some(",
         "self.current_view = view;",
         "self.hovered_index = None;",
-        "self.opened_from_main_menu = true;",
         "MainWindowMode::Full",
         "\"open_builtin_filterable_view\"",
         "resize_to_view_sync(ViewType::MainWindow, 0);",
@@ -281,6 +278,13 @@ fn open_builtin_filterable_view_sets_shared_focus_contract() {
             "Missing required shared view-contract line: {expected}"
         );
     }
+    // Launch origin belongs to the entry point: launcher opens go back on
+    // Escape, direct (hotkey/deeplink) opens close. The shared helper must not
+    // overwrite it.
+    assert!(
+        !body.contains("self.opened_from_main_menu = true;"),
+        "open_builtin_filterable_view must not clobber the entry point's launch origin"
+    );
 }
 
 #[test]
@@ -381,24 +385,21 @@ fn surface_contracts_match_main_window_sizing_shape() {
     let app_view_state = compact_source(&app_view_state_source[contract_start..]);
     let layout_info = compact_source(&read("src/app_layout/build_layout_info.rs"));
 
-    for (kind, preview, visual, view_type) in [
+    for (kind, preview, visual) in [
         (
             "SurfaceKind::ThemeChooser",
             "RequiredSplitPreview",
             "SplitPreviewVisual",
-            "AppView::ThemeChooserView{..}",
         ),
         (
             "SurfaceKind::FileSearchMini",
             "NoPersistentPreview",
             "CompactLauncherVisual",
-            "FileSearchPresentation::Mini=>crate::window_resize::ViewType::MainWindow",
         ),
         (
             "SurfaceKind::FileSearchFull",
             "RequiredSplitPreview",
             "SplitPreviewVisual",
-            "FileSearchPresentation::Full=>crate::window_resize::ViewType::MainWindow",
         ),
     ] {
         let contract = compact_surface_kind_match_arm(&app_view_state, kind);
@@ -406,11 +407,14 @@ fn surface_contracts_match_main_window_sizing_shape() {
             contract.contains(preview) && contract.contains(visual),
             "{kind} contract must declare {preview} and {visual}"
         );
-        assert!(
-            layout_info.contains(view_type),
-            "build_layout_info must map {kind} to the matching main-window view type"
-        );
     }
+    // Layout info derives its fallback view type from the production sizing
+    // owner (checked by file_search_sizing_tracks_presentation_contract) rather
+    // than a second AppView -> ViewType table that previously drifted.
+    assert!(
+        layout_info.contains("self.calculate_window_size_params_with_app(Some(&*cx))"),
+        "build_layout_info must size through the production calculate_window_size_params owner"
+    );
 }
 
 #[test]

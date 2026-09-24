@@ -478,6 +478,12 @@ pub(crate) enum FooterActionDispatchAuthorization<'a> {
 }
 
 impl MainWindowFooterConfig {
+    /// The native footer draws something: at least one button or a left
+    /// affordance. Only then does the view reserve the in-stage footer zone.
+    pub(crate) fn shows_content(&self) -> bool {
+        !self.buttons.is_empty() || self.left_info.is_some()
+    }
+
     pub(crate) fn new(surface: &'static str, mut buttons: Vec<FooterButtonConfig>) -> Self {
         let mut shortcut_counts = BTreeMap::<String, usize>::new();
         for button in &buttons {
@@ -1505,9 +1511,14 @@ pub(crate) fn sync_main_footer_popup(
     // separate GPUI overlay NSWindow does not, so glass mode keeps only the
     // native host active and always closes the overlay.
     let requested_surface = config.map(|cfg| cfg.surface);
-    // Decide floating (main menu) vs detached placement before the native
-    // host recomputes its frame below.
-    set_main_footer_surface(requested_surface);
+    // Record which surface's footer is actually drawn (a config with nothing
+    // to show, e.g. the focused-text mini before a result, reserves no zone)
+    // before the native host recomputes its frame below.
+    set_main_footer_surface(
+        config
+            .filter(|cfg| cfg.shows_content())
+            .map(|cfg| cfg.surface),
+    );
     update_main_window_footer_host_state(requested_surface, None, false);
     let parent_window_handle = window.window_handle();
     let parent_bounds = window.bounds();

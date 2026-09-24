@@ -18,25 +18,25 @@ fn collect_files(root: impl AsRef<Path>, files: &mut Vec<PathBuf>) {
 }
 
 #[test]
-fn legacy_agent_chat_subprocess_backend_files_are_removed() {
+fn legacy_acp_subprocess_backend_files_are_removed() {
     for path in [
-        "src/ai/agent_chat/ui/agy_adapter.rs",
-        "src/ai/agent_chat/ui/client.rs",
-        "src/ai/agent_chat/ui/handlers.rs",
-        "src/ai/agent_chat/ui/provider.rs",
-        "tests/agy_agent_chat_adapter_harness.rs",
-        "scripts/agentic/mock-agent_chat-agent.js",
-        "scripts/agentic/tx_wait_for_agent_chat_runtime_semantics.ts",
+        "src/ai/acp/agy_adapter.rs",
+        "src/ai/acp/client.rs",
+        "src/ai/acp/handlers.rs",
+        "src/ai/acp/provider.rs",
+        "tests/agy_acp_adapter_harness.rs",
+        "scripts/agentic/mock-acp-agent.js",
+        "scripts/agentic/tx_wait_for_acp_runtime_semantics.ts",
     ] {
         assert!(
             !Path::new(path).exists(),
-            "legacy Agent Chat subprocess backend file should be removed: {path}"
+            "legacy ACP subprocess backend file should be removed: {path}"
         );
     }
 }
 
 #[test]
-fn source_tree_does_not_reference_legacy_agent_chat_backend_symbols() {
+fn source_tree_does_not_reference_legacy_acp_backend_symbols() {
     let mut files = vec![PathBuf::from("Cargo.toml")];
     for root in ["src", "scripts/agentic", "tests"] {
         collect_files(root, &mut files);
@@ -44,21 +44,21 @@ fn source_tree_does_not_reference_legacy_agent_chat_backend_symbols() {
 
     let this_file = Path::new("tests/source_audits/agent_chat_no_legacy_backend.rs");
     let forbidden = [
-        "AgentChatRuntime",
-        "AgentChatConnection",
-        "AgentChatProvider",
-        "AgyAgentChatAgent",
-        "AGY_AGENT_CHAT",
-        "--agy-agent_chat-adapter",
-        "AgentChatCommand",
-        "AgentChatCancelCommand",
-        "AgentChatPromptTurnRequest",
+        "AcpRuntime",
+        "AcpConnection",
+        "AcpProvider",
+        "AgyAcpAgent",
+        "AGY_ACP",
+        "--agy-acp-adapter",
+        "AcpCommand",
+        "AcpCancelCommand",
+        "AcpPromptTurnRequest",
         "StreamPrompt",
         "stream_prompt",
         "AgentSideConnection",
         "ClientSideConnection",
-        "mock-agent_chat-agent",
-        "agy_agent_chat_adapter_harness",
+        "mock-acp-agent",
+        "agy_acp_adapter_harness",
     ];
 
     for path in files {
@@ -76,7 +76,7 @@ fn source_tree_does_not_reference_legacy_agent_chat_backend_symbols() {
         for symbol in forbidden {
             assert!(
                 !source.contains(symbol),
-                "{} must not reference legacy Agent Chat subprocess backend symbol {symbol}",
+                "{} must not reference legacy ACP subprocess backend symbol {symbol}",
                 path.display()
             );
         }

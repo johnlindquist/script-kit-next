@@ -12,28 +12,12 @@
 //!    forces the change to be deliberate (and paired with a contract migration).
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 fn read(rel: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
     fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
-}
-
-fn collect_rs_files(root: impl AsRef<Path>, files: &mut Vec<PathBuf>) {
-    let root = root.as_ref();
-    let entries = match fs::read_dir(root) {
-        Ok(entries) => entries,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_rs_files(path, files);
-        } else if path.extension().is_some_and(|ext| ext == "rs") {
-            files.push(path);
-        }
-    }
 }
 
 #[test]
@@ -115,119 +99,6 @@ fn app_view_state_uses_agent_chat_ui_boundary() {
     );
 }
 
-/// The chat-runtime/UI types that MUST flow through the `agent_chat::ui`
-/// facade once an outer consumer references them by an `agent_chat::` path.
-const RUNTIME_TYPES: &[&str] = &[
-    "AgentChatView",
-    "AgentChatThread",
-    "AgentChatThreadInit",
-    "AgentChatThreadMessage",
-    "AgentChatThreadStatus",
-    "AgentChatEvent",
-    "AgentChatEventRx",
-    "AgentChatSession",
-    "AgentChatInlineSetupState",
-    "AgentChatSetupAction",
-    "AgentChatRetryRequest",
-    "AgentChatHistoryResumeRequest",
-    "AgentChatPermissionBroker",
-    "AgentChatLaunchBlocker",
-    "AgentChatLaunchRequirements",
-    "AgentChatLaunchResolution",
-    "AgentChatToolCallState",
-];
-
-/// Returns the first runtime type that `content` reaches via an `agent_chat::` path
-/// (optionally through a single submodule segment, e.g. `agent_chat::view::AgentChatThread`).
-/// The frozen `AppView::AgentChatView` enum variant is NOT matched because it has
-/// no `agent_chat::` path prefix.
-fn first_agent_chat_runtime_reference(content: &str) -> Option<String> {
-    let is_ident = |c: char| c.is_alphanumeric() || c == '_';
-    for (idx, _) in content.match_indices("agent_chat::") {
-        let rest = &content[idx + "agent_chat::".len()..];
-        // Optionally skip one lowercase submodule segment like `view::`.
-        let after_submodule = match rest.find("::") {
-            Some(pos)
-                if pos > 0
-                    && rest[..pos]
-                        .chars()
-                        .all(|c| c.is_ascii_lowercase() || c == '_') =>
-            {
-                &rest[pos + 2..]
-            }
-            _ => rest,
-        };
-        for ty in RUNTIME_TYPES {
-            if let Some(tail) = after_submodule.strip_prefix(ty) {
-                if !tail.chars().next().is_some_and(is_ident) {
-                    return Some((*ty).to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-#[test]
-fn outer_consumers_reach_runtime_types_through_agent_chat_ui() {
-    // Outer feature roots must import the chat-runtime/UI types via the
-    // `agent_chat::ui` facade, not directly from `crate::ai::agent_chat::ui`. Non-runtime
-    // Agent Chat compatibility surfaces (catalog/config/portal/history/surface_state/
-    // actions-dialog/context builders) are allowed to stay on `crate::ai::agent_chat::ui`.
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let outer_roots = [
-        "src/app_impl",
-        "src/notes",
-        "src/render_builtins",
-        "src/actions",
-        "src/app_actions",
-        "src/prompt_handler",
-        "src/test_support",
-    ];
-
-    let mut offenders = Vec::new();
-    for root in outer_roots {
-        let mut files = Vec::new();
-        collect_rs_files(manifest.join(root), &mut files);
-        for file in files {
-            let contents = fs::read_to_string(&file).unwrap_or_default();
-            if let Some(ty) = first_agent_chat_runtime_reference(&contents) {
-                offenders.push(format!("{} reaches agent_chat::{ty}", file.display()));
-            }
-        }
-    }
-
-    assert!(
-        offenders.is_empty(),
-        "outer consumers must import chat-runtime types from \
-         crate::ai::agent_chat::ui, not crate::ai::agent_chat::ui; offenders: {offenders:#?}"
-    );
-}
-
-#[test]
-fn agent_chat_ui_facade_stays_runtime_only() {
-    // The facade is a runtime/UI boundary; it must NOT absorb non-runtime Agent Chat
-    // compatibility surfaces. Those get their own future boundaries if needed.
-    let ui = read("src/ai/agent_chat/ui/mod.rs");
-    for forbidden in [
-        "AgentChatAgentCatalogEntry",
-        "AgentChatAgentConfig",
-        "AgentChatAgentRuntimeState",
-        "AgentChatActionsDialogContext",
-        "AgentChatPortalLaunchContract",
-        "AgentChatHistoryEntry",
-        "portal_contract",
-        "catalog::",
-        "config::",
-        "history::",
-    ] {
-        assert!(
-            !ui.contains(forbidden),
-            "agent_chat::ui must stay runtime-only; it must not re-export `{forbidden}`"
-        );
-    }
-}
-
 #[test]
 fn frozen_serialized_surface_ids_are_unchanged() {
     let app_view = read("src/main_sections/app_view_state.rs");
@@ -273,28 +144,6 @@ fn frozen_get_agent_chat_state_protocol_contract_is_unchanged() {
         agent_chat_state.contains("AgentChatStateSnapshot"),
         "frozen `AgentChatStateSnapshot` automation type must remain"
     );
-}
-
-#[test]
-fn agent_chat_user_facing_copy_uses_feature_name() {
-    // Display copy must name the feature "Agent Chat", not "Agent Chat". Each pair
-    // asserts the new copy is present and the old Agent Chat-as-feature label is gone.
-    let cases: &[(&str, &str, &str)] = &[(
-        "src/render_prompts/term.rs",
-        "⌘W Agent Chat",
-        "⌘W Agent Chat",
-    )];
-    for (path, expect_new, forbid_old) in cases {
-        let src = read(path);
-        assert!(
-            src.contains(expect_new),
-            "{path} must use the Agent Chat feature name (`{expect_new}`)"
-        );
-        assert!(
-            !src.contains(forbid_old),
-            "{path} must not keep the Agent Chat-as-feature display label (`{forbid_old}`)"
-        );
-    }
 }
 
 #[test]

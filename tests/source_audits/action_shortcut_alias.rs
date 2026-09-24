@@ -157,7 +157,7 @@ fn shortcut_recorder_close_rekeys_main_filter_after_native_popup_close() {
         .expect("close_shortcut_recorder not found");
     let block = &recorder[close_pos..recorder.len().min(close_pos + 2000)];
     let close_window_pos = block
-        .find("close_shortcut_recorder_window(cx);")
+        .find("close_shortcut_recorder_instance(generation, cx)")
         .expect("close_shortcut_recorder should close the native recorder window");
     let show_main_pos = block
         .find("crate::platform::show_main_window_without_activation();")

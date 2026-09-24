@@ -37,7 +37,7 @@ fn test_render_emoji_picker_handles_enter_copy() {
     );
 
     assert!(
-        source.contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string("),
+        source.contains("crate::platform::copy_text(emoji.emoji)"),
         "render_emoji_picker should copy selected emoji on Enter/click"
     );
 }

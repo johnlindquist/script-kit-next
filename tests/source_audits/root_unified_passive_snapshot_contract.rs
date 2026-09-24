@@ -336,8 +336,7 @@ fn root_defaults_benchmark_enforces_input_echo_and_staleness() {
         );
     }
     assert!(
-        proof.contains("waitForSourceResult(")
-            && proof.contains("expectedComputedSearchText"),
+        proof.contains("waitForSourceResult(") && proof.contains("expectedComputedSearchText"),
         "source settle waits must be keyed by the expected final query, not the global fixture query"
     );
     assert!(
@@ -409,8 +408,8 @@ fn jsonl_history_sources_use_mtime_backed_foreground_indexes() {
         assert!(
             source.contains("OnceLock<Mutex<Option<")
                 && source.contains("IndexCache")
-                && source.contains("history_file_signature(&path)")
-                && source.contains("parse_history_entries(&content)")
+                && source.contains("history_file_signature(")
+                && source.contains("parse_history_entries(&")
                 && source.contains("cache.entries.clone()")
                 && (source.contains("read_private_history_file(&path)")
                     || source.contains("crate::atomic_file::read_private_file(path)")),

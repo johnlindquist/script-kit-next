@@ -34,9 +34,9 @@ fn focused_text_turns_use_focused_prompt_blocks_not_generic_submit_input() {
     for required in [
         "pub(crate) fn submit_blocks",
         "display_user_text",
-        "clear_all_pending_context(\"submit_blocks\")",
-        "AgentChatThreadMessageRole::User",
-        "start_turn(AgentChatTurnRequest",
+        "attempted_items: self.pending_context_items.clone()",
+        "self.start_prepared_turn(",
+        "push_user_message: true",
     ] {
         assert!(
             AGENT_CHAT_THREAD.contains(required),

@@ -353,20 +353,22 @@ impl ScriptListApp {
         // event stream (gpui-kit's `InputEvent` is matched exhaustively by
         // gpui-ai, so extensions cannot live there).
         let gpui_input_ext_subscription = cx.subscribe_in(&gpui_input_state, window, {
-            move |this, _, event: &gpui_component::input::ScriptKitInputEvent, window, cx| match event {
-                gpui_component::input::ScriptKitInputEvent::PressTab { secondary } => {
-                    if matches!(this.current_view, AppView::ScriptList)
-                        && this.menu_syntax_capture_form_owns_input()
-                    {
-                        if *secondary {
-                            this.focus_previous_menu_syntax_form_field(window, cx);
-                        } else {
-                            this.focus_next_menu_syntax_form_field(window, cx);
+            move |this, _, event: &gpui_component::input::ScriptKitInputEvent, window, cx| {
+                match event {
+                    gpui_component::input::ScriptKitInputEvent::PressTab { secondary } => {
+                        if matches!(this.current_view, AppView::ScriptList)
+                            && this.menu_syntax_capture_form_owns_input()
+                        {
+                            if *secondary {
+                                this.focus_previous_menu_syntax_form_field(window, cx);
+                            } else {
+                                this.focus_next_menu_syntax_form_field(window, cx);
+                            }
                         }
                     }
-                }
-                gpui_component::input::ScriptKitInputEvent::SelectionChange => {
-                    this.note_main_input_changed(cx)
+                    gpui_component::input::ScriptKitInputEvent::SelectionChange => {
+                        this.note_main_input_changed(cx)
+                    }
                 }
             }
         });
@@ -2673,11 +2675,7 @@ impl ScriptListApp {
                             if let AppView::AgentChatView { entity } = &this.current_view {
                                 let entity = entity.clone();
                                 entity.update(cx, |chat, cx| {
-                                    let _ = chat.request_conversation_dismiss(
-                                        crate::components::conversation_actions::ConversationDismissTrigger::Escape,
-                                        window,
-                                        cx,
-                                    );
+                                    chat.handle_conversation_escape(window, cx);
                                 });
                                 cx.stop_propagation();
                                 return;

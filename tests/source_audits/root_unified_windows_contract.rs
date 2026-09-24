@@ -18,11 +18,10 @@ fn root_windows_source_refreshes_in_app_layer_not_grouping() {
         .expect("root windows async refresh source should be present");
     for needle in [
         "background_executor()",
-        ".spawn(async move { crate::window_control::list_windows() })",
-        "crate::window_control::list_windows()",
+        "let _ = tx.try_send(crate::window_control::list_windows());",
         "begin_root_windows_refresh",
-        "install_root_windows",
-        "fail_root_windows_refresh",
+        "\"root_windows_refresh_started\"",
+        "app.finish_root_windows_worker(token, result, owned_run.as_deref(), cx)",
     ] {
         assert!(
             refresh_method.contains(needle),
@@ -94,8 +93,7 @@ fn root_windows_source_enriches_metadata_without_render_time_icon_decode() {
         "K_CG_WINDOW_LIST_OPTION_ALL",
         "K_CG_WINDOW_LIST_EXCLUDE_DESKTOP_ELEMENTS",
         "kCGWindowIsOnscreen",
-        "append_core_graphics_windows",
-        "WindowInfoInit",
+        "list_core_graphics_windows_all_spaces",
     ] {
         assert!(
             query.contains(needle),

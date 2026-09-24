@@ -183,6 +183,20 @@ fn is_read_only_automation_query(message: &crate::protocol::Message) -> bool {
     )
 }
 
+/// Stdin requests whose reply belongs on the app's stdout (the automation
+/// client that sent them), never on a running script's channel: the
+/// synchronous reads above, plus GPUI event simulation, whose deferred reply
+/// captures the sender at dispatch. Routed to a script, an Escape that ends
+/// the script disconnected that channel and the reply was silently dropped.
+fn replies_to_automation_client(message: &crate::protocol::Message) -> bool {
+    use crate::protocol::Message;
+    is_read_only_automation_query(message)
+        || matches!(
+            message,
+            Message::SimulateGpuiEvent { .. } | Message::CancelGpuiEvent { .. }
+        )
+}
+
 fn prompt_message_from_protocol_message(
     message: crate::protocol::Message,
 ) -> Option<PromptMessage> {

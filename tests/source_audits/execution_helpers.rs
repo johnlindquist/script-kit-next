@@ -79,49 +79,54 @@ fn open_scratch_pad_shows_toast_on_read_failure() {
 // Scratch Pad auto-save
 // ---------------------------------------------------------------------------
 
+// The editor owns the autosave loop (`EditorPrompt::start_autosave`); the
+// scratch-pad seed constructor starts it and relays save errors to a toast.
+
 #[test]
 fn scratch_pad_autosave_uses_two_second_interval() {
-    let content = execution_helpers_content();
-
+    let editor = read("src/editor/mod.rs");
+    let autosave = super::function_body(&editor, "start_autosave").expect("start_autosave");
     assert!(
-        content.contains("Duration::from_secs(2)"),
+        autosave.contains("Duration::from_secs(2)"),
         "Expected scratch pad auto-save interval to be 2 seconds"
     );
 }
 
 #[test]
 fn scratch_pad_autosave_stops_when_entity_is_dropped() {
-    let content = execution_helpers_content();
-
-    // The autosave loop should break when entity_weak.upgrade() returns None
+    let editor = read("src/editor/mod.rs");
+    let autosave = super::function_body(&editor, "start_autosave").expect("start_autosave");
     assert!(
-        content.contains("entity_weak.upgrade()"),
-        "Expected autosave loop to use weak reference for entity liveness check"
+        autosave.contains("self.autosave_task = Some(cx.spawn("),
+        "the autosave task must be owned by the editor so it drops with it"
     );
     assert!(
-        content.contains("false // Entity dropped, stop the task"),
-        "Expected autosave to break when entity is dropped"
+        autosave.contains("if result.is_err() {") && autosave.contains("break;"),
+        "Expected autosave to stop once the editor entity is gone"
     );
 }
 
 #[test]
 fn scratch_pad_submit_save_error_surfaces_toast() {
-    let content = execution_helpers_content();
-
-    // The submit callback should send errors through a channel for toast display
+    let seeds = read("src/design_evaluation/prompt_fixtures.rs");
+    let scratch = seeds
+        .split("PromptSeed::ScratchPad(seed) => {")
+        .nth(1)
+        .and_then(|rest| rest.split("PromptSeed::").next())
+        .expect("seed constructor must handle PromptSeed::ScratchPad");
     assert!(
-        content.contains("save_err_tx.try_send("),
+        scratch.contains(".try_send(format!(\"Failed to save scratch pad: {error}\"))"),
         "Expected scratch pad submit callback to send save errors via channel"
     );
     assert!(
-        content.contains("save_err_rx.recv().await"),
+        scratch.contains("save_error_receiver.recv().await"),
         "Expected scratch pad error listener to await save error channel"
     );
+    assert!(
+        scratch.contains("editor.start_autosave(seed.path, cx)"),
+        "scratch pad must start the editor-owned autosave"
+    );
 }
-
-// ---------------------------------------------------------------------------
-// API key prompt
-// ---------------------------------------------------------------------------
 
 #[test]
 fn show_api_key_prompt_stores_pending_provider_name() {
@@ -332,7 +337,8 @@ fn ai_clear_conversation_uses_deferred_helper() {
 fn ai_clear_conversation_shows_hud_on_success() {
     let content = builtin_execution_content();
     assert!(
-        content.contains("Self::ClearConversation => \"ai_ClearConversation_routed_to_agent_chat\""),
+        content
+            .contains("Self::ClearConversation => \"ai_ClearConversation_routed_to_agent_chat\""),
         "Expected ClearConversation success to be reported through the named routed_to_agent_chat outcome"
     );
 }

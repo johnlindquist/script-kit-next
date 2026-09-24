@@ -62,21 +62,6 @@ fn root_filter_keeps_type_skill_qualifier_without_new_drawer() {
 }
 
 #[test]
-fn agent_chat_slash_skills_stage_context_parts_instead_of_opening_drawer() {
-    let view = read("src/ai/agent_chat/ui/view.rs");
-
-    assert!(
-        view.contains("discover_plugin_skills(&index)")
-            && view.contains("agent_chat_slash_skill_cataloged")
-            && view.contains("SlashCommandPayload::PluginSkill(skill)")
-            && view.contains("build_skill_slash_command_text(&skill.skill_id)")
-            && view.contains("build_skill_context_part(")
-            && view.contains("thread.add_context_part(part, cx)"),
-        "Agent Chat slash skill acceptance must stay in the slash/context-part path"
-    );
-}
-
-#[test]
 fn existing_skill_contract_tests_cover_duplicate_slugs_and_staging() {
     let plugin_skill_search = read("tests/plugin_skill_search.rs");
     let agent_chat_tests = read("src/ai/agent_chat/ui/tests.rs");

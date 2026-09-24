@@ -24,6 +24,7 @@ impl NotesApp {
             surface,
             has_current_note: self.selected_note_id.is_some(),
             auto_sizing_enabled: self.auto_sizing_enabled,
+            has_save_failure: self.save_failure.is_some(),
         }
     }
 

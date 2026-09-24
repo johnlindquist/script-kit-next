@@ -78,10 +78,8 @@ fn all_sub_handlers_return_dispatch_outcome() {
 fn handle_action_creates_dispatch_context_before_dispatch() {
     let content = read("src/app_actions/handle_action/mod.rs");
 
-    let fn_start = content
-        .find("fn handle_action(")
-        .expect("Expected handle_action function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 500)];
+    let fn_body =
+        super::function_body(&content, "handle_action").expect("Expected handle_action function");
 
     assert!(
         fn_body.contains("DispatchContext::for_action("),

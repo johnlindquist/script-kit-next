@@ -615,7 +615,7 @@ impl ScriptListApp {
                     _ => {
                         return Err(anyhow::anyhow!(
                             "unknown appearance mode '{value}' (auto, light, dark)"
-                        ))
+                        ));
                     }
                 };
                 self.set_theme_chooser_appearance_mode(
@@ -631,7 +631,7 @@ impl ScriptListApp {
                     _ => {
                         return Err(anyhow::anyhow!(
                             "unknown panel mode '{value}' (preview, customize)"
-                        ))
+                        ));
                     }
                 };
                 self.set_theme_chooser_panel_mode(mode, cx);
@@ -4665,17 +4665,31 @@ impl ScriptListApp {
             )
             .when(is_customize, |panel| panel.child(customizer_scroller))
             .when(!is_customize, |panel| {
-                panel.child(facts_card).child(
-                    // Launcher-style live preview fills the remaining space in
-                    // Preview mode so theme browsing reads like the real shell.
-                    div().flex_1().min_h(px(0.0)).flex().flex_col().child(
-                        self.render_theme_chooser_live_preview(
-                            selected_preset_name,
-                            accent_name_str,
-                            &chrome,
+                panel
+                    // The facts card is taller than the panel; it scrolls in
+                    // its own share so the status chips and contrast line
+                    // below stay visible instead of being pushed off the end.
+                    .child(
+                        div()
+                            .id("theme-chooser-preview-facts-scroll")
+                            .flex_1()
+                            .min_h(px(0.0))
+                            .flex()
+                            .flex_col()
+                            .overflow_y_scrollbar()
+                            .child(facts_card),
+                    )
+                    .child(
+                        // Launcher-style live preview shares the remaining space in
+                        // Preview mode so theme browsing reads like the real shell.
+                        div().flex_1().min_h(px(0.0)).flex().flex_col().child(
+                            self.render_theme_chooser_live_preview(
+                                selected_preset_name,
+                                accent_name_str,
+                                &chrome,
+                            ),
                         ),
-                    ),
-                )
+                    )
             })
             // ── Semantic status chips + contrast audit (summary only) ──
             .child(chips_row)

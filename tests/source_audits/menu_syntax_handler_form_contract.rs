@@ -80,11 +80,10 @@ fn semicolon_capture_composer_outer_shell_consumes_non_list_language_without_own
     let hint_renderer = &render[hint_start..hint_end];
 
     assert!(
-        hint_renderer.contains("crate::components::non_list_palette(theme)")
-            && hint_renderer.contains(
-                "crate::components::non_list_metrics(crate::components::NonListDensity::Compact)"
-            )
-            && hint_renderer.contains("crate::components::non_list_content_stack(")
+        hint_renderer.contains("crate::components::NonListComposition::new(")
+            && hint_renderer.contains("crate::components::NonListCompositionOwner::MenuSyntax")
+            && hint_renderer.contains("crate::components::NonListDensity::Compact")
+            && hint_renderer.contains(".content_stack(")
             && hint_renderer.contains("\"menu-syntax-main-hint-content\"")
             && hint_renderer.contains("metrics.max_width")
             && hint_renderer.contains("metrics.block_gap"),
@@ -156,7 +155,9 @@ fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
     let filter_change = read("src/app_impl/filter_input_change.rs");
     assert!(
         !filter_change.contains("trim_end_matches(' ').to_string()")
-            && !filter_change.contains("self.focus_next_menu_syntax_form_field(window, cx);\n                return;"),
+            && !filter_change.contains(
+                "self.focus_next_menu_syntax_form_field(window, cx);\n                return;"
+            ),
         "typing a trailing space in the main input must not trim the command or auto-focus the first handler field"
     );
 }
@@ -216,7 +217,8 @@ fn snippet_form_multiline_input_uses_chat_pattern_and_enter_routing() {
             && app.contains("if *secondary || *shift")
             && app.contains("input.read(cx).value().to_string()")
             && app.contains("self.menu_syntax_form_syncing_from_input = true;")
-            && app.contains("self.update_menu_syntax_form_field(Some(field_id), value, window, cx)"),
+            && app
+                .contains("self.update_menu_syntax_form_field(Some(field_id), value, window, cx)"),
         "multiline field Enter events should submit on plain Enter and sync secondary Enter newline insertion from InputState"
     );
     assert!(
@@ -416,7 +418,8 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
 
     let preflight = read("src/main_window_preflight/build.rs");
     assert!(
-        preflight.contains("AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => None")
+        preflight
+            .contains("AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => None")
             && preflight.contains("return \"handler-form\".to_string();")
             && preflight.contains("return Vec::new();"),
         "handler forms must not expose stale launcher selected/visible rows or Enter targets through preflight"
@@ -461,10 +464,9 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
 fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths() {
     let immediate = read("src/app_impl/filter_input_updates.rs");
     assert!(
-        immediate.contains("let mut handler_form_owns_input = false;")
-            && immediate
-                .contains("handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);")
-            && immediate.contains("let handler_form_field_owns_input =")
+        immediate.contains(
+            "let handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);"
+        ) && immediate.contains("let handler_form_field_owns_input =")
             && immediate.contains("self.menu_syntax_form_input_active && handler_form_owns_input")
             && immediate.contains("if handler_form_field_owns_input")
             && immediate.contains("self.menu_syntax_object_selector_state = Default::default();")
@@ -472,7 +474,8 @@ fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths
             && !immediate.contains("close_menu_syntax_object_selector_main_list(cx)")
             && immediate.contains("if !handler_form_field_owns_input")
             && immediate.contains("self.menu_syntax_object_selector_state.snapshot.is_none()")
-            && immediate.contains("self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);"),
+            && immediate
+                .contains("self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);"),
         "programmatic setFilter/setInput must suppress trigger/object popups only while a focused handler-form field owns input"
     );
 
@@ -513,9 +516,10 @@ fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths
 #[test]
 fn batch_set_input_uses_window_aware_immediate_filter_writer() {
     let prompt = read("src/prompt_handler/mod.rs");
+    let batch = read("src/prompt_handler/batch_transport.rs");
     assert!(
-        prompt.contains("fn set_main_window_input_text_for_batch(")
-            && prompt.contains("app.set_input_text_in_window(&text, window, cx);")
+        batch.contains("fn set_main_window_input_text_for_batch(")
+            && batch.contains("app.set_input_text_in_window(text, window, cx)")
             && prompt.contains("fn set_input_text_in_window(")
             && prompt.contains("self.set_filter_text_immediate(text.to_string(), window, cx);"),
         "batch input updates need the main window so ScriptList setInput can run the same immediate filter/form sync path as user typing"
@@ -580,7 +584,9 @@ fn script_list_printable_simulate_key_can_update_filter_text() {
         helper.contains("key_char: Option<&str>")
             && helper.contains("!matches!(self.current_view, AppView::ScriptList)")
             && helper.contains("modifiers.platform || modifiers.alt || modifiers.control")
-            && helper.contains("menu_syntax_form_input_active && self.menu_syntax_capture_form_owns_input()")
+            && helper.contains(
+                "menu_syntax_form_input_active && self.menu_syntax_capture_form_owns_input()"
+            )
             && helper.contains("next.push_str(ch);")
             && helper.contains("self.set_filter_text_immediate(next, window, cx);"),
         "printable simulateKey support must append plain characters through the immediate filter writer and stay out of active handler fields"
@@ -751,7 +757,7 @@ fn handler_form_focus_reveal_has_scroll_and_layout_contract() {
         "Tab focus movement must reveal the active handler form field in the main hint scroll container"
     );
 
-    let layout = read("src/app_layout/build_layout_info.rs");
+    let layout = read("src/app_layout/build_layout_info_handler_form.rs");
     assert!(
         layout.contains("handlerFormFocusedVisibility")
             && layout.contains("handlerFormFieldBounds")
@@ -775,8 +781,9 @@ fn live_input_field_updates_do_not_reset_existing_focus_selection() {
     let update_body = &app[update_start..tab_key_start];
 
     assert!(
-        update_body.contains("let sync_from_focused_live_input = self.menu_syntax_form_syncing_from_input")
-            && update_body.contains("menu_syntax_form_input_active")
+        update_body.contains(
+            "let sync_from_focused_live_input = self.menu_syntax_form_syncing_from_input"
+        ) && update_body.contains("menu_syntax_form_input_active")
             && update_body.contains("menu_syntax_form_draft_field_id")
             && update_body.contains("id == resolved_field_id"),
         "live InputEvent::Change updates must identify the already-focused form field before syncing serialized text"
@@ -795,8 +802,11 @@ fn live_input_field_updates_do_not_reset_existing_focus_selection() {
     );
     assert!(
         update_body.contains("self.ensure_menu_syntax_form_inputs(&form, window, cx);")
-            && update_body.contains("self.menu_syntax_form_draft_field_id = Some(resolved_field_id.clone());")
-            && update_body.contains("self.sync_menu_syntax_form_trigger_picker_state(&form, window, cx);"),
+            && update_body.contains(
+                "self.menu_syntax_form_draft_field_id = Some(resolved_field_id.clone());"
+            )
+            && update_body
+                .contains("self.sync_menu_syntax_form_trigger_picker_state(&form, window, cx);"),
         "skipping live-input refocus must still sync form inputs, draft state, and autocomplete popup state"
     );
 }
@@ -825,12 +835,12 @@ fn priority_field_uses_sidebar_autocomplete_not_inline_choice_chips() {
     let elements = read("src/app_layout/collect_elements.rs");
     assert!(
         !elements.contains("handlerFormChoiceField")
-        && !elements.contains("handlerFormChoiceOption")
-        && !elements.contains("handlerFormAutocompleteOption")
-        && !elements.contains("\"radiogroup\"")
-        && elements.contains("MenuSyntaxFormFieldKind::Priority")
-        && elements.contains("handlerFormAutocompleteField")
-        && elements.contains("\"combobox\""),
+            && !elements.contains("handlerFormChoiceOption")
+            && !elements.contains("handlerFormAutocompleteOption")
+            && !elements.contains("\"radiogroup\"")
+            && elements.contains("MenuSyntaxFormFieldKind::Priority")
+            && elements.contains("handlerFormAutocompleteField")
+            && elements.contains("\"combobox\""),
         "getElements must expose priority as a combobox while picker choices come from the shared Trigger Popup target"
     );
 }
@@ -890,7 +900,7 @@ fn autocomplete_renders_owned_popup_list_and_escape_dismisses_first() {
         "getElements must expose form combobox fields while picker options are exposed by the shared Trigger Popup automation target"
     );
 
-    let layout = read("src/app_layout/build_layout_info.rs");
+    let layout = read("src/app_layout/build_layout_info_handler_form.rs");
     assert!(
         layout.contains("\"surface\": \"menuSyntaxTriggerPicker\""),
         "layout receipts must identify form autocomplete as the shared Trigger Popup surface"

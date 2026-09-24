@@ -18,15 +18,21 @@ fn extract_section<'a>(src: &'a str, needle: &str, len: usize) -> &'a str {
 #[test]
 fn mcp_exposes_capture_native_window_with_closed_schema() {
     let src = read("src/mcp_computer_use_tools.rs");
+    let schemas = read("src/mcp_computer_use_schemas.rs");
 
     assert!(src.contains("COMPUTER_CAPTURE_NATIVE_WINDOW_TOOL"));
     assert!(src.contains("\"computer/capture_native_window\""));
     assert!(src.contains("computer_capture_native_window_input_schema"));
-    assert!(src.contains("\"additionalProperties\": false"));
-    assert!(src.contains("\"nativeWindowId\""));
-    assert!(src.contains("\"expectedBundleId\""));
-    assert!(src.contains("\"includeImage\""));
-    assert!(src.contains("\"hiDpi\""));
+    let schema = extract_section(
+        &schemas,
+        "fn computer_capture_native_window_input_schema",
+        1500,
+    );
+    assert!(schema.contains("\"additionalProperties\": false"));
+    assert!(schema.contains("\"nativeWindowId\""));
+    assert!(schema.contains("\"expectedBundleId\""));
+    assert!(schema.contains("\"includeImage\""));
+    assert!(schema.contains("\"hiDpi\""));
 }
 
 #[test]

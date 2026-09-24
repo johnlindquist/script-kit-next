@@ -31,13 +31,11 @@ fn reset_ranking_removes_frecency_entry_and_refreshes() {
         block.contains("frecency_store.save()"),
         "reset_ranking should persist the updated frecency store"
     );
+    // The mutation runs inside the shared results-refresh commit, which
+    // invalidates the filter/grouped caches and republishes the list once.
     assert!(
-        block.contains("invalidate_grouped_cache()"),
-        "reset_ranking should invalidate the grouped cache"
-    );
-    assert!(
-        block.contains("refresh_scripts(cx)"),
-        "reset_ranking should refresh scripts to rebuild the list"
+        block.contains("self.commit_main_menu_results_refresh(\"reset-ranking\""),
+        "reset_ranking should rebuild the list through the shared results-refresh commit"
     );
 }
 

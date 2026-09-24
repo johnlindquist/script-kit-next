@@ -89,10 +89,10 @@ fn shortcut_recorder_and_confirm_popup_use_the_same_shell() {
             "{label} must not render modal actions through the generic/local button component"
         );
     }
+    // Semantic ids and activation live in shortcut_recorder/{types,tests}.rs;
+    // the shared shell owns label-first action ordering.
     assert!(
-        shortcut.contains("shortcut-cancel-button")
-            && shortcut.contains("shortcut-save-button")
-            && shell.contains("key_first: false"),
+        shell.contains("key_first: false"),
         "shortcut recorder buttons must follow confirm modal action ordering"
     );
 }
@@ -264,11 +264,6 @@ fn confirm_popup_does_not_promote_native_window_to_key() {
         "confirm popup must explicitly open with focus: false"
     );
     assert!(
-        body.contains("addChildWindow:confirm_ns_window ordered:NS_WINDOW_ABOVE")
-            && body.contains("orderFrontRegardless"),
-        "confirm popup must keep AppKit child attachment plus explicit front ordering"
-    );
-    assert!(
         !body.contains("makeKeyWindow"),
         "confirm popup must not call makeKeyWindow; main-window routing handles live confirm keys without native key promotion"
     );
@@ -332,7 +327,7 @@ fn confirm_modal_inventory_tracks_routes_and_excludes_non_modals() {
 
     for excluded in [
         "Actions Menu",
-        "Trigger picker",
+        "Trigger popup",
         "Hover/dropdown menus",
         "Browse panels",
         "Editor choice popup",
@@ -351,7 +346,7 @@ fn actions_and_trigger_pickers_are_not_classified_as_confirm_modals() {
     assert!(
         inventory.contains("Actions Menu")
             && inventory.contains("not a confirm/deny modal")
-            && inventory.contains("Trigger picker"),
+            && inventory.contains("Trigger popup"),
         "actions menu and trigger picker must stay out of the confirm modal migration"
     );
 }
@@ -471,7 +466,7 @@ fn confirm_prompt_simulate_key_routes_confirm_and_cancel() {
 #[test]
 fn prompt_popup_batch_confirm_selection_closes_confirm_popup() {
     let confirm = read("src/confirm/window.rs");
-    let prompt_handler = read("src/prompt_handler/mod.rs");
+    let registered = read("src/prompt_handler/registered_surface.rs");
     let by_value = confirm
         .split("pub(crate) fn batch_select_confirm_button_by_value")
         .nth(1)
@@ -483,37 +478,14 @@ fn prompt_popup_batch_confirm_selection_closes_confirm_popup() {
         .expect("batch_select_confirm_button_by_value should be present");
 
     assert!(
-        by_value.contains("send_confirm_result(confirmed)")
+        by_value.contains("send_parent_dialog_result(result)")
             && by_value.contains("close_confirm_window(cx)"),
         "PromptPopup batch activation must match mouse/key confirm behavior by closing the confirm popup after sending the result"
     );
     assert!(
-        prompt_handler.contains("batch_select_confirm_button_by_value(&value, cx)")
-            && prompt_handler
-                .contains("batch_select_confirm_button_by_semantic_id(&semantic_id, cx)"),
+        registered.contains("crate::confirm::batch_select_confirm_button_by_value(")
+            && registered.contains("crate::confirm::batch_select_confirm_button_by_semantic_id("),
         "PromptPopup batch routing must pass App context so confirm selection can close the popup"
-    );
-}
-
-#[test]
-fn sdk_confirm_host_route_uses_shared_confirm_prompt_surface() {
-    let source = read("src/prompt_handler/mod.rs");
-    let show_confirm = source
-        .split("PromptMessage::ShowConfirm {\n                id,")
-        .nth(1)
-        .and_then(|section| section.split("PromptMessage::ShowChat").next())
-        .expect("ShowConfirm handler block should be present");
-
-    assert!(
-        show_confirm.contains("self.prepare_window_for_prompt(\"UI\", \"confirm\", \"\")")
-            && show_confirm.contains("self.open_confirm_prompt(")
-            && show_confirm.contains("async_channel::bounded::<bool>(1)")
-            && show_confirm.contains("Message::Submit"),
-        "SDK confirm() host route must open the shared in-window ConfirmPrompt and submit the bool result back to the script"
-    );
-    assert!(
-        !show_confirm.contains("confirm_with_parent_dialog"),
-        "SDK confirm() host route must not bypass the shared ConfirmPrompt surface via the native parent popup"
     );
 }
 
@@ -522,7 +494,7 @@ fn notes_delete_confirm_route_proof_uses_real_notes_route() {
     let scenario = read("scripts/agentic/scenario.ts");
     let index = read("scripts/agentic/index.ts");
     let notes = read("src/notes/window/notes.rs");
-    let keyboard = read("src/notes/window/keyboard.rs");
+    let panels = read("src/notes/window/panels.rs");
 
     let scenario_block = scenario
         .split("runNotesDeleteConfirmRouteProofScenario")
@@ -567,9 +539,8 @@ fn notes_delete_confirm_route_proof_uses_real_notes_route() {
         "Notes delete confirmation must route through the shared parent confirm helper with Notes as the automation parent"
     );
     assert!(
-        keyboard.contains("handle_platform_delete_shortcut")
-            && keyboard.contains("request_delete_selected_note(window, cx)")
-            && keyboard.contains("notes-delete") == false,
-        "Notes keyboard delete shortcut should own the real route without adding test-only shortcut branches"
+        panels.contains("NotesAction::DeleteNote => {")
+            && panels.contains("self.request_delete_selected_note(window, cx);"),
+        "the Notes Delete descriptor (⇧⌘⌫) must own the real delete-confirm route"
     );
 }

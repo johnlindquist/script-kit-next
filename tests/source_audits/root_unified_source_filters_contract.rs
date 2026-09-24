@@ -41,17 +41,16 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(filtering.contains("search_root_browser_history_meta_direct"));
     assert!(filtering.contains(".is_some_and(|query| query.has_source_filters())"));
 
-    assert!(root_file.contains("free_text_for_search(&self.menu_syntax_mode, query)"));
-    assert!(root_file
-        .contains("!source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files)"));
-    assert!(root_file.contains("root_file_options.files_enabled = true;"));
-    assert!(root_file.contains("let publish_active_results = source_filters"));
-    assert!(root_file.contains(".includes(crate::menu_syntax::RootUnifiedSourceFilter::Files)"));
-    assert!(root_file.contains("|| matches!(&request, RootFileSearchRequest::DirectoryBrowse"));
+    assert!(root_file.contains("crate::menu_syntax::free_text_for_search(&syntax, raw).trim()"));
+    assert!(root_file.contains(
+        "let explicit = advanced.is_some_and(|query| query.source_filters.includes(source));"
+    ));
+    assert!(root_file.contains("options.files_enabled = true;"));
+    assert!(root_file.contains("!query.source_filters.allows(source) || query.has_predicates()"));
+    assert!(root_file.contains("RootProviderPublicationPolicy::Visible"));
+    assert!(root_file.contains("RootProviderPublicationPolicy::CacheOnly"));
     assert!(root_file.contains("self.root_search.root_file_frame = None;"));
-    assert!(root_file.contains(".is_none_or(|advanced_query| !advanced_query.has_predicates())"));
-    assert!(root_file.contains("self.cached_root_file_results_for_request(&request)"));
-    assert!(root_file.contains("root_file_result_fingerprint(&self.root_search.root_file_results)"));
+    assert!(root_file.contains("app.cached_root_file_results_for_request(&request);"));
 }
 
 #[test]

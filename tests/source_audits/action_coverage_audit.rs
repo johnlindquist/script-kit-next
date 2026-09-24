@@ -177,9 +177,9 @@ fn error_paths_use_show_error_toast_not_show_hud() {
                     // Some HUD messages reference errors in log context, check carefully
                     // show_hud should never contain "Failed to", "Error:", "Cannot "
                     assert!(
-                        !trimmed.contains("\"Failed to") &&
-                        !trimmed.contains("\"Error:") &&
-                        !trimmed.contains("\"Cannot "),
+                        !trimmed.contains("\"Failed to")
+                            && !trimmed.contains("\"Error:")
+                            && !trimmed.contains("\"Cannot "),
                         "Error message found in show_hud() call — should use show_error_toast() instead:\n  {}",
                         trimmed
                     );
@@ -236,20 +236,28 @@ fn handle_action_uses_only_named_duration_constants() {
 
 #[test]
 fn visible_attach_actions_use_agent_chat_label() {
-    for (path, label) in [
+    // Each surface names the concrete product; Dictation History stages the
+    // transcript as context, so its verb is "Add".
+    for (path, label, expected) in [
         (
             "src/render_builtins/actions.rs",
             "dictation history actions",
+            "Add to Agent Chat",
         ),
         (
             "src/app_impl/root_unified_result_actions.rs",
             "root unified result actions",
+            "Attach to Agent Chat",
         ),
-        ("src/actions/dialog.rs", "actions dialog docs"),
+        (
+            "src/actions/dialog.rs",
+            "actions dialog docs",
+            "Attach to Agent Chat",
+        ),
     ] {
         let source = read(path);
         assert!(
-            source.contains("Attach to Agent Chat"),
+            source.contains(expected),
             "{label} should use the concrete Agent Chat product label"
         );
         assert!(
@@ -1390,7 +1398,8 @@ fn actions_dialog_state_uses_shared_destructive_detection() {
 
     assert!(
         prompt_handler.contains("\"visibleActions\"")
-            && prompt_handler.contains("\"destructive\": crate::actions::is_destructive_action(action)"),
+            && prompt_handler
+                .contains("\"destructive\": crate::actions::is_destructive_action(action)"),
         "getState actionsDialog.visibleActions must report the same destructive status used by the renderer"
     );
     assert!(

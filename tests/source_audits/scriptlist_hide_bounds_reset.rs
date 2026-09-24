@@ -33,10 +33,12 @@ fn reset_helper_body(content: &str) -> &str {
     &content[fn_start..fn_end]
 }
 
+/// The hidden ScriptList reset runs after AppKit confirms the hide, in the
+/// `MainWindowPostHide::ResetScriptList` completion.
 fn defer_reset_helper_body(content: &str) -> &str {
     let fn_start = content
-        .find("pub(crate) fn defer_reset_to_script_list_after_main_window_hidden(")
-        .expect("Expected defer_reset_to_script_list_after_main_window_hidden function in lifecycle_reset.rs");
+        .find("fn complete_hidden_main_window_script_list_reset(")
+        .expect("Expected complete_hidden_main_window_script_list_reset in lifecycle_reset.rs");
     let fn_end = content[fn_start + 1..]
         .find("\n    pub(crate) fn ")
         .map(|p| fn_start + 1 + p)
@@ -54,7 +56,7 @@ fn hide_main_window_helper_resizes_to_mini_default_when_in_mini_mode() {
 
     assert!(
         hide_body.contains("reset_mini_bounds_after_hidden_reset")
-            && hide_body.contains("defer_reset_to_script_list_after_main_window_hidden("),
+            && hide_body.contains("MainWindowPostHide::ResetScriptList {"),
         "hide_main_window_helper must pass mini-mode reset intent into the deferred hidden reset"
     );
     assert!(
@@ -85,7 +87,7 @@ fn hide_resize_runs_after_surface_rekey_not_before() {
 
     assert!(
         rekey_pos < visibility_pos
-            && defer_body.find("reset_hidden_main_window_to_script_list(cx, reason)")
+            && defer_body.find("self.reset_hidden_main_window_to_script_list(cx, request.reason)")
                 < Some(resize_pos),
         "Resize must run after the hidden reset re-keys the automation surface to ScriptList"
     );
@@ -114,7 +116,7 @@ fn hide_helper_does_not_resize_before_saving_position() {
         .find("save_main_position_for_display(")
         .expect("hide helper must save position for next show");
     let defer_pos = hide_body
-        .find("defer_reset_to_script_list_after_main_window_hidden(")
+        .find("MainWindowPostHide::ResetScriptList {")
         .expect("hide helper must defer hidden ScriptList reset");
     let resize_pos = defer_body
         .find("resize_to_mini_main_window_sync(")

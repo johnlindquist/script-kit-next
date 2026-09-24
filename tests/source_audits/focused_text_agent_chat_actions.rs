@@ -181,10 +181,9 @@ fn focused_text_mini_loading_has_no_body_thinking_text() {
     assert!(AGENT_CHAT_VIEW.contains("FOCUSED_TEXT_MINI_PLACEHOLDER"));
     assert!(render_fn.contains("Self::render_composer_input_text"));
     assert!(render_fn.contains("focused_text_mini_input_height()"));
-    assert!(render_fn.contains("crate::panel::HEADER_PADDING_X"));
+    assert!(render_fn.contains("menu_def.shell.header_padding_x"));
     assert!(render_fn.contains("active_pending"));
     assert!(render_fn.contains("render_input_profile_icon"));
-    assert!(render_fn.contains("FOCUSED_TEXT_MINI_INPUT_MAX_VISIBLE_HEIGHT"));
     assert!(render_fn.contains("focused-text-mini-preview-enter"));
     assert!(render_fn.contains("input_locked"));
     assert!(!render_fn.contains("focused-text-mini-close"));
@@ -221,7 +220,7 @@ fn full_agent_chat_profile_icon_moves_to_header_focused_text_keeps_icon() {
 
     assert!(!composer_fn.contains("\"agent-chat-input-profile-icon\""));
     assert!(!composer_fn.contains("let profile_icon = Self::render_input_profile_icon"));
-    assert!(composer_fn.contains("trailing: Vec::new()"));
+    assert!(composer_fn.contains("trailing: vec![Self::render_send_button_for_state("));
     assert!(mini_render_fn.contains("\"focused-text-profile-icon\""));
     assert!(mini_render_fn.contains("render_input_profile_icon"));
     let input_pos = mini_render_fn

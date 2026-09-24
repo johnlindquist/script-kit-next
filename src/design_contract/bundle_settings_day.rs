@@ -141,24 +141,46 @@ fn append_settings_and_day_design_tokens(
     let icon_policy = match settings_facts_fresh.icon_policy {
         crate::settings_hub_contract::SettingsRowIconPolicy::Iconless => "iconless",
     };
-    b.add("settingsHub.icons.policy", TokenStage::Resolved, None,
-        TokenValue::Text { value: icon_policy.into() },
-        Some("settings_hub_contract::SETTINGS_ROW_ICON_POLICY"), false, &[]);
+    b.add(
+        "settingsHub.icons.policy",
+        TokenStage::Resolved,
+        None,
+        TokenValue::Text {
+            value: icon_policy.into(),
+        },
+        Some("settings_hub_contract::SETTINGS_ROW_ICON_POLICY"),
+        false,
+        &[],
+    );
     let items = crate::settings_hub_contract::get_settings_items_for(false);
     if let Some(action) = crate::settings_hub_contract::selected_settings_action_descriptor(
-        &items, "", 0, crate::settings_hub_contract::SettingsActionAvailability::all_available(),
+        &items,
+        "",
+        0,
+        crate::settings_hub_contract::SettingsActionAvailability::all_available(),
     ) {
         for (id, value) in [
-            ("settingsHub.footer.primaryActionId", action.action_id.as_str()),
+            (
+                "settingsHub.footer.primaryActionId",
+                action.action_id.as_str(),
+            ),
             ("settingsHub.footer.primaryLabel", action.primary_verb),
         ] {
             b.add(id, TokenStage::Resolved, None, TokenValue::Text { value: value.into() },
                 Some("settings_hub_contract::selected_settings_action_descriptor(items, empty_filter, 0, all_available)"),
                 false, &[]);
         }
-        b.add("settingsHub.footer.primaryEnabled", TokenStage::Resolved, None,
-            TokenValue::Text { value: action.enabled.to_string() },
-            Some("SettingsActionDescriptor.enabled"), false, &[]);
+        b.add(
+            "settingsHub.footer.primaryEnabled",
+            TokenStage::Resolved,
+            None,
+            TokenValue::Text {
+                value: action.enabled.to_string(),
+            },
+            Some("SettingsActionDescriptor.enabled"),
+            false,
+            &[],
+        );
     }
 
     // ── Shared main-view / component-theme owners (Day Page slice) ──────
@@ -421,8 +443,9 @@ fn append_settings_and_day_design_tokens(
             ),
         ],
         "warning",
-        "The Day Page GPUI layer reserves the 32px footer rail \
-         (render_native_main_window_footer_spacer = current_main_menu_footer_height) \
+        "The Day Page GPUI layer reserves the footer rail \
+         (root in-stage footer zone in glass mode; render_native_main_window_footer_spacer = \
+         current_main_menu_footer_height otherwise) \
          while the native AppKit footer HOST band is modeled at 36px. The footer \
          height ladder continues — do NOT 'fix' either value in the exporter; \
          painted truth for the bottom band needs an activeFooter probe + pixel check.",

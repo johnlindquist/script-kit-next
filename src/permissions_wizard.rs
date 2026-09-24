@@ -327,9 +327,15 @@ pub fn request_permission(
                 permiso_detect::PermissionStatus::Denied
             }
         }
-        PermissionKind::ScreenRecording => permiso_detect::request_screen_capture_access(),
-        PermissionKind::InputMonitoring => permiso_detect::request_input_monitoring_access(),
-        PermissionKind::EventSynthesizing => permiso_detect::request_event_synthesizing_access(),
+        PermissionKind::ScreenRecording => {
+            crate::platform::permission_requests::request_screen_capture_access()
+        }
+        PermissionKind::InputMonitoring => {
+            crate::platform::permission_requests::request_input_monitoring_access()
+        }
+        PermissionKind::EventSynthesizing => {
+            crate::platform::permission_requests::request_event_synthesizing_access()
+        }
         PermissionKind::Microphone => permiso_detect::microphone_authorized(),
     }
 }

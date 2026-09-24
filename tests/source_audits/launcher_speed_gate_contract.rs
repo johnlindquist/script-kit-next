@@ -25,7 +25,14 @@ fn workflow_step<'a>(workflow: &'a str, name: &str) -> &'a str {
 fn deterministic_perf_workflow_runs_the_root_frame_gate() {
     let workflow = read(".github/workflows/perf-gates.yml");
     let syntax_step = workflow_step(&workflow, "Syntax-check performance probes");
-    let runtime_step = workflow_step(&workflow, "Run semantic frame-identity gate");
+    let runtime_step = workflow_step(&workflow, "Run hidden-window semantic frame-identity gate");
+    // The gate runs the verified immutable artifact built by the previous step.
+    let build_step = workflow_step(&workflow, "Build stable root frame gate artifact");
+    assert_contains(
+        build_step,
+        "--artifact-out .test-output/perf-gates/app.reference.json",
+        "root frame gate artifact build",
+    );
 
     for probe in [
         "scripts/agentic/root-typing-lag-benchmark.ts",
@@ -36,7 +43,7 @@ fn deterministic_perf_workflow_runs_the_root_frame_gate() {
 
     for needle in [
         "bun scripts/agentic/root-search-frame-stability.ts",
-        "--binary target-agent/artifacts/root-frame-gate/script-kit-gpui",
+        "--artifact .test-output/perf-gates/app.reference.json",
         "--receipt .test-output/perf-gates/root-search-frame-stability.json",
     ] {
         assert_contains(runtime_step, needle, "root frame-identity runtime gate");

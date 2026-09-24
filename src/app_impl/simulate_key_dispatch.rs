@@ -2082,17 +2082,10 @@ impl ScriptListApp {
                         );
                         view.close_actions_popup(ActionsDialogHost::AgentChat, window, ctx);
                     } else if key_lower == "escape" || key_lower == "esc" {
-                        let execution = entity_clone.update(ctx, |chat, cx| {
-                            chat.request_conversation_dismiss(
-                                crate::components::conversation_actions::ConversationDismissTrigger::Escape,
-                                window,
-                                cx,
-                            )
+                        entity_clone.update(ctx, |chat, cx| {
+                            chat.handle_conversation_escape(window, cx);
                         });
-                        logging::log(
-                            "STDIN",
-                            &format!("SimulateKey: Agent Chat Escape execution={execution:?}"),
-                        );
+                        logging::log("STDIN", "SimulateKey: Agent Chat Escape");
                     } else if has_cmd && key_lower == "w" {
                         let execution = entity_clone.update(ctx, |chat, cx| {
                             chat.request_conversation_dismiss(

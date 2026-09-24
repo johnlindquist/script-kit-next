@@ -3,6 +3,8 @@
 const RUST_CAPTURE: &str = include_str!("../../src/platform/screenshots_window_open.rs");
 const VERIFY_SHOT: &str = include_str!("../../scripts/agentic/verify-shot.ts");
 const MATRIX: &str = include_str!("../../scripts/agentic/verify-shot-blank-rejection-matrix.ts");
+/// verify-shot delegates its blank-rejection thresholds to this shared auditor.
+const PNG_AUDIT: &str = include_str!("../../scripts/devtools/lib/png-rgba.ts");
 
 #[test]
 fn rust_and_bun_pixel_audits_expose_same_fields() {
@@ -28,6 +30,10 @@ fn rust_and_bun_pixel_audits_expose_same_fields() {
 
 #[test]
 fn rust_and_bun_use_the_same_blank_rejection_thresholds() {
+    assert!(
+        VERIFY_SHOT.contains("import { auditRgbaPng } from \"../devtools/lib/png-rgba.ts\";"),
+        "verify-shot must use the shared PNG pixel auditor"
+    );
     for literal in [
         "unique_bucket_count <= 1",
         "unique_bucket_count <= DARK_EMPTY_MAX_UNIQUE_BUCKETS",
@@ -50,7 +56,7 @@ fn rust_and_bun_use_the_same_blank_rejection_thresholds() {
         "maxLuma < 16.0",
     ] {
         assert!(
-            VERIFY_SHOT.contains(literal) && MATRIX.contains(literal),
+            PNG_AUDIT.contains(literal) && MATRIX.contains(literal),
             "Bun audit and fixture matrix must keep threshold literal {literal}"
         );
     }

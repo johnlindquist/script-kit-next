@@ -4627,11 +4627,13 @@ mod brain_inbox_section_tests {
             None,
         );
 
+        // The header names the section and how much of the inbox is shown;
+        // the rest lives in Actions.
         assert!(
             matches!(
                 &grouped[0],
                 GroupedListItem::SectionHeader(label, Some(icon))
-                    if label == "Brain Inbox" && icon == "inbox"
+                    if label == "Brain Inbox · 2 of 2 · All in Actions" && icon == "inbox"
             ),
             "section header must be pinned at index 0, got {:?}",
             grouped[0]
@@ -4688,6 +4690,14 @@ mod brain_inbox_section_tests {
             .filter(|row| matches!(row, SearchResult::BrainInboxItem(_)))
             .count();
         assert_eq!(inbox_rows, 3, "rows must be capped at max_results");
+        assert!(
+            matches!(
+                &grouped[0],
+                GroupedListItem::SectionHeader(label, _) if label == "Brain Inbox · 3 of 5 · All in Actions"
+            ),
+            "header must report shown-of-total when capped, got {:?}",
+            grouped[0]
+        );
     }
 
     #[test]
@@ -4769,7 +4779,7 @@ mod brain_inbox_section_tests {
         assert!(
             matches!(
                 &grouped[0],
-                GroupedListItem::SectionHeader(label, _) if label == "Brain Inbox"
+                GroupedListItem::SectionHeader(label, _) if label.starts_with("Brain Inbox")
             ),
             "whitespace-only filter is the empty query"
         );

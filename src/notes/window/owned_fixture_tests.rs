@@ -70,10 +70,15 @@ fn failed_save_keeps_notes_open_for_escape_and_cmd_w(cx: &mut gpui::TestAppConte
                     assert_eq!(app.entry_reveal, reveal_before, "{key} must not begin exit");
                 });
                 let layers = Root::read(window, cx).layer_snapshot(cx);
-                assert_eq!(layers.notifications.len(), 1, "repeat close must not spam");
+                assert_eq!(
+                    layers.notifications.len(),
+                    1,
+                    "{key}: repeat close must not spam: {:?}",
+                    layers.notifications
+                );
                 assert_eq!(
                     layers.notifications[0].message.as_deref(),
-                    Some("Couldn't save the note. Your changes are still open.")
+                    Some(super::navigation::NOTES_SAVE_FAILURE_MESSAGE)
                 );
             }
         })

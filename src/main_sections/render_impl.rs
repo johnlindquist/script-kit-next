@@ -369,7 +369,9 @@ impl Render for ScriptListApp {
         // rendered, so no capsule sync ever prunes the groups it registered
         // during startup frames — drop them or they linger as ghost capsules
         // at the container's bottom edge.
-        if interactive_host && crate::footer_popup::glass_scroll_bands_active() && self.main_window_uses_native_footer()
+        if interactive_host
+            && crate::footer_popup::glass_scroll_bands_active()
+            && self.main_window_uses_native_footer()
         {
             crate::components::footer_chrome::remove_glass_capsule_window(window);
         }
@@ -785,13 +787,7 @@ impl Render for ScriptListApp {
         let main_content_size = window_size;
         let main_content_width = f32::from(window_size.width);
         let main_content_height = f32::from(window_size.height);
-        let footer_zone_reserve = if crate::footer_popup::main_window_footer_in_stage()
-            && !crate::footer_popup::main_list_scrolls_under_footer()
-        {
-            crate::footer_popup::main_window_footer_zone_height()
-        } else {
-            0.0
-        };
+        let footer_zone_reserve = crate::footer_popup::main_window_view_footer_zone_reserve();
 
         // Clone grid_config for use in the closure
         let grid_config = self.grid_config.clone();
@@ -812,23 +808,38 @@ impl Render for ScriptListApp {
             let entity_for_dismiss = entity.clone();
 
             Some(
-                div().debug_selector(|| "main-warning-banner".into()).w_full().px(px(12.)).pt(px(8.)).child(
-                    WarningBanner::new("bun is not installed. Install from bun.sh", banner_colors)
+                div()
+                    .debug_selector(|| "main-warning-banner".into())
+                    .w_full()
+                    .px(px(12.))
+                    .pt(px(8.))
+                    .child(
+                        WarningBanner::new(
+                            "bun is not installed. Install from bun.sh",
+                            banner_colors,
+                        )
                         .on_click(Box::new(move |_event, _window, cx| {
                             if let Some(app) = entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    if let Err(error) = this.open_bun_website() { this.show_error_toast(format!("Browser was not opened: {error}"), cx); }
+                                    if let Err(error) = this.open_bun_website() {
+                                        this.show_error_toast(
+                                            format!("Browser was not opened: {error}"),
+                                            cx,
+                                        );
+                                    }
                                 });
                             }
                         }))
-                        .on_dismiss(Box::new(move |_event, _window, cx| {
-                            if let Some(app) = entity_for_dismiss.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.dismiss_bun_warning(cx);
-                                });
-                            }
-                        })),
-                ),
+                        .on_dismiss(Box::new(
+                            move |_event, _window, cx| {
+                                if let Some(app) = entity_for_dismiss.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.dismiss_bun_warning(cx);
+                                    });
+                                }
+                            },
+                        )),
+                    ),
             )
         } else {
             None

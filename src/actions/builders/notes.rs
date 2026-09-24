@@ -145,6 +145,7 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         },
         has_current_note: plan.has_active_note_actions() || plan.has_trash_note_actions(),
         auto_sizing_enabled: !plan.needs_auto_sizing_action(),
+        has_save_failure: false,
     };
     get_notes_command_bar_actions_for_context(context)
 }

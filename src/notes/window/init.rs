@@ -567,9 +567,10 @@ impl NotesApp {
 
         window.push_notification(
             gpui_component::notification::Notification::error(
-                "Couldn't save the note. Your changes are still open.",
+                super::navigation::NOTES_SAVE_FAILURE_MESSAGE,
             )
-            .id1::<NotesApp>("notes-save-failed"),
+            .autohide(false)
+            .id::<crate::components::document_status::DocumentSaveFailureNotification>(),
             cx,
         );
         cx.notify();

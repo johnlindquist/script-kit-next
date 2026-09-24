@@ -5071,6 +5071,86 @@ text_style.text_inset_left,
         }
     }
 
+    /// The single Escape owner for Agent Chat. Every keyboard path (the view's
+    /// own key handler, the host `intercept_keystrokes` interceptors, and the
+    /// simulateKey automation mirror) must call this, never
+    /// `request_conversation_dismiss` directly: the interceptors run before the
+    /// view's handler, so bypassing this skipped the focused-text unwind.
+    ///
+    /// Open overlays take Escape first. With none open, a focused-text quick
+    /// prompt unwinds progressively (clear typed text, then close) before the
+    /// generic conversation dismiss.
+    pub(crate) fn handle_conversation_escape(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::components::conversation_actions::ConversationDismissTrigger;
+
+        let overlay_open = self.permission_options_open
+            || crate::actions::is_actions_window_open()
+            || self.pending_portal_session.is_some()
+            || self.has_escape_dismissible_popup();
+        if overlay_open
+            || !(self.is_focused_text_mini() || self.focused_text_originated_from_quick_prompt())
+        {
+            tracing::info!(
+                target: "script_kit::keyboard",
+                event = "embedded_agent_chat_escape_host_dismiss_requested",
+                overlay_open,
+            );
+            let _ =
+                self.request_conversation_dismiss(ConversationDismissTrigger::Escape, window, cx);
+            return;
+        }
+
+        let (phase, input_has_text) = {
+            let thread = self.live_thread().read(cx);
+            (
+                self.focused_text_mini_phase_for_thread(thread),
+                !thread.input.text().is_empty() || !self.scope_input.is_empty(),
+            )
+        };
+        let action = match phase {
+            Some(FocusedTextMiniPhase::InputOnly) if input_has_text => "clear_input",
+            Some(FocusedTextMiniPhase::InputOnly) => "close_empty_input",
+            Some(FocusedTextMiniPhase::Loading) => "cancel_loading",
+            Some(FocusedTextMiniPhase::Streaming) => "stop_streaming",
+            Some(FocusedTextMiniPhase::Result) => "close_result",
+            Some(FocusedTextMiniPhase::Error) => "close_error",
+            None => "close_non_mini_focused_text",
+        };
+        tracing::info!(
+            target: "script_kit::keyboard",
+            event = "focused_text_escape_progressive",
+            ui_variant = self.ui_variant.state_id(),
+            phase = phase.map(FocusedTextMiniPhase::state_id).unwrap_or("unknown"),
+            action = action,
+        );
+        match phase {
+            Some(FocusedTextMiniPhase::InputOnly) if input_has_text => {
+                self.scope_input.clear();
+                self.scope_visible = false;
+                self.scope_focused = false;
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.clear();
+                    thread.notify_semantic_change(cx);
+                });
+                self.resize_focused_text_mini_for_scope_change(&*cx);
+            }
+            Some(FocusedTextMiniPhase::InputOnly) => {
+                self.trigger_close_window_requested(window, cx);
+            }
+            Some(_) | None => {
+                let _ = self.request_conversation_dismiss(
+                    ConversationDismissTrigger::Escape,
+                    window,
+                    cx,
+                );
+            }
+        }
+    }
+
     pub(crate) fn allow_native_close_request(&mut self, cx: &mut Context<Self>) -> bool {
         use crate::components::conversation_actions::{
             ConversationDismissDecision, ConversationDismissTrigger, ConversationOverlayFacts,
@@ -9958,8 +10038,11 @@ crate::components::main_view_chrome::MainViewInputShellIds::new(
         } else {
             fallback_preview_height
         };
+        // Content must end where the footer's reservation begins: the root's
+        // in-stage zone in glass mode (the spacer below is then zero-height),
+        // or this view's own footer spacer otherwise.
         let footer_height = if reserve_native_footer {
-            crate::components::footer_chrome::current_main_menu_footer_height()
+            crate::footer_popup::main_window_footer_reservation_height()
         } else {
             0.0
         };
@@ -13461,78 +13544,8 @@ impl AgentChatView {
             return;
         }
 
-        // Escape with no open dialogs unwinds focused-text mini state
-        // progressively before falling back to the normal Agent Chat behavior.
         if crate::ui_foundation::is_key_escape(key) {
-            if self.is_focused_text_mini() || self.focused_text_originated_from_quick_prompt() {
-                let (phase, input_has_text) = {
-                    let thread = self.live_thread().read(cx);
-                    (
-                        self.focused_text_mini_phase_for_thread(thread),
-                        !thread.input.text().is_empty() || !self.scope_input.is_empty(),
-                    )
-                };
-
-                let action = match phase {
-                    Some(FocusedTextMiniPhase::InputOnly) if input_has_text => "clear_input",
-                    Some(FocusedTextMiniPhase::InputOnly) => "close_empty_input",
-                    Some(FocusedTextMiniPhase::Loading) => "cancel_loading",
-                    Some(FocusedTextMiniPhase::Streaming) => "stop_streaming",
-                    Some(FocusedTextMiniPhase::Result) => "close_result",
-                    Some(FocusedTextMiniPhase::Error) => "close_error",
-                    None => "close_non_mini_focused_text",
-                };
-
-                tracing::info!(
-                    target: "script_kit::keyboard",
-                    event = "focused_text_escape_progressive",
-                    ui_variant = self.ui_variant.state_id(),
-                    phase = phase.map(FocusedTextMiniPhase::state_id).unwrap_or("unknown"),
-                    action = action,
-                );
-
-                match phase {
-                    Some(FocusedTextMiniPhase::InputOnly) if input_has_text => {
-                        self.scope_input.clear();
-                        self.scope_visible = false;
-                        self.scope_focused = false;
-                        self.live_thread().update(cx, |thread, cx| {
-                            thread.input.clear();
-                            thread.notify_semantic_change(cx);
-                        });
-                        self.resize_focused_text_mini_for_scope_change(&*cx);
-                    }
-                    Some(FocusedTextMiniPhase::InputOnly) => {
-                        self.trigger_close_window_requested(window, cx);
-                    }
-                    Some(FocusedTextMiniPhase::Loading | FocusedTextMiniPhase::Streaming) => {
-                        let _ = self.request_conversation_dismiss(
-                            crate::components::conversation_actions::ConversationDismissTrigger::Escape,
-                            window,
-                            cx,
-                        );
-                    }
-                    Some(FocusedTextMiniPhase::Result | FocusedTextMiniPhase::Error) | None => {
-                        let _ = self.request_conversation_dismiss(
-                            crate::components::conversation_actions::ConversationDismissTrigger::Escape,
-                            window,
-                            cx,
-                        );
-                    }
-                }
-
-                cx.stop_propagation();
-                return;
-            }
-            tracing::info!(
-                target: "script_kit::keyboard",
-                event = "embedded_agent_chat_escape_host_dismiss_requested",
-            );
-            let _ = self.request_conversation_dismiss(
-                crate::components::conversation_actions::ConversationDismissTrigger::Escape,
-                window,
-                cx,
-            );
+            self.handle_conversation_escape(window, cx);
             cx.stop_propagation();
             return;
         }

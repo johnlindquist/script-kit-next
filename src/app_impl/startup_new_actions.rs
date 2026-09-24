@@ -257,11 +257,7 @@
                             if let AppView::AgentChatView { entity } = &this.current_view {
                                 let entity = entity.clone();
                                 entity.update(cx, |chat, cx| {
-                                    let _ = chat.request_conversation_dismiss(
-                                        crate::components::conversation_actions::ConversationDismissTrigger::Escape,
-                                        window,
-                                        cx,
-                                    );
+                                    chat.handle_conversation_escape(window, cx);
                                 });
                                 cx.stop_propagation();
                                 return;

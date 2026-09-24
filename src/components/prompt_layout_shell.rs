@@ -848,19 +848,18 @@ pub(crate) fn render_universal_prompt_hint_strip() -> AnyElement {
     render_simple_hint_strip(universal_prompt_hints(), None)
 }
 
-/// Transparent spacer div matching the native footer height.
+/// Transparent spacer for the native footer's view-owned reservation.
 ///
-/// Used in place of the GPUI hint strip when the native NSVisualEffectView
-/// footer is active, so content doesn't get hidden behind the AppKit footer.
+/// Used in place of the GPUI hint strip when the native footer is active.
+/// Zero-height in glass mode, where the root stage reserves the whole
+/// in-stage footer zone; the footer height otherwise.
 #[allow(dead_code)]
 pub(crate) fn render_native_main_window_footer_spacer() -> AnyElement {
     div()
         .id("native-main-window-footer-spacer")
         .debug_selector(|| "native-main-window-footer-spacer".to_string())
         .w_full()
-        .h(px(
-            crate::components::footer_chrome::current_main_menu_footer_height(),
-        ))
+        .h(px(crate::footer_popup::view_owned_native_footer_height()))
         .into_any_element()
 }
 

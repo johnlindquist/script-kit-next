@@ -16,56 +16,48 @@ fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> 
     &tail[..end]
 }
 
+/// Term and editor size themselves one tick after construction. That deferred
+/// resize must prove the prompt instance that scheduled it is still current,
+/// or a quickly replaced prompt resizes the window for its successor.
 #[test]
-fn prompt_spawned_term_resize_is_state_guarded() {
+fn prompt_spawned_term_and_editor_resizes_are_instance_guarded() {
     let source = read("src/prompt_handler/mod.rs");
-    for expected in [
-        "PromptMessage::ShowTerm {",
-        "let expected_id = id.clone();",
-        "AppView::TermPrompt { id, .. }",
-        "id == &expected_id",
-        "calculate_window_size_params_if_current_view(",
-        "\"show_term_deferred_resize\"",
-        "resize_to_view_sync(view_type, item_count);",
+    for (kind, marker) in [
+        (
+            "term",
+            "self.prepare_constructed_sdk_prompt(\"term\", true, cx);",
+        ),
+        (
+            "editor",
+            "self.prepare_constructed_sdk_prompt(\"editor\", true, cx);",
+        ),
     ] {
         assert!(
-            source.contains(expected),
-            "ShowTerm deferred resize must contain state guard marker `{expected}`"
+            source.contains(marker),
+            "Show{kind} must use the deferred, guarded resize"
         );
     }
-    assert!(
-        !source.contains("resize_to_view_sync(ViewType::TermPrompt, 0);"),
-        "ShowTerm must not spawn an unconditional TermPrompt resize"
-    );
-}
-
-#[test]
-fn prompt_spawned_editor_resize_is_state_guarded() {
-    let source = read("src/prompt_handler/mod.rs");
-    let block = source_between(
+    let prepare = source_between(
         &source,
-        "PromptMessage::ShowEditor {",
-        "PromptMessage::ScriptExit =>",
+        "fn prepare_constructed_sdk_prompt(",
+        "pub(crate) fn make_submit_callback(",
     );
-
-    assert!(
-        !block.contains("cx.spawn(async move |_this, _cx|")
-            && !block.contains("resize_to_view_sync(ViewType::EditorPrompt, 0);"),
-        "ShowEditor must not spawn an unconditional EditorPrompt resize"
-    );
+    let deferred = source_between(prepare, "if deferred {", "} else if let Some(");
     for expected in [
-        "let expected_id = id.clone();",
-        "AppView::EditorPrompt { id, .. }",
-        "id == &expected_id",
-        "calculate_window_size_params_if_current_view(",
-        "\"show_editor_deferred_resize\"",
+        ".map(|binding| binding.instance().clone())",
+        "== expected.as_ref()",
         "resize_to_view_sync(view_type, item_count);",
     ] {
         assert!(
-            block.contains(expected),
-            "ShowEditor deferred resize must contain state guard marker `{expected}`"
+            deferred.contains(expected),
+            "deferred prompt resize must contain instance guard marker `{expected}`"
         );
     }
+    assert!(
+        !source.contains("resize_to_view_sync(ViewType::TermPrompt, 0);")
+            && !source.contains("resize_to_view_sync(ViewType::EditorPrompt, 0);"),
+        "term/editor must not spawn an unconditional resize"
+    );
 }
 
 #[test]

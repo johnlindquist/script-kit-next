@@ -36,7 +36,7 @@ fn function_body<'a>(source: &'a str, name: &str) -> &'a str {
 
 #[test]
 fn day_page_render_does_not_mount_inline_spine_overlay() {
-    let view = source("src/main_sections/day_page_view.rs");
+    let view = source("src/main_sections/day_page_render.rs");
     let render = function_body(&view, "fn render(");
 
     assert!(
@@ -105,7 +105,10 @@ fn day_page_spine_adapter_exposes_no_overlay_rows() {
 #[test]
 fn day_page_cannot_delegate_to_main_list_spine_projection() {
     let filter_input_core = source("src/app_impl/filter_input_core.rs");
-    let owns_main_list = function_body(&filter_input_core, "fn spine_projection_owns_main_list(");
+    let owns_main_list = function_body(
+        &filter_input_core,
+        "fn spine_projection_owns_main_list_for(",
+    );
 
     assert!(
         owns_main_list.contains("AppView::DayPage { .. }")
@@ -149,7 +152,7 @@ fn day_page_context_round_trip_still_uses_main_menu() {
 
 #[test]
 fn day_page_header_context_chips_are_inert() {
-    let view = source("src/main_sections/day_page_view.rs");
+    let view = source("src/main_sections/day_page_render.rs");
     let render = function_body(&view, "fn render(");
 
     assert!(
@@ -279,9 +282,9 @@ fn day_page_footer_cannot_open_generic_agent_chat_popup() {
     );
 
     let agent_model_arm = dispatcher
-        .split("crate::footer_popup::FooterAction::AgentModel =>")
+        .split("crate::footer_popup::FooterAction::AgentModel => {")
         .nth(1)
-        .expect("FooterAction::AgentModel arm should exist");
+        .expect("FooterAction::AgentModel dispatch arm should exist");
     assert!(
         agent_model_arm.contains("AppView::DayPage { .. }")
             && agent_model_arm.contains("main_window_footer_agent_model_ignored_day_page"),

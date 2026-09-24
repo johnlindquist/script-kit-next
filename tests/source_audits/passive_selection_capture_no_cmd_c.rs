@@ -23,7 +23,9 @@ fn passive_spine_preview_uses_ax_only_selection_capture() {
         "pub(crate) fn set_script_count",
     );
 
-    assert!(preview_body.contains("get_selected_text_ax_only()"));
+    // The preview reads the selection of the recorded source app through the
+    // per-app AX-only helper; the fallback-capable API may synthesize Cmd+C.
+    assert!(preview_body.contains("selected_text_for_app_ax_only("));
     assert!(
         !preview_body.contains("get_selected_text()"),
         "passive Spine preview must not call the fallback-capable selected-text API"

@@ -268,40 +268,51 @@ mod footer_layout_tests {
         assert_eq!(tiny.y, 0.0);
     }
 
-    /// Every main-window surface shares one footer zone; only the main menu
-    /// scrolls its list under it. Bottom-anchored popups clear the capsules'
-    /// top edge in glass mode and the caller's footer otherwise.
+    /// Every main-window surface shares one footer zone. The root reserves it
+    /// only while a native footer is present on a non-menu view (the main
+    /// menu scrolls under it; a footer-less surface reserves nothing), and
+    /// views never reserve footer space of their own in glass mode.
     #[test]
-    fn footer_zone_is_surface_independent_and_only_main_menu_scrolls_under() {
+    fn footer_zone_reserve_follows_the_present_native_footer_surface() {
         let footer = crate::components::footer_chrome::current_main_menu_footer_height();
         let gap = super::FLOAT_FOOTER_CONTAINER_GAP_PX;
-        for surface in [
-            Some("select_prompt"),
-            Some("agent_chat"),
-            Some("day_page"),
-            None,
-            Some("script_list"),
+        let in_stage = super::main_window_footer_in_stage();
+        for (surface, expected_reserve, expected_scroll_under) in [
+            (Some("select_prompt"), footer + gap * 2.0, false),
+            (Some("agent_chat"), footer + gap * 2.0, false),
+            (Some("day_page"), footer + gap * 2.0, false),
+            (None, 0.0, false),
+            (Some("script_list"), 0.0, true),
         ] {
             super::set_main_footer_surface(surface);
-            let in_stage = super::main_window_footer_in_stage();
             assert_eq!(
                 super::main_list_scrolls_under_footer(),
-                in_stage && surface == Some("script_list")
+                in_stage && expected_scroll_under,
+                "{surface:?}"
             );
             if in_stage {
+                assert_eq!(
+                    super::main_window_view_footer_zone_reserve(),
+                    expected_reserve,
+                    "{surface:?}"
+                );
+                assert_eq!(super::view_owned_native_footer_height(), 0.0);
                 assert_eq!(super::main_window_footer_zone_height(), footer + gap * 2.0);
                 assert_eq!(
-                    super::main_window_footer_reservation_height(),
-                    footer + gap * 2.0
+                    super::main_window_bottom_popup_clearance(30.0),
+                    footer + gap
                 );
-                assert_eq!(super::main_window_bottom_popup_clearance(30.0), footer + gap);
             } else {
-                assert_eq!(super::main_window_footer_zone_height(), 0.0);
+                assert_eq!(super::main_window_view_footer_zone_reserve(), 0.0);
+                assert_eq!(super::view_owned_native_footer_height(), footer);
                 assert_eq!(super::main_window_footer_reservation_height(), footer);
                 assert_eq!(super::main_window_bottom_popup_clearance(30.0), 30.0);
             }
         }
         super::set_main_footer_surface(None);
+        // A config with nothing to draw (e.g. the focused-text mini before a
+        // result) is not a present footer, so the sync records no surface.
+        assert!(!super::MainWindowFooterConfig::new("agent_chat", Vec::new()).shows_content());
     }
 
     #[test]
