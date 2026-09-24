@@ -585,7 +585,8 @@ impl ScriptListApp {
         let vibrancy_bg = get_vibrancy_background(theme);
 
         // Use explicit height from layout constants
-        let content_height = window_resize::layout::STANDARD_HEIGHT;
+        let content_height =
+            window_resize::main_window_content_height(window_resize::layout::STANDARD_HEIGHT);
 
         div()
             .flex()
@@ -838,7 +839,9 @@ impl ScriptListApp {
 
         crate::components::prompt_shell_container(0.0, vibrancy_bg)
             .id("script-issues-shell")
-            .h(window_resize::layout::STANDARD_HEIGHT)
+            .h(window_resize::main_window_content_height(
+                window_resize::layout::STANDARD_HEIGHT,
+            ))
             .key_context("ScriptIssuesView")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -1006,7 +1009,9 @@ impl ScriptListApp {
 
         crate::components::prompt_shell_container(0.0, vibrancy_bg)
             .id("creation-feedback-shell")
-            .h(window_resize::layout::STANDARD_HEIGHT)
+            .h(window_resize::main_window_content_height(
+                window_resize::layout::STANDARD_HEIGHT,
+            ))
             .key_context("CreationFeedback")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -1074,7 +1079,9 @@ impl ScriptListApp {
 
         crate::components::prompt_shell_container(0.0, vibrancy_bg)
             .id("confirm-prompt-shell")
-            .h(window_resize::layout::STANDARD_HEIGHT)
+            .h(window_resize::main_window_content_height(
+                window_resize::layout::STANDARD_HEIGHT,
+            ))
             .key_context("ConfirmPrompt")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)

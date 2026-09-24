@@ -148,10 +148,24 @@ fn glass_capsule_row_with_cleanup(
         for stale_group in &groups_to_remove {
             crate::platform::footer_hit_regions::remove_group(window, stale_group);
         }
+        // Native glass shells and hit regions are not subject to GPUI's clip:
+        // a row an ancestor clips entirely out of view (a view's own overflow,
+        // the in-stage footer zone boundary) must leave no glass shells or
+        // hit targets behind. Partially visible rows keep every capsule so
+        // hover indices stay aligned with the element order.
+        let visible = window.content_mask().bounds;
         let capsule_bounds = bounds
             .into_iter()
             .skip(skip_leading_children)
             .collect::<Vec<_>>();
+        let capsule_bounds = if capsule_bounds
+            .iter()
+            .any(|capsule| capsule.intersects(&visible))
+        {
+            capsule_bounds
+        } else {
+            Vec::new()
+        };
         crate::platform::footer_hit_regions::sync_for_window(window, group, &capsule_bounds);
 
         if enabled {

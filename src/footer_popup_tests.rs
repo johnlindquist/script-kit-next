@@ -22,6 +22,25 @@ mod footer_layout_tests {
         assert!(regions.footer.height >= 0.0);
     }
 
+    /// The fade must leave everything above the capsule top at full opacity
+    /// and never ramp below the stage bottom; inverted or out-of-layer bands
+    /// install no mask instead of fading visible rows.
+    #[test]
+    fn bottom_edge_fade_ramps_inside_the_occluded_band_only() {
+        // 480pt layer, capsules' top at 80pt, stage bottom at 40pt (y up).
+        let [ramp_bottom, band_top] =
+            super::bottom_edge_fade_stops(480.0, 80.0, 40.0, 0.6).expect("band");
+        assert!((band_top - 80.0 / 480.0).abs() < 1e-9);
+        assert!((ramp_bottom - 56.0 / 480.0).abs() < 1e-9);
+        assert!(ramp_bottom < band_top);
+        let [full_ramp_bottom, _] =
+            super::bottom_edge_fade_stops(480.0, 80.0, 40.0, 7.0).expect("clamped ramp");
+        assert!((full_ramp_bottom - 40.0 / 480.0).abs() < 1e-9);
+        assert_eq!(super::bottom_edge_fade_stops(480.0, 40.0, 80.0, 0.6), None);
+        assert_eq!(super::bottom_edge_fade_stops(480.0, 500.0, 40.0, 0.6), None);
+        assert_eq!(super::bottom_edge_fade_stops(0.5, 0.4, 0.1, 0.6), None);
+    }
+
     #[test]
     #[cfg(target_os = "macos")]
     fn floating_footer_hints_are_edge_flush_while_legacy_keeps_its_inset() {
@@ -237,47 +256,50 @@ mod footer_layout_tests {
         );
     }
 
+    /// The in-stage capsule container sits one gap inside the window's sides
+    /// and bottom, whatever the surface, and never above the window top.
     #[test]
-    fn over_content_footer_preserves_stage_and_clears_its_bottom_edge() {
-        let detached = main_window_detached_footer_regions_gpui(750.0, 480.0, 32.0, 8.0, 2.0);
-        let overlay = super::main_window_footer_bounds_gpui(750.0, 480.0, 32.0, 8.0, 2.0, true);
-        assert_eq!(overlay.height, detached.footer.height);
-        assert_eq!(overlay.x, 8.0);
-        assert_eq!(overlay.x + overlay.width, detached.footer.width - 8.0);
-        let baseline = super::main_window_footer_bounds_gpui(750.0, 480.0, 32.0, 8.0, 2.0, false);
-        assert_eq!(baseline, detached.footer);
-        assert_eq!(
-            overlay.y + overlay.height + 8.0,
-            detached.main_content.height
-        );
-        assert_eq!(detached.footer.y - overlay.y, 48.0);
-        let tiny = super::main_window_footer_bounds_gpui(750.0, 50.0, 32.0, 8.0, 2.0, true);
+    fn in_stage_footer_sits_one_gap_inside_the_window_edges() {
+        let footer = super::main_window_footer_bounds_gpui(750.0, 480.0, 32.0, 8.0, 2.0);
+        assert_eq!((footer.x, footer.width), (8.0, 734.0));
+        assert_eq!((footer.y, footer.height), (440.0, 32.0));
+        assert_eq!(footer.y + footer.height + 8.0, 480.0);
+        let tiny = super::main_window_footer_bounds_gpui(750.0, 30.0, 32.0, 8.0, 2.0);
         assert_eq!(tiny.y, 0.0);
     }
 
-    /// Tahoe floating chrome is main-menu-only: other surfaces keep the
-    /// detached footer, and bottom-anchored popups clear whichever placement
-    /// is active.
+    /// Every main-window surface shares one footer zone; only the main menu
+    /// scrolls its list under it. Bottom-anchored popups clear the capsules'
+    /// top edge in glass mode and the caller's footer otherwise.
     #[test]
-    fn over_content_follows_main_menu_surface_only() {
-        super::set_main_footer_surface(Some("select_prompt"));
-        assert!(!super::main_window_footer_over_content());
-        assert_eq!(super::main_window_bottom_popup_clearance(30.0), 30.0);
-        super::set_main_footer_surface(None);
-        assert!(!super::main_window_footer_over_content());
-        super::set_main_footer_surface(Some("script_list"));
-        assert_eq!(
-            super::main_window_footer_over_content(),
-            super::main_window_footer_over_content_enabled()
-        );
-        if super::main_window_footer_over_content() {
-            let clearance = super::main_window_bottom_popup_clearance(30.0);
+    fn footer_zone_is_surface_independent_and_only_main_menu_scrolls_under() {
+        let footer = crate::components::footer_chrome::current_main_menu_footer_height();
+        let gap = super::FLOAT_FOOTER_CONTAINER_GAP_PX;
+        for surface in [
+            Some("select_prompt"),
+            Some("agent_chat"),
+            Some("day_page"),
+            None,
+            Some("script_list"),
+        ] {
+            super::set_main_footer_surface(surface);
+            let in_stage = super::main_window_footer_in_stage();
             assert_eq!(
-                clearance,
-                super::main_window_float_footer_strip_height()
-                    + crate::ui::chrome::LIQUID_GLASS_DENSE_GAP_PX
-                    + crate::components::footer_chrome::current_main_menu_footer_height()
+                super::main_list_scrolls_under_footer(),
+                in_stage && surface == Some("script_list")
             );
+            if in_stage {
+                assert_eq!(super::main_window_footer_zone_height(), footer + gap * 2.0);
+                assert_eq!(
+                    super::main_window_footer_reservation_height(),
+                    footer + gap * 2.0
+                );
+                assert_eq!(super::main_window_bottom_popup_clearance(30.0), footer + gap);
+            } else {
+                assert_eq!(super::main_window_footer_zone_height(), 0.0);
+                assert_eq!(super::main_window_footer_reservation_height(), footer);
+                assert_eq!(super::main_window_bottom_popup_clearance(30.0), 30.0);
+            }
         }
         super::set_main_footer_surface(None);
     }

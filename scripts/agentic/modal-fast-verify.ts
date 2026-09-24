@@ -176,7 +176,7 @@ const checks: Check[] = [
         requireContains(confirmOptions, ["focus: false"]),
         requireContains(actionsConfig, [
           "configure_attached_popup_window(",
-          "GlassMorphVariant::ContentLayer",
+          "GlassMorphVariant::MirrorMainEntry",
         ]),
         requireContains(confirmConfig, [
           "configure_attached_popup_window(",
@@ -364,6 +364,7 @@ const checks: Check[] = [
         "FooterActionSlot::Run",
         "configure_attached_popup_window(",
         "GlassMorphVariant::ContentLayer",
+        "GlassMorphVariant::MirrorMainEntry",
         "GlassMorphVariant::FadeOnly",
         "SCRIPT_KIT_DISABLE_AUTOMATIC_UPDATE_CHECK",
       ]),

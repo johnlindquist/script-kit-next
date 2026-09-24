@@ -226,15 +226,14 @@ impl ScriptListApp {
         let vibrancy_bg = get_vibrancy_background(theme);
 
         // Use explicit height from layout constants instead of h_full()
-        // h_full() doesn't work at the root level because there's no parent to fill
-        // Wrapper height holds the terminal entity AND the footer hint strip,
-        // so it must equal the full panel height. Using the terminal-grid-only
-        // `quick_terminal_content_height()` here would leave a `FOOTER_HEIGHT`
-        // gap below the footer.
+        // h_full() doesn't work at the root level because there's no parent to fill.
+        // The wrapper holds the terminal entity (and the in-flow footer hint
+        // strip when glass is off) and ends above the in-stage footer zone, so
+        // no terminal row is laid out under the floating footer.
         let content_height = if is_quick_terminal {
             window_resize::quick_terminal_panel_height()
         } else {
-            window_resize::layout::MAX_HEIGHT
+            window_resize::main_window_content_height(window_resize::layout::MAX_HEIGHT)
         };
 
         // Key handler for Cmd+K actions toggle

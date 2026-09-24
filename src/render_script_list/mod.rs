@@ -1252,6 +1252,12 @@ impl ScriptListApp {
                                                 ResolvedMainMenuSelection::SearchResult { row, .. } | ResolvedMainMenuSelection::Calculator { row, .. } => row.stable_key == press.stable_key,
                                             });
                                             if !this.select_main_menu_row(grouped_index, MainMenuSelectionOrigin::Pointer, cx) { return; }
+                                            // A row clicked through its visible top while its
+                                            // bottom sits under the floating footer scrolls just
+                                            // clear of it (no-op for fully visible rows). The
+                                            // click point stays on the same row, so a double
+                                            // click still targets it.
+                                            this.reveal_main_list_selection_above_footer("pointer_click");
                                             this.note_list_pointer_click(grouped_index, cx);
                                             this.clear_menu_syntax_filter_accept_hint();
                                             cx.notify();
@@ -1399,41 +1405,18 @@ impl ScriptListApp {
                 let viewport_height = self.main_list_state.viewport_bounds().size.height;
                 let safe_viewport_height =
                     (viewport_height - header_overlay_height - footer_overlay_height).max(px(0.0));
-                // GEO-009: predictive scrollbar content height resolves the
-                // MainMenuThemed presentation ONCE (same themed metrics the
-                // row renderer paints), then sums typed predictive slots —
-                // no per-item metric rebuilds, no bare height arithmetic.
-                let hide_initial_section_header = current_main_menu_theme
-                    .def()
-                    .header_info_bar
-                    .hide_initial_section_header;
-                let themed_metrics = crate::list_item::metrics::resolved_list_presentation_metrics(
-                    crate::list_item::metrics::ListPresentationMode::MainMenuThemed,
-                    self.current_design,
-                    current_main_menu_theme,
+                // One model owns thumb position, extent, and drag: the exact
+                // theme heights the reveal math uses. ListState's own
+                // scrollbar offset sums only measured rows, so it collapsed
+                // after jumps and snapped the thumb to the top.
+                let scrollbar_handle = crate::scrolling::model_scrollbar::ModelListScrollbarHandle::new(
+                    self.main_list_state.clone(),
+                    grouped_items.clone(),
+                    crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
+                        current_main_menu_theme,
+                    ),
                 );
-                let content_height = px(crate::list_item::metrics::resolved_list_content_height(
-                    &themed_metrics,
-                    grouped_items.iter().enumerate().map(|(ix, item)| {
-                        use crate::list_item::metrics::PredictiveListSlot;
-                        match item {
-                            GroupedListItem::SectionHeader(..) => {
-                                if ix == 0 && hide_initial_section_header {
-                                    PredictiveListSlot::HiddenSection
-                                } else if ix == 0 {
-                                    PredictiveListSlot::FirstSection
-                                } else {
-                                    PredictiveListSlot::Section
-                                }
-                            }
-                            GroupedListItem::ReservedSectionSlot => {
-                                PredictiveListSlot::ReservedFirstSection
-                            }
-                            GroupedListItem::Status(..) => PredictiveListSlot::SourceStatus,
-                            GroupedListItem::Item(..) => PredictiveListSlot::Row,
-                        }
-                    }),
-                ));
+                let content_height = scrollbar_handle.content_height();
 
                 div()
                     .absolute()
@@ -1455,8 +1438,13 @@ impl ScriptListApp {
                         },
                     ))
                     .child(
-                        GpuiScrollbar::vertical(&self.main_list_state)
+                        GpuiScrollbar::vertical(&scrollbar_handle)
                             .id("launcher-main-scrollbar")
+                            // Track = this overlay (below the header, above the
+                            // floating footer), not the list's padded viewport;
+                            // otherwise the track ran under both and the thumb
+                            // sat a thumb-length too high.
+                            .viewport_from_layout()
                             .scroll_size(size(px(0.0), content_height))
                             .into_any_element(),
                     )
@@ -1502,6 +1490,24 @@ impl ScriptListApp {
                     )
                 })
                 .child(scrollbar_overlay)
+                // Tahoe floating footer: rows scrolled under the capsules stay
+                // visible (natively faded) but are not interactive. Wheel
+                // input still scrolls the list; the native capsules sit above.
+                .when(
+                    crate::footer_popup::main_list_scrolls_under_footer(),
+                    |root| {
+                        root.child(
+                            div()
+                                .debug_selector(|| "main-list-footer-occlusion".into())
+                                .absolute()
+                                .left_0()
+                                .right_0()
+                                .bottom_0()
+                                .h(main_list_footer_overlay_total_padding())
+                                .block_mouse_except_scroll(),
+                        )
+                    },
+                )
                 .into_any_element()
         };
 

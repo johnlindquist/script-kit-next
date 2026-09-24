@@ -8,6 +8,8 @@ enum GlassMorphVariant {
     WindowFrame,
     ContentLayer,
     FadeOnly,
+    /// Child popup that replays the selected main-window entry preset.
+    MirrorMainEntry,
 }
 
 #[cfg(target_os = "macos")]
@@ -213,6 +215,18 @@ impl GlassMorphVariant {
             Self::WindowFrame => "window_frame",
             Self::ContentLayer => "detached_window_frame",
             Self::FadeOnly => "fade_only",
+            Self::MirrorMainEntry => "mirror_main_entry",
+        }
+    }
+
+    /// The Actions popup (the only `MirrorMainEntry` surface) settles on the
+    /// untinted popup material; every other surface keeps the window backdrop.
+    fn backdrop_role(self) -> NativeGlassSurfaceRole {
+        match self {
+            Self::MirrorMainEntry => NativeGlassSurfaceRole::PopupBackdrop,
+            Self::WindowFrame | Self::ContentLayer | Self::FadeOnly => {
+                NativeGlassSurfaceRole::WindowBackdrop
+            }
         }
     }
 }
@@ -880,7 +894,20 @@ pub(crate) enum GlassExitMode {
 
 #[cfg(target_os = "macos")]
 fn glass_exit_mode(window_name: &str) -> GlassExitMode {
-    if window_name_uses_fixed_frame_exit(window_name) {
+    glass_exit_mode_for_preset(
+        window_name,
+        crate::theme::animation::current_preset().spec().legacy,
+    )
+}
+
+/// Surfaces that mirror the main window's motion (the Actions popup, per the
+/// 2026-09-23 owner request) take its fixed-frame fade under every catalog
+/// preset. `PreviousCalibration` (legacy) restores their calibrated popup exit.
+#[cfg(target_os = "macos")]
+fn glass_exit_mode_for_preset(window_name: &str, legacy_preset: bool) -> GlassExitMode {
+    if window_name_uses_fixed_frame_exit(window_name)
+        || (!legacy_preset && window_name_mirrors_main_motion(window_name))
+    {
         GlassExitMode::DetachedRegionsFadeOnly
     } else {
         GlassExitMode::PopupTransformAndBlur
@@ -1208,8 +1235,13 @@ include!("secondary_window_glass_style.rs");
 /// `window` must be a valid NSWindow on the main thread (checked + null-guarded).
 #[cfg(target_os = "macos")]
 unsafe fn configure_tahoe_window_backdrop(window: id, log_target: &str, window_name: &str) -> bool {
-    configure_tahoe_window_backdrop_with_result(window, log_target, window_name)
-        .is_some_and(|result| result.created)
+    configure_tahoe_window_backdrop_with_result(
+        window,
+        log_target,
+        window_name,
+        NativeGlassSurfaceRole::WindowBackdrop,
+    )
+    .is_some_and(|result| result.created)
 }
 
 #[cfg(target_os = "macos")]
@@ -1217,6 +1249,7 @@ unsafe fn configure_tahoe_window_backdrop_with_result(
     window: id,
     log_target: &str,
     window_name: &str,
+    backdrop_role: NativeGlassSurfaceRole,
 ) -> Option<TahoeGlassBackdropResult> {
     use cocoa::appkit::{NSViewHeightSizable, NSViewWidthSizable};
     use cocoa::foundation::NSRect;
@@ -1351,10 +1384,7 @@ unsafe fn configure_tahoe_window_backdrop_with_result(
     let _: () =
         msg_send![glass_view, setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
 
-    let style = resolve_native_glass_style(
-        &crate::theme::get_cached_theme(),
-        NativeGlassSurfaceRole::WindowBackdrop,
-    );
+    let style = resolve_native_glass_style(&crate::theme::get_cached_theme(), backdrop_role);
     let tint_selector_supported: bool =
         msg_send![glass_view, respondsToSelector: sel!(setTintColor:)];
     let corner_selector_supported: bool =
@@ -1572,7 +1602,7 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
         is_dark,
         "ACTIONS",
         "Actions popup",
-        GlassMorphVariant::ContentLayer,
+        GlassMorphVariant::MirrorMainEntry,
     );
 }
 

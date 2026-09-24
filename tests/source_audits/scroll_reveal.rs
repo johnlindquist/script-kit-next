@@ -284,33 +284,3 @@ fn footer_safe_scroll_offset_uses_footer_reduced_viewport_for_trailing_scroll_bu
         "footer_safe_scroll_offset_for_item must compare against the footer-safe visible bottom edge"
     );
 }
-
-#[test]
-fn script_list_scrollbar_overlay_uses_footer_safe_viewport_and_content_height() {
-    let content = read("src/render_script_list/mod.rs");
-
-    assert!(
-        content.contains(
-            "let safe_viewport_height = (viewport_height - footer_overlay_height).max(px(0.0));"
-        ),
-        "script list scrollbar overlay must clip itself to the footer-safe viewport height"
-    );
-    assert!(
-        content.contains(".map(|(ix, item)| match item {")
-            && content.contains("GroupedListItem::SectionHeader(..)")
-            && content.contains("GroupedListItem::Item(..)"),
-        "script list scrollbar overlay must size against real grouped row heights"
-    );
-    assert!(
-        content.contains(".scroll_size(size(px(0.0), content_height))"),
-        "script list scrollbar overlay must override vendor scroll size with row content height"
-    );
-    assert!(
-        !content.contains("+ footer_overlay_height;"),
-        "script list scrollbar content height must not add footer padding or the thumb cannot reach the bottom"
-    );
-    assert!(
-        !content.contains(".scrollbar_show(ScrollbarShow::Always)"),
-        "script list scrollbar should not force always-visible mode"
-    );
-}

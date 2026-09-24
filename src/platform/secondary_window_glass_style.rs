@@ -3,6 +3,11 @@
 pub(crate) enum NativeGlassSurfaceRole {
     WindowBackdrop,
     FloatingCapsule,
+    /// Untinted window backdrop for the Actions popup. It always sits inside
+    /// the main window, so it composites over already-tinted main glass; the
+    /// stability tint on top of that read as a washed-out gray settle
+    /// (2026-09-23 owner report). Frosted, no tint: keeps the glassy tone.
+    PopupBackdrop,
 }
 
 #[cfg(target_os = "macos")]
@@ -36,10 +41,14 @@ pub(crate) fn resolve_native_glass_style(
     let matched = crate::ui_foundation::main_window_matched_background_rgba(theme);
     let tint_rgb = (matched >> 8) & 0x00ff_ffff;
     let tint_floor = crate::ui::chrome::LIQUID_GLASS_STABILITY_TINT_ALPHA_FLOOR;
-    let effective_tint_alpha = requested_tint_alpha
-        .unwrap_or(tint_floor)
-        .max(tint_floor)
-        .clamp(0.0, 1.0);
+    let effective_tint_alpha = if matches!(role, NativeGlassSurfaceRole::PopupBackdrop) {
+        0.0
+    } else {
+        requested_tint_alpha
+            .unwrap_or(tint_floor)
+            .max(tint_floor)
+            .clamp(0.0, 1.0)
+    };
     let capsule = matches!(role, NativeGlassSurfaceRole::FloatingCapsule);
     let veil_alpha = if capsule {
         crate::ui::chrome::LIQUID_GLASS_CAPSULE_VEIL_ALPHA
@@ -265,6 +274,30 @@ pub(crate) unsafe fn apply_native_glass_style(glass_view: id, style: NativeGlass
     )
 }
 
+/// The resolved tint as an `NSColor`, or nil for an untinted style. A
+/// zero-alpha tint means "no tint": nil matches untinted glass exactly rather
+/// than installing a transparent-color tint layer. Entry animations target
+/// this same value so they settle on the installed material.
+///
+/// # Safety
+/// Main thread (AppKit color construction).
+#[cfg(target_os = "macos")]
+pub(crate) unsafe fn native_glass_tint_color(style: &NativeGlassStyle) -> id {
+    if style.effective_tint_alpha <= 0.0 {
+        return nil;
+    }
+    let red = f64::from((style.signature.tint_rgb >> 16) & 0xff) / 255.0;
+    let green = f64::from((style.signature.tint_rgb >> 8) & 0xff) / 255.0;
+    let blue = f64::from(style.signature.tint_rgb & 0xff) / 255.0;
+    msg_send![
+        class!(NSColor),
+        colorWithCalibratedRed: red
+        green: green
+        blue: blue
+        alpha: f64::from(style.effective_tint_alpha)
+    ]
+}
+
 /// See [`apply_native_glass_style`]; `reason` feeds the style-application
 /// ledger that proves the material stack stays static during entry.
 ///
@@ -330,13 +363,7 @@ pub(crate) unsafe fn apply_native_glass_style_with_reason(
     let red = f64::from((style.signature.tint_rgb >> 16) & 0xff) / 255.0;
     let green = f64::from((style.signature.tint_rgb >> 8) & 0xff) / 255.0;
     let blue = f64::from(style.signature.tint_rgb & 0xff) / 255.0;
-    let tint: id = msg_send![
-        class!(NSColor),
-        colorWithCalibratedRed: red
-        green: green
-        blue: blue
-        alpha: f64::from(style.effective_tint_alpha)
-    ];
+    let tint = native_glass_tint_color(&style);
     let _: () = msg_send![glass_view, setTintColor: tint];
 
     let _: () = msg_send![glass_view, setWantsLayer: cocoa::base::YES];
@@ -417,6 +444,7 @@ pub(crate) unsafe fn apply_native_glass_style_with_reason(
     let role_name = match style.role {
         NativeGlassSurfaceRole::WindowBackdrop => "window_backdrop",
         NativeGlassSurfaceRole::FloatingCapsule => "floating_capsule",
+        NativeGlassSurfaceRole::PopupBackdrop => "popup_backdrop",
     };
     tracing::info!(
         target: "script_kit::native_glass",

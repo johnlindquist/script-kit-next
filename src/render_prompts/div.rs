@@ -50,7 +50,8 @@ impl ScriptListApp {
         let vibrancy_bg = get_vibrancy_background(theme);
 
         // Use explicit height from layout constants
-        let content_height = window_resize::layout::STANDARD_HEIGHT;
+        let content_height =
+            window_resize::main_window_content_height(window_resize::layout::STANDARD_HEIGHT);
 
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(

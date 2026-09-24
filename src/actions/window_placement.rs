@@ -70,11 +70,10 @@ pub(crate) fn resolved_actions_popup_height(
 }
 
 /// Cap a top-anchored Actions popup so it ends above the floating footer
-/// capsules. With the main-menu footer floating inside the glass stage, a
-/// full-height TopCenter/TopRight popup (272 + 360 on a 480pt window) covered
-/// the capsules' top edge; detached footers sit below the stage and are
-/// untouched. `bottom_clearance` is the distance from the main window's
-/// bottom edge to the capsules' top edge.
+/// capsules, which float inside the glass stage on every main-window surface;
+/// a full-height TopCenter/TopRight popup (272 + 360 on a 480pt window) would
+/// otherwise cover the capsules' top edge. `bottom_clearance` is the distance
+/// from the main window's bottom edge to the capsules' top edge.
 pub(crate) fn top_anchored_popup_height_above_floating_footer(
     popup_height: f32,
     main_window_height: f32,

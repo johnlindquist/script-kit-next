@@ -55,7 +55,7 @@ impl Render for DayPageView {
         let header_height =
             crate::components::main_view_chrome::main_view_header_metrics(menu_def, None)
                 .header_height;
-        let footer_height = crate::components::footer_chrome::current_main_menu_footer_height();
+        let footer_height = crate::footer_popup::main_window_footer_reservation_height();
         let shelf_count = if self.kit_resource_preview.is_none() {
             self.clipboard_shelf.len()
         } else {

@@ -808,19 +808,37 @@ unsafe fn finish_coherent_glass_entry(window: id, outcome: &'static str) {
 
 #[cfg(target_os = "macos")]
 unsafe fn discard_closed_coherent_glass_entry(backdrop: id) {
-    let (window_key, state) = {
-        let mut states = GLASS_COHERENT_ENTRY_STATES
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let window_key = states
-            .iter()
-            .find(|(_, state)| state.backdrop_key == backdrop as usize)
-            .map(|(window_key, _)| *window_key);
-        let Some(window_key) = window_key else {
-            return;
-        };
-        (window_key, states.remove(&window_key))
-    };
+    let window_key = GLASS_COHERENT_ENTRY_STATES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .find(|(_, state)| state.backdrop_key == backdrop as usize)
+        .map(|(window_key, _)| *window_key);
+    if let Some(window_key) = window_key {
+        discard_coherent_glass_entry_for_window_key(window_key);
+    }
+}
+
+/// A visible exit defers its coherent entry restore to hidden parking, which
+/// only the main window has. A popup that mirrors the main entry is destroyed
+/// instead, so its committed exit releases the deferred state here — never
+/// leaking the retained views or leaving a pointer-reusable stale key.
+#[cfg(target_os = "macos")]
+pub(crate) fn release_glass_entry_for_removed_window(ticket: GlassExitTicket) {
+    // SAFETY: main thread (GPUI foreground update); discard never messages
+    // the window, only releases objects the entry itself retained.
+    unsafe { discard_coherent_glass_entry_for_window_key(ticket.window_key) }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn release_glass_entry_for_removed_window(_ticket: GlassExitTicket) {}
+
+#[cfg(target_os = "macos")]
+unsafe fn discard_coherent_glass_entry_for_window_key(window_key: usize) {
+    let state = GLASS_COHERENT_ENTRY_STATES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&window_key);
     let Some(state) = state else {
         return;
     };
@@ -1494,6 +1512,7 @@ pub fn dematerialize_then_remove_gpui_window<V: 'static>(
                     return;
                 }
                 record_glass_exit_commit(ticket);
+                release_glass_entry_for_removed_window(ticket);
                 let _ = any_handle.update(cx, |_view, window, _cx| {
                     window.remove_window();
                 });
@@ -1550,6 +1569,7 @@ fn remove_gpui_window_after_glass_exit_from_app_with_ticket(
                 return;
             }
             record_glass_exit_commit(ticket);
+            release_glass_entry_for_removed_window(ticket);
             let _ = any_handle.update(cx, |_view, window, _cx| {
                 window.remove_window();
             });

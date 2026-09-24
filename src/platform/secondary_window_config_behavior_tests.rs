@@ -349,7 +349,7 @@ fn main_entry_restores_the_spotlight_soft_materialize_prefix() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn detached_main_backdrop_excludes_footer_and_exact_eight_point_gutter() {
+fn detached_backdrop_excludes_footer_and_exact_eight_point_gutter() {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
 
     let bounds = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(750.0, 501.0));
@@ -374,39 +374,65 @@ fn detached_main_backdrop_excludes_footer_and_exact_eight_point_gutter() {
 #[cfg(target_os = "macos")]
 #[test]
 fn notes_defaults_to_full_backdrop() {
-    // Default (static) partition owners: Main + Dictation only.
-    for window_name in ["Main window", "Dictation overlay"] {
+    // Default (static) partition owner: Dictation only. The main window's
+    // footer floats inside its stage, so its glass fills the window.
+    assert!(super::window_name_owns_detached_footer("Dictation overlay"));
+    for window_name in ["Main window", "Notes", "Actions popup"] {
         assert!(
-            super::window_name_owns_detached_footer(window_name),
-            "{window_name} must own the default floating footer partition"
+            !super::window_name_owns_detached_footer(window_name),
+            "{window_name} must not reserve a detached footer strip"
         );
     }
-    assert!(
-        !super::window_name_owns_detached_footer("Notes"),
-        "Notes must default to the full-window backdrop (Notes mode has no footer)"
-    );
-    assert!(!super::window_name_owns_detached_footer("Actions popup"));
+}
+
+/// The main window's glass fills the whole window in glass mode (its footer
+/// is in-stage) while keeping the partitioned host's shadowless, rounded
+/// policy: a full-window NSWindow shadow would outline the transparent host.
+#[cfg(target_os = "macos")]
+#[test]
+fn main_backdrop_fills_the_window_but_keeps_the_partitioned_host_policy() {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+
+    if !crate::footer_popup::main_window_footer_in_stage() {
+        return;
+    }
+    let bounds = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(750.0, 480.0));
+    let layout = super::tahoe_backdrop_layout("Main window");
+    let frame = layout.frame(bounds);
+    assert_eq!((frame.origin.y, frame.size.height), (0.0, 480.0));
+    assert_eq!(layout.bottom_inset(), 0.0);
+    assert!(layout.is_detached_footer());
 }
 
 #[cfg(target_os = "macos")]
 #[test]
-fn notes_exit_remains_fixed_frame_fade_only_in_both_modes() {
+fn exit_mode_follows_calibration_set_and_actions_mirrors_main_preset() {
     // The calibrated exit motion keys off the fixed-frame-exit set, NOT
     // the backdrop layout — Notes stays fade-only with zero inset.
-    for window_name in ["Main window", "Notes", "Dictation overlay"] {
-        assert!(super::window_name_uses_fixed_frame_exit(window_name));
-        assert_eq!(
-            super::glass_exit_mode(window_name),
-            super::GlassExitMode::DetachedRegionsFadeOnly
-        );
+    for legacy_preset in [false, true] {
+        for window_name in ["Main window", "Notes", "Dictation overlay"] {
+            assert_eq!(
+                super::glass_exit_mode_for_preset(window_name, legacy_preset),
+                super::GlassExitMode::DetachedRegionsFadeOnly
+            );
+        }
+        for window_name in ["Confirm popup", "Inline popup"] {
+            assert_eq!(
+                super::glass_exit_mode_for_preset(window_name, legacy_preset),
+                super::GlassExitMode::PopupTransformAndBlur
+            );
+        }
     }
-    for window_name in ["Actions popup", "Confirm popup", "Inline popup"] {
-        assert!(!super::window_name_uses_fixed_frame_exit(window_name));
-        assert_eq!(
-            super::glass_exit_mode(window_name),
-            super::GlassExitMode::PopupTransformAndBlur
-        );
-    }
+    // Actions mirrors the main window's fade under every catalog preset;
+    // PreviousCalibration restores its calibrated shrink-out + blur.
+    assert_eq!(
+        super::glass_exit_mode_for_preset("Actions popup", false),
+        super::GlassExitMode::DetachedRegionsFadeOnly
+    );
+    assert_eq!(
+        super::glass_exit_mode_for_preset("Actions popup", true),
+        super::GlassExitMode::PopupTransformAndBlur
+    );
     assert_eq!(super::glass_exit_remove_delay().as_millis(), 135);
 }
 
@@ -531,6 +557,32 @@ fn native_glass_style_locks_tint_floor_and_preserves_requested_tint_semantics() 
     assert_eq!(light_capsule.rim_width, 1.0);
     assert_eq!(light_capsule.signature.rim_rgba, 0x0000_002E);
     assert_ne!(backdrop.signature, explicit.signature);
+}
+
+/// The Actions popup composites over the already-tinted main glass; its own
+/// stability tint read as a washed-out gray settle (2026-09-23 owner report).
+/// Its backdrop stays untinted even when a theme requests tint, while the
+/// window backdrop keeps the floor and the requested value.
+#[cfg(target_os = "macos")]
+#[test]
+fn popup_backdrop_stays_untinted_regardless_of_requested_tint() {
+    let mut inherited = crate::theme::Theme::default();
+    inherited.opacity.as_mut().unwrap().glass_tint_opacity = None;
+    let mut requested = inherited.clone();
+    requested.opacity.as_mut().unwrap().glass_tint_opacity = Some(0.72);
+    for theme in [&inherited, &requested] {
+        let popup =
+            super::resolve_native_glass_style(theme, super::NativeGlassSurfaceRole::PopupBackdrop);
+        assert_eq!(popup.effective_tint_alpha, 0.0);
+        assert_eq!(popup.veil_alpha, 0.0);
+        assert_eq!(popup.rim_width, 0.0);
+    }
+    let window = |theme: &crate::theme::Theme| {
+        super::resolve_native_glass_style(theme, super::NativeGlassSurfaceRole::WindowBackdrop)
+            .effective_tint_alpha
+    };
+    assert_eq!(window(&inherited), 0.35);
+    assert_eq!(window(&requested), 0.72);
 }
 
 /// The material stack must be STATIC between morph start and settle: only

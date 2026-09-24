@@ -129,21 +129,39 @@ pub(crate) fn main_window_detached_footer_regions_appkit(
     }
 }
 
-/// Tahoe floating chrome: on the main menu the footer capsules float INSIDE the
-/// glass stage, over the bottom of the list (8pt side and bottom insets),
-/// instead of in the detached strip below it. Stage and host dimensions stay
-/// unchanged; only the capsules move up. Default on; set
-/// `SCRIPT_KIT_MAIN_FOOTER_OVER_CONTENT=0` to restore the detached placement.
-pub(crate) fn main_window_footer_over_content_enabled() -> bool {
-    static ENABLED: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
-        std::env::var("SCRIPT_KIT_MAIN_FOOTER_OVER_CONTENT").as_deref() != Ok("0")
-    });
-    *ENABLED && glass_scroll_bands_active()
+/// Tahoe floating chrome for the main window: the glass stage fills the whole
+/// window and the footer capsules float INSIDE it, in one fixed zone at the
+/// bottom (one gap above, below, and at each side), on every main-window
+/// surface (2026-09-23 owner request: the capsules sat below the glass on
+/// non-menu views). Views keep their content above the zone; only the main
+/// menu list scrolls under it (faded and non-interactive).
+pub(crate) fn main_window_footer_in_stage() -> bool {
+    glass_scroll_bands_active()
+}
+
+/// Height of the in-stage footer zone: capsule height plus one gap above and
+/// one below. 0 when the footer is not in the stage (glass off).
+pub(crate) fn main_window_footer_zone_height() -> f32 {
+    if main_window_footer_in_stage() {
+        crate::components::footer_chrome::current_main_menu_footer_height()
+            + FLOAT_FOOTER_CONTAINER_GAP_PX * 2.0
+    } else {
+        0.0
+    }
+}
+
+/// Bottom space every main-window view keeps free of content: the in-stage
+/// footer zone, or the in-flow GPUI footer when glass is off.
+pub(crate) fn main_window_footer_reservation_height() -> f32 {
+    if main_window_footer_in_stage() {
+        main_window_footer_zone_height()
+    } else {
+        crate::components::footer_chrome::current_main_menu_footer_height()
+    }
 }
 
 /// Native footer surface currently synced into the main window is the main
-/// menu (`script_list`). Only the main menu floats its capsules over content;
-/// every other surface keeps the detached footer.
+/// menu (`script_list`), whose list scrolls under the in-stage footer.
 static MAIN_FOOTER_SURFACE_IS_MAIN_MENU: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
@@ -154,50 +172,44 @@ pub(crate) fn set_main_footer_surface(surface: Option<&str>) {
     );
 }
 
-/// The installed main-window footer floats over the content right now.
-pub(crate) fn main_window_footer_over_content() -> bool {
-    main_window_footer_over_content_enabled()
+/// The main-menu list extends under the in-stage footer zone right now
+/// (fade, input blocker, and reveal clearance apply). Every other surface
+/// ends its content above the zone.
+pub(crate) fn main_list_scrolls_under_footer() -> bool {
+    main_window_footer_in_stage()
         && MAIN_FOOTER_SURFACE_IS_MAIN_MENU.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// Distance from the main window's bottom edge to a bottom-anchored popup's
-/// bottom edge (Actions / Cmd+K): above the capsules wherever they sit.
+/// Distance from the main window's bottom edge to the in-stage capsules' top
+/// edge; bottom-anchored popups (Actions / Cmd+K) add their own margin.
 pub(crate) fn main_window_bottom_popup_clearance(detached_footer_height: f32) -> f32 {
-    if main_window_footer_over_content() {
-        main_window_float_footer_strip_height()
-            + crate::ui::chrome::LIQUID_GLASS_DENSE_GAP_PX
-            + crate::components::footer_chrome::current_main_menu_footer_height()
+    if main_window_footer_in_stage() {
+        main_window_footer_zone_height() - FLOAT_FOOTER_CONTAINER_GAP_PX
     } else {
         detached_footer_height
     }
 }
 
+/// In-stage footer capsule container (GPUI top-left space): one `gap` inset
+/// from the window's sides and bottom, identical on every surface.
 pub(crate) fn main_window_footer_bounds_gpui(
     width: f32,
     host_height: f32,
     footer_height: f32,
-    gap_height: f32,
+    gap: f32,
     backing_scale: f32,
-    over_content: bool,
 ) -> crate::protocol::LayoutBounds {
-    let regions = main_window_detached_footer_regions_gpui(
-        width,
-        host_height,
-        footer_height,
-        gap_height,
-        backing_scale,
-    );
-    let mut footer = regions.footer;
-    if over_content {
-        let side_inset =
-            round_footer_region_value(crate::ui::chrome::LIQUID_GLASS_DENSE_GAP_PX, backing_scale)
-                .min(footer.width / 2.0);
-        footer.x = side_inset;
-        footer.width -= side_inset * 2.0;
-        footer.y =
-            (regions.main_content.height - footer.height - regions.transparent_gap.height).max(0.0);
+    let width = round_footer_region_value(width.max(0.0), backing_scale);
+    let host_height = round_footer_region_value(host_height.max(0.0), backing_scale);
+    let footer_height =
+        round_footer_region_value(footer_height.max(0.0), backing_scale).min(host_height);
+    let inset = round_footer_region_value(gap.max(0.0), backing_scale).min(width / 2.0);
+    crate::protocol::LayoutBounds {
+        x: inset,
+        y: (host_height - inset - footer_height).max(0.0),
+        width: (width - inset * 2.0).max(0.0),
+        height: footer_height,
     }
-    footer
 }
 
 /// Height of the fully transparent strip the main window reserves below its
@@ -325,7 +337,6 @@ unsafe fn ensure_main_window_footer_glass_container(gpui_view: id, ns_window: id
         footer_height() as f32,
         FLOAT_FOOTER_CONTAINER_GAP_PX,
         backing_scale as f32,
-        main_window_footer_over_content(),
     );
     let footer_frame = NSRect::new(
         NSPoint::new(
@@ -378,6 +389,214 @@ unsafe fn remove_main_window_footer_glass_container(ns_window: id) {
     MAIN_WINDOW_FOOTER_GLASS_HOSTS.with(|hosts| {
         hosts.borrow_mut().remove(&(ns_window as usize));
     });
+}
+
+/// `CALayer.name` of the bottom-edge fade mask on the main GPUI layer. The
+/// coherent entry may temporarily install its own foreground clip mask on
+/// the same layer (and restores ours afterwards), so this owner only ever
+/// updates or removes a mask carrying this name.
+#[cfg(target_os = "macos")]
+const MAIN_LIST_BOTTOM_EDGE_FADE_MASK_NAME: &str = "script-kit-main-list-bottom-edge-fade";
+
+/// Unit-space gradient stops (y up, 0 = layer bottom) for the floating-footer
+/// scroll edge: full opacity above `band_top`, ramping down to the floor over
+/// `ramp_fraction` of the occluded band, then holding the floor to the bottom.
+/// `None` when the geometry cannot express a band.
+fn bottom_edge_fade_stops(
+    layer_height: f64,
+    band_top: f64,
+    stage_bottom: f64,
+    ramp_fraction: f64,
+) -> Option<[f64; 2]> {
+    if layer_height <= 1.0 || band_top <= stage_bottom || band_top > layer_height {
+        return None;
+    }
+    let ramp_bottom = band_top - (band_top - stage_bottom) * ramp_fraction.clamp(0.0, 1.0);
+    Some([
+        (ramp_bottom / layer_height).clamp(0.0, 1.0),
+        (band_top / layer_height).clamp(0.0, 1.0),
+    ])
+}
+
+/// Tahoe floating-footer scroll edge: on the main menu the list scrolls under
+/// the floating capsules, so fade the GPUI content there into the glass
+/// (a true alpha mask, not a painted band), matching Apple's soft scroll
+/// edge. Rows in the band stay visible but read as behind the chrome; GPUI
+/// separately blocks hover/clicks there. Removed on every other surface.
+///
+/// # Safety
+/// Main thread; `gpui_view` and `ns_window` belong to the live main window.
+#[cfg(target_os = "macos")]
+pub(crate) unsafe fn sync_main_list_bottom_edge_fade(gpui_view: id, ns_window: id) {
+    use cocoa::base::YES;
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if gpui_view == nil {
+        return;
+    }
+    let layer: id = msg_send![gpui_view, layer];
+    if layer == nil {
+        return;
+    }
+    let mask_name = ns_string(MAIN_LIST_BOTTOM_EDGE_FADE_MASK_NAME);
+    let current: id = msg_send![layer, mask];
+    let ours = current != nil && {
+        let name: id = msg_send![current, name];
+        let same: cocoa::base::BOOL = if name != nil && mask_name != nil {
+            msg_send![name, isEqualToString: mask_name]
+        } else {
+            cocoa::base::NO
+        };
+        same == YES
+    };
+    if current != nil && !ours {
+        // Another owner (entry foreground clip) holds the mask right now.
+        log_main_list_bottom_edge_fade(BottomEdgeFadeState::DeferredForeignMask);
+        return;
+    }
+
+    let container = MAIN_WINDOW_FOOTER_GLASS_HOSTS.with(|hosts| {
+        hosts
+            .borrow()
+            .get(&(ns_window as usize))
+            .map(|host| host.container())
+            .unwrap_or(nil)
+    });
+    let layer_bounds: NSRect = msg_send![layer, bounds];
+    let stops = if main_list_scrolls_under_footer() && container != nil {
+        let container_frame: NSRect = msg_send![container, frame];
+        let superview: id = msg_send![container, superview];
+        // GPUI's view is not flipped and backs its layer, so view space is
+        // the layer's y-up space.
+        let footer: NSRect =
+            msg_send![gpui_view, convertRect: container_frame fromView: superview];
+        let tokens = crate::designs::current_main_menu_theme().def().list;
+        // The band is the whole footer zone: from one gap above the capsules
+        // (where keyboard reveal stops) down to the window bottom.
+        let gap = f64::from(FLOAT_FOOTER_CONTAINER_GAP_PX);
+        let band_top = footer.origin.y
+            + footer.size.height
+            + gap
+            + f64::from(crate::list_item::effective_footer_reveal_clearance_height());
+        let stage_bottom = footer.origin.y - gap;
+        bottom_edge_fade_stops(
+            layer_bounds.size.height,
+            band_top,
+            stage_bottom,
+            f64::from(tokens.bottom_edge_fade_ramp_fraction),
+        )
+        .map(|stops| (stops, f64::from(tokens.bottom_edge_fade_floor_alpha)))
+    } else {
+        None
+    };
+
+    let transaction = objc::runtime::Class::get("CATransaction");
+    if let Some(transaction) = transaction {
+        let _: () = msg_send![transaction, begin];
+        let _: () = msg_send![transaction, setDisableActions: YES];
+    }
+    match stops {
+        None => {
+            if ours {
+                let _: () = msg_send![layer, setMask: nil];
+            }
+        }
+        Some(([ramp_bottom, band_top], floor_alpha)) => {
+            let mask: id = if ours {
+                current
+            } else if let Some(gradient_class) = objc::runtime::Class::get("CAGradientLayer") {
+                let mask: id = msg_send![gradient_class, layer];
+                if mask != nil {
+                    let _: () = msg_send![mask, setName: mask_name];
+                    let _: () = msg_send![mask, setStartPoint: NSPoint::new(0.5, 0.0)];
+                    let _: () = msg_send![mask, setEndPoint: NSPoint::new(0.5, 1.0)];
+                }
+                mask
+            } else {
+                nil
+            };
+            if mask != nil {
+                let white: id = msg_send![class!(NSColor), whiteColor];
+                let faded: id = msg_send![white, colorWithAlphaComponent: floor_alpha];
+                let faded_cg: id = msg_send![faded, CGColor];
+                let full_cg: id = msg_send![white, CGColor];
+                let colors = [faded_cg, faded_cg, full_cg, full_cg];
+                let colors: id = msg_send![
+                    class!(NSArray),
+                    arrayWithObjects: colors.as_ptr()
+                    count: colors.len()
+                ];
+                let locations = [0.0, ramp_bottom, band_top, 1.0].map(|value: f64| -> id {
+                    msg_send![class!(NSNumber), numberWithDouble: value]
+                });
+                let locations: id = msg_send![
+                    class!(NSArray),
+                    arrayWithObjects: locations.as_ptr()
+                    count: locations.len()
+                ];
+                let _: () = msg_send![mask, setColors: colors];
+                let _: () = msg_send![mask, setLocations: locations];
+                // Horizontally oversized so an entry width morph never
+                // exposes an unmasked (hidden) strip at either edge.
+                const WIDTH_SLACK: f64 = 4096.0;
+                let _: () = msg_send![
+                    mask,
+                    setFrame: NSRect::new(
+                        NSPoint::new(layer_bounds.origin.x - WIDTH_SLACK, layer_bounds.origin.y),
+                        NSSize::new(
+                            layer_bounds.size.width + WIDTH_SLACK * 2.0,
+                            layer_bounds.size.height,
+                        ),
+                    )
+                ];
+                if !ours {
+                    let _: () = msg_send![layer, setMask: mask];
+                }
+            }
+        }
+    }
+    if let Some(transaction) = transaction {
+        let _: () = msg_send![transaction, commit];
+    }
+    log_main_list_bottom_edge_fade(match stops {
+        Some(([ramp_bottom_unit, band_top_unit], floor_alpha)) => BottomEdgeFadeState::Installed {
+            layer_height: layer_bounds.size.height,
+            band_top_unit,
+            ramp_bottom_unit,
+            floor_alpha,
+        },
+        None => BottomEdgeFadeState::Absent,
+    });
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum BottomEdgeFadeState {
+    Absent,
+    DeferredForeignMask,
+    Installed {
+        layer_height: f64,
+        band_top_unit: f64,
+        ramp_bottom_unit: f64,
+        floor_alpha: f64,
+    },
+}
+
+/// Change-only receipt for the bottom-edge fade owner (runs every render).
+#[cfg(target_os = "macos")]
+fn log_main_list_bottom_edge_fade(state: BottomEdgeFadeState) {
+    static LAST: std::sync::Mutex<Option<BottomEdgeFadeState>> = std::sync::Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if *last != Some(state) {
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "main_list_bottom_edge_fade",
+            state = ?state,
+            "main_list_bottom_edge_fade"
+        );
+        *last = Some(state);
+    }
 }
 
 /// Registry of the floating-footer window per parent (`(parent_ptr, footer_ptr)`).

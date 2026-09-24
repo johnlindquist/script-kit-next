@@ -179,17 +179,12 @@ pub fn arg_header_chrome_height() -> f32 {
         .header_height
 }
 
-/// The full footer exclusion for Arg/Mini prompts. The detached footer's real
-/// gutter belongs to the reservation too; it is not usable choice-list space.
+/// The full footer exclusion for Arg/Mini prompts: the in-stage footer zone
+/// (capsules plus their gaps) or the in-flow footer. Not usable list space.
 pub fn arg_rendered_footer_reservation() -> RenderedFooterReservation {
     RenderedFooterReservation {
         owner_role: GeometryRole::FooterNativeHost,
-        reservation_height: crate::components::footer_chrome::current_main_menu_footer_height()
-            + if crate::footer_popup::glass_scroll_bands_active() {
-                crate::footer_popup::FLOAT_FOOTER_CONTAINER_GAP_PX
-            } else {
-                0.0
-            },
+        reservation_height: crate::footer_popup::main_window_footer_reservation_height(),
     }
 }
 

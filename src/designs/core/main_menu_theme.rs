@@ -119,6 +119,12 @@ pub struct MainMenuListTokens {
     pub top_occlusion_ramp: f32,
     /// Peak alpha for the theme-derived top occlusion gradient.
     pub top_occlusion_peak_alpha: u32,
+    /// Floating-footer scroll edge (Tahoe): list content under the capsules
+    /// fades to this fraction of its opacity, visible but clearly behind.
+    pub bottom_edge_fade_floor_alpha: f32,
+    /// Fraction of the occluded band (capsule top to stage bottom) over which
+    /// content ramps from full opacity down to the floor.
+    pub bottom_edge_fade_ramp_fraction: f32,
     /// Maximum visual-only boundary displacement for precise trackpad input.
     pub overscroll_max_distance: f32,
     /// Resistance distance used by the saturating rubber-band curve.
@@ -814,6 +820,8 @@ fn base_main_menu_theme_def(
             top_occlusion_height: 10.0,
             top_occlusion_ramp: 96.0,
             top_occlusion_peak_alpha: 0x2E,
+            bottom_edge_fade_floor_alpha: 0.3,
+            bottom_edge_fade_ramp_fraction: 0.6,
             overscroll_max_distance: 18.0,
             overscroll_resistance: 36.0,
             overscroll_settle_ms: 180,

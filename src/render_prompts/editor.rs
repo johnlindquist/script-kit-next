@@ -76,7 +76,8 @@ impl ScriptListApp {
 
         // Use explicit height from layout constants instead of h_full()
         // h_full() doesn't work at the root level because there's no parent to fill
-        let content_height = window_resize::layout::MAX_HEIGHT;
+        let content_height =
+            window_resize::main_window_content_height(window_resize::layout::MAX_HEIGHT);
 
         // Key handler for Cmd+K actions toggle (at parent level to intercept before editor)
         let has_actions_for_handler = has_actions;

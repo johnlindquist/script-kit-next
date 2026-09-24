@@ -1,18 +1,10 @@
 #[inline]
 fn main_list_footer_overlay_height() -> gpui::Pixels {
-    // On the main menu the floating capsules occlude the bottom of the glass
-    // stage; reserve them so keyboard selection stays above the capsules
-    // while unselected rows still scroll behind them.
-    if crate::footer_popup::main_window_footer_over_content_enabled() {
-        gpui::px(
-            crate::components::footer_chrome::current_main_menu_footer_height()
-                + crate::footer_popup::FLOAT_FOOTER_CONTAINER_GAP_PX,
-        )
-    } else if crate::footer_popup::glass_scroll_bands_active() {
-        gpui::px(0.0)
-    } else {
-        gpui::px(crate::components::footer_chrome::current_main_menu_footer_height())
-    }
+    // The main-menu list extends under the in-stage footer zone; reserve the
+    // whole zone so keyboard selection stays above the capsules while
+    // unselected rows still scroll (faded) behind them. Without glass the
+    // in-flow GPUI footer is reserved instead.
+    gpui::px(crate::footer_popup::main_window_footer_reservation_height())
 }
 
 #[inline]
@@ -1678,6 +1670,7 @@ mod scroll_fade_tests {
             section_header: 32.0,
             status: 24.0,
             item: 40.0,
+            hide_first_section_header: false,
         };
 
         assert_eq!(main_list_visible_range(&rows, 10.0, 55.0, heights), (0, 3));

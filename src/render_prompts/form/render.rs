@@ -122,7 +122,8 @@ impl ScriptListApp {
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(theme);
-        let content_height = window_resize::layout::STANDARD_HEIGHT;
+        let content_height =
+            window_resize::main_window_content_height(window_resize::layout::STANDARD_HEIGHT);
 
         // Form fields have their own focus handles and on_key_down handlers.
         // We DO NOT track_focus on the container - the fields handle their own focus.

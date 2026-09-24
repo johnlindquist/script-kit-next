@@ -779,27 +779,19 @@ impl Render for ScriptListApp {
         // Wrap content in a container that can have the debug grid overlay
         let window_bounds = window.bounds();
         let window_size = gpui::size(window_bounds.size.width, window_bounds.size.height);
-        let detached_regions = crate::footer_popup::main_window_detached_footer_regions_gpui(
-            f32::from(window_size.width),
-            f32::from(window_size.height),
-            if crate::footer_popup::glass_scroll_bands_active() {
-                crate::components::footer_chrome::current_main_menu_footer_height()
-            } else {
-                0.0
-            },
-            if crate::footer_popup::glass_scroll_bands_active() {
-                crate::footer_popup::FLOAT_FOOTER_CONTAINER_GAP_PX
-            } else {
-                0.0
-            },
-            window.scale_factor(),
-        );
-        let main_content_size = gpui::size(
-            px(detached_regions.main_content.width),
-            px(detached_regions.main_content.height),
-        );
-        let main_content_width = detached_regions.main_content.width;
-        let main_content_height = detached_regions.main_content.height;
+        // The stage fills the window; the native footer floats inside it in a
+        // fixed bottom zone on every surface. Views keep their content above
+        // that zone; only the main-menu list extends under it (faded).
+        let main_content_size = window_size;
+        let main_content_width = f32::from(window_size.width);
+        let main_content_height = f32::from(window_size.height);
+        let footer_zone_reserve = if crate::footer_popup::main_window_footer_in_stage()
+            && !crate::footer_popup::main_list_scrolls_under_footer()
+        {
+            crate::footer_popup::main_window_footer_zone_height()
+        } else {
+            0.0
+        };
 
         // Clone grid_config for use in the closure
         let grid_config = self.grid_config.clone();
@@ -988,6 +980,9 @@ impl Render for ScriptListApp {
                 .flex_1()
                 .w_full()
                 .min_h(px(0.))
+                // Clip at the footer zone: the full-window stage no longer
+                // hides a view's overflow, which would bleed under the capsules.
+                .overflow_hidden()
                 .child(main_content)
                 .when_some(arg_sizing, |container, (mode, choice_count)| {
                     let entity = cx.entity().downgrade();
@@ -1084,9 +1079,8 @@ impl Render for ScriptListApp {
                 .into_any_element()
         };
 
-        // The physical window is the complete main+gap+footer group. GPUI
-        // paints only the bounded main-content stage; the gutter and native
-        // footer region remain transparent above the same Metal host.
+        // The physical window is one full-window glass stage; the native
+        // footer floats inside its bottom zone above the same Metal host.
         div()
             .id("main-window-root")
             .size_full()
@@ -1245,11 +1239,10 @@ impl Render for ScriptListApp {
                     .flex()
                     .flex_col()
                     // The main window's gpui-component Root is intentionally
-                    // transparent because the native footer lives below this
-                    // stage. Paint the same theme veil here so every opacity
-                    // setting stops at the content boundary and the detached
-                    // gutter remains physically empty.
+                    // transparent; this full-window stage paints the theme
+                    // veil behind content and the in-stage footer zone alike.
                     .bg(cx.theme().background)
+                    .pb(px(footer_zone_reserve))
                     // Hide mouse cursor while typing: GPUI 0.3 removed
                     // CursorStyle::None; its default CursorHideMode
                     // (OnTypingAndAction) hides the pointer on keystrokes.
@@ -1320,10 +1313,7 @@ impl Render for ScriptListApp {
                         ))
                     })
                     // Root dialogs and their modal hit shields belong to the
-                    // same bounded stage as every other GPUI overlay. Keeping
-                    // them below this stage's height + overflow clip prevents
-                    // paint or input from entering the transparent gutter or
-                    // the native footer strip.
+                    // same bounded stage as every other GPUI overlay.
                     .child(
                         div()
                             .id("main-window-dialog-layer-boundary")

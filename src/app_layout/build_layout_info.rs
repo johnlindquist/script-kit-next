@@ -245,9 +245,18 @@ impl ScriptListApp {
             window_width
         };
         let content_top = main_y + header_height;
+        // Views end their content above the in-stage footer zone; only the
+        // main-menu list extends under it (same rule as the root renderer).
+        let footer_zone_reserve = if crate::footer_popup::main_window_footer_in_stage()
+            && !matches!(self.current_view, AppView::ScriptList)
+        {
+            crate::footer_popup::main_window_footer_zone_height()
+        } else {
+            0.0
+        };
         let content_height = arg_geometry
             .map(|geometry| geometry.resolved.viewport_height)
-            .unwrap_or(window_height - header_height);
+            .unwrap_or(window_height - footer_zone_reserve - header_height);
 
         // Root container
         components.push(
@@ -400,16 +409,13 @@ impl ScriptListApp {
         // honest because `native_footer_surface()` returns `None` for them.
         if self.current_view.native_footer_surface().is_some() {
             let footer_height = footer_metrics.height_px;
-            let footer_bounds = if matches!(self.current_view, AppView::ScriptList)
-                && crate::footer_popup::main_window_footer_over_content_enabled()
-            {
+            let footer_bounds = if crate::footer_popup::main_window_footer_in_stage() {
                 crate::footer_popup::main_window_footer_bounds_gpui(
                     window_width,
                     window_height,
                     footer_height,
                     crate::footer_popup::FLOAT_FOOTER_CONTAINER_GAP_PX,
                     1.0,
-                    true,
                 )
             } else {
                 crate::protocol::LayoutBounds {

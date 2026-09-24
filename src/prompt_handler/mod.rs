@@ -7020,7 +7020,7 @@ impl ScriptListApp {
             gpui_fallback_visible: crate::footer_popup::main_footer_gpui_overlay_visible(),
             over_content_preview: native_ready
                 && target.kind == crate::protocol::AutomationWindowKind::Main
-                && crate::footer_popup::main_window_footer_over_content(),
+                && crate::footer_popup::main_list_scrolls_under_footer(),
             left_info,
             button_count: buttons.len(),
             action_slot_count,

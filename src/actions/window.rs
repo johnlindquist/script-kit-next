@@ -1646,7 +1646,7 @@ pub fn open_actions_window(
         fixed_height,
         f32::from(main_window_bounds.size.height),
         position,
-        crate::footer_popup::main_window_footer_over_content(),
+        crate::footer_popup::main_window_footer_in_stage(),
         crate::footer_popup::main_window_bottom_popup_clearance(FOOTER_HEIGHT),
     );
 
@@ -2129,9 +2129,9 @@ mod actions_popup_origin_tests {
     use super::*;
     use gpui::{px, Bounds, Point, Size};
 
-    /// Measured live on the 480pt main menu: floating capsules start 80pt above
-    /// the window bottom (strip 40 + gap 8 + capsule 32) and a 360pt TopCenter
-    /// popup anchored at +44 ended 4pt inside them. The cap keeps an 8pt gap.
+    /// A top-anchored popup must end one margin above the in-stage footer
+    /// capsules. The 80pt clearance here is deliberately large enough that a
+    /// 360pt TopCenter popup needs the cap; the cap keeps an 8pt gap.
     #[test]
     fn top_anchored_popup_ends_above_floating_footer_capsules() {
         let tokens = crate::designs::current_actions_popup_theme();
@@ -2240,8 +2240,11 @@ mod actions_popup_origin_tests {
         );
         assert_eq!(
             f32::from(origin.y),
-            40.0 + 500.0 - 180.0 - FOOTER_HEIGHT - ACTIONS_MARGIN_Y,
-            "BottomRight must sit above the footer"
+            40.0 + 500.0
+                - 180.0
+                - crate::footer_popup::main_window_bottom_popup_clearance(FOOTER_HEIGHT)
+                - ACTIONS_MARGIN_Y,
+            "BottomRight must sit above the footer capsules"
         );
     }
 
@@ -2417,8 +2420,14 @@ mod actions_popup_geometry_tests {
 
         // x = 100 + 480 - 320 - 8 = 252
         assert_eq!(x, 252.0);
-        // y = 50 + 220 - 180 - FOOTER_HEIGHT(30) - ACTIONS_MARGIN_Y(8) = 52
-        assert_eq!(y, 52.0);
+        // y = 50 + 220 - 180 - footer clearance - ACTIONS_MARGIN_Y(8)
+        assert_eq!(
+            y,
+            50.0 + 220.0
+                - 180.0
+                - crate::footer_popup::main_window_bottom_popup_clearance(FOOTER_HEIGHT)
+                - ACTIONS_MARGIN_Y
+        );
     }
 
     #[test]

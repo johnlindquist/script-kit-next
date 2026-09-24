@@ -1547,6 +1547,9 @@ pub(crate) fn sync_main_footer_popup(
                 remove_main_window_footer_host(ns_window);
                 update_main_window_footer_host_state(None, None, false);
             }
+            // After the host frame settles: fade only while the main-menu
+            // capsules float over the list; removed on every other surface.
+            sync_main_list_bottom_edge_fade(gpui_view, ns_window);
         }
     }
 

@@ -8,7 +8,7 @@
             };
             // Day Page is context-only, so shared metrics omit MainViewInput.
             let day_page_content_top = header_height;
-            let footer_height = footer_metrics.height_px;
+            let footer_height = crate::footer_popup::main_window_footer_reservation_height();
             let budget = day_page_layout_budget(
                 window_height,
                 day_page_content_top,

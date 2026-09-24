@@ -60,20 +60,32 @@ pub(crate) fn main_window_list_budget_height() -> f32 {
 
 /// Content height for Quick Terminal inside the main window shell.
 ///
-/// This is the *terminal-grid-only* height (panel minus footer hint strip).
-/// Use it for the initial PTY resize hint via `TermPrompt::with_height`.
+/// This is the *terminal-grid-only* height: the panel minus the in-flow GPUI
+/// footer strip when glass is off (the in-stage native footer takes no space
+/// inside the panel). Use it for the initial PTY resize hint via
+/// `TermPrompt::with_height`.
 pub fn quick_terminal_content_height() -> Pixels {
-    px(MAIN_WINDOW_MAX_HEIGHT - layout::FOOTER_HEIGHT)
+    let in_flow_footer = if crate::footer_popup::main_window_footer_in_stage() {
+        0.0
+    } else {
+        layout::FOOTER_HEIGHT
+    };
+    quick_terminal_panel_height() - px(in_flow_footer)
 }
 
-/// Full panel height for Quick Terminal inside the main window shell.
-///
-/// This matches the NSPanel size and must be used as `.h()` on the render
-/// wrapper that holds *both* the terminal entity AND the footer hint strip.
-/// Using the smaller content height here leaves a visible gap of
-/// `FOOTER_HEIGHT` pixels below the footer.
+/// Height a main-window view shell may occupy when it is sized from a window
+/// height constant: the window minus the in-stage footer zone (unchanged
+/// when glass is off, where views host the in-flow footer themselves).
+/// Sizing a shell to the full window lays its bottom out under the floating
+/// footer, where it is clipped.
+pub fn main_window_content_height(window_height: Pixels) -> Pixels {
+    window_height - px(crate::footer_popup::main_window_footer_zone_height())
+}
+
+/// Full panel height for Quick Terminal inside the main window shell (holds
+/// the in-flow footer hint strip too when glass is off).
 pub fn quick_terminal_panel_height() -> Pixels {
-    px(MAIN_WINDOW_MAX_HEIGHT)
+    main_window_content_height(px(MAIN_WINDOW_MAX_HEIGHT))
 }
 
 /// Maximum number of selectable rows that can fit without clipping, given

@@ -127,6 +127,30 @@ exits, settled materials, footer geometry, and glyph tokens remain locked.
 This catalog is not a newly measured Spotlight calibration. Do not collapse its
 alternatives or change the chosen/default preset during unrelated fixes.
 
+**2026-09-23 Actions mirrors main (user-authorized):** the owner asked for the
+Actions menu appear/disappear to mimic the main window. The Actions popup
+(`GlassMorphVariant::MirrorMainEntry`) replays the SELECTED main-window preset
+through the same `animate_tahoe_glass_preset_appearance` choreography (main-only
+debounce, footer capsules, runtime receipt, and hidden-park restore stay gated
+on the physical main NSWindow), and exits with the main window's fixed-frame
+fade (`glass_exit_mode_for_preset`). Under `PreviousCalibration` the Actions
+popup restores its calibrated grow-in entry and shrink-out + blur exit, so the
+calibration captures above remain valid. Confirm, inline, shortcut-recorder,
+and footer popups keep their calibrated motion. The Actions popup also settles
+untinted (`NativeGlassSurfaceRole::PopupBackdrop`, under every preset): it sits
+over the already-tinted main glass, and its own stability tint snapped the
+glassy entry to a washed-out gray (owner report and A/B capture, 2026-09-23).
+
+**2026-09-23 in-stage footer everywhere (owner-authorized, executive call):**
+the main window's glass stage fills the whole window and the native footer
+capsules float INSIDE it on every main-window surface, in one fixed bottom zone
+(`main_window_footer_zone_height()` = footer + one gap above and below; capsules
+one gap from the sides and bottom). The old transparent strip below the stage
+is gone (backdrop inset 0, same shadowless/rounded host policy). Views keep
+content above the zone via root stage padding and `main_window_content_height`;
+only the main-menu list scrolls under it (fade, input blocker, reveal padding).
+Window heights, motion timings, materials, and glyph tokens are unchanged.
+
 `src/theme/animation.rs` owns preset IDs/specs; `config.ts`'s
 `animation.preset` persists the explicit choice. Launcher registration/dispatch,
 typed generation-guarded show requests in `src/lib.rs`, and the existing native
@@ -320,6 +344,16 @@ Local `scripts/verify.sh` invocations use the same bounded agent wrapper by defa
 `dev-watch` and every preexisting named session are borrowed operator state, never agent-owned cleanup targets. Reusing either returns `cleanup.command: null`; direct isolated startup cannot claim `dev-watch`, and `devtools-session.sh cleanup` requires both `--expected-pid` and `--expected-generation` from the same new-session receipt. Failure cleanup forwards the same exact identity to `session.sh stop` and never stops a preexisting session. Session names, positive-whole timeouts, modes, and build policies fail closed before preflight; readiness markers count only while their owning session is actually alive.
 
 The canonical `scripts/devtools/inspect.ts` orchestrator must follow the same ownership contract: a resumed or borrowed session never receives cleanup authority, and a newly created session emits a stop command only after proving its exact PID and generation. Failed or unready startup and failed show requests are terminal; never discard their result and continue collecting misleading inspection receipts.
+
+**Driver session scratch and disk hygiene.**
+
+`Driver.launch` (in `scripts/devtools/driver.ts`) creates a fresh `/tmp/sk-driver-sessions/<name>-<pid>-<n>-<ts>` directory for every launch, containing a sandbox HOME (`home/.scriptkit`), `app.log`, and protocol logs. Each one is roughly **150–250 MB**, and `close()` does **not** delete it. On 2026-09-23 one barrage run left 32 sessions (**7.2 GiB**) on the boot disk after its process exited. On the same day, Macintosh HD briefly fell to 3.2 GB free.
+
+- **Clean up what you create.** After a driver run, delete the exact `driver.sessionDir` paths your run created, unless you still need them as evidence. Never delete sessions you did not create, and never delete `dev-watch` or a borrowed session. Record any retained session path in your receipt, and remove it when the task ends.
+- **Loops, barrages, and matrices** (more than a handful of launches) must delete each session after its assertions pass, and keep only failing sessions for diagnosis. Follow the `glass-smoke-study.ts` pattern (`rmSync` unless `keepDriverSessions`).
+- **Keep bulk evidence off the boot disk.** When a run must retain many sessions, videos, screenshots, or large logs, pass an explicit `sessionDir` on a mounted external SSD (for example `/Volumes/Samsung SSD T5 2TB/offload/script-kit-gpui/driver-sessions/<task>`). Verify the volume is mounted first. If it is missing, run fewer launches instead of falling back to `/tmp`.
+- **Check free space before large runs.** Run `df -h /` first. If Macintosh HD has less than 25 GB free, do not start a barrage or matrix; clean your own leftovers or report the pressure instead.
+- **Before finishing**, run `du -sh /tmp/sk-driver-sessions` and report the number and total size of sessions your task left behind (it should be zero).
 
 All agentic scenario, target-thread, and filterable-surface subprocesses cross the shared noninteractive subprocess guard before `Bun.spawn`: only reviewed read-only session transports are permitted, while AppleScript, Swift, native input, screen capture, arbitrary shell commands, and weakened child safety authority fail closed. Scenario cleanup, the filterable matrix, both surface navigators, and Notes use an in-memory owned-session registry; resumed sessions are borrowed, and newly created sessions can be stopped only with their original PID and generation. A pending-ready process may retain cleanup identity without converting its genuine `ready: false` receipt into a successful readiness proof.
 

@@ -16,5 +16,10 @@ pub(crate) mod list_geometry;
     reason = "the separately compiled launcher binary owns viewport interaction consumers"
 )]
 pub(crate) mod list_interaction;
+#[allow(
+    dead_code,
+    reason = "the separately compiled launcher binary owns the main-list scrollbar consumer"
+)]
+pub(crate) mod model_scrollbar;
 #[cfg(test)]
 mod native_script_list_scroll_tests;

@@ -53,7 +53,12 @@ unsafe fn animate_tahoe_glass_fade_appearance(window: id, log_target: &str, wind
 /// report). Growing in from below final size keeps the same physics while
 /// the reflow reads as the menu materializing into place.
 #[cfg(target_os = "macos")]
-unsafe fn animate_tahoe_glass_child_appearance(window: id, log_target: &str, window_name: &str) {
+unsafe fn animate_tahoe_glass_child_appearance(
+    window: id,
+    log_target: &str,
+    window_name: &str,
+    backdrop_role: NativeGlassSurfaceRole,
+) {
     let Some(tuning) = glass_morph_tuning() else {
         let _: () = msg_send![window, setAlphaValue: 1.0f64];
         return;
@@ -72,6 +77,7 @@ unsafe fn animate_tahoe_glass_child_appearance(window: id, log_target: &str, win
         log_target,
         window_name,
         GlassEntrySurface::ChildPopup,
+        backdrop_role,
     );
     logging::log(
         log_target,
@@ -82,6 +88,45 @@ unsafe fn animate_tahoe_glass_child_appearance(window: id, log_target: &str, win
             tuning.duration,
             parent != nil,
         ),
+    );
+}
+
+/// Actions popup enter: replay the main window's SELECTED entry preset
+/// (2026-09-23 owner request: "have the actions menu appear/disappear
+/// animation mimic the main window"), so both surfaces share one timing,
+/// geometry, material, content, and defocus choreography and change together
+/// when the launcher preset changes. `PreviousCalibration` (legacy) restores
+/// the calibrated calibration-era pairing: grow-in here, shrink-out on exit.
+#[cfg(target_os = "macos")]
+unsafe fn animate_tahoe_glass_mirrored_main_child_appearance(
+    window: id,
+    log_target: &str,
+    window_name: &str,
+    backdrop_role: NativeGlassSurfaceRole,
+) {
+    // One Copy snapshot; never re-read in any later callback of this entry.
+    let preset = crate::theme::animation::current_preset();
+    let spec = preset.spec();
+    if spec.legacy {
+        animate_tahoe_glass_child_appearance(window, log_target, window_name, backdrop_role);
+        return;
+    }
+    // Frame-animating while parent-attached fights the parent-child
+    // machinery; detach for the entry and reattach once it settles.
+    let parent: id = msg_send![window, parentWindow];
+    if parent != nil {
+        let _: id = msg_send![parent, retain];
+        let _: () = msg_send![parent, removeChildWindow: window];
+        let _: id = msg_send![window, retain];
+        schedule_child_morph_settle(parent, window, f64::from(spec.duration_ms) / 1000.0 + 0.08);
+    }
+    animate_tahoe_glass_preset_appearance(
+        window,
+        log_target,
+        window_name,
+        preset,
+        spec,
+        backdrop_role,
     );
 }
 
@@ -157,6 +202,7 @@ unsafe fn animate_tahoe_glass_main_appearance(window: id, log_target: &str, wind
         log_target,
         window_name,
         GlassEntrySurface::Main,
+        NativeGlassSurfaceRole::WindowBackdrop,
     )
 }
 
@@ -175,7 +221,13 @@ unsafe fn animate_tahoe_glass_window_frame_appearance(
     let surface = glass_entry_surface_for_window_frame(
         crate::window_manager::get_main_window() == Some(window),
     );
-    animate_tahoe_glass_appearance_profiled(window, log_target, window_name, surface)
+    animate_tahoe_glass_appearance_profiled(
+        window,
+        log_target,
+        window_name,
+        surface,
+        NativeGlassSurfaceRole::WindowBackdrop,
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -193,6 +245,7 @@ unsafe fn animate_tahoe_glass_secondary_appearance(
         log_target,
         window_name,
         GlassEntrySurface::FreeStandingSecondary,
+        NativeGlassSurfaceRole::WindowBackdrop,
     )
 }
 
@@ -213,6 +266,7 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
     log_target: &str,
     window_name: &str,
     surface: GlassEntrySurface,
+    backdrop_role: NativeGlassSurfaceRole,
 ) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
 
@@ -224,12 +278,13 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
         let preset = crate::theme::animation::current_preset();
         let spec = preset.spec();
         if !spec.legacy {
-            animate_tahoe_glass_coherent_main_appearance(
+            animate_tahoe_glass_preset_appearance(
                 window,
                 log_target,
                 window_name,
                 preset,
                 spec,
+                backdrop_role,
             );
             return;
         }
@@ -464,11 +519,9 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
         let nil_color: id = nil;
         let _: () = msg_send![glass_view, setTintColor: nil_color];
         let _: () = msg_send![class!(NSAnimationContext), endGrouping];
-        // One 88ms animation group back to the resolved production material.
-        let final_style = resolve_native_glass_style(
-            &crate::theme::get_cached_theme(),
-            NativeGlassSurfaceRole::WindowBackdrop,
-        );
+        // One 88ms animation group back to the installed production material.
+        let final_style =
+            resolve_native_glass_style(&crate::theme::get_cached_theme(), backdrop_role);
         let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
         let onset_ctx: id = msg_send![class!(NSAnimationContext), currentContext];
         let _: () = msg_send![onset_ctx, setDuration: tuning.material_onset_duration];
@@ -484,18 +537,8 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
         }
         let glass_animator: id = msg_send![glass_view, animator];
         let _: () = msg_send![glass_animator, setStyle: 0isize]; // Regular
-                                                                 // Resolved production tint, same construction as
-                                                                 // apply_native_glass_style_with_reason.
-        let red = f64::from((final_style.signature.tint_rgb >> 16) & 0xff) / 255.0;
-        let green = f64::from((final_style.signature.tint_rgb >> 8) & 0xff) / 255.0;
-        let blue = f64::from(final_style.signature.tint_rgb & 0xff) / 255.0;
-        let tint: id = msg_send![
-            class!(NSColor),
-            colorWithCalibratedRed: red
-            green: green
-            blue: blue
-            alpha: f64::from(final_style.effective_tint_alpha)
-        ];
+        // Same tint the install applied (nil for an untinted role).
+        let tint = native_glass_tint_color(&final_style);
         if tint != nil {
             let _: () = msg_send![glass_animator, setTintColor: tint];
         }
@@ -838,18 +881,26 @@ unsafe fn animate_tahoe_glass_appearance_profiled(
     }
 }
 
-/// Main-only continuous choreography. Existing AppKit groups, tagged glass
-/// callbacks, bounce targets, and cancellation owner remain authoritative.
+/// Catalog-preset continuous choreography. The main window runs it for every
+/// non-legacy preset; the Actions popup mirrors it. Existing AppKit groups,
+/// tagged glass callbacks, bounce targets, and cancellation owner remain
+/// authoritative. Main-only state (recent-start debounce, footer capsules,
+/// the runtime receipt, hidden-park restore) is gated on the physical main
+/// NSWindow.
 #[cfg(target_os = "macos")]
-unsafe fn animate_tahoe_glass_coherent_main_appearance(
+unsafe fn animate_tahoe_glass_preset_appearance(
     window: id,
     log_target: &str,
     window_name: &str,
     preset: crate::theme::animation::MainWindowAnimationPreset,
     spec: crate::theme::animation::MainWindowAnimationSpec,
+    backdrop_role: NativeGlassSurfaceRole,
 ) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
-    MAIN_COHERENT_ENTRY_PREPARING.store(true, std::sync::atomic::Ordering::Relaxed);
+    let is_main = crate::window_manager::get_main_window() == Some(window);
+    if is_main {
+        MAIN_COHERENT_ENTRY_PREPARING.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     cancel_ns_window_exit_dematerialize_impl(window, false);
     MAIN_COHERENT_ENTRY_PREPARING.store(false, std::sync::atomic::Ordering::Relaxed);
     if GLASS_COHERENT_ENTRY_STATES
@@ -857,14 +908,19 @@ unsafe fn animate_tahoe_glass_coherent_main_appearance(
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .contains_key(&(window as usize))
     {
-        logging::log(
-            log_target,
-            &format!(
-            "event=glass_morph_skip window={} phase=enter preset={} reason=pending_hidden_restore",
-            window_name, preset.id(),
-        ),
-        );
-        return;
+        if is_main {
+            logging::log(
+                log_target,
+                &format!(
+                "event=glass_morph_skip window={} phase=enter preset={} reason=pending_hidden_restore",
+                window_name, preset.id(),
+            ),
+            );
+            return;
+        }
+        // Popups are never hidden-parked, so nothing else will restore a
+        // deferred (or pointer-reused stale) entry: restore it before arming.
+        finish_coherent_glass_entry(window, "interrupted");
     }
     let skip = |reason: &str| {
         let _: () = msg_send![window, setAlphaValue: 1.0f64];
@@ -878,7 +934,7 @@ unsafe fn animate_tahoe_glass_coherent_main_appearance(
             ),
         );
     };
-    if glass_morph_recently_started() {
+    if is_main && glass_morph_recently_started() {
         skip("recently_started_debounce");
         return;
     }
@@ -923,17 +979,10 @@ unsafe fn animate_tahoe_glass_coherent_main_appearance(
     let _: () = msg_send![window, setAlphaValue: spec.window_start_alpha];
     let _: () = msg_send![window, setFrame: start display: true];
 
-    let resolved_style = resolve_native_glass_style(
-        &crate::theme::get_cached_theme(),
-        NativeGlassSurfaceRole::WindowBackdrop,
-    );
-    let red = f64::from((resolved_style.signature.tint_rgb >> 16) & 0xff) / 255.0;
-    let green = f64::from((resolved_style.signature.tint_rgb >> 8) & 0xff) / 255.0;
-    let blue = f64::from(resolved_style.signature.tint_rgb & 0xff) / 255.0;
-    let tint: id = msg_send![class!(NSColor),
-        colorWithCalibratedRed: red green: green blue: blue
-        alpha: f64::from(resolved_style.effective_tint_alpha)
-    ];
+    // Settle on the material the install applied for this surface's role
+    // (the Actions popup resolves untinted: no washed-out tint snap).
+    let resolved_style = resolve_native_glass_style(&crate::theme::get_cached_theme(), backdrop_role);
+    let tint = native_glass_tint_color(&resolved_style);
     let style_supported: bool = msg_send![backdrop, respondsToSelector: sel!(setStyle:)];
     let tint_supported: bool = msg_send![backdrop, respondsToSelector: sel!(setTintColor:)];
     let material_supported = style_supported && tint_supported;
@@ -949,8 +998,14 @@ unsafe fn animate_tahoe_glass_coherent_main_appearance(
     // The native detached footer is a separate GPUI sibling: never seed or
     // filter its gap-spanning container. Only the rounded glass capsules and
     // their own foreground labels participate in this reveal.
-    let footer_host = crate::footer_popup::main_window_footer_entry_alpha_target(window);
-    let capsules = crate::footer_popup::main_window_footer_entry_capsules(window);
+    let (footer_host, capsules) = if is_main {
+        (
+            crate::footer_popup::main_window_footer_entry_alpha_target(window),
+            crate::footer_popup::main_window_footer_entry_capsules(window),
+        )
+    } else {
+        (nil, Vec::new())
+    };
     let capsule_count = capsules.len();
     let mut capsule_blur_count = 0usize;
     let mut capsule_material_count = 0usize;
@@ -1188,6 +1243,7 @@ unsafe fn animate_tahoe_glass_coherent_main_appearance(
     ];
     record_native_glass_entry_span(window, tuning.duration);
     let configured_ns = crate::platform::host_clock::host_time_ns();
+    if is_main {
     MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1239,6 +1295,7 @@ unsafe fn animate_tahoe_glass_coherent_main_appearance(
             cancelled_at_host_time_ns: None,
             actual_end_host_time_ns: None,
         });
+    }
     if spec.foreground_blur_radius > 0.0 && content_roots > 0 && foreground_blur_count == 0 {
         logging::log(
             log_target,
@@ -1259,13 +1316,16 @@ unsafe fn animate_tahoe_glass_coherent_main_appearance(
             spec.foreground_blur_radius,
         ));
     }
-    GLASS_MORPH_LAST_DURATION_MS.store(
-        spec.duration_ms as u64,
-        std::sync::atomic::Ordering::Relaxed,
-    );
+    if is_main {
+        GLASS_MORPH_LAST_DURATION_MS.store(
+            spec.duration_ms as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
     logging::log(log_target, &format!(
-        "event=glass_morph window={} variant=window_frame phase=enter surface_profile=main preset={} direction=shrink_in total_entry_duration_ns={} visible_tail_duration_ns={} phase1_ns={} hold_ns=0 phase2_ns={} start_scale_x={:.6} squish_scale_x={:.6} start_scale_y=1 squish_scale_y=1 start_alpha={:.4} material_start_alpha={:.4} content_start_alpha={:.4} alpha_ramp_ns={} reveal_ns={} entry_blur_radius={:.2} foreground_blur_radius={:.2} foreground_blurred_root_count={} foreground_root_count={} footer_capsule_count={} footer_blurred_capsule_count={} footer_material_ramp_count={} expected_settle_deadline_ns={} final_width_pt={:.2} final_height_pt={:.2} final_alpha=1 geometry_curve=easeOut rebound_curve=easeInEaseOut material_curve=easeOut",
-        window_name, preset.id(), spec.duration_ms as u64 * 1_000_000,
+        "event=glass_morph window={} variant=window_frame phase=enter surface_profile={} preset={} direction=shrink_in total_entry_duration_ns={} visible_tail_duration_ns={} phase1_ns={} hold_ns=0 phase2_ns={} start_scale_x={:.6} squish_scale_x={:.6} start_scale_y=1 squish_scale_y=1 start_alpha={:.4} material_start_alpha={:.4} content_start_alpha={:.4} alpha_ramp_ns={} reveal_ns={} entry_blur_radius={:.2} foreground_blur_radius={:.2} foreground_blurred_root_count={} foreground_root_count={} footer_capsule_count={} footer_blurred_capsule_count={} footer_material_ramp_count={} expected_settle_deadline_ns={} final_width_pt={:.2} final_height_pt={:.2} final_alpha=1 geometry_curve=easeOut rebound_curve=easeInEaseOut material_curve=easeOut",
+        window_name, if is_main { "main" } else { "child_popup_mirrors_main" },
+        preset.id(), spec.duration_ms as u64 * 1_000_000,
         spec.duration_ms as u64 * 1_000_000, spec.compression_ms as u64 * 1_000_000,
         (spec.duration_ms - spec.compression_ms) as u64 * 1_000_000,
         spec.start_width_scale, spec.squish_width_scale,

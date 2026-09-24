@@ -539,16 +539,15 @@ Changes to Rust code trigger a rebuild (~2-5 seconds). Theme and script changes 
 
 Operator development retains `./dev.sh`'s default `local-llm` feature. Owned evaluations above are a separate opt-in build and do not change it.
 
-On the main menu the native glass footer capsules float inside the glass stage,
-over the bottom of the list (Tahoe floating chrome), with an 8pt bottom inset
-and 8pt outer side gaps. Other surfaces keep the detached footer. Stage/window
-dimensions, capsule materials, glyphs, and motion stay unchanged; the original
-transparent host strip remains reserved below the panel. Launcher selection
-reveal reserves the overlaid footer area, but unselected rows can scroll behind
-the capsules, and the Actions popup opens above them.
-`getState.activeFooter.overContentPreview` reports whether the installed
-main-window footer is floating. Launch with `SCRIPT_KIT_MAIN_FOOTER_OVER_CONTENT=0`
-to restore the detached placement everywhere.
+On every main-window surface the glass stage fills the window and the native
+footer capsules float inside it (Tahoe floating chrome), in one fixed bottom
+zone with an 8pt gap above, below, and at the sides. Views keep their content
+above that zone. The main menu list alone extends under it: rows scrolled
+behind the capsules fade into the glass and ignore hover and clicks, selection
+reveal stops above the zone, and the scrollbar track ends there too. The
+Actions popup opens above the capsules.
+`getState.activeFooter.overContentPreview` reports whether the main-menu list
+currently scrolls under the footer.
 
 The operator watcher uses a real SSD workspace under `/Volumes/OMEGA SSD/sk/<repo-id>/`, not the repository's internal `target/`. App and local-LLM helper Cargo targets, Pi provisioning targets/source cache, Metal/Clang caches, optional sccache storage, and build temporary files stay in that workspace. The app launches directly from its SSD target; `local-llm` and the `dev-fast` startup profile remain enabled. Native CMake builds default to Ninja; an explicit `CMAKE_GENERATOR` is preserved.
 

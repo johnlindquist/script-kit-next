@@ -68,7 +68,9 @@ unsafe fn configure_window_vibrancy_common_impl(
         );
     }
 
-    let backdrop = configure_tahoe_window_backdrop_with_result(window, log_target, window_name);
+    let backdrop_role = morph_variant.backdrop_role();
+    let backdrop =
+        configure_tahoe_window_backdrop_with_result(window, log_target, window_name, backdrop_role);
     let glass_created = backdrop.is_some_and(|result| result.created);
     let morph_tuning = glass_morph_tuning();
     // Secondary/overlay windows (notes, dictation, confirm, actions, AI,
@@ -91,11 +93,17 @@ unsafe fn configure_window_vibrancy_common_impl(
                 // the morph's duration and run the SAME NSWindow frame morph
                 // the main window uses, then reattach — the frame animation
                 // only fights the parent-child machinery while attached.
-                animate_tahoe_glass_child_appearance(window, log_target, window_name);
+                animate_tahoe_glass_child_appearance(window, log_target, window_name, backdrop_role);
             }
             GlassMorphVariant::FadeOnly => {
                 animate_tahoe_glass_fade_appearance(window, log_target, window_name)
             }
+            GlassMorphVariant::MirrorMainEntry => animate_tahoe_glass_mirrored_main_child_appearance(
+                window,
+                log_target,
+                window_name,
+                backdrop_role,
+            ),
         }
     }
 
@@ -116,10 +124,7 @@ unsafe fn configure_window_vibrancy_common_impl(
     let style_signature = backdrop
         .map(|result| result.style_signature)
         .unwrap_or_else(|| {
-            resolve_native_glass_style(
-                &crate::theme::get_cached_theme(),
-                NativeGlassSurfaceRole::WindowBackdrop,
-            )
+            resolve_native_glass_style(&crate::theme::get_cached_theme(), backdrop_role)
             .signature
         });
     let configured_at_monotonic_ns = crate::platform::host_clock::host_time_ns();

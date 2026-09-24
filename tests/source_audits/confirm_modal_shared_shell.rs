@@ -223,12 +223,12 @@ fn confirm_popup_native_background_matches_actions_popup_not_footer_flush_strip(
     );
     assert!(
         actions_config.contains("configure_attached_popup_window(")
-            && actions_config.contains("GlassMorphVariant::ContentLayer")
+            && actions_config.contains("GlassMorphVariant::MirrorMainEntry")
             && confirm_config.contains("configure_attached_popup_window(")
             && confirm_config.contains("GlassMorphVariant::ContentLayer")
             && !confirm_config.contains("setHasShadow: false")
             && !confirm_config.contains("setCornerRadius: 0.0_f64"),
-        "centered confirm and actions popups must share the attached-popup owner and calibrated content-layer motion"
+        "centered confirm and actions popups must share the attached-popup owner; confirm keeps calibrated content-layer motion while actions mirrors the main-window entry preset (2026-09-23 owner request)"
     );
     assert!(
         footer_config.contains("configure_attached_popup_window(")
