@@ -1488,6 +1488,101 @@ impl ScriptListApp {
                                         continue;
                                     }
 
+                                    // Handle GetMenuBar directly (no UI needed). The main
+                                    // panel is non-activating, so the menu bar owner is
+                                    // still the app the user was working in.
+                                    if let Message::GetMenuBar {
+                                        request_id,
+                                        bundle_id,
+                                    } = &msg
+                                    {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            bundle_id = ?bundle_id,
+                                            "GetMenuBar request"
+                                        );
+
+                                        let scanned = match bundle_id.as_deref() {
+                                            Some(bundle_id) => {
+                                                menu_bar::get_menu_bar_for_bundle_id(bundle_id)
+                                            }
+                                            None => menu_bar::get_frontmost_menu_bar(),
+                                        };
+                                        let response = match scanned {
+                                            Ok(items) => Message::menu_bar_result(
+                                                request_id.clone(),
+                                                menu_bar::to_protocol_items(&items),
+                                            ),
+                                            Err(e) => {
+                                                tracing::info!(
+                                                    category = "EXEC",
+                                                    error = %e,
+                                                    request_id = %request_id,
+                                                    "GetMenuBar error"
+                                                );
+                                                Message::menu_bar_error(
+                                                    request_id.clone(),
+                                                    format!("{e:#}"),
+                                                )
+                                            }
+                                        };
+
+                                        if let Err(e) = reader_response_tx.send(response) {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                error = %e,
+                                                "Failed to send menu bar response"
+                                            );
+                                        }
+                                        continue;
+                                    }
+
+                                    // Handle ExecuteMenuAction directly (no UI needed)
+                                    if let Message::ExecuteMenuAction {
+                                        request_id,
+                                        bundle_id,
+                                        path,
+                                    } = &msg
+                                    {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            bundle_id = %bundle_id,
+                                            menu_depth = path.len(),
+                                            "ExecuteMenuAction request"
+                                        );
+
+                                        #[cfg(target_os = "macos")]
+                                        let result =
+                                            script_kit_gpui::menu_executor::execute_menu_action(
+                                                bundle_id, path,
+                                            );
+                                        #[cfg(not(target_os = "macos"))]
+                                        let result: anyhow::Result<()> = Err(anyhow::anyhow!(
+                                            "Menu actions are only supported on macOS"
+                                        ));
+
+                                        let response = match result {
+                                            Ok(()) => {
+                                                Message::menu_action_success(request_id.clone())
+                                            }
+                                            Err(e) => Message::menu_action_error(
+                                                request_id.clone(),
+                                                format!("{e:#}"),
+                                            ),
+                                        };
+
+                                        if let Err(e) = reader_response_tx.send(response) {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                error = %e,
+                                                "Failed to send menu action response"
+                                            );
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle DisplayList directly (no UI needed)
                                     if let Message::DisplayList { request_id } = &msg {
                                         tracing::info!(

@@ -579,6 +579,10 @@ macro_rules! protocol_message_variants_query_ops {
         request_id: String,
         /// The menu bar items (hierarchical)
         items: Vec<super::types::MenuBarItemData>,
+        /// Why the menu bar could not be read. Absent on success, so an empty
+        /// `items` list without an error means the app exposes no menus.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
     },
 
     /// Execute a menu action by path

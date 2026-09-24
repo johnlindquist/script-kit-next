@@ -110,7 +110,20 @@ impl Message {
 
     /// Create a MenuBarResult response message
     pub fn menu_bar_result(request_id: String, items: Vec<MenuBarItemData>) -> Self {
-        Message::MenuBarResult { request_id, items }
+        Message::MenuBarResult {
+            request_id,
+            items,
+            error: None,
+        }
+    }
+
+    /// Create a MenuBarResult response for a menu bar that could not be read
+    pub fn menu_bar_error(request_id: String, error: String) -> Self {
+        Message::MenuBarResult {
+            request_id,
+            items: Vec::new(),
+            error: Some(error),
+        }
     }
 
     /// Create an ExecuteMenuAction request message

@@ -4036,6 +4036,8 @@ interface MenuBarResultMessage {
   type: 'menuBarResult';
   requestId: string;
   items: MenuBarItem[];
+  /** Present when the menu bar could not be read. */
+  error?: string;
 }
 
 interface ExecuteMenuActionMessage {
@@ -5101,6 +5103,24 @@ declare global {
    * @param windowId - The ID of the window to move
    */
   function moveToPreviousDisplay(windowId: number): Promise<void>;
+
+  /**
+   * Read the native menu bar of an app without pressing anything.
+   * Requires Accessibility permission.
+   * @param bundleId - App to read (e.g. "com.apple.finder"); defaults to the
+   *                   app that owns the menu bar (the one active before Script Kit)
+   * @throws Error when the menu bar cannot be read (permission, app not running)
+   */
+  function getMenuBar(bundleId?: string): Promise<MenuBarItem[]>;
+
+  /**
+   * Press a menu item in the frontmost app by its title path.
+   * Requires Accessibility permission.
+   * @param bundleId - Bundle ID of the frontmost app
+   * @param menuPath - Titles from the top-level menu to the item, e.g. ["File", "Export…"]
+   * @throws Error when the app is not frontmost or the item is missing or disabled
+   */
+  function executeMenuAction(bundleId: string, menuPath: string[]): Promise<void>;
 
   // =============================================================================
   // File Search Functions
@@ -9094,6 +9114,8 @@ globalThis.fileSearch = async function fileSearch(query: string, options?: FindO
  * @param bundleId - Optional bundle ID to get menu bar from a specific app
  *                   (e.g., "com.apple.finder"). If not provided, uses frontmost app.
  * @returns Promise resolving to array of top-level menu bar items
+ * @throws Error when the menu bar cannot be read (for example, missing
+ *         Accessibility permission or the app is not running)
  * 
  * @example
  * ```typescript
@@ -9127,50 +9149,50 @@ globalThis.getMenuBar = async function getMenuBar(bundleId?: string): Promise<Me
       ]
     : [];
 
-  return new Promise((resolve) => {
-    const resolver = (msg: ResponseMessage) => {
-      // Handle MenuBarResult message type
-      if (msg.type === 'menuBarResult') {
-        const resultMsg = msg as MenuBarResultMessage;
-        resolve(resultMsg.items);
+  const { promise, resolve, reject } = Promise.withResolvers<MenuBarItem[]>();
+  const resolver = (msg: ResponseMessage) => {
+    // Handle MenuBarResult message type
+    if (msg.type === 'menuBarResult') {
+      const resultMsg = msg as MenuBarResultMessage;
+      if (resultMsg.error) {
+        reject(new Error(resultMsg.error));
         return;
       }
+      resolve(resultMsg.items);
+      return;
+    }
 
-      // Handle auto-submit (msg will be the auto-submit value directly)
-      if (Array.isArray(msg)) {
-        resolve(msg as MenuBarItem[]);
-        return;
-      }
+    // Handle auto-submit (msg will be the auto-submit value directly)
+    if (Array.isArray(msg)) {
+      resolve(msg as MenuBarItem[]);
+      return;
+    }
 
-      // Fallback to submit message handling (backwards compatibility)
-      const submitMsg = msg as SubmitMessage;
-      const value = submitMsg.value ?? '[]';
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) {
-          resolve(parsed as MenuBarItem[]);
-        } else {
-          resolve([]);
-        }
-      } catch {
-        resolve([]);
-      }
-    };
+    // Fallback to submit message handling (backwards compatibility)
+    const submitMsg = msg as SubmitMessage;
+    const value = submitMsg.value ?? '[]';
+    try {
+      const parsed = JSON.parse(value);
+      resolve(Array.isArray(parsed) ? (parsed as MenuBarItem[]) : []);
+    } catch {
+      resolve([]);
+    }
+  };
 
-    addPending(id, resolver, {
-      type: 'menuBarResult',
-      requestId: id,
-      items: fixtureItems,
-    } satisfies MenuBarResultMessage);
+  addPending(id, resolver, {
+    type: 'menuBarResult',
+    requestId: id,
+    items: fixtureItems,
+  } satisfies MenuBarResultMessage);
 
-    const message: GetMenuBarMessage = {
-      type: 'getMenuBar',
-      requestId: id,
-      bundleId,
-    };
+  const message: GetMenuBarMessage = {
+    type: 'getMenuBar',
+    requestId: id,
+    bundleId,
+  };
 
-    send(message);
-  });
+  send(message);
+  return promise;
 };
 
 /**

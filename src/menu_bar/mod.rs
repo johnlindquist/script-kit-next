@@ -796,6 +796,76 @@ pub fn get_menu_bar_for_pid(pid: i32) -> Result<Vec<MenuBarItem>> {
     debug!(item_count = items.len(), "Parsed menu bar items");
     Ok(items)
 }
+
+/// Get the menu bar of the running application with `bundle_id`.
+///
+/// Fails when no instance is running instead of reading some other app.
+#[instrument]
+pub fn get_menu_bar_for_bundle_id(bundle_id: &str) -> Result<Vec<MenuBarItem>> {
+    let pid = running_pid_for_bundle_id(bundle_id)?;
+    get_menu_bar_for_pid(pid)
+}
+
+/// PID of the first running instance of `bundle_id`, per AppKit.
+fn running_pid_for_bundle_id(bundle_id: &str) -> Result<i32> {
+    use objc::runtime::{Class, Object};
+    use objc::{msg_send, sel, sel_impl};
+
+    let class = Class::get("NSRunningApplication").context("Failed to get NSRunningApplication")?;
+    // CFString is toll-free bridged to NSString.
+    let ns_bundle_id = try_create_cf_string(bundle_id)?;
+    let pid = unsafe {
+        let apps: *mut Object = msg_send![
+            class,
+            runningApplicationsWithBundleIdentifier: ns_bundle_id as *mut Object
+        ];
+        let count: usize = if apps.is_null() {
+            0
+        } else {
+            msg_send![apps, count]
+        };
+        (0..count)
+            .map(|index| {
+                let app: *mut Object = msg_send![apps, objectAtIndex: index];
+                let pid: i32 = msg_send![app, processIdentifier];
+                pid
+            })
+            .find(|pid| *pid > 0)
+    };
+    cf_release(ns_bundle_id);
+    pid.with_context(|| format!("Application {bundle_id} is not running"))
+}
+
+/// Project scanned menus into the script protocol shape.
+///
+/// Separators are dropped because they are not actionable; every remaining
+/// item carries the title path `executeMenuAction` needs to press it.
+pub fn to_protocol_items(items: &[MenuBarItem]) -> Vec<crate::protocol::MenuBarItemData> {
+    fn project(item: &MenuBarItem, parent: &[String]) -> crate::protocol::MenuBarItemData {
+        let mut menu_path = parent.to_vec();
+        menu_path.push(item.title.clone());
+        crate::protocol::MenuBarItemData {
+            title: item.title.clone(),
+            enabled: item.enabled,
+            shortcut: item
+                .shortcut
+                .as_ref()
+                .map(KeyboardShortcut::to_display_string),
+            children: item
+                .children
+                .iter()
+                .filter(|child| !child.is_separator())
+                .map(|child| project(child, &menu_path))
+                .collect(),
+            menu_path,
+        }
+    }
+    items
+        .iter()
+        .filter(|item| !item.is_separator())
+        .map(|item| project(item, &[]))
+        .collect()
+}
 // ============================================================================
 // Tests
 // ============================================================================
