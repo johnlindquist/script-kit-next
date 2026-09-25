@@ -11,7 +11,8 @@
  * - intentional compact exception: FocusedTextMini input, scoped, and result/footer phases
  * - embedded multiline surface: AgentChat one-line and deterministic wrapped composer
  * - view-owned context-only surface: DayPage
- * - root-owned context-only surfaces: PermissionsWizard and ConfirmPrompt
+ * - root-owned context-only surface: PermissionsWizard (confirmations are
+ *   the shared confirm popup, not a main-window surface)
  *
  * Source contracts classify the remaining AppViews. The protocol currently
  * has no generic deterministic script-prompt fixture, so script-owned body
@@ -1557,11 +1558,6 @@ const snapshotExpectations = {
     statePromptType: "unknown",
     layoutPromptType: "permissionsWizard",
   },
-  confirmPrompt: {
-    surfaceKind: "ConfirmPrompt",
-    statePromptType: "unknown",
-    layoutPromptType: "confirmPrompt",
-  },
 } satisfies Record<string, SnapshotExpectation>;
 
 const startedAt = new Date();
@@ -1943,17 +1939,6 @@ try {
   );
   receipt.surfaces.permissionsWizard = permissions;
   assertRootOwnedContextOnly("permissions-wizard", permissions, baseline);
-
-  driver.send({ type: "openConfirmPrompt" });
-  await waitForSurface(driver, "ConfirmPrompt");
-  const confirm = await snapshot(
-    driver,
-    "confirm-prompt",
-    snapshotExpectations.confirmPrompt,
-    true,
-  );
-  receipt.surfaces.confirmPrompt = confirm;
-  assertRootOwnedContextOnly("confirm-prompt", confirm, baseline);
   check("probe-completed", true);
 } catch (error) {
   receipt.error = String(error);

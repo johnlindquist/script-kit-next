@@ -381,26 +381,44 @@ fn collect_confirm_popup_snapshot(
     let cancel_focused = snap.focused_button == "cancel";
     let has_secondary = snap.secondary_text.is_some();
 
-    let mut elements = vec![
-        element(
-            "panel:confirm-dialog",
-            ElementType::Panel,
-            Some(snap.title),
-            Some(snap.body),
+    let mut elements = vec![element(
+        "panel:confirm-dialog",
+        ElementType::Panel,
+        Some(snap.title),
+        Some(snap.body),
+        None,
+        None,
+        None,
+    )];
+    if let Some(text) = snap.input_text {
+        // The field owns typing for as long as the modal is open.
+        let mut field = element(
+            "input:confirm-field",
+            ElementType::Input,
             None,
+            Some(text),
             None,
+            Some(true),
             None,
-        ),
-        element(
-            "button:0:confirm",
-            ElementType::Button,
-            Some(snap.confirm_text),
-            Some("confirm".to_string()),
-            None,
-            Some(confirm_focused),
-            Some(0),
-        ),
-    ];
+        );
+        field.status_kind = snap.input_problem.as_ref().map(|_| "error".to_string());
+        field.action_disabled = snap.input_problem;
+        elements.push(field);
+    }
+    let mut confirm = element(
+        "button:0:confirm",
+        ElementType::Button,
+        Some(snap.confirm_text),
+        Some("confirm".to_string()),
+        None,
+        Some(confirm_focused),
+        Some(0),
+    );
+    if !snap.primary_enabled {
+        confirm.action_disabled = Some("input_invalid".to_string());
+        confirm.selectable = Some(false);
+    }
+    elements.push(confirm);
     if let Some(secondary_text) = snap.secondary_text {
         elements.push(element(
             "button:1:secondary",

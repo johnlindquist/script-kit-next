@@ -45,7 +45,7 @@ fn creation_feedback_layout_exposes_window_panel_path_and_action_geometry() {
     let branch = source_between(
         LAYOUT_SOURCE,
         "if matches!(self.current_view, AppView::CreationFeedback",
-        "if matches!(self.current_view, AppView::ConfirmPrompt",
+        "// GEO-002: explicit Arg/Mini model branch.",
     );
 
     for component in [

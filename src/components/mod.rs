@@ -14,7 +14,6 @@
 //! - [`PromptFooter`] - Footer component with logo, primary/secondary action buttons
 //! - [`PromptContainer`] - Container component for consistent prompt window layout
 //! - [`ShortcutRecorder`] - Modal for recording keyboard shortcuts with visual feedback
-//! - [`AliasInput`] - Modal for entering command aliases with keyboard focus
 //!
 //!
 //! # Design Patterns
@@ -26,7 +25,6 @@
 //! - **Theme integration**: Use `from_theme()` or `from_design()` for colors
 
 pub mod ai_recovery;
-pub mod alias_input;
 pub(crate) mod braille_loading;
 pub(crate) mod builtin_leading_separator;
 pub mod button;
@@ -61,7 +59,6 @@ pub(crate) mod modal_dim;
 pub(crate) mod navigation_affordance;
 pub(crate) mod non_list_state;
 pub mod notes_editor;
-pub(crate) mod overlay_modal;
 pub mod prompt_container;
 pub mod prompt_footer;
 pub mod prompt_layout_shell;
@@ -88,7 +85,6 @@ pub use ai_recovery::{
     AiRecoverySemanticNode, AI_RECOVERY_FOOTER_ID,
 };
 #[allow(unused_imports)]
-pub use alias_input::{AliasInput, AliasInputAction, AliasInputColors};
 pub use button::{Button, ButtonColors, ButtonVariant};
 #[allow(unused_imports)]
 pub(crate) use confirm_modal_shell::{

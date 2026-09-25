@@ -14,4 +14,4 @@ pub(crate) mod sign_in;
 
 pub(crate) use launch_spec::GooseProfileLaunch;
 pub(crate) use protocol::GooseLaunchSpec;
-pub(crate) use runtime::GooseAcpRuntime;
+pub(crate) use runtime::GooseRuntime;

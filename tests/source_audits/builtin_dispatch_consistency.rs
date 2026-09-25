@@ -294,7 +294,7 @@ fn deferred_sizing_keeps_mini_filterable_builtins_narrow() {
         .find("pub(crate) fn calculate_window_size_params")
         .expect("Expected calculate_window_size_params");
     let fn_end = content[fn_start..]
-        .find("    /// Returns the focused button when the active view is `ConfirmPrompt`.")
+        .find("    /// Update window size using deferred execution (SAFE during render/event cycles).")
         .expect("Expected next method after calculate_window_size_params");
     let body = &content[fn_start..fn_start + fn_end];
     let compacted = compact_source(body);
@@ -331,7 +331,7 @@ fn deferred_sizing_keeps_preview_builtins_wide() {
         .find("pub(crate) fn calculate_window_size_params")
         .expect("Expected calculate_window_size_params");
     let fn_end = content[fn_start..]
-        .find("    /// Returns the focused button when the active view is `ConfirmPrompt`.")
+        .find("    /// Update window size using deferred execution (SAFE during render/event cycles).")
         .expect("Expected next method after calculate_window_size_params");
     let body = &content[fn_start..fn_start + fn_end];
     let compacted = compact_source(body);
@@ -365,7 +365,7 @@ fn file_search_sizing_tracks_presentation_contract() {
     let body = source_between(
         &content,
         "pub(crate) fn calculate_window_size_params",
-        "    /// Returns the focused button when the active view is `ConfirmPrompt`.",
+        "    /// Update window size using deferred execution (SAFE during render/event cycles).",
     );
     let compacted = compact_source(body);
     let arm = compact_app_view_match_arm(&compacted, "AppView::FileSearchView{");

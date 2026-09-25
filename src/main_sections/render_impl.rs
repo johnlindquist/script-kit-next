@@ -769,13 +769,6 @@ impl Render for ScriptListApp {
                 .into_any_element(),
             AppView::AgentChatView { entity } => entity.into_any_element(),
             AppView::DayPage { entity } => entity.into_any_element(),
-            AppView::ConfirmPrompt {
-                options,
-                focused_button,
-                ..
-            } => self
-                .render_confirm_prompt(options, focused_button, cx)
-                .into_any_element(),
         };
 
         // Wrap content in a container that can have the debug grid overlay
@@ -844,12 +837,6 @@ impl Render for ScriptListApp {
         } else {
             None
         };
-
-        // Build alias input overlay if state is set
-        let alias_input_overlay = self.render_alias_input_overlay(window, cx);
-
-        // Build Tab AI save-offer overlay if a successful run is awaiting save decision
-        let tab_ai_save_offer_overlay = self.render_tab_ai_save_offer_overlay(window, cx);
 
         // Log render timing for filter perf analysis - always log for "gr" filters
         let render_elapsed = render_start.elapsed();
@@ -1096,19 +1083,8 @@ impl Render for ScriptListApp {
             .id("main-window-root")
             .size_full()
             .relative()
-            // Route keys to confirm popup when it's open (Escape/Enter/Tab).
-            // This must be at the outermost level to intercept before any
-            // view-specific handlers.
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 let key = event.keystroke.key.as_str();
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
 
                 // The internal brain-memory preview is a sessionless DivPrompt:
                 // Enter/Escape close it back to the launcher list here instead
@@ -1298,14 +1274,6 @@ impl Render for ScriptListApp {
                     .when_some(warning_banner, |container, banner| container.child(banner))
                     // Main content takes remaining space
                     .child(main_content_container)
-                    // Alias input overlay (on top of main content when entering alias)
-                    .when_some(alias_input_overlay, |container, overlay| {
-                        container.child(overlay)
-                    })
-                    // Tab AI save-offer overlay (on top after successful Tab AI execution)
-                    .when_some(tab_ai_save_offer_overlay, |container, overlay| {
-                        container.child(overlay)
-                    })
                     .when_some(main_window_modal_dim_layer, |container, overlay| {
                         container.child(overlay)
                     })

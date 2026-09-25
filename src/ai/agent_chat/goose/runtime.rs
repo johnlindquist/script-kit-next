@@ -56,12 +56,12 @@ enum GooseCommand {
     },
 }
 
-pub(crate) struct GooseAcpRuntime {
+pub(crate) struct GooseRuntime {
     tx: async_channel::Sender<GooseCommand>,
     spec: Arc<GooseLaunchSpec>,
 }
 
-impl GooseAcpRuntime {
+impl GooseRuntime {
     pub(crate) fn spawn(spec: GooseLaunchSpec) -> Result<Self> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Provider)?;
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)?;
@@ -99,7 +99,7 @@ impl GooseAcpRuntime {
     }
 }
 
-impl AgentChatConnection for GooseAcpRuntime {
+impl AgentChatConnection for GooseRuntime {
     fn start_turn(
         &self,
         request: AgentChatTurnRequest,
@@ -119,7 +119,7 @@ impl AgentChatConnection for GooseAcpRuntime {
         spec.surface = crate::ai::phase_trace::AiSurface::Mini;
         spec.owns_agent_policy = false;
         let runtime =
-            GooseAcpRuntime::spawn(spec).map_err(crate::ai::reliability::AiAdapterError::from)?;
+            GooseRuntime::spawn(spec).map_err(crate::ai::reliability::AiAdapterError::from)?;
         let ui_thread_id = request.ui_thread_id.clone();
         let inner_rx = runtime.start_turn(request)?;
         let (event_tx, event_rx) = async_channel::bounded(256);
@@ -176,7 +176,7 @@ impl AgentChatConnection for GooseAcpRuntime {
     }
 }
 
-impl Drop for GooseAcpRuntime {
+impl Drop for GooseRuntime {
     fn drop(&mut self) {
         if let Some(policy_id) = self
             .spec
@@ -1129,7 +1129,7 @@ mod tests {
     fn goose_runtime_is_an_agent_chat_connection() {
         fn accepts(_: &dyn AgentChatConnection) {}
         let (tx, _rx) = async_channel::bounded::<GooseCommand>(1);
-        let runtime = GooseAcpRuntime {
+        let runtime = GooseRuntime {
             tx,
             spec: Arc::new(GooseLaunchSpec::new("/bin/false", "/tmp")),
         };

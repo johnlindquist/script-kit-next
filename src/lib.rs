@@ -171,6 +171,12 @@ pub mod hud_manager;
 #[path = "app_impl/path_action.rs"]
 pub mod path_action;
 
+// What the launcher accepts as a command alias. Same `#[path]` re-export
+// pattern as `path_action`: the binary's alias editor uses it and its tests
+// run under `cargo test --lib`.
+#[path = "app_impl/alias_validation.rs"]
+pub mod alias_validation;
+
 // Pure planner from `TriggerBuiltin` to `AppRoute`. Same re-export
 // pattern as `path_action` — the physical file lives in `src/app_impl/`
 // but the lib crate also carries it so the exhaustive-coverage tests

@@ -20,7 +20,11 @@
 //! ```
 
 pub(crate) mod parent_dialog;
+pub(crate) mod text_field;
 pub(crate) mod window;
+
+#[allow(unused_imports)]
+pub(crate) use text_field::{ConfirmTextField, ConfirmTextValidator, SharedConfirmTextField};
 
 // Used by include!() code in app_actions/handle_action/scripts.rs — clippy
 // cannot trace usage through include!() and reports a false-positive dead_code
@@ -31,10 +35,12 @@ pub(crate) use crate::components::confirm_modal_shell::PARENT_MODAL_WIDTH_PX;
 pub(crate) use parent_dialog::{
     confirm_with_parent_dialog, open_parent_action_dialog, open_parent_confirm_dialog,
     open_parent_confirm_dialog_for_automation_parent, open_parent_confirm_dialog_for_entity,
-    open_parent_confirm_dialog_with_lifecycle, ParentActionDialogOptions, ParentConfirmOptions,
+    open_parent_confirm_dialog_with_lifecycle, open_parent_input_dialog, ParentActionDialogOptions,
+    ParentConfirmOptions,
 };
-// Design-contract resolvers shared by the in-window confirm renderer and the
-// token exporter (src/design_contract).
+#[allow(unused_imports)]
+pub(crate) use window::refresh_confirm_popup;
+// Design-contract values for the confirm mockups (src/design_contract).
 #[allow(unused_imports)]
 pub(crate) use parent_dialog::{
     confirm_prompt_line_height_px, resolved_confirm_prompt_colors, resolved_confirm_prompt_metrics,
@@ -60,5 +66,9 @@ pub(crate) use window::{
 };
 #[allow(unused_imports)]
 pub(crate) use window::{close_confirm_window, close_owned_confirm_window};
+#[allow(unused_imports)]
+pub(crate) use window::{
+    confirm_window_key_intent, route_window_key_to_confirm_popup, ConfirmWindowKeyIntent,
+};
 #[allow(unused_imports)]
 pub(crate) use window::{get_confirm_popup_snapshot, ConfirmPopupSnapshot};

@@ -1858,11 +1858,8 @@ pub(crate) struct ScriptListApp {
     /// The shortcut recorder entity (persisted to maintain focus)
     shortcut_recorder_entity:
         Option<Entity<crate::components::shortcut_recorder::ShortcutRecorder>>,
-    /// Alias input state - when Some, shows the alias input modal
+    /// Alias editor state - when Some, its modal is open
     alias_input_state: Option<AliasInputState>,
-    /// The alias input entity (persisted to maintain focus)
-    alias_input_entity: Option<Entity<crate::components::alias_input::AliasInput>>,
-    alias_input_subscription: Option<Subscription>,
     /// Most recent Tab AI execution waiting for success/failure accounting.
     pending_tab_ai_execution: Option<crate::ai::TabAiExecutionRecord>,
     /// Tab AI save-offer overlay state — when Some, prompts to persist the last successful ephemeral script.

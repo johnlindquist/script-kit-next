@@ -281,7 +281,6 @@ impl ScriptListApp {
             AppView::SdkReferenceView { .. } => "SdkReferenceView",
             AppView::TipsView { .. } => "TipsView",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
-            AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         };
 
         let old_focused_input = self.focused_input;

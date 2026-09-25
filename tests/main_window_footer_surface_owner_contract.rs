@@ -41,7 +41,6 @@ fn app_view_owns_native_footer_surface_map() {
         "AppView::QuickTerminalView { .. } => Some(\"quick_terminal\")",
         "AppView::AgentChatView { .. } => Some(\"agent_chat\")",
         "AppView::ScriptIssuesView { .. } => Some(\"script_issues\")",
-        "AppView::ConfirmPrompt { .. } => Some(\"confirm_prompt\")",
         "AppView::TermPrompt { .. } => Some(\"term_prompt\")",
         "AppView::About { .. } => Some(\"about\")",
         "AppView::MicroPrompt { .. } => Some(\"micro_prompt\")",

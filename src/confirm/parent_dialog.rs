@@ -1,38 +1,15 @@
 use std::rc::Rc;
-use std::sync::Mutex;
 
-use gpui::{px, AnyView, App, AppContext as _, Pixels, SharedString, WeakEntity, Window};
+use gpui::{px, App, AppContext as _, Pixels, SharedString, WeakEntity, Window};
 use gpui_component::button::ButtonVariant;
 
+use super::text_field::SharedConfirmTextField;
 use super::window::{
     open_confirm_popup_window, ConfirmPopupParentWindow, ConfirmWindowOptions, ParentDialogResult,
 };
 use crate::components::confirm_modal_shell::PARENT_MODAL_WIDTH_PX;
 
 type ConfirmCallback = Rc<dyn Fn(&mut Window, &mut App)>;
-
-/// Routing hook for in-window confirm. The binary registers a closure during
-/// startup that knows how to push `AppView::ConfirmPrompt` onto the
-/// `ScriptListApp` entity. Returns `true` when it accepted the route.
-type InWindowRouter = Box<
-    dyn Fn(AnyView, ParentConfirmOptions, async_channel::Sender<bool>, &mut App) -> bool
-        + Send
-        + Sync,
->;
-
-static IN_WINDOW_ROUTER: Mutex<Option<InWindowRouter>> = Mutex::new(None);
-
-#[allow(dead_code)]
-pub(crate) fn register_in_window_router(router: InWindowRouter) {
-    if let Ok(mut guard) = IN_WINDOW_ROUTER.lock() {
-        *guard = Some(router);
-        tracing::info!(
-            target: "script_kit::confirm",
-            event = "in_window_confirm_router_registered",
-            "Registered in-window confirm router"
-        );
-    }
-}
 
 #[derive(Clone)]
 pub(crate) struct ParentConfirmOptions {
@@ -94,15 +71,15 @@ impl Default for ParentConfirmOptions {
     }
 }
 
-// ── Design-contract resolvers for the in-window confirm surface ────────────
-// Shared between `render_confirm_prompt` (render_prompts/other.rs) and the
-// token exporter (src/design_contract) so the two can never drift. The
-// legacy popup-window path (src/confirm/window.rs) is a different surface
-// and deliberately does not use these.
+// ── Design-contract values for the confirm mockups ─────────────────────────
+// Exported through src/design_contract for the HTML design mockups. Every
+// confirmation in the app is the native confirm popup (src/confirm/window.rs);
+// the full-window confirm these values once described was retired on
+// 2026-09-24 because a modal must never replace the window it belongs to.
 
-/// Title font size in the in-window confirm surface.
+/// Title font size for the confirm mockups.
 pub(crate) const CONFIRM_PROMPT_TITLE_FONT_SIZE_PX: f32 = 20.0;
-/// Body font size in the in-window confirm surface.
+/// Body font size for the confirm mockups.
 pub(crate) const CONFIRM_PROMPT_BODY_FONT_SIZE_PX: f32 = 14.0;
 /// Reading-width cap for the body copy.
 pub(crate) const CONFIRM_PROMPT_BODY_MAX_WIDTH_PX: f32 = 560.0;
@@ -117,7 +94,7 @@ pub(crate) fn confirm_prompt_line_height_px(font_size: f32) -> f32 {
     (font_size * PHI).round()
 }
 
-/// Layout inputs `render_confirm_prompt` actually consumes.
+/// Confirm mockup layout inputs exported as design-contract tokens.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ConfirmPromptMetrics {
     /// Padding on the centered content region (`design_spacing.padding_xl`).
@@ -243,8 +220,7 @@ pub(crate) fn open_parent_confirm_dialog_for_automation_parent(
         Some(parent_automation_id.into()),
         || true,
         Rc::new(on_confirm),
-        None,
-        None,
+        DialogExtras::default(),
         Rc::new(on_cancel),
     );
 }
@@ -284,8 +260,7 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
         None,
         keep_open_while,
         Rc::new(on_confirm),
-        None,
-        None,
+        DialogExtras::default(),
         Rc::new(on_cancel),
     );
 }
@@ -302,26 +277,88 @@ pub(crate) fn open_parent_action_dialog(
     on_secondary: impl Fn(&mut Window, &mut App) + 'static,
     on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
 ) {
-    let secondary_text = options.secondary_text;
-    let popup = ParentConfirmOptions {
-        title: options.title,
-        body: options.body,
-        confirm_text: options.primary_text,
-        cancel_text: options.dismiss_text,
-        confirm_variant: ButtonVariant::Primary,
-        width: options.width,
-    };
+    let secondary = options
+        .secondary_text
+        .clone()
+        .map(|label| (label, Rc::new(on_secondary) as ConfirmCallback));
     open_parent_confirm_dialog_with_lifecycle_and_parent(
         window,
         cx,
-        popup,
+        action_dialog_popup_options(&options),
         None,
         || true,
         Rc::new(on_primary),
-        secondary_text.clone(),
-        secondary_text.map(|_| Rc::new(on_secondary) as ConfirmCallback),
+        DialogExtras {
+            secondary,
+            input: None,
+        },
         Rc::new(on_dismiss),
     );
+}
+
+/// Ask for a short value in the shared confirm modal: a single-line field
+/// above the buttons, with `options.body` as the hint under it. The primary
+/// button stays disabled while `field` reports a problem; `on_submit`
+/// receives the field's text. The caller keeps `field` to read or set the
+/// text while the modal is open. The modal closes without running any
+/// callback once `keep_open_while` turns false.
+#[allow(
+    dead_code,
+    reason = "the separately compiled application binary owns the alias editor"
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one callback per modal outcome plus the owner's lifetime and field"
+)]
+pub(crate) fn open_parent_input_dialog(
+    window: &mut Window,
+    cx: &mut App,
+    options: ParentActionDialogOptions,
+    field: SharedConfirmTextField,
+    keep_open_while: impl Fn() -> bool + 'static,
+    on_submit: impl Fn(String, &mut Window, &mut App) + 'static,
+    on_secondary: impl Fn(&mut Window, &mut App) + 'static,
+    on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
+) {
+    let secondary = options
+        .secondary_text
+        .clone()
+        .map(|label| (label, Rc::new(on_secondary) as ConfirmCallback));
+    let submitted = field.clone();
+    open_parent_confirm_dialog_with_lifecycle_and_parent(
+        window,
+        cx,
+        action_dialog_popup_options(&options),
+        None,
+        keep_open_while,
+        Rc::new(move |window, cx| {
+            let text = submitted.borrow().text().to_string();
+            on_submit(text, window, cx);
+        }),
+        DialogExtras {
+            secondary,
+            input: Some(field),
+        },
+        Rc::new(on_dismiss),
+    );
+}
+
+fn action_dialog_popup_options(options: &ParentActionDialogOptions) -> ParentConfirmOptions {
+    ParentConfirmOptions {
+        title: options.title.clone(),
+        body: options.body.clone(),
+        confirm_text: options.primary_text.clone(),
+        cancel_text: options.dismiss_text.clone(),
+        confirm_variant: ButtonVariant::Primary,
+        width: options.width,
+    }
+}
+
+/// Optional parts of a modal beyond primary and dismiss.
+#[derive(Default)]
+struct DialogExtras {
+    secondary: Option<(SharedString, ConfirmCallback)>,
+    input: Option<SharedConfirmTextField>,
 }
 
 #[expect(
@@ -335,8 +372,7 @@ fn open_parent_confirm_dialog_with_lifecycle_and_parent(
     explicit_parent_automation_id: Option<String>,
     keep_open_while: impl Fn() -> bool + 'static,
     on_confirm: ConfirmCallback,
-    secondary_text: Option<SharedString>,
-    on_secondary: Option<ConfirmCallback>,
+    extras: DialogExtras,
     on_cancel: ConfirmCallback,
 ) {
     let has_lifecycle_predicate = true;
@@ -364,7 +400,6 @@ fn open_parent_confirm_dialog_with_lifecycle_and_parent(
         window.activate_window();
     }
 
-    let keep_open_while: Rc<dyn Fn() -> bool> = Rc::new(keep_open_while);
     let parent_bounds = window.bounds();
     let display_id = window.display(cx).map(|d| d.id());
     let parent_window_handle = window.window_handle();
@@ -389,12 +424,23 @@ fn open_parent_confirm_dialog_with_lifecycle_and_parent(
     };
     let parent_automation_id = parent_info.id;
     let parent_id_for_result = parent_automation_id.clone();
+    // A modal never outlives its parent window: when the parent closes
+    // (Notes toggled away, detached Agent Chat closed), close the modal
+    // instead of leaving an orphan popup that still claims the keyboard.
+    let keep_open_while: Rc<dyn Fn() -> bool> = {
+        let parent_id = parent_automation_id.clone();
+        Rc::new(move || {
+            crate::windows::get_runtime_window_handle_for_generation(&parent_id, parent_generation)
+                == Some(parent_window_handle)
+                && keep_open_while()
+        })
+    };
 
     let (result_tx, result_rx) = async_channel::bounded::<ParentDialogResult>(1);
 
     let on_confirm_for_task = on_confirm.clone();
     let on_cancel_for_task = on_cancel.clone();
-    let on_secondary_for_task = on_secondary.clone();
+    let (secondary_text, on_secondary_for_task) = extras.secondary.unzip();
 
     tracing::info!(
         target: "script_kit::confirm",
@@ -477,6 +523,7 @@ fn open_parent_confirm_dialog_with_lifecycle_and_parent(
         secondary_text,
         confirm_variant: options.confirm_variant,
         width: options.width,
+        input: extras.input,
     };
 
     match open_confirm_popup_window(
@@ -612,32 +659,6 @@ mod tests {
     }
 
     #[test]
-    fn async_confirm_route_no_longer_uses_in_window_confirm_prompt_router() {
-        let source = fs::read_to_string("src/confirm/parent_dialog.rs")
-            .expect("Failed to read src/confirm/parent_dialog.rs");
-        let production_source = source.split("#[cfg(test)]").next().unwrap_or(&source);
-        let function_body = production_source
-            .split("pub(crate) async fn confirm_with_parent_dialog")
-            .nth(1)
-            .and_then(|section| section.split("let confirmed = confirm_rx.recv()").next())
-            .expect("expected confirm_with_parent_dialog body");
-        let normalized = normalize_ws(function_body);
-
-        assert!(
-            !normalized.contains("crate::is_main_window_visible()"),
-            "async confirms should no longer choose AppView::ConfirmPrompt based on main-window visibility"
-        );
-        assert!(
-            !normalized.contains("IN_WINDOW_ROUTER.lock()"),
-            "async confirms should no longer route through the in-window ConfirmPrompt router"
-        );
-        assert!(
-            normalized.contains("open_parent_confirm_dialog("),
-            "async confirms should open the shared native parent confirm popup"
-        );
-    }
-
-    #[test]
     fn parent_confirm_dialog_passes_parent_bounds_to_popup_window() {
         let source = fs::read_to_string("src/confirm/parent_dialog.rs")
             .expect("Failed to read src/confirm/parent_dialog.rs");
@@ -752,15 +773,6 @@ mod tests {
             "quit should use the entity-owned parent confirm helper while preserving the shared copy and shutdown cleanup"
         );
     }
-
-    // NOTE: prompt_handler's SDK confirm() route no longer uses
-    // confirm_with_parent_dialog — 192d7d647 ("Route SDK confirm through
-    // shared prompt") intentionally migrated it onto the shared in-window
-    // ConfirmPrompt surface via Self::open_confirm_prompt. That contract is
-    // locked by tests/source_audits/confirm_modal_shared_shell.rs::
-    // sdk_confirm_host_route_uses_shared_confirm_prompt_surface, so the old
-    // prompt_handler_confirm_uses_shared_async_confirm_helper audit here was
-    // removed instead of being rewritten into a duplicate.
 
     #[test]
     fn quit_action_and_builtin_quit_share_shutdown_cleanup() {

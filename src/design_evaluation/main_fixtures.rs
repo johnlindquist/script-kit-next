@@ -824,11 +824,11 @@ pub(crate) fn main_overlay_state(
     let sources = app.main_services.owned_sources();
     serde_json::json!({
         "fixtureId": sources.and_then(|sources| sources.overlay_fixture_id),
-        "alias": app.alias_input_entity.as_ref().filter(|_| app.alias_input_state.is_some()).map(|entity| {
-            let input = entity.read(cx);
-            serde_json::json!({"entityId": entity.entity_id().as_u64(), "text": input.text(), "cursor": input.input.cursor(), "selection": input.input.selection().range(), "semanticToken": input.semantic_token()})
+        "alias": app.alias_input_state.as_ref().map(|state| {
+            let field = state.field.borrow();
+            serde_json::json!({"text": field.text(), "cursor": field.state.cursor(), "selection": field.state.selection().range(), "problem": field.problem().map(|problem| problem.to_string())})
         }),
-        "saveOffer": app.tab_ai_save_offer_state.as_ref().map(|state| serde_json::json!({"filename": state.filename_stem, "error": state.error.as_ref().map(|error| error.as_ref()), "syntheticExecution": state.record.provider_id == "owned-fixture"})),
+        "saveOffer": app.tab_ai_save_offer_state.as_ref().map(|state| serde_json::json!({"filename": state.filename_stem, "syntheticExecution": state.record.provider_id == "owned-fixture"})),
         "warningVisible": app.show_bun_warning, "logsVisible": app.show_logs,
         "logLines": if app.show_logs { sources.map(|sources| sources.overlay_logs.as_slice()).unwrap_or(&[]) } else { &[] },
         "loading": app.main_list_loading_kind().map(|kind| kind.footer_label()),
@@ -850,20 +850,40 @@ pub(crate) fn main_overlay_elements(
     use crate::protocol::{ElementContentKind, ElementInfo};
     let mut elements = Vec::new();
     let layers = gpui_component::Root::read(window, cx).layer_snapshot(cx);
-    if app.alias_input_state.is_some() {
-        if let Some(input) = &app.alias_input_entity {
-            elements.extend(input.read(cx).automation_elements());
+    if let Some(state) = &app.alias_input_state {
+        let field = state.field.borrow();
+        let mut title = ElementInfo::panel("alias-input-modal-content");
+        title.semantic_id = "alias-input-modal-content".into();
+        title.text = Some(format!("Alias for \u{201c}{}\u{201d}", state.command_name));
+        elements.push(title.redact_text(ElementContentKind::UserContent));
+        let mut input = ElementInfo::input("alias", Some(field.text()), true);
+        input.semantic_id = "alias-input-field".into();
+        elements.push(input);
+        let mut save = ElementInfo::button(0, "Save");
+        save.semantic_id = "alias-input:save".into();
+        save.action_disabled = field.problem().map(|_| "alias_validation_failed".into());
+        save.selectable = Some(save.action_disabled.is_none());
+        elements.push(save);
+        if state.has_alias {
+            let mut clear = ElementInfo::button(1, "Remove Alias");
+            clear.semantic_id = "alias-input:clear".into();
+            elements.push(clear);
         }
+        let mut cancel = ElementInfo::button(2, "Cancel");
+        cancel.semantic_id = "alias-input:cancel".into();
+        elements.push(cancel);
     }
     if let Some(state) = &app.tab_ai_save_offer_state {
         let mut panel = ElementInfo::panel("tab-ai-save-offer");
         panel.semantic_id = "tab-ai-save-offer".into();
-        panel.text = Some(format!("Save as {}.ts?", state.filename_stem));
-        panel.value = state.error.as_ref().map(|error| error.to_string());
+        panel.text = Some(format!(
+            "Save it as {}.ts to run it again from the launcher.",
+            state.filename_stem
+        ));
         elements.push(panel.redact_content(ElementContentKind::UserContent));
         for (id, label) in [
             ("tab-ai-save-offer:save", "Save"),
-            ("tab-ai-save-offer:dismiss", "Dismiss"),
+            ("tab-ai-save-offer:dismiss", "Not Now"),
         ] {
             let mut command = ElementInfo::panel(id);
             command.semantic_id = id.into();
@@ -949,7 +969,7 @@ pub(crate) fn set_main_overlay_input(
             .is_empty(),
         "root_dialog_has_no_editable_fixture_field"
     );
-    if app.alias_input_state.is_none() || app.alias_input_entity.is_none() {
+    if app.alias_input_state.is_none() {
         return Ok(false);
     }
     app.update_alias_text(text.to_owned(), cx);
@@ -978,11 +998,16 @@ pub(crate) fn select_main_overlay_element(
     if !submit {
         return Ok(true);
     }
-    if id.starts_with("alias-input:") && app.alias_input_state.is_some() {
-        if let Some(input) = &app.alias_input_entity {
-            return input
-                .update(cx, |input, cx| input.activate_semantic_action(id, cx))
-                .map_err(anyhow::Error::msg);
+    if let Some(state) = &app.alias_input_state {
+        let alias = state.field.borrow().text().to_string();
+        match id {
+            "alias-input:save" => app.save_alias_with_text(alias, cx),
+            "alias-input:clear" => app.save_alias_with_text(String::new(), cx),
+            "alias-input:cancel" => app.close_alias_input(cx),
+            _ => {}
+        }
+        if id.starts_with("alias-input:") {
+            return Ok(true);
         }
     }
     match id {

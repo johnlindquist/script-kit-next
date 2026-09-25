@@ -1045,7 +1045,7 @@
         "Live providers, credentials, network and operator storage"
       ],
       "appViewVariant": "ScriptList",
-      "presentationOwner": "src/app_impl/alias_input.rs::render_alias_input_overlay",
+      "presentationOwner": "src/app_impl/alias_input.rs::show_alias_input",
       "expectedSemanticSurface": "scriptList",
       "requiredSemanticIds": [
         "alias-*"
@@ -1069,7 +1069,7 @@
         "Live providers, credentials, network and operator storage"
       ],
       "appViewVariant": "ScriptList",
-      "presentationOwner": "src/app_impl/agent_handoff/mod.rs::render_tab_ai_save_offer_overlay",
+      "presentationOwner": "src/app_impl/agent_handoff/mod.rs::open_tab_ai_save_offer",
       "expectedSemanticSurface": "scriptList",
       "requiredSemanticIds": [
         "tab-ai-save-offer"
@@ -1640,30 +1640,6 @@
       "expectedSemanticSurface": "naming-prompt",
       "requiredSemanticIds": [
         "input:*"
-      ]
-    },
-    {
-      "id": "prompt.confirm",
-      "family": "prompt",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "ConfirmPrompt",
-      "presentationOwner": "src/render_prompts/other.rs::render_confirm_prompt",
-      "expectedSemanticSurface": "confirmPrompt",
-      "requiredSemanticIds": [
-        "panel:confirm-prompt",
-        "button:*"
       ]
     },
     {
@@ -2927,8 +2903,8 @@
         "main.script-list"
       ],
       "presentationOwners": [
-        "src/app_impl/agent_handoff/mod.rs::render_tab_ai_save_offer_overlay",
-        "src/app_impl/alias_input.rs::render_alias_input_overlay",
+        "src/app_impl/agent_handoff/mod.rs::open_tab_ai_save_offer",
+        "src/app_impl/alias_input.rs::show_alias_input",
         "src/app_impl/lifecycle_reset.rs::flush_pending_toasts",
         "src/components/braille_loading.rs::constellation_loading_layer",
         "src/debug_grid/mod.rs::render_grid_overlay",
@@ -3538,17 +3514,6 @@
       ],
       "presentationOwners": [
         "src/day_page/render.rs"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "appViewVariant": "ConfirmPrompt",
-      "surfaceKind": "ConfirmPrompt",
-      "fixtureIds": [
-        "prompt.confirm"
-      ],
-      "presentationOwners": [
-        "src/render_prompts/other.rs::render_confirm_prompt"
       ],
       "proofBoundary": "owned-production-runtime"
     }
@@ -4993,37 +4958,6 @@
         "cmdW": "CloseMainWindow"
       },
       "automationSemanticSurface": "dayPage"
-    },
-    {
-      "surfaceKind": "ConfirmPrompt",
-      "appViewVariants": [
-        "ConfirmPrompt"
-      ],
-      "appViewFooters": [
-        {
-          "variant": "ConfirmPrompt",
-          "nativeFooterSurface": "confirm_prompt",
-          "meaning": "routeLabelOnly"
-        }
-      ],
-      "vocabulary": {
-        "family": "FeedbackSurface",
-        "inputOwnership": "NoEditableInput",
-        "previewRole": "FeedbackPanel"
-      },
-      "focusPolicy": "NoEditableFocus",
-      "keyboardPolicy": "NoEditableKeyboard",
-      "actionsPolicy": "NoSurfaceActions",
-      "proofPolicy": "PopupStateProof",
-      "visualPolicy": "PopupVisual",
-      "dismissPolicy": {
-        "policy": "explicit",
-        "windowBlur": "Ignore",
-        "backdropClick": "Ignore",
-        "escape": "LetViewHandle",
-        "cmdW": "CloseMainWindow"
-      },
-      "automationSemanticSurface": "confirmPrompt"
     }
   ]
 }

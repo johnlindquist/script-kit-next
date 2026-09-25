@@ -126,7 +126,6 @@ fn notes_browse_footer_buttons(
     ]
 }
 
-
 pub(crate) fn flow_session_footer_buttons(
     working: bool,
     enabled: bool,
@@ -527,29 +526,6 @@ impl ScriptListApp {
         );
 
         buttons
-    }
-
-    /// Footer buttons for an in-window `ConfirmPrompt`. Reuses the native
-    /// Apply/Close slots so no AppKit ObjC selector wiring needs to change —
-    /// only the labels and `selected` flag change per options + focused button.
-    fn confirm_prompt_footer_buttons(
-        &self,
-        options: &crate::confirm::ParentConfirmOptions,
-        focused_button: ConfirmFocusedButton,
-    ) -> Vec<crate::footer_popup::FooterButtonConfig> {
-        use crate::footer_popup::{FooterAction, FooterButtonConfig};
-
-        let confirm_focused = matches!(focused_button, ConfirmFocusedButton::Confirm);
-        let cancel_focused = matches!(focused_button, ConfirmFocusedButton::Cancel);
-
-        vec![
-            FooterButtonConfig::new(FooterAction::Apply, "↵", options.confirm_text.to_string())
-                .selected(confirm_focused)
-                .enabled(true),
-            FooterButtonConfig::new(FooterAction::Close, "Esc", options.cancel_text.to_string())
-                .selected(cancel_focused)
-                .enabled(true),
-        ]
     }
 
     fn latest_agent_chat_assistant_response(&self, cx: &App) -> Option<String> {

@@ -93,7 +93,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
         Some("ChatPrompt") => ("chat-prompt", &["input:*", "list:chat-messages"]),
         Some("TermPrompt") => ("term-prompt", &["list:term-lines", "choice:*"]),
         Some("NamingPrompt") => ("naming-prompt", &["input:*"]),
-        Some("ConfirmPrompt") => ("confirmPrompt", &["panel:confirm-prompt", "button:*"]),
         Some("WebcamView") => ("webcam", &["panel:webcam"]),
         Some("ScratchPadView") => ("scratch-pad", &["input:scratch-pad-language"]),
         Some("QuickTerminalView") => ("quick-terminal", &["list:quick-terminal-lines", "choice:*"]),
@@ -233,11 +232,11 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         | "main.menu-syntax-history" => ("ScriptList", "src/render_script_list"),
         "main-overlay.alias" => (
             "ScriptList",
-            "src/app_impl/alias_input.rs::render_alias_input_overlay",
+            "src/app_impl/alias_input.rs::show_alias_input",
         ),
         "main-overlay.tab-ai-save-offer" => (
             "ScriptList",
-            "src/app_impl/agent_handoff/mod.rs::render_tab_ai_save_offer_overlay",
+            "src/app_impl/agent_handoff/mod.rs::open_tab_ai_save_offer",
         ),
         "main-overlay.root-dialog" => (
             "ScriptList",
@@ -346,10 +345,6 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "prompt.chat" => ("ChatPrompt", "src/prompts/chat"),
         "prompt.term" => ("TermPrompt", "src/term_prompt"),
         "prompt.naming" => ("NamingPrompt", "src/prompts/naming"),
-        "prompt.confirm" => (
-            "ConfirmPrompt",
-            "src/render_prompts/other.rs::render_confirm_prompt",
-        ),
         "prompt.webcam" => ("WebcamView", "src/prompts/webcam.rs"),
         "prompt.scratch-pad" => ("ScratchPadView", "src/editor"),
         "prompt.quick-terminal" => ("QuickTerminalView", "src/term_prompt"),

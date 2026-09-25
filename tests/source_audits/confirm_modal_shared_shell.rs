@@ -223,20 +223,20 @@ fn confirm_popup_native_background_matches_actions_popup_not_footer_flush_strip(
     );
     assert!(
         actions_config.contains("configure_attached_popup_window(")
-            && actions_config.contains("GlassMorphVariant::MirrorMainEntry")
+            && actions_config.contains("NativeGlassSurfaceRole::PopupBackdrop")
             && confirm_config.contains("configure_attached_popup_window(")
-            && confirm_config.contains("GlassMorphVariant::ContentLayer")
+            && confirm_config.contains("NativeGlassSurfaceRole::PopupBackdrop")
             && !confirm_config.contains("setHasShadow: false")
             && !confirm_config.contains("setCornerRadius: 0.0_f64"),
-        "centered confirm and actions popups must share the attached-popup owner; confirm keeps calibrated content-layer motion while actions mirrors the main-window entry preset (2026-09-23 owner request)"
+        "centered confirm and actions popups must share the attached-popup owner and the untinted popup backdrop"
     );
     assert!(
         footer_config.contains("configure_attached_popup_window(")
-            && footer_config.contains("GlassMorphVariant::FadeOnly")
+            && footer_config.contains("NativeGlassSurfaceRole::WindowBackdrop")
             && footer_config.contains("setIgnoresMouseEvents: true")
             && footer_config.contains("setHasShadow: false")
             && footer_config.contains("setCornerRadius: 0.0_f64"),
-        "flush footer picker must use the same attached-popup owner while preserving its fade-only, no-shadow/no-corner exception"
+        "flush footer picker must use the same attached-popup owner while preserving its no-shadow/no-corner exception"
     );
 }
 
@@ -393,73 +393,6 @@ fn destructive_confirm_safety_scenario_uses_dry_run_confirm_fixture() {
             && scenario.contains("systemCommandRequested: false")
             && scenario.contains("trashMutationRequested: false"),
         "dry-run destructive confirm proof must explicitly guard against real destructive commands"
-    );
-}
-
-#[test]
-fn sdk_confirm_runtime_proof_uses_real_script_run_route() {
-    let scenario = read("scripts/agentic/scenario.ts");
-    let index = read("scripts/agentic/index.ts");
-    let smoke = read("tests/smoke/test-confirm-sdk-runtime.ts");
-    let inventory = read(".goals/receipts/modal-inventory.md");
-
-    assert!(
-        scenario.contains("runSdkConfirmRuntimeProofScenario")
-            && scenario.contains("tests/smoke/test-confirm-sdk-runtime.ts")
-            && scenario.contains("type: \"run\"")
-            && scenario.contains("sdk-confirm-run-")
-            && scenario.contains("SCRIPT_KIT_SESSION_DIR")
-            && scenario.contains("SCRIPT_KIT_GPUI_BINARY")
-            && scenario.contains("SCRIPT_KIT_DISABLE_AUTOMATIC_UPDATE_CHECK")
-            && scenario.contains("expectedProtocolType: \"confirm\"")
-            && scenario.contains("expectedSurface: \"ConfirmPrompt\""),
-        "SDK confirm runtime proof must drive the real script run route into the shared ConfirmPrompt surface from an isolated session"
-    );
-    assert!(
-        scenario.contains("simulateKey")
-            && scenario.contains("sdk-confirm-escape-cancel")
-            && scenario.contains("scriptResult.result === false")
-            && scenario.contains("processTree")
-            && scenario.contains("failureArtifacts")
-            && scenario.contains("confirm-modal-sdk-confirm-runtime-artifacts")
-            && !scenario
-                .split("runSdkConfirmRuntimeProofScenario")
-                .nth(1)
-                .expect("SDK confirm runtime proof scenario should be present")
-                .contains("openConfirmPrompt"),
-        "SDK confirm runtime proof must resolve safely through Escape, preserve blocker artifacts on failure, and must not fall back to the stdin confirm fixture"
-    );
-    assert!(
-        index.contains("sdk-confirm-runtime-proof")
-            && index.contains("runSdkConfirmRuntimeProofScenario"),
-        "agentic index must expose a stable top-level SDK confirm runtime proof recipe"
-    );
-    assert!(
-        smoke.contains("await confirm({")
-            && smoke.contains("SDK confirm runtime proof?")
-            && smoke.contains("Confirm SDK")
-            && smoke.contains("Cancel SDK")
-            && smoke.contains("resultType: typeof result"),
-        "SDK confirm smoke script must call global confirm() and persist the boolean result receipt"
-    );
-    assert!(
-        inventory.contains("SDK `confirm`"),
-        "inventory must track the SDK confirm runtime proof status"
-    );
-}
-
-#[test]
-fn confirm_prompt_simulate_key_routes_confirm_and_cancel() {
-    let source = read("src/app_impl/simulate_key_dispatch.rs");
-
-    assert!(
-        source.contains("AppView::ConfirmPrompt { .. }")
-            && source.contains("SimulateKey: Escape - cancel ConfirmPrompt")
-            && source.contains("view.resolve_confirm_prompt(false, window, ctx)")
-            && source.contains("SimulateKey: Enter - confirm ConfirmPrompt")
-            && source.contains("view.resolve_confirm_prompt(confirmed, window, ctx)")
-            && source.contains("view.toggle_confirm_prompt_focus(ctx)"),
-        "stdin simulateKey must route ConfirmPrompt Tab, Enter, and Escape through the shared confirm resolver"
     );
 }
 

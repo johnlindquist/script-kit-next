@@ -25,31 +25,6 @@ fn initialize_startup_diagnostics() {
 }
 
 fn register_startup_window_routers() {
-    // Register the in-window confirm router so `confirm_with_parent_dialog`
-    // can push `AppView::ConfirmPrompt` onto the main `ScriptListApp` entity
-    // instead of opening the popup window when the main window is active.
-    //
-    // The window's root view is `gpui_component::Root` wrapping the actual
-    // `ScriptListApp` AnyView, so the router unwraps Root → inner AnyView →
-    // ScriptListApp before pushing the confirm prompt.
-    crate::confirm::parent_dialog::register_in_window_router(Box::new(
-        |any_view, options, sender, cx| {
-            let root = match any_view.downcast::<gpui_component::Root>() {
-                Ok(r) => r,
-                Err(_) => return false,
-            };
-            let inner_any = root.read(cx).view().clone();
-            if let Ok(entity) = inner_any.downcast::<ScriptListApp>() {
-                entity.update(cx, |app, cx| {
-                    app.open_confirm_prompt(options, sender, cx);
-                });
-                true
-            } else {
-                false
-            }
-        },
-    ));
-
     // Notes → main Agent Chat handoff: the dual-compiled Notes window code
     // cannot name `ScriptListApp`, so the binary registers the
     // downcast-and-stage closure here. Staging happens BEFORE ShowMain so the

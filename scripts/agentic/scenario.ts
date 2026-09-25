@@ -7941,72 +7941,70 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
       cancelText,
       requestId: "agentic-destructive-confirm-open",
     }, 8000);
+    // Every confirmation is the shared confirm popup: a child window, not a
+    // state of the main window. Poll the window list for it.
     const statePolls: Record<string, unknown>[] = [];
     let stateBefore: Record<string, unknown> = {};
+    let popupBefore: Record<string, unknown> | null = null;
     for (let attempt = 0; attempt < 30; attempt += 1) {
       stateBefore = rpcResponse(await rpc(opts.session, {
         type: "getState",
         requestId: `agentic-destructive-confirm-state-before-${attempt}`,
         summaryOnly: true,
       }, "stateResult", 8000));
+      popupBefore = promptPopupWindowFromList(await rpc(opts.session, {
+        type: "listAutomationWindows",
+        requestId: `agentic-destructive-confirm-windows-before-${attempt}`,
+      }, "automationWindowListResult", 5000));
       statePolls.push({
         attempt,
         promptType: stateBefore.promptType ?? null,
         windowVisible: stateBefore.windowVisible ?? null,
-        surfaceKind: stateBefore.surfaceKind ?? null,
+        confirmPopup: popupBefore?.id ?? null,
       });
-      if (String(stateBefore.promptType ?? "") === "confirmPrompt") {
+      if (popupBefore?.id === "confirm-popup") {
         break;
       }
       await Bun.sleep(200);
     }
-    const waitReceipt = { kind: "manual-getState-poll", polls: statePolls };
+    const waitReceipt = { kind: "manual-window-list-poll", polls: statePolls };
     const elementsBefore = rpcResponse(await rpc(opts.session, {
       type: "getElements",
+      target: { type: "id", id: "confirm-popup" },
       requestId: "agentic-destructive-confirm-elements-before",
       limit: 80,
     }, "elementsResult", 8000));
     const keyboardBefore: Record<string, unknown> = {};
-    const keyboardError = "getKeyboardInfo protocol primitive is unavailable; using activeFooter state for footer safety proof";
+    const keyboardError = "getKeyboardInfo protocol primitive is unavailable; using the popup's cancel button for Escape safety proof";
 
     const elements = asArray(elementsBefore.elements).map(asRecord);
-    const footerButtons = asArray(asRecord(stateBefore.activeFooter).buttons).map(asRecord);
-    const footerConfirmButton = footerButtons.find((button) => String(button.action ?? "") === "apply") ?? null;
-    const footerCancelButton = footerButtons.find((button) => String(button.action ?? "") === "close") ?? null;
-    const confirmButton = elements.find((element) =>
-      String(element.id ?? "").startsWith("button:0:")
-      || String(element.label ?? "") === confirmText
-    ) ?? footerConfirmButton;
-    const cancelButton = elements.find((element) =>
-      String(element.id ?? "").startsWith("button:1:")
-      || String(element.label ?? "") === cancelText
-    ) ?? footerCancelButton;
-    const confirmPromptId = String(stateBefore.promptType ?? "") === "confirmPrompt"
-      ? String(stateBefore.promptId ?? stateBefore.promptType)
-      : null;
-    const hostSurface = String(stateBefore.surfaceKind ?? stateBefore.semanticSurface ?? "");
-    const footerBindings = asRecord(keyboardBefore.footerBindings);
-    const activeFooterText = JSON.stringify(stateBefore.activeFooter ?? {}).toLowerCase();
+    const confirmButton = elements.find((element) => String(element.semanticId ?? "") === "button:0:confirm") ?? null;
+    const cancelButton = elements.find((element) => String(element.semanticId ?? "").endsWith(":cancel")) ?? null;
+    const confirmPromptId = popupBefore?.id === "confirm-popup" ? String(popupBefore.id) : null;
+    const hostSurface = String(popupBefore?.parentWindowId ?? "");
     const escapeCancelReceipt = await sendAndAwaitParse(opts.session, {
       type: "simulateKey",
       key: "escape",
       modifiers: [],
       requestId: "agentic-destructive-confirm-escape",
     }, 8000);
+    await Bun.sleep(300);
     const stateAfterCancel = rpcResponse(await rpc(opts.session, {
       type: "getState",
       requestId: "agentic-destructive-confirm-state-after-cancel",
       summaryOnly: true,
     }, "stateResult", 8000));
+    const popupAfterCancel = promptPopupWindowFromList(await rpc(opts.session, {
+      type: "listAutomationWindows",
+      requestId: "agentic-destructive-confirm-windows-after-cancel",
+    }, "automationWindowListResult", 5000));
 
-    const confirmSurfaceOpen = String(stateBefore.promptType ?? "") === "confirmPrompt";
+    const confirmSurfaceOpen = confirmPromptId !== null;
     const buttonsExposed = confirmButton != null && cancelButton != null;
-    const cancelDismissed = String(stateAfterCancel.promptType ?? "") !== "confirmPrompt";
-    const noMutationAfterCancel = cancelDismissed;
-    const footerActionsSafe =
-      String(footerBindings.escape ?? footerBindings.Escape ?? "").toLowerCase().includes("cancel")
-      || JSON.stringify(keyboardBefore).toLowerCase().includes("cancel")
-      || activeFooterText.includes("cancel");
+    const cancelDismissed = popupAfterCancel?.id !== "confirm-popup";
+    const noMutationAfterCancel = cancelDismissed
+      && String(stateAfterCancel.promptType ?? "") === String(stateBefore.promptType ?? "");
+    const footerActionsSafe = String(cancelButton?.text ?? "") === cancelText;
     const status = confirmSurfaceOpen
       && buttonsExposed
       && cancelDismissed
@@ -8044,16 +8042,16 @@ export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
         readyReceipt,
         stopReceipt,
         confirmPromptId,
-        confirmRouteGeneration: stateBefore.generation ?? null,
-        confirmSurfaceKind: stateBefore.surfaceKind ?? stateBefore.promptType ?? null,
-        parentAutomationWindowId: stateBefore.automationWindowId ?? null,
-        previousViewIdentity: stateBefore.previousViewIdentity ?? null,
+        confirmRouteGeneration: popupBefore?.generation ?? null,
+        confirmSurfaceKind: popupBefore?.semanticSurface ?? null,
+        parentAutomationWindowId: popupBefore?.parentWindowId ?? null,
+        previousViewIdentity: stateBefore.promptType ?? null,
         dangerActionId: requestedFixture,
         dangerActionLabel: confirmText,
         dangerLevel: "dry-run",
-        confirmButtonSemanticId: confirmButton ? String(confirmButton.id ?? confirmButton.action ?? "") : null,
-        cancelButtonSemanticId: cancelButton ? String(cancelButton.id ?? cancelButton.action ?? "") : null,
-        focusedButtonBefore: elementsBefore.selectedId ?? elementsBefore.focusedId ?? null,
+        confirmButtonSemanticId: confirmButton ? String(confirmButton.semanticId ?? "") : null,
+        cancelButtonSemanticId: cancelButton ? String(cancelButton.semanticId ?? "") : null,
+        focusedButtonBefore: elementsBefore.focusedSemanticId ?? null,
         tabFocusSamples: [],
         enterResolutionSamples: [],
         escapeCancelReceipt,
@@ -8181,9 +8179,9 @@ export async function runSdkConfirmRuntimeProofScenario(opts: {
     },
     hostRoute: {
       expectedPromptMessage: "ShowConfirm",
-      expectedSurface: "ConfirmPrompt",
+      expectedSurface: "confirm-popup",
       hostHandler: "src/prompt_handler/mod.rs::PromptMessage::ShowConfirm",
-      sharedRoute: "open_confirm_prompt",
+      sharedRoute: "open_main_window_confirm",
     },
     destructiveCommandExecuted: false,
     systemCommandRequested: false,
@@ -8227,20 +8225,26 @@ export async function runSdkConfirmRuntimeProofScenario(opts: {
       requestId: runRequestId,
     }, 8000, sessionEnv);
 
+    // SDK confirm() opens the shared confirm popup over the main window; the
+    // main window keeps showing whatever it showed before.
     const statePolls: Record<string, unknown>[] = [];
+    let popupBefore: Record<string, unknown> | null = null;
     for (let attempt = 0; attempt < 40; attempt += 1) {
       stateBefore = rpcResponse(await rpc(opts.session, {
         type: "getState",
         requestId: `sdk-confirm-state-before-${attempt}`,
         summaryOnly: true,
       }, "stateResult", 8000, sessionEnv));
+      popupBefore = promptPopupWindowFromList(await rpc(opts.session, {
+        type: "listAutomationWindows",
+        requestId: `sdk-confirm-windows-before-${attempt}`,
+      }, "automationWindowListResult", 5000, sessionEnv));
       statePolls.push({
         attempt,
         promptType: stateBefore.promptType ?? null,
-        surfaceKind: stateBefore.surfaceKind ?? null,
-        semanticSurface: stateBefore.semanticSurface ?? null,
+        confirmPopup: popupBefore?.id ?? null,
       });
-      if (String(stateBefore.promptType ?? "") === "confirmPrompt") {
+      if (popupBefore?.id === "confirm-popup") {
         break;
       }
       await Bun.sleep(100);
@@ -8248,21 +8252,14 @@ export async function runSdkConfirmRuntimeProofScenario(opts: {
 
     elementsBefore = rpcResponse(await rpc(opts.session, {
       type: "getElements",
+      target: { type: "id", id: "confirm-popup" },
       requestId: "sdk-confirm-elements-before",
       limit: 80,
     }, "elementsResult", 8000, sessionEnv));
 
     const elements = asArray(elementsBefore.elements).map(asRecord);
-    const footerButtons = asArray(asRecord(stateBefore.activeFooter).buttons).map(asRecord);
-    const activeFooterText = JSON.stringify(stateBefore.activeFooter ?? {}).toLowerCase();
-    const confirmButton = elements.find((element) =>
-      String(element.id ?? "").startsWith("button:0:")
-      || String(element.label ?? "") === "Confirm SDK"
-    ) ?? footerButtons.find((button) => String(button.action ?? "") === "apply") ?? null;
-    const cancelButton = elements.find((element) =>
-      String(element.id ?? "").startsWith("button:1:")
-      || String(element.label ?? "") === "Cancel SDK"
-    ) ?? footerButtons.find((button) => String(button.action ?? "") === "close") ?? null;
+    const confirmButton = elements.find((element) => String(element.semanticId ?? "") === "button:0:confirm") ?? null;
+    const cancelButton = elements.find((element) => String(element.semanticId ?? "").endsWith(":cancel")) ?? null;
 
     escapeCancelReceipt = await sendWithoutAwaitParse(opts.session, {
       type: "simulateKey",
@@ -8295,25 +8292,25 @@ export async function runSdkConfirmRuntimeProofScenario(opts: {
       requestId: "sdk-confirm-state-after-resolve",
       summaryOnly: true,
     }, "stateResult", 8000, sessionEnv));
+    const popupAfterResolve = promptPopupWindowFromList(await rpc(opts.session, {
+      type: "listAutomationWindows",
+      requestId: "sdk-confirm-windows-after-resolve",
+    }, "automationWindowListResult", 5000, sessionEnv));
 
     stopReceipt = parseMaybeJson(
       (await runTool(["bash", "scripts/agentic/session.sh", "stop", opts.session], "sdk-confirm:session-stop", sessionEnv)).stdout,
     );
 
-    const confirmSurfaceOpen = String(stateBefore.promptType ?? "") === "confirmPrompt";
-    const promptDismissed = String(stateAfterResolve.promptType ?? "") !== "confirmPrompt";
-    const confirmButtonText = String(confirmButton ? confirmButton.label ?? confirmButton.text ?? "" : "");
-    const cancelButtonText = String(cancelButton ? cancelButton.label ?? cancelButton.text ?? "" : "");
-    const footerHasApply = activeFooterText.includes("apply") || footerButtons.some((button) => String(button.action ?? "") === "apply");
-    const footerHasClose = activeFooterText.includes("close") || footerButtons.some((button) => String(button.action ?? "") === "close");
+    const confirmSurfaceOpen = popupBefore?.id === "confirm-popup";
+    const promptDismissed = popupAfterResolve?.id !== "confirm-popup";
+    const confirmButtonText = String(confirmButton?.text ?? "");
+    const cancelButtonText = String(cancelButton?.text ?? "");
     const scriptResolvedFalse = scriptResult.phase === "resolved"
       && scriptResult.result === false
       && scriptResult.resultType === "boolean";
     const status = confirmSurfaceOpen
       && confirmButtonText === "Confirm SDK"
       && cancelButtonText === "Cancel SDK"
-      && footerHasApply
-      && footerHasClose
       && promptDismissed
       && scriptResolvedFalse
       ? "pass"
@@ -8331,26 +8328,19 @@ export async function runSdkConfirmRuntimeProofScenario(opts: {
         ...baseProof,
         promptBeforeResolve: {
           promptType: stateBefore.promptType ?? null,
-          semanticSurface: stateBefore.semanticSurface ?? null,
-          surfaceKind: stateBefore.surfaceKind ?? null,
-          promptId: stateBefore.promptId ?? null,
-          automationWindowId: stateBefore.automationWindowId ?? null,
-          activeFooter: stateBefore.activeFooter ?? null,
+          confirmPopup: popupBefore,
         },
         elementsBeforeResolve: {
-          panelSemanticId: elements.find((element) => String(element.id ?? "").startsWith("panel:"))?.id ?? null,
-          confirmButtonSemanticId: confirmButton ? confirmButton.id ?? confirmButton.action ?? null : null,
+          panelSemanticId: elements.find((element) => String(element.semanticId ?? "").startsWith("panel:"))?.semanticId ?? null,
+          confirmButtonSemanticId: confirmButton?.semanticId ?? null,
           confirmButtonText,
-          cancelButtonSemanticId: cancelButton ? cancelButton.id ?? cancelButton.action ?? null : null,
+          cancelButtonSemanticId: cancelButton?.semanticId ?? null,
           cancelButtonText,
-          selectedOrFocusedId: elementsBefore.selectedId ?? elementsBefore.focusedId ?? null,
+          selectedOrFocusedId: elementsBefore.focusedSemanticId ?? null,
         },
         footerAndKeys: {
-          footerHasApply,
-          footerHasClose,
           cancelKey: "Escape",
           escapeCancelReceipt,
-          keyboardPolicy: stateBefore.keyboardPolicy ?? "NoEditableKeyboard/source-contract",
         },
         scriptResult: {
           path: receiptPath,
@@ -8456,7 +8446,7 @@ export async function runSdkConfirmRuntimeProofScenario(opts: {
         scriptResult: { path: receiptPath, ...scriptResult },
         cleanup: {
           stateAfterResolve,
-          promptDismissed: String(stateAfterResolve.promptType ?? "") !== "confirmPrompt",
+          promptDismissed: null,
           scriptReceiptWritten: scriptResult.phase === "resolved",
           stopReceipt,
           sessionDir,
@@ -8866,7 +8856,7 @@ export async function runPopupFocusKeycapVisualSemanticsStressScenario(opts: {
     linearIssue: "file_linear:popup_focus_keycap_visual_semantics_receipts_missing",
     popupFocusKeycapVisualSemantics: {
       kind: "ux.popupFocusKeycapVisualSemantics", popupKeycapStressId: "loop-twenty-three-popup-focus-keycap",
-      requestedSurfaces: opts.surfaces ?? ["actionsDialog", "confirmPrompt"],
+      requestedSurfaces: opts.surfaces ?? ["actionsDialog", "confirmDialog"],
       surfaceSamples: [], surface: null, popupKind: null, automationWindowId: null, osWindowId: null, parentAutomationWindowId: null, semanticSurface: null,
       stateReceipt: null, elementsReceipt: null, popupFocusKeycapVisualSemanticsReceipt: null,
       keycapSamples: [], keycapRole: null, keycapLabel: null, shortcutLabel: null, normalizedShortcutTokens: [], platformGlyph: null,

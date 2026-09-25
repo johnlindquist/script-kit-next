@@ -7168,7 +7168,12 @@ impl Window {
         cx.propagate_event = true;
         self.dispatch_keystroke_interceptors(event, self.context_stack(), cx);
         if !cx.propagate_event {
-            self.finish_dispatch_key_event(event, dispatch_path, self.context_stack(), cx);
+            // Script Kit: an interceptor that stops propagation owns the
+            // keystroke. Finishing dispatch here would still hand it to the
+            // first key listener on the focus path, because the listener
+            // loop invokes a listener before it checks propagation — so a
+            // key a modal consumed also reached the window's outermost
+            // capture handler (double-routed Tab, Escape closing the parent).
             return;
         }
 

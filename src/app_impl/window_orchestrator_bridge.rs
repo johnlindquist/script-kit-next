@@ -62,7 +62,6 @@ impl ScriptListApp {
                 AppView::AgentChatView { .. } => FocusTarget::AgentChat,
                 AppView::DayPage { .. } => FocusTarget::EditorPrompt,
                 AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
-                AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
                 AppView::PermissionsWizardView { .. } => FocusTarget::AppRoot,
             }),
             crate::window_orchestrator::FocusToken::ChatComposer => Some(FocusTarget::AgentChat),

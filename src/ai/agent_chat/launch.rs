@@ -3,7 +3,7 @@ use std::sync::{Arc, OnceLock};
 
 use anyhow::{anyhow, Context as _, Result};
 
-use crate::ai::agent_chat::goose::{GooseAcpRuntime, GooseProfileLaunch};
+use crate::ai::agent_chat::goose::{GooseProfileLaunch, GooseRuntime};
 use crate::ai::agent_chat::profiles::{
     resolve_effective_profile, resolve_effective_profile_decision,
     resolve_quick_ai_profile_decision, AgentChatProfileContext, ResolvedAgentChatProfile,
@@ -105,7 +105,7 @@ impl AgentChatLaunch {
             key: self.warm_key.clone(),
             cwd: self.cwd.clone(),
             factory: Arc::new(move || {
-                let runtime = GooseAcpRuntime::spawn(goose.spec_for_spawn())?;
+                let runtime = GooseRuntime::spawn(goose.spec_for_spawn())?;
                 Ok(Arc::new(runtime) as Arc<dyn AgentChatConnection>)
             }),
         }

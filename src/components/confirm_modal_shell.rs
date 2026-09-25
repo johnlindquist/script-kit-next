@@ -1,4 +1,6 @@
-use gpui::{div, prelude::*, px, AnyElement, Div, Rgba, SharedString, Stateful};
+use gpui::{
+    div, point, prelude::*, px, size, AnyElement, Bounds, Div, Pixels, Rgba, SharedString, Stateful,
+};
 
 use crate::components::footer_chrome::{
     render_footer_hint_action_button_frame, FooterHintActionButtonFrameSpec,
@@ -19,6 +21,52 @@ pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_WIDTH: f32 = 2.0;
 pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_HEIGHT: f32 = 14.0;
 pub(crate) const CONFIRM_MODAL_HEADER_GAP: f32 = 8.0;
 pub(crate) const CONFIRM_MODAL_RADIUS: f32 = 8.0;
+/// Gap kept between a modal and the edges of the screen's visible area.
+pub(crate) const MODAL_SCREEN_MARGIN_PX: f32 = 12.0;
+
+/// Place a `width` × `height` modal over its parent window.
+///
+/// Centers on the part of the parent that is on screen and keeps the whole
+/// modal inside the display's visible area (menu bar and Dock excluded), so a
+/// parent parked at a screen edge never pushes its modal off screen. The modal
+/// keeps its own size instead of shrinking to a small parent — that clipped
+/// its buttons — and only shrinks to fit the screen.
+pub(crate) fn modal_bounds_over_parent(
+    parent: Bounds<Pixels>,
+    display: Option<Bounds<Pixels>>,
+    width: Pixels,
+    height: Pixels,
+) -> Bounds<Pixels> {
+    let Some(display) = display else {
+        return Bounds::centered_at(parent.center(), size(width, height));
+    };
+    let margin = px(MODAL_SCREEN_MARGIN_PX);
+    let area = Bounds {
+        origin: display.origin + point(margin, margin),
+        size: size(
+            (display.size.width - margin * 2.0).max(px(0.0)),
+            (display.size.height - margin * 2.0).max(px(0.0)),
+        ),
+    };
+    let width = width.min(area.size.width);
+    let height = height.min(area.size.height);
+    let on_screen = parent.intersect(&display);
+    let anchor = if on_screen.is_empty() {
+        parent.center()
+    } else {
+        on_screen.center()
+    };
+    let x = (anchor.x - width / 2.0)
+        .max(area.left())
+        .min(area.right() - width);
+    let y = (anchor.y - height / 2.0)
+        .max(area.top())
+        .min(area.bottom() - height);
+    Bounds {
+        origin: point(x, y),
+        size: size(width, height),
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct ConfirmModalShellConfig {

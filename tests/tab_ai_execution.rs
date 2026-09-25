@@ -381,39 +381,6 @@ fn prompt_handler_completes_tab_ai_on_real_script_lifecycle_events() {
     );
 }
 
-#[test]
-fn tab_ai_success_opens_real_save_offer_overlay() {
-    let source =
-        std::fs::read_to_string("src/app_impl/agent_handoff/mod.rs").expect("read agent_handoff");
-    let normalized = normalize_ws(&source);
-    assert!(
-        normalized.contains("self.open_tab_ai_save_offer(record, cx);"),
-        "successful Tab AI runs should surface a real save offer UI"
-    );
-    assert!(
-        normalized.contains("pub(crate) fn render_tab_ai_save_offer_overlay")
-            && normalized.contains(".id(\"tab-ai-save-offer\")"),
-        "save offer overlay must be renderable and keyboard-driven"
-    );
-}
-
-#[test]
-fn render_impl_layers_tab_ai_save_offer_overlay_above_main_content() {
-    let source =
-        std::fs::read_to_string("src/main_sections/render_impl.rs").expect("read render_impl");
-    let normalized = normalize_ws(&source);
-    assert!(
-        normalized.contains(
-            "let tab_ai_save_offer_overlay = self.render_tab_ai_save_offer_overlay(window, cx);"
-        ),
-        "render_impl must build the save-offer overlay"
-    );
-    assert!(
-        normalized.contains("tab_ai_save_offer_overlay"),
-        "render_impl must layer the save-offer overlay above main content"
-    );
-}
-
 // ── Public Export Coverage ──
 
 #[test]

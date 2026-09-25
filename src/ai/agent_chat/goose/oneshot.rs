@@ -85,7 +85,7 @@ pub(crate) fn stream(
     spec.recipe = recipe;
     spec.session_title = "Script Kit completion".to_string();
     spec.hidden_session = true;
-    let runtime = super::runtime::GooseAcpRuntime::spawn(spec)?;
+    let runtime = super::runtime::GooseRuntime::spawn(spec)?;
 
     let mut blocks = vec![ContentBlock::Text(TextContent::new(request.prompt))];
     blocks.extend(request.images.into_iter().map(ContentBlock::Image));

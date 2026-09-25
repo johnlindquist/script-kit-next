@@ -762,22 +762,6 @@ fn agent_handoff_no_longer_has_overlay_open_close() {
 }
 
 // =========================================================================
-// Save-offer overlay rendering (still active)
-// =========================================================================
-
-#[test]
-fn render_impl_renders_tab_ai_save_offer_overlay() {
-    assert!(
-        RENDER_IMPL_SOURCE.contains("render_tab_ai_save_offer_overlay"),
-        "render_impl.rs must build the Tab AI save-offer overlay"
-    );
-    assert!(
-        RENDER_IMPL_SOURCE.contains("tab_ai_save_offer_overlay"),
-        "render_impl.rs must compose the Tab AI save-offer overlay into the overlay stack"
-    );
-}
-
-// =========================================================================
 // ScriptList fallback routes through the shared Cmd+Enter AI helper
 // =========================================================================
 

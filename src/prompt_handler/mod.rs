@@ -3048,16 +3048,6 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
-                    AppView::ConfirmPrompt { options, .. } => (
-                        "confirmPrompt".to_string(),
-                        None,
-                        None,
-                        String::new(),
-                        0,
-                        0,
-                        -1,
-                        Some(options.title.to_string()),
-                    ),
                 };
                 let observation = self.prompt_observation(cx);
                 let (input_value, choice_count, visible_choice_count, selected_index) = observation
@@ -5843,51 +5833,28 @@ impl ScriptListApp {
                     ..Default::default()
                 };
 
-                if let Some(window) =
-                    current_window.filter(|_| !crate::runtime_policy::is_owned_evaluation())
-                {
-                    let binding = PromptCompletionBinding::sdk(id, self.response_sender.clone());
-                    if let Some(previous) = self.prompt_completion.replace(binding.clone()) {
-                        previous.retire();
-                    }
-                    let send_confirm = binding.clone();
-                    let confirm_app = cx.entity().downgrade();
-                    let cancel_app = confirm_app.clone();
-                    self.prepare_window_for_prompt("UI", "confirm", "");
-                    crate::confirm::open_parent_confirm_dialog(
-                        window,
-                        cx,
-                        options,
-                        move |_window, cx| {
-                            if let Err(error) =
-                                send_confirm.try_complete(PromptOutcome::Confirmed(true))
-                            {
-                                let _ = confirm_app.update(cx, |app, cx| {
-                                    app.show_error_toast(error.to_string(), cx)
-                                });
-                            }
-                        },
-                        move |_window, cx| {
-                            if let Err(error) =
-                                binding.try_complete(PromptOutcome::Confirmed(false))
-                            {
-                                let _ = cancel_app.update(cx, |app, cx| {
-                                    app.show_error_toast(error.to_string(), cx)
-                                });
-                            }
-                        },
-                    );
-                } else {
-                    let seed = PromptSeed::Confirm(ConfirmPromptSeed {
-                        common: PromptSeedCommon::sdk(id, None, self.response_sender.clone()),
-                        options,
-                    });
-                    if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                        self.show_error_toast(error.to_string(), cx);
-                        return;
-                    }
-                    self.prepare_constructed_sdk_prompt("confirm", false, cx);
+                let binding = PromptCompletionBinding::sdk(id, self.response_sender.clone());
+                if let Some(previous) = self.prompt_completion.replace(binding.clone()) {
+                    previous.retire();
                 }
+                self.prepare_window_for_prompt("UI", "confirm", "");
+                let live = binding.clone();
+                let app = cx.entity().downgrade();
+                self.open_main_window_confirm(
+                    options,
+                    // The question stops mattering when the script moves on.
+                    move || !live.observation().retired,
+                    move |confirmed, cx| {
+                        if let Err(error) =
+                            binding.try_complete(PromptOutcome::Confirmed(confirmed))
+                        {
+                            let _ = app.update(cx, |app, cx| {
+                                app.show_error_toast(error.to_string(), cx)
+                            });
+                        }
+                    },
+                    cx,
+                );
 
                 cx.notify();
             }

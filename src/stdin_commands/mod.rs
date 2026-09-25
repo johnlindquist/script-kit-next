@@ -448,7 +448,8 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open a deterministic in-window ConfirmPrompt fixture for visual/layout proof.
+    /// Open the shared confirm modal over the main window with fixture copy,
+    /// for visual, layout, and keyboard proof.
     OpenConfirmPrompt {
         #[serde(default)]
         title: Option<String>,

@@ -1894,6 +1894,8 @@ impl DayPageView {
         .detach();
     }
 
+    /// Ask through the shared confirm modal over the main window. Deferred
+    /// because the day page is usually updated from inside the app entity.
     fn open_deferred_confirm_prompt(
         &self,
         options: crate::confirm::ParentConfirmOptions,
@@ -1908,7 +1910,14 @@ impl DayPageView {
             cx.update(|cx| {
                 if let Some(app) = app.upgrade() {
                     app.update(cx, |app, cx| {
-                        app.open_confirm_prompt(options, sender, cx);
+                        app.open_main_window_confirm(
+                            options,
+                            || true,
+                            move |confirmed, _| {
+                                let _ = sender.try_send(confirmed);
+                            },
+                            cx,
+                        );
                     });
                 }
             });

@@ -176,7 +176,6 @@ impl PromptCompletionSink for BoundCompletionSink {
 #[derive(Clone)]
 pub(crate) struct PromptCompletionBinding {
     sink: Arc<BoundCompletionSink>,
-    pub(crate) confirm_lifetime: bool,
 }
 impl std::fmt::Debug for PromptCompletionBinding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -197,7 +196,6 @@ impl PromptCompletionBinding {
                 destination,
                 state: Mutex::new(PromptCompletionObservation::default()),
             }),
-            confirm_lifetime: false,
         }
     }
     pub(crate) fn sdk(id: String, sender: Option<SyncSender<Message>>) -> Self {
@@ -211,9 +209,6 @@ impl PromptCompletionBinding {
     }
     pub(crate) fn instance(&self) -> &PromptInstance {
         &self.sink.instance
-    }
-    pub(crate) fn is_confirm_lifetime(&self) -> bool {
-        self.confirm_lifetime
     }
     pub(crate) fn try_complete(
         &self,

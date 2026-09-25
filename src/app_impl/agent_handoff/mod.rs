@@ -4405,7 +4405,6 @@ impl ScriptListApp {
             AppView::DayPage { .. } => FocusTarget::EditorPrompt,
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
 
-            AppView::ConfirmPrompt { .. } => FocusTarget::AppRoot,
             AppView::PermissionsWizardView { .. } => FocusTarget::AppRoot,
         }
     }
@@ -5740,7 +5739,6 @@ impl ScriptListApp {
             AppView::SdkReferenceView { .. } => "SdkReferenceView".to_string(),
             AppView::TipsView { .. } => "TipsView".to_string(),
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView".to_string(),
-            AppView::ConfirmPrompt { .. } => "ConfirmPrompt".to_string(),
         }
     }
 
@@ -5874,8 +5872,7 @@ impl ScriptListApp {
             | AppView::ScriptIssuesView { .. }
             | AppView::ActionsDialog
             | AppView::InstalledKitsView { .. }
-            | AppView::PermissionsWizardView { .. }
-            | AppView::ConfirmPrompt { .. } => None,
+            | AppView::PermissionsWizardView { .. } => None,
         }
     }
 
@@ -5957,6 +5954,8 @@ impl ScriptListApp {
         }
     }
 
+    /// Offer to keep the script a successful Tab AI run produced, in the
+    /// shared confirm modal: ↵ Save, Esc Not Now.
     pub(crate) fn open_tab_ai_save_offer(
         &mut self,
         record: crate::ai::TabAiExecutionRecord,
@@ -5968,13 +5967,39 @@ impl ScriptListApp {
             filename_stem_sha256 = %crate::logging::log_private_user_value(&filename_stem),
             filename_stem_bytes = filename_stem.len(),
         );
+        let options = crate::confirm::ParentConfirmOptions {
+            title: "Save this script?".into(),
+            body: format!("Save it as {filename_stem}.ts to run it again from the launcher.")
+                .into(),
+            confirm_text: "Save".into(),
+            cancel_text: "Not Now".into(),
+            ..Default::default()
+        };
+        let open = std::rc::Rc::new(());
+        let still_open = std::rc::Rc::downgrade(&open);
         self.tab_ai_save_offer_state = Some(TabAiSaveOfferState {
             record,
             filename_stem,
-            error: None,
+            _open: open,
         });
         self.mark_main_data_changed();
         self.mark_main_presentation_changed();
+        let app = cx.entity().downgrade();
+        self.open_main_window_confirm(
+            options,
+            // Closing the offer from elsewhere closes the modal.
+            move || still_open.upgrade().is_some(),
+            move |save, cx| {
+                let _ = app.update(cx, |app, cx| {
+                    if save {
+                        app.save_tab_ai_script(cx);
+                    } else {
+                        app.close_tab_ai_save_offer(cx);
+                    }
+                });
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -6018,11 +6043,12 @@ impl ScriptListApp {
                             &state.filename_stem
                         ),
                     );
-                    if let Some(save_state) = &mut self.tab_ai_save_offer_state {
-                        save_state.error = Some(format!("Failed to save script: {error}").into());
-                    }
+                    // The modal has closed; say what went wrong where the
+                    // user is now looking.
+                    self.tab_ai_save_offer_state = None;
                     self.mark_main_data_changed();
-                    cx.notify();
+                    self.mark_main_presentation_changed();
+                    self.show_error_toast(format!("Failed to save script: {error}"), cx);
                     return;
                 }
             };
@@ -6099,109 +6125,6 @@ impl ScriptListApp {
             prompts::CreationFeedbackPayload::generated_script(created_file_path),
             cx,
         );
-    }
-
-    fn handle_tab_ai_save_offer_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let key = event.keystroke.key.as_str();
-
-        if crate::ui_foundation::is_key_escape(key) {
-            self.close_tab_ai_save_offer(cx);
-            cx.stop_propagation();
-            return;
-        }
-
-        if crate::ui_foundation::is_key_enter(key) {
-            self.save_tab_ai_script(cx);
-            cx.stop_propagation();
-            return;
-        }
-
-        cx.propagate();
-    }
-
-    pub(crate) fn render_tab_ai_save_offer_overlay(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<gpui::AnyElement> {
-        let state = self.tab_ai_save_offer_state.as_ref()?;
-        let theme = &self.theme;
-
-        // Ensure the main focus handle is focused so key events route here
-        if !self.focus_handle.is_focused(window) {
-            window.focus(&self.focus_handle, cx);
-        }
-
-        // Whisper chrome colors — same tokens as the main Tab AI overlay
-        let bg_scrim = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            theme.colors.background.main,
-            crate::theme::opacity::OPACITY_NEAR_FULL,
-        ));
-        let text_primary = gpui::rgb(theme.colors.text.primary);
-        let error_color = gpui::rgb(theme.colors.ui.error);
-        let divider_rgba = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            theme.colors.text.primary,
-            crate::theme::opacity::OPACITY_GHOST,
-        ));
-
-        let hint_px: f32 = crate::window_resize::main_layout::HINT_STRIP_PADDING_X;
-
-        let message: SharedString = format!("Save as {}.ts?", state.filename_stem).into();
-
-        // Full-width inline panel — matches main Tab AI overlay chrome,
-        // not a floating card. Footer uses HintStrip with save-specific
-        // hints (justified exception: this is a confirmation dialog, not
-        // the primary input surface).
-        let overlay = div()
-            .id("tab-ai-save-offer")
-            .debug_selector(|| "tab-ai-save-offer".into())
-            .absolute()
-            .inset_0()
-            .track_focus(&self.focus_handle)
-            .flex()
-            .flex_col()
-            .bg(bg_scrim)
-            // Message row — bare text, no card, no accent bar
-            .child(
-                div().w_full().px(px(hint_px)).py(px(10.)).child(
-                    div()
-                        .text_sm()
-                        .font_family(crate::list_item::FONT_MONO)
-                        .text_color(text_primary)
-                        .child(message),
-                ),
-            )
-            // Hairline divider — ghost opacity
-            .child(div().w_full().h(px(1.)).bg(divider_rgba))
-            // Error message if present — below divider, minimal
-            .when_some(state.error.clone(), |d, msg| {
-                d.child(
-                    div()
-                        .w_full()
-                        .px(px(hint_px))
-                        .py(px(4.))
-                        .text_xs()
-                        .text_color(error_color)
-                        .child(msg),
-                )
-            })
-            // Spacer pushes footer to bottom
-            .child(div().flex_1())
-            // Footer — save-specific hint strip via shared component
-            // (justified exception: confirmation dialog uses ↵ Save / Esc Dismiss
-            // instead of the canonical three-key strip)
-            .child(components::HintStrip::new(vec![
-                "\u{21B5} Save".into(),
-                "Esc Dismiss".into(),
-            ]))
-            .on_key_down(cx.listener(Self::handle_tab_ai_save_offer_key_down));
-
-        Some(overlay.into_any_element())
     }
 }
 

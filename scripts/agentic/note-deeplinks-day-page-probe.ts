@@ -89,10 +89,14 @@ async function dayPageElementsText(driver: Driver): Promise<string> {
   return JSON.stringify(elements);
 }
 
-async function waitForPromptType(driver: Driver, promptType: string, label: string) {
+/**
+ * A deep-link confirmation is the shared confirm modal over the day page: the
+ * popup opens and the day page stays underneath (it is never replaced).
+ */
+async function waitForConfirmModal(driver: Driver, label: string) {
   const opened = await pollUntil(label, async () => {
     const state = await getStateSummary(driver);
-    return state.promptType === promptType;
+    return state.promptType === "dayPage" && (await confirmWindows(driver)).length > 0;
   });
   return {
     opened,
@@ -105,7 +109,7 @@ async function closeConfirmWithEscape(driver: Driver, label: string) {
   await driver.simulateKey("escape");
   const closed = await pollUntil(`${label}-confirm-closed`, async () => {
     const state = await getStateSummary(driver);
-    return state.promptType === "dayPage";
+    return state.promptType === "dayPage" && (await confirmWindows(driver)).length === 0;
   });
   return {
     closed,
@@ -141,7 +145,7 @@ try {
   const runSeed = asObj(await setDayPageInput(driver, runLink));
   check("run_link_seeded", runSeed.success === true, { batch: runSeed });
   await driver.simulateKey(".", ["cmd"]);
-  const runConfirm = await waitForPromptType(driver, "confirmPrompt", "run-confirm-open");
+  const runConfirm = await waitForConfirmModal(driver, "run-confirm-open");
   check("cmd_dot_on_run_link_opens_confirm", runConfirm.opened, runConfirm);
   const runClose = await closeConfirmWithEscape(driver, "run");
   check(
@@ -154,7 +158,7 @@ try {
   const spineSeed = asObj(await setDayPageInput(driver, spineLink));
   check("spine_link_seeded", spineSeed.success === true, { batch: spineSeed });
   await driver.simulateKey(".", ["cmd"]);
-  const spineModal = await waitForPromptType(driver, "confirmPrompt", "spine-modal-open");
+  const spineModal = await waitForConfirmModal(driver, "spine-modal-open");
   check("cmd_dot_on_spine_link_opens_context_modal", spineModal.opened, spineModal);
   const spineClose = await closeConfirmWithEscape(driver, "spine");
   check(
@@ -195,11 +199,7 @@ try {
     batch: unsupportedKitSeed,
   });
   await driver.simulateKey(".", ["cmd"]);
-  const unsupportedModal = await waitForPromptType(
-    driver,
-    "confirmPrompt",
-    "unsupported-kit-context-modal-open",
-  );
+  const unsupportedModal = await waitForConfirmModal(driver, "unsupported-kit-context-modal-open");
   check("unsupported_kit_context_opens_helpful_modal", unsupportedModal.opened, {
     ...unsupportedModal,
     elements: await dayPageElementsText(driver),
@@ -231,11 +231,7 @@ try {
   check("mouse_run_link_click_dispatches", mouseRunClick.every((result) => result.success), {
     click: mouseRunClick,
   });
-  const mouseRunConfirm = await waitForPromptType(
-    driver,
-    "confirmPrompt",
-    "mouse-run-confirm-open",
-  );
+  const mouseRunConfirm = await waitForConfirmModal(driver, "mouse-run-confirm-open");
   check("mouse_run_link_opens_confirm", mouseRunConfirm.opened, mouseRunConfirm);
   const mouseRunClose = await closeConfirmWithEscape(driver, "mouse-run");
   check(
@@ -253,11 +249,7 @@ try {
   check("mouse_unknown_spine_click_dispatches", mouseUnknownClick.every((result) => result.success), {
     click: mouseUnknownClick,
   });
-  const mouseUnknownModal = await waitForPromptType(
-    driver,
-    "confirmPrompt",
-    "mouse-unknown-spine-modal-open",
-  );
+  const mouseUnknownModal = await waitForConfirmModal(driver, "mouse-unknown-spine-modal-open");
   check("mouse_unknown_spine_opens_context_modal", mouseUnknownModal.opened, mouseUnknownModal);
   const mouseUnknownClose = await closeConfirmWithEscape(driver, "mouse-unknown-spine");
   check(

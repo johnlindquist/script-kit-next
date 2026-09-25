@@ -399,13 +399,6 @@ impl ScriptListApp {
                     let report = report.clone();
                     self.copy_script_issues_to_clipboard(&report, cx);
                 } else if self.dispatch_kit_store_remove_footer_action(cx) {
-                } else if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
-                    tracing::info!(
-                        target: "script_kit::footer_popup",
-                        event = "confirm_prompt_footer_apply",
-                        "Confirming in-window confirm prompt from native footer"
-                    );
-                    self.resolve_confirm_prompt(true, window, cx);
                 } else if let AppView::QuickTerminalView { entity } = &self.current_view {
                     let entity = entity.clone();
                     tracing::info!(
@@ -460,13 +453,6 @@ impl ScriptListApp {
                 } else if self.dispatch_kit_store_browse_back_footer_action(window, cx)
                     || self.dispatch_day_page_preview_footer_action(action, window, cx)
                 {
-                } else if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
-                    tracing::info!(
-                        target: "script_kit::footer_popup",
-                        event = "confirm_prompt_footer_close",
-                        "Cancelling in-window confirm prompt from native footer"
-                    );
-                    self.resolve_confirm_prompt(false, window, cx);
                 } else if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -809,24 +795,6 @@ impl ScriptListApp {
         if let AppView::NotesBrowseView { search } = &self.current_view {
             let has_selection = Self::notes_browse_selected_visible_row(search).is_some();
             return notes_browse_footer_buttons(enabled, search.destination, has_selection);
-        }
-
-        // ConfirmPrompt: Apply (Confirm) + Close (Cancel) labeled per options.
-        if let AppView::ConfirmPrompt {
-            options,
-            focused_button,
-            ..
-        } = &self.current_view
-        {
-            let buttons = self.confirm_prompt_footer_buttons(options, *focused_button);
-            tracing::debug!(
-                target: "script_kit::footer_popup",
-                event = "main_window_footer_buttons_resolved",
-                view = ?self.current_view,
-                button_count = buttons.len(),
-                "Resolved ConfirmPrompt footer buttons"
-            );
-            return buttons;
         }
 
         // Quick Terminal: scoped Close (+ optional Apply) — never Run/AI/Actions.
@@ -2003,9 +1971,6 @@ impl ScriptListApp {
                 Some((compact_ai_view_type_for_mode(self.main_window_mode), 0))
             }
             AppView::DayPage { .. } => Some((ViewType::MainWindow, 0)),
-            // In-window confirm participates in the canonical 480px main
-            // shell; only its body controls differ from searchable views.
-            AppView::ConfirmPrompt { .. } => Some((ViewType::MainWindow, 0)),
         }
     }
 
@@ -2111,58 +2076,6 @@ impl ScriptListApp {
         }
 
         self.calculate_window_size_params()
-    }
-
-    /// Returns the focused button when the active view is `ConfirmPrompt`.
-    pub(crate) fn confirm_prompt_focused_button(&self) -> Option<ConfirmFocusedButton> {
-        if let AppView::ConfirmPrompt { focused_button, .. } = &self.current_view {
-            Some(*focused_button)
-        } else {
-            None
-        }
-    }
-
-    /// Flip Tab focus between Confirm and Cancel inside an active `ConfirmPrompt`.
-    pub(crate) fn toggle_confirm_prompt_focus(&mut self, cx: &mut Context<Self>) {
-        if let AppView::ConfirmPrompt { focused_button, .. } = &mut self.current_view {
-            *focused_button = focused_button.toggled();
-            cx.notify();
-        }
-    }
-
-    /// Send the confirm/cancel result to the awaiting caller and restore the
-    /// previous launcher view. No-op if the active view is not `ConfirmPrompt`.
-    pub(crate) fn resolve_confirm_prompt(
-        &mut self,
-        confirmed: bool,
-        window: &mut gpui::Window,
-        cx: &mut Context<Self>,
-    ) {
-        let AppView::ConfirmPrompt {
-            sender, previous, ..
-        } = &self.current_view
-        else {
-            return;
-        };
-        if let Err(error) = sender.try_send(confirmed) {
-            self.show_error_toast(format!("Unable to deliver confirmation: {error}"), cx);
-            return;
-        }
-        if self
-            .prompt_completion
-            .as_ref()
-            .is_some_and(|binding| binding.is_confirm_lifetime() && !binding.observation().retired)
-        {
-            // The bound completion owner restores only after the SDK/local sink succeeds.
-            return;
-        }
-        let previous = (**previous).clone();
-        self.transition_current_view_and_rekey_main_automation_surface(previous);
-        if matches!(self.current_view, AppView::ScriptList) {
-            self.flush_pending_main_menu_query(cx);
-        }
-        self.sync_main_footer_popup(window, cx);
-        cx.notify();
     }
 
     /// Update window size using deferred execution (SAFE during render/event cycles).

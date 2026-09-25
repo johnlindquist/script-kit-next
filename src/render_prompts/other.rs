@@ -478,7 +478,6 @@ impl ScriptListApp {
         let focus_handle = entity.read(cx).focus_handle.clone();
         window.focus(&focus_handle, cx);
 
-
         let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
             vec!["Esc Cancel".into()],
             None,
@@ -1023,94 +1022,6 @@ impl ScriptListApp {
                     .overflow_y_scrollbar()
                     .p(px(design_spacing.padding_xl))
                     .child(panel),
-            )
-            .when_some(
-                self.main_window_footer_slot(self.clickable_universal_footer_action_rail(cx)),
-                |d, footer| d.child(footer),
-            )
-            .into_any_element()
-    }
-
-    /// In-window confirm surface — replaces the popup confirm dialog when the
-    /// main window is the active context. Title + body in the main content
-    /// area; footer reuses the native AppKit footer with Apply/Close buttons
-    /// labeled per [`ParentConfirmOptions`].
-    pub(crate) fn render_confirm_prompt(
-        &mut self,
-        options: crate::confirm::ParentConfirmOptions,
-        focused_button: ConfirmFocusedButton,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        use gpui_component::button::ButtonVariant;
-
-        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
-        let theme = self.theme.clone();
-        let design_spacing = render_context.design_spacing;
-        let vibrancy_bg = get_vibrancy_background(render_context.theme);
-
-        let is_danger = matches!(options.confirm_variant, ButtonVariant::Danger);
-        let colors = crate::confirm::resolved_confirm_prompt_colors(theme.as_ref(), is_danger);
-        let metrics = crate::confirm::resolved_confirm_prompt_metrics(
-            design_spacing,
-            crate::components::footer_chrome::current_main_menu_footer_height(),
-        );
-        let title_color = rgba(colors.title_rgba);
-        let body_color = rgba(colors.body_rgba);
-
-        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
-            let key = event.keystroke.key.as_str();
-            if crate::ui_foundation::is_key_escape(key) {
-                this.resolve_confirm_prompt(false, window, cx);
-                cx.stop_propagation();
-            } else if key.eq_ignore_ascii_case("enter") {
-                let confirm = matches!(
-                    this.confirm_prompt_focused_button(),
-                    Some(ConfirmFocusedButton::Confirm),
-                );
-                this.resolve_confirm_prompt(confirm, window, cx);
-                cx.stop_propagation();
-            } else if key.eq_ignore_ascii_case("tab") {
-                this.toggle_confirm_prompt_focus(cx);
-                cx.stop_propagation();
-            }
-        });
-
-        let _ = focused_button; // focus state is reflected via the native footer
-
-        crate::components::prompt_shell_container(0.0, vibrancy_bg)
-            .id("confirm-prompt-shell")
-            .h(window_resize::main_window_content_height(
-                window_resize::layout::STANDARD_HEIGHT,
-            ))
-            .key_context("ConfirmPrompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .min_h(px(0.))
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(metrics.stack_gap))
-                    .p(px(metrics.content_padding))
-                    .child(
-                        div()
-                            .text_color(title_color)
-                            .text_size(px(metrics.title_font_size))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child(options.title.clone()),
-                    )
-                    .child(
-                        div()
-                            .max_w(px(metrics.body_max_width))
-                            .text_color(body_color)
-                            .text_size(px(metrics.body_font_size))
-                            .text_center()
-                            .child(options.body.clone()),
-                    ),
             )
             .when_some(
                 self.main_window_footer_slot(self.clickable_universal_footer_action_rail(cx)),

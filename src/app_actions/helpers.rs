@@ -25,7 +25,7 @@
 // |                      |               | AppLauncher, WindowSwitcher, FileSearch,  |
 // |                      |               | ThemeChooser, Webcam,                   |
 // |                      |               | ScratchPad, QuickTerminal, ShortcutRec,   |
-// |                      |               | AliasInput, NamingDialog, ActionsDialog   |
+// |                      |               | Alias modal, NamingDialog, ActionsDialog  |
 // | **Info / coming soon**| Toast (info) | Feature not yet available, empty state     |
 // | **Warning**          | Toast (warning)| Missing permissions, unsupported platform |
 // | **Error**            | Toast (error) | ALL failure paths — no exceptions          |

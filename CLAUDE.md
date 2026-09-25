@@ -310,6 +310,17 @@ Launcher-sourced Agent Chat opens stage the currently selected launcher row as a
 - Only entries where the user deliberately targeted a row (Cmd+Enter on a selection, actions payloads, explicit handoffs) may stage the focused row — and Cmd+Enter already suppresses the *default auto-selected* row via its empty-input guard in `agent_handoff/mod.rs`. Mirror that guard's intent in any new launcher-sourced entry.
 - The contract is locked by `quick_question_entry_suppresses_all_implicit_context` in `src/app_impl/agent_handoff/agent_chat_entry.rs`; keep new entry points honest against it rather than weakening the test.
 
+## Modal Contract
+
+Modals have repeatedly leaked keys (Tab that never moved focus, ⌘↵ that ran a destructive primary, Notes and detached Agent Chat modals whose keys went into the editor underneath, an Add Alias editor whose Enter ran a launcher row), replaced their window instead of floating over it, and hung off the edge of a display. The 2026-09-24 audit made every modal one component with one key owner:
+
+- Every modal is the shared confirm popup (`src/confirm/**`): a native glass child window over its parent — main, Notes, Dictation, or detached Agent Chat. Never render a modal as an `AppView` or an in-window overlay that replaces or covers the window's content. Main-window callers open it with `ScriptListApp::open_main_window_confirm` / `open_main_window_modal`; a modal that asks for a value uses `confirm::open_parent_input_dialog` with a `ConfirmTextField` (the alias editor does).
+- `components::confirm_modal_shell::modal_bounds_over_parent` places modals: over the on-screen part of the parent, fully inside the display's visible area, never shrunk to a small parent.
+- `install_modal_key_owner_interceptor` (`src/app_impl/startup/modal_key_owner.rs`) is registered before every other keystroke interceptor and routes keys to the popup (`confirm::route_window_key_to_confirm_popup`) from its parent window. Do not add confirm checks to individual interceptors or element key listeners — bindings such as Root's Tab focus cycle run before element listeners and pre-empt them.
+- `vendor/gpui/src/window.rs` returns immediately when an interceptor stops propagation. Upstream GPUI still hands that key to the first element listener on the focus path; restoring that behavior double-routes every modal key.
+- `confirm::confirm_window_key_intent` is the single key map: only a bare Enter activates; Esc and ⌘W dismiss; Tab/⇧Tab (and ←/→ without a field) move focus.
+- Prove modal changes with `bun scripts/agentic/modal-keyboard-audit-probe.ts`. It presses keys with `simulateGpuiEvent` on the window macOS would deliver them to (`simulateKey` calls surface methods directly and cannot show a leak) and checks each modal's real frame from the macOS window server against every display's visible area. GPUI reports window bounds relative to the window's own display, so automation bounds alone cannot prove a modal is on screen.
+
 # Agent Cargo Wrapper
 
 Every explicit `bun test` file or directory MUST start with `./`, `../`, or

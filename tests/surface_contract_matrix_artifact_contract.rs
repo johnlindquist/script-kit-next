@@ -170,7 +170,6 @@ fn matrix_exposes_known_native_footer_surfaces() {
         ("QuickTerminalView", Some("quick_terminal")),
         ("TermPrompt", None),
         ("MicroPrompt", None),
-        ("ConfirmPrompt", Some("confirm_prompt")),
         ("BrowseKitsView", Some("kit_store_browse")),
         ("InstalledKitsView", Some("kit_store_installed")),
     ] {

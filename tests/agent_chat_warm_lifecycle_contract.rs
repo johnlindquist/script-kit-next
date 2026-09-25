@@ -33,7 +33,7 @@ fn warm_session_lifecycle_symbols_are_explicit() {
 fn warm_session_manager_is_backend_neutral() {
     assert!(WARM_SESSION_SOURCE.contains("Arc<dyn AgentChatConnection>"));
     for forbidden in [
-        "GooseAcpRuntime",
+        "GooseRuntime",
         "GooseLaunchSpec",
         "AgentChatView",
         "AppView",
@@ -52,13 +52,13 @@ fn warm_session_manager_is_backend_neutral() {
 fn warm_session_lifecycle_routes_goose_only_through_launch_helper() {
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("warm_session_manager"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("GooseAcpRuntime::spawn"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("GooseRuntime::spawn"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_launch_with_cwd_override"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_launch_with_cwd_override"));
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("manager.acquire_ready_or_spawn_cold"));
     assert!(TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"));
     assert!(
-        !AGENT_CHAT_SETUP_SOURCE.contains("GooseAcpRuntime")
+        !AGENT_CHAT_SETUP_SOURCE.contains("GooseRuntime")
             && !AGENT_CHAT_SETUP_SOURCE.contains("AgentChatBackend::Goose"),
         "setup card routing must stay out of the goose warm path"
     );

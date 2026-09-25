@@ -390,15 +390,6 @@ enum AppView {
     },
     /// Today's brain day page in the main launcher window (same frame as ScriptList).
     DayPage { entity: Entity<DayPageView> },
-    /// In-window confirm state — replaces the popup dialog when the main window
-    /// is the active context. Restored to `previous` when the user confirms or
-    /// cancels via Esc / Enter / Tab + ↵ / footer Apply / Close.
-    ConfirmPrompt {
-        options: crate::confirm::ParentConfirmOptions,
-        sender: async_channel::Sender<bool>,
-        focused_button: ConfirmFocusedButton,
-        previous: Box<AppView>,
-    },
 }
 
 /// Exhaustive host-level header/input ownership for every main-window view.
@@ -447,26 +438,6 @@ impl MainViewHeaderInputPolicy {
             self,
             Self::ViewOwnedCanonicalInput | Self::ViewOwnedCanonicalMultilineInput
         )
-    }
-}
-
-/// Which button has Tab focus inside an in-window [`AppView::ConfirmPrompt`].
-///
-/// Default is `Confirm` so a bare ↵ activates the primary action, mirroring
-/// the popup confirm window's initial focus.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum ConfirmFocusedButton {
-    #[default]
-    Confirm,
-    Cancel,
-}
-
-impl ConfirmFocusedButton {
-    pub(crate) fn toggled(self) -> Self {
-        match self {
-            Self::Confirm => Self::Cancel,
-            Self::Cancel => Self::Confirm,
-        }
     }
 }
 
@@ -522,7 +493,6 @@ pub(crate) enum SurfaceKind {
     AttachmentPortalBrowser,
     AgentChat,
     DayPage,
-    ConfirmPrompt,
 }
 
 /// First-pass vocabulary for describing what kind of launcher surface an
@@ -943,7 +913,6 @@ impl AppView {
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
             AppView::AgentChatView { .. } => "AgentChatView",
             AppView::DayPage { .. } => "DayPage",
-            AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         }
     }
 
@@ -1019,7 +988,6 @@ impl AppView {
             | AppView::NotesBrowseView { .. } => SurfaceKind::AttachmentPortalBrowser,
             AppView::AgentChatView { .. } => SurfaceKind::AgentChat,
             AppView::DayPage { .. } => SurfaceKind::DayPage,
-            AppView::ConfirmPrompt { .. } => SurfaceKind::ConfirmPrompt,
         }
     }
 
@@ -1089,8 +1057,7 @@ impl AppView {
             | AppView::QuickTerminalView { .. }
             | AppView::CreationFeedback { .. }
             | AppView::ScriptIssuesView { .. }
-            | AppView::PermissionsWizardView { .. }
-            | AppView::ConfirmPrompt { .. } => MainViewHeaderInputPolicy::RootContextOnly,
+            | AppView::PermissionsWizardView { .. } => MainViewHeaderInputPolicy::RootContextOnly,
         }
     }
 
@@ -1173,7 +1140,6 @@ impl AppView {
             AppView::MigrateV1View { .. } => Some("migrate_v1"),
             AppView::InstalledKitsView { .. } => Some("kit_store_installed"),
             AppView::FavoritesBrowseView { .. } => Some("favorites"),
-            AppView::ConfirmPrompt { .. } => Some("confirm_prompt"),
             AppView::TipsView { .. } => Some("tips"),
             AppView::TermPrompt { .. } => Some("term_prompt"),
             AppView::About { .. } => Some("about"),
@@ -1725,20 +1691,6 @@ impl SurfaceKind {
                 standard,
                 "dayPage",
             ),
-            SurfaceKind::ConfirmPrompt => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(
-                    FeedbackSurface,
-                    NoEditableInput,
-                    FeedbackPanel,
-                ),
-                NoEditableFocus,
-                NoEditableKeyboard,
-                NoSurfaceActions,
-                PopupStateProof,
-                PopupVisual,
-                explicit,
-                "confirmPrompt",
-            ),
         }
     }
 }
@@ -1934,30 +1886,33 @@ struct ShortcutRecorderState {
     command_name: String,
 }
 
-/// State for the inline alias input overlay.
-///
-/// When this is Some, the alias input modal is displayed.
-/// Used for configuring command aliases.
-#[derive(Debug, Clone)]
+/// The open alias editor. When this is Some, its modal is on screen.
+#[derive(Debug)]
 struct AliasInputState {
     /// The unique command identifier (e.g., "builtin/clipboard-history", "app/com.apple.Safari")
     command_id: String,
     /// Human-readable name of the command being configured
     command_name: String,
-    /// Current alias text being edited
-    alias_text: String,
+    /// The modal's field, shared with the popup that edits it.
+    field: crate::confirm::SharedConfirmTextField,
+    /// Whether the command already had an alias (the modal offers Remove).
+    has_alias: bool,
+    /// Dropping the state closes the modal: its lifetime check holds a weak
+    /// reference to this token.
+    _open: std::rc::Rc<()>,
 }
 
-/// State for the Tab AI save-offer overlay, shown after a successful ephemeral
-/// script execution when the user is prompted to persist the script.
+/// The open Tab AI save offer, shown after a successful ephemeral script run.
+/// When this is Some, its modal is on screen.
 #[derive(Debug, Clone)]
 struct TabAiSaveOfferState {
     /// The execution record for the completed Tab AI run.
     record: crate::ai::TabAiExecutionRecord,
     /// Derived filename stem (e.g. "force-quit-this-app").
     filename_stem: String,
-    /// Error message if save attempt failed, shown inline in the overlay.
-    error: Option<SharedString>,
+    /// Dropping the state closes the modal: its lifetime check holds a weak
+    /// reference to this token.
+    _open: std::rc::Rc<()>,
 }
 
 #[cfg(test)]

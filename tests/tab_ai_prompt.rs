@@ -314,62 +314,6 @@ fn tab_ai_overlay_placeholders_use_main_menu_placeholder_theme_token() {
     );
 }
 
-#[test]
-fn tab_ai_save_offer_uses_named_opacity_constants() {
-    // The save-offer overlay must not use raw float literals for opacity
-    assert!(
-        !TAB_AI_SOURCE.contains("0.85,"),
-        "save-offer overlay should use OPACITY_NEAR_FULL, not raw 0.85"
-    );
-    assert!(
-        !TAB_AI_SOURCE.contains("0.4,"),
-        "save-offer overlay should use OPACITY_DISABLED, not raw 0.4"
-    );
-}
-
-#[test]
-fn tab_ai_save_offer_uses_shared_hint_strip() {
-    assert!(
-        TAB_AI_SOURCE.contains("HintStrip::new(vec!["),
-        "save-offer overlay must use the shared HintStrip component"
-    );
-    assert!(
-        TAB_AI_SOURCE.contains(r#""\u{21B5} Save"#),
-        "save-offer overlay must expose the Save hint via HintStrip"
-    );
-    assert!(
-        TAB_AI_SOURCE.contains(r#""Esc Dismiss""#),
-        "save-offer overlay must expose the Dismiss hint via HintStrip"
-    );
-}
-
-#[test]
-fn tab_ai_save_offer_is_not_floating_card() {
-    // The old floating card used a fixed width (420px) and centered layout
-    assert!(
-        !TAB_AI_SOURCE.contains("w(px(420.))"),
-        "save-offer overlay must not use the old 420px floating card width"
-    );
-    assert!(
-        !TAB_AI_SOURCE.contains("rounded_b("),
-        "save-offer overlay must not use bottom-rounded card corners"
-    );
-}
-
-#[test]
-fn tab_ai_save_offer_uses_ghost_opacity_divider() {
-    // The save-offer render path must reference OPACITY_GHOST for its divider
-    // (both the main overlay and save-offer overlay use it)
-    let save_offer_section = TAB_AI_SOURCE
-        .find("render_tab_ai_save_offer_overlay")
-        .expect("save-offer render function exists");
-    let save_offer_code = &TAB_AI_SOURCE[save_offer_section..];
-    assert!(
-        save_offer_code.contains("OPACITY_GHOST"),
-        "save-offer overlay must use OPACITY_GHOST for its divider"
-    );
-}
-
 // ── Mandatory script verification contract regression tests ─────────
 //
 // These tests lock the canonical launchpad and new-script skill

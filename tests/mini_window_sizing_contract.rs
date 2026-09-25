@@ -66,11 +66,7 @@ fn chat_and_agent_chat_sizing_branch_on_main_window_mode() {
         chat_arm.contains("compact_ai_view_type_for_mode(self.main_window_mode)"),
         "AppView::ChatPrompt must branch on main_window_mode"
     );
-    let agent_chat_arm = source_between(
-        calculate,
-        "AppView::AgentChatView",
-        "AppView::ConfirmPrompt",
-    );
+    let agent_chat_arm = source_between(calculate, "AppView::AgentChatView", "AppView::DayPage");
     assert!(
         agent_chat_arm.contains("compact_ai_view_type_for_mode(self.main_window_mode)"),
         "AppView::AgentChatView must branch on main_window_mode"

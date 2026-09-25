@@ -66,7 +66,7 @@ fn resize_guard_helper_delegates_to_canonical_state_sizing() {
     let block = source_between(
         &source,
         "pub(crate) fn calculate_window_size_params_if_current_view(",
-        "    /// Returns the focused button when the active view is `ConfirmPrompt`.",
+        "    /// Update window size using deferred execution (SAFE during render/event cycles).",
     );
 
     for expected in [

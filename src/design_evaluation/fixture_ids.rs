@@ -80,7 +80,6 @@ pub(crate) const PROMPT_FIXTURE_IDS: &[&str] = &[
     "prompt.chat",
     "prompt.term",
     "prompt.naming",
-    "prompt.confirm",
     "prompt.webcam",
     "prompt.scratch-pad",
     "prompt.quick-terminal",

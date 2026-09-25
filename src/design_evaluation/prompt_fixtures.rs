@@ -131,10 +131,6 @@ pub(crate) struct NamingPromptSeed {
     pub config: crate::prompts::NamingPromptConfig,
     pub input: String,
 }
-pub(crate) struct ConfirmPromptSeed {
-    pub common: PromptSeedCommon,
-    pub options: crate::confirm::ParentConfirmOptions,
-}
 pub(crate) struct WebcamPromptSeed {
     pub common: PromptSeedCommon,
     pub width: u32,
@@ -174,7 +170,6 @@ pub(crate) enum PromptSeed {
     Chat(ChatPromptSeed),
     Term(TerminalPromptSeed),
     Naming(NamingPromptSeed),
-    Confirm(ConfirmPromptSeed),
     Webcam(WebcamPromptSeed),
     ScratchPad(ScratchPadPromptSeed),
     QuickTerminal(TerminalPromptSeed),
@@ -198,7 +193,6 @@ impl PromptSeed {
             Self::Chat(seed) => &mut seed.common,
             Self::Term(seed) | Self::QuickTerminal(seed) => &mut seed.common,
             Self::Naming(seed) => &mut seed.common,
-            Self::Confirm(seed) => &mut seed.common,
             Self::Webcam(seed) => &mut seed.common,
             Self::ScratchPad(seed) => &mut seed.editor.common,
             Self::CreatePreset(seed) => &mut seed.common,
@@ -216,10 +210,8 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> anyhow::Result<PromptInstance> {
         let quick_terminal = matches!(&seed, PromptSeed::QuickTerminal(_));
-        let confirm_lifetime = matches!(&seed, PromptSeed::Confirm(_));
         let common = seed.common_mut();
-        let mut binding = common.completion.clone();
-        binding.confirm_lifetime = confirm_lifetime;
+        let binding = common.completion.clone();
         let instance = binding.instance().clone();
         anyhow::ensure!(!instance.id.is_empty(), "empty_prompt_id");
         let actions = common.actions.take();
@@ -637,61 +629,6 @@ impl ScriptListApp {
                     FocusTarget::NamingPrompt,
                 )
             }
-            PromptSeed::Confirm(seed) => {
-                let (sender, receiver) = async_channel::bounded(1);
-                let completion = binding.clone();
-                cx.spawn(async move |this, cx| {
-                    while let Ok(confirmed) = receiver.recv().await {
-                        let result = completion.try_complete(PromptOutcome::Confirmed(confirmed));
-                        let delivered = result.is_ok();
-                        let still_current = this
-                            .update(cx, |app, cx| {
-                                if app
-                                    .prompt_completion
-                                    .as_ref()
-                                    .map(|binding| binding.instance())
-                                    != Some(completion.instance())
-                                {
-                                    return false;
-                                }
-                                match result {
-                                    Ok(_) => {
-                                        if let AppView::ConfirmPrompt { previous, .. } =
-                                            &app.current_view
-                                        {
-                                            app.current_view = (**previous).clone();
-                                            app.note_main_route_changed();
-                                            app.mark_main_surface_changed();
-                                        }
-                                        completion.retire();
-                                    }
-                                    Err(error) => app.show_error_toast(error.to_string(), cx),
-                                }
-                                app.mark_main_data_changed();
-                                if matches!(app.current_view, AppView::ScriptList) {
-                                    app.flush_pending_main_menu_query(cx);
-                                }
-                                cx.notify();
-                                true
-                            })
-                            .ok()
-                            == Some(true);
-                        if delivered || !still_current {
-                            break;
-                        }
-                    }
-                })
-                .detach();
-                (
-                    AppView::ConfirmPrompt {
-                        options: seed.options,
-                        sender,
-                        focused_button: crate::ConfirmFocusedButton::default(),
-                        previous: Box::new(self.current_view.clone()),
-                    },
-                    FocusTarget::AppRoot,
-                )
-            }
             PromptSeed::Webcam(seed) => {
                 let prompt = crate::prompts::WebcamPrompt::from_nv12_frame(
                     id,
@@ -1047,22 +984,6 @@ impl ScriptListApp {
                     .as_ref()
                     .map(|error| format!("{error:?}"));
             }
-            AppView::ConfirmPrompt {
-                options,
-                focused_button,
-                ..
-            } => {
-                observation.choice_count = 2;
-                observation.selected_index =
-                    Some(if *focused_button == crate::ConfirmFocusedButton::Confirm {
-                        0
-                    } else {
-                        1
-                    });
-                observation
-                    .values
-                    .push(("message".into(), options.body.to_string()));
-            }
             AppView::WebcamView { entity } => {
                 let prompt = entity.read(cx);
                 observation
@@ -1156,11 +1077,7 @@ impl ScriptListApp {
 
     pub(crate) fn update_prompt_theme(&mut self, cx: &mut Context<Self>) {
         let theme = self.theme.clone();
-        let mut view = &self.current_view;
-        while let AppView::ConfirmPrompt { previous, .. } = view {
-            view = previous.as_ref();
-        }
-        match view {
+        match &self.current_view {
             AppView::DivPrompt { entity, .. } => {
                 entity.update(cx, |prompt, cx| prompt.update_theme(theme, cx))
             }
@@ -1278,7 +1195,6 @@ pub(crate) fn prompt_fixture_seed(
             let directory = owned_prompt_path("created")?; std::fs::create_dir_all(&directory)?;
             PromptSeed::Naming(NamingPromptSeed { common, config: crate::prompts::NamingPromptConfig::new(crate::prompts::NamingTarget::Script, directory, "ts"), input: "Fixture Script".into() })
         }
-        "prompt.confirm" => PromptSeed::Confirm(ConfirmPromptSeed { common, options: crate::confirm::ParentConfirmOptions { title: "Confirm fixture".into(), body: "Use this local choice?".into(), confirm_text: "Use choice".into(), cancel_text: "Cancel".into(), ..Default::default() } }),
         "prompt.webcam" => {
             let (width, height) = (320, 180);
             let mut nv12 = vec![128; width * height * 3 / 2];

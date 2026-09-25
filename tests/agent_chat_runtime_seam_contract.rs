@@ -74,7 +74,7 @@ fn phase_two_keeps_view_out_of_runtime_refactor() {
 fn engine_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch::from_profile"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("GooseAcpRuntime::spawn"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("GooseRuntime::spawn"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatWarmSessionSpec"));
     assert!(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_agent_chat_view_from_launch"),
@@ -110,7 +110,7 @@ fn tab_launch_uses_goose_warm_path_without_agent_chat_runtime_fallback() {
         "Agent Chat launch must not instantiate the legacy Agent Chat runtime"
     );
     assert!(
-        AGENT_CHAT_LAUNCH_SOURCE.contains("GooseAcpRuntime"),
+        AGENT_CHAT_LAUNCH_SOURCE.contains("GooseRuntime"),
         "profiles should be routed to the goose ACP runtime"
     );
     assert!(

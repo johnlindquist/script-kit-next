@@ -3,7 +3,7 @@ use super::*;
 use std::sync::{Mutex, OnceLock};
 
 use gpui::{
-    div, AnyWindowHandle, Bounds, DisplayId, Entity, FocusHandle, Pixels, Point, Render, Size,
+    div, AnyWindowHandle, Bounds, DisplayId, Entity, FocusHandle, Pixels, Render,
     WeakEntity, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 
@@ -216,17 +216,16 @@ impl Render for ShortcutRecorderPopupWindow {
     }
 }
 
-fn shortcut_recorder_window_bounds(parent_bounds: Bounds<Pixels>) -> Bounds<Pixels> {
-    let width =
-        px(crate::components::confirm_modal_shell::MODAL_WIDTH_PX).min(parent_bounds.size.width);
-    let height = px(SHORTCUT_RECORDER_POPUP_HEIGHT).min(parent_bounds.size.height);
-    let x = parent_bounds.origin.x + ((parent_bounds.size.width - width) / 2.0);
-    let y = parent_bounds.origin.y + ((parent_bounds.size.height - height) / 2.0);
-
-    Bounds {
-        origin: Point { x, y },
-        size: Size { width, height },
-    }
+fn shortcut_recorder_window_bounds(
+    parent_bounds: Bounds<Pixels>,
+    display_bounds: Option<Bounds<Pixels>>,
+) -> Bounds<Pixels> {
+    crate::components::confirm_modal_shell::modal_bounds_over_parent(
+        parent_bounds,
+        display_bounds,
+        px(crate::components::confirm_modal_shell::MODAL_WIDTH_PX),
+        px(SHORTCUT_RECORDER_POPUP_HEIGHT),
+    )
 }
 
 fn close_shortcut_recorder_window(cx: &mut App) {
@@ -493,7 +492,11 @@ fn open_shortcut_recorder_window(
         WindowBackgroundAppearance::Opaque
     };
     let is_dark_vibrancy = theme.should_use_dark_vibrancy();
-    let bounds = shortcut_recorder_window_bounds(parent.bounds);
+    let display_bounds = parent
+        .display_id
+        .and_then(|id| cx.find_display(id))
+        .map(|display| display.visible_bounds());
+    let bounds = shortcut_recorder_window_bounds(parent.bounds, display_bounds);
 
     let window_theme = std::sync::Arc::clone(&theme);
     let app_for_close = app.clone();

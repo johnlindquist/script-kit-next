@@ -493,7 +493,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 view.open_creation_feedback_payload(payload, ctx);
                             }
                             ExternalCommand::OpenConfirmPrompt { title, body, confirm_text, cancel_text, request_id: _ } => {
-                                logging::log("STDIN", "Opening ConfirmPrompt surface via stdin command");
+                                logging::log("STDIN", "Opening confirm modal fixture via stdin command");
                                 script_kit_gpui::set_main_window_visible(true);
                                 script_kit_gpui::mark_window_shown();
                                 platform::show_main_window_without_activation();
@@ -513,7 +513,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     ctx,
                                 );
                                 sync_main_automation_window(current_main_automation_bounds(), true, true);
-                                let (sender, _receiver) = async_channel::bounded(1);
                                 let options = crate::confirm::ParentConfirmOptions {
                                     title: title.unwrap_or_else(|| "Delete saved item?".to_string()).into(),
                                     body: body.unwrap_or_else(|| "This action changes local Script Kit state. Confirm to continue or cancel to return to the launcher.".to_string()).into(),
@@ -522,7 +521,18 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     confirm_variant: gpui_component::button::ButtonVariant::Danger,
                                     width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
                                 };
-                                view.open_confirm_prompt(options, sender, ctx);
+                                view.open_main_window_confirm(
+                                    options,
+                                    || true,
+                                    |confirmed, _| {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "confirm_modal_fixture_resolved",
+                                            confirmed,
+                                        );
+                                    },
+                                    ctx,
+                                );
                             }
                             ExternalCommand::OpenAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");

@@ -33,7 +33,6 @@ fn is_plain_platform_cmd_w(event: &gpui::KeystrokeEvent) -> bool {
         && key.eq_ignore_ascii_case("w")
 }
 
-
 impl ScriptListApp {
     fn install_main_window_close_interceptor(&mut self, cx: &mut Context<Self>) {
         let app_entity_for_cmd_w = cx.entity().downgrade();
@@ -68,7 +67,6 @@ impl ScriptListApp {
             }
         });
         self.gpui_input_subscriptions.push(cmd_w_interceptor);
-
     }
 
     fn route_day_page_note_switcher_key(
@@ -192,14 +190,8 @@ impl ScriptListApp {
             event = "top_level_cmd_w_close_main_window",
             current_view = %self.app_view_name(),
             actions_open = crate::actions::is_actions_window_open(),
-            confirm_open = crate::confirm::is_confirm_window_open(),
             show_actions_popup = self.show_actions_popup,
         );
-
-        if crate::confirm::is_confirm_window_open() {
-            crate::confirm::route_key_to_confirm_popup("escape", cx);
-            return;
-        }
 
         if crate::actions::is_actions_window_open() || self.show_actions_popup {
             self.close_actions_popup_for_current_view(window, cx);

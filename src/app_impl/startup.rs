@@ -714,9 +714,6 @@ impl ScriptListApp {
             shortcut_recorder_entity: None,
             // Alias input state - starts as None (no alias input showing)
             alias_input_state: None,
-            // Alias input entity - persisted to maintain focus
-            alias_input_entity: None,
-            alias_input_subscription: None,
             pending_tab_ai_execution: None,
             tab_ai_save_offer_state: None,
             tab_ai_harness: None,
@@ -801,6 +798,9 @@ impl ScriptListApp {
         app.announced_registry_conflicts = conflicts.into_iter().collect();
         app.flush_pending_main_menu_query(cx);
 
+        // First interceptor: an open modal owns the keyboard before any
+        // launcher, window-close, or navigation interceptor sees a key.
+        app.install_modal_key_owner_interceptor(cx);
         app.install_main_window_close_interceptor(cx);
 
         // Add Tab key interceptor for "Ask AI" feature and file search directory navigation
@@ -852,14 +852,6 @@ impl ScriptListApp {
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control;
 
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
 
                 // cwd-pick mode (Tab → FileSearchView) owns Escape/Backspace so
                 // the launcher's progressive-escape semantics apply: one Escape
@@ -1451,14 +1443,6 @@ impl ScriptListApp {
                 let is_left = crate::ui_foundation::is_key_left(key);
                 let is_right = crate::ui_foundation::is_key_right(key);
 
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
                 let no_direction_modifiers = !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control;
@@ -2308,15 +2292,6 @@ impl ScriptListApp {
                 let key = event.keystroke.key.as_str();
                 let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
 
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
-
                 // Home key or Cmd+Up → jump to first item
                 // End key or Cmd+Down → jump to last item
                 let is_home = key.eq_ignore_ascii_case("home")
@@ -2485,14 +2460,6 @@ impl ScriptListApp {
                     return;
                 }
 
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
@@ -2782,6 +2749,7 @@ impl ScriptListApp {
 }
 
 include!("startup/navigation_routes.rs");
+include!("startup/modal_key_owner.rs");
 
 #[cfg(test)]
 mod tests {

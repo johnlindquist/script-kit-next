@@ -10,29 +10,31 @@ use std::{
 
 use gpui::{
     div, prelude::*, px, AnyElement, AnyWindowHandle, App, Bounds, Context, DisplayId, FocusHandle,
-    Focusable, Pixels, Point, Render, SharedString, Size, Task, Window, WindowBackgroundAppearance,
+    Focusable, Pixels, Render, SharedString, Task, Window, WindowBackgroundAppearance,
     WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 use gpui_component::button::ButtonVariant as ConfirmButtonVariant;
 
+use super::text_field::{
+    render_confirm_text_field, SharedConfirmTextField, CONFIRM_TEXT_FIELD_HEIGHT,
+};
 use crate::runtime_policy::WindowHostPolicy;
 use crate::{
     components::confirm_modal_shell::{
-        confirm_modal_header, confirm_modal_shell, modal_action_row, ConfirmModalShellConfig,
-        ModalActionRowButton, CONFIRM_MODAL_RADIUS, MODAL_WIDTH_PX,
+        confirm_modal_header, confirm_modal_shell, modal_action_row, modal_bounds_over_parent,
+        ConfirmModalShellConfig, ModalActionRowButton, CONFIRM_MODAL_RADIUS, MODAL_WIDTH_PX,
     },
     components::footer_chrome::{
         current_main_menu_footer_height, current_main_menu_footer_metrics,
         footer_action_slot_width, footer_button_height, footer_centered_action_button_layout,
         footer_centered_action_edge_padding_x, FooterActionSlot, FooterHintButtonLayoutOverrides,
     },
-    components::overlay_modal::MODAL_PADDING,
     platform,
     theme::get_cached_theme,
     ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab},
 };
 
-const CONFIRM_PADDING_X: f32 = MODAL_PADDING;
+const CONFIRM_PADDING_X: f32 = 24.0;
 const CONFIRM_PADDING_Y: f32 = 20.0;
 const CONFIRM_SECTION_GAP: f32 = 10.0;
 const CONFIRM_TITLE_LINE_HEIGHT: f32 = 16.0;
@@ -51,7 +53,6 @@ static CONFIRM_PARENT_WINDOW: OnceLock<Mutex<Option<(String, u64, AnyWindowHandl
     OnceLock::new();
 static CONFIRM_RESULT_TX: OnceLock<Mutex<Option<async_channel::Sender<ParentDialogResult>>>> =
     OnceLock::new();
-static CONFIRM_FOCUSED_BUTTON: OnceLock<Mutex<FocusedButton>> = OnceLock::new();
 static CONFIRM_HAS_SECONDARY: OnceLock<Mutex<bool>> = OnceLock::new();
 
 fn current_confirm_window_handle() -> Option<WindowHandle<ConfirmPopupWindow>> {
@@ -94,6 +95,9 @@ pub(crate) struct ConfirmWindowOptions {
     pub secondary_text: Option<SharedString>,
     pub confirm_variant: ConfirmButtonVariant,
     pub width: Pixels,
+    /// A single-line field shown between the title and the buttons. The
+    /// body then becomes a one-line hint under the field.
+    pub input: Option<SharedConfirmTextField>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,7 +116,7 @@ enum FocusedButton {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ConfirmWindowKeyIntent {
+pub(crate) enum ConfirmWindowKeyIntent {
     FocusNext,
     FocusPrev,
     ActivateFocused,
@@ -125,19 +129,34 @@ fn is_key_right(key: &str) -> bool {
     key.eq_ignore_ascii_case("right") || key.eq_ignore_ascii_case("arrowright")
 }
 
+/// What a keystroke means to a confirm modal. Shared by the native confirm
+/// popup and the in-window confirm prompt.
+///
+/// Only a bare Enter activates a button: a modified Enter is a different
+/// command elsewhere (⌘↵ opens Agent Chat), and letting it through would run
+/// a destructive primary by habit. ⌘W closes the topmost layer, which is the
+/// modal. Keys with no meaning here return `None`; callers still swallow
+/// them so nothing leaks to the window underneath.
 #[inline]
-fn confirm_window_key_intent(
+pub(crate) fn confirm_window_key_intent(
     key: &str,
     modifiers: &gpui::Modifiers,
 ) -> Option<ConfirmWindowKeyIntent> {
-    if key.eq_ignore_ascii_case("i") && modifiers.platform && !modifiers.control && !modifiers.alt {
-        return Some(ConfirmWindowKeyIntent::ActivateSecondary);
-    }
     if is_key_escape(key) {
         return Some(ConfirmWindowKeyIntent::Cancel);
     }
+    let only_command = modifiers.platform && !modifiers.control && !modifiers.alt;
+    if only_command && !modifiers.shift && key.eq_ignore_ascii_case("w") {
+        return Some(ConfirmWindowKeyIntent::Cancel);
+    }
+    if only_command && key.eq_ignore_ascii_case("i") {
+        return Some(ConfirmWindowKeyIntent::ActivateSecondary);
+    }
+    if modifiers.platform || modifiers.control || modifiers.alt {
+        return None;
+    }
     if is_key_enter(key) {
-        return Some(ConfirmWindowKeyIntent::ActivateFocused);
+        return (!modifiers.shift).then_some(ConfirmWindowKeyIntent::ActivateFocused);
     }
     if is_key_tab(key) {
         return Some(if modifiers.shift {
@@ -195,7 +214,13 @@ fn confirm_window_height_from_body_lines(has_body: bool, body_lines: usize) -> f
     .clamp(CONFIRM_MIN_HEIGHT, CONFIRM_MAX_HEIGHT)
 }
 
-fn confirm_window_dynamic_height(width: Pixels, body: &str, cx: &App) -> f32 {
+fn confirm_window_dynamic_height(width: Pixels, body: &str, has_input: bool, cx: &App) -> f32 {
+    if has_input {
+        // Title, field, one hint/problem line, buttons.
+        return confirm_window_height_from_body_lines(true, 1)
+            + CONFIRM_TEXT_FIELD_HEIGHT
+            + confirm_anatomy_header_body_gap();
+    }
     let width_px: f32 = width.into();
     let content_width = (width_px - (confirm_shell_padding_x() * 2.0)).max(160.0);
 
@@ -313,36 +338,13 @@ fn confirm_modal_spacer(id: &'static str, height_px: f32) -> AnyElement {
 
 fn confirm_window_bounds(
     parent_bounds: Bounds<Pixels>,
-    width: Pixels,
-    body: &str,
+    display_bounds: Option<Bounds<Pixels>>,
+    options: &ConfirmWindowOptions,
     cx: &App,
 ) -> Bounds<Pixels> {
-    let requested_width = width.min(px(MODAL_WIDTH_PX));
-    let actual_width = requested_width.min(parent_bounds.size.width);
-    let dynamic_height = confirm_window_dynamic_height(actual_width, body, cx);
-    confirm_window_bounds_from_height(parent_bounds, actual_width, dynamic_height)
-}
-
-/// Pure centering step: place a `width` × `height` popup centered over the
-/// parent, clamping height to the parent. Split from the measuring wrapper so
-/// tests can exercise the placement contract without a live text system.
-fn confirm_window_bounds_from_height(
-    parent_bounds: Bounds<Pixels>,
-    actual_width: Pixels,
-    dynamic_height: f32,
-) -> Bounds<Pixels> {
-    let height = px(dynamic_height).min(parent_bounds.size.height);
-
-    let x = parent_bounds.origin.x + ((parent_bounds.size.width - actual_width) / 2.0);
-    let y = parent_bounds.origin.y + ((parent_bounds.size.height - height) / 2.0);
-
-    Bounds {
-        origin: Point { x, y },
-        size: Size {
-            width: actual_width,
-            height,
-        },
-    }
+    let width = options.width.min(px(MODAL_WIDTH_PX));
+    let height = confirm_window_dynamic_height(width, &options.body, options.input.is_some(), cx);
+    modal_bounds_over_parent(parent_bounds, display_bounds, width, px(height))
 }
 
 fn clear_confirm_window_handle() {
@@ -359,96 +361,92 @@ fn clear_confirm_window_handle() {
     }
 }
 
-/// Route a key event to the confirm popup window if it's open.
-/// Returns true if the key was handled (confirm popup consumed it).
-/// Called from the main window's key handler chain.
+/// Route a key (without typed text) to the confirm popup if it's open.
+/// Returns true when a popup is open: it consumes every key, including ones
+/// it has no use for. Kept for callers that only know the key name, such as
+/// the legacy `simulateKey` automation route and "close the modal" paths.
 #[allow(dead_code)]
 pub(crate) fn consume_main_window_key_while_confirm_open(
     key: &str,
     modifiers: &gpui::Modifiers,
     cx: &mut App,
 ) -> bool {
-    if !is_confirm_window_open() {
-        return false;
-    }
-
-    let intent = confirm_window_key_intent(key, modifiers);
-
-    tracing::info!(
-        target: "script_kit::confirm",
-        event = "route_key_to_confirm_popup",
-        key,
-        shift = modifiers.shift,
-        platform = modifiers.platform,
-        alt = modifiers.alt,
-        control = modifiers.control,
-        intent = ?intent,
-        "Main window routing key to confirm popup"
-    );
-
-    match intent {
-        Some(ConfirmWindowKeyIntent::Cancel) => {
-            tracing::info!(
-                target: "script_kit::confirm",
-                event = "route_key_confirm_cancel",
-                "Routing Escape to confirm popup → cancel"
-            );
-            resolve_confirm_window_from_parent(ParentDialogResult::Dismiss, cx);
-            true
-        }
-        Some(ConfirmWindowKeyIntent::ActivateFocused) => {
-            let focused = get_confirm_focused_button();
-            let result = match focused {
-                FocusedButton::Confirm => ParentDialogResult::Primary,
-                FocusedButton::Secondary => ParentDialogResult::Secondary,
-                FocusedButton::Cancel => ParentDialogResult::Dismiss,
-            };
-            tracing::info!(
-                target: "script_kit::confirm",
-                event = "route_key_confirm_enter",
-                result = ?result,
-                focused_button = ?focused,
-                "Routing Enter to confirm popup → activate focused"
-            );
-            resolve_confirm_window_from_parent(result, cx);
-            true
-        }
-        Some(ConfirmWindowKeyIntent::ActivateSecondary) => {
-            if CONFIRM_HAS_SECONDARY
-                .get()
-                .and_then(|state| state.lock().ok())
-                .is_some_and(|state| *state)
-            {
-                resolve_confirm_window_from_parent(ParentDialogResult::Secondary, cx);
-            }
-            true
-        }
-        Some(ConfirmWindowKeyIntent::FocusNext) => {
-            cycle_confirm_focused_button(false);
-            // Notify the confirm window to re-render with updated focus
-            notify_confirm_window(cx);
-            true
-        }
-        Some(ConfirmWindowKeyIntent::FocusPrev) => {
-            cycle_confirm_focused_button(true);
-            notify_confirm_window(cx);
-            true
-        }
-        None => {
-            tracing::debug!(
-                target: "script_kit::confirm",
-                event = "route_key_confirm_consume_unhandled",
-                key,
-                "Confirm popup is open — consuming unhandled key"
-            );
-            true
-        }
-    }
+    apply_key_to_confirm_popup(
+        &gpui::Keystroke {
+            modifiers: *modifiers,
+            key: key.to_string(),
+            key_char: None,
+        },
+        cx,
+    )
 }
 
 #[allow(dead_code)]
 pub(crate) fn route_key_to_confirm_popup(key: &str, cx: &mut App) -> bool {
     consume_main_window_key_while_confirm_open(key, &gpui::Modifiers::default(), cx)
+}
+
+/// Route a keystroke `window` received to the open confirm popup.
+///
+/// The popup is a non-activating child panel: it never becomes the key
+/// window, so every key meant for it arrives at its parent (the main window,
+/// Notes, Dictation, or detached Agent Chat). While it is open it owns those
+/// keys — and its own, should a click ever make it key — so no shortcut,
+/// text input, or Escape ladder underneath sees them. Keys from unrelated
+/// windows pass through. Returns true when the popup consumed the key.
+#[allow(
+    dead_code,
+    reason = "the application binary's modal key owner interceptor calls this"
+)]
+pub(crate) fn route_window_key_to_confirm_popup(
+    window: &mut Window,
+    keystroke: &gpui::Keystroke,
+    cx: &mut App,
+) -> bool {
+    let window_id = window.window_handle().window_id();
+    if current_confirm_window_handle().is_some_and(|popup| popup.window_id() == window_id) {
+        if let Some(Some(popup)) = window.root::<ConfirmPopupWindow>() {
+            popup.update(cx, |popup, cx| {
+                popup.handle_keystroke(keystroke, window, cx)
+            });
+        }
+        return true;
+    }
+    confirm_parent_window_handle().is_some_and(|parent| parent.window_id() == window_id)
+        && apply_key_to_confirm_popup(keystroke, cx)
+}
+
+/// Apply a keystroke from outside the popup window (its parent, or
+/// automation). The popup window is not being dispatched, so it can be
+/// updated directly.
+fn apply_key_to_confirm_popup(keystroke: &gpui::Keystroke, cx: &mut App) -> bool {
+    let Some(handle) = current_confirm_window_handle() else {
+        return false;
+    };
+    tracing::info!(
+        target: "script_kit::confirm",
+        event = "route_key_to_confirm_popup",
+        key = %keystroke.key,
+        shift = keystroke.modifiers.shift,
+        platform = keystroke.modifiers.platform,
+        alt = keystroke.modifiers.alt,
+        control = keystroke.modifiers.control,
+        "Routing key to confirm popup"
+    );
+    if let Err(error) = handle.update(cx, |popup, window, cx| {
+        popup.handle_keystroke(keystroke, window, cx)
+    }) {
+        tracing::warn!(target: "script_kit::confirm", event = "confirm_key_route_failed", %error);
+    }
+    true
+}
+
+fn confirm_parent_window_handle() -> Option<AnyWindowHandle> {
+    CONFIRM_PARENT_WINDOW.get().and_then(|slot| {
+        slot.lock()
+            .ok()
+            .and_then(|slot| slot.as_ref().map(|(_, _, handle)| *handle))
+    })
 }
 
 #[allow(
@@ -580,22 +578,6 @@ pub(crate) fn batch_select_confirm_button_by_semantic_id(
     )
 }
 
-fn get_confirm_focused_button() -> FocusedButton {
-    CONFIRM_FOCUSED_BUTTON
-        .get()
-        .and_then(|s| s.lock().ok())
-        .map_or(FocusedButton::Confirm, |g| *g)
-}
-
-fn cycle_confirm_focused_button(reverse: bool) {
-    let has_secondary = CONFIRM_HAS_SECONDARY
-        .get()
-        .and_then(|state| state.lock().ok())
-        .is_some_and(|state| *state);
-    let next = next_confirm_focused_button(get_confirm_focused_button(), reverse, has_secondary);
-    set_confirm_focused_button(next);
-}
-
 fn next_confirm_focused_button(
     current: FocusedButton,
     reverse: bool,
@@ -615,31 +597,13 @@ fn next_confirm_focused_button(
     }
 }
 
-fn set_confirm_focused_button(next: FocusedButton) {
-    if let Some(storage) = CONFIRM_FOCUSED_BUTTON.get() {
-        if let Ok(mut guard) = storage.lock() {
-            *guard = next;
-        }
-    }
-}
-
-/// Defer closing the confirm window to the next frame so that
-/// `is_confirm_window_open()` remains true for the rest of the current
-/// event processing cycle. This prevents PressEnter and other handlers
-/// from also processing the same Enter keystroke.
-fn resolve_confirm_window_from_parent(result: ParentDialogResult, cx: &mut App) {
-    if let Some(storage) = CONFIRM_WINDOW.get() {
-        if let Ok(guard) = storage.lock() {
-            if let Some(handle) = guard.as_ref() {
-                let _ = handle.update(cx, |confirm, window, cx| {
-                    confirm.resolve_and_close(result, window, cx);
-                });
-            }
-        }
-    }
-}
-
-fn notify_confirm_window(cx: &mut App) {
+/// Re-render the open confirm popup after its caller changed shared state
+/// (for example, the text of its field).
+#[allow(
+    dead_code,
+    reason = "the application binary's alias editor fixture sets field text"
+)]
+pub(crate) fn refresh_confirm_popup(cx: &mut App) {
     if let Some(storage) = CONFIRM_WINDOW.get() {
         if let Ok(guard) = storage.lock() {
             if let Some(handle) = guard.as_ref() {
@@ -676,6 +640,11 @@ pub(crate) struct ConfirmPopupSnapshot {
     pub(crate) generation: u64,
     pub(crate) completion_error: Option<String>,
     pub(crate) revisions: (u64, u64, u64, u64),
+    /// Text of the modal's field, when it has one.
+    pub(crate) input_text: Option<String>,
+    /// Why the field's text cannot be submitted, when it cannot.
+    pub(crate) input_problem: Option<String>,
+    pub(crate) primary_enabled: bool,
 }
 
 /// Read the confirm popup snapshot if the popup window is open.
@@ -715,6 +684,16 @@ pub(crate) fn get_confirm_popup_snapshot(
                 generation: expected_generation,
                 completion_error: popup.completion_error.clone(),
                 revisions: popup.revision_facts(),
+                input_text: popup
+                    .input
+                    .as_ref()
+                    .map(|field| field.borrow().text().to_string()),
+                input_problem: popup
+                    .input
+                    .as_ref()
+                    .and_then(|field| field.borrow().problem())
+                    .map(|problem| problem.to_string()),
+                primary_enabled: popup.primary_enabled(),
             })
         },
     )
@@ -849,7 +828,11 @@ pub(crate) fn open_confirm_popup_window(
     } else {
         WindowBackgroundAppearance::Opaque
     };
-    let bounds = confirm_window_bounds(parent_window.bounds, options.width, &options.body, cx);
+    let display_bounds = parent_window
+        .display_id
+        .and_then(|id| cx.find_display(id))
+        .map(|display| display.visible_bounds());
+    let bounds = confirm_window_bounds(parent_window.bounds, display_bounds, &options, cx);
     let request = options.clone();
     let sender = result_tx.clone();
     let handle = cx.open_window(
@@ -873,6 +856,14 @@ pub(crate) fn open_confirm_popup_window(
         .get_or_init(|| Mutex::new(None))
         .lock()
         .map_err(|_| anyhow::anyhow!("confirm_state_poisoned"))? = Some(handle);
+    // The parent routes keys to the modal from the first frame, before the
+    // deferred native attach publishes the popup: a key pressed in between
+    // must reach the modal, not the parent's editor or launcher.
+    *CONFIRM_PARENT_WINDOW
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .map_err(|_| anyhow::anyhow!("confirm_state_poisoned"))? =
+        Some((parent_id.clone(), parent_generation, parent_window.handle));
     let exact_parent_id = parent_id.clone();
 
     let publish = move |cx: &mut App| -> anyhow::Result<()> {
@@ -926,10 +917,6 @@ pub(crate) fn open_confirm_popup_window(
             .get_or_init(|| Mutex::new(None))
             .lock()
             .map_err(|_| anyhow::anyhow!("confirm_state_poisoned"))? = Some(result_tx);
-        *CONFIRM_FOCUSED_BUTTON
-            .get_or_init(|| Mutex::new(FocusedButton::Confirm))
-            .lock()
-            .map_err(|_| anyhow::anyhow!("confirm_state_poisoned"))? = FocusedButton::Confirm;
         notify_confirm_parent_window(cx);
         Ok(())
     };
@@ -1086,6 +1073,7 @@ pub(crate) struct ConfirmPopupWindow {
     semantic_revision: u64,
     presentation_revision: u64,
     applied_theme_revision: u64,
+    input: Option<SharedConfirmTextField>,
 }
 
 impl ConfirmPopupWindow {
@@ -1135,6 +1123,7 @@ impl ConfirmPopupWindow {
             semantic_revision: 1,
             presentation_revision: 1,
             applied_theme_revision: 0,
+            input: options.input,
         }
     }
 
@@ -1145,8 +1134,75 @@ impl ConfirmPopupWindow {
             self.secondary_text.is_some(),
         );
         self.semantic_revision = self.semantic_revision.saturating_add(1);
-        set_confirm_focused_button(self.focused_button);
         cx.notify();
+    }
+
+    /// Whether the primary button may run: a field with a problem blocks it.
+    fn primary_enabled(&self) -> bool {
+        self.input
+            .as_ref()
+            .is_none_or(|field| field.borrow().problem().is_none())
+    }
+
+    /// The one key handler for the modal, whichever window the key reached.
+    /// With a text field, typing and ←/→ edit the field and Tab moves
+    /// between buttons; ↵ activates the focused button, Esc and ⌘W dismiss.
+    fn handle_keystroke(
+        &mut self,
+        keystroke: &gpui::Keystroke,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let key = keystroke.key.as_str();
+        let mut intent = confirm_window_key_intent(key, &keystroke.modifiers);
+        if self.input.is_some()
+            && matches!(
+                intent,
+                Some(ConfirmWindowKeyIntent::FocusNext | ConfirmWindowKeyIntent::FocusPrev)
+            )
+            && !is_key_tab(key)
+        {
+            intent = None;
+        }
+        match intent {
+            Some(ConfirmWindowKeyIntent::Cancel) => {
+                self.resolve_and_close(ParentDialogResult::Dismiss, window, cx);
+            }
+            Some(ConfirmWindowKeyIntent::ActivateFocused) => {
+                let result = match self.focused_button {
+                    FocusedButton::Confirm if self.primary_enabled() => ParentDialogResult::Primary,
+                    FocusedButton::Confirm => return,
+                    FocusedButton::Secondary => ParentDialogResult::Secondary,
+                    FocusedButton::Cancel => ParentDialogResult::Dismiss,
+                };
+                self.resolve_and_close(result, window, cx);
+            }
+            Some(ConfirmWindowKeyIntent::ActivateSecondary) => {
+                if self.secondary_text.is_some() {
+                    self.resolve_and_close(ParentDialogResult::Secondary, window, cx);
+                }
+            }
+            Some(ConfirmWindowKeyIntent::FocusNext) => self.shift_focus(false, cx),
+            Some(ConfirmWindowKeyIntent::FocusPrev) => self.shift_focus(true, cx),
+            None => {
+                let Some(field) = self.input.clone() else {
+                    return;
+                };
+                let modifiers = keystroke.modifiers;
+                let edited = field.borrow_mut().state.handle_key(
+                    key,
+                    keystroke.key_char.as_deref(),
+                    modifiers.platform || modifiers.control,
+                    modifiers.alt,
+                    modifiers.shift,
+                    cx,
+                );
+                if edited {
+                    self.semantic_revision = self.semantic_revision.saturating_add(1);
+                    cx.notify();
+                }
+            }
+        }
     }
 
     fn ensure_lifecycle_task(&mut self, cx: &mut Context<Self>) {
@@ -1198,7 +1254,9 @@ impl ConfirmPopupWindow {
                         if this.resolved {
                             return this.generation;
                         }
-                        match result_tx.try_send(ParentDialogResult::Dismiss) {
+                        // The owner ended the question (its script exited, its
+                        // window closed, its state moved on); nobody answered.
+                        match result_tx.try_send(ParentDialogResult::ProgrammaticClose) {
                             Ok(()) => {
                                 this.resolved = true;
                                 this.generation
@@ -1319,11 +1377,6 @@ impl Render for ConfirmPopupWindow {
         );
 
         self.ensure_lifecycle_task(cx);
-        let focused = get_confirm_focused_button();
-        if self.focused_button != focused {
-            self.focused_button = focused;
-            self.semantic_revision = self.semantic_revision.saturating_add(1);
-        }
 
         if !self.did_request_focus {
             self.did_request_focus = true;
@@ -1334,66 +1387,6 @@ impl Render for ConfirmPopupWindow {
             );
             window.focus(&self.focus_handle, cx);
         }
-
-        let handle_key = cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-            let key = event.keystroke.key.as_str();
-            let modifiers = &event.keystroke.modifiers;
-            let intent = confirm_window_key_intent(key, modifiers);
-
-            tracing::info!(
-                target: "script_kit::confirm",
-                event = "confirm_popup_key_down",
-                key,
-                intent = ?intent,
-                "Confirm popup received key"
-            );
-
-            match intent {
-                Some(ConfirmWindowKeyIntent::Cancel) => {
-                    tracing::info!(
-                        target: "script_kit::confirm",
-                        event = "confirm_popup_escape",
-                        "User pressed Escape — cancelling"
-                    );
-                    this.resolve_and_close(ParentDialogResult::Dismiss, window, cx);
-                }
-                Some(ConfirmWindowKeyIntent::ActivateFocused) => {
-                    let result = match this.focused_button {
-                        FocusedButton::Confirm => ParentDialogResult::Primary,
-                        FocusedButton::Secondary => ParentDialogResult::Secondary,
-                        FocusedButton::Cancel => ParentDialogResult::Dismiss,
-                    };
-                    tracing::info!(
-                        target: "script_kit::confirm",
-                        event = "confirm_popup_enter",
-                        result = ?result,
-                        focused_button = ?this.focused_button,
-                        "User pressed Enter — activating focused button"
-                    );
-                    this.resolve_and_close(result, window, cx);
-                }
-                Some(ConfirmWindowKeyIntent::ActivateSecondary) => {
-                    if this.secondary_text.is_some() {
-                        this.resolve_and_close(ParentDialogResult::Secondary, window, cx);
-                    }
-                }
-                Some(ConfirmWindowKeyIntent::FocusNext) => {
-                    this.shift_focus(false, cx);
-                }
-                Some(ConfirmWindowKeyIntent::FocusPrev) => {
-                    this.shift_focus(true, cx);
-                }
-                None => {
-                    tracing::debug!(
-                        target: "script_kit::confirm",
-                        event = "confirm_popup_consume_unhandled_key",
-                        key,
-                        "Confirm popup consumed unhandled key"
-                    );
-                }
-            }
-            cx.stop_propagation();
-        });
 
         let theme = get_cached_theme();
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
@@ -1432,7 +1425,7 @@ impl Render for ConfirmPopupWindow {
             slot_width_px: confirm_slot_width,
             height_px: action_button_height,
             selected: confirm_focused,
-            enabled: true,
+            enabled: self.primary_enabled(),
             layout: action_button_layout,
             on_click: Box::new(move |_, window, cx| {
                 confirm_entity.update(cx, |this: &mut Self, cx| {
@@ -1480,7 +1473,7 @@ impl Render for ConfirmPopupWindow {
         )
         .debug_selector(|| "confirm-modal-action-row".to_string());
 
-        let has_body = !self.body.trim().is_empty();
+        let has_body = !self.body.trim().is_empty() || self.input.is_some();
         let gaps = confirm_modal_stack_gaps(has_body);
         let mut stack = div()
             .id("confirm-modal-stack")
@@ -1494,7 +1487,39 @@ impl Render for ConfirmPopupWindow {
                 "confirm-modal-gap:after-header",
                 gaps.after_header_px,
             ));
-        if has_body {
+        if let Some(field) = &self.input {
+            let field = field.borrow();
+            // One line under the field: the problem once there is text to
+            // judge, otherwise the caller's hint.
+            let problem = (!field.text().is_empty())
+                .then(|| field.problem())
+                .flatten();
+            let (message, color) = match problem {
+                Some(problem) => (problem, gpui::rgb(theme.colors.ui.error)),
+                None => (self.body.clone(), body_color),
+            };
+            stack = stack
+                .child(render_confirm_text_field(&field, &chrome))
+                .child(confirm_modal_spacer(
+                    "confirm-modal-gap:after-field",
+                    confirm_anatomy_header_body_gap(),
+                ))
+                .child(
+                    div()
+                        .debug_selector(|| "confirm-modal-body".to_string())
+                        .w_full()
+                        .h(px(confirm_body_line_height()))
+                        .text_xs()
+                        .line_height(px(confirm_body_line_height()))
+                        .text_color(color)
+                        .truncate()
+                        .child(message),
+                )
+                .child(confirm_modal_spacer(
+                    "confirm-modal-gap:after-body",
+                    gaps.after_body_px.unwrap_or(0.0),
+                ));
+        } else if has_body {
             stack = stack
                 .child(
                     div()
@@ -1523,7 +1548,6 @@ impl Render for ConfirmPopupWindow {
             .debug_selector(|| "confirm-popup-root".to_string())
             .size_full()
             .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
             .bg(surface_bg)
             .overflow_hidden()
             .child(confirm_modal_shell(
@@ -1547,6 +1571,7 @@ impl Render for ConfirmPopupWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui::{Point, Size};
 
     #[test]
     fn confirm_window_key_intent_maps_escape_enter_and_tab_navigation() {
@@ -1587,6 +1612,109 @@ mod tests {
         assert_eq!(
             confirm_window_key_intent("right", &no_mods),
             Some(ConfirmWindowKeyIntent::FocusNext)
+        );
+    }
+
+    /// ⌘↵ means "open Agent Chat" everywhere else; inside a confirm it once
+    /// activated the focused (destructive) button. Only a bare Enter may.
+    #[test]
+    fn confirm_window_key_intent_never_activates_on_modified_enter() {
+        for modifiers in [
+            gpui::Modifiers {
+                platform: true,
+                ..Default::default()
+            },
+            gpui::Modifiers {
+                platform: true,
+                shift: true,
+                ..Default::default()
+            },
+            gpui::Modifiers {
+                control: true,
+                ..Default::default()
+            },
+            gpui::Modifiers {
+                alt: true,
+                ..Default::default()
+            },
+            gpui::Modifiers {
+                shift: true,
+                ..Default::default()
+            },
+        ] {
+            assert_eq!(
+                confirm_window_key_intent("enter", &modifiers),
+                None,
+                "{modifiers:?}"
+            );
+        }
+        let command = gpui::Modifiers {
+            platform: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            confirm_window_key_intent("w", &command),
+            Some(ConfirmWindowKeyIntent::Cancel),
+            "⌘W closes the topmost layer, which is the modal"
+        );
+        assert_eq!(confirm_window_key_intent("tab", &command), None);
+    }
+
+    struct KeyListenerProbe {
+        focus_handle: FocusHandle,
+        seen: Rc<std::cell::Cell<usize>>,
+    }
+
+    impl Render for KeyListenerProbe {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            let seen = self.seen.clone();
+            div()
+                .size_full()
+                .track_focus(&self.focus_handle)
+                .capture_key_down(move |_, _, _| seen.set(seen.get() + 1))
+        }
+    }
+
+    /// The confirm router consumes keys in a keystroke interceptor. A key it
+    /// consumed must not also reach the parent window's outermost capture
+    /// listener — that double delivery cycled Tab twice (focus never moved in
+    /// a two-button modal) and let Escape run the parent's close ladder.
+    #[gpui::test]
+    fn stopped_keystroke_interceptor_hides_the_key_from_element_listeners(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let seen = Rc::new(std::cell::Cell::new(0));
+        let window = cx.add_window({
+            let seen = seen.clone();
+            move |_, cx| KeyListenerProbe {
+                focus_handle: cx.focus_handle(),
+                seen,
+            }
+        });
+        window
+            .update(cx, |probe, window, cx| {
+                window.focus(&probe.focus_handle, cx)
+            })
+            .unwrap();
+        let _interceptor = cx.update(|cx| {
+            cx.intercept_keystrokes(|event, _, cx| {
+                if event.keystroke.key == "tab" {
+                    cx.stop_propagation();
+                }
+            })
+        });
+
+        cx.dispatch_keystroke(window.into(), gpui::Keystroke::parse("tab").unwrap());
+        assert_eq!(
+            seen.get(),
+            0,
+            "an intercepted key reached an element listener"
+        );
+        cx.dispatch_keystroke(window.into(), gpui::Keystroke::parse("a").unwrap());
+        assert_eq!(
+            seen.get(),
+            1,
+            "keys the interceptor ignores still reach listeners"
         );
     }
 
@@ -1632,91 +1760,83 @@ mod tests {
         assert!(no_body >= CONFIRM_MIN_HEIGHT);
     }
 
-    #[test]
-    fn confirm_window_bounds_centered_over_parent_window() {
-        let parent_bounds = Bounds {
-            origin: Point {
-                x: px(100.),
-                y: px(200.),
-            },
+    fn rect(x: f32, y: f32, width: f32, height: f32) -> Bounds<Pixels> {
+        Bounds {
+            origin: Point { x: px(x), y: px(y) },
             size: Size {
-                width: px(750.),
-                height: px(500.),
+                width: px(width),
+                height: px(height),
             },
-        };
-
-        let expected_width = MODAL_WIDTH_PX;
-        let expected_height = confirm_window_height_from_body_lines(true, 1);
-        let bounds =
-            confirm_window_bounds_from_height(parent_bounds, px(expected_width), expected_height);
-        let actual_x: f32 = bounds.origin.x.into();
-        let actual_y: f32 = bounds.origin.y.into();
-        let actual_w: f32 = bounds.size.width.into();
-
-        let expected_x = 100.0 + ((750.0 - expected_width) / 2.0);
-        let expected_y = 200.0 + ((500.0 - expected_height) / 2.0);
-
-        assert!((actual_x - expected_x).abs() < 0.5);
-        assert!((actual_y - expected_y).abs() < 0.5);
-        assert!((actual_w - expected_width).abs() < 0.5);
-    }
-
-    #[test]
-    fn confirm_window_bounds_centered_notes_sized_parent() {
-        let parent_bounds = Bounds {
-            origin: Point {
-                x: px(960.),
-                y: px(80.),
-            },
-            size: Size {
-                width: px(350.),
-                height: px(280.),
-            },
-        };
-
-        // Notes trash confirm: short two-line body at the compact width.
-        let bounds = confirm_window_bounds_from_height(
-            parent_bounds,
-            px(326.),
-            confirm_window_height_from_body_lines(true, 2),
-        );
-
-        let x: f32 = bounds.origin.x.into();
-        let y: f32 = bounds.origin.y.into();
-        let width: f32 = bounds.size.width.into();
-        let height: f32 = bounds.size.height.into();
-
-        assert!(
-            (x - (960.0 + ((350.0 - 326.0) / 2.0))).abs() < 0.5,
-            "popup x must center over notes parent"
-        );
-        assert!(
-            (width - 326.0).abs() < 0.5,
-            "popup width should use the requested compact width when it fits"
-        );
-        assert!(
-            (y - (80.0 + ((280.0 - height) / 2.0))).abs() < 0.5,
-            "popup must center vertically over notes parent"
-        );
-    }
-
-    #[test]
-    fn confirm_focus_global_state_tracks_native_popup_focus_changes() {
-        if let Ok(mut state) = CONFIRM_HAS_SECONDARY
-            .get_or_init(|| Mutex::new(false))
-            .lock()
-        {
-            *state = false;
         }
-        let _ = CONFIRM_FOCUSED_BUTTON.get_or_init(|| Mutex::new(FocusedButton::Confirm));
-        set_confirm_focused_button(FocusedButton::Confirm);
-        assert_eq!(get_confirm_focused_button(), FocusedButton::Confirm);
+    }
 
-        cycle_confirm_focused_button(false);
-        assert_eq!(get_confirm_focused_button(), FocusedButton::Cancel);
+    fn assert_inside_screen(modal: Bounds<Pixels>, display: Bounds<Pixels>) {
+        let margin = px(crate::components::confirm_modal_shell::MODAL_SCREEN_MARGIN_PX) - px(0.5);
+        assert!(
+            modal.left() >= display.left() + margin,
+            "{modal:?} leaves {display:?}"
+        );
+        assert!(
+            modal.right() <= display.right() - margin,
+            "{modal:?} leaves {display:?}"
+        );
+        assert!(
+            modal.top() >= display.top() + margin,
+            "{modal:?} leaves {display:?}"
+        );
+        assert!(
+            modal.bottom() <= display.bottom() - margin,
+            "{modal:?} leaves {display:?}"
+        );
+    }
 
-        set_confirm_focused_button(FocusedButton::Confirm);
-        assert_eq!(get_confirm_focused_button(), FocusedButton::Confirm);
+    #[test]
+    fn confirm_window_bounds_center_over_a_fully_visible_parent() {
+        let display = rect(0., 25., 1728., 1050.);
+        let parent = rect(100., 200., 750., 500.);
+        let height = confirm_window_height_from_body_lines(true, 1);
+        let modal = modal_bounds_over_parent(parent, Some(display), px(MODAL_WIDTH_PX), px(height));
+
+        assert!((modal.center().x - parent.center().x).abs() < px(0.5));
+        assert!((modal.center().y - parent.center().y).abs() < px(0.5));
+        assert_eq!(modal.size.width, px(MODAL_WIDTH_PX));
+        assert_eq!(modal.size.height, px(height));
+    }
+
+    /// A Notes window parked at a screen edge put its delete confirm half off
+    /// screen: the modal centered on the window, not on what was visible.
+    #[test]
+    fn confirm_window_bounds_stay_on_screen_for_an_edge_parked_parent() {
+        let display = rect(0., 25., 1728., 1050.);
+        let height = px(confirm_window_height_from_body_lines(true, 2));
+        for parent in [
+            rect(1560., 80., 350., 280.),  // mostly past the right edge
+            rect(-250., 400., 350., 280.), // mostly past the left edge
+            rect(700., 1000., 350., 280.), // hanging below the Dock line
+            rect(700., -200., 350., 260.), // above the menu bar
+        ] {
+            let modal = modal_bounds_over_parent(parent, Some(display), px(326.), height);
+            assert_inside_screen(modal, display);
+            assert_eq!(modal.size.height, height, "the modal must not be clipped");
+            assert!(
+                modal.intersects(&parent),
+                "the modal must stay over the visible part of {parent:?}"
+            );
+        }
+    }
+
+    /// Clamping to a short parent cut the action row off; a modal keeps its
+    /// own height and only shrinks to fit the screen.
+    #[test]
+    fn confirm_window_bounds_keep_full_height_over_a_short_parent() {
+        let display = rect(0., 25., 1728., 1050.);
+        let parent = rect(600., 400., 750., 90.);
+        let height = px(CONFIRM_MAX_HEIGHT);
+        let modal = modal_bounds_over_parent(parent, Some(display), px(MODAL_WIDTH_PX), height);
+
+        assert_eq!(modal.size.height, height);
+        assert!((modal.center().x - parent.center().x).abs() < px(0.5));
+        assert_inside_screen(modal, display);
     }
 
     #[test]

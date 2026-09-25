@@ -9,6 +9,8 @@ mod agent_chat_surface_transitions;
 mod agent_handoff;
 #[path = "alias_input.rs"]
 mod alias_input;
+#[path = "alias_validation.rs"]
+mod alias_validation;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod app_impl_state_sync_tests;

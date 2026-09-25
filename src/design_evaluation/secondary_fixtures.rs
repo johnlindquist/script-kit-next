@@ -268,6 +268,7 @@ pub(crate) fn mount_secondary_fixture(
                         .then(|| "Keep editing".into()),
                     confirm_variant: gpui_component::button::ButtonVariant::Primary,
                     width: px(360.0),
+                    input: None,
                 },
                 Rc::new(|| true),
                 sender,
