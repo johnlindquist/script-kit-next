@@ -2103,7 +2103,7 @@ impl ScriptListApp {
             .clear();
     }
 
-    fn active_script_list_attachment_portal_kind(
+    pub(crate) fn active_script_list_attachment_portal_kind(
         &self,
     ) -> Option<crate::ai::context_selector::types::ContextPortalKind> {
         use crate::ai::context_selector::types::ContextPortalKind;
@@ -2601,13 +2601,14 @@ impl ScriptListApp {
         let root_windows_generation = self.root_search.root_windows_refresh_generation();
         let brain_inbox_epoch = self.root_search.root_brain_inbox_epoch();
         let grouped_source_filter_key = format!("{grouped_source_filters:?}");
+        let intent_token = self.intent_launcher.cache_token(computed_filter_text);
         let grouped_cache_key = match current_app_commands_app_name.as_deref() {
             Some(app_name) => format!(
-                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}\x1Fbrain-inbox-epoch={brain_inbox_epoch}",
+                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}\x1Fbrain-inbox-epoch={brain_inbox_epoch}\x1Fintent={intent_token}",
                 computed_filter_text
             ),
             None => format!(
-                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}\x1Fbrain-inbox-epoch={brain_inbox_epoch}",
+                "{}\x1Fsource-filters={grouped_source_filter_key}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}\x1Fbrain-inbox-epoch={brain_inbox_epoch}\x1Fintent={intent_token}",
                 computed_filter_text
             ),
         };
@@ -3044,6 +3045,19 @@ impl ScriptListApp {
                 grouped_items,
                 flat_results,
                 self.inline_calculator.as_ref(),
+            )
+        };
+        let (grouped_items, flat_results) = if menu_syntax_owns_main_list
+            || spine_owns_for_computed
+            || self.active_script_list_attachment_portal_kind().is_some()
+        {
+            (grouped_items, flat_results)
+        } else {
+            self.pin_intent_row(
+                grouped_items,
+                flat_results,
+                raw_filter_text,
+                &mut ranking_evidence,
             )
         };
         let (grouped_items, flat_results) =

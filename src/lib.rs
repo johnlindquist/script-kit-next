@@ -239,6 +239,7 @@ pub mod frecency;
 
 // Input history for up/down arrow navigation through previous inputs
 pub mod input_history;
+pub mod intent;
 
 // Process management for tracking bun script processes
 pub mod process_manager;

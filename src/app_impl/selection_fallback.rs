@@ -458,6 +458,10 @@ impl ScriptListApp {
             anyhow::bail!("main_menu_command_input_missing");
         }
 
+        if self.hold_enter_for_intent_reading(cx) {
+            self.update_main_menu_dispatch_status("pendingIntentReading", None);
+            return Ok(MainMenuDispatchResult::PendingConfirmation);
+        }
         if let Err(reason) = self.authorize_main_menu_selected_effect() {
             self.update_main_menu_dispatch_status("refused", Some(reason));
             self.record_blocked_script_list_submit(reason);
@@ -626,6 +630,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Fallback(_) => None,
                     // Script Issues is a synthetic diagnostic row — no frecency.
                     scripts::SearchResult::ScriptIssue(_) => None,
+                    scripts::SearchResult::Intent(_) => None,
                     // Spine projections don't track frecency.
                     scripts::SearchResult::SpineProjection(_) => None,
                 };
@@ -690,6 +695,7 @@ impl ScriptListApp {
                 }
 
                 self.mark_opened_from_main_menu("execute_selected");
+                self.record_intent_last_action_for_result(&result);
                 match result {
                     scripts::SearchResult::Script(script_match) => {
                         // Run 13 Pass 2 (user bug report) — if the user
@@ -919,6 +925,13 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::ScriptIssue(_) => {
                         self.open_script_issues_view(cx);
+                    }
+                    scripts::SearchResult::Intent(intent_match) => {
+                        self.set_main_menu_dispatch_observation(observation.clone());
+                        if let Err(reason) = self.execute_intent_plan(&intent_match.plan, cx) {
+                            self.update_main_menu_dispatch_status("refused", Some(reason));
+                            anyhow::bail!(reason);
+                        }
                     }
                     scripts::SearchResult::SpineProjection(_) => {
                         anyhow::bail!("main_menu_spine_action_requires_live_window");

@@ -1370,6 +1370,8 @@ pub(crate) struct ScriptListApp {
     /// Cancel flag for the in-flight LLM ghost request (best-effort: set before
     /// dispatch; stale responses are always discarded by generation compare).
     ghost_llm_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Jev's reading of the committed query and the plan pinned for it.
+    pub(crate) intent_launcher: crate::intent::IntentLauncher,
     /// LRU cache of LLM ghost predictions keyed by (query, cwd, context_rev, model).
     ghost_llm_cache: std::collections::VecDeque<(
         crate::scripts::search::ghost::GhostLlmCacheKey,

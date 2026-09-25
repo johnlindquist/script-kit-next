@@ -1092,6 +1092,16 @@ fn render_focused_info_for_result(
             let _ = match_indices;
             let _ = shortcut_display;
         }
+        scripts::SearchResult::Intent(intent_match) => {
+            if let Some(typed) = intent_match.plan.typed.as_deref() {
+                content = content.child(focused_info_labeled_section("TYPED", typed, style));
+            }
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Intent", style));
+            let _ = match_indices;
+            let _ = shortcut_display;
+        }
         scripts::SearchResult::SpineProjection(_) => {
             // Spine projection rows have no focused info panel
             let _ = match_indices;
@@ -1303,6 +1313,7 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Fallback(_) => None, // Fallbacks don't track frecency
                     scripts::SearchResult::ScriptIssue(_) => None, // Diagnostic row doesn't track frecency
+                    scripts::SearchResult::Intent(_) => None,
                     scripts::SearchResult::SpineProjection(_) => None, // Spine projections don't track frecency
                 };
 
@@ -1531,6 +1542,12 @@ impl ScriptListApp {
                         "script-issues".to_string(),
                         false,
                         "Inspect",
+                    )),
+                    scripts::SearchResult::Intent(m) => Some(ScriptInfo::with_action_verb(
+                        &m.plan.title,
+                        "intent".to_string(),
+                        false,
+                        m.verb,
                     )),
                     scripts::SearchResult::SpineProjection(_) => None, // Spine projections have no info panel
                     scripts::SearchResult::Flow(m) => Some(ScriptInfo::with_action_verb(

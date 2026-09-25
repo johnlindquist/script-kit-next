@@ -334,8 +334,59 @@ fn primary_action_copy(script: &ScriptInfo) -> PrimaryActionCopy {
     }
 }
 
+fn is_intent_plan(script: &ScriptInfo) -> bool {
+    script
+        .command_descriptor
+        .as_ref()
+        .is_some_and(|descriptor| {
+            descriptor.identity.source() == sk_protocol::command_contract::CommandSource::Intent
+        })
+}
+
+/// A plan read from a sentence can run, be kept as a script, or be explained; script
+/// preferences like aliases and favorites don't apply to it.
+fn intent_plan_actions(script: &ScriptInfo) -> Vec<Action> {
+    let primary_copy = primary_action_copy(script);
+    let mut run = Action::new(
+        "run_script",
+        primary_copy.title,
+        Some(primary_copy.description),
+        ActionCategory::ScriptContext,
+    )
+    .with_shortcut("↵")
+    .with_icon(IconName::PlayFilled)
+    .with_section("Actions");
+    if let Some(descriptor) = &script.command_descriptor {
+        run = run.with_command_contract(descriptor);
+    }
+    vec![
+        run,
+        Action::new(
+            "save_intent_as_script",
+            "Save as Script",
+            Some("Keep this as a script you can run again or give a shortcut".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘S")
+        .with_icon(IconName::FileCode)
+        .with_section("Actions"),
+        Action::new(
+            "toggle_info",
+            "Show Info",
+            Some("Toggle detailed info about this item".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘I")
+        .with_icon(IconName::File)
+        .with_section("Actions"),
+    ]
+}
+
 /// Get actions specific to the focused script.
 pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
+    if is_intent_plan(script) {
+        return intent_plan_actions(script);
+    }
     if has_invalid_script_context_input(script) {
         tracing::warn!(
             target: "script_kit::actions",

@@ -473,6 +473,7 @@ impl ScriptListApp {
             prediction_revision: Default::default(),
             ghost_llm_generation: 0,
             ghost_llm_cancel: None,
+            intent_launcher: crate::intent::IntentLauncher::default(),
             ghost_llm_cache: std::collections::VecDeque::new(),
             launcher_context,
             launcher_context_generation: 0,

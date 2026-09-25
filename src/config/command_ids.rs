@@ -75,6 +75,7 @@ impl CommandCategory {
             | CommandSource::Fallback
             | CommandSource::ValidationIssue
             | CommandSource::Spine
+            | CommandSource::Intent
             | CommandSource::Agent => None,
         }
     }

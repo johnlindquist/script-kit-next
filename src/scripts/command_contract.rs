@@ -718,6 +718,11 @@ impl SearchResult {
                 digest.number(item.fatal_count as u64);
                 digest.number(item.warning_count as u64);
             }
+            Self::Intent(item) => {
+                digest.text(item.plan.pathway.key());
+                digest.text(&item.plan.request);
+                digest.text(&item.plan.title);
+            }
             Self::SpineProjection(row) => digest.spine(row),
         }
         digest.finish()
@@ -935,6 +940,7 @@ impl SearchResult {
             Self::Agent(_) => CommandSource::Agent,
             Self::Fallback(_) => CommandSource::Fallback,
             Self::ScriptIssue(_) => CommandSource::ValidationIssue,
+            Self::Intent(_) => CommandSource::Intent,
             Self::SpineProjection(_) => CommandSource::Spine,
         }
     }
@@ -1125,7 +1131,8 @@ impl SearchResult {
             | Self::ClipboardHistory(_)
             | Self::DictationHistory(_)
             | Self::Fallback(_)
-            | Self::ScriptIssue(_) => {}
+            | Self::ScriptIssue(_)
+            | Self::Intent(_) => {}
         }
         descriptor.validate()?;
         Ok(descriptor)

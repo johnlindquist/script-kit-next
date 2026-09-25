@@ -1424,6 +1424,7 @@ fn is_eligible_for_ghost(result: &SearchResult) -> bool {
             | SearchResult::BrowserHistory(_)
             | SearchResult::BrowserTab(_)
             | SearchResult::ScriptIssue(_)
+            | SearchResult::Intent(_)
             | SearchResult::SpineProjection(_)
             | SearchResult::Agent(_)
     )

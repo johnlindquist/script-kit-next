@@ -116,6 +116,7 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         SearchResult::Agent(_) => ArtifactKind::Agent,
         SearchResult::Fallback(_) => ArtifactKind::Fallback,
         SearchResult::ScriptIssue(_) => ArtifactKind::Issue,
+        SearchResult::Intent(_) => ArtifactKind::Fallback,
         // Spine projections don't have a dedicated ArtifactKind; map to Fallback
         SearchResult::SpineProjection(_) => ArtifactKind::Fallback,
         // Flows don't have a dedicated ArtifactKind yet; map to Fallback like

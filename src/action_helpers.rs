@@ -91,6 +91,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
         )),
+        Some(SearchResult::Intent(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Intent row has no path"),
+        )),
         Some(SearchResult::SpineProjection(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Spine projection row has no filesystem path"),
         )),
@@ -158,6 +161,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
+        )),
+        Some(SearchResult::Intent(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Intent row has no path"),
         )),
         Some(SearchResult::SpineProjection(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Spine projection row has no filesystem path"),
@@ -236,6 +242,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
+        )),
+        Some(SearchResult::Intent(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Intent row has no path"),
         )),
         Some(SearchResult::SpineProjection(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Spine projection row has no filesystem path"),
@@ -333,6 +342,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row cannot be edited"),
+        )),
+        Some(SearchResult::Intent(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Intent row cannot be edited"),
         )),
         Some(SearchResult::SpineProjection(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Spine projection row cannot be edited"),

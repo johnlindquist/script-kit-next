@@ -425,6 +425,12 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("ExclamationTriangle".to_string())),
                 ),
+                SearchResult::Intent(m) => (
+                    m.plan.title.clone(),
+                    Some(m.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("sparkles".to_string())),
+                ),
                 SearchResult::SpineProjection(row) => (
                     row.title.to_string(),
                     row.subtitle.as_ref().map(|s| s.to_string()),

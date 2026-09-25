@@ -38,10 +38,11 @@ pub enum CommandSource {
     PromptTarget,
     PromptAction,
     Agent,
+    Intent,
 }
 
 impl CommandSource {
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 25] = [
         Self::Builtin,
         Self::Script,
         Self::Scriptlet,
@@ -66,6 +67,7 @@ impl CommandSource {
         Self::PromptTarget,
         Self::PromptAction,
         Self::Agent,
+        Self::Intent,
     ];
 
     pub const fn prefix(self) -> &'static str {
@@ -94,6 +96,7 @@ impl CommandSource {
             Self::PromptTarget => "prompt-target",
             Self::PromptAction => "prompt-action",
             Self::Agent => "agent",
+            Self::Intent => "intent",
         }
     }
 

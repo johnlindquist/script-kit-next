@@ -35,6 +35,10 @@ mod filter_input_core;
 mod filter_input_updates;
 #[path = "filtering_cache.rs"]
 mod filtering_cache;
+#[path = "intent_launcher.rs"]
+mod intent_launcher;
+#[path = "intent_live.rs"]
+mod intent_live;
 #[path = "../launch_filter_policy.rs"]
 mod launch_filter_policy;
 #[path = "lifecycle_reset.rs"]

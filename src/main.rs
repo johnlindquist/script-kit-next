@@ -99,6 +99,7 @@ mod prompt_completion;
 mod prompts;
 mod protocol;
 mod protocol_stats;
+pub use script_kit_gpui::intent;
 pub use script_kit_gpui::runtime_policy;
 mod scripts;
 mod scrolling;

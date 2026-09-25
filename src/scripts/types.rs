@@ -381,6 +381,29 @@ pub struct ScriptIssueMatch {
     pub score: i32,
 }
 
+/// Selection keys of intent rows start with this.
+pub const INTENT_ROW_KEY_PREFIX: &str = "intent/";
+
+/// Jev's reading of the typed sentence, pinned first so Enter does what it asks.
+#[derive(Clone, Debug)]
+pub struct IntentMatch {
+    pub plan: std::sync::Arc<crate::intent::Plan>,
+    pub subtitle: String,
+    pub verb: &'static str,
+    pub score: i32,
+}
+
+impl IntentMatch {
+    pub fn new(plan: std::sync::Arc<crate::intent::Plan>) -> Self {
+        Self {
+            subtitle: crate::intent::plan_subtitle(&plan),
+            verb: crate::intent::plan_verb(&plan),
+            plan,
+            score: i32::MAX,
+        }
+    }
+}
+
 /// Represents a fallback command match for the "Use with..." section
 ///
 /// Fallbacks are always shown at the bottom of search results when there's a filter query.
@@ -591,6 +614,8 @@ pub enum SearchResult {
     /// Synthetic row summarizing script validation failures, pinned at the top
     /// of the launcher so authors see "my script vanished" repairs inline.
     ScriptIssue(ScriptIssueMatch),
+    /// Jev's plan for the typed sentence, pinned at the top while it matches the text.
+    Intent(IntentMatch),
     /// In-place Spine prompt-builder row projected into the main list.
     SpineProjection(crate::spine::SpineListRow),
 }
@@ -631,7 +656,7 @@ impl SearchResult {
             SearchResult::DictationHistory(_) => Some(RootUnifiedSourceFilter::Dictation),
             SearchResult::BrowserTab(_) => Some(RootUnifiedSourceFilter::BrowserTabs),
             SearchResult::BrowserHistory(_) => Some(RootUnifiedSourceFilter::BrowserHistory),
-            SearchResult::Agent(_) | SearchResult::Fallback(_) => None,
+            SearchResult::Agent(_) | SearchResult::Fallback(_) | SearchResult::Intent(_) => None,
             SearchResult::SpineProjection(_) => None,
         }
     }
@@ -665,6 +690,7 @@ impl SearchResult {
                 .as_deref()
                 .unwrap_or_else(|| fm.fallback.name()),
             SearchResult::ScriptIssue(issue) => &issue.title,
+            SearchResult::Intent(m) => &m.plan.title,
             SearchResult::SpineProjection(row) => row.title.as_ref(),
         }
     }
@@ -702,6 +728,7 @@ impl SearchResult {
                 .as_deref()
                 .or_else(|| Some(fm.fallback.description())),
             SearchResult::ScriptIssue(issue) => issue.description.as_deref(),
+            SearchResult::Intent(m) => Some(m.subtitle.as_str()),
             SearchResult::SpineProjection(row) => row.subtitle.as_ref().map(|s| s.as_ref()),
         }
     }
@@ -730,6 +757,7 @@ impl SearchResult {
             SearchResult::Agent(am) => am.score,
             SearchResult::Fallback(fm) => fm.score,
             SearchResult::ScriptIssue(issue) => issue.score,
+            SearchResult::Intent(m) => m.score,
             SearchResult::SpineProjection(row) => row.score,
         }
     }
@@ -767,6 +795,7 @@ impl SearchResult {
             SearchResult::Agent(_) => "Agent",
             SearchResult::Fallback(_) => "Fallback",
             SearchResult::ScriptIssue(_) => "Issues",
+            SearchResult::Intent(_) => "Intent",
             SearchResult::SpineProjection(row) => row.kind.type_label(),
         }
     }
@@ -807,7 +836,7 @@ impl SearchResult {
             | SearchResult::Skill(_)
             | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
-            SearchResult::ScriptIssue(_) => None,
+            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) => None,
             SearchResult::SpineProjection(_) => None,
         }
     }
@@ -855,7 +884,7 @@ impl SearchResult {
             SearchResult::BrowserTab(_) => None,
             SearchResult::BrowserHistory(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::Fallback(_) | SearchResult::Agent(_) => None,
-            SearchResult::ScriptIssue(_) => None,
+            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) => None,
             _ => self.launcher_command_id(),
         }
     }
@@ -896,6 +925,7 @@ impl SearchResult {
             SearchResult::Agent(am) => Some(format!("agent/{}", am.agent.path.display())),
             SearchResult::BrowserTab(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::ScriptIssue(_) => Some("script-issue/catalog-validation".to_string()),
+            SearchResult::Intent(m) => Some(format!("{INTENT_ROW_KEY_PREFIX}{}", m.plan.title)),
             SearchResult::SpineProjection(row) => Some(row.id.to_string()),
             _ => self
                 .history_result_key()
@@ -937,6 +967,7 @@ impl SearchResult {
             SearchResult::Agent(_) => ("Agent", "bot"),
             SearchResult::Fallback(_) => ("Fallback", "zap"),
             SearchResult::ScriptIssue(_) => ("Issues", "triangle-alert"),
+            SearchResult::Intent(_) => ("Intent", "sparkles"),
             SearchResult::SpineProjection(row) => row.kind.type_accessory_info(),
         }
     }
@@ -991,7 +1022,7 @@ impl SearchResult {
             SearchResult::BrowserTab(_) => Some("Browser Tabs"),
             SearchResult::BrowserHistory(_) => Some("Browser History"),
             SearchResult::Window(_) => Some("Windows"),
-            SearchResult::ScriptIssue(_) => None,
+            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) => None,
             SearchResult::SpineProjection(_) => Some("Spine"),
             _ => None,
         }
@@ -1084,6 +1115,7 @@ impl SearchResult {
                 }
             }
             SearchResult::ScriptIssue(_) => "Inspect Issues",
+            SearchResult::Intent(m) => m.verb,
             SearchResult::SpineProjection(row) => row.default_action_text(),
         }
     }

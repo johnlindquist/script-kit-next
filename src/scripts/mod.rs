@@ -75,10 +75,10 @@ pub use self::types::{
     preview_cache_is_valid, preview_match_signature, AgentChatHistoryMatch, AgentMatch,
     AiVaultMatch, AppMatch, BrainInboxMatch, BrainMatch, BrowserHistoryMatch, BrowserTabMatch,
     BuiltInMatch, ClipboardHistoryMatch, ConversationRowTarget, DictationHistoryMatch,
-    FallbackConfig, FallbackMatch, FileMatch, FlowMatch, MatchEvidence, MatchEvidenceField,
-    MatchIndices, NoteMatch, RootWindowEntry, Script, ScriptBody, ScriptContentMatch,
-    ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult,
-    SkillMatch, TodoMatch, WindowMatch,
+    FallbackConfig, FallbackMatch, FileMatch, FlowMatch, IntentMatch, MatchEvidence,
+    MatchEvidenceField, MatchIndices, NoteMatch, RootWindowEntry, Script, ScriptBody,
+    ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch,
+    SearchResult, SkillMatch, TodoMatch, WindowMatch, INTENT_ROW_KEY_PREFIX,
 };
 #[allow(unused_imports)]
 pub use self::validation::{

@@ -1633,7 +1633,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/animation-presets",
             "Animation Presets",
-            "Browse 25 main-window entry animations",
+            "Preview and choose how the main window fades in",
             vec!["animation", "preset", "fade", "blur", "motion", "demo"],
             BuiltInFeature::AnimationPresets,
             "clapperboard",

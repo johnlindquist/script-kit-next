@@ -697,6 +697,7 @@ mod advanced_query_tests {
                     | SearchResult::BrowserHistory(_) => "rootPassive",
                     SearchResult::Fallback(_) => "fallback",
                     SearchResult::ScriptIssue(_) => "scriptIssue",
+                    SearchResult::Intent(_) => "intent",
                     SearchResult::BrainInboxItem(_) => "brainInbox",
                     SearchResult::Agent(_) => "agent",
                     SearchResult::SpineProjection(_) => "spine",

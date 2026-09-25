@@ -319,6 +319,13 @@ impl ScriptListApp {
                     }
                 }
             }
+            "save_intent_as_script" => {
+                if self.save_selected_intent_as_script(cx) {
+                    DispatchOutcome::success()
+                } else {
+                    DispatchOutcome::not_handled().with_detail("no_intent_row_selected")
+                }
+            }
             "toggle_info" => {
                 tracing::info!(
                     category = "UI",
