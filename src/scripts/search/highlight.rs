@@ -1,5 +1,5 @@
 use nucleo_matcher::pattern::Pattern;
-use nucleo_matcher::{Matcher, Utf32Str};
+use nucleo_matcher::Matcher;
 
 use super::super::types::{
     MatchEvidence, MatchEvidenceField, MatchIndices, ScriptMatchKind, SearchResult,
@@ -109,10 +109,9 @@ impl UnicodeHighlightCtx {
 
     #[inline]
     fn indices_for(&mut self, haystack: &str) -> (bool, Vec<usize>) {
-        self.haystack_buf.clear();
         self.indices_buf.clear();
 
-        let utf32 = Utf32Str::new(haystack, &mut self.haystack_buf);
+        let utf32 = super::nucleo::char_units(haystack, &mut self.haystack_buf);
         if self
             .pattern
             .indices(utf32, &mut self.matcher, &mut self.indices_buf)

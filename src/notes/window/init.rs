@@ -351,12 +351,9 @@ impl NotesApp {
     ///
     /// This ensures bounds are saved even when the window is closed via traffic light
     /// (red close button) which doesn't go through our close handlers.
-    /// Bounds may only persist while the interlock is `Enabled`: the
-    /// calibrated entry morph (compression/rebound) and exit fade own the
-    /// frame in the locked phases, and persisting one of THOSE intermediate
-    /// frames would restore a morph-sized window after a rapid close or
-    /// crash. The close paths save the stable frame explicitly before the
-    /// exit begins.
+    /// Bounds may only persist while the interlock is `Enabled`: the entry
+    /// and exit fades own the window in the locked phases. The close paths
+    /// save the stable frame explicitly before the exit begins.
     fn bounds_are_persistable(&self) -> bool {
         !self.host_policy.is_hidden()
             && self.native_resize_phase == resize::NotesNativeResizePhase::Enabled
@@ -367,10 +364,7 @@ impl NotesApp {
     }
 
     /// Explicit close-path save of the stable pre-exit frame. Skipped while
-    /// the interlock is locked: a close during the calibrated entry morph
-    /// would otherwise persist a transient 106%/98.5% morph frame (runtime
-    /// probe notes-live-resize, morph clause, 2026-07-26). The last stable
-    /// save simply remains authoritative.
+    /// the interlock is locked; the last stable save remains authoritative.
     pub(super) fn maybe_save_stable_bounds_for_exit(&self, window: &gpui::Window) {
         if !self.bounds_are_persistable() {
             tracing::info!(

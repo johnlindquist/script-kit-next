@@ -1335,7 +1335,6 @@ describe("noninteractive DevTools operator safety", () => {
 
   test.each([
     ["glass observer verification", "glass-observers.ts", "verifyCommand"],
-    ["Spotlight live filmstrip", "spotlight-sync-filmstrip.ts", "main"],
     ["main-window native drag", "main-window-native-drag.ts", "cli"],
   ])("%s refuses before native capture while pure imports stay available", (_owner, file, entrypoint) => {
     const root = mkdtempSync(join(tmpdir(), "script-kit-visible-entry-safety-"));

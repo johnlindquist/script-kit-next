@@ -3,16 +3,6 @@
 // ============================================================================
 
 #[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GlassMorphVariant {
-    WindowFrame,
-    ContentLayer,
-    FadeOnly,
-    /// Child popup that replays the selected main-window entry preset.
-    MirrorMainEntry,
-}
-
-#[cfg(target_os = "macos")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct NativeGlassEntryReceipt {
     pub(crate) window_number: i64,
@@ -25,31 +15,9 @@ pub(crate) struct NativeGlassEntryReceipt {
     /// `f64::to_bits` of the visible entry start alpha the morph launched
     /// with (bits keep the receipt `Eq`). `None` when no morph ran.
     pub(crate) morph_start_alpha_bits: Option<u64>,
-    /// TOTAL entry duration (material onset + visible tail) in ms.
+    /// Fade duration in ms; every material, content, and alpha channel has
+    /// settled by then.
     pub(crate) settle_duration_ms: u64,
-    /// Material onset prefix (glass Clear→Regular ramp) in ms.
-    pub(crate) material_onset_duration_ms: u64,
-    /// Geometry/alpha tail duration in ms.
-    pub(crate) visible_tail_duration_ms: u64,
-    /// GPUI content hold before its fade, in ms.
-    pub(crate) content_hold_duration_ms: u64,
-    /// GPUI content fade duration in ms.
-    pub(crate) content_fade_duration_ms: u64,
-    /// Time from native morph start until phase one first crosses the final
-    /// window size — the pure GEOMETRIC crossing (23ms at the default
-    /// visible-tail calibration). Content reveal must use
-    /// `content_reveal_delay_ms`, which also waits out the alpha ramp.
-    pub(crate) settled_crossing_delay_ms: u64,
-    /// Material-safe reveal anchor: max(geometric crossing, alpha ramp).
-    pub(crate) content_reveal_delay_ms: u64,
-    /// Compression duration (phase one) in ms.
-    pub(crate) phase_one_duration_ms: u64,
-    /// Rebound duration (phase two) in ms.
-    pub(crate) phase_two_duration_ms: u64,
-    /// 0.85 → 0.99 alpha ramp duration in ms.
-    pub(crate) alpha_ramp_duration_ms: u64,
-    /// 0.99 → 1.0 finishing alpha duration in ms.
-    pub(crate) alpha_finish_duration_ms: u64,
     pub(crate) configured_at_monotonic_ns: u64,
     pub(crate) configured_at_unix_ms: u64,
 }
@@ -63,10 +31,6 @@ struct MainGlassEntryRuntimeReceipt {
     window_number: i64,
     preset_id: &'static str,
     duration_ms: u32,
-    compression_ms: u32,
-    reveal_ms: u32,
-    start_width_scale: f64,
-    squish_width_scale: f64,
     window_start_alpha: f64,
     material_start_alpha: f64,
     backdrop_start_alpha_effective: f64,
@@ -89,7 +53,7 @@ struct MainGlassEntryRuntimeReceipt {
     actual_alpha: Option<f64>,
     post_hide_alpha: Option<f64>,
     effects_restored: Option<bool>,
-    frame_restored: Option<bool>,
+    frame_unchanged: Option<bool>,
     outcome: &'static str,
     configured_at_host_time_ns: u64,
     cancelled_at_host_time_ns: Option<u64>,
@@ -156,11 +120,6 @@ pub fn main_glass_entry_lifecycle_receipt() -> serde_json::Value {
         "presetId": receipt.preset_id,
         "outcome": receipt.outcome,
         "durationMs": receipt.duration_ms,
-        "compressionMs": receipt.compression_ms,
-        "reboundMs": receipt.duration_ms - receipt.compression_ms,
-        "revealMs": receipt.reveal_ms,
-        "startWidthScale": receipt.start_width_scale,
-        "squishWidthScale": receipt.squish_width_scale,
         "windowStartAlpha": receipt.window_start_alpha,
         "materialStartAlpha": receipt.material_start_alpha,
         "backdropStartAlphaEffective": receipt.backdrop_start_alpha_effective,
@@ -183,7 +142,7 @@ pub fn main_glass_entry_lifecycle_receipt() -> serde_json::Value {
         "actualFinalFrame": receipt.actual_frame,
         "actualFinalAlpha": receipt.actual_alpha,
         "postHideAlpha": receipt.post_hide_alpha,
-        "frameRestored": receipt.frame_restored,
+        "frameUnchanged": receipt.frame_unchanged,
         "effectsRestored": receipt.effects_restored,
         "configuredAtHostTimeNs": receipt.configured_at_host_time_ns,
         "expectedSettleDeadlineNs": receipt.configured_at_host_time_ns
@@ -208,605 +167,29 @@ struct TahoeGlassBackdropResult {
     style_signature: NativeGlassStyleSignature,
 }
 
-#[cfg(target_os = "macos")]
-impl GlassMorphVariant {
-    fn log_name(self) -> &'static str {
-        match self {
-            Self::WindowFrame => "window_frame",
-            Self::ContentLayer => "detached_window_frame",
-            Self::FadeOnly => "fade_only",
-            Self::MirrorMainEntry => "mirror_main_entry",
-        }
-    }
-
-    /// Popups that mirror the main window (the Actions menu and modals) sit
-    /// over the already-tinted main glass and settle on the untinted popup
-    /// material; every other surface keeps the window backdrop.
-    fn backdrop_role(self) -> NativeGlassSurfaceRole {
-        match self {
-            Self::MirrorMainEntry => NativeGlassSurfaceRole::PopupBackdrop,
-            Self::WindowFrame | Self::ContentLayer | Self::FadeOnly => {
-                NativeGlassSurfaceRole::WindowBackdrop
-            }
-        }
-    }
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug)]
-struct GlassMorphTuning {
-    duration: f64,
-    inset_fraction: f64,
-    start_alpha: f64,
-    start_scale_x: f64,
-    start_scale_y: f64,
-    squish_scale_x: f64,
-    squish_scale_y: f64,
-    phase1: f64,
-    phase2: f64,
-    /// Alpha the phase-one ramp targets (0.99 — never fully opaque while the
-    /// window is wider than natural size).
-    phase1_alpha_target: f64,
-    /// Duration of the start_alpha → phase1_alpha_target leg (clamped to
-    /// phase1).
-    alpha_ramp_duration: f64,
-    /// Duration of the phase1_alpha_target → 1.0 leg from rebound start
-    /// (clamped to phase2).
-    alpha_finish_duration: f64,
-    /// Material onset prefix duration before the visible tail begins.
-    material_onset_duration: f64,
-    /// GPUI content hold before its fade (within the onset).
-    content_hold_duration: f64,
-    /// GPUI content fade duration (ends at tail start).
-    content_fade_duration: f64,
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum MainFooterEntryDefocusScope {
-    PerCapsule,
-}
-
-#[cfg(target_os = "macos")]
-impl MainFooterEntryDefocusScope {
-    fn log_name(self) -> &'static str {
-        match self {
-            Self::PerCapsule => "per_capsule",
-        }
-    }
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct MainFooterEntryMaterialPolicy {
-    target_alpha: f64,
-    /// The gap-spanning footer CONTAINER never joins the content fade — a
-    /// translucent container would mix desktop pixels through the
-    /// inter-capsule gaps (the measured 2026-08-12 capsule-fade defect).
-    enroll_in_content_fade: bool,
-    defocus_scope: MainFooterEntryDefocusScope,
-    /// Radius applied independently to every clipped NSGlassEffectView
-    /// capsule; never apply this value to the footer container or hints host.
-    defocus_radius: f64,
-    /// Each capsule runs the SAME Clear→Regular + tint material ramp as the
-    /// main backdrop across the onset prefix (2026-08-13 parity retune, user
-    /// report: the capsules "don't match the blur of the main window" — the
-    /// material ramp, not the layer defocus, is the visible bloom).
-    material_onset_ramp: bool,
-    /// Each capsule's own foreground contentView joins the shared content
-    /// fade at the content presence floor, so labels bloom in with the main
-    /// content instead of popping in crisp. This is PER-CAPSULE foreground
-    /// alpha, never the container (see enroll_in_content_fade).
-    foreground_content_fade: bool,
-}
-
-#[cfg(target_os = "macos")]
-fn main_footer_entry_material_policy() -> MainFooterEntryMaterialPolicy {
-    MainFooterEntryMaterialPolicy {
-        target_alpha: 1.0,
-        enroll_in_content_fade: false,
-        defocus_scope: MainFooterEntryDefocusScope::PerCapsule,
-        defocus_radius: glass_main_entry_blur_radius(),
-        material_onset_ramp: true,
-        foreground_content_fade: true,
-    }
-}
-
-/// Which product surface is entering. The geometry function must be told this
-/// EXPLICITLY by its caller — never infer it from `window_name`, which is a
-/// human-readable log label and not a policy input.
-///
-/// Introduced by Oracle session `glass-entry-feel-options` WP1 as the typed
-/// replacement for the old `grow_in: bool`. The bool could only express
-/// direction; the user's request ("make main feel like the Cmd+K Actions
-/// menu") needs direction, travel scaling, and onset to vary per surface.
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GlassEntrySurface {
-    /// The launcher panel, summoned by the global hotkey.
-    Main,
-    /// A popup attached to a parent NSWindow (Actions/Cmd+K and friends).
-    ChildPopup,
-    /// Notes, Dictation, HUD — free-standing secondary windows.
-    FreeStandingSecondary,
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GlassEntryDirection {
-    /// Spotlight's outset enter: start wider, compress below final, rebound.
-    ShrinkIn,
-    /// The child-popup enter: start below final, overshoot past it, settle.
-    GrowIn,
-}
-
-#[cfg(target_os = "macos")]
-impl GlassEntryDirection {
-    /// Multiplies every per-side travel. `ShrinkIn` keeps the historical
-    /// `+1.0` (start outset, squish under final); `GrowIn` inverts it.
-    fn geometry_sign(self) -> f64 {
-        match self {
-            Self::ShrinkIn => 1.0,
-            Self::GrowIn => -1.0,
-        }
-    }
-
-    fn log_name(self) -> &'static str {
-        match self {
-            Self::ShrinkIn => "shrink_in",
-            Self::GrowIn => "grow_in",
-        }
-    }
-}
-
-/// How per-side travel is derived from the settled window width.
-///
-/// `Fractional` is the only policy production uses today. The other two are
-/// the WP2/WP4 candidates from `glass-entry-feel-options` and are unreachable
-/// until `glass_entry_policy` returns them.
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GlassEntryTravelPolicy {
-    /// Travel = width × fraction. Same percentage on every surface, which
-    /// means a wide window physically moves further and faster.
-    Fractional,
-    /// Travel capped at the Actions popup's point displacement, so a large
-    /// window moves the same NUMBER OF POINTS as the popup rather than the
-    /// same percentage.
-    ///
-    /// Not yet resolved by `glass_entry_policy` — this is the WP2 candidate
-    /// from `glass-entry-feel-options`. Implemented and unit-tested now so the
-    /// retune is a one-line policy change rather than new geometry code.
-    #[allow(dead_code)]
-    ActionsPointCapped,
-    /// No geometry at all — alpha-only entry. The WP4 fade-only candidate;
-    /// see `ActionsPointCapped` for why it is implemented ahead of use.
-    #[allow(dead_code)]
-    FixedFrame,
-}
-
-#[cfg(target_os = "macos")]
-impl GlassEntryTravelPolicy {
-    fn log_name(self) -> &'static str {
-        match self {
-            Self::Fractional => "fractional",
-            Self::ActionsPointCapped => "actions_point_capped",
-            Self::FixedFrame => "fixed_frame",
-        }
-    }
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GlassEntryOnsetPolicy {
-    /// Material onset prefix (glass Clear→Regular + held GPUI content roots)
-    /// before the visible tail.
-    Full,
-    /// Skip the onset; the visible tail starts immediately. The WP4 tail-only
-    /// candidate — not yet resolved by `glass_entry_policy`.
-    #[allow(dead_code)]
-    TailOnly,
-}
-
-/// How the FIRST PHOTON's geometry relates to the calibrated visible-tail
-/// start frame.
-///
-/// Retuned 2026-08-13 from the user-supplied 57fps Spotlight reference
-/// (`.artifacts/entry-onset-retune/reference/measurements.json`): Spotlight's
-/// first photon is ~103.05% of settled width and converges to the ~101.2%
-/// tail-start width within the material prefix. The main window restores that
-/// soft-materialize stretch; popups and secondary windows stay tail-aligned.
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GlassEntryOnsetGeometry {
-    /// Begin directly on the calibrated visible-tail frame.
-    TailAligned,
-    /// Restore Spotlight's wider first photon, then converge to the calibrated
-    /// visible-tail frame inside the existing material-onset prefix.
-    SpotlightSoftMaterialize,
-}
-
-#[cfg(target_os = "macos")]
-impl GlassEntryOnsetGeometry {
-    fn start_per_side(self, final_width: f64, tail_start_per_side: f64) -> f64 {
-        match self {
-            Self::TailAligned => tail_start_per_side,
-            Self::SpotlightSoftMaterialize => {
-                final_width * (GLASS_MAIN_ONSET_START_WIDTH_SCALE - 1.0) * 0.5
-            }
-        }
-    }
-
-    fn duration(self) -> f64 {
-        match self {
-            Self::TailAligned => 0.0,
-            Self::SpotlightSoftMaterialize => GLASS_MAIN_ONSET_GEOMETRY_DURATION,
-        }
-    }
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct GlassEntryPolicy {
-    direction: GlassEntryDirection,
-    travel: GlassEntryTravelPolicy,
-    onset: GlassEntryOnsetPolicy,
-    onset_geometry: GlassEntryOnsetGeometry,
-}
-
-/// The per-surface entry policy.
-///
-/// This resolver is the single place a retune happens. As of WP1 it is
-/// deliberately BEHAVIOR-PRESERVING: it reproduces exactly what the old
-/// `grow_in: bool` did at each call site, so the typed refactor can land and
-/// be verified before any motion changes.
-#[cfg(target_os = "macos")]
-fn glass_entry_policy(surface: GlassEntrySurface) -> GlassEntryPolicy {
-    match surface {
-        GlassEntrySurface::Main => GlassEntryPolicy {
-            direction: GlassEntryDirection::ShrinkIn,
-            travel: GlassEntryTravelPolicy::Fractional,
-            onset: GlassEntryOnsetPolicy::Full,
-            onset_geometry: GlassEntryOnsetGeometry::SpotlightSoftMaterialize,
-        },
-        GlassEntrySurface::ChildPopup => GlassEntryPolicy {
-            direction: GlassEntryDirection::GrowIn,
-            travel: GlassEntryTravelPolicy::Fractional,
-            onset: GlassEntryOnsetPolicy::Full,
-            onset_geometry: GlassEntryOnsetGeometry::TailAligned,
-        },
-        GlassEntrySurface::FreeStandingSecondary => GlassEntryPolicy {
-            direction: GlassEntryDirection::ShrinkIn,
-            travel: GlassEntryTravelPolicy::Fractional,
-            onset: GlassEntryOnsetPolicy::Full,
-            onset_geometry: GlassEntryOnsetGeometry::TailAligned,
-        },
-    }
-}
-
-#[cfg(target_os = "macos")]
-impl GlassEntrySurface {
-    fn log_name(self) -> &'static str {
-        match self {
-            Self::Main => "main",
-            Self::ChildPopup => "child_popup",
-            Self::FreeStandingSecondary => "free_standing_secondary",
-        }
-    }
-
-    /// The main window's stronger onset defocus vs the shared popup/secondary
-    /// radius (2026-08-13 soft-materialize retune).
-    fn entry_blur_radius(self) -> f64 {
-        match self {
-            Self::Main => glass_main_entry_blur_radius(),
-            Self::ChildPopup | Self::FreeStandingSecondary => glass_entry_blur_radius(),
-        }
-    }
-
-    /// Main resolves its defocus inside the material-onset prefix; other
-    /// surfaces keep the historical full-entry ramp.
-    fn entry_blur_duration(self, tuning: GlassMorphTuning) -> f64 {
-        match self {
-            Self::Main => tuning.material_onset_duration,
-            Self::ChildPopup | Self::FreeStandingSecondary => tuning.total_entry_duration(),
-        }
-    }
-}
-
-/// Resolve the physical main NSWindow to `GlassEntrySurface::Main` at the
-/// shared window-frame animation owner so the main-only onset policy is
-/// actually exercised; every other window-frame surface stays secondary.
-#[cfg(target_os = "macos")]
-fn glass_entry_surface_for_window_frame(is_main_window: bool) -> GlassEntrySurface {
-    if is_main_window {
-        GlassEntrySurface::Main
-    } else {
-        GlassEntrySurface::FreeStandingSecondary
-    }
-}
-
-/// Per-side HORIZONTAL travel, in points, for one entry.
-///
-/// Vertical travel is deliberately NOT modelled here: it is derived from the
-/// window HEIGHT (not width) and damped by `GLASS_MORPH_VERTICAL_DAMPING`, and
-/// routing it through a width-based resolver would change its formula.
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct GlassEntryTravel {
-    /// Distance per side at the first visible frame.
-    start_per_side: f64,
-    /// Distance per side at the opposite extreme (max compression for
-    /// shrink-in, max overshoot for grow-in).
-    extreme_per_side: f64,
-}
-
-/// Resolve per-side horizontal travel for a surface.
-///
-/// `Fractional` reproduces the pre-WP1 arithmetic exactly, so this function is
-/// a no-op refactor at today's policies.
-#[cfg(target_os = "macos")]
-fn glass_entry_travel(
-    policy: GlassEntryTravelPolicy,
-    final_width: f64,
-    inset_fraction: f64,
-    actions_reference_width: f64,
-) -> GlassEntryTravel {
-    let squish_fraction = (inset_fraction * GLASS_MORPH_SQUISH_FACTOR)
-        .clamp(GLASS_MORPH_MIN_SQUISH, GLASS_MORPH_MAX_SQUISH);
-    let fractional = GlassEntryTravel {
-        start_per_side: final_width * inset_fraction,
-        extreme_per_side: final_width * squish_fraction,
-    };
-    match policy {
-        GlassEntryTravelPolicy::Fractional => fractional,
-        GlassEntryTravelPolicy::ActionsPointCapped => GlassEntryTravel {
-            start_per_side: fractional
-                .start_per_side
-                .min(actions_reference_width * inset_fraction),
-            extreme_per_side: fractional
-                .extreme_per_side
-                .min(actions_reference_width * squish_fraction),
-        },
-        GlassEntryTravelPolicy::FixedFrame => GlassEntryTravel {
-            start_per_side: 0.0,
-            extreme_per_side: 0.0,
-        },
-    }
-}
-
-/// Nominal Actions popup width used by `ActionsPointCapped`. Unused until a
-/// policy selects that travel mode; WP0 exists to replace this nominal value
-/// with the measured median rendered Actions width.
-#[cfg(target_os = "macos")]
-const GLASS_ENTRY_ACTIONS_REFERENCE_WIDTH: f64 = 340.0;
-
-#[cfg(target_os = "macos")]
-impl GlassMorphTuning {
-    /// The geometry/alpha tail (compression + rebound) — `duration`.
-    fn visible_tail_duration(self) -> f64 {
-        self.duration
-    }
-    /// Onset prefix + visible tail.
-    fn total_entry_duration(self) -> f64 {
-        self.material_onset_duration + self.visible_tail_duration()
-    }
-    fn visible_tail_start_delay_ms(self) -> u64 {
-        (self.material_onset_duration * 1000.0).round() as u64
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn cubic_bezier_axis(t: f64, first: f64, second: f64) -> f64 {
-    let inverse = 1.0 - t;
-    3.0 * inverse * inverse * t * first + 3.0 * inverse * t * t * second + t * t * t
-}
-
-/// Convert a phase-one geometry progress to elapsed time for a CAMediaTiming
-/// cubic-bezier whose value axis has control values (0, 1) and whose time
-/// axis has control values (`time_c1`, `time_c2`).
-#[cfg(target_os = "macos")]
-fn bezier_time_fraction_for_progress(progress: f64, time_c1: f64, time_c2: f64) -> f64 {
-    let progress = progress.clamp(0.0, 1.0);
-    let mut low = 0.0;
-    let mut high = 1.0;
-    for _ in 0..32 {
-        let parameter = (low + high) * 0.5;
-        let value = cubic_bezier_axis(parameter, 0.0, 1.0);
-        if value < progress {
-            low = parameter;
-        } else {
-            high = parameter;
-        }
-    }
-    cubic_bezier_axis((low + high) * 0.5, time_c1, time_c2)
-}
-
-/// Time from native morph start until phase one's ease-out compression
-/// (`cubic-bezier(0, 0, 0.58, 1)`) first crosses the final window size.
-#[cfg(target_os = "macos")]
-fn settled_size_crossing_delay_ms(tuning: GlassMorphTuning) -> u64 {
-    let phase_distance = tuning.start_scale_x - tuning.squish_scale_x;
-    if phase_distance <= f64::EPSILON {
-        return 0;
-    }
-    let geometry_progress = ((tuning.start_scale_x - 1.0) / phase_distance).clamp(0.0, 1.0);
-    let time_fraction = bezier_time_fraction_for_progress(geometry_progress, 0.0, 0.58);
-    (tuning.phase1 * time_fraction * 1000.0).round() as u64
-}
-
-/// Material-safe content reveal anchor: content may begin revealing only
-/// once BOTH the geometry has crossed the final size AND the alpha ramp has
-/// completed — revealing text while alpha is still below 0.99 would read as
-/// a double fade.
-#[cfg(target_os = "macos")]
-fn entry_content_reveal_delay_ms(tuning: GlassMorphTuning) -> u64 {
-    tuning.visible_tail_start_delay_ms()
-        + settled_size_crossing_delay_ms(tuning)
-            .max((tuning.alpha_ramp_duration * 1000.0).ceil() as u64)
-}
-
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_MIN_DURATION: f64 = 0.02;
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_MIN_INSET: f64 = 0.005;
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_MAX_DURATION: f64 = 2.0;
-/// Visible entry start alpha for EVERY entry variant (WindowFrame,
-/// ContentLayer, FadeOnly).
-///
-/// NSWindow.alphaValue multiplies every pixel the window contributes, so at
-/// 0.0 the user sees pure wallpaper where UI should be — the compositor
-/// blends `screen = a*window + (1-a)*desktop` and the early entry frames
-/// were up to 100% desktop. 0.85 is the lowest evidence-backed start that
-/// keeps every displayed entry frame within the <=5 dE00 color budget while
-/// still softening the deliberately exaggerated calibration start frame.
-///
-/// Calibration note: this is the ONE value the color-consistency premise
-/// unlocked (HITL submission 98cab5e5-6f15-4311-8d49-83e31602e641; Oracle
-/// plan `floating-capsule-entry-material` step 3). Every other Glass Motion
-/// Calibration Lock value is untouched. Do not alias this to a theme token.
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_ENTRY_START_ALPHA: f64 = 0.85;
 /// Alpha for TRULY HIDDEN parking only (window ordered out between shows).
 /// Zero-alpha parking of a visible window is a contract violation — the
 /// park helpers runtime-check `isVisible == false` before applying this.
 #[cfg(target_os = "macos")]
 const GLASS_HIDDEN_PARK_ALPHA: f64 = 0.0;
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_MAX_INSET: f64 = 0.4;
-/// Height participation in the entry morph. Spotlight's measured height
-/// undershoot is ±0–2px ("~0% height participation in the squish" —
-/// https://eager-hollow-dyyf.here.now/): the morph is width-dominant, so the
-/// visible-tail calibration removes vertical motion entirely.
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_VERTICAL_DAMPING: f64 = 0.0;
-/// Squish depth as a fraction of the entry inset, applied PER SIDE (the frame
-/// math doubles it into total width). Spotlight's measured maximum undershoot
-/// is −1.3% of total width (https://eager-hollow-dyyf.here.now/). With the
-/// visible-tail inset of 0.006 the factor product (0.0015) sits below the
-/// clamp, so the per-side minimum of 0.0065 is what actually renders:
-/// 0.0065 ×2 = 1.3% total — exactly the measured squish.
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_SQUISH_FACTOR: f64 = 0.25;
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_MIN_SQUISH: f64 = 0.0065;
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_MAX_SQUISH: f64 = 0.015;
-/// No explicit rest at max compression: the compression ease-out ends at
-/// zero velocity and the rebound ease-in-out begins at zero velocity, which
-/// is what reads as physical settling. (The earlier 50ms dead hold plus a
-/// 90ms rebound made the tail feel sticky-then-quick; Spotlight's measured
-/// rebound gets a full ~140ms.)
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_SQUISH_HOLD: f64 = 0.0;
-/// Compression is one third of the visible tail (70ms at the 0.210s
-/// default), leaving two thirds (140ms) for the rebound.
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_PHASE1_FRACTION: f64 = 1.0 / 3.0;
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_MIN_REBOUND_DURATION: f64 = 0.04;
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_FADE_FRACTION: f64 = 2.0 / 3.0;
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_MIN_FADE_DURATION: f64 = 0.05;
-/// Alpha target for the phase-one ramp. Spotlight's fade completes (≥0.99)
-/// at almost exactly the moment width bottoms out — the window is never
-/// fully opaque while wider than its natural size. The final 0.99 → 1.0 leg
-/// runs from rebound start.
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_PHASE1_ALPHA_TARGET: f64 = 0.99;
-/// Duration of the 0.85 → 0.99 alpha ramp (ease-out), phase-locked so alpha
-/// is at 0.99 well before max compression. Clamped to phase one for short
-/// custom durations.
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_ALPHA_RAMP_DURATION: f64 = 0.036;
-/// Duration of the 0.99 → 1.0 finishing leg (ease-out) starting at rebound.
-/// Clamped to phase two for short custom durations.
-#[cfg(target_os = "macos")]
-const GLASS_MORPH_ALPHA_FINISH_DURATION: f64 = 0.052;
-/// Material-onset prefix (glass-entry-onset-v2, measured from the
-/// 2026-07-27 Spotlight footage): Spotlight materializes presence
-/// 0.04→0.86 over its ~88ms prefix BEFORE the visible geometry tail.
-/// The original Spotlight wall clock was restored on 2026-09-15. Script Kit
-/// reproduces it as a glass material ramp (Clear→Regular + tint) at a
-/// constant 0.85 NSWindow alpha — never sub-0.85 window alpha.
-#[cfg(target_os = "macos")]
-const GLASS_MATERIAL_ONSET_DURATION: f64 = 0.088;
-/// The main window's FIRST PHOTON width scale (2026-08-13 soft-materialize
-/// retune, measured from the user-supplied 57fps Spotlight reference:
-/// first photon 1.0305 of settled width).
-#[cfg(target_os = "macos")]
-const GLASS_MAIN_ONSET_START_WIDTH_SCALE: f64 = 1.0305;
-/// How long the first-photon frame eases into the calibrated 101.2%
-/// visible-tail start (reference: converged by ~35ms at 1:1; 36ms here,
-/// matching the restored content/material cadence).
-#[cfg(target_os = "macos")]
-const GLASS_MAIN_ONSET_GEOMETRY_DURATION: f64 = 0.036;
-/// GPUI content roots fade in WITH the material from the first photon
-/// (2026-08-13 content-timing retune: the user-supplied 57fps Spotlight
-/// reference shows the bar's content faintly present from the very first
-/// frame, and the previous 26ms hold produced readable empty-body frames
-/// once the native footer stopped enrolling in the content fade).
+/// The floating footer overlay re-presents on the main entry's clock with no
+/// hold before its own fade.
 #[cfg(target_os = "macos")]
 const GLASS_ENTRY_CONTENT_HOLD_DURATION: f64 = 0.0;
-/// Content fade spans the full material prefix, finishing exactly when the
-/// tail begins (clamped to onset − hold in glass_entry_content_fade_duration).
 #[cfg(target_os = "macos")]
 const GLASS_ENTRY_CONTENT_FADE_DURATION: f64 = 0.088;
-/// Onset timing curve reproducing the measured normalized presence samples
-/// (~0.294/0.535/0.761/1.0, sampled proportionally across the onset).
-#[cfg(target_os = "macos")]
-#[allow(dead_code)] // consumed by the onset animator (plan steps 3–6)
-const GLASS_MATERIAL_ONSET_C1: (f32, f32) = (0.18, 0.00);
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-const GLASS_MATERIAL_ONSET_C2: (f32, f32) = (0.14, 0.00);
+/// Every window exits with the same fixed-frame alpha fade.
 #[cfg(target_os = "macos")]
 const GLASS_EXIT_DURATION: f64 = 0.12;
 const GLASS_EXIT_REMOVE_DELAY_MS: u64 = 135;
-#[cfg(target_os = "macos")]
-const GLASS_EXIT_GROW_X: f64 = 0.03;
-/// Popup/modal shrink-out exit travel (fraction per side). Slightly larger
-/// than the grow-out release so the "someone let go of the ball" read is
-/// visible at the fast exit duration.
-#[cfg(target_os = "macos")]
-const GLASS_EXIT_SHRINK_X: f64 = 0.05;
-#[cfg(target_os = "macos")]
-const GLASS_EXIT_SHRINK_Y: f64 = 0.035;
-#[cfg(target_os = "macos")]
-const GLASS_EXIT_GROW_Y: f64 = 0.012;
-#[cfg(target_os = "macos")]
-const GLASS_EXIT_BLUR_RADIUS: f64 = 8.0;
 
-/// Entry defocus radius, in points: the window materializes OUT of a blur.
-///
-/// Why this exists (user report 2026-07-27: "we're missing the type of
-/// fade-in/blur that spotlight does"). Spotlight's entry begins well before
-/// our first visible frame, fading up from near-nothing. We deliberately
-/// omitted that prefix — see the entry-alpha lock — because `NSWindow`
-/// `alphaValue` multiplies EVERY contributed pixel, so a low-alpha visible
-/// frame shows wallpaper rather than Spotlight's coherent faint glass. The
-/// result is an entry that has Spotlight's geometry but almost none of its
-/// materialization: alpha only ever travels 0.85 -> 1.0.
-///
-/// A layer blur is the missing primitive, because it is a WITHIN-window
-/// effect: it defocuses the window's own pixels without letting the desktop
-/// through. That buys the "resolving into being" read that the alpha floor
-/// forbids, while leaving every locked geometry, timing, and alpha value
-/// untouched.
-///
-/// Mirrors `GLASS_EXIT_BLUR_RADIUS` so entry and exit are inverses.
+/// Defocus radius, in points, the floating footer overlay resolves out of
+/// when it re-presents.
 #[cfg(target_os = "macos")]
 const GLASS_ENTRY_BLUR_RADIUS: f64 = 8.0;
 
-/// Live override for the entry defocus radius, in points, so the radius can be
-/// judged by feel without a rebuild:
-/// `SCRIPT_KIT_GLASS_ENTRY_BLUR=16 script-kit-gpui`. `0` disables the defocus
-/// and restores the exact pre-2026-07-27 entry.
-///
-/// Deliberately an env override rather than a theme slider: this is an open
-/// perceptual question, not a settled product value, and it must not enter the
-/// calibration fixture until the user picks a radius.
+/// Live override for the footer overlay defocus radius, in points:
+/// `SCRIPT_KIT_GLASS_ENTRY_BLUR=16 script-kit-gpui`. `0` disables it.
 #[cfg(target_os = "macos")]
 fn glass_entry_blur_radius() -> f64 {
     std::env::var("SCRIPT_KIT_GLASS_ENTRY_BLUR")
@@ -816,198 +199,23 @@ fn glass_entry_blur_radius() -> f64 {
         .unwrap_or(GLASS_ENTRY_BLUR_RADIUS)
 }
 
-/// The main window's onset defocus radius (2026-08-13 soft-materialize
-/// retune): stronger than the shared 8pt so the first photon reads soft, and
-/// resolved inside the 44ms material prefix rather than the full entry.
-#[cfg(target_os = "macos")]
-const GLASS_MAIN_ENTRY_BLUR_RADIUS: f64 = 12.0;
-
-/// Same live override contract as `glass_entry_blur_radius`, scoped to the
-/// main window's onset defocus.
-#[cfg(target_os = "macos")]
-fn glass_main_entry_blur_radius() -> f64 {
-    std::env::var("SCRIPT_KIT_GLASS_MAIN_ENTRY_BLUR")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<f64>().ok())
-        .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 64.0)
-        .unwrap_or(GLASS_MAIN_ENTRY_BLUR_RADIUS)
-}
-
-/// Effective GPUI content fade duration for the entry.
-///
-/// THE DEFAULT IS THE THING THAT MAKES THE ENTRY FEEL UNFADED. The stock value
-/// is `GLASS_ENTRY_CONTENT_FADE_DURATION` clamped so the fade ENDS at the
-/// material-onset boundary: `0.088.min(0.088 - 0.0)` = 88ms. The content is
-/// therefore fully opaque at t=88ms, before the 210ms geometry tail begins — so
-/// across the whole visible tail nothing is fading, and the entry reads as a
-/// solid panel doing a 1.2% width wiggle rather than something materializing.
-///
-/// `SCRIPT_KIT_GLASS_CONTENT_FADE=<ms>` overrides it and is INTENTIONALLY
-/// UNCLAMPED, so the fade may run concurrently with the geometry tail (the
-/// shape Spotlight actually has). Try 180 or 210 to make the fade span the tail.
-/// Total entry duration is unchanged either way — this overlaps existing time
-/// rather than adding any; the 1:1 reference tempo stays fixed.
+/// Footer overlay fade duration; `SCRIPT_KIT_GLASS_CONTENT_FADE=<ms>`
+/// overrides it.
 #[cfg(target_os = "macos")]
 fn glass_entry_content_fade_duration() -> f64 {
-    if let Some(seconds) = std::env::var("SCRIPT_KIT_GLASS_CONTENT_FADE")
+    std::env::var("SCRIPT_KIT_GLASS_CONTENT_FADE")
         .ok()
         .and_then(|raw| raw.trim().parse::<f64>().ok())
         .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 2000.0)
         .map(|ms| ms / 1000.0)
-    {
-        return seconds;
-    }
-    GLASS_ENTRY_CONTENT_FADE_DURATION
-        .min(GLASS_MATERIAL_ONSET_DURATION - GLASS_ENTRY_CONTENT_HOLD_DURATION)
-}
-
-/// First-photon content presence floor (2026-08-13 empty-window retune,
-/// user report: "the main window starts with an 'empty' window").
-///
-/// The 57fps Spotlight reference measures the bar's content at ~21% of its
-/// settled presence in the very first visible frame — content is never
-/// truly absent, it blooms in WITH the material. Seeding the GPUI content
-/// roots at 0.0 reproduced an "empty stage" first photon instead; this floor
-/// starts every held content root at `0.21 × its natural alpha` so the body
-/// is faintly readable from photon 1, then the existing 44ms fade carries it
-/// to full presence.
-#[cfg(target_os = "macos")]
-const GLASS_ENTRY_CONTENT_START_ALPHA: f64 = 0.21;
-
-/// Same live override contract as `glass_entry_content_fade_duration`,
-/// scoped to the content presence floor: `SCRIPT_KIT_GLASS_CONTENT_START=0.4`
-/// (fraction of natural alpha, 0 restores the pre-2026-08-13 empty seed).
-#[cfg(target_os = "macos")]
-fn glass_entry_content_start_alpha() -> f64 {
-    std::env::var("SCRIPT_KIT_GLASS_CONTENT_START")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<f64>().ok())
-        .filter(|value| value.is_finite() && (0.0..=1.0).contains(value))
-        .unwrap_or(GLASS_ENTRY_CONTENT_START_ALPHA)
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum GlassExitMode {
-    DetachedRegionsFadeOnly,
-    PopupTransformAndBlur,
-}
-
-#[cfg(target_os = "macos")]
-fn glass_exit_mode(window_name: &str) -> GlassExitMode {
-    glass_exit_mode_for_preset(
-        window_name,
-        crate::theme::animation::current_preset().spec().legacy,
-    )
-}
-
-/// Surfaces that mirror the main window's motion (the Actions popup, per the
-/// 2026-09-23 owner request) take its fixed-frame fade under every catalog
-/// preset. `PreviousCalibration` (legacy) restores their calibrated popup exit.
-#[cfg(target_os = "macos")]
-fn glass_exit_mode_for_preset(window_name: &str, legacy_preset: bool) -> GlassExitMode {
-    if window_name_uses_fixed_frame_exit(window_name)
-        || (!legacy_preset && window_name_mirrors_main_motion(window_name))
-    {
-        GlassExitMode::DetachedRegionsFadeOnly
-    } else {
-        GlassExitMode::PopupTransformAndBlur
-    }
+        .unwrap_or(GLASS_ENTRY_CONTENT_FADE_DURATION)
 }
 
 pub fn glass_exit_remove_delay() -> std::time::Duration {
     std::time::Duration::from_millis(GLASS_EXIT_REMOVE_DELAY_MS)
 }
 
-#[allow(
-    dead_code,
-    reason = "the calibrated native-glass compatibility delay is retained without changing its locked timing"
-)]
-pub(crate) fn glass_entry_settle_delay() -> std::time::Duration {
-    let tail = crate::theme::get_cached_theme()
-        .get_opacity()
-        .glass_morph_duration
-        .unwrap_or(crate::theme::opacity::GLASS_MORPH_DEFAULT_DURATION)
-        .clamp(0.0, GLASS_MORPH_MAX_DURATION as f32);
-    // Total entry = material onset prefix + visible tail (298ms default).
-    std::time::Duration::from_secs_f64(f64::from(tail) + GLASS_MATERIAL_ONSET_DURATION)
-}
-
 include!("secondary_window_glass_lifecycle.rs");
-#[cfg(target_os = "macos")]
-fn glass_morph_tuning() -> Option<GlassMorphTuning> {
-    let opacity = crate::theme::get_cached_theme().get_opacity();
-    let duration = f64::from(
-        opacity
-            .glass_morph_duration
-            .unwrap_or(crate::theme::opacity::GLASS_MORPH_DEFAULT_DURATION)
-            .clamp(0.0, GLASS_MORPH_MAX_DURATION as f32),
-    );
-    let inset_fraction = f64::from(
-        opacity
-            .glass_morph_inset
-            .unwrap_or(crate::theme::opacity::GLASS_MORPH_DEFAULT_INSET)
-            .clamp(0.0, GLASS_MORPH_MAX_INSET as f32),
-    );
-    glass_morph_tuning_from(duration, inset_fraction)
-}
-
-#[cfg(target_os = "macos")]
-fn glass_morph_tuning_from(duration: f64, inset_fraction: f64) -> Option<GlassMorphTuning> {
-    if duration < GLASS_MORPH_MIN_DURATION || inset_fraction < GLASS_MORPH_MIN_INSET {
-        return None;
-    }
-
-    let squish_fraction = (inset_fraction * GLASS_MORPH_SQUISH_FACTOR)
-        .clamp(GLASS_MORPH_MIN_SQUISH, GLASS_MORPH_MAX_SQUISH);
-    let phase1 = duration * GLASS_MORPH_PHASE1_FRACTION;
-    let phase2 =
-        (duration - phase1 - GLASS_MORPH_SQUISH_HOLD).max(GLASS_MORPH_MIN_REBOUND_DURATION);
-    Some(GlassMorphTuning {
-        duration,
-        inset_fraction,
-        start_alpha: GLASS_MORPH_ENTRY_START_ALPHA,
-        start_scale_x: 1.0 + inset_fraction * 2.0,
-        start_scale_y: 1.0 + inset_fraction * GLASS_MORPH_VERTICAL_DAMPING * 2.0,
-        squish_scale_x: 1.0 - squish_fraction * 2.0,
-        squish_scale_y: 1.0 - squish_fraction * GLASS_MORPH_VERTICAL_DAMPING * 2.0,
-        phase1,
-        phase2,
-        phase1_alpha_target: GLASS_MORPH_PHASE1_ALPHA_TARGET,
-        alpha_ramp_duration: GLASS_MORPH_ALPHA_RAMP_DURATION.min(phase1),
-        alpha_finish_duration: GLASS_MORPH_ALPHA_FINISH_DURATION.min(phase2),
-        material_onset_duration: GLASS_MATERIAL_ONSET_DURATION,
-        content_hold_duration: GLASS_ENTRY_CONTENT_HOLD_DURATION,
-        content_fade_duration: glass_entry_content_fade_duration(),
-    })
-}
-/// The catalog's total wall clock is one uninterrupted main-window morph.
-/// Legacy tuning remains exclusively in `glass_morph_tuning`.
-#[cfg(target_os = "macos")]
-fn main_glass_morph_tuning(
-    spec: crate::theme::animation::MainWindowAnimationSpec,
-) -> GlassMorphTuning {
-    let duration = f64::from(spec.duration_ms) / 1000.0;
-    let phase1 = f64::from(spec.compression_ms) / 1000.0;
-    let phase2 = duration - phase1;
-    GlassMorphTuning {
-        duration,
-        inset_fraction: (spec.start_width_scale - 1.0).abs() * 0.5,
-        start_alpha: spec.window_start_alpha,
-        start_scale_x: spec.start_width_scale,
-        start_scale_y: 1.0,
-        squish_scale_x: spec.squish_width_scale,
-        squish_scale_y: 1.0,
-        phase1,
-        phase2,
-        phase1_alpha_target: GLASS_MORPH_PHASE1_ALPHA_TARGET,
-        alpha_ramp_duration: (f64::from(spec.reveal_ms) / 1000.0).min(phase1),
-        alpha_finish_duration: GLASS_MORPH_ALPHA_FINISH_DURATION.min(phase2),
-        material_onset_duration: 0.0,
-        content_hold_duration: 0.0,
-        content_fade_duration: f64::from(spec.reveal_ms) / 1000.0,
-    }
-}
 
 // SAFETY: Caller must pass a valid NSWindow pointer on the main thread.
 // The function nil-checks all derived pointers (content view, appearance).
@@ -1017,9 +225,9 @@ unsafe fn configure_window_vibrancy_common(
     log_target: &str,
     window_name: &str,
     is_dark: bool,
-    morph_variant: GlassMorphVariant,
+    backdrop_role: NativeGlassSurfaceRole,
 ) -> NativeGlassEntryReceipt {
-    configure_window_vibrancy_common_impl(window, log_target, window_name, is_dark, morph_variant)
+    configure_window_vibrancy_common_impl(window, log_target, window_name, is_dark, backdrop_role)
 }
 
 include!("secondary_window_vibrancy_impl.rs");
@@ -1182,15 +390,12 @@ pub fn configure_child_attached_overlay_window_glass(
         if ns_window.is_null() {
             return;
         }
-        // This call creates the glass, so it owns the entry motion: modals
-        // mirror the main window (like Actions); other overlays keep the
-        // calibrated child grow-in.
-        let morph_variant = if window_name_mirrors_main_motion(window_name) {
-            GlassMorphVariant::MirrorMainEntry
+        let backdrop_role = if window_name_uses_popup_backdrop(window_name) {
+            NativeGlassSurfaceRole::PopupBackdrop
         } else {
-            GlassMorphVariant::ContentLayer
+            NativeGlassSurfaceRole::WindowBackdrop
         };
-        configure_window_vibrancy_common(ns_window, log_target, window_name, is_dark, morph_variant);
+        configure_window_vibrancy_common(ns_window, log_target, window_name, is_dark, backdrop_role);
     }
 }
 
@@ -1530,7 +735,7 @@ unsafe fn configure_attached_popup_window(
     is_dark: bool,
     log_target: &str,
     window_name: &str,
-    morph_variant: GlassMorphVariant,
+    backdrop_role: NativeGlassSurfaceRole,
 ) {
     if window.is_null() {
         tracing::warn!(
@@ -1585,7 +790,7 @@ unsafe fn configure_attached_popup_window(
     let empty_string: id = msg_send![class!(NSString), string];
     let _: () = msg_send![window, setFrameAutosaveName: empty_string];
 
-    configure_window_vibrancy_common(window, log_target, window_name, is_dark, morph_variant);
+    configure_window_vibrancy_common(window, log_target, window_name, is_dark, backdrop_role);
 
     // SAFETY: `window` is a valid, non-null NSWindow pointer (checked at function entry).
     // orderFrontRegardless brings the popup visually above the main panel without
@@ -1605,7 +810,7 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
         is_dark,
         "ACTIONS",
         "Actions popup",
-        GlassMorphVariant::MirrorMainEntry,
+        NativeGlassSurfaceRole::PopupBackdrop,
     );
 }
 
@@ -1626,7 +831,7 @@ pub unsafe fn configure_inline_dropdown_popup_window(window: id, is_dark: bool) 
         is_dark,
         "POPUP",
         "Inline popup",
-        GlassMorphVariant::ContentLayer,
+        NativeGlassSurfaceRole::WindowBackdrop,
     );
 
     // Inline dropdowns should read as native child popups with depth.
@@ -1649,11 +854,6 @@ pub fn configure_inline_dropdown_popup_window(_window: *mut std::ffi::c_void, _i
 /// actions popup. Reuses the shared popup vibrancy path so confirm dialogs
 /// get native macOS blur.
 ///
-/// Modals move like the Actions menu (2026-09-24 owner request: "the modal
-/// animation needs to match the animation that we use for the actions menu
-/// where it doesn't change its width anymore"): they replay the selected
-/// main-window preset and exit with its fixed-frame fade.
-///
 /// # Safety
 /// Same invariants as `configure_actions_popup_window`.
 #[cfg(target_os = "macos")]
@@ -1663,7 +863,7 @@ pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
         is_dark,
         "CONFIRM",
         "Confirm popup",
-        GlassMorphVariant::MirrorMainEntry,
+        NativeGlassSurfaceRole::PopupBackdrop,
     );
 }
 
@@ -1684,7 +884,7 @@ pub unsafe fn configure_shortcut_recorder_popup_window(window: id, is_dark: bool
         is_dark,
         "SHORTCUT",
         "Shortcut recorder popup",
-        GlassMorphVariant::ContentLayer,
+        NativeGlassSurfaceRole::WindowBackdrop,
     );
 }
 
@@ -1699,14 +899,12 @@ pub fn configure_shortcut_recorder_popup_window(_window: *mut std::ffi::c_void, 
 /// Same invariants as `configure_actions_popup_window`.
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool) {
-    // Footer behavior is intentionally unchanged and remains alpha-only; it
-    // tracks the parent frame and is outside the floating-surface contract.
     configure_attached_popup_window(
         window,
         is_dark,
         "ACTIONS",
         "Actions popup",
-        GlassMorphVariant::FadeOnly,
+        NativeGlassSurfaceRole::WindowBackdrop,
     );
     let _: () = msg_send![window, setIgnoresMouseEvents: true];
 
@@ -1789,7 +987,7 @@ pub(crate) unsafe fn configure_secondary_window_vibrancy_with_receipt(
         "PANEL",
         window_name,
         is_dark,
-        GlassMorphVariant::WindowFrame,
+        NativeGlassSurfaceRole::WindowBackdrop,
     ))
 }
 
@@ -1824,7 +1022,7 @@ pub unsafe fn configure_dictation_overlay_window(window: id, is_dark: bool) {
         "DICTATION",
         "Dictation overlay",
         is_dark,
-        GlassMorphVariant::WindowFrame,
+        NativeGlassSurfaceRole::WindowBackdrop,
     );
 
     let title: id = msg_send![
@@ -1869,7 +1067,7 @@ pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool) {
         "HUD",
         "HUD",
         is_dark,
-        GlassMorphVariant::WindowFrame,
+        NativeGlassSurfaceRole::WindowBackdrop,
     );
 
     let title: id = msg_send![
@@ -1938,7 +1136,7 @@ mod secondary_window_config_tests {
         assert!(
             body.contains("configure_window_vibrancy_common(")
                 && body.contains("\"HUD\",")
-                && body.contains("GlassMorphVariant::WindowFrame"),
+                && body.contains("NativeGlassSurfaceRole::WindowBackdrop"),
             "HUD window vibrancy must reuse the shared native background/material configuration"
         );
         assert!(

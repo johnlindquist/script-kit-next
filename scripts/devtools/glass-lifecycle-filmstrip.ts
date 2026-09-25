@@ -32,10 +32,10 @@ import {
   validateScenarioTimingIntervals,
 } from "./glass-lifecycle-filmstrip-contract.ts";
 import {
+  ACTIONS_GLASS_ENTRY_EXPECTATION,
   MAIN_GLASS_ENTRY_EXPECTATION,
+  analyzeEntryFadeLog,
   analyzeEntryMotionEnvelope,
-  analyzeEntrySurfaceFields,
-  analyzeOnsetReceipt,
 } from "./glass-entry-motion-contract.ts";
 import {
   finishInterferenceMonitor,
@@ -826,7 +826,7 @@ try {
   // only the classification around it changes: missing settled bounds, wrong
   // pinned owner, capture-health failure, and under-resolved evidence are
   // INVALID_OBSERVER — never EVALUABLE_FAIL. Source-derived geometry
-  // (entryEvidence, onset, runtimeContract) stays diagnostic-only.
+  // (entryEvidence, runtimeContract) stays diagnostic-only.
   // Interference and cleanup dominate at run level in the finally block.
   const mainEntryObservation = classifyGlassObservation({
     captureHealthPass: mainEntryFilmstrip.receipt?.captureHealthPass === true
@@ -1070,9 +1070,9 @@ try {
     && notesTimes.visible >= expectedVisibleLowerNs
     && notesTimes.visible <= expectedVisibleUpperNs;
   // If exact-window discovery finished after first entry, the cancel/reopen
-  // generation has no new native morph. Preserve the original generation's
-  // runtime clocks so the receipt still proves the first-open reveal crossed
-  // final size during phase one and began before rebound.
+  // generation has no new native entry. Preserve the original generation's
+  // runtime clocks so the receipt still proves the first-open body reveal
+  // began with the fade instead of waiting for it.
   const morphReveal = finalReveal?.morphStarted === true
     ? finalReveal
     : notesReadyState?.entryReveal;
@@ -1082,12 +1082,11 @@ try {
   );
   const morphSettleDurationMs = Number(morphReveal?.settleDurationMs);
   const morphRevealDelayMs = Number(morphReveal?.revealDelayMs);
-  const phaseOneEndNs = morphConfiguredNs + morphSettleDurationMs * 500_000;
-  const revealBeganBeforeRebound = morphReveal?.morphStarted === true
-    && morphRevealDelayMs > 0
-    && morphRevealDelayMs < morphSettleDurationMs / 2
+  const entryEndNs = morphConfiguredNs + morphSettleDurationMs * 1_000_000;
+  const revealBeganWithEntry = morphReveal?.morphStarted === true
+    && morphRevealDelayMs === 0
     && Number.isFinite(morphRevealStartedNs)
-    && morphRevealStartedNs < phaseOneEndNs;
+    && morphRevealStartedNs < entryEndNs;
   const framesBeforeVisible = (
     notesEntryFilmstrip.receipt?.frames ?? []
   ).filter((frame: Json) =>
@@ -1105,7 +1104,7 @@ try {
     && typeof configuredState?.revealDelayMs === "number"
     && hiddenBeforeVisible
     && visibleAfterAnchor
-    && revealBeganBeforeRebound
+    && revealBeganWithEntry
     && Number(finalReveal?.completedFrameCount ?? 0) >= 2
     && notesTimesOrdered
     && notesVisibleWithinBounds;
@@ -1292,7 +1291,7 @@ try {
     bodyOnlyReveal: {
       hiddenBeforeVisible,
       visibleAfterAnchor,
-      revealBeganBeforeRebound,
+      revealBeganWithEntry,
       framesBeforeVisible,
       completedFrameCount: finalReveal?.completedFrameCount ?? null,
       bodyPixelTransition: notesEntryFilmstrip.metrics?.bodyPixelTransition ?? false,
@@ -1309,9 +1308,9 @@ try {
           configuredAtMonotonicNs: morphConfiguredNs,
           revealRequestedAtMonotonicNs: morphRevealStartedNs,
           settleDurationMs: morphSettleDurationMs,
-          settledCrossingDelayMs: morphRevealDelayMs,
-          phaseOneEndNs,
-          beganBeforeRebound: revealBeganBeforeRebound,
+          revealDelayMs: morphRevealDelayMs,
+          entryEndNs,
+          beganWithEntry: revealBeganWithEntry,
         },
       },
     },
@@ -1632,11 +1631,8 @@ try {
       scenarioUnixIntervals,
     ) as Json;
   }
-  // WP0 (Oracle `glass-entry-feel-options`): the main and Actions receipts must
-  // carry the SAME onset and surface/travel evidence so the two entries can be
-  // compared field by field. Oracle's verdict on the "onset applicability
-  // differs" theory was to compare what the runtime already logs before adding
-  // speculative code — impossible while only one probe parsed it.
+  // The main and Actions receipts carry the same logged fade evidence so the
+  // two entries can be compared field by field.
   {
     const appLogLines = (existsSync(driver.logPath)
       ? readFileSync(driver.logPath, "utf8")
@@ -1646,16 +1642,17 @@ try {
       && line.includes(contractWindowName)
       && line.includes("phase=enter")
     ).slice(-3);
-    const onsetLines = appLogLines
-      .filter((line) => line.includes("event=native_glass_entry_onset"))
-      .slice(-3);
     const timelineLines = appLogLines
       .filter((line) => line.includes("host_time_ns="))
       .filter((line) => /event=(main|actions)_/.test(line))
       .slice(-24);
     receipt.entryEvidence = {
-      surfaceFields: analyzeEntrySurfaceFields(entryLines),
-      onset: analyzeOnsetReceipt(onsetLines),
+      fade: analyzeEntryFadeLog(
+        entryLines,
+        contractWindowName === "Main window"
+          ? MAIN_GLASS_ENTRY_EXPECTATION
+          : ACTIONS_GLASS_ENTRY_EXPECTATION,
+      ),
       timeline: timelineLines,
     } as Json;
   }

@@ -45,8 +45,7 @@ impl NucleoCtx {
     /// Reuses internal buffer to avoid allocations.
     #[inline]
     pub fn score(&mut self, haystack: &str) -> Option<u32> {
-        self.buf.clear();
-        let utf32 = Utf32Str::new(haystack, &mut self.buf);
+        let utf32 = char_units(haystack, &mut self.buf);
         self.pattern.score(utf32, &mut self.matcher)
     }
 
@@ -69,15 +68,29 @@ impl NucleoCtx {
     /// Returns None if no match. Indices are sorted and deduplicated.
     #[inline]
     pub fn indices(&mut self, haystack: &str) -> Option<Vec<usize>> {
-        self.buf.clear();
         self.indices_buf.clear();
-        let utf32 = Utf32Str::new(haystack, &mut self.buf);
+        let utf32 = char_units(haystack, &mut self.buf);
         self.pattern
             .indices(utf32, &mut self.matcher, &mut self.indices_buf)?;
         self.indices_buf.sort_unstable();
         self.indices_buf.dedup();
         Some(self.indices_buf.iter().map(|idx| *idx as usize).collect())
     }
+}
+
+/// Present `haystack` to nucleo with one unit per `char`.
+///
+/// `Utf32Str::new` folds every grapheme into its first character, and falls
+/// back to raw bytes when all of those are ASCII, so nucleo's indices would
+/// count visible characters or bytes. Every caller highlights and inspects by
+/// `char` index; one unit per `char` keeps the two aligned.
+pub(super) fn char_units<'a>(haystack: &'a str, buf: &'a mut Vec<char>) -> Utf32Str<'a> {
+    if haystack.is_ascii() {
+        return Utf32Str::Ascii(haystack.as_bytes());
+    }
+    buf.clear();
+    buf.extend(haystack.chars());
+    Utf32Str::Unicode(buf)
 }
 
 fn fuzzy_match_is_compact(haystack: &str, query: &str, indices: &[usize]) -> bool {

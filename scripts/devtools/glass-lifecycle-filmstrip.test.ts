@@ -121,7 +121,7 @@ describe("exact detached-owner lifecycle", () => {
   const active = {
     schemaVersion: 2,
     nativeWindowNumber: 77,
-    exitMode: "DetachedRegionsFadeOnly",
+    exitMode: "FadeOnly",
     originalFrame: [10, 20, 300, 200],
     currentFrame: [10, 20, 300, 200],
     currentAlpha: 0.8,

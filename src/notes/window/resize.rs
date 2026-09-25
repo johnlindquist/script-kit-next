@@ -4,15 +4,13 @@ use super::*;
 ///
 /// The Notes shell policy (`window_resize::policy`) says the user MAY resize;
 /// this phase says WHEN: the resizable style bit is only set while `Enabled`.
-/// The calibrated glass entry morph owns the frame until the full settle
-/// duration has elapsed (`EntryLocked`), and the fixed-frame exit fade owns it
-/// from the moment an exit ticket is issued (`ExitLocked`). Unlocking at the
-/// earlier body-reveal crossing would let a user drag fight the rebound — the
-/// unlock anchor is `configured_at + settle_duration_ms`, NOT the reveal
-/// crossing. No glass motion constant is read or written here.
+/// The entry fade owns the window until its settle duration has elapsed
+/// (`EntryLocked`, anchored at `configured_at + settle_duration_ms`), and the
+/// exit fade owns it from the moment an exit ticket is issued (`ExitLocked`).
+/// No glass motion constant is read or written here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub(crate) enum NotesNativeResizePhase {
-    /// Window created / entry morph in flight: native resizing off.
+    /// Window created / entry fade in flight: native resizing off.
     #[default]
     EntryLocked,
     /// Entry settled: native resizing on (policy minimums enforced by AppKit).
@@ -69,10 +67,8 @@ pub(super) enum NotesResizePhaseEvent {
     ExitSupersededRestartHidden,
 }
 
-/// Monotonic time at which native resizing may unlock: the FULL settle
-/// duration after native configuration. Deliberately NOT the body-reveal
-/// crossing (`settled_crossing_delay_ms`) — the reveal starts while the glass
-/// morph is still compressing/rebounding.
+/// Monotonic time at which native resizing may unlock: the full entry fade
+/// after native configuration.
 pub(super) const fn native_resize_unlock_target_ns(
     configured_at_monotonic_ns: u64,
     settle_duration_ms: u64,

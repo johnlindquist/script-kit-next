@@ -8032,6 +8032,7 @@ dependencies = [
  "tree-sitter-highlight",
  "tree-sitter-md",
  "tree-sitter-typescript",
+ "unicode-segmentation",
  "ureq",
  "url",
  "usvg 0.45.1",

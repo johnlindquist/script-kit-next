@@ -28,12 +28,14 @@ import {
 } from "./glass-system-telemetry.ts";
 
 const INSTRUMENTED_LINE =
-  "event=glass_morph window=main variant=window_frame phase=enter " +
-  "duration=0.28s inset=0.030 start_alpha=0.85 " +
-  "start_alpha_bits=3feb333333333333 settle_duration_ns=280000000 " +
+  "event=glass_morph window=main variant=fade phase=enter " +
+  "surface_profile=main preset=fixed_frame direction=fixed_frame " +
+  "duration_ns=280000000 width_scale=1 height_scale=1 " +
+  "window_start_alpha=0.8500 material_start_alpha=0.1500 content_start_alpha=0.1500 " +
+  "start_alpha=0.8500 start_alpha_bits=3feb333333333333 settle_duration_ns=280000000 " +
   "configured_at_host_time_ns=225190135124625 " +
   "expected_settle_deadline_ns=225190415124625 " +
-  "frames=680x400->700x410->690x405";
+  "final_width_pt=750.00 final_height_pt=480.00 final_alpha=1 curve=easeOut";
 
 const LEGACY_LINE =
   "event=glass_morph window=main variant=window_frame phase=enter " +

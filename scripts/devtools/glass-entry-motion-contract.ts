@@ -1,17 +1,16 @@
 /**
- * Glass entry-motion contract — the visible-tail calibration.
+ * Glass entry-motion contract — the fixed-frame fade.
  *
- * Shape retuned 2026-07-26 (glass-entry-spotlight-retune): the first safe
- * frame (NSWindow alpha 0.85) is phase-aligned to Spotlight's measured
- * materialized state (101.2% width), ease-out compression, no hold,
- * ease-in-out rebound at a 1:2 ratio, alpha 0.85 → 0.99 → 1.0.
- * The 2026-07-27 2x speed-up was removed on 2026-09-15 at the user's
- * request: 70ms compression, 140ms rebound, 36ms alpha ramp, 52ms
- * alpha finish. Reference: https://eager-hollow-dyyf.here.now/
+ * Every window keeps its settled frame. Entry is one grouped ease-out fade:
+ * glass material, content, and NSWindow alpha rise together to 1.0 over the
+ * preset's duration. The default preset (`sharp_presence`) runs 90ms from
+ * window alpha 0.99, material 0.8, and content 0.85 with no defocus.
  *
- * The analyzers verify the EXACT floating-point runtime scale fields logged
- * by the morph (integer `frames=` values are diagnostics only — far too
- * coarse for a 340-point Actions popup).
+ * Rendered frames are judged by `analyzeEntryMotionEnvelope`: every frame at
+ * the settled size, the first visible frame at or above the 0.85 alpha floor,
+ * and alpha never stepping backward. `analyzeEntryFadeLog` checks the values
+ * the entry logged against the same expectation; it is a diagnostic, never a
+ * substitute for rendered evidence.
  */
 
 export type NativeWindowBounds =
@@ -26,64 +25,23 @@ type EntryFrame = {
   windowBounds?: NativeWindowBounds;
 };
 
-// 2026-08-13 soft-materialize retune (user-supplied 57fps Spotlight
-// reference): the FIRST VISIBLE frame is 103.05% of settled width and eases
-// to the preserved 101.2% visible-tail start over 36ms inside the 88ms
-// material prefix; main's onset defocus is 12pt resolving to 0 across that
-// prefix. Actions/popups stay tail-aligned with the historical 8pt/full-entry
-// ramp.
 export const MAIN_GLASS_ENTRY_EXPECTATION = {
-  durationMs: 210,
-  materialOnsetMs: 88,
-  compressionMs: 70,
-  holdMs: 0,
-  reboundMs: 140,
-  onsetGeometryMs: 36,
-  onsetGeometryToleranceMs: 18,
-  firstVisibleWidthScale: 1.0305,
-  startWidthScale: 1.012,
-  extremeWidthScale: 0.987,
-  finalWidthScale: 1,
-  startHeightScale: 1,
-  extremeHeightScale: 1,
-  startAlpha: 0.85,
-  phase1Alpha: 0.99,
-  alphaRampMs: 36,
-  alphaFinishMs: 52,
-  contentHoldMs: 0,
-  contentFadeMs: 88,
-  // 2026-08-13 empty-window retune: content roots seed at Spotlight's
-  // measured first-photon presence (~21% of settled) instead of alpha 0.
-  contentStartAlpha: 0.21,
-  entryBlurRadius: 12,
-  entryBlurToRadius: 0,
-  entryBlurDurationMs: 88,
-  footerBlurRadius: 12,
-  footerBlurToRadius: 0,
-  footerBlurScope: "per_capsule",
-  footerBlurDurationMs: 88,
-  footerMinimumCapsuleCount: 1,
-  footerEnrolled: false,
-  // 2026-08-13 capsule parity retune: every capsule runs the main backdrop's
-  // Clear→Regular + tint ramp and fades its own foreground contentView.
-  footerMaterialRamp: true,
-  footerForegroundFade: true,
-  direction: "shrink-in",
+  presetId: "sharp_presence",
+  surfaceProfile: "main",
+  direction: "fixed_frame",
+  durationMs: 90,
+  windowStartAlpha: 0.99,
+  materialStartAlpha: 0.8,
+  contentStartAlpha: 0.85,
+  entryBlurRadius: 0,
+  foregroundBlurRadius: 0,
+  alphaFloor: 0.85,
+  minimumResolvedFrames: 3,
 } as const;
 
 export const ACTIONS_GLASS_ENTRY_EXPECTATION = {
   ...MAIN_GLASS_ENTRY_EXPECTATION,
-  onsetGeometryMs: 0,
-  firstVisibleWidthScale: 0.988,
-  startWidthScale: 0.988,
-  extremeWidthScale: 1.013,
-  entryBlurRadius: 8,
-  entryBlurDurationMs: 298,
-  footerBlurRadius: 0,
-  footerMinimumCapsuleCount: 0,
-  footerMaterialRamp: false,
-  footerForegroundFade: false,
-  direction: "grow-in",
+  surfaceProfile: "secondary",
 } as const;
 
 export type GlassEntryExpectation =
@@ -108,11 +66,8 @@ function size(bounds: NativeWindowBounds) {
 /**
  * Filmstrip capture analysis against a named expectation.
  *
- * Returns `underResolved: true` (instead of a hard product verdict) when
- * the damage-driven capture produced too few geometry samples to judge the
- * curve — callers must then prove the endpoints with the exact runtime
- * scale fields (`analyzeLoggedEntryGeometry`) rather than widening
- * tolerances (decision rule 5B, glass-entry-spotlight-retune).
+ * Returns `underResolved: true` (instead of a product verdict) when the
+ * damage-driven capture produced fewer frames than a fade needs to be seen.
  */
 export function analyzeEntryMotionEnvelope(
   frames: EntryFrame[],
@@ -146,106 +101,40 @@ export function analyzeEntryMotionEnvelope(
   const distinctWidths = new Set(
     measured.map((frame) => frame.widthScale.toFixed(4)),
   ).size;
-  const underResolved = measured.length < 6 || distinctWidths < 4;
+  const underResolved = measured.length < expectation.minimumResolvedFrames;
 
-  const widthTolerance = Math.max(0.006, 2 / settled.width);
-  if (
-    first == null
-    || Math.abs(first.widthScale - expectation.firstVisibleWidthScale) > widthTolerance
-  ) {
+  // One point of slack on either axis absorbs backing-scale rounding.
+  const widthTolerance = Math.max(0.001, 1 / settled.width);
+  const heightTolerance = Math.max(0.001, 1 / settled.height);
+  const moved = measured.find((frame) =>
+    Math.abs(frame.widthScale - 1) > widthTolerance
+    || Math.abs(frame.heightScale - 1) > heightTolerance
+  );
+  if (moved) {
     errors.push(
-      `first visible width scale must be ${expectation.firstVisibleWidthScale.toFixed(4)} ±${widthTolerance.toFixed(4)}`,
+      `frame ${moved.sequence ?? "?"} is ${(moved.widthScale * 100).toFixed(2)}% × ${(moved.heightScale * 100).toFixed(2)}% of settled; the entry must keep the settled frame`,
     );
   }
-  if (first != null && (first.alpha < 0.84 || first.alpha > 0.88)) {
+  if (first != null && first.alpha < expectation.alphaFloor - 0.01) {
     errors.push(
-      `first visible alpha ${first.alpha.toFixed(3)} outside the 0.84–0.88 start window`,
+      `first visible alpha ${first.alpha.toFixed(3)} is below the ${expectation.alphaFloor} floor`,
     );
   }
-
-  // Soft-materialize convergence: a timestamped frame inside the material
-  // prefix must reach the preserved visible-tail start width near the 36ms
-  // onset-geometry duration (1:1 tempo restored 2026-09-15).
-  let onsetTailVisible: (typeof measured)[number] | null = null;
-  if (first != null && expectation.onsetGeometryMs > 0) {
-    const firstTime = typeof first.displayTimeNs === "number"
-      ? first.displayTimeNs
-      : null;
-    const candidates = measured.slice(1).flatMap((frame) => {
-      const displayTimeNs = typeof frame.displayTimeNs === "number"
-        ? frame.displayTimeNs
-        : null;
-      if (firstTime === null || displayTimeNs === null) return [];
-      const elapsedMs = (displayTimeNs - firstTime) / 1_000_000;
-      return elapsedMs > 0 && elapsedMs <= expectation.materialOnsetMs
-        ? [{ frame, elapsedMs }]
-        : [];
-    });
-    // Damage-driven ~60Hz capture samples the ease sparsely: accept a
-    // converged frame OR a strictly-narrowing intermediate frame (the native
-    // onset receipt proves the animation parameters independently); fail only
-    // when frames exist and none narrows.
-    const converged = candidates.find((candidate) =>
-      Math.abs(candidate.frame.widthScale - expectation.startWidthScale) <= widthTolerance
-    ) ?? null;
-    const narrowing = candidates.find((candidate) =>
-      first != null
-      && candidate.frame.widthScale < first.widthScale - 1e-6
-      && candidate.frame.widthScale > expectation.startWidthScale - widthTolerance
-    ) ?? null;
-    const proof = converged ?? narrowing;
-    if (candidates.length === 0) {
-      errors.push("no timestamped onset frame proves convergence to the visible-tail start");
-    } else if (proof == null) {
+  for (let index = 1; index < measured.length; index += 1) {
+    const previous = measured[index - 1]!;
+    const current = measured[index]!;
+    if (current.alpha < previous.alpha - 0.01) {
       errors.push(
-        `onset must converge to tail width scale ${expectation.startWidthScale.toFixed(3)} ±${widthTolerance.toFixed(4)}`,
+        `alpha stepped backward from ${previous.alpha.toFixed(3)} to ${current.alpha.toFixed(3)} at frame ${current.sequence ?? index}`,
       );
-    } else {
-      onsetTailVisible = proof.frame;
+      break;
     }
-  }
-  if (expectation.direction === "shrink-in") {
-    const minimum = measured.length
-      ? Math.min(...measured.map((frame) => frame.widthScale))
-      : null;
-    // Upper edge 0.995 tolerates damage-frame samples landing at ~0.9947;
-    // a missing compression reads ~1.0.
-    if (minimum !== null && (minimum < 0.981 || minimum > 0.995)) {
-      errors.push(
-        `shrink-in minimum width scale ${minimum.toFixed(4)} outside 0.981–0.995`,
-      );
-    }
-    // Spotlight invariant: never fully opaque while wider than natural.
-    if (
-      measured.some((frame) => frame.alpha >= 0.999 && frame.widthScale > 1.002)
-    ) {
-      errors.push(
-        "a frame was fully opaque while wider than natural size (Spotlight never is)",
-      );
-    }
-  } else {
-    const maximum = measured.length
-      ? Math.max(...measured.map((frame) => frame.widthScale))
-      : null;
-    if (maximum !== null && (maximum < 1.007 || maximum > 1.019)) {
-      errors.push(
-        `grow-in maximum width scale ${maximum.toFixed(4)} outside 1.007–1.019`,
-      );
-    }
-  }
-  if (
-    measured.some((frame) =>
-      frame.heightScale < 0.997 || frame.heightScale > 1.003
-    )
-  ) {
-    errors.push("height escaped the 0.997–1.003 envelope (height participation must be 0)");
   }
 
   return {
     expectation,
     settled,
     firstVisible: first ?? null,
-    onsetTailVisible,
     minimumWidthScale: measured.length
       ? Math.min(...measured.map((frame) => frame.widthScale))
       : null,
@@ -272,344 +161,90 @@ function parseExactField(line: string, key: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-function parseBooleanField(line: string, key: string): boolean | null {
-  const match = line.match(new RegExp(`(?:^| )${key}=(true|false)(?= |$)`));
-  return match ? match[1] === "true" : null;
-}
-
 function parseTextField(line: string, key: string): string | null {
   const match = line.match(new RegExp(`(?:^| )${key}=([A-Za-z0-9_-]+)(?= |$)`));
   return match ? match[1] : null;
 }
 
-export function analyzeOnsetReceipt(
-  logLines: string[],
-  expectation: GlassEntryExpectation = MAIN_GLASS_ENTRY_EXPECTATION,
-) {
-  const line = [...logLines].reverse().find((candidate) =>
-    candidate.includes("event=native_glass_entry_onset")
-  );
-  if (!line) {
-    return {
-      present: false,
-      line: null,
-      supported: null,
-      entryBlurRadius: null,
-      entryBlurToRadius: null,
-      footerBlurRadius: null,
-      footerBlurToRadius: null,
-      footerBlurScope: null,
-      footerBlurDurationNs: null,
-      footerCapsuleCount: null,
-      footerBlurredCapsuleCount: null,
-      footerMaterialRampCount: null,
-      footerForegroundFadeCount: null,
-      footerEnrolled: null,
-      entryBlurDurationNs: null,
-      onsetStartWidthScale: null,
-      tailStartWidthScale: null,
-      onsetGeometryDurationNs: null,
-      contentRootCount: null,
-      onsetDurationNs: null,
-      contentHoldNs: null,
-      contentFadeNs: null,
-      contentStartAlpha: null,
-      windowAlpha: null,
-      errors: ["native onset receipt is missing"],
-      pass: false,
-    };
-  }
-
-  const receipt = {
-    present: true,
-    line,
-    supported: parseBooleanField(line, "supported"),
-    entryBlurRadius: parseExactField(line, "entry_blur_radius"),
-    entryBlurToRadius: parseExactField(line, "entry_blur_to_radius"),
-    footerBlurRadius: parseExactField(line, "footer_blur_radius"),
-    footerBlurToRadius: parseExactField(line, "footer_blur_to_radius"),
-    footerBlurScope: parseTextField(line, "footer_blur_scope"),
-    footerBlurDurationNs: parseExactField(line, "footer_blur_duration_ns"),
-    footerCapsuleCount: parseExactField(line, "footer_capsule_count"),
-    footerBlurredCapsuleCount: parseExactField(line, "footer_blurred_capsule_count"),
-    footerMaterialRampCount: parseExactField(line, "footer_material_ramp_count"),
-    footerForegroundFadeCount: parseExactField(line, "footer_foreground_fade_count"),
-    footerEnrolled: parseBooleanField(line, "footer_enrolled"),
-    entryBlurDurationNs: parseExactField(line, "entry_blur_duration_ns"),
-    onsetStartWidthScale: parseExactField(line, "onset_start_width_scale"),
-    tailStartWidthScale: parseExactField(line, "tail_start_width_scale"),
-    onsetGeometryDurationNs: parseExactField(line, "onset_geometry_duration_ns"),
-    contentRootCount: parseExactField(line, "content_root_count"),
-    onsetDurationNs: parseExactField(line, "duration_ns"),
-    contentHoldNs: parseExactField(line, "content_hold_ns"),
-    contentFadeNs: parseExactField(line, "content_fade_ns"),
-    contentStartAlpha: parseExactField(line, "content_start_alpha"),
-    windowAlpha: parseExactField(line, "window_alpha"),
-  };
-  const errors: string[] = [];
-  const check = (
-    label: string,
-    actual: number | null,
-    expected: number,
-    tolerance: number,
-  ) => {
-    if (actual === null || Math.abs(actual - expected) > tolerance) {
-      errors.push(`${label}=${actual} must be ${expected} ±${tolerance}`);
-    }
-  };
-
-  if (receipt.supported !== true) errors.push(`supported=${receipt.supported} must be true`);
-  check("entry_blur_radius", receipt.entryBlurRadius, expectation.entryBlurRadius, 0.05);
-  check("entry_blur_to_radius", receipt.entryBlurToRadius, expectation.entryBlurToRadius, 0.01);
-  check(
-    "entry_blur_duration_ns",
-    receipt.entryBlurDurationNs,
-    expectation.entryBlurDurationMs * 1_000_000,
-    1_000_000,
-  );
-  check(
-    "onset_start_width_scale",
-    receipt.onsetStartWidthScale,
-    expectation.firstVisibleWidthScale,
-    0.0005,
-  );
-  check(
-    "tail_start_width_scale",
-    receipt.tailStartWidthScale,
-    expectation.startWidthScale,
-    0.0005,
-  );
-  check(
-    "onset_geometry_duration_ns",
-    receipt.onsetGeometryDurationNs,
-    expectation.onsetGeometryMs * 1_000_000,
-    1_000_000,
-  );
-  check(
-    "duration_ns",
-    receipt.onsetDurationNs,
-    expectation.materialOnsetMs * 1_000_000,
-    1_000_000,
-  );
-  check("content_hold_ns", receipt.contentHoldNs, expectation.contentHoldMs * 1_000_000, 1_000_000);
-  check("content_fade_ns", receipt.contentFadeNs, expectation.contentFadeMs * 1_000_000, 1_000_000);
-  check("window_alpha", receipt.windowAlpha, expectation.startAlpha, 0.001);
-  check("footer_blur_radius", receipt.footerBlurRadius, expectation.footerBlurRadius, 0.05);
-  if (
-    receipt.footerBlurRadius !== null
-    && receipt.entryBlurRadius !== null
-    && Math.abs(receipt.footerBlurRadius - receipt.entryBlurRadius) > 0.001
-    && expectation.footerMinimumCapsuleCount > 0
-  ) {
-    errors.push(
-      `footer_blur_radius=${receipt.footerBlurRadius} must equal entry_blur_radius=${receipt.entryBlurRadius}`,
-    );
-  }
-  check("footer_blur_to_radius", receipt.footerBlurToRadius, expectation.footerBlurToRadius, 0.01);
-  if (receipt.footerBlurScope !== expectation.footerBlurScope) {
-    errors.push(
-      `footer_blur_scope=${receipt.footerBlurScope} must be ${expectation.footerBlurScope}`,
-    );
-  }
-  check(
-    "footer_blur_duration_ns",
-    receipt.footerBlurDurationNs,
-    expectation.footerBlurDurationMs * 1_000_000,
-    1_000_000,
-  );
-  if (
-    receipt.footerCapsuleCount === null
-    || receipt.footerCapsuleCount < expectation.footerMinimumCapsuleCount
-  ) {
-    errors.push(
-      `footer_capsule_count=${receipt.footerCapsuleCount} must be >= ${expectation.footerMinimumCapsuleCount}`,
-    );
-  }
-  if (
-    receipt.footerBlurredCapsuleCount === null
-    || receipt.footerBlurredCapsuleCount !== receipt.footerCapsuleCount
-  ) {
-    errors.push(
-      `footer_blurred_capsule_count=${receipt.footerBlurredCapsuleCount} must equal footer_capsule_count=${receipt.footerCapsuleCount}`,
-    );
-  }
-  if (receipt.footerEnrolled !== expectation.footerEnrolled) {
-    errors.push(
-      `footer_enrolled=${receipt.footerEnrolled} must be ${expectation.footerEnrolled}`,
-    );
-  }
-  check(
-    "content_start_alpha",
-    receipt.contentStartAlpha,
-    expectation.contentStartAlpha ?? 0.21,
-    0.005,
-  );
-  if (expectation.footerMaterialRamp && expectation.footerMinimumCapsuleCount > 0) {
-    // Capsule material parity: EVERY capsule must run the Clear→Regular ramp
-    // and fade its own foreground — a partial install is a fail, not a skip.
-    if (
-      receipt.footerMaterialRampCount === null
-      || receipt.footerMaterialRampCount !== receipt.footerCapsuleCount
-    ) {
-      errors.push(
-        `footer_material_ramp_count=${receipt.footerMaterialRampCount} must equal footer_capsule_count=${receipt.footerCapsuleCount}`,
-      );
-    }
-  }
-  if (expectation.footerForegroundFade && expectation.footerMinimumCapsuleCount > 0) {
-    if (
-      receipt.footerForegroundFadeCount === null
-      || receipt.footerForegroundFadeCount !== receipt.footerCapsuleCount
-    ) {
-      errors.push(
-        `footer_foreground_fade_count=${receipt.footerForegroundFadeCount} must equal footer_capsule_count=${receipt.footerCapsuleCount}`,
-      );
-    }
-  }
-
-  return { ...receipt, errors, pass: errors.length === 0 };
-}
-
 /**
- * The WP0 surface/travel fields added to the entry morph line.
- *
- * These answer questions the fractional scale fields cannot: how far the window
- * actually moves in POINTS (the same percentage is a very different gesture on
- * a 750pt window than a 340pt popup), and whether AppKit still considered the
- * popup a child window when its morph was armed.
+ * Check the most recent `event=glass_morph ... phase=enter` line against a
+ * named expectation. The logged defocus radius is what was actually
+ * installed, so it may be lower than the preset's when the runtime lacks the
+ * blur filter; it may never be higher.
  */
-export function analyzeEntrySurfaceFields(
-  logLines: string[],
-) {
-  const line = [...logLines].reverse().find((candidate) =>
-    candidate.includes("variant=window_frame")
-    && candidate.includes("phase=enter")
-  );
-  if (!line) return { present: false, line: null };
-  const text = (key: string) => {
-    const match = line.match(new RegExp(`${key}=([A-Za-z_]+)`));
-    return match ? match[1] : null;
-  };
-  return {
-    present: true,
-    line,
-    surfaceProfile: text("surface_profile"),
-    direction: text("direction"),
-    travelPolicy: text("travel_policy"),
-    finalWidthPt: parseExactField(line, "final_width_pt"),
-    startTravelPerSidePt: parseExactField(line, "start_travel_per_side_pt"),
-    extremeTravelPerSidePt: parseExactField(line, "extreme_travel_per_side_pt"),
-    visibleTailDurationNs: parseExactField(line, "visible_tail_duration_ns"),
-    totalEntryDurationNs: parseExactField(line, "total_entry_duration_ns"),
-    parentAttachedAtArm: text("parent_attached_at_arm") === "true",
-    nativeParentWindowNumber: parseExactField(line, "native_parent_window_number"),
-  };
-}
-
-/**
- * Verify the morph's EXACT logged calibration against a named expectation.
- * A binary that logs only the old integer schema fails closed (old-schema
- * receipts cannot prove the visible-tail calibration).
- */
-export function analyzeLoggedEntryGeometry(
+export function analyzeEntryFadeLog(
   logLines: string[],
   expectation: GlassEntryExpectation,
 ) {
-  const line = [...logLines].reverse().find((candidate) =>
-    candidate.includes("variant=window_frame")
-    && candidate.includes("phase=enter")
-  );
-  if (!line) {
+  const line = [...logLines]
+    .reverse()
+    .find((candidate) =>
+      candidate.includes("event=glass_morph ")
+      && candidate.includes("phase=enter")
+    ) ?? null;
+  if (line === null) {
     return {
       pass: false,
-      errors: ["runtime entry geometry log is missing"],
+      errors: ["no entry fade log line"],
       line: null,
+      fields: null,
     };
   }
+  const fields = {
+    variant: parseTextField(line, "variant"),
+    direction: parseTextField(line, "direction"),
+    surfaceProfile: parseTextField(line, "surface_profile"),
+    preset: parseTextField(line, "preset"),
+    durationNs: parseExactField(line, "duration_ns"),
+    widthScale: parseExactField(line, "width_scale"),
+    heightScale: parseExactField(line, "height_scale"),
+    windowStartAlpha: parseExactField(line, "window_start_alpha"),
+    materialStartAlpha: parseExactField(line, "material_start_alpha"),
+    contentStartAlpha: parseExactField(line, "content_start_alpha"),
+    entryBlurRadius: parseExactField(line, "entry_blur_radius"),
+    foregroundBlurRadius: parseExactField(line, "foreground_blur_radius"),
+  };
   const errors: string[] = [];
-  const startScaleX = parseExactField(line, "start_scale_x");
-  const startScaleY = parseExactField(line, "start_scale_y");
-  const squishScaleX = parseExactField(line, "squish_scale_x");
-  const squishScaleY = parseExactField(line, "squish_scale_y");
-  const phase1Ns = parseExactField(line, "phase1_ns");
-  const holdNs = parseExactField(line, "hold_ns");
-  const phase2Ns = parseExactField(line, "phase2_ns");
-  const alphaTarget = parseExactField(line, "alpha_phase1_target");
-  const alphaRampNs = parseExactField(line, "alpha_ramp_ns");
-  const alphaFinishNs = parseExactField(line, "alpha_finish_ns");
-  const startAlpha = parseExactField(line, "start_alpha");
-
-  if (
-    startScaleX === null
-    || squishScaleX === null
-    || phase1Ns === null
-    || phase2Ns === null
-  ) {
-    return {
-      pass: false,
-      errors: [
-        "exact runtime scale fields missing — old binary schema cannot prove the visible-tail calibration",
-      ],
-      line,
-    };
-  }
-
-  const scaleEpsilon = 0.0005;
-  // f32 theme durations quantize the nanosecond phases (0.21f32/3 →
-  // 69,999,998ns); tolerate 1ms of quantization, never more.
-  const nsEpsilon = 1_000_000;
-  const check = (
-    label: string,
+  const expectText = (
+    name: string,
+    actual: string | null,
+    expected: string,
+  ) => {
+    if (actual !== expected) errors.push(`${name} is ${actual ?? "missing"}, expected ${expected}`);
+  };
+  const expectNumber = (
+    name: string,
     actual: number | null,
     expected: number,
-    epsilon: number,
+    tolerance = 1e-4,
   ) => {
-    if (actual === null || Math.abs(actual - expected) > epsilon) {
-      errors.push(`${label}=${actual} must be ${expected} ±${epsilon}`);
+    if (actual === null || Math.abs(actual - expected) > tolerance) {
+      errors.push(`${name} is ${actual ?? "missing"}, expected ${expected}`);
     }
   };
-  check("start_scale_x", startScaleX, expectation.startWidthScale, scaleEpsilon);
-  check("start_scale_y", startScaleY, expectation.startHeightScale, scaleEpsilon);
-  check("squish_scale_x", squishScaleX, expectation.extremeWidthScale, scaleEpsilon);
-  check("squish_scale_y", squishScaleY, expectation.extremeHeightScale, scaleEpsilon);
-  check("phase1_ns", phase1Ns, expectation.compressionMs * 1_000_000, nsEpsilon);
-  check("hold_ns", holdNs, expectation.holdMs * 1_000_000, nsEpsilon);
-  check("phase2_ns", phase2Ns, expectation.reboundMs * 1_000_000, nsEpsilon);
-  check("alpha_phase1_target", alphaTarget, expectation.phase1Alpha, 0.000001);
-  check("alpha_ramp_ns", alphaRampNs, expectation.alphaRampMs * 1_000_000, nsEpsilon);
-  check(
-    "alpha_finish_ns",
-    alphaFinishNs,
-    expectation.alphaFinishMs * 1_000_000,
-    nsEpsilon,
-  );
-  check("start_alpha", startAlpha, expectation.startAlpha, 0.001);
-  for (const curve of [
-    "geometry_curve=easeOut",
-    "rebound_curve=easeInEaseOut",
-    "alpha_curve=easeOut",
-  ]) {
-    if (!line.includes(curve)) errors.push(`missing ${curve}`);
+  expectText("variant", fields.variant, "fade");
+  expectText("direction", fields.direction, expectation.direction);
+  expectText("surface_profile", fields.surfaceProfile, expectation.surfaceProfile);
+  expectText("preset", fields.preset, expectation.presetId);
+  expectNumber("duration_ns", fields.durationNs, expectation.durationMs * 1_000_000, 0.5);
+  expectNumber("width_scale", fields.widthScale, 1);
+  expectNumber("height_scale", fields.heightScale, 1);
+  expectNumber("window_start_alpha", fields.windowStartAlpha, expectation.windowStartAlpha);
+  expectNumber("material_start_alpha", fields.materialStartAlpha, expectation.materialStartAlpha);
+  expectNumber("content_start_alpha", fields.contentStartAlpha, expectation.contentStartAlpha);
+  if (
+    fields.entryBlurRadius === null
+    || fields.entryBlurRadius > expectation.entryBlurRadius + 0.01
+  ) {
+    errors.push(
+      `entry_blur_radius is ${fields.entryBlurRadius ?? "missing"}, expected at most ${expectation.entryBlurRadius}`,
+    );
   }
-
-  // Integer frames= remain useful diagnostics but are never the proof.
-  const frameMatch = line.match(/frames=(\d+)x(\d+)->(\d+)x(\d+)->(\d+)x(\d+)/);
+  expectNumber("foreground_blur_radius", fields.foregroundBlurRadius, expectation.foregroundBlurRadius, 0.01);
   return {
-    line,
-    expectation,
-    startScaleX,
-    startScaleY,
-    squishScaleX,
-    squishScaleY,
-    phase1Ns,
-    holdNs,
-    phase2Ns,
-    alphaTarget,
-    alphaRampNs,
-    alphaFinishNs,
-    startAlpha,
-    integerFrames: frameMatch ? frameMatch.slice(1).map(Number) : null,
-    errors,
     pass: errors.length === 0,
+    errors,
+    line,
+    fields,
   };
 }

@@ -822,8 +822,8 @@ fn open_notes_window_with_close_behavior(
     let native_config = update_notes_window_detached(handle, cx, |window, _cx| {
         let native = configure_notes_as_floating_panel(window);
         // Apply the Notes shell's minimum-size constraints immediately, but
-        // keep native user resizing locked until the calibrated entry morph
-        // fully settles (`schedule_notes_resize_unlock`).
+        // keep native user resizing locked until the entry fade settles
+        // (`schedule_notes_resize_unlock`).
         crate::platform::apply_window_resize_policy(
             window,
             crate::window_resize::policy::resize_policy(
@@ -1655,8 +1655,6 @@ fn configure_notes_as_floating_panel(gpui_window: &gpui::Window) -> Option<Notes
             configured_at_monotonic_ns: receipt.configured_at_monotonic_ns,
             configured_at_unix_ms: receipt.configured_at_unix_ms,
             settle_duration_ms: receipt.settle_duration_ms,
-            settled_crossing_delay_ms: receipt.settled_crossing_delay_ms,
-            content_reveal_delay_ms: receipt.content_reveal_delay_ms,
             morph_started: receipt.morph_started,
             morph_start_alpha_bits: receipt.morph_start_alpha_bits,
         })

@@ -962,26 +962,6 @@ mod from_dialog_builtin_action_validation_tests {
     // 20. Fuzzy match with real action titles
     // =========================================================================
 
-    #[test]
-    fn fuzzy_match_works_on_real_action_titles() {
-        // Common user search patterns against actual action titles
-        assert!(ActionsDialog::fuzzy_match("edit script", "es"));
-        assert!(ActionsDialog::fuzzy_match("reveal in finder", "rif"));
-        assert!(ActionsDialog::fuzzy_match("copy path", "cp"));
-        assert!(ActionsDialog::fuzzy_match("copy deeplink", "cdl"));
-        assert!(ActionsDialog::fuzzy_match("add keyboard shortcut", "aks"));
-        assert!(ActionsDialog::fuzzy_match("reset ranking", "rr"));
-        assert!(ActionsDialog::fuzzy_match("view logs", "vl"));
-    }
-
-    #[test]
-    fn fuzzy_match_fails_for_reversed_chars() {
-        // "se" should not fuzzy match "edit script" (s comes after e)
-        // Actually: e-d-i-t- -s-c-r-i-p-t → 's' at index 5, 'e' not found after 's'... wait
-        // "se": s at 5, then e at... no e after index 5. So it fails.
-        assert!(!ActionsDialog::fuzzy_match("edit script", "se"));
-    }
-
     // =========================================================================
     // 21. Action verb propagation in primary action
     // =========================================================================
@@ -2992,25 +2972,6 @@ mod from_dialog_builtin_action_validation_tests_2 {
     // =========================================================================
     // 35. Fuzzy match on real action IDs across contexts
     // =========================================================================
-
-    #[test]
-    fn fuzzy_match_on_clipboard_action_titles() {
-        let entry = ClipboardEntryInfo {
-            id: "e".into(),
-            content_type: ContentType::Text,
-            pinned: false,
-            preview: "t".into(),
-            image_dimensions: None,
-            frontmost_app_name: None,
-        };
-        let actions = get_clipboard_history_context_actions(&entry);
-        // "pke" should fuzzy match "Paste and Keep Window Open" (p-a-s-t-e... k-e-e-p)
-        let paste_keep = actions
-            .iter()
-            .find(|a| a.id == "clip:clipboard_paste_keep_open")
-            .unwrap();
-        assert!(ActionsDialog::fuzzy_match(&paste_keep.title_lower, "pke"));
-    }
 
     // =========================================================================
     // 36. Grouped items headers style produces section headers
@@ -5144,7 +5105,6 @@ mod from_dialog_builtin_action_validation_tests_4 {
     //! - AI command bar icon-per-section coverage
     //! - New chat with all-empty inputs produces empty output
     //! - score_action edge cases (empty query, single char, unicode)
-    //! - fuzzy_match boundary conditions (empty strings, longer needle, etc.)
     //! - parse_shortcut_keycaps for all modifier symbols
     //! - format_shortcut_hint roundtrips for unusual key names
     //! - to_deeplink_name with CJK, emoji, RTL characters
@@ -5804,48 +5764,6 @@ mod from_dialog_builtin_action_validation_tests_4 {
             "Single char prefix match should score 100+, got {}",
             score
         );
-    }
-
-    // =========================================================================
-    // 11. fuzzy_match boundary conditions
-    // =========================================================================
-
-    #[test]
-    fn fuzzy_match_empty_needle_always_matches() {
-        assert!(ActionsDialog::fuzzy_match("anything", ""));
-    }
-
-    #[test]
-    fn fuzzy_match_empty_haystack_only_matches_empty_needle() {
-        assert!(ActionsDialog::fuzzy_match("", ""));
-        assert!(!ActionsDialog::fuzzy_match("", "a"));
-    }
-
-    #[test]
-    fn fuzzy_match_needle_longer_than_haystack_fails() {
-        assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-    }
-
-    #[test]
-    fn fuzzy_match_exact_match_succeeds() {
-        assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-    }
-
-    #[test]
-    fn fuzzy_match_subsequence_succeeds() {
-        assert!(ActionsDialog::fuzzy_match("edit script", "edsc"));
-    }
-
-    #[test]
-    fn fuzzy_match_wrong_order_fails() {
-        assert!(!ActionsDialog::fuzzy_match("abc", "cba"));
-    }
-
-    #[test]
-    fn fuzzy_match_case_sensitive() {
-        // fuzzy_match is case-sensitive (expects pre-lowercased input)
-        assert!(!ActionsDialog::fuzzy_match("hello", "H"));
-        assert!(ActionsDialog::fuzzy_match("hello", "h"));
     }
 
     // =========================================================================
@@ -8487,48 +8405,6 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let score = ActionsDialog::score_action(&action, "edit");
             // Prefix match (100) + description match (15) = 115
             assert_eq!(score, 115);
-        }
-
-        // =========================================================================
-        // 10. fuzzy_match edge cases
-        // =========================================================================
-
-        #[test]
-        fn fuzzy_match_empty_needle_always_matches() {
-            assert!(ActionsDialog::fuzzy_match("anything", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_empty_haystack_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn fuzzy_match_both_empty_matches() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_subsequence() {
-            assert!(ActionsDialog::fuzzy_match("edit script", "es"));
-            assert!(ActionsDialog::fuzzy_match("edit script", "eit"));
-            assert!(ActionsDialog::fuzzy_match("edit script", "edsc"));
-        }
-
-        #[test]
-        fn fuzzy_match_no_subsequence() {
-            assert!(!ActionsDialog::fuzzy_match("edit", "xyz"));
-            assert!(!ActionsDialog::fuzzy_match("abc", "abdc"));
-        }
-
-        #[test]
-        fn fuzzy_match_needle_longer_than_haystack() {
-            assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-        }
-
-        #[test]
-        fn fuzzy_match_exact_equals() {
-            assert!(ActionsDialog::fuzzy_match("hello", "hello"));
         }
 
         // =========================================================================
@@ -11184,37 +11060,6 @@ mod from_dialog_builtin_action_validation_tests_6 {
         }
 
         // =========================================================================
-        // 20. fuzzy_match edge cases
-        // =========================================================================
-
-        #[test]
-        fn fuzzy_match_empty_needle_matches_anything() {
-            assert!(ActionsDialog::fuzzy_match("hello", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_subsequence() {
-            assert!(ActionsDialog::fuzzy_match("hello world", "hlwrd"));
-        }
-
-        #[test]
-        fn fuzzy_match_no_subsequence() {
-            assert!(!ActionsDialog::fuzzy_match("hello", "xyz"));
-        }
-
-        #[test]
-        fn fuzzy_match_needle_longer_than_haystack() {
-            assert!(!ActionsDialog::fuzzy_match("hi", "hello"));
-        }
-
-        #[test]
-        fn fuzzy_match_single_char() {
-            assert!(ActionsDialog::fuzzy_match("hello", "h"));
-            assert!(ActionsDialog::fuzzy_match("hello", "o"));
-            assert!(!ActionsDialog::fuzzy_match("hello", "z"));
-        }
-
-        // =========================================================================
         // 21. parse_shortcut_keycaps edge cases
         // =========================================================================
 
@@ -11735,7 +11580,6 @@ mod from_dialog_builtin_action_validation_tests_7 {
     //! 13. Path context action ordering: primary first, trash last
     //! 14. Clipboard action shortcut format (all use symbol notation)
     //! 15. Score_action with whitespace-only query
-    //! 16. fuzzy_match with repeated characters
     //! 17. build_grouped_items_static with single-item single-section
     //! 18. coerce_action_selection with alternating header-item pattern
     //! 19. parse_shortcut_keycaps with empty string and multi-byte
@@ -12762,66 +12606,6 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let score = ActionsDialog::score_action(&action, " ");
             // " " is a contains match on the title " " appears after words
             assert!(score > 0, "Space should match title containing spaces");
-        }
-
-        // ============================================================
-        // 16. fuzzy_match with repeated characters
-        // ============================================================
-
-        #[test]
-        fn fuzzy_repeated_chars_in_needle() {
-            assert!(
-                ActionsDialog::fuzzy_match("aabbcc", "abc"),
-                "Should match subsequence with repeated chars in haystack"
-            );
-        }
-
-        #[test]
-        fn fuzzy_repeated_chars_in_both() {
-            assert!(
-                ActionsDialog::fuzzy_match("aabbcc", "aabb"),
-                "Should match when both have repeated chars"
-            );
-        }
-
-        #[test]
-        fn fuzzy_needle_longer_than_haystack() {
-            assert!(
-                !ActionsDialog::fuzzy_match("ab", "abc"),
-                "Needle longer than haystack should not match"
-            );
-        }
-
-        #[test]
-        fn fuzzy_exact_match() {
-            assert!(
-                ActionsDialog::fuzzy_match("hello", "hello"),
-                "Exact match is a valid subsequence"
-            );
-        }
-
-        #[test]
-        fn fuzzy_empty_needle_always_matches() {
-            assert!(
-                ActionsDialog::fuzzy_match("anything", ""),
-                "Empty needle should match everything"
-            );
-        }
-
-        #[test]
-        fn fuzzy_empty_haystack_empty_needle() {
-            assert!(
-                ActionsDialog::fuzzy_match("", ""),
-                "Both empty should match"
-            );
-        }
-
-        #[test]
-        fn fuzzy_empty_haystack_nonempty_needle() {
-            assert!(
-                !ActionsDialog::fuzzy_match("", "a"),
-                "Non-empty needle with empty haystack should not match"
-            );
         }
 
         // ============================================================
@@ -16121,41 +15905,6 @@ mod from_dialog_builtin_action_validation_tests_8 {
         // Fuzzy match edge cases
         // ============================================================
 
-        #[test]
-        fn fuzzy_match_empty_needle_always_true() {
-            assert!(ActionsDialog::fuzzy_match("anything", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_empty_haystack_nonempty_needle_false() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn fuzzy_match_both_empty_true() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_exact_match_true() {
-            assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-        }
-
-        #[test]
-        fn fuzzy_match_subsequence_true() {
-            assert!(ActionsDialog::fuzzy_match("hello world", "hlo"));
-        }
-
-        #[test]
-        fn fuzzy_match_no_subsequence_false() {
-            assert!(!ActionsDialog::fuzzy_match("hello", "z"));
-        }
-
-        #[test]
-        fn fuzzy_match_needle_longer_than_haystack_false() {
-            assert!(!ActionsDialog::fuzzy_match("hi", "hello"));
-        }
-
         // ============================================================
         // ActionCategory invariants
         // ============================================================
@@ -17689,41 +17438,6 @@ mod from_dialog_builtin_action_validation_tests_9 {
         // ============================================================
         // 28. Fuzzy match edge cases
         // ============================================================
-
-        #[test]
-        fn fuzzy_match_empty_needle_matches() {
-            assert!(ActionsDialog::fuzzy_match("anything", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_empty_haystack_empty_needle() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_empty_haystack_nonempty_needle() {
-            assert!(!ActionsDialog::fuzzy_match("", "x"));
-        }
-
-        #[test]
-        fn fuzzy_match_subsequence() {
-            assert!(ActionsDialog::fuzzy_match("edit script", "esi"));
-        }
-
-        #[test]
-        fn fuzzy_match_no_subsequence() {
-            assert!(!ActionsDialog::fuzzy_match("abc", "abd"));
-        }
-
-        #[test]
-        fn fuzzy_match_exact() {
-            assert!(ActionsDialog::fuzzy_match("test", "test"));
-        }
-
-        #[test]
-        fn fuzzy_match_needle_longer_than_haystack() {
-            assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-        }
 
         // ============================================================
         // 29. has_action=false invariant for all builtin contexts
@@ -19495,35 +19209,6 @@ mod from_dialog_builtin_action_validation_tests_10 {
         fn score_no_match_zero() {
             let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
             assert_eq!(ActionsDialog::score_action(&a, "zzzzz"), 0);
-        }
-
-        // ========================================
-        // 24. fuzzy_match edge cases (5 tests)
-        // ========================================
-
-        #[test]
-        fn fuzzy_empty_needle_always_matches() {
-            assert!(ActionsDialog::fuzzy_match("anything", ""));
-        }
-
-        #[test]
-        fn fuzzy_empty_haystack_nonempty_needle_fails() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn fuzzy_exact_match() {
-            assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-        }
-
-        #[test]
-        fn fuzzy_subsequence_match() {
-            assert!(ActionsDialog::fuzzy_match("abcdef", "ace"));
-        }
-
-        #[test]
-        fn fuzzy_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("abc", "z"));
         }
 
         // ========================================

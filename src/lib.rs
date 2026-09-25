@@ -597,6 +597,10 @@ mod animation_replay_tests {
     }
 }
 
+#[cfg(test)]
+#[path = "show_window_request_property_tests.rs"]
+mod show_window_request_property_tests;
+
 /// Channel for requesting the main window to be shown
 /// Used by prompt_handler to signal that the window should come back after script exit
 static SHOW_WINDOW_CHANNEL: std::sync::LazyLock<(

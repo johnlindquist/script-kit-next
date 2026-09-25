@@ -852,7 +852,7 @@ pub struct ActionsDialog {
     pub skip_track_focus: bool,
     /// When true, the container fills the hosting window's bounds instead of
     /// its token-derived inline shell. Detached Actions uses this so GPUI content
-    /// reflows with the calibrated native grow-in presentation.
+    /// reflows with the native window it is hosted in.
     pub fill_window_bounds: bool,
     /// Outer shell height frozen from the root, unfiltered route at open.
     /// Content/filter/route mutations never rewrite this value.
@@ -3900,25 +3900,6 @@ impl ActionsDialog {
         }
 
         (score > 0).then_some((score, title_indices, description_indices))
-    }
-
-    /// Legacy case-sensitive subsequence matcher. Production matching goes
-    /// through the shared `SearchHighlightMatchCtx` (see `score_action`); this
-    /// is retained test-only because a large generated test corpus pins its
-    /// exact subsequence semantics as a reference implementation.
-    #[cfg(test)]
-    pub(crate) fn fuzzy_match(haystack: &str, needle: &str) -> bool {
-        let mut haystack_chars = haystack.chars();
-        for needle_char in needle.chars() {
-            loop {
-                match haystack_chars.next() {
-                    Some(h) if h == needle_char => break,
-                    Some(_) => continue,
-                    None => return false,
-                }
-            }
-        }
-        true
     }
 
     /// Derive the legacy prefix(100) > contains(50) > fuzzy(25) ranking tier

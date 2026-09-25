@@ -109,45 +109,58 @@ Cross-surface behavior must stay predictable:
 
 ## Glass Motion Calibration Lock
 
-The main-window, Actions, Notes, Dictation, and popup glass motion was calibrated
-against frame-by-frame Spotlight reference footage. **Agents must not retune,
-normalize, simplify, or "clean up" these values unless the user explicitly asks
-for animation retuning or unlocks the calibration in the current request.** A
+Window motion is owner-calibrated. **Agents must not retune, normalize,
+simplify, or "clean up" these values unless the user explicitly asks for
+animation retuning or unlocks the calibration in the current request.** A
 generic bug fix, refactor, theme change, or contrast task is not permission.
 If a requested change appears to require different motion values, preserve the
 calibration and ask for explicit permission instead.
 
-**2026-09-16 main-entry comparison catalog (user-authorized):** the owner asked
-to implement coherent entry and 25 launcher presets for choosing the balance
-through real use. At the owner's subsequent 2026-09-16 choice, main-window
-entry defaults to `SharpPresence`: no resizing/morph or defocus. Its existing
-timing and appearance stay unchanged. `PreviousCalibration` (Animation 21)
-and the other comparison alternatives remain intact. Other surfaces,
-exits, settled materials, footer geometry, and glyph tokens remain locked.
-This catalog is not a newly measured Spotlight calibration. Do not collapse its
-alternatives or change the chosen/default preset during unrelated fixes.
+**2026-09-24 fade cutover (owner-authorized):** the owner retired every
+grow/shrink entry and exit — "the window entry animation of growing and
+shrinking is completely outdated. It's really just the quick fade … super fast
+fade in, super fast fade out" — for the main window, modals, the Agent modal,
+the Actions menu, Notes, and every other window. The contract:
 
-**2026-09-23 Actions mirrors main (user-authorized):** the owner asked for the
-Actions menu appear/disappear to mimic the main window. The Actions popup
-(`GlassMorphVariant::MirrorMainEntry`) replays the SELECTED main-window preset
-through the same `animate_tahoe_glass_preset_appearance` choreography (main-only
-debounce, footer capsules, runtime receipt, and hidden-park restore stay gated
-on the physical main NSWindow), and exits with the main window's fixed-frame
-fade (`glass_exit_mode_for_preset`). Under `PreviousCalibration` the Actions
-popup restores its calibrated grow-in entry and shrink-out + blur exit, so the
-calibration captures above remain valid. Inline, shortcut-recorder, and footer
-popups keep their calibrated motion.
+- every window keeps its settled frame on entry and exit. No window animates
+  its width, height, or a layer transform, and child popups stay attached to
+  their parent;
+- entry is one grouped ease-out `NSAnimationContext` fade
+  (`animate_tahoe_glass_entry`): the glass material (Clear → Regular + tint),
+  GPUI content roots, footer capsules, and NSWindow alpha rise together to
+  `1.0` over the selected preset's duration, and any defocus resolves over the
+  same span;
+- presets (`src/theme/animation.rs`): `SharpPresence` (default) — `90ms`,
+  window alpha `0.99`, material `0.8`, content `0.85`, no defocus;
+  `FixedFrame` ("Soft Focus Fade") — `140ms`, window `0.85`, material and
+  content `0.15`, `12pt` backdrop/capsule and `4pt` foreground defocus.
+  Retired preset ids in `config.ts` load as the default;
+- exit is a `0.12s` ease-in-out alpha fade to `0` for every window
+  (`FadeOnly`); the window is removed after `135ms`;
+- NSWindow alpha below `0.85` shows the desktop through the glass, so no
+  visible frame starts below it. Truly hidden parking (window ordered out)
+  stays alpha `0.0` via `GLASS_HIDDEN_PARK_ALPHA`; zero-alpha parking of a
+  visible window is a contract violation (runtime tripwire
+  `glass_hidden_park_on_visible_window`);
+- Actions and confirm modals settle on the untinted popup material
+  (`NativeGlassSurfaceRole::PopupBackdrop`) over the already-tinted main
+  glass; every other window uses the window material;
+- Notes reveals its body with the fade (reveal delay `0ms`) and unlocks native
+  resizing at `configured_at + settle_duration_ms`;
+- glass material: stability tint floor `0.35` and capsule veil `0.0`
+  (`src/ui/chrome/tokens.rs`).
 
-**2026-09-24 modals mirror Actions (user-authorized):** the owner asked for the
-modal animation to "match the animation that we use for the actions menu where
-it doesn't change its width anymore." The confirm popup (every parent confirm
-and action dialog, including Agent Chat sign-in) now uses
-`GlassMorphVariant::MirrorMainEntry` and the Actions exit/material rules
-exactly; under `PreviousCalibration` it restores its calibrated grow-in and
-shrink-out + blur. The Actions popup also settles
-untinted (`NativeGlassSurfaceRole::PopupBackdrop`, under every preset): it sits
-over the already-tinted main glass, and its own stability tint snapped the
-glassy entry to a washed-out gray (owner report and A/B capture, 2026-09-23).
+Before the cutover, for comparison: the default `SharpPresence` already kept
+a fixed frame but took `235ms` to settle, revealing material and content over
+`90ms`; Notes, HUD, and Dictation shrank in `101.2% → 98.7% → 100%` over
+`298ms`; inline and shortcut-recorder popups grew in `98.8% → 101.3% → 100%`;
+those popups plus the microphone and Agent Chat history popups exited by
+shrinking `5%/3.5%` under an `8pt` blur, and any other window outside the
+fade-only set grew out `3%/1.2%` under the same blur; and a 26-preset
+comparison catalog (including `PreviousCalibration`, the
+Spotlight-measured `298ms` shrink-in) was selectable. The Spotlight evidence
+for those curves stays in git history (lineage 09bddd931 → eb8e1e115 →
+cd5634ec8) and at https://eager-hollow-dyyf.here.now/.
 
 **2026-09-23 in-stage footer everywhere (owner-authorized, executive call):**
 the main window's glass stage fills the whole window and the native footer
@@ -161,121 +174,32 @@ Window heights, motion timings, materials, and glyph tokens are unchanged.
 
 `src/theme/animation.rs` owns preset IDs/specs; `config.ts`'s
 `animation.preset` persists the explicit choice. Launcher registration/dispatch,
-typed generation-guarded show requests in `src/lib.rs`, and the existing native
+typed generation-guarded show requests in `src/lib.rs`, and the native
 animation/lifecycle owners provide selection and replay. `getState` exposes
 `mainWindowAnimation` with selection/catalog and captured native lifecycle.
-Coherent remains an optional preset: 298ms total (158ms compression, 140ms rebound, no onset-width pause),
-140ms overlapping reveal, 0.15 initial material/content presence, the 0.85
-NSWindow alpha floor, 12pt backdrop/capsule and 4pt bounded foreground defocus.
-Capsule foreground is not double-faded when material/content curves agree;
-mixed presets report effective label alpha and ancestor caps honestly.
 Model-property receipts do not prove composited pixel presence or sharpness.
-The named calibration fixture/envelopes still defend the preserved baseline:
-visible calibration captures must explicitly select `PreviousCalibration`
-through the supported launcher operation before measuring, not widen tolerances
-or relabel a different preset as calibrated.
-
-The preserved calibration contract is (entry retuned 2026-07-26 to the
-Spotlight visible tail — Oracle session `glass-entry-spotlight-retune`,
-user-authorized, evidence: the frame-by-frame measurement page
-https://eager-hollow-dyyf.here.now/ and the before/after receipts in
-`.artifacts/glass-entry-spotlight-retune/`; lineage 09bddd931 → eb8e1e115 →
-cd5634ec8; exit/material values remain from the 2026-07-24 calibration
-against `CleanShot 2026-07-24 at 09.18.40.mp4`):
-
-- **2026-09-15 SPEED RESTORATION (authorized): Spotlight's 1:1 entry tempo**
-  replaces the 2026-07-27 2x speed-up, at the owner's request to match the
-  supplied frame-by-frame reference. Temporal phases are doubled from that
-  speed-up; shape, ratios, curves, geometry, alpha levels, blur radii, and
-  exit semantics stay unchanged;
-- default entry duration (visible tail) `0.210s`: `70ms` ease-out
-  compression, NO explicit hold, `140ms` ease-in-out rebound. The
-  compression ease-out ends at zero velocity and the rebound begins at zero
-  velocity — that turn, not a dead hold, is the physical settling;
-- material onset prefix `88ms` (glass Clear→Regular + tint ramp at a
-  CONSTANT `0.85` NSWindow alpha, curve `(0.18,0)/(0.14,0)`); GPUI content
-  roots fade in WITH the material from the first photon — hold `0ms`, fade
-  `88ms`, ending exactly at tail start (2026-08-13 content-timing retune:
-  the 57fps Spotlight reference shows content faintly present from frame 1,
-  and the prior 26ms hold produced readable empty-body frames once the
-  native footer stopped enrolling in the content fade). **2026-08-13
-  empty-window retune (user report: "the main window starts with an
-  'empty' window"):** content roots seed at `0.21 ×` their natural alpha —
-  Spotlight's measured first-photon presence (~21% of settled) — never at
-  `0.0`, then fade to full (`GLASS_ENTRY_CONTENT_START_ALPHA`,
-  `SCRIPT_KIT_GLASS_CONTENT_START` override). Total entry `298ms`
-  = onset + tail (Oracle session `glass-entry-onset-v2`, measured from
-  `CleanShot 2026-07-27 at 10.08.42.mp4`);
-- entry inset `0.006` per side, producing a main shrink-in
-  `103.05% → 101.2% → 98.7% → 100%` width path (Notes/Dictation stay
-  `101.2% → 98.7% → 100%`) and an Actions/popup grow-in
-  `98.8% → 101.3% → 100%` path. **2026-08-13 soft-materialize retune
-  (user-authorized, measured from `CleanShot 2026-08-13 at 00.25.36.mp4`,
-  57fps):** the MAIN window's first photon is `103.05%` wide (Spotlight's
-  measured first photon), easing to the preserved `101.2%` visible-tail
-  start over `36ms` inside the material prefix, with the main backdrop's
-  onset defocus raised to `12pt → 0` resolved across the `88ms` prefix
-  (`GLASS_MAIN_ONSET_START_WIDTH_SCALE`, `GLASS_MAIN_ONSET_GEOMETRY_DURATION`,
-  `GLASS_MAIN_ENTRY_BLUR_RADIUS`; popups/secondary keep the shared `8pt`
-  full-entry ramp. Each floating footer `NSGlassEffectView` capsule uses the
-  same main `12pt → 0` defocus across `88ms`, applied per capsule with
-  `masksToBounds`, AND — 2026-08-13 capsule material parity, user report:
-  the buttons "don't match the blur of the main window" — the same
-  Clear→Regular + tint material ramp as the main backdrop across the `88ms`
-  prefix, with each capsule's own foreground contentView joining the shared
-  content fade at the `0.21` presence floor; the footer container, hints
-  host, and transparent inter-capsule gaps remain filter-free and never
-  fade).
-  NSWindow alpha below 0.85 still exposes desktop pixels, so the sub-0.85
-  presence prefix remains deliberately omitted — the wider+blurrier first
-  photon at the 0.85 floor is the safe reproduction. Height participation
-  is `0` (vertical damping 0.0 — Spotlight measures ±0–2px). Squish factor
-  stays `0.25`, clamped `0.0065–0.015` per side; the default hits the
-  0.0065 minimum = Spotlight's measured `−1.3%` total squish;
-- entry alpha: visible start `0.85`, easing to `0.99` over `36ms`
-  (ease-out), holding the model value at `0.99` through max compression,
-  then easing `0.99 → 1.0` over `52ms` from rebound start. A shrink-in
-  frame must NEVER be fully opaque while wider than natural size;
-- the `0.85` floor lineage: retuned from `0.0` on 2026-07-25 (HITL
-  submission `98cab5e5-6f15-4311-8d49-83e31602e641` / Oracle plan
-  `floating-capsule-entry-material` — NSWindow alpha multiplies every
-  contributed pixel, so low-alpha visible frames displayed mostly
-  wallpaper). Truly hidden parking (window ordered out) stays alpha `0.0`
-  via `GLASS_HIDDEN_PARK_ALPHA`; zero-alpha parking of a visible window is
-  a contract violation (runtime tripwire
-  `glass_hidden_park_on_visible_window`);
-- phase-one fraction `1/3`, squish hold `0.0s`, fade fraction `2/3`;
-- Notes body reveal uses the material-safe anchor, ABSOLUTE from native
-  configure: onset + `max(geometric crossing 23ms, alpha ramp 36ms)` =
-  `124ms`, then keeps its `90ms` body fade;
-- glass material: stability tint floor `0.35` and capsule veil `0.0`
-  (`src/ui/chrome/tokens.rs`) — the veil was removed in the user-authorized
-  Jul 27 calibration; the older `0.80` policy text was stale. The Jul 23
-  `0.55`/`0.94` stack read near-solid mid-entry, visibly heavier than the
-  Spotlight reference fade;
-- detached main-window exit is fixed-frame fade-only;
-- popup exit duration `0.12s`, removal delay `135ms`, grow x/y `0.03/0.012`,
-  shrink x/y `0.05/0.035`, and blur radius `8.0`.
 
 Owning sources and anti-drift evidence:
 
-- defaults: `src/theme/opacity.rs`;
-- native physics/lifecycle: `src/platform/secondary_window_config.rs`;
+- preset specs: `src/theme/animation.rs`;
+- native entry/exit/lifecycle: `src/platform/secondary_window_config.rs`,
+  `src/platform/secondary_window_glass_animation.rs`, and
+  `src/platform/secondary_window_glass_lifecycle.rs`;
 - clipped footer capsule inventory: `src/footer_popup.rs`;
+- value rules: `src/platform/glass_entry_property_tests.rs`;
 - named production fixture:
   `scripts/agentic/fixtures/glass-motion-calibration-theme.json`;
-- geometry envelope:
+- fade envelope:
   `scripts/devtools/glass-entry-motion-contract.ts`;
 - frame/runtime probes:
   `scripts/devtools/glass-lifecycle-filmstrip.ts`,
   `scripts/devtools/actions-entry-filmstrip.ts`, and
   `scripts/devtools/rapid-toggle-stress.ts`.
 
-Do not update the fixture, envelope thresholds, expected geometry, or their
+Do not update the fixture, envelope thresholds, expected values, or their
 tests merely to make a changed animation pass. With explicit user permission,
-retune from new frame-by-frame evidence, update all owning sources together,
-and report the before/after measurements. Without that permission, restore the
-locked values.
+retune, update all owning sources together, and report the before/after
+values. Without that permission, restore the locked values.
 
 Minimum anti-drift check:
 
@@ -283,8 +207,7 @@ Minimum anti-drift check:
 bun test ./scripts/devtools/glass-entry-motion-contract.test.ts \
   ./scripts/devtools/glass-lifecycle-filmstrip.test.ts \
   ./scripts/devtools/rapid-toggle-stress.test.ts
-./scripts/agentic/agent-cargo.sh test --lib \
-  platform::secondary_window_config_tests::glass_motion_fixture_matches_the_measured_production_calibration
+./scripts/agentic/agent-cargo.sh test --lib glass_entry_property_tests
 ```
 
 For runtime/visual changes, also run the lifecycle, Actions-entry, and rapid

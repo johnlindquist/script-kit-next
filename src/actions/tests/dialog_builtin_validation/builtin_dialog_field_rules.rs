@@ -1072,45 +1072,6 @@ mod from_dialog_builtin_action_validation_tests_11 {
     }
 
     // ============================================================================
-    // 22. fuzzy_match edge cases
-    // ============================================================================
-
-    #[test]
-    fn cat22_empty_needle_matches() {
-        assert!(ActionsDialog::fuzzy_match("anything", ""));
-    }
-
-    #[test]
-    fn cat22_empty_haystack_with_needle_fails() {
-        assert!(!ActionsDialog::fuzzy_match("", "x"));
-    }
-
-    #[test]
-    fn cat22_both_empty_matches() {
-        assert!(ActionsDialog::fuzzy_match("", ""));
-    }
-
-    #[test]
-    fn cat22_exact_match() {
-        assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-    }
-
-    #[test]
-    fn cat22_subsequence_match() {
-        assert!(ActionsDialog::fuzzy_match("hello world", "hlo"));
-    }
-
-    #[test]
-    fn cat22_no_subsequence() {
-        assert!(!ActionsDialog::fuzzy_match("hello", "xyz"));
-    }
-
-    #[test]
-    fn cat22_needle_longer_than_haystack() {
-        assert!(!ActionsDialog::fuzzy_match("hi", "hello"));
-    }
-
-    // ============================================================================
     // 23. score_action boundary thresholds
     // ============================================================================
 
@@ -3035,45 +2996,6 @@ mod from_dialog_builtin_action_validation_tests_12 {
         }
 
         // =========================================================================
-        // 22. fuzzy_match edge cases
-        // =========================================================================
-
-        #[test]
-        fn cat22_empty_needle_matches() {
-            assert!(ActionsDialog::fuzzy_match("anything", ""));
-        }
-
-        #[test]
-        fn cat22_empty_haystack_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("", "x"));
-        }
-
-        #[test]
-        fn cat22_both_empty_matches() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn cat22_exact_match() {
-            assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-        }
-
-        #[test]
-        fn cat22_subsequence_match() {
-            assert!(ActionsDialog::fuzzy_match("hello world", "hlw"));
-        }
-
-        #[test]
-        fn cat22_no_subsequence() {
-            assert!(!ActionsDialog::fuzzy_match("hello", "xyz"));
-        }
-
-        #[test]
-        fn cat22_needle_longer_than_haystack() {
-            assert!(!ActionsDialog::fuzzy_match("hi", "hello"));
-        }
-
-        // =========================================================================
         // 23. Script context exact action ordering
         // =========================================================================
 
@@ -4681,45 +4603,6 @@ mod from_dialog_builtin_action_validation_tests_13 {
         }
 
         // =========================================================================
-        // 18. fuzzy_match edge cases
-        // =========================================================================
-
-        #[test]
-        fn cat18_empty_needle_true() {
-            assert!(ActionsDialog::fuzzy_match("anything", ""));
-        }
-
-        #[test]
-        fn cat18_empty_haystack_false() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn cat18_both_empty_true() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn cat18_exact_match() {
-            assert!(ActionsDialog::fuzzy_match("abc", "abc"));
-        }
-
-        #[test]
-        fn cat18_subsequence() {
-            assert!(ActionsDialog::fuzzy_match("abcdef", "ace"));
-        }
-
-        #[test]
-        fn cat18_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("abc", "xyz"));
-        }
-
-        #[test]
-        fn cat18_needle_longer_than_haystack() {
-            assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-        }
-
-        // =========================================================================
         // 19. build_grouped_items_static
         // =========================================================================
 
@@ -5345,7 +5228,6 @@ mod from_dialog_builtin_action_validation_tests_14 {
     //! - build_grouped_items_static with mixed sections and alternating patterns
     //! - coerce_action_selection with interleaved headers
     //! - score_action stacking: title + description + shortcut all match
-    //! - fuzzy_match Unicode subsequence
     //! - parse_shortcut_keycaps with slash and number inputs
     //! - to_deeplink_name with numeric-only and empty-after-strip inputs
     //! - Action with_shortcut_opt Some vs None chaining
@@ -6356,45 +6238,6 @@ mod from_dialog_builtin_action_validation_tests_14 {
             .with_shortcut("⌘E");
             let score = ActionsDialog::score_action(&action, "zzzzz");
             assert_eq!(score, 0);
-        }
-
-        // =========================================================================
-        // 14. fuzzy_match Unicode subsequence
-        // =========================================================================
-
-        #[test]
-        fn cat14_fuzzy_match_ascii_subsequence() {
-            assert!(ActionsDialog::fuzzy_match("hello world", "hlo"));
-        }
-
-        #[test]
-        fn cat14_fuzzy_match_exact() {
-            assert!(ActionsDialog::fuzzy_match("exact", "exact"));
-        }
-
-        #[test]
-        fn cat14_fuzzy_match_empty_needle() {
-            assert!(ActionsDialog::fuzzy_match("anything", ""));
-        }
-
-        #[test]
-        fn cat14_fuzzy_match_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("abc", "xyz"));
-        }
-
-        #[test]
-        fn cat14_fuzzy_match_needle_longer() {
-            assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-        }
-
-        #[test]
-        fn cat14_fuzzy_match_both_empty() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn cat14_fuzzy_match_empty_haystack_nonempty_needle() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
         }
 
         // =========================================================================
@@ -9259,7 +9102,6 @@ mod from_dialog_builtin_action_validation_tests_16 {
     //! - format_shortcut_hint modifier keyword normalization edge cases
     //! - to_deeplink_name numeric and underscore handling
     //! - score_action empty query behaviour
-    //! - fuzzy_match case sensitivity
     //! - build_grouped_items_static single-item input
     //! - coerce_action_selection single-item input
     //! - CommandBarConfig close flag independence
@@ -10189,45 +10031,6 @@ mod from_dialog_builtin_action_validation_tests_16 {
         }
 
         // =========================================================================
-        // cat14: fuzzy_match case sensitivity
-        // =========================================================================
-
-        #[test]
-        fn cat14_fuzzy_exact_match() {
-            assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-        }
-
-        #[test]
-        fn cat14_fuzzy_subsequence() {
-            assert!(ActionsDialog::fuzzy_match("hello world", "hwd"));
-        }
-
-        #[test]
-        fn cat14_fuzzy_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("hello", "xyz"));
-        }
-
-        #[test]
-        fn cat14_fuzzy_empty_needle() {
-            assert!(ActionsDialog::fuzzy_match("hello", ""));
-        }
-
-        #[test]
-        fn cat14_fuzzy_empty_haystack() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn cat14_fuzzy_both_empty() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn cat14_fuzzy_needle_longer() {
-            assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-        }
-
-        // =========================================================================
         // cat15: build_grouped_items_static single-item input
         // =========================================================================
 
@@ -11067,7 +10870,6 @@ mod from_dialog_builtin_action_validation_tests_17 {
     //! 17. ActionsDialog::format_shortcut_hint SDK-style shortcuts
     //! 18. ActionsDialog::parse_shortcut_keycaps compound shortcuts
     //! 19. ActionsDialog::score_action multi-field bonus stacking
-    //! 20. ActionsDialog::fuzzy_match character ordering requirement
     //! 21. build_grouped_items_static with no-section actions
     //! 22. coerce_action_selection alternating header-item pattern
     //! 23. CommandBarConfig notes_style preset values
@@ -12116,40 +11918,6 @@ mod from_dialog_builtin_action_validation_tests_17 {
                 .with_shortcut("⌘E");
             // "⌘e" matches shortcut_lower "⌘e" => +10
             assert_eq!(ActionsDialog::score_action(&action, "⌘e"), 10);
-        }
-
-        // ================================================================
-        // Cat 20: ActionsDialog::fuzzy_match character ordering requirement
-        // ================================================================
-
-        #[test]
-        fn cat20_correct_order_matches() {
-            assert!(ActionsDialog::fuzzy_match("hello world", "hlo"));
-        }
-
-        #[test]
-        fn cat20_wrong_order_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("hello world", "olh"));
-        }
-
-        #[test]
-        fn cat20_exact_match() {
-            assert!(ActionsDialog::fuzzy_match("abc", "abc"));
-        }
-
-        #[test]
-        fn cat20_empty_needle_matches() {
-            assert!(ActionsDialog::fuzzy_match("anything", ""));
-        }
-
-        #[test]
-        fn cat20_empty_haystack_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn cat20_needle_longer_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
         }
 
         // ================================================================
@@ -13621,37 +13389,6 @@ mod from_dialog_builtin_action_validation_tests_18 {
             let score = ActionsDialog::score_action(&action, "⌘t");
             // No title match for "⌘t", but shortcut match: 10
             assert_eq!(score, 10);
-        }
-
-        // =========================================================================
-        // Category 16: fuzzy_match edge cases
-        // =========================================================================
-
-        #[test]
-        fn cat16_repeated_chars_in_haystack() {
-            // "aaa" in "banana" should match (b-a-n-a-n-a has three a's)
-            assert!(ActionsDialog::fuzzy_match("banana", "aaa"));
-        }
-
-        #[test]
-        fn cat16_repeated_chars_insufficient() {
-            // "aaaa" in "banana" should fail (only 3 a's available)
-            assert!(!ActionsDialog::fuzzy_match("banana", "aaaa"));
-        }
-
-        #[test]
-        fn cat16_single_char_match() {
-            assert!(ActionsDialog::fuzzy_match("hello", "h"));
-        }
-
-        #[test]
-        fn cat16_single_char_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("hello", "z"));
-        }
-
-        #[test]
-        fn cat16_full_string_match() {
-            assert!(ActionsDialog::fuzzy_match("hello", "hello"));
         }
 
         // =========================================================================
@@ -15254,46 +14991,6 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 "Description match should give 15+, got {}",
                 score
             );
-        }
-
-        // =========================================================================
-        // Category 15: fuzzy_match subsequence correctness
-        // Tests the fuzzy matching helper function.
-        // =========================================================================
-
-        #[test]
-        fn cat15_fuzzy_exact_match() {
-            assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-        }
-
-        #[test]
-        fn cat15_fuzzy_subsequence_match() {
-            assert!(ActionsDialog::fuzzy_match("hello world", "hlwrd"));
-        }
-
-        #[test]
-        fn cat15_fuzzy_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("hello", "xyz"));
-        }
-
-        #[test]
-        fn cat15_fuzzy_empty_needle() {
-            assert!(ActionsDialog::fuzzy_match("hello", ""));
-        }
-
-        #[test]
-        fn cat15_fuzzy_empty_haystack() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn cat15_fuzzy_needle_longer_than_haystack() {
-            assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-        }
-
-        #[test]
-        fn cat15_fuzzy_both_empty() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
         }
 
         // =========================================================================
@@ -16967,45 +16664,6 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 "Shortcut match should score 10+, got {}",
                 score
             );
-        }
-
-        // =========================================================================
-        // Category 13: fuzzy_match subsequence behavior
-        // =========================================================================
-
-        #[test]
-        fn cat13_exact_match() {
-            assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-        }
-
-        #[test]
-        fn cat13_subsequence_match() {
-            assert!(ActionsDialog::fuzzy_match("hello world", "hlwrd"));
-        }
-
-        #[test]
-        fn cat13_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("hello", "xyz"));
-        }
-
-        #[test]
-        fn cat13_empty_needle_matches() {
-            assert!(ActionsDialog::fuzzy_match("hello", ""));
-        }
-
-        #[test]
-        fn cat13_empty_haystack_no_match() {
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn cat13_both_empty() {
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn cat13_needle_longer_fails() {
-            assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
         }
 
         // =========================================================================

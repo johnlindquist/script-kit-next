@@ -647,8 +647,8 @@ pub struct NotesApp {
     /// Last root pointer-down classification for bottom-resize verification.
     last_bottom_resize_receipt: Option<resize::NotesBottomResizeReceipt>,
     /// Native (all-edge) resize interlock: the resizable style bit is only on
-    /// while this is `Enabled`; calibrated entry/exit morphs own the frame in
-    /// the locked phases. See `resize::NotesNativeResizePhase`.
+    /// while this is `Enabled`; the entry and exit fades own the window in the
+    /// locked phases. See `resize::NotesNativeResizePhase`.
     native_resize_phase: resize::NotesNativeResizePhase,
     /// Last bounds published to the automation window registry. Native
     /// (AppKit-tracked) resizes never pass through the custom resize

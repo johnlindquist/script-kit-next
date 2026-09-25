@@ -62,10 +62,7 @@ fn record_glass_exit_begin(window: id, ticket: GlassExitTicket, window_name: &st
         window_name: window_name.to_string(),
         native_window_number,
         generation: ticket.generation,
-        mode: match glass_exit_mode(window_name) {
-            GlassExitMode::DetachedRegionsFadeOnly => "DetachedRegionsFadeOnly",
-            GlassExitMode::PopupTransformAndBlur => "PopupTransformAndBlur",
-        },
+        mode: "FadeOnly",
         original_frame: [
             frame.origin.x,
             frame.origin.y,
@@ -284,34 +281,16 @@ pub(crate) fn glass_exit_ticket_is_current(_ticket: GlassExitTicket) -> bool {
 
 #[cfg(target_os = "macos")]
 unsafe fn cancel_pending_glass_window_selectors(window: id) {
-    if let Ok(mut targets) = GLASS_MORPH_SETTLE_TARGETS.lock() {
-        targets.remove(&(window as usize));
-    }
-    if let Ok(mut targets) = GLASS_MORPH_TAIL_TARGETS.lock() {
-        targets.remove(&(window as usize));
-    }
     let coherent_active = GLASS_COHERENT_ENTRY_STATES
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .contains_key(&(window as usize));
     let visible: bool = msg_send![window, isVisible];
-    let content = GLASS_ENTRY_CONTENT_TARGETS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .remove(&(window as usize));
     if !coherent_active || !visible {
-        if let Some(content) = content {
-            for (view_ptr, original_alpha) in content.views {
-                let view = view_ptr as id;
-                if view != nil {
-                    let _: () = msg_send![view, setAlphaValue: original_alpha];
-                }
-            }
-        }
         finish_coherent_glass_entry(window, "interrupted");
     } else {
-        // A fixed-frame fade exit must not briefly expose a full, sharp,
-        // natural-sized stage while the window is still visible. Invalidate
+        // A fade exit must not briefly expose a full, sharp stage while the
+        // window is still visible. Invalidate
         // selectors now; the retained state is restored after orderOut.
         let mut receipt = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
             .lock()
@@ -335,21 +314,9 @@ unsafe fn cancel_pending_glass_window_selectors(window: id) {
     let _: () = msg_send![
         class!(NSObject),
         cancelPreviousPerformRequestsWithTarget: glass_view
-        selector: sel!(settleOwnWindowFrame)
+        selector: sel!(finishOwnWindowEntry)
         object: nil
     ];
-    for selector in [
-        sel!(revealOwnWindowEntryContent),
-        sel!(beginOwnWindowEntryTail),
-        sel!(finishOwnWindowEntry),
-    ] {
-        let _: () = msg_send![
-            class!(NSObject),
-            cancelPreviousPerformRequestsWithTarget: glass_view
-            selector: selector
-            object: nil
-        ];
-    }
 }
 
 #[cfg(target_os = "macos")]
@@ -360,9 +327,8 @@ unsafe fn cancel_ns_window_exit_dematerialize(window: id) -> bool {
 /// Cancel a pending exit. `restore_alpha = true` is the public
 /// cancellation/recovery contract (the window must end up presentable at
 /// full alpha). Entry animation passes `restore_alpha = false`: restoring
-/// 1.0 before the start frame is installed would flash a full-alpha extreme
-/// calibration frame — the entry path owns alpha and applies
-/// `tuning.start_alpha` BEFORE installing the start geometry.
+/// 1.0 first would flash a full-alpha frame before the entry installs its
+/// start alpha.
 #[cfg(target_os = "macos")]
 unsafe fn cancel_ns_window_exit_dematerialize_impl(window: id, restore_alpha: bool) -> bool {
     if window == nil {
@@ -403,41 +369,6 @@ unsafe fn cancel_ns_window_exit_dematerialize_impl(window: id, restore_alpha: bo
     true
 }
 
-/// Per-window two-phase bounce settle targets. Multiple HUDs and secondary
-/// windows can materialize concurrently, so a single global slot would let one
-/// window steal another's rebound target.
-/// Everything the delayed visible tail needs at T=88ms. Stored per-window
-/// (same non-retaining pointer-key pattern as the settle targets; the
-/// cancellation path clears these before window teardown).
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug)]
-struct GlassMorphTailTarget {
-    squish_frame: [f64; 4],
-    final_frame: [f64; 4],
-    phase1: f64,
-    phase2: f64,
-    alpha_ramp_duration: f64,
-    phase1_alpha_target: f64,
-    alpha_finish_duration: f64,
-}
-
-#[cfg(target_os = "macos")]
-static GLASS_MORPH_TAIL_TARGETS: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<usize, GlassMorphTailTarget>>,
-> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
-
-/// Scheduled content reveal owns its duration and view list. A live preset
-/// change cannot alter a previously armed window's delayed reveal.
-#[cfg(target_os = "macos")]
-struct GlassEntryContentTarget {
-    duration: f64,
-    views: Vec<(usize, f64)>,
-}
-
-#[cfg(target_os = "macos")]
-static GLASS_ENTRY_CONTENT_TARGETS: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<usize, GlassEntryContentTarget>>,
-> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 /// A coherent entry owns every native object it temporarily changes. Object
 /// pointers in the maps are only keys; retained objects are released exactly
 /// once by the finish callback or the synchronous interruption path.
@@ -458,7 +389,6 @@ struct GlassEntryLayerSnapshot {
 #[cfg(target_os = "macos")]
 struct GlassEntryStyleSnapshot {
     view: usize,
-    style: isize,
     tint: usize,
 }
 
@@ -466,7 +396,6 @@ struct GlassEntryStyleSnapshot {
 struct GlassCoherentEntryState {
     backdrop_key: usize,
     window_number: i64,
-    final_frame: [f64; 4],
     alpha_views: Vec<(usize, f64)>,
     layers: Vec<GlassEntryLayerSnapshot>,
     styles: Vec<GlassEntryStyleSnapshot>,
@@ -496,16 +425,10 @@ unsafe fn release_entry_object(object: usize) {
 
 #[cfg(target_os = "macos")]
 impl GlassCoherentEntryState {
-    fn new(frame: cocoa::foundation::NSRect, backdrop: id, window_number: i64) -> Self {
+    fn new(backdrop: id, window_number: i64) -> Self {
         Self {
             backdrop_key: backdrop as usize,
             window_number,
-            final_frame: [
-                frame.origin.x,
-                frame.origin.y,
-                frame.size.width,
-                frame.size.height,
-            ],
             alpha_views: Vec::new(),
             layers: Vec::new(),
             styles: Vec::new(),
@@ -624,11 +547,9 @@ impl GlassCoherentEntryState {
         if view == nil || self.styles.iter().any(|style| style.view == view as usize) {
             return;
         }
-        let style: isize = msg_send![view, style];
         let tint: id = msg_send![view, tintColor];
         self.styles.push(GlassEntryStyleSnapshot {
             view: retain_entry_object(view),
-            style,
             tint: retain_entry_object(tint),
         });
     }
@@ -658,10 +579,9 @@ impl GlassCoherentEntryState {
         }
     }
 
-    unsafe fn restore(self, window: id, restore_frame: bool) -> ([f64; 4], f64, bool) {
-        use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    unsafe fn restore(self, window: id) -> ([f64; 4], f64, bool) {
+        use cocoa::foundation::NSRect;
         let Self {
-            final_frame,
             alpha_views,
             layers,
             styles,
@@ -744,11 +664,6 @@ impl GlassCoherentEntryState {
             release_entry_object(snapshot.tint);
             release_entry_object(snapshot.view);
         }
-        if restore_frame {
-            let [x, y, width, height] = final_frame;
-            let frame = NSRect::new(NSPoint::new(x, y), NSSize::new(width, height));
-            let _: () = msg_send![window, setFrame: frame display: true];
-        }
         let _: () = msg_send![window, setAlphaValue: 1.0f64];
         let _: () = msg_send![class!(NSAnimationContext), endGrouping];
         let actual_frame: NSRect = msg_send![window, frame];
@@ -759,8 +674,7 @@ impl GlassCoherentEntryState {
             actual_frame.size.width,
             actual_frame.size.height,
         ];
-        effects_restored &=
-            (!restore_frame || actual == final_frame) && (actual_alpha - 1.0).abs() < 0.000_001;
+        effects_restored &= (actual_alpha - 1.0).abs() < 0.000_001;
         (actual, actual_alpha, effects_restored)
     }
 }
@@ -777,9 +691,7 @@ unsafe fn finish_coherent_glass_entry(window: id, outcome: &'static str) {
     let Some(state) = state else {
         return;
     };
-    let visible: bool = msg_send![window, isVisible];
-    let restore_frame = outcome == "completed" || !visible;
-    let (actual_frame, actual_alpha, effects_restored) = state.restore(window, restore_frame);
+    let (actual_frame, actual_alpha, effects_restored) = state.restore(window);
     let now = crate::platform::host_clock::host_time_ns();
     let mut receipt = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
         .lock()
@@ -792,7 +704,7 @@ unsafe fn finish_coherent_glass_entry(window: id, outcome: &'static str) {
             receipt.actual_frame = Some(actual_frame);
             receipt.actual_alpha = Some(actual_alpha);
             receipt.effects_restored = Some(effects_restored);
-            receipt.frame_restored = Some(restore_frame && actual_frame == receipt.expected_frame);
+            receipt.frame_unchanged = Some(actual_frame == receipt.expected_frame);
             if outcome == "interrupted" && receipt.cancelled_at_host_time_ns.is_none() {
                 receipt.cancelled_at_host_time_ns = Some(now);
             }
@@ -820,8 +732,8 @@ unsafe fn discard_closed_coherent_glass_entry(backdrop: id) {
 }
 
 /// A visible exit defers its coherent entry restore to hidden parking, which
-/// only the main window has. A popup that mirrors the main entry is destroyed
-/// instead, so its committed exit releases the deferred state here — never
+/// only the main window has. Other windows are destroyed instead, so their
+/// committed exit releases the deferred state here — never
 /// leaking the retained views or leaving a pointer-reusable stale key.
 #[cfg(target_os = "macos")]
 pub(crate) fn release_glass_entry_for_removed_window(ticket: GlassExitTicket) {
@@ -842,18 +754,6 @@ unsafe fn discard_coherent_glass_entry_for_window_key(window_key: usize) {
     let Some(state) = state else {
         return;
     };
-    GLASS_MORPH_SETTLE_TARGETS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .remove(&window_key);
-    GLASS_MORPH_TAIL_TARGETS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .remove(&window_key);
-    GLASS_ENTRY_CONTENT_TARGETS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .remove(&window_key);
     let window_number = state.window_number;
     state.discard();
     let now = crate::platform::host_clock::host_time_ns();
@@ -887,15 +787,13 @@ extern "C" fn tahoe_glass_backdrop_finish_coherent_entry(
     }
 }
 
-/// Native main bounds are authoritative for the foreground clip. Convert the
-/// already bounded backdrop into the root's own coordinates; never mask the
-/// common contentView or the gap-spanning footer host.
+/// Native bounds are authoritative for the foreground clip. Convert the
+/// already bounded backdrop into the root's own coordinates and mask the root
+/// to that rounded shape; never mask the common contentView or the
+/// gap-spanning footer host. The frame never moves during entry, so the mask
+/// is static.
 #[cfg(target_os = "macos")]
-unsafe fn clip_entry_defocus_to_backdrop(
-    root: id,
-    backdrop: id,
-    spec: crate::theme::animation::MainWindowAnimationSpec,
-) -> bool {
+unsafe fn clip_entry_defocus_to_backdrop(root: id, backdrop: id) -> bool {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
@@ -920,18 +818,11 @@ unsafe fn clip_entry_defocus_to_backdrop(
     if layer == nil || right <= left || top <= bottom {
         return false;
     }
-    let start_clip = NSRect::new(
+    let clip = NSRect::new(
         NSPoint::new(left, bottom),
         NSSize::new(right - left, top - bottom),
     );
-    let start_width = start_clip.size.width;
-    let extreme_width = start_width * spec.squish_width_scale / spec.start_width_scale;
-    let final_width = start_width / spec.start_width_scale;
-    let width_max = start_width.max(extreme_width).max(final_width);
     let Some(mask_class) = objc::runtime::Class::get("CAShapeLayer") else {
-        return false;
-    };
-    let Some(animation_class) = objc::runtime::Class::get("CAKeyframeAnimation") else {
         return false;
     };
     let mask: id = msg_send![mask_class, layer];
@@ -946,323 +837,18 @@ unsafe fn clip_entry_defocus_to_backdrop(
     };
     let radius = corner_radius
         .max(0.0)
-        .min(start_clip.size.height * 0.5)
-        .min(start_width.min(extreme_width).min(final_width) * 0.5);
-    let stages = [start_width, extreme_width, final_width];
-    let mut paths = [std::ptr::null_mut(); 3];
-    for (index, width) in stages.into_iter().enumerate() {
-        paths[index] = CGPathCreateWithRoundedRect(
-            NSRect::new(
-                NSPoint::new(left, bottom),
-                NSSize::new(width, start_clip.size.height),
-            ),
-            radius,
-            radius,
-            std::ptr::null(),
-        );
-    }
-    if paths.iter().any(|path| path.is_null()) {
-        for path in paths {
-            if !path.is_null() {
-                CGPathRelease(path);
-            }
-        }
+        .min(clip.size.height * 0.5)
+        .min(clip.size.width * 0.5);
+    let path = CGPathCreateWithRoundedRect(clip, radius, radius, std::ptr::null());
+    if path.is_null() {
         return false;
     }
-    // A mask layer does not inherit ordinary sibling autoresizing. Animate
-    // its path with the same two phase timings as the NSWindow frame, so
-    // narrow->wide presets retain the rounded stage boundary throughout.
-    let mask_frame = NSRect::new(
-        root_bounds.origin,
-        NSSize::new(
-            root_bounds.size.width.max(width_max),
-            root_bounds.size.height,
-        ),
-    );
-    let _: () = msg_send![mask, setFrame: mask_frame];
-    let _: () = msg_send![mask, setPath: paths[2]];
-    let animation_key = tahoe_ns_string("path");
-    let animation: id = msg_send![animation_class, animationWithKeyPath: animation_key];
-    if animation == nil {
-        for path in paths {
-            CGPathRelease(path);
-        }
-        return false;
-    }
-    let path_objects = [paths[0] as id, paths[1] as id, paths[2] as id];
-    let values: id =
-        msg_send![class!(NSArray), arrayWithObjects: path_objects.as_ptr() count: 3usize];
-    let phase_ratio = f64::from(spec.compression_ms) / f64::from(spec.duration_ms);
-    let times: [id; 3] = [
-        msg_send![class!(NSNumber), numberWithDouble: 0.0f64],
-        msg_send![class!(NSNumber), numberWithDouble: phase_ratio],
-        msg_send![class!(NSNumber), numberWithDouble: 1.0f64],
-    ];
-    let key_times: id = msg_send![class!(NSArray), arrayWithObjects: times.as_ptr() count: 3usize];
-    let _: () = msg_send![animation, setValues: values];
-    let _: () = msg_send![animation, setKeyTimes: key_times];
-    let _: () = msg_send![animation, setDuration: f64::from(spec.duration_ms) / 1000.0];
-    if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
-        let ease_out: id = msg_send![timing_class, functionWithName: tahoe_ns_string("easeOut")];
-        let rebound: id =
-            msg_send![timing_class, functionWithName: tahoe_ns_string("easeInEaseOut")];
-        if ease_out != nil && rebound != nil {
-            let curves = [ease_out, rebound];
-            let functions: id =
-                msg_send![class!(NSArray), arrayWithObjects: curves.as_ptr() count: 2usize];
-            let _: () = msg_send![animation, setTimingFunctions: functions];
-        }
-    }
-    let _: () = msg_send![animation, setRemovedOnCompletion: true];
-    let _: () = msg_send![mask, addAnimation: animation forKey: tahoe_ns_string("entryStageMask")];
+    let _: () = msg_send![mask, setFrame: root_bounds];
+    let _: () = msg_send![mask, setPath: path as id];
     let _: () = msg_send![layer, setMasksToBounds: true];
     let _: () = msg_send![layer, setMask: mask];
-    for path in paths {
-        CGPathRelease(path);
-    }
+    CGPathRelease(path);
     true
-}
-
-/// T=53ms: fade the held GPUI content roots to their original alpha over
-/// 35ms (ease-out). Transparent GPUI pixels reveal the already-present
-/// glass, never bare desktop.
-#[cfg(target_os = "macos")]
-extern "C" fn tahoe_glass_backdrop_reveal_entry_content(
-    this: &objc::runtime::Object,
-    _: objc::runtime::Sel,
-) {
-    // SAFETY: main thread (performSelector on the main run loop).
-    unsafe {
-        let this_id = this as *const objc::runtime::Object as id;
-        let window: id = msg_send![this_id, window];
-        if window == nil {
-            return;
-        }
-        let targets = GLASS_ENTRY_CONTENT_TARGETS
-            .lock()
-            .ok()
-            .and_then(|mut guard| guard.remove(&(window as usize)));
-        let Some(target) = targets else { return };
-        let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
-        let ctx: id = msg_send![class!(NSAnimationContext), currentContext];
-        let _: () = msg_send![ctx, setDuration: target.duration];
-        let _: () = msg_send![ctx, setAllowsImplicitAnimation: true];
-        if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
-            let name = tahoe_ns_string("easeOut");
-            if name != nil {
-                let timing: id = msg_send![timing_class, functionWithName: name];
-                if timing != nil {
-                    let _: () = msg_send![ctx, setTimingFunction: timing];
-                }
-            }
-        }
-        for (view_ptr, original_alpha) in target.views {
-            let view = view_ptr as id;
-            if view != nil {
-                let animator: id = msg_send![view, animator];
-                let _: () = msg_send![animator, setAlphaValue: original_alpha];
-            }
-        }
-        let _: () = msg_send![class!(NSAnimationContext), endGrouping];
-    }
-}
-
-/// T=88ms: run the (unchanged) visible tail — ease-out compression with the
-/// 0.85→0.99 alpha ramp, then the scheduled rebound.
-#[cfg(target_os = "macos")]
-extern "C" fn tahoe_glass_backdrop_begin_entry_tail(
-    this: &objc::runtime::Object,
-    _: objc::runtime::Sel,
-) {
-    use cocoa::foundation::{NSPoint, NSRect, NSSize};
-    // SAFETY: main thread (performSelector on the main run loop).
-    unsafe {
-        let this_id = this as *const objc::runtime::Object as id;
-        let window: id = msg_send![this_id, window];
-        if window == nil {
-            return;
-        }
-        let target = GLASS_MORPH_TAIL_TARGETS
-            .lock()
-            .ok()
-            .and_then(|mut guard| guard.remove(&(window as usize)));
-        let Some(target) = target else { return };
-        let [sx, sy, sw, sh] = target.squish_frame;
-        let squish = NSRect::new(NSPoint::new(sx, sy), NSSize::new(sw, sh));
-
-        // Frame compression: its own context (phase one, ease-out).
-        let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
-        let ctx: id = msg_send![class!(NSAnimationContext), currentContext];
-        let _: () = msg_send![ctx, setDuration: target.phase1];
-        let _: () = msg_send![ctx, setAllowsImplicitAnimation: true];
-        if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
-            let name = tahoe_ns_string("easeOut");
-            if name != nil {
-                let timing: id = msg_send![timing_class, functionWithName: name];
-                if timing != nil {
-                    let _: () = msg_send![ctx, setTimingFunction: timing];
-                }
-            }
-        }
-        let animator: id = msg_send![window, animator];
-        let _: () = msg_send![animator, setFrame: squish display: true];
-        let _: () = msg_send![class!(NSAnimationContext), endGrouping];
-
-        // Alpha ramp 0.85 -> 0.99 (separate context, shorter, ease-out).
-        let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
-        let alpha_ctx: id = msg_send![class!(NSAnimationContext), currentContext];
-        let _: () = msg_send![alpha_ctx, setDuration: target.alpha_ramp_duration];
-        let _: () = msg_send![alpha_ctx, setAllowsImplicitAnimation: true];
-        if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
-            let name = tahoe_ns_string("easeOut");
-            if name != nil {
-                let timing: id = msg_send![timing_class, functionWithName: name];
-                if timing != nil {
-                    let _: () = msg_send![alpha_ctx, setTimingFunction: timing];
-                }
-            }
-        }
-        let alpha_animator: id = msg_send![window, animator];
-        let _: () = msg_send![alpha_animator, setAlphaValue: target.phase1_alpha_target];
-        let _: () = msg_send![class!(NSAnimationContext), endGrouping];
-
-        // Schedule the (unchanged) rebound.
-        if let Ok(mut guard) = GLASS_MORPH_SETTLE_TARGETS.lock() {
-            guard.insert(
-                window as usize,
-                GlassMorphSettleTarget {
-                    frame: target.final_frame,
-                    frame_duration: target.phase2,
-                    alpha_duration: target.alpha_finish_duration,
-                },
-            );
-        }
-        let _: () = msg_send![
-            this_id,
-            performSelector: sel!(settleOwnWindowFrame)
-            withObject: nil
-            afterDelay: (target.phase1 + GLASS_MORPH_SQUISH_HOLD)
-        ];
-    }
-}
-
-/// Rebound target for one in-flight entry morph. Named fields (not a
-/// positional tuple) so the frame and alpha legs cannot be silently
-/// transposed as the schedule grows.
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug)]
-struct GlassMorphSettleTarget {
-    frame: [f64; 4],
-    /// Rebound frame animation duration (phase two, ease-in-out).
-    frame_duration: f64,
-    /// 0.99 → 1.0 finishing alpha duration (ease-out), starting at rebound.
-    alpha_duration: f64,
-}
-
-#[cfg(target_os = "macos")]
-static GLASS_MORPH_SETTLE_TARGETS: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<usize, GlassMorphSettleTarget>>,
-> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
-
-/// Phase 2 of the appear bounce: ease the window from its compression
-/// extreme back up to the final frame (ease-in-out — it starts at zero
-/// velocity where the ease-out compression ended), while the finishing
-/// alpha leg (0.99 → 1.0, ease-out) runs in its OWN animation context
-/// because it has a different duration.
-#[cfg(target_os = "macos")]
-extern "C" fn tahoe_glass_backdrop_settle(this: &objc::runtime::Object, _: objc::runtime::Sel) {
-    use cocoa::foundation::{NSPoint, NSRect, NSSize};
-    // SAFETY: main thread (performSelector on the main run loop); standard
-    // NSView/NSWindow accessors and the window animator proxy.
-    unsafe {
-        let this_id = this as *const objc::runtime::Object as id;
-        let window: id = msg_send![this_id, window];
-        if window == nil {
-            return;
-        }
-        let target = GLASS_MORPH_SETTLE_TARGETS
-            .lock()
-            .ok()
-            .and_then(|mut guard| guard.remove(&(window as usize)));
-        let Some(target) = target else {
-            return;
-        };
-        let [x, y, w, h] = target.frame;
-        let frame = NSRect::new(NSPoint::new(x, y), NSSize::new(w, h));
-
-        // Frame rebound: its own context (duration = phase two).
-        let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
-        let ctx: id = msg_send![class!(NSAnimationContext), currentContext];
-        let _: () = msg_send![ctx, setDuration: target.frame_duration];
-        let _: () = msg_send![ctx, setAllowsImplicitAnimation: true];
-        if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
-            let name = tahoe_ns_string("easeInEaseOut");
-            if name != nil {
-                let timing: id = msg_send![timing_class, functionWithName: name];
-                if timing != nil {
-                    let _: () = msg_send![ctx, setTimingFunction: timing];
-                }
-            }
-        }
-        let animator: id = msg_send![window, animator];
-        let _: () = msg_send![animator, setFrame: frame display: true];
-        let _: () = msg_send![class!(NSAnimationContext), endGrouping];
-
-        // Finishing alpha leg: separate context (different duration).
-        let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
-        let alpha_ctx: id = msg_send![class!(NSAnimationContext), currentContext];
-        let _: () = msg_send![alpha_ctx, setDuration: target.alpha_duration];
-        let _: () = msg_send![alpha_ctx, setAllowsImplicitAnimation: true];
-        if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
-            let name = tahoe_ns_string("easeOut");
-            if name != nil {
-                let timing: id = msg_send![timing_class, functionWithName: name];
-                if timing != nil {
-                    let _: () = msg_send![alpha_ctx, setTimingFunction: timing];
-                }
-            }
-        }
-        let alpha_animator: id = msg_send![window, animator];
-        let _: () = msg_send![alpha_animator, setAlphaValue: 1.0f64];
-        let _: () = msg_send![class!(NSAnimationContext), endGrouping];
-    }
-}
-
-/// `+[CAMediaTimingFunction functionWithControlPoints::::]` — the objc
-/// msg_send! macro cannot express selectors with unnamed arguments, so call
-/// through a typed `objc_msgSend` cast. Control points with y outside 0..1
-/// give a smooth overshoot (spring feel) in a single continuous animation.
-#[cfg(target_os = "macos")]
-#[allow(dead_code)] // Kept for curve experiments; the appear morph now uses
-                    // explicit squish/rebound keyframes instead of a single overshoot curve.
-unsafe fn timing_function_with_control_points(c1x: f32, c1y: f32, c2x: f32, c2y: f32) -> id {
-    #[link(name = "objc")]
-    extern "C" {
-        fn objc_msgSend();
-    }
-
-    let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") else {
-        return nil;
-    };
-    let sel = objc::runtime::Sel::register("functionWithControlPoints::::");
-    // SAFETY: objc_msgSend with a matching typed signature; on arm64 a single
-    // objc_msgSend entry point serves all signatures.
-    let send: unsafe extern "C" fn(
-        *mut objc::runtime::Class,
-        objc::runtime::Sel,
-        f32,
-        f32,
-        f32,
-        f32,
-    ) -> id = std::mem::transmute(objc_msgSend as *const ());
-    send(
-        timing_class as *const objc::runtime::Class as *mut objc::runtime::Class,
-        sel,
-        c1x,
-        c1y,
-        c2x,
-        c2y,
-    )
 }
 
 /// Ramp an entry defocus on the window's content view layer: the window
@@ -1382,8 +968,8 @@ unsafe fn main_has_coherent_entry_receipt(window: id) -> bool {
     let matching = receipt.as_ref().filter(|receipt| {
         receipt.window_key == window as usize && receipt.window_number == window_number
     });
-    if let Some(receipt) = matching {
-        return receipt.preset_id != "previous_calibration";
+    if matching.is_some() {
+        return true;
     }
     // Before the first coherent receipt exists, preserve unrelated native
     // filters already installed on rounded capsules. The arm site sets this
@@ -1421,19 +1007,16 @@ unsafe fn clear_exit_dematerialize_blur(window: id) {
         }
     }
     // The coherent finish restored each capsule's original filters/mask.
-    // The old blanket clear would erase unrelated pre-entry CA filters on
-    // a hide/reopen; legacy and non-main profiles keep their old clear.
+    // A blanket clear would erase unrelated pre-entry CA filters on a
+    // hide/reopen, so it only runs before the first coherent entry.
     if !main_has_coherent_entry_receipt(window) {
         crate::footer_popup::clear_main_window_footer_entry_capsule_effects(window);
     }
 }
 
-/// Spotlight-style exit dematerialize for the main window, measured from a
-/// 57fps recording: ~120ms ease-in-out fade + slight outward growth (the
-/// inverse of the entry's compression) + a gaussian blur ramp on the
-/// content view layer (private CAFilter — same pattern as the backdrop
-/// saturation boost). Returns false when glass/morph is unavailable so the
-/// caller hides immediately.
+/// Exit for the main window: a fixed-frame ease-in-out alpha fade over
+/// `GLASS_EXIT_DURATION`. Returns false when native glass is unavailable so
+/// the caller hides immediately.
 ///
 /// This runs ABOVE the synchronous hide layer: the caller plays this,
 /// waits ~135ms, then runs the NORMAL hide flow. Never defer orderOut:
@@ -1450,9 +1033,8 @@ pub fn begin_main_window_exit_dematerialize() -> bool {
     unsafe { begin_ns_window_exit_dematerialize(window, "PANEL", "Main window") }
 }
 
-/// Generalized dematerialize for any live GPUI window (notes, dictation
-/// overlay) — same measured recipe as the main window's exit. Returns false
-/// when glass/morph is unavailable so callers close instantly instead.
+/// The same fixed-frame exit fade for any live GPUI window. Returns false
+/// when native glass is unavailable so callers close instantly instead.
 #[cfg(target_os = "macos")]
 pub fn begin_gpui_window_exit_dematerialize(
     window: &gpui::Window,
@@ -1597,181 +1179,47 @@ unsafe fn begin_ns_window_exit_dematerialize(
     log_target: &str,
     window_name: &str,
 ) -> bool {
-    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use cocoa::foundation::NSRect;
 
     if !(tahoe_native_glass_composition_available()
         && crate::theme::get_cached_theme().is_vibrancy_enabled())
     {
         return false;
     }
-    if glass_morph_tuning().is_none() {
+    let visible: bool = msg_send![window, isVisible];
+    if !visible {
         return false;
     }
-
-    // SAFETY: main thread; standard AppKit calls plus the private
-    // CAFilter/CABasicAnimation classes resolved at runtime.
-    {
-        let visible: bool = msg_send![window, isVisible];
-        if !visible {
-            return false;
-        }
-        let frame: NSRect = msg_send![window, frame];
-        if frame.size.width < 40.0 || frame.size.height < 40.0 {
-            return false;
-        }
-        // An exit requested while the entry rebound is still pending must
-        // freeze the owning window as one partitioned surface. Otherwise the
-        // old settle callback can resize the stage while its capsules fade.
-        cancel_pending_glass_window_selectors(window);
-
-        if matches!(
-            glass_exit_mode(window_name),
-            GlassExitMode::DetachedRegionsFadeOnly
-        ) {
-            clear_exit_dematerialize_blur(window);
-            let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
-            let ctx: id = msg_send![class!(NSAnimationContext), currentContext];
-            let _: () = msg_send![ctx, setDuration: GLASS_EXIT_DURATION];
-            let _: () = msg_send![ctx, setAllowsImplicitAnimation: true];
-            if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
-                let name = tahoe_ns_string("easeInEaseOut");
-                if name != nil {
-                    let timing: id = msg_send![timing_class, functionWithName: name];
-                    if timing != nil {
-                        let _: () = msg_send![ctx, setTimingFunction: timing];
-                    }
-                }
-            }
-            let animator: id = msg_send![window, animator];
-            let _: () = msg_send![animator, setAlphaValue: 0.0f64];
-            let _: () = msg_send![class!(NSAnimationContext), endGrouping];
-            logging::log(
-                log_target,
-                &format!(
-                    "event=glass_morph window={} variant=detached_regions_fade_only phase=exit duration={:.2}s direction=fixed_frame",
-                    window_name, GLASS_EXIT_DURATION
-                ),
-            );
-            return true;
-        }
-
-        // Popup-only blur ramp: 0 -> 8pt over the fade.
-        let content_view: id = msg_send![window, contentView];
-        if content_view != nil {
-            let layer: id = msg_send![content_view, layer];
-            if layer != nil {
-                if let (Some(filter_class), Some(anim_class)) = (
-                    objc::runtime::Class::get("CAFilter"),
-                    objc::runtime::Class::get("CABasicAnimation"),
-                ) {
-                    let blur_type = tahoe_ns_string("gaussianBlur");
-                    let filter: id = msg_send![filter_class, filterWithType: blur_type];
-                    if filter != nil {
-                        let exit_name = tahoe_ns_string("exitBlur");
-                        let _: () = msg_send![filter, setName: exit_name];
-                        let radius_key = tahoe_ns_string("inputRadius");
-                        let zero: id = msg_send![class!(NSNumber), numberWithDouble: 0.0f64];
-                        let _: () = msg_send![filter, setValue: zero forKey: radius_key];
-                        let filters: id = msg_send![class!(NSArray), arrayWithObject: filter];
-                        let _: () = msg_send![layer, setFilters: filters];
-
-                        let key_path = tahoe_ns_string("filters.exitBlur.inputRadius");
-                        let anim: id = msg_send![anim_class, animationWithKeyPath: key_path];
-                        if anim != nil {
-                            let eight: id = msg_send![class!(NSNumber), numberWithDouble: GLASS_EXIT_BLUR_RADIUS];
-                            let _: () = msg_send![anim, setFromValue: zero];
-                            let _: () = msg_send![anim, setToValue: eight];
-                            let _: () = msg_send![anim, setDuration: GLASS_EXIT_DURATION];
-                            let forwards = tahoe_ns_string("forwards");
-                            let _: () = msg_send![anim, setFillMode: forwards];
-                            let _: () = msg_send![anim, setRemovedOnCompletion: false];
-                            let anim_key = tahoe_ns_string("exitBlurRamp");
-                            let _: () = msg_send![layer, addAnimation: anim forKey: anim_key];
-                        }
-                    }
-                }
-            }
-        }
-
-        // Exit travel direction is a per-surface policy (user call
-        // 2026-07-21): the main window (and other free-standing windows)
-        // keep the outward release, while the actions menu and modal popups
-        // SHRINK away — the inverse of their grow-in enter, like a squeezed
-        // ball being let go of in reverse. Centralized here so every exit
-        // path shares one classification.
-        let shrink_out = matches!(
-            window_name,
-            "Actions popup"
-                | "Confirm popup"
-                | "Inline popup"
-                | "Shortcut recorder popup"
-                | "Microphone popup"
-                | "Agent Chat history popup"
-        );
-        let grown = if shrink_out {
-            let shrink_x = frame.size.width * GLASS_EXIT_SHRINK_X;
-            let shrink_y = frame.size.height * GLASS_EXIT_SHRINK_Y;
-            NSRect::new(
-                NSPoint::new(frame.origin.x + shrink_x, frame.origin.y + shrink_y),
-                NSSize::new(
-                    (frame.size.width - shrink_x * 2.0).max(1.0),
-                    (frame.size.height - shrink_y * 2.0).max(1.0),
-                ),
-            )
-        } else {
-            let grow_x = frame.size.width * GLASS_EXIT_GROW_X;
-            let grow_y = frame.size.height * GLASS_EXIT_GROW_Y;
-            NSRect::new(
-                NSPoint::new(frame.origin.x - grow_x, frame.origin.y - grow_y),
-                NSSize::new(
-                    frame.size.width + grow_x * 2.0,
-                    frame.size.height + grow_y * 2.0,
-                ),
-            )
-        };
-        // Child-attached popups: layer transforms are neutralized by AppKit
-        // (NSViewBackingLayer, runtime-proven) and frame animation fights the
-        // parent-child machinery — so detach for the exit. The window is
-        // being destroyed after the 135ms tail; no reattach.
-        let parent_window: id = msg_send![window, parentWindow];
-        let variant = if parent_window == nil {
-            GlassMorphVariant::WindowFrame
-        } else {
-            GlassMorphVariant::ContentLayer
-        };
-        if parent_window != nil {
-            let _: () = msg_send![parent_window, removeChildWindow: window];
-        }
-
-        let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
-        let ctx: id = msg_send![class!(NSAnimationContext), currentContext];
-        let _: () = msg_send![ctx, setDuration: GLASS_EXIT_DURATION];
-        let _: () = msg_send![ctx, setAllowsImplicitAnimation: true];
-        if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
-            let name = tahoe_ns_string("easeInEaseOut");
-            if name != nil {
-                let timing: id = msg_send![timing_class, functionWithName: name];
-                if timing != nil {
-                    let _: () = msg_send![ctx, setTimingFunction: timing];
-                }
-            }
-        }
-        let animator: id = msg_send![window, animator];
-        let _: () = msg_send![animator, setFrame: grown display: true];
-        let _: () = msg_send![animator, setAlphaValue: 0.0f64];
-        let _: () = msg_send![class!(NSAnimationContext), endGrouping];
-
-        logging::log(
-            log_target,
-            &format!(
-                "event=glass_morph window={} variant={} phase=exit duration={:.2}s direction={}",
-                window_name,
-                variant.log_name(),
-                GLASS_EXIT_DURATION,
-                if shrink_out { "shrink_out" } else { "grow_out" }
-            ),
-        );
+    let frame: NSRect = msg_send![window, frame];
+    if frame.size.width < 40.0 || frame.size.height < 40.0 {
+        return false;
     }
+    // Freeze any in-flight entry so the fade starts from what is on screen.
+    cancel_pending_glass_window_selectors(window);
+    clear_exit_dematerialize_blur(window);
+    let _: () = msg_send![class!(NSAnimationContext), beginGrouping];
+    let ctx: id = msg_send![class!(NSAnimationContext), currentContext];
+    let _: () = msg_send![ctx, setDuration: GLASS_EXIT_DURATION];
+    let _: () = msg_send![ctx, setAllowsImplicitAnimation: true];
+    if let Some(timing_class) = objc::runtime::Class::get("CAMediaTimingFunction") {
+        let name = tahoe_ns_string("easeInEaseOut");
+        if name != nil {
+            let timing: id = msg_send![timing_class, functionWithName: name];
+            if timing != nil {
+                let _: () = msg_send![ctx, setTimingFunction: timing];
+            }
+        }
+    }
+    let animator: id = msg_send![window, animator];
+    let _: () = msg_send![animator, setAlphaValue: 0.0f64];
+    let _: () = msg_send![class!(NSAnimationContext), endGrouping];
+    logging::log(
+        log_target,
+        &format!(
+            "event=glass_morph window={} variant=fade_only phase=exit duration={:.2}s direction=fixed_frame",
+            window_name, GLASS_EXIT_DURATION
+        ),
+    );
     true
 }
 
@@ -1781,18 +1229,17 @@ pub fn begin_main_window_exit_dematerialize() -> bool {
 }
 
 /// Park a just-hidden window at alpha 0 so that whichever code path orders
-/// it front next cannot flash a full-alpha frame before the appear morph
+/// it front next cannot flash a full-alpha frame before the entry fade
 /// starts (multiple show paths exist: the platform show helpers and GPUI's
-/// `activate_window`). The appear morph restores alpha — including on every
-/// early exit — so the window can never stay invisible.
+/// `activate_window`). The entry restores alpha — including on every early
+/// exit — so the window can never stay invisible.
 #[cfg(target_os = "macos")]
 unsafe fn park_hidden_window_for_glass_morph(window: id) {
     if window.is_null() {
         return;
     }
-    // Instant/fallback hides may not have begun a native exit. Cancel every
-    // coherent settle/reveal callback before restoring its state while
-    // hidden, or an old rebound can resize the next show's settled frame.
+    // Instant/fallback hides may not have begun a native exit. Cancel the
+    // pending entry finish and restore its state while hidden.
     let hidden: bool = !msg_send![window, isVisible];
     if hidden
         && GLASS_COHERENT_ENTRY_STATES
@@ -1812,16 +1259,6 @@ unsafe fn park_hidden_window_for_glass_morph(window: id) {
     {
         return;
     }
-    let morph_opacity = crate::theme::get_cached_theme().get_opacity();
-    let duration = morph_opacity
-        .glass_morph_duration
-        .unwrap_or(crate::theme::opacity::GLASS_MORPH_DEFAULT_DURATION);
-    let inset = morph_opacity
-        .glass_morph_inset
-        .unwrap_or(crate::theme::opacity::GLASS_MORPH_DEFAULT_INSET);
-    if duration < 0.02 || inset < 0.005 {
-        return; // morph disabled: leave alpha untouched
-    }
     // Zero-alpha parking is legal ONLY for a window that is not presented.
     // A visible window at alpha zero is wallpaper where UI should be — the
     // exact defect the visible-entry alpha policy forbids.
@@ -1838,9 +1275,8 @@ unsafe fn park_hidden_window_for_glass_morph(window: id) {
     record_main_coherent_hidden_alpha(window);
 }
 
-/// True when a morph started within the last 700ms. Rapid re-shows would
-/// otherwise capture a mid-animation frame as the "final" target and shrink
-/// the window a little more on every trigger.
+/// True when a main entry started within the last 700ms. A rapid re-show
+/// presents at full alpha immediately instead of restarting the fade.
 #[cfg(target_os = "macos")]
 fn glass_morph_recently_started() -> bool {
     use std::sync::atomic::Ordering;

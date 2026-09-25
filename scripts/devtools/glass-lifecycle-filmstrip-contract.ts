@@ -316,8 +316,8 @@ export function validateDetachedExitLifecycle(
   if (Number(receipt?.nativeWindowNumber) !== expectedWindowId) {
     errors.push("native exit CGWindowID mismatch");
   }
-  if (receipt?.exitMode !== "DetachedRegionsFadeOnly") {
-    errors.push("native exit mode must be DetachedRegionsFadeOnly");
+  if (receipt?.exitMode !== "FadeOnly") {
+    errors.push("native exit mode must be FadeOnly");
   }
   if (expectedState === "exiting") {
     const original = receipt?.originalFrame;

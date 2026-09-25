@@ -3336,3 +3336,6 @@ fn text_append_then_full_replacement_wins(cx: &mut gpui::TestAppContext) {
         assert_eq!(state.source_text().to_string(), "completely replaced");
     });
 }
+
+#[path = "stop_simulation_tests.rs"]
+mod stop_simulation_tests;

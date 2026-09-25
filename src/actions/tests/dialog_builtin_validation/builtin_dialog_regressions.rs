@@ -909,35 +909,6 @@ mod from_dialog_builtin_action_validation_tests_32 {
     }
 
     // ---------------------------------------------------------------------------
-    // 22. fuzzy_match: edge cases
-    // ---------------------------------------------------------------------------
-
-    #[test]
-    fn batch32_fuzzy_match_empty_needle_matches() {
-        assert!(ActionsDialog::fuzzy_match("anything", ""));
-    }
-
-    #[test]
-    fn batch32_fuzzy_match_empty_haystack_empty_needle() {
-        assert!(ActionsDialog::fuzzy_match("", ""));
-    }
-
-    #[test]
-    fn batch32_fuzzy_match_empty_haystack_nonempty_needle() {
-        assert!(!ActionsDialog::fuzzy_match("", "a"));
-    }
-
-    #[test]
-    fn batch32_fuzzy_match_subsequence() {
-        assert!(ActionsDialog::fuzzy_match("hello world", "hlo"));
-    }
-
-    #[test]
-    fn batch32_fuzzy_match_no_subsequence() {
-        assert!(!ActionsDialog::fuzzy_match("hello", "ba"));
-    }
-
-    // ---------------------------------------------------------------------------
     // 23. build_grouped_items_static: Headers style adds section headers
     // ---------------------------------------------------------------------------
 
@@ -1580,35 +1551,6 @@ mod from_dialog_builtin_action_validation_tests_33 {
             "Prefix (100) + desc bonus (15) should be >= 115, got {}",
             score
         );
-    }
-
-    // =====================================================================
-    // 8. ActionsDialog::fuzzy_match: edge cases
-    // =====================================================================
-
-    #[test]
-    fn fuzzy_match_exact_match_returns_true() {
-        assert!(ActionsDialog::fuzzy_match("edit script", "edit script"));
-    }
-
-    #[test]
-    fn fuzzy_match_subsequence_returns_true() {
-        assert!(ActionsDialog::fuzzy_match("edit script", "eds"));
-    }
-
-    #[test]
-    fn fuzzy_match_no_match_returns_false() {
-        assert!(!ActionsDialog::fuzzy_match("edit script", "xyz"));
-    }
-
-    #[test]
-    fn fuzzy_match_empty_needle_returns_true() {
-        assert!(ActionsDialog::fuzzy_match("anything", ""));
-    }
-
-    #[test]
-    fn fuzzy_match_needle_longer_returns_false() {
-        assert!(!ActionsDialog::fuzzy_match("ab", "abcdef"));
     }
 
     // =====================================================================
@@ -5255,30 +5197,6 @@ mod from_dialog_builtin_action_validation_tests_35 {
     }
 
     // =====================================================================
-    // 26. fuzzy_match: additional patterns
-    // =====================================================================
-
-    #[test]
-    fn fuzzy_match_exact() {
-        assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-    }
-
-    #[test]
-    fn fuzzy_match_subsequence() {
-        assert!(ActionsDialog::fuzzy_match("hello world", "hlwrd"));
-    }
-
-    #[test]
-    fn fuzzy_match_no_match() {
-        assert!(!ActionsDialog::fuzzy_match("abc", "xyz"));
-    }
-
-    #[test]
-    fn fuzzy_match_needle_longer_than_haystack() {
-        assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-    }
-
-    // =====================================================================
     // 27. Cross-context: all contexts produce non-empty actions
     // =====================================================================
 
@@ -7810,32 +7728,6 @@ mod from_dialog_builtin_action_validation_tests_38 {
             let action = Action::new("test", "Run Script", None, ActionCategory::ScriptContext);
             let score = ActionsDialog::score_action(&action, "zzz");
             assert_eq!(score, 0);
-        }
-
-        // =========================================================================
-        // 21. fuzzy_match: repeated and edge characters
-        // =========================================================================
-
-        #[test]
-        fn fuzzy_match_repeated_chars_in_needle() {
-            // "aab" should match "a_a_b_" since both a's and b are found in order
-            assert!(ActionsDialog::fuzzy_match("a_a_b_", "aab"));
-        }
-
-        #[test]
-        fn fuzzy_match_needle_equals_haystack() {
-            assert!(ActionsDialog::fuzzy_match("exact", "exact"));
-        }
-
-        #[test]
-        fn fuzzy_match_reverse_order_fails() {
-            // "ba" should not match "ab" because b comes after a
-            assert!(!ActionsDialog::fuzzy_match("ab", "ba"));
-        }
-
-        #[test]
-        fn fuzzy_match_single_char() {
-            assert!(ActionsDialog::fuzzy_match("hello", "h"));
         }
 
         // =========================================================================
@@ -11217,8 +11109,6 @@ mod from_dialog_builtin_action_validation_tests_41 {
     //! Batch 41: Dialog builtin action validation tests
     //!
     //! Focuses on:
-    //! - fuzzy_match: empty needle and empty haystack behavior
-    //! - fuzzy_match: subsequence order enforcement
     //! - score_action: description-only match yields exactly 15
     //! - score_action: shortcut-only match yields exactly 10
     //! - score_action: combined prefix + description + shortcut max score
@@ -11260,60 +11150,6 @@ mod from_dialog_builtin_action_validation_tests_41 {
         use crate::file_search::{FileInfo, FileType};
         use crate::prompts::PathInfo;
         use crate::scriptlets::Scriptlet;
-
-        // =========================================================================
-        // 1. fuzzy_match: empty needle and empty haystack behavior
-        // =========================================================================
-
-        #[test]
-        fn fuzzy_match_empty_needle_matches_anything() {
-            // Empty needle should match any haystack (no characters to find)
-            assert!(ActionsDialog::fuzzy_match("hello world", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_empty_haystack_fails_nonempty_needle() {
-            // Non-empty needle can't be found in empty haystack
-            assert!(!ActionsDialog::fuzzy_match("", "a"));
-        }
-
-        #[test]
-        fn fuzzy_match_both_empty_matches() {
-            // Both empty: trivially matches
-            assert!(ActionsDialog::fuzzy_match("", ""));
-        }
-
-        #[test]
-        fn fuzzy_match_single_char_in_haystack() {
-            assert!(ActionsDialog::fuzzy_match("abcdef", "a"));
-            assert!(ActionsDialog::fuzzy_match("abcdef", "f"));
-            assert!(!ActionsDialog::fuzzy_match("abcdef", "z"));
-        }
-
-        // =========================================================================
-        // 2. fuzzy_match: subsequence order enforcement
-        // =========================================================================
-
-        #[test]
-        fn fuzzy_match_correct_order_matches() {
-            assert!(ActionsDialog::fuzzy_match("copy path", "cp"));
-        }
-
-        #[test]
-        fn fuzzy_match_reversed_order_fails() {
-            assert!(!ActionsDialog::fuzzy_match("copy path", "pc"));
-        }
-
-        #[test]
-        fn fuzzy_match_duplicate_chars_in_needle() {
-            // "aa" should match "banana" (a at index 1, a at index 3)
-            assert!(ActionsDialog::fuzzy_match("banana", "aa"));
-        }
-
-        #[test]
-        fn fuzzy_match_full_string_as_subsequence() {
-            assert!(ActionsDialog::fuzzy_match("edit", "edit"));
-        }
 
         // =========================================================================
         // 3. score_action: description-only match yields exactly 15
@@ -14069,27 +13905,6 @@ mod from_dialog_builtin_action_validation_tests_44 {
         assert_eq!(score, 0);
     }
 
-    // =========== 30. fuzzy_match: various patterns ===========
-
-    #[test]
-    fn fuzzy_match_full_string() {
-        assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-    }
-
-    #[test]
-    fn fuzzy_match_subsequence() {
-        assert!(ActionsDialog::fuzzy_match("hello world", "hwd"));
-    }
-
-    #[test]
-    fn fuzzy_match_empty_needle_matches() {
-        assert!(ActionsDialog::fuzzy_match("anything", ""));
-    }
-
-    #[test]
-    fn fuzzy_match_reversed_fails() {
-        assert!(!ActionsDialog::fuzzy_match("abc", "cba"));
-    }
 }
 
 mod from_dialog_builtin_action_validation_tests_45 {

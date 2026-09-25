@@ -4,7 +4,7 @@ unsafe fn configure_window_vibrancy_common_impl(
     log_target: &str,
     window_name: &str,
     is_dark: bool,
-    morph_variant: GlassMorphVariant,
+    backdrop_role: NativeGlassSurfaceRole,
 ) -> NativeGlassEntryReceipt {
     // Clear window appearance so GPUI can detect system appearance changes.
     // Appearance is set on individual NSVisualEffectViews instead.
@@ -68,43 +68,16 @@ unsafe fn configure_window_vibrancy_common_impl(
         );
     }
 
-    let backdrop_role = morph_variant.backdrop_role();
     let backdrop =
         configure_tahoe_window_backdrop_with_result(window, log_target, window_name, backdrop_role);
     let glass_created = backdrop.is_some_and(|result| result.created);
-    let morph_tuning = glass_morph_tuning();
     // Secondary/overlay windows (notes, dictation, confirm, actions, AI,
     // flow manager, inline popups) are created per appearance, so a freshly
-    // created backdrop means the window just appeared: morph it in.
-    // Child-attached panels transform the content layer because animating a
-    // child NSWindow frame fights AppKit's parent-child machinery and lags.
+    // created backdrop means the window just appeared: fade it in.
+    let preset = crate::theme::animation::current_preset();
+    let entry_spec = preset.spec();
     if glass_created {
-        match morph_variant {
-            GlassMorphVariant::WindowFrame => {
-                animate_tahoe_glass_window_frame_appearance(window, log_target, window_name)
-            }
-            GlassMorphVariant::ContentLayer => {
-                // Runtime-proven (real-pixel capture + static-transform
-                // experiment): CALayer transforms on the contentView's
-                // NSViewBackingLayer are neutralized by AppKit — even a
-                // static 0.85 model scale renders at full size. No
-                // layer-transform morph can ever work on AppKit-managed
-                // backing layers. Instead: detach from the parent window for
-                // the morph's duration and run the SAME NSWindow frame morph
-                // the main window uses, then reattach — the frame animation
-                // only fights the parent-child machinery while attached.
-                animate_tahoe_glass_child_appearance(window, log_target, window_name, backdrop_role);
-            }
-            GlassMorphVariant::FadeOnly => {
-                animate_tahoe_glass_fade_appearance(window, log_target, window_name)
-            }
-            GlassMorphVariant::MirrorMainEntry => animate_tahoe_glass_mirrored_main_child_appearance(
-                window,
-                log_target,
-                window_name,
-                backdrop_role,
-            ),
-        }
+        animate_tahoe_glass_entry(window, log_target, window_name, preset, backdrop_role);
     }
 
     let appearance_name = if is_dark {
@@ -147,84 +120,10 @@ unsafe fn configure_window_vibrancy_common_impl(
         native_selectors_supported,
         style_applied,
         style_signature,
-        morph_started: glass_created && morph_tuning.is_some(),
-        morph_start_alpha_bits: if glass_created {
-            morph_tuning.map(|tuning| tuning.start_alpha.to_bits())
-        } else {
-            None
-        },
+        morph_started: glass_created,
+        morph_start_alpha_bits: glass_created.then(|| entry_spec.window_start_alpha.to_bits()),
         settle_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| (tuning.total_entry_duration() * 1000.0).round() as u64)
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        material_onset_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| tuning.visible_tail_start_delay_ms())
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        visible_tail_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| (tuning.visible_tail_duration() * 1000.0).round() as u64)
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        content_hold_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| (tuning.content_hold_duration * 1000.0).round() as u64)
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        content_fade_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| (tuning.content_fade_duration * 1000.0).round() as u64)
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        settled_crossing_delay_ms: if glass_created {
-            morph_tuning
-                .map(settled_size_crossing_delay_ms)
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        content_reveal_delay_ms: if glass_created {
-            morph_tuning.map(entry_content_reveal_delay_ms).unwrap_or(0)
-        } else {
-            0
-        },
-        phase_one_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| (tuning.phase1 * 1000.0).round() as u64)
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        phase_two_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| (tuning.phase2 * 1000.0).round() as u64)
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        alpha_ramp_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| (tuning.alpha_ramp_duration * 1000.0).round() as u64)
-                .unwrap_or(0)
-        } else {
-            0
-        },
-        alpha_finish_duration_ms: if glass_created {
-            morph_tuning
-                .map(|tuning| (tuning.alpha_finish_duration * 1000.0).round() as u64)
-                .unwrap_or(0)
+            u64::from(entry_spec.duration_ms)
         } else {
             0
         },

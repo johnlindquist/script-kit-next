@@ -1555,8 +1555,8 @@ mod tests {
         let mut expected = serde_json::to_value(load_static_config(&path).unwrap()).unwrap();
         expected.as_object_mut().unwrap().remove("animation");
         for preset in [
-            crate::theme::animation::MainWindowAnimationPreset::PreviousCalibration,
-            crate::theme::animation::MainWindowAnimationPreset::Coherent,
+            crate::theme::animation::MainWindowAnimationPreset::FixedFrame,
+            crate::theme::animation::MainWindowAnimationPreset::SharpPresence,
         ] {
             super::save_animation_preferences(&crate::config::AnimationPreferences { preset })
                 .expect("save chosen entry animation");

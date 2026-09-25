@@ -10,9 +10,6 @@ struct NotesNativeEntryConfig {
     configured_at_monotonic_ns: u64,
     configured_at_unix_ms: u64,
     settle_duration_ms: u64,
-    settled_crossing_delay_ms: u64,
-    /// Material-safe reveal anchor: max(geometric crossing, alpha ramp).
-    content_reveal_delay_ms: u64,
     morph_started: bool,
     morph_start_alpha_bits: Option<u64>,
 }
@@ -73,15 +70,12 @@ async fn wait_for_notes_entry_deadline(executor: &gpui::BackgroundExecutor, targ
     }
 }
 
-/// Schedule the native-resize unlock for the calibrated entry morph.
+/// Schedule the native-resize unlock once the entry fade has settled.
 ///
-/// The unlock anchor is `configured_at + settle_duration_ms` — the FULL glass
-/// settle, deliberately later than the body-reveal crossing
-/// (`settled_crossing_delay_ms`) that `schedule_notes_entry_reveal` uses. The
-/// text reveal begins while the window is still compressing/rebounding;
-/// unlocking there would let a user drag fight the rebound. Stale generations,
-/// replaced windows, and active exit tickets are all rejected — both here and
-/// again by the phase transition table in `resize.rs`.
+/// The unlock anchor is `configured_at + settle_duration_ms`, so a drag never
+/// starts while the entry still owns the window's alpha and material. Stale
+/// generations, replaced windows, and active exit tickets are all rejected —
+/// both here and again by the phase transition table in `resize.rs`.
 fn schedule_notes_resize_unlock(
     handle: gpui::WindowHandle<Root>,
     notes_app: Entity<NotesApp>,
@@ -143,14 +137,9 @@ fn schedule_notes_entry_reveal(
             .map(|config| config.settle_duration_ms)
             .unwrap_or(0)
     };
-    let reveal_delay_ms = if fallback_used {
-        settle_duration_ms
-    } else {
-        native
-            .as_ref()
-            .map(|config| config.content_reveal_delay_ms)
-            .unwrap_or(0)
-    };
+    // The native entry keeps a fixed frame, so the body fades in with the
+    // material from the first frame.
+    let reveal_delay_ms = if fallback_used { settle_duration_ms } else { 0 };
     let configured_at_monotonic_ns = native
         .as_ref()
         .map(|config| config.configured_at_monotonic_ns)

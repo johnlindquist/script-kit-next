@@ -36,15 +36,14 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
   domain for existing app callers; storage tests must not depend on the app,
   GPUI, Metal shaders, Whisper, or ONNX.
 
-## Main-window animation ownership
+## Window animation ownership
 
-- `src/theme/animation.rs` owns the 25 main-entry preset specs and stable IDs;
-  configuration owns explicit `animation.preset` persistence.
+- `src/theme/animation.rs` owns the two window-entry fade presets and their
+  stable IDs; configuration owns explicit `animation.preset` persistence.
 - Built-ins/launcher own selection and next/previous/replay. `ShowWindowRequest`
   in `src/lib.rs` owns replay currency; the native glass animation/lifecycle
-  files own bounded effects and restoration. Other surfaces/exits stay locked.
-- The old calibration remains the explicit `PreviousCalibration` alternative;
-  preset/model status is not composited visual acceptance.
+  files own the fixed-frame entry and exit fades and restoration.
+- Preset/model status is not composited visual acceptance.
 
 ## Roster
 

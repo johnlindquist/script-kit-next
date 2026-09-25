@@ -100,6 +100,7 @@ anyhow = "1.0"
 thiserror = "2.0"
 regex = "1.12"
 nucleo-matcher = "0.3"         # High-performance fuzzy matching (10-100x faster than bespoke)
+unicode-segmentation = "1.12"  # Text-field caret moves by visible character
 pulldown-cmark = { version = "0.12", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "time", "tracing-log"] }

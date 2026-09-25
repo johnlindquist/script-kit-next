@@ -91,72 +91,10 @@ impl TriggerBuiltin {
         TriggerBuiltin::AnimationPrevious,
         TriggerBuiltin::AnimationReplay,
         TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::Coherent,
-        ),
-        TriggerBuiltin::AnimationPreset(crate::theme::animation::MainWindowAnimationPreset::Brisk),
-        TriggerBuiltin::AnimationPreset(crate::theme::animation::MainWindowAnimationPreset::Swift),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::Leisurely,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::Cinematic,
-        ),
-        TriggerBuiltin::AnimationPreset(
             crate::theme::animation::MainWindowAnimationPreset::FixedFrame,
-        ),
-        TriggerBuiltin::AnimationPreset(crate::theme::animation::MainWindowAnimationPreset::GrowIn),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::Shallow,
-        ),
-        TriggerBuiltin::AnimationPreset(crate::theme::animation::MainWindowAnimationPreset::Bounce),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::DeepSquish,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::Present,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::SoftFade,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::LateContent,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::EarlyContent,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::Luminous,
-        ),
-        TriggerBuiltin::AnimationPreset(crate::theme::animation::MainWindowAnimationPreset::Razor),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::SoftFocus,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::Diffuse,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::ForegroundFocus,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::MaterialHaze,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::PreviousCalibration,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::QuickGrow,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::VelvetBounce,
         ),
         TriggerBuiltin::AnimationPreset(
             crate::theme::animation::MainWindowAnimationPreset::SharpPresence,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::DreamyGlide,
-        ),
-        TriggerBuiltin::AnimationPreset(
-            crate::theme::animation::MainWindowAnimationPreset::BriskMaterialHaze,
         ),
     ];
 
@@ -419,32 +357,8 @@ pub const TRIGGER_BUILTIN_COMMAND_IDS: &[&str] = &[
     "builtin/animation-next",
     "builtin/animation-previous",
     "builtin/animation-replay",
-    "builtin/animation-coherent",
-    "builtin/animation-brisk",
-    "builtin/animation-swift",
-    "builtin/animation-leisurely",
-    "builtin/animation-cinematic",
     "builtin/animation-fixed-frame",
-    "builtin/animation-grow-in",
-    "builtin/animation-shallow",
-    "builtin/animation-bounce",
-    "builtin/animation-deep-squish",
-    "builtin/animation-present",
-    "builtin/animation-soft-fade",
-    "builtin/animation-late-content",
-    "builtin/animation-early-content",
-    "builtin/animation-luminous",
-    "builtin/animation-razor",
-    "builtin/animation-soft-focus",
-    "builtin/animation-diffuse",
-    "builtin/animation-foreground-focus",
-    "builtin/animation-material-haze",
-    "builtin/animation-previous-calibration",
-    "builtin/animation-quick-grow",
-    "builtin/animation-velvet-bounce",
     "builtin/animation-sharp-presence",
-    "builtin/animation-dreamy-glide",
-    "builtin/animation-brisk-material-haze",
 ];
 
 /// Accessor used by `tests/mcp_resource_drift.rs` and the

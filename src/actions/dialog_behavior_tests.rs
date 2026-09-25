@@ -717,16 +717,6 @@ fn score_action_shortcut_only_match() {
     );
 }
 
-#[test]
-fn fuzzy_match_case_insensitive_precomputed() {
-    use super::dialog::ActionsDialog;
-
-    // fuzzy_match operates on lowercased strings (pre-computed in title_lower)
-    assert!(ActionsDialog::fuzzy_match("edit script", "es"));
-    assert!(ActionsDialog::fuzzy_match("edit script", "eit"));
-    assert!(!ActionsDialog::fuzzy_match("edit script", "z"));
-}
-
 // =========================================================================
 // Notes command bar: conditional actions
 // =========================================================================

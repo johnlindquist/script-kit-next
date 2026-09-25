@@ -142,7 +142,6 @@ require_clean_source_identity() {
     scripts/devtools/glass-interference.ts
     scripts/devtools/glass-motion-contrast.ts
     scripts/devtools/glass-native-helper-cache.ts
-    scripts/devtools/spotlight-sync-filmstrip.ts
     scripts/devtools/main-window-native-drag.ts
     scripts/devtools/act.ts
     scripts/devtools/devtools.ts

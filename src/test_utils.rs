@@ -80,3 +80,41 @@ pub fn read_all_handle_action_sources() -> String {
     }
     combined
 }
+
+/// Deterministic property checks for unit tests.
+///
+/// A property states a rule and lets a generator hunt for an input that
+/// breaks it. Runs replay the same inputs unless `SEED` is set (the same
+/// variable GPUI's seeded tests use), so every reported failure reproduces.
+/// Failure persistence is off: a breaking input is reported with the seed,
+/// never written into the source tree.
+#[cfg(test)]
+pub(crate) mod property {
+    use gpui::proptest::strategy::Strategy;
+    use gpui::proptest::test_runner::{Config, RngAlgorithm, TestCaseResult, TestRng, TestRunner};
+
+    /// Fail with the rule's name, the smallest breaking input, and the seed.
+    #[track_caller]
+    pub(crate) fn assert_rule<S: Strategy>(
+        rule_name: &str,
+        cases: u32,
+        strategy: S,
+        rule: impl Fn(S::Value) -> TestCaseResult,
+    ) {
+        let seed = std::env::var("SEED")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        let mut bytes = [0u8; 32];
+        bytes[..8].copy_from_slice(&seed.to_le_bytes());
+        let config = Config {
+            cases,
+            failure_persistence: None,
+            ..Config::default()
+        };
+        let rng = TestRng::from_seed(RngAlgorithm::ChaCha, &bytes);
+        if let Err(error) = TestRunner::new_with_rng(config, rng).run(&strategy, rule) {
+            panic!("rule broken: {rule_name}\n{error}\nreplay: SEED={seed}");
+        }
+    }
+}

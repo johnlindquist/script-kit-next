@@ -465,10 +465,7 @@ fn test_score_action_fuzzy_match() {
         ActionCategory::ScriptContext,
     );
 
-    // "rvf" is a fuzzy match for "reveal in finder" (r-e-v-e-a-l-i-n-f-i-n-d-e-r)
-    let fuzzy = ActionsDialog::fuzzy_match(&action.title_lower, "rvf");
-    assert!(fuzzy, "rvf should fuzzy-match 'reveal in finder'");
-
+    // "rvf" is a scattered match for "reveal in finder" (r-e-v-e-a-l-i-n-f-i-n-d-e-r)
     let score = ActionsDialog::score_action(&action, "rvf");
     assert_eq!(score, 25, "Fuzzy match should score 25");
 }
@@ -484,27 +481,6 @@ fn test_score_action_no_match() {
 
     let score = ActionsDialog::score_action(&action, "zzz");
     assert_eq!(score, 0, "No match should score 0");
-}
-
-#[test]
-fn test_fuzzy_match_empty_needle() {
-    assert!(
-        ActionsDialog::fuzzy_match("anything", ""),
-        "Empty needle matches everything"
-    );
-}
-
-#[test]
-fn test_fuzzy_match_needle_longer_than_haystack() {
-    assert!(
-        !ActionsDialog::fuzzy_match("ab", "abc"),
-        "Needle longer than haystack should not match"
-    );
-}
-
-#[test]
-fn test_fuzzy_match_exact() {
-    assert!(ActionsDialog::fuzzy_match("hello", "hello"));
 }
 
 // =========================================================================

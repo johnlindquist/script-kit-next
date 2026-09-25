@@ -350,54 +350,6 @@ fn score_action_no_match_at_all() {
 }
 
 // =========================================================================
-// 6. fuzzy_match — edge cases
-// =========================================================================
-
-#[test]
-fn fuzzy_match_empty_needle_returns_true() {
-    assert!(ActionsDialog::fuzzy_match("anything", ""));
-}
-
-#[test]
-fn fuzzy_match_empty_haystack_non_empty_needle() {
-    assert!(!ActionsDialog::fuzzy_match("", "x"));
-}
-
-#[test]
-fn fuzzy_match_exact_match() {
-    assert!(ActionsDialog::fuzzy_match("hello", "hello"));
-}
-
-#[test]
-fn fuzzy_match_subsequence() {
-    assert!(ActionsDialog::fuzzy_match("hello world", "hlw"));
-}
-
-#[test]
-fn fuzzy_match_needle_longer_than_haystack() {
-    assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
-}
-
-#[test]
-fn fuzzy_match_repeated_chars_in_needle() {
-    // "aab" in "abracadabra" — first 'a' at 0, second 'a' at 2, 'b' at 4
-    assert!(ActionsDialog::fuzzy_match("abracadabra", "aab"));
-}
-
-#[test]
-fn fuzzy_match_same_char_repeated() {
-    // "aaa" in "banana" — b-a-n-a-n-a: 'a' at 1, 'a' at 3, 'a' at 5
-    assert!(ActionsDialog::fuzzy_match("banana", "aaa"));
-}
-
-#[test]
-fn fuzzy_match_case_sensitive() {
-    // Fuzzy match is case-sensitive
-    assert!(!ActionsDialog::fuzzy_match("hello", "H"));
-    assert!(ActionsDialog::fuzzy_match("Hello", "H"));
-}
-
-// =========================================================================
 // 7. coerce_action_selection — more patterns
 // =========================================================================
 

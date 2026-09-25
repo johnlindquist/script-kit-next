@@ -33,10 +33,8 @@ import {
 } from "./glass-evidence-contract.ts";
 import {
   ACTIONS_GLASS_ENTRY_EXPECTATION,
+  analyzeEntryFadeLog,
   analyzeEntryMotionEnvelope,
-  analyzeEntrySurfaceFields,
-  analyzeLoggedEntryGeometry,
-  analyzeOnsetReceipt,
   type NativeWindowBounds,
 } from "./glass-entry-motion-contract.ts";
 import { validateFilmstripCapture } from "./glass-lifecycle-filmstrip-contract.ts";
@@ -320,7 +318,7 @@ try {
 
   await announceTestStatus(
     "Animation lock · Actions entry",
-    "120 Hz exact-window filmstrip; 98.8% -> 101.3% -> 100% grow-in must remain inside the golden envelope",
+    "120 Hz exact-window filmstrip; the fade must keep the settled frame and never dip below the alpha floor",
   );
 
   // Arm over the already-known main region. Actions is constrained inside that
@@ -504,10 +502,10 @@ try {
       && line.includes("phase=enter")
     )
     .slice(-3);
-  // SOURCE DIAGNOSTIC ONLY (C08): the logged geometry is retained for
+  // SOURCE DIAGNOSTIC ONLY (C08): the logged fade is retained for
   // diagnosis and cross-surface comparison. It is NEVER part of the gate —
   // rendered evidence is the only truth layer that can pass this probe.
-  const loggedGeometryDiagnostic = analyzeLoggedEntryGeometry(
+  const loggedGeometryDiagnostic = analyzeEntryFadeLog(
     motionLog,
     ACTIONS_GLASS_ENTRY_EXPECTATION,
   );
@@ -525,12 +523,6 @@ try {
     pass: renderedEnvelope.pass === true,
     errors: renderedEnvelope.errors ?? [],
   };
-  const surfaceFields = analyzeEntrySurfaceFields(motionLog);
-  const onsetLog = appLog
-    .split("\n")
-    .filter((line) => line.includes("event=native_glass_entry_onset"))
-    .slice(-3);
-  const onset = analyzeOnsetReceipt(onsetLog);
   receipt.capture = {
     command,
     exitCode: captureExitCode,
@@ -552,11 +544,8 @@ try {
   receipt.motion = {
     loggedGeometryDiagnostic,
     renderedEnvelope,
-    surfaceFields,
-    onset,
   };
   receipt.motionLog = motionLog;
-  receipt.onsetLog = onsetLog;
   if (motionLog.length < 1) {
     // A missing source log is a WARNING against the source layer, not a
     // rendered-observer failure (plan §3.5: rendered truth stays

@@ -70,12 +70,12 @@ describe("disposition table", () => {
       present: true,
       underResolved: false,
       pass: false,
-      errors: ["grow-in maximum width scale 1.0500 outside 1.007–1.019"],
+      errors: ["frame 2 is 105.00% × 100.00% of settled; the entry must keep the settled frame"],
     };
     const classified = classifyGlassObservation(input);
     expect(classified.disposition).toBe("EVALUABLE_FAIL");
     expect(classified.productErrors).toContain(
-      "grow-in maximum width scale 1.0500 outside 1.007–1.019",
+      "frame 2 is 105.00% × 100.00% of settled; the entry must keep the settled frame",
     );
     expect(exitCodeForDisposition(classified.disposition)).toBe(2);
   });
@@ -149,8 +149,8 @@ describe("locked envelope integration (evaluator unchanged)", () => {
     );
     expect(envelope.underResolved).toBe(false);
     expect(envelope.pass).toBe(true);
-    expect(envelope.firstVisible?.widthScale).toBeCloseTo(1.0305, 6);
-    expect(envelope.onsetTailVisible?.widthScale).toBeCloseTo(1.012, 6);
+    expect(envelope.firstVisible?.widthScale).toBeCloseTo(1, 6);
+    expect(envelope.firstVisible?.alpha).toBeCloseTo(0.99, 6);
   });
 
   test("a single rendered frame is under-resolved by the LOCKED evaluator", () => {
@@ -163,12 +163,12 @@ describe("locked envelope integration (evaluator unchanged)", () => {
     expect(envelope.pass).toBe(false);
   });
 
-  test("three distinct widths are under-resolved by the LOCKED evaluator", () => {
+  test("a frame that changes size fails the LOCKED evaluator", () => {
     const frames = syntheticValidMainEntryFrames().map((frame, index) => ({
       ...frame,
       windowBounds: [
         [0, 0],
-        [750 * [1.012, 1.012, 0.987, 0.987, 1, 1][index]!, 501],
+        [750 * [1.012, 1, 1, 1, 1, 1][index]!, 501],
       ] as [[number, number], [number, number]],
     }));
     const envelope = analyzeEntryMotionEnvelope(
@@ -176,8 +176,9 @@ describe("locked envelope integration (evaluator unchanged)", () => {
       SETTLED,
       MAIN_GLASS_ENTRY_EXPECTATION,
     );
-    expect(envelope.distinctWidths).toBe(3);
-    expect(envelope.underResolved).toBe(true);
+    expect(envelope.distinctWidths).toBe(2);
+    expect(envelope.underResolved).toBe(false);
+    expect(envelope.pass).toBe(false);
   });
 });
 
@@ -287,7 +288,7 @@ describe("synthetic negative controls", () => {
   test("exactly eight controls, each with the required disposition and a nonzero exit", () => {
     const expected: Record<string, string> = {
       "single-frame": "INVALID_OBSERVER",
-      "too-few-widths": "INVALID_OBSERVER",
+      "too-few-visible-frames": "INVALID_OBSERVER",
       "wrong-window-id": "INVALID_OBSERVER",
       "multiple-candidate-owners": "INVALID_OBSERVER",
       "missing-notes-phase": "INVALID_OBSERVER",

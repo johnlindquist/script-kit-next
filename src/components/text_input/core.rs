@@ -1,5 +1,6 @@
 use gpui::{ClipboardItem, Context, Render};
 use std::collections::VecDeque;
+use unicode_segmentation::GraphemeCursor;
 
 /// Selection in a single-line text input
 /// anchor = where selection started, cursor = current position
@@ -285,14 +286,14 @@ impl TextInputState {
         self.selection = TextSelection::caret(self.selection.cursor + inserted_chars);
     }
 
-    /// Delete selection, or character before cursor if no selection
+    /// Delete selection, or the visible character before the cursor
     pub fn backspace(&mut self) {
         if !self.selection.is_empty() {
             self.record_edit_snapshot();
             self.delete_selection();
         } else if self.selection.cursor > 0 {
             self.record_edit_snapshot();
-            let new_pos = self.selection.cursor - 1;
+            let new_pos = self.previous_character_boundary(self.selection.cursor);
             let byte_start = self.char_to_byte(new_pos);
             let byte_end = self.char_to_byte(self.selection.cursor);
             self.text.replace_range(byte_start..byte_end, "");
@@ -300,7 +301,7 @@ impl TextInputState {
         }
     }
 
-    /// Delete selection, or character after cursor if no selection
+    /// Delete selection, or the visible character after the cursor
     pub fn delete(&mut self) {
         if !self.selection.is_empty() {
             self.record_edit_snapshot();
@@ -310,7 +311,8 @@ impl TextInputState {
             if self.selection.cursor < len {
                 self.record_edit_snapshot();
                 let byte_start = self.char_to_byte(self.selection.cursor);
-                let byte_end = self.char_to_byte(self.selection.cursor + 1);
+                let byte_end =
+                    self.char_to_byte(self.next_character_boundary(self.selection.cursor));
                 self.text.replace_range(byte_start..byte_end, "");
             }
         }
@@ -399,7 +401,7 @@ impl TextInputState {
             let (start, _) = self.selection.range();
             self.set_selection(TextSelection::caret(start));
         } else if self.selection.cursor > 0 {
-            let new_pos = self.selection.cursor - 1;
+            let new_pos = self.previous_character_boundary(self.selection.cursor);
             if extend_selection {
                 self.set_selection(TextSelection {
                     anchor: self.selection.anchor,
@@ -419,7 +421,7 @@ impl TextInputState {
             let (_, end) = self.selection.range();
             self.set_selection(TextSelection::caret(end));
         } else if self.selection.cursor < len {
-            let new_pos = self.selection.cursor + 1;
+            let new_pos = self.next_character_boundary(self.selection.cursor);
             if extend_selection {
                 self.set_selection(TextSelection {
                     anchor: self.selection.anchor,
@@ -636,6 +638,28 @@ impl TextInputState {
             .nth(char_idx)
             .map(|(i, _)| i)
             .unwrap_or(self.text.len())
+    }
+
+    /// Character index of the visible-character boundary before `cursor`.
+    ///
+    /// A visible character can span several code points (a skin-toned or
+    /// family emoji, a flag, a letter with a combining accent), so stepping
+    /// one `char` would split it.
+    fn previous_character_boundary(&self, cursor: usize) -> usize {
+        let mut graphemes = GraphemeCursor::new(self.char_to_byte(cursor), self.text.len(), true);
+        match graphemes.prev_boundary(&self.text, 0) {
+            Ok(Some(byte)) => self.text[..byte].chars().count(),
+            _ => 0,
+        }
+    }
+
+    /// Character index of the visible-character boundary after `cursor`.
+    fn next_character_boundary(&self, cursor: usize) -> usize {
+        let mut graphemes = GraphemeCursor::new(self.char_to_byte(cursor), self.text.len(), true);
+        match graphemes.next_boundary(&self.text, 0) {
+            Ok(Some(byte)) => self.text[..byte].chars().count(),
+            _ => self.text.chars().count(),
+        }
     }
 
     /// Find the previous word boundary from cursor

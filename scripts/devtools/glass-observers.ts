@@ -372,18 +372,18 @@ function syntheticFrame(
 }
 
 /**
- * Synthetic samples of the EXISTING locked 103.05% → 101.2% → 98.7%
- * main-entry shape. These are test observations, never production animation
- * values or a substitute for a real composited-frame receipt.
+ * Synthetic samples of the fixed-frame sharp_presence fade (alpha 0.99 →
+ * 1.0 at the settled size). These are test observations, never production
+ * animation values or a substitute for a real composited-frame receipt.
  */
 export function syntheticValidMainEntryFrames(windowId = 77) {
   return [
-    syntheticFrame(0, 1.0305, 0.85, windowId),
-    syntheticFrame(1, 1.012, 0.95, windowId),
-    syntheticFrame(2, 0.995, 0.97, windowId),
-    syntheticFrame(3, 0.987, 0.985, windowId),
-    syntheticFrame(4, 0.993, 0.99, windowId),
-    syntheticFrame(5, 1.0, 1.0, windowId),
+    syntheticFrame(0, 1, 0.99, windowId),
+    syntheticFrame(1, 1, 0.992, windowId),
+    syntheticFrame(2, 1, 0.995, windowId),
+    syntheticFrame(3, 1, 0.998, windowId),
+    syntheticFrame(4, 1, 1.0, windowId),
+    syntheticFrame(5, 1, 1.0, windowId),
   ];
 }
 
@@ -544,15 +544,15 @@ export function runSyntheticNegativeControls(
     });
   }
 
-  // 2. too-few-widths — enough frames, only three distinct width scales.
+  // 2. too-few-visible-frames — six captured frames, only two visible.
   {
     const frames = [
-      syntheticFrame(0, 1.012, 0.85),
-      syntheticFrame(1, 1.012, 0.9),
-      syntheticFrame(2, 0.987, 0.95),
-      syntheticFrame(3, 0.987, 0.97),
-      syntheticFrame(4, 1.0, 0.99),
-      syntheticFrame(5, 1.0, 1.0),
+      syntheticFrame(0, 1, 0),
+      syntheticFrame(1, 1, 0),
+      syntheticFrame(2, 1, 0),
+      syntheticFrame(3, 1, 0),
+      syntheticFrame(4, 1, 0.99),
+      syntheticFrame(5, 1, 1.0),
     ];
     const envelope = analyzeEntryMotionEnvelope(
       frames,
@@ -566,9 +566,9 @@ export function runSyntheticNegativeControls(
       pass: envelope.pass === true,
       errors: envelope.errors ?? [],
     };
-    record("too-few-widths", "INVALID_OBSERVER", input, {
+    record("too-few-visible-frames", "INVALID_OBSERVER", input, {
       frameCount: frames.length,
-      distinctWidths: envelope.distinctWidths,
+      measuredFrameCount: envelope.measuredFrameCount,
       underResolved: envelope.underResolved,
     });
   }

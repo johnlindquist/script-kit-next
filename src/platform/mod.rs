@@ -54,3 +54,6 @@ include!("cursor.rs");
 include!("screen_capture_overlay.rs");
 include!("panel_invariants.rs");
 include!("tests.rs");
+
+#[cfg(all(test, target_os = "macos"))]
+mod glass_entry_property_tests;

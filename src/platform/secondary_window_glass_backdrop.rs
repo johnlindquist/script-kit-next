@@ -51,23 +51,11 @@ impl TahoeBackdropLayout {
     }
 }
 
-/// Windows whose calibrated glass EXIT is the fixed-frame fade
-/// (`GlassExitMode::DetachedRegionsFadeOnly`). This is a motion-calibration
-/// contract and deliberately independent of the backdrop layout below: Notes
-/// keeps its calibrated fade-only exit in BOTH surface modes, even while its
-/// backdrop is full-window (no footer band).
+/// Windows whose glass resolves as an untinted popup material
+/// (`NativeGlassSurfaceRole::PopupBackdrop`): the Actions menu and modals.
+/// Keyed by the same label the close paths already pass.
 #[cfg(target_os = "macos")]
-fn window_name_uses_fixed_frame_exit(window_name: &str) -> bool {
-    matches!(window_name, "Main window" | "Notes" | "Dictation overlay")
-}
-
-/// Windows whose entry and exit mirror the main window's selected preset:
-/// the Actions menu (2026-09-23 owner request) and modals (2026-09-24 owner
-/// request). Keyed by the same exit label the close paths already pass; the
-/// footer strip reuses "Actions popup" only as its configure log label and
-/// never runs a glass exit.
-#[cfg(target_os = "macos")]
-fn window_name_mirrors_main_motion(window_name: &str) -> bool {
+fn window_name_uses_popup_backdrop(window_name: &str) -> bool {
     matches!(window_name, "Actions popup" | "Confirm popup")
 }
 
@@ -95,9 +83,9 @@ fn tahoe_backdrop_layout(window_name: &str) -> TahoeBackdropLayout {
     }
 }
 
-/// Self-heal after the appear morph: window content can resize while the
-/// frame animation is in flight (the launcher sizes to its list on show),
-/// leaving the glass stuck at stale bounds. Scheduled via
+/// Self-heal after the entry: window content can resize while the entry is
+/// in flight (the launcher sizes to its list on show), leaving the glass
+/// stuck at stale bounds. Scheduled via
 /// `performSelector:afterDelay:` right after the animation ends.
 #[cfg(target_os = "macos")]
 extern "C" fn tahoe_glass_backdrop_repin(this: &objc::runtime::Object, _: objc::runtime::Sel) {
@@ -164,18 +152,6 @@ fn tahoe_glass_backdrop_view_class(glass_class: id) -> Option<*const objc::runti
         decl.add_method(
             sel!(repinToSuperviewBounds),
             tahoe_glass_backdrop_repin as extern "C" fn(&Object, Sel),
-        );
-        decl.add_method(
-            sel!(settleOwnWindowFrame),
-            tahoe_glass_backdrop_settle as extern "C" fn(&Object, Sel),
-        );
-        decl.add_method(
-            sel!(revealOwnWindowEntryContent),
-            tahoe_glass_backdrop_reveal_entry_content as extern "C" fn(&Object, Sel),
-        );
-        decl.add_method(
-            sel!(beginOwnWindowEntryTail),
-            tahoe_glass_backdrop_begin_entry_tail as extern "C" fn(&Object, Sel),
         );
         decl.add_method(
             sel!(finishOwnWindowEntry),

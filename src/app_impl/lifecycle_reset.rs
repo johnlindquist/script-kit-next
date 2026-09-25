@@ -428,8 +428,7 @@ impl ScriptListApp {
     /// The ONE application-level owner of an ordinary main-window dismissal.
     ///
     /// Sequence (locked exit contract, values immutable):
-    /// 1. Play the calibrated fixed-frame exit fade
-    ///    (`begin_main_window_exit_dematerialize`, `DetachedRegionsFadeOnly`).
+    /// 1. Play the fixed-frame exit fade (`begin_main_window_exit_dematerialize`).
     /// 2. Wait the locked removal delay (`glass_exit_remove_delay`) — zero when
     ///    glass is unavailable so non-glass hides stay instant.
     /// 3. Reject the request when a re-show or newer visibility generation

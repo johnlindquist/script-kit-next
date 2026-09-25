@@ -779,7 +779,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     key: "animation.preset",
     type: "string | undefined",
     default: undefined,
-    description: "Main-window entry animation preset (25 choices; previous_calibration restores the former entry)"
+    description: "Window entry fade (sharp_presence or fixed_frame; retired ids load as sharp_presence)"
   },
   {
     key: "dictation.selectedDeviceId",

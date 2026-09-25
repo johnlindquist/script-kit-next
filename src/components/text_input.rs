@@ -9,6 +9,9 @@
 
 #[path = "text_input/core.rs"]
 pub(crate) mod core;
+#[cfg(test)]
+#[path = "text_input/property_tests.rs"]
+mod property_tests;
 #[path = "text_input/render.rs"]
 mod render;
 #[cfg(test)]
