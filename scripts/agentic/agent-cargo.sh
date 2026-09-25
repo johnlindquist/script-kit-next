@@ -269,6 +269,17 @@ if [[ "$noninteractive_mode" == "1" ]]; then
         reviewed_app_target=1
       fi
 
+      # The launcher exists only in the binary crate. Its headless Enter-button
+      # rules are the one reviewed selection from the binary's test target; the
+      # binary's other unit tests stay unreviewed.
+      if (( ${#requested_args[@]} == 4 )) \
+        && [[ "${requested_args[0]}" == "test" \
+           && "${requested_args[1]}" == "--bin" \
+           && "${requested_args[2]}" == "script-kit-gpui" \
+           && "${requested_args[3]}" == "enter_button_property_tests" ]]; then
+        reviewed_app_target=1
+      fi
+
       if (( reviewed_app_target == 0 && (reviewed_domain_target == 0 || unreviewed_package == 1) )); then
         worker_failure "noninteractive agent Cargo requires an explicit reviewed --lib, --test, or safe domain package"
       fi

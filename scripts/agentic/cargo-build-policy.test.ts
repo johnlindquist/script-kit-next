@@ -890,6 +890,9 @@ process.exit(child.exitCode);
     ["test", "--locked"],
     ["test", "privacy"],
     ["test", "-p", "script-kit-gpui"],
+    ["test", "--bin", "script-kit-gpui"],
+    ["test", "--bin", "script-kit-gpui", "enter_button"],
+    ["test", "--bin", "script-kit-gpui", "--", "enter_button_property_tests"],
     ["nextest", "run"],
   ].map(args => [args] as const))("refuses unreviewed blanket Rust test discovery %j before Cargo runs", (unscopedArgs) => {
     const workspace = fixture();
@@ -897,6 +900,14 @@ process.exit(child.exitCode);
   
     expect(result.status).toBe(64);
     expect(result.stderr).toContain("requires an explicit reviewed --lib, --test, or safe domain package");
+    expect(existsSync(workspace.capture)).toBe(false);
+  });
+
+  test("admits exactly the launcher Enter-button rules from the binary's tests", () => {
+    const workspace = fixture();
+    const result = run("agent-cargo.sh", ["test", "--bin", "script-kit-gpui", "enter_button_property_tests"], { ...workspace.env, SCRIPT_KIT_AGENT_POLICY_ONLY: "1" });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ pool: "agent-debug", passive: true });
     expect(existsSync(workspace.capture)).toBe(false);
   });
 

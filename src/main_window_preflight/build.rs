@@ -8,6 +8,10 @@ use crate::scripts::SearchResult;
 use crate::AppView;
 use std::hash::{Hash, Hasher};
 
+pub(crate) fn row_block_reason(row: &crate::MainMenuRowProjection) -> Option<&'static str> {
+    (!row.eligibility.activatable).then_some("This command is not available right now.")
+}
+
 pub(crate) fn command_block_reason(
     app: &crate::ScriptListApp,
     result: &SearchResult,
@@ -16,7 +20,7 @@ pub(crate) fn command_block_reason(
         return match app.resolved_main_menu_selected_subject() {
             Some(crate::ResolvedMainMenuSelection::SearchResult { row, .. })
             | Some(crate::ResolvedMainMenuSelection::Calculator { row, .. }) => {
-                (!row.eligibility.activatable).then_some("This command is not available right now.")
+                row_block_reason(row)
             }
             None => Some("No current selected result."),
         };

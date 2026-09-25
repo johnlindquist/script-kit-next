@@ -57,7 +57,9 @@ impl ScriptListApp {
             return label.to_string();
         }
 
-        match self.resolved_main_menu_selected_subject() {
+        // The label describes the highlighted row, including while a newer
+        // query waits to be filtered; Enter finishes that query before running.
+        match self.painted_main_menu_selected_subject() {
             Some(ResolvedMainMenuSelection::SearchResult { result, .. }) => {
                 main_window_result_action_label(result, frontmost_app_name.as_deref())
             }
@@ -657,9 +659,9 @@ impl ScriptListApp {
             return None;
         }
 
-        match self.resolved_main_menu_selected_subject() {
-            Some(ResolvedMainMenuSelection::SearchResult { result, .. }) => {
-                crate::main_window_preflight::command_block_reason(self, result)
+        match self.painted_main_menu_selected_subject() {
+            Some(ResolvedMainMenuSelection::SearchResult { row, .. }) => {
+                crate::main_window_preflight::row_block_reason(row)
             }
             Some(ResolvedMainMenuSelection::Calculator { .. }) => None,
             None => Some("No current selected result."),
@@ -2409,6 +2411,10 @@ impl ScriptListApp {
 #[cfg(test)]
 #[path = "ui_window_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ui_window_enter_button_property_tests.rs"]
+mod enter_button_property_tests;
 
 include!("ui_window_footer_helpers.rs");
 include!("ui_window_context_chips.rs");
