@@ -91,7 +91,7 @@ repair a reference-file destination.
 Use new reference/output destinations or a current verified reference; do not
 rebuild merely because a recipe or evidence destination changed. The manifest's
 default feature is `ocr`; owned search fixtures do not require `local-llm`, live
-models, credentials, or a Pi provider. One evaluator runs at a time, within the
+models, credentials, or a goose provider. One evaluator runs at a time, within the
 existing eight-window, 4,096-request, 2,048-frame, ten-minute and retained-image
 limits. Split the finite schedule inventory into bounded deterministic shards;
 exceeding a limit never authorizes sampling it down to a passing subset.
@@ -271,7 +271,7 @@ attachment portal with a provider-free, hidden Chat return host. Releasing its
 owned script source exercises production grouping and the actual reserved slot,
 not injected rows. The recipe checks slot semantics, paint, refused selection,
 navigation and portal cancellation, then prepares the launcher for calculator
-submission. This is not proof of live Chat entry, Pi transport or Chat dismissal.
+submission. This is not proof of live Chat entry, goose transport or Chat dismissal.
 
 For sources advertised by `searchProviderWait`, use the existing `waitFor`
 transport with condition `{ type: "searchProvider", source, query, afterRunId }`.

@@ -11,7 +11,7 @@
 //! - One background thread ("brain-telegram") long-polling `getUpdates`;
 //!   never panics, never hot-loops (errors back off up to a cap).
 //! - Answers are grounded in [`super::recall_context_block`] and produced by
-//!   the same one-shot pi completion the curator uses ([`super::pi_oneshot`]).
+//!   the same one-shot pi completion the curator uses ([`super::ai_oneshot`]).
 //! - The bot token is a secret: it is never logged, and because Telegram API
 //!   URLs embed it, every logged error string is passed through
 //!   [`redact_token`] first.
@@ -173,7 +173,7 @@ fn answer_question(question: &str) -> String {
             return LOOKUP_FAILED_REPLY.to_string();
         }
     };
-    match super::pi_oneshot(&build_answer_prompt(question, &context)) {
+    match super::ai_oneshot(&build_answer_prompt(question, &context)) {
         Ok(Some(answer)) if !answer.trim().is_empty() => truncate_reply(&answer),
         Ok(Some(_)) => NO_MEMORY_REPLY.to_string(),
         Ok(None) => NO_AGENT_REPLY.to_string(),

@@ -10,7 +10,6 @@ on:
       - "scripts/agentic/agent-cargo.sh"
       - "scripts/agentic/root-search-frame-stability.ts"
       - "scripts/agentic/root-typing-lag-benchmark.ts"
-      - "scripts/agentic/quick-ai-latency-bench.ts"
       - "scripts/devtools/**"
       - "src/app_impl/filter_*.rs"
       - "src/app_impl/filtering_cache.rs"
@@ -82,12 +81,10 @@ jobs:
         run: |
           bun scripts/agentic/root-typing-lag-benchmark.ts --describe-contract
           bun scripts/agentic/root-search-frame-stability.ts --describe-contract
-          bun scripts/agentic/quick-ai-latency-bench.ts --describe-contract
           bun test --timeout 30000 \
             ./scripts/agentic/root-typing-lag-benchmark.test.ts \
             ./scripts/agentic/root-search-frame-stability.test.ts \
             ./scripts/devtools/performance-contract.test.ts \
-            ./scripts/agentic/quick-ai-latency-bench.test.ts \
             ./scripts/agentic/ai-phase-trace-report.test.ts
 
       - name: Build stable root frame gate artifact

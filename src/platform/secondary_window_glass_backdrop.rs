@@ -61,13 +61,14 @@ fn window_name_uses_fixed_frame_exit(window_name: &str) -> bool {
     matches!(window_name, "Main window" | "Notes" | "Dictation overlay")
 }
 
-/// Windows whose entry and exit mirror the main window's selected preset
-/// (2026-09-23 owner request). Keyed by the same exit label the close paths
-/// already pass; the footer strip reuses "Actions popup" only as its configure
-/// log label and never runs a glass exit.
+/// Windows whose entry and exit mirror the main window's selected preset:
+/// the Actions menu (2026-09-23 owner request) and modals (2026-09-24 owner
+/// request). Keyed by the same exit label the close paths already pass; the
+/// footer strip reuses "Actions popup" only as its configure log label and
+/// never runs a glass exit.
 #[cfg(target_os = "macos")]
 fn window_name_mirrors_main_motion(window_name: &str) -> bool {
-    window_name == "Actions popup"
+    matches!(window_name, "Actions popup" | "Confirm popup")
 }
 
 /// Windows whose DEFAULT backdrop reserves the detached-footer band. Notes is

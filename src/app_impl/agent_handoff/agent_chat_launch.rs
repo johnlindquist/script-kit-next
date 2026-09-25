@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone)]
 struct AgentChatWarmRetryLaunch {
-    pi_launch: crate::ai::agent_chat::launch::PiAgentChatLaunch,
+    agent_launch: crate::ai::agent_chat::launch::AgentChatLaunch,
     request: TabAiLaunchRequest,
     capture_rx: TabAiDeferredCaptureRx,
     focused_part: Option<crate::ai::message_parts::AiContextPart>,
@@ -65,7 +65,7 @@ fn agent_chat_hot_prewarm_enabled_from(disabled: Option<&str>, enabled: Option<&
 
 impl ScriptListApp {
     /// Open a deterministic, provider-free standard Agent Chat surface for
-    /// DevTools and visual smoke tests. This intentionally bypasses Pi warm-up.
+    /// DevTools and visual smoke tests. This intentionally bypasses goose warm-up.
     pub(crate) fn open_standard_agent_chat_mock_fixture(&mut self, cx: &mut Context<Self>) {
         let owned_hidden = matches!(&self.main_services, MainServices::OwnedFixtures(_));
         let source_view = self.current_view.clone();
@@ -298,27 +298,9 @@ impl ScriptListApp {
                 &ai_preferences,
                 &profile_ctx,
             ) {
-                Ok(crate::ai::agent_chat::launch::ResolvedQuickAiLaunch::CodexExec(launch)) => {
-                    self.open_tab_ai_codex_exec_view_from_launch(
-                        *launch,
-                        request,
-                        capture_rx,
-                        focused_part,
-                        use_ask_anything_fallback,
-                        explicit_ambient_chip_label,
-                        auto_submit,
-                        agent_chat_initial_input,
-                        permission_rx,
-                        source_view,
-                        had_harness_session,
-                        pending_script_list_trigger,
-                        open_started_at,
-                        cx,
-                    );
-                }
-                Ok(crate::ai::agent_chat::launch::ResolvedQuickAiLaunch::Pi(pi_launch)) => {
-                    self.open_tab_ai_pi_view_from_launch(
-                        *pi_launch,
+                Ok(agent_launch) => {
+                    self.open_tab_ai_agent_chat_view_from_launch(
+                        agent_launch,
                         request,
                         capture_rx,
                         focused_part,
@@ -350,33 +332,33 @@ impl ScriptListApp {
             return;
         }
 
-        let pi_launch_result = if focused_text_mini {
-            crate::ai::agent_chat::launch::resolve_focused_text_pi_launch(
+        let agent_launch_result = if focused_text_mini {
+            crate::ai::agent_chat::launch::resolve_focused_text_launch(
                 &ai_preferences,
                 &profile_ctx,
             )
         } else {
-            crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
+            crate::ai::agent_chat::launch::resolve_selected_launch_with_cwd_override(
                 &ai_preferences,
                 &profile_ctx,
                 cwd_override.clone(),
             )
         };
-        match pi_launch_result {
-            Ok(pi_launch) => {
+        match agent_launch_result {
+            Ok(agent_launch) => {
                 if cwd_override.is_some() {
                     let default_cwd = crate::ai::agent_chat::launch::resolve_selected_launch_cwd(
                         &ai_preferences,
                         &profile_ctx,
                     );
                     crate::ai::agent_chat::ui::record_agent_chat_cwd_recent(
-                        &pi_launch.profile.id,
-                        pi_launch.cwd.clone(),
+                        &agent_launch.profile.id,
+                        agent_launch.cwd.clone(),
                         Some(default_cwd.as_path()),
                     );
                 }
-                self.open_tab_ai_pi_view_from_launch(
-                    pi_launch,
+                self.open_tab_ai_agent_chat_view_from_launch(
+                    agent_launch,
                     request,
                     capture_rx,
                     focused_part,
@@ -396,13 +378,13 @@ impl ScriptListApp {
             Err(error) => {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
-                    event = "pi_agent_chat_launch_resolution_failed",
+                    event = "agent_chat_launch_resolution_failed",
                     error = %error,
                     focused_text_mini,
                 );
                 self.preserve_source_after_agent_chat_preflight_failure(
                     if focused_text_mini {
-                        "Pi Text profile is unavailable"
+                        "The Text profile is unavailable"
                     } else {
                         "Agent Chat is unavailable"
                     },
@@ -440,9 +422,9 @@ impl ScriptListApp {
     }
 
     /// Fail a Quick AI launch closed BEFORE any thread is created, because the
-    /// launch request smuggled context into a zero-context surface. Shared by
-    /// the Codex and Pi Quick AI sites so both refuse identically (production
-    /// refusal, not a debug assert). The caller owns dropping `capture_rx`.
+    /// launch request smuggled context into a zero-context surface. A
+    /// production refusal, not a debug assert. The caller owns dropping
+    /// `capture_rx`.
     fn fail_quick_ai_context_invariant(
         &mut self,
         ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
@@ -466,132 +448,9 @@ impl ScriptListApp {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn open_tab_ai_codex_exec_view_from_launch(
+    fn open_tab_ai_agent_chat_view_from_launch(
         &mut self,
-        launch: crate::ai::agent_chat::launch::CodexQuickAiExecLaunch,
-        request: TabAiLaunchRequest,
-        capture_rx: TabAiDeferredCaptureRx,
-        focused_part: Option<crate::ai::message_parts::AiContextPart>,
-        use_ask_anything_fallback: bool,
-        explicit_ambient_chip_label: Option<String>,
-        auto_submit: bool,
-        agent_chat_initial_input: Option<String>,
-        permission_rx: async_channel::Receiver<crate::ai::agent_chat::ui::AgentChatApprovalRequest>,
-        source_view: AppView,
-        had_harness_session: bool,
-        pending_script_list_trigger: Option<char>,
-        open_started_at: std::time::Instant,
-        cx: &mut Context<Self>,
-    ) {
-        if Self::quick_ai_context_invariant_violated(
-            request.ui_variant,
-            &focused_part,
-            use_ask_anything_fallback,
-            &explicit_ambient_chip_label,
-        ) {
-            drop(capture_rx);
-            self.fail_quick_ai_context_invariant(
-                request.ui_variant,
-                focused_part.is_some(),
-                use_ask_anything_fallback,
-                explicit_ambient_chip_label.is_some(),
-                cx,
-            );
-            return;
-        }
-        drop(capture_rx);
-
-        let connection = std::sync::Arc::new(
-            crate::ai::agent_chat::codex_exec::CodexQuickAiExecConnection::new(launch.spec.clone()),
-        );
-        let ui_thread_id = format!(
-            "quick-ai-codex-{}-{}",
-            std::process::id(),
-            open_started_at.elapsed().as_nanos()
-        );
-        let thread = cx.new(|cx| {
-            crate::ai::agent_chat::ui::AgentChatThread::new(
-                connection,
-                permission_rx,
-                crate::ai::agent_chat::ui::AgentChatThreadInit {
-                    ui_thread_id,
-                    cwd: launch.cwd.clone(),
-                    initial_input: agent_chat_initial_input,
-                    initial_context_parts: Vec::new(),
-                    display_name: launch.profile.name.clone().into(),
-                    profile_id: launch.profile.id.clone(),
-                    profile_display_name: Some(launch.profile.name.clone().into()),
-                    profile_icon_name: launch.profile.icon_name.clone(),
-                    selected_agent: None,
-                    available_agents: Vec::new(),
-                    launch_requirements:
-                        crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
-                    available_models: launch.available_models.clone(),
-                    selected_model_id: launch.selected_model_id.clone(),
-                    // WP-B1: Quick AI is zero-retention — the thread-owned
-                    // policy denies every automatic egress for quick questions.
-                    session_policy:
-                        crate::ai::agent_chat::ui::capabilities::AgentChatSessionPolicy::QuickAi,
-                },
-                cx,
-            )
-        });
-        let view_entity = cx.new(|cx| {
-            crate::ai::agent_chat::ui::AgentChatView::new(thread.clone(), cx)
-                .with_ui_variant(request.ui_variant)
-        });
-
-        self.active_agent_chat_warm_lease = None;
-        self.wire_embedded_agent_chat_footer_callbacks(&view_entity, cx);
-        self.embedded_agent_chat = Some(view_entity.clone());
-        self.tab_ai_harness_return_view = Some(source_view.clone());
-        self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
-        self.seed_tab_ai_apply_back_route(&request.source_view, &request.ui_snapshot, None);
-        view_entity.update(cx, |view, _cx| {
-            view.opened_via_transient_trigger = pending_script_list_trigger;
-        });
-        self.enter_embedded_agent_chat_surface(view_entity.clone(), cx);
-        cx.notify();
-
-        // Quick AI is a second embedded policy decision no longer: it must
-        // enter with the request's own zero-implicit-context policy.
-        debug_assert_eq!(
-            request.context_policy,
-            AgentChatContextPolicy::NoContext,
-            "Quick AI must enter with a zero-context policy",
-        );
-        let needs_deferred = self.stage_agent_chat_initial_context_parts(
-            None,
-            &view_entity,
-            &thread,
-            None,
-            false,
-            None,
-            auto_submit,
-            pending_script_list_trigger,
-            &request.context_policy,
-            false,
-            &source_view,
-            cx,
-        );
-        debug_assert!(!needs_deferred, "Quick AI must never await context capture");
-        self.schedule_agent_chat_post_paint_harness_teardown(
-            had_harness_session,
-            open_started_at,
-            cx,
-        );
-        tracing::info!(
-            target: "script_kit::quick_ai",
-            event = "quick_ai_codex_view_switched",
-            profile_id = %launch.profile.id,
-            total_ms = open_started_at.elapsed().as_millis() as u64,
-        );
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn open_tab_ai_pi_view_from_launch(
-        &mut self,
-        pi_launch: crate::ai::agent_chat::launch::PiAgentChatLaunch,
+        agent_launch: crate::ai::agent_chat::launch::AgentChatLaunch,
         request: TabAiLaunchRequest,
         capture_rx: TabAiDeferredCaptureRx,
         focused_part: Option<crate::ai::message_parts::AiContextPart>,
@@ -607,7 +466,7 @@ impl ScriptListApp {
         open_started_at: std::time::Instant,
         cx: &mut Context<Self>,
     ) {
-        // WP-B2: the Pi path serves every variant, so fail a Quick AI launch
+        // WP-B2: the goose path serves every variant, so fail a Quick AI launch
         // closed here — mirroring the Codex site — before any thread exists if
         // the request smuggled a focused/ambient/fallback context payload.
         if Self::quick_ai_context_invariant_violated(
@@ -634,18 +493,18 @@ impl ScriptListApp {
                 .map(|part| part.source().contains("screenshot=1"))
                 .unwrap_or(false),
         };
-        let warm_spec = pi_launch.warm_spec();
+        let warm_spec = agent_launch.warm_spec();
         let manager = crate::ai::agent_chat::launch::warm_session_manager();
-        if let Some(snapshot) = manager.snapshot(&pi_launch.warm_key).filter(|snapshot| {
+        if let Some(snapshot) = manager.snapshot(&agent_launch.warm_key).filter(|snapshot| {
             snapshot.state == crate::ai::agent_chat::warm_session::AgentChatWarmSessionState::Failed
         }) {
             // S11: log the classified code and diagnostic fingerprint, never
             // a message that used to carry raw provider/spawn text.
             tracing::warn!(
                 target: "script_kit::tab_ai",
-                event = "pi_agent_chat_warm_failed_setup",
-                profile_id = %pi_launch.profile.id,
-                warm_key = %pi_launch.warm_key,
+                event = "agent_chat_warm_failed_setup",
+                profile_id = %agent_launch.profile.id,
+                warm_key = %agent_launch.warm_key,
                 generation = snapshot.generation,
                 failure_code = ?snapshot.failure.as_ref().map(|failure| failure.failure.code),
                 diagnostic_fingerprint = ?snapshot
@@ -656,7 +515,7 @@ impl ScriptListApp {
             );
             self.show_agent_chat_warm_recovery(
                 AgentChatWarmRetryLaunch {
-                    pi_launch,
+                    agent_launch,
                     request,
                     capture_rx,
                     focused_part,
@@ -682,9 +541,9 @@ impl ScriptListApp {
             Err(error) => {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
-                    event = "pi_agent_chat_acquire_or_cold_spawn_failed",
-                    profile_id = %pi_launch.profile.id,
-                    warm_key = %pi_launch.warm_key,
+                    event = "agent_chat_acquire_or_cold_spawn_failed",
+                    profile_id = %agent_launch.profile.id,
+                    warm_key = %agent_launch.warm_key,
                     error = %error,
                 );
                 self.preserve_source_after_agent_chat_preflight_failure(
@@ -701,10 +560,10 @@ impl ScriptListApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "pi_agent_chat_warm_acquired",
-            profile_id = %pi_launch.profile.id,
-            profile_name = %pi_launch.profile.name,
-            warm_key = %pi_launch.warm_key,
+            event = "agent_chat_warm_acquired",
+            profile_id = %agent_launch.profile.id,
+            profile_name = %agent_launch.profile.name,
+            warm_key = %agent_launch.warm_key,
             acquire_origin = ?acquire_origin,
             generation = lease.generation,
             ui_thread_id = %ui_thread_id,
@@ -721,17 +580,17 @@ impl ScriptListApp {
                     cwd,
                     initial_input: agent_chat_initial_input.clone(),
                     initial_context_parts: Vec::new(),
-                    display_name: pi_launch.profile.name.clone().into(),
-                    profile_id: pi_launch.profile.id.clone(),
-                    profile_display_name: Some(pi_launch.profile.name.clone().into()),
-                    profile_icon_name: pi_launch.profile.icon_name.clone(),
+                    display_name: agent_launch.profile.name.clone().into(),
+                    profile_id: agent_launch.profile.id.clone(),
+                    profile_display_name: Some(agent_launch.profile.name.clone().into()),
+                    profile_icon_name: agent_launch.profile.icon_name.clone(),
                     selected_agent: None,
                     available_agents: Vec::new(),
                     launch_requirements: requirements,
-                    available_models: pi_launch.available_models.clone(),
-                    selected_model_id: pi_launch.selected_model_id.clone(),
+                    available_models: agent_launch.available_models.clone(),
+                    selected_model_id: agent_launch.selected_model_id.clone(),
                     // The immutable launch policy is the SOLE authority: the
-                    // Pi path serves every variant, so Quick AI stays ephemeral.
+                    // goose path serves every variant, so Quick AI stays ephemeral.
                     session_policy:
                         crate::ai::agent_chat::ui::capabilities::AgentChatSessionPolicy::for_launch_variant(
                             request.ui_variant,
@@ -766,8 +625,8 @@ impl ScriptListApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "pi_agent_chat_view_switched",
-            profile_id = %pi_launch.profile.id,
+            event = "agent_chat_view_switched",
+            profile_id = %agent_launch.profile.id,
             agent_chat_ui_variant = request.ui_variant.state_id(),
             total_ms = open_started_at.elapsed().as_millis() as u64,
         );
@@ -825,9 +684,9 @@ impl ScriptListApp {
         // re-derived `Unknown` from generic English - so a warm-session auth
         // failure lost its Sign In action on the way to its own recovery card.
         let recovery_state = crate::ai::agent_chat::agent_chat_recovery::warm_recovery_state(
-            &launch.pi_launch.profile.id,
-            launch.pi_launch.selected_model_id.as_deref(),
-            &launch.pi_launch.cwd,
+            &launch.agent_launch.profile.id,
+            launch.agent_launch.selected_model_id.as_deref(),
+            &launch.agent_launch.cwd,
             snapshot.failure.as_ref(),
             attempts,
         );
@@ -935,7 +794,7 @@ impl ScriptListApp {
         open_agent_chat_recovery_dialog_deferred(
             cx,
             crate::confirm::ParentActionDialogOptions {
-                title: "Pi Agent Chat details".into(),
+                title: "Agent Chat details".into(),
                 body: body.into(),
                 primary_text: "Retry".into(),
                 secondary_text: None,
@@ -976,7 +835,7 @@ impl ScriptListApp {
         };
         let manager = crate::ai::agent_chat::launch::warm_session_manager();
         let retry = manager.reprepare_failed_generation_background(
-            launch.pi_launch.warm_spec(),
+            launch.agent_launch.warm_spec(),
             failed.generation,
         );
         let retry_generation = match retry {
@@ -987,7 +846,7 @@ impl ScriptListApp {
                     target: "script_kit::tab_ai",
                     event = "agent_chat_recovery_failure",
                     phase = "retry_start",
-                    warm_key = %launch.pi_launch.warm_key,
+                    warm_key = %launch.agent_launch.warm_key,
                     failed_generation = failed.generation,
                     reason = "warm_slot_missing",
                 );
@@ -999,7 +858,7 @@ impl ScriptListApp {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "agent_chat_recovery_start",
-            warm_key = %launch.pi_launch.warm_key,
+            warm_key = %launch.agent_launch.warm_key,
             failed_generation = failed.generation,
             retry_generation,
             attempt = attempts.saturating_add(1),
@@ -1011,8 +870,10 @@ impl ScriptListApp {
         open_agent_chat_recovery_dialog_deferred(
             cx,
             crate::confirm::ParentActionDialogOptions {
-                title: "Retrying Pi Agent Chat…".into(),
-                body: "Checking the Pi sidecar and available models. Your current screen remains open.".into(),
+                title: "Retrying Agent Chat…".into(),
+                body:
+                    "Checking the AI engine and available models. Your current screen remains open."
+                        .into(),
                 primary_text: "Back".into(),
                 secondary_text: None,
                 dismiss_text: "Back".into(),
@@ -1028,7 +889,7 @@ impl ScriptListApp {
         );
 
         let app = cx.entity().downgrade();
-        let warm_key = launch.pi_launch.warm_key.clone();
+        let warm_key = launch.agent_launch.warm_key.clone();
         cx.spawn(async move |_this, cx| {
             loop {
                 cx.background_executor()
@@ -1081,8 +942,8 @@ impl ScriptListApp {
                                 retry_generation,
                                 attempt = attempts.saturating_add(1),
                             );
-                            this.open_tab_ai_pi_view_from_launch(
-                                launch.pi_launch,
+                            this.open_tab_ai_agent_chat_view_from_launch(
+                                launch.agent_launch,
                                 launch.request,
                                 launch.capture_rx,
                                 launch.focused_part,
@@ -1277,11 +1138,11 @@ impl ScriptListApp {
         agent_chat_hot_prewarm_enabled_from(disabled.as_deref(), enabled.as_deref())
     }
 
-    /// Start warming a Pi Agent Chat session for the current Spine cwd so a
+    /// Start warming an Agent Chat session for the current Spine cwd so a
     /// later Cmd+Enter acquires a ready warm session with the correct working
     /// directory instead of missing (which would surface the "try again"
     /// toast). Invoked when the user picks a cwd and hot prewarm is explicitly
-    /// enabled; idle Pi workers are otherwise deferred until first use because
+    /// enabled; idle goose workers are otherwise deferred until first use because
     /// they can consume multiple CPU cores and starve GPUI frame delivery.
     pub(crate) fn prewarm_agent_chat_for_spine_cwd(&self, cx: &mut Context<Self>) {
         let _ = cx;
@@ -1308,20 +1169,20 @@ impl ScriptListApp {
         }
 
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
-        match crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
+        match crate::ai::agent_chat::launch::resolve_selected_launch_with_cwd_override(
             ai_preferences,
             &profile_ctx,
             self.spine_cwd_for_agent_chat_launch(),
         ) {
-            Ok(pi_launch) => {
+            Ok(agent_launch) => {
                 let manager = crate::ai::agent_chat::launch::warm_session_manager();
-                if let Err(error) = manager.prepare_warm_background(pi_launch.warm_spec()) {
+                if let Err(error) = manager.prepare_warm_background(agent_launch.warm_spec()) {
                     tracing::warn!(
                         target: "script_kit::spine",
                         event = "prewarm_selected_agent_chat_profile_failed",
                         source,
-                        warm_key = %pi_launch.warm_key,
-                        profile_id = %pi_launch.profile.id,
+                        warm_key = %agent_launch.warm_key,
+                        profile_id = %agent_launch.profile.id,
                         error = %error,
                     );
                 } else {
@@ -1329,9 +1190,9 @@ impl ScriptListApp {
                         target: "script_kit::spine",
                         event = "prewarm_selected_agent_chat_profile",
                         source,
-                        warm_key = %pi_launch.warm_key,
-                        profile_id = %pi_launch.profile.id,
-                        cwd = %pi_launch.cwd.display(),
+                        warm_key = %agent_launch.warm_key,
+                        profile_id = %agent_launch.profile.id,
+                        cwd = %agent_launch.cwd.display(),
                     );
                 }
             }

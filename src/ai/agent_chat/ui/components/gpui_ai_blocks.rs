@@ -25,7 +25,7 @@ pub(crate) fn block_id(prefix: &str, message_id: u64) -> SharedString {
     SharedString::from(format!("agent-chat-{prefix}-{message_id}"))
 }
 
-/// Map the Pi tool lifecycle onto gpui-ai's progressive state.
+/// Map the tool lifecycle onto gpui-ai's progressive state.
 pub(crate) fn tool_progress<T>(status: AgentChatToolStatus, content: T) -> Progressive<T> {
     match status {
         AgentChatToolStatus::Pending => Progressive::pending(content),
@@ -187,14 +187,12 @@ pub(crate) fn render_assistant_text(msg: &AgentChatThreadMessage, streaming: boo
         .into_any_element()
 }
 
-/// gpui-ai's human-turn bubble colors (accent surface + contrast ink),
-/// resolved from the Script Kit theme so the bubble follows every theme.
+/// Human-turn bubble colors: a quiet gray panel with primary text, like the
+/// common chat pattern. The accent stays reserved for focus and small marks.
 pub(crate) fn user_bubble_colors(theme: &crate::theme::Theme) -> (gpui::Rgba, gpui::Rgba) {
-    let colors = &theme.colors;
-    let ink = crate::theme::gpui_integration::best_contrast_of_two(
-        colors.accent.selected,
-        colors.text.on_accent,
-        colors.background.main,
-    );
-    (gpui::rgb(colors.accent.selected), gpui::rgb(ink))
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    (
+        gpui::rgba(chrome.chat_user_message_surface_rgba),
+        gpui::rgb(chrome.text_primary_hex),
+    )
 }

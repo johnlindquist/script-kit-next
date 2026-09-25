@@ -65,7 +65,7 @@ pub use self::agent_task_dock::{
     AgentTaskDockState, AgentTaskDockStatus, AgentTaskDockSubmitDecision, AgentTaskDockSurface,
     AgentTaskDockTask,
 };
-pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
+pub use self::config::{DetectedKeys, ModelInfo};
 pub use self::current_app_automation_memory::{
     current_app_automation_memory_index_path, read_current_app_automation_memory_index,
     resolve_current_app_automation_from_memory, upsert_current_app_automation_memory_from_receipt,

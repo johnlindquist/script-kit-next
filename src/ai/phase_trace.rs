@@ -1,18 +1,15 @@
 //! Shared AI phase trace: one NDJSON lifecycle stream for every AI surface.
 //!
-//! Quick AI has had a private `TraceSink` in `agent_chat/codex_exec.rs` since
-//! the latency work. It answered "where did the 6 seconds go?" for exactly one
-//! surface. This module generalises that instrument so Agent Chat, Text, Mini,
-//! and Flows are measurable too, without duplicating the writer three times.
+//! It answers "where did the time go?" for Agent Chat, Quick AI, Text, Mini,
+//! and Flows with one writer and one vocabulary.
 //!
-//! # Why a common vocabulary across three different transports
+//! # Why a common vocabulary across different transports
 //!
-//! The three transports are structurally unlike each other:
+//! The two transports are structurally unlike each other:
 //!
 //! | Surface | Transport | Owner |
 //! |---|---|---|
-//! | Quick AI | cold one-shot `codex exec` | `agent_chat/codex_exec.rs` |
-//! | Agent Chat / Text / Mini | Pi sidecar RPC | `agent_chat/pi/runtime.rs` |
+//! | Agent Chat / Quick AI / Text / Mini | goose sidecar over ACP | `agent_chat/goose/runtime.rs` |
 //! | Flows | persistent `codex app-server` JSON-RPC | `flows/codex_client.rs` |
 //!
 //! What they share is a *turn shape*: something starts, the provider first
@@ -93,7 +90,7 @@ impl AiSurface {
     /// Map an Agent Chat profile id plus turn kind onto a surface.
     ///
     /// `auxiliary` is the focused-text variation path
-    /// (`start_isolated_turn`): same Pi transport, but a separate process and a
+    /// (`start_isolated_turn`): same goose transport, but a separate process and a
     /// different user-visible surface, so it must not be pooled with the
     /// primary Text turn when computing medians.
     pub(crate) fn from_profile(profile_id: &str, auxiliary: bool) -> Self {
@@ -113,10 +110,8 @@ impl AiSurface {
 /// transport (cold process spawn) from cost that belongs to the model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AiTransport {
-    /// Cold one-shot `codex exec` subprocess.
-    CodexExec,
-    /// Long-lived Pi sidecar over JSON-RPC on stdio.
-    PiRpc,
+    /// Long-lived goose sidecar speaking ACP (JSON-RPC 2.0) on stdio.
+    GooseAcp,
     /// Persistent `codex app-server` JSON-RPC session.
     CodexAppServer,
 }
@@ -124,8 +119,7 @@ pub(crate) enum AiTransport {
 impl AiTransport {
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::CodexExec => "codex-exec",
-            Self::PiRpc => "pi-rpc",
+            Self::GooseAcp => "goose-acp",
             Self::CodexAppServer => "codex-app-server",
         }
     }
@@ -151,7 +145,7 @@ impl TurnOutcome {
     }
 
     /// Only a completed turn is a valid latency sample. A failed turn measures
-    /// how fast something broke; Pi previously "finished" in 800-900ms in a
+    /// how fast something broke; the previous engine "finished" in 800-900ms in a
     /// sandbox purely because it could not start.
     pub(crate) fn is_latency_sample(self) -> bool {
         matches!(self, Self::Completed)
@@ -241,8 +235,8 @@ impl PhaseTrace {
     /// The caller's `run_id` is a *label*, not an identity: it is suffixed with
     /// a process-global turn ordinal so every turn is distinguishable. This is
     /// deliberately enforced here rather than at the call sites, because the
-    /// call sites already got it wrong once. The Pi transport labelled every
-    /// isolated turn `"pi-isolated"` and every session turn `"pi-{session}"`,
+    /// call sites already got it wrong once. The previous engine transport labelled every
+    /// isolated turn `"goose-isolated"` and every session turn `"pi-{session}"`,
     /// so concurrent turns — the focused-text variation fan-out runs up to
     /// three at once — shared one id. Any analyzer that groups by run id then
     /// interleaves their phases and reports a confident median for a turn that
@@ -306,7 +300,7 @@ impl PhaseTrace {
         //
         // This is load-bearing, not stylistic. `writeln!` against a `File`
         // drives `fmt::Write` machinery that emits several `write` syscalls per
-        // record. Pi's stdout reader races its command loop, and Flows' event
+        // record. goose's stdout reader races its command loop, and Flows' event
         // pump races its session thread, so two records interleave *inside* a
         // line and NDJSON parsing dies on corrupted JSON. A single `write_all`
         // to an `O_APPEND` descriptor is atomic with respect to the file
@@ -470,7 +464,7 @@ mod phase_trace_tests {
         let trace = PhaseTrace::begin_at(
             path.clone(),
             AiSurface::AgentChat,
-            AiTransport::PiRpc,
+            AiTransport::GooseAcp,
             "run-1",
         );
         trace.turn_start(json!({}));
@@ -495,7 +489,7 @@ mod phase_trace_tests {
         );
         for record in &records {
             assert_eq!(record["surface"], "agent-chat");
-            assert_eq!(record["transport"], "pi-rpc");
+            assert_eq!(record["transport"], "goose-acp");
             assert_eq!(
                 record["runId"], run_id,
                 "all records of one turn share one run id"
@@ -547,7 +541,7 @@ mod phase_trace_tests {
     fn first_only_milestones_are_idempotent() {
         let path = temp_path("idempotent");
         let _ = std::fs::remove_file(&path);
-        let trace = PhaseTrace::begin_at(path.clone(), AiSurface::Text, AiTransport::PiRpc, "r");
+        let trace = PhaseTrace::begin_at(path.clone(), AiSurface::Text, AiTransport::GooseAcp, "r");
         for _ in 0..50 {
             trace.observe_provider_event();
             trace.observe_visible_output("delta");
@@ -564,8 +558,12 @@ mod phase_trace_tests {
     fn terminal_is_recorded_once_even_when_racing_paths_both_fire() {
         let path = temp_path("terminal-once");
         let _ = std::fs::remove_file(&path);
-        let trace =
-            PhaseTrace::begin_at(path.clone(), AiSurface::AgentChat, AiTransport::PiRpc, "r");
+        let trace = PhaseTrace::begin_at(
+            path.clone(),
+            AiSurface::AgentChat,
+            AiTransport::GooseAcp,
+            "r",
+        );
         trace.terminal(TurnOutcome::Completed, None);
         trace.terminal(TurnOutcome::Failed, Some("RuntimeClosed"));
         let records = read_records(&path);
@@ -595,7 +593,7 @@ mod phase_trace_tests {
         let provider = "openai-codex-internal-endpoint";
         let tool = "read_file:/Users/private/.ssh/id_rsa";
 
-        let trace = PhaseTrace::begin_at(path.clone(), AiSurface::Mini, AiTransport::PiRpc, "r");
+        let trace = PhaseTrace::begin_at(path.clone(), AiSurface::Mini, AiTransport::GooseAcp, "r");
         trace.turn_start(json!({}));
         trace.observe_visible_output(secret_query);
         trace.observe_thought(provider);
@@ -634,7 +632,7 @@ mod phase_trace_tests {
         let trace = PhaseTrace::begin_at(
             path.clone(),
             AiSurface::AgentChat,
-            AiTransport::PiRpc,
+            AiTransport::GooseAcp,
             "private-run",
         );
         trace.turn_start(json!({}));
@@ -690,7 +688,7 @@ mod phase_trace_tests {
         let trace = PhaseTrace::begin_at(
             path.clone(),
             AiSurface::Mini,
-            AiTransport::PiRpc,
+            AiTransport::GooseAcp,
             "private-model-run",
         );
         trace.observe_visible_output(visible);
@@ -742,13 +740,17 @@ mod phase_trace_tests {
     }
 
     /// Concurrent writers share one `Arc`; seq must stay unique so records are
-    /// never silently lost when Pi's stdout reader races the command loop.
+    /// never silently lost when goose's stdout reader races the command loop.
     #[test]
     fn concurrent_writes_produce_unique_sequence_numbers() {
         let path = temp_path("concurrent");
         let _ = std::fs::remove_file(&path);
-        let trace =
-            PhaseTrace::begin_at(path.clone(), AiSurface::AgentChat, AiTransport::PiRpc, "r");
+        let trace = PhaseTrace::begin_at(
+            path.clone(),
+            AiSurface::AgentChat,
+            AiTransport::GooseAcp,
+            "r",
+        );
         let handles: Vec<_> = (0..8)
             .map(|_| {
                 let trace = trace.clone();
@@ -775,7 +777,7 @@ mod phase_trace_tests {
     ///
     /// This is the defect that made the Mini latency numbers unusable: the
     /// focused-text variation fan-out opens several isolated turns at once, all
-    /// labelled `"pi-isolated"`, so an analyzer grouping by run id blended
+    /// labelled `"goose-isolated"`, so an analyzer grouping by run id blended
     /// their phases and emitted a median for a turn nobody ran. Overlapping
     /// lifetimes are the point of the test — sequential turns collided far less
     /// obviously, which is why this survived a whole measured run.
@@ -787,15 +789,15 @@ mod phase_trace_tests {
         let first = PhaseTrace::begin_at(
             path.clone(),
             AiSurface::Mini,
-            AiTransport::PiRpc,
-            "pi-isolated",
+            AiTransport::GooseAcp,
+            "goose-isolated",
         );
         // Opened BEFORE the first turn terminates: the real fan-out overlaps.
         let second = PhaseTrace::begin_at(
             path.clone(),
             AiSurface::Mini,
-            AiTransport::PiRpc,
-            "pi-isolated",
+            AiTransport::GooseAcp,
+            "goose-isolated",
         );
         first.turn_start(json!({}));
         second.turn_start(json!({}));

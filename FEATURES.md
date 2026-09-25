@@ -8,7 +8,7 @@ This document is generated from the `scriptkit-core-qa-50` web-choice submission
 - Active lock-in scope: 49 selected QA candidates.
 - One selected candidate is omitted from this contract per product-scope feedback.
 - Experimental: Mini Mode is documented as WIP only; it is not treated as a stable user contract yet.
-- Terminology: user-facing docs use `Agent Chat with Pi Backend`; source files, tests, commands, and persisted choice ids use Agent Chat / Pi-backed Agent Chat names only.
+- Terminology: user-facing docs say `Agent Chat`; the goose engine is an implementation detail. Stable anchors below keep their original ids.
 - Main input cwd behavior: `>` must not select cwd; Tab is the cwd trigger.
 - Cargo verification must use `./scripts/agentic/agent-cargo.sh`, not bare `cargo`.
 
@@ -162,7 +162,7 @@ the matrix only through a future QA lock-in selection.
 - Choice id: `escape-go-back-hide-preserves-state`
 - Surface: Main Launcher / Window Focus
 - Status: Active QA lock-in candidate
-- User contract: Escape clears filters, goes back from built-ins opened from main, or hides only the main panel according to route state; Notes/Agent Chat with Pi Backend windows remain alive.
+- User contract: Escape clears filters, goes back from built-ins opened from main, or hides only the main panel according to route state; Notes/Agent Chat windows remain alive.
 - Regression risk: Hide/reset refactors can app-hide secondary windows, clear state too aggressively, or trap the user on a stale route.
 - Proof commands:
   - `bun scripts/devtools/events.ts record --session core-qa --start --show -- bun scripts/devtools/act.ts key --key Escape --main --strict --surface ScriptList`
@@ -175,9 +175,9 @@ the matrix only through a future QA lock-in selection.
 
 - Stable anchor: `agent-chat-accepts-a-prompt-and-exposes-response-lifecycle`
 - Choice id: `agent-chat-submit-stream-lifecycle`
-- Surface: Agent Chat / Agent Chat with Pi Backend
+- Surface: Agent Chat / Agent Chat
 - Status: Active QA lock-in candidate
-- User contract: The composer accepts text, Cmd+Enter/Enter submit is allowed only with proof intent, message count or awaiting-first-assistant state changes, and Agent Chat with Pi Backend state remains targetable.
+- User contract: The composer accepts text, Cmd+Enter/Enter submit is allowed only with proof intent, message count or awaiting-first-assistant state changes, and Agent Chat state remains targetable.
 - Regression risk: Chat routing, submit gates, or streaming state can drift and make prompt submission unsafe or unobservable.
 - Proof commands:
   - `bun scripts/devtools/inspect.ts --session core-qa --start --show --main --surface AgentChat --limit 200`
@@ -185,10 +185,10 @@ the matrix only through a future QA lock-in selection.
   - `bun scripts/devtools/act.ts key --key Enter --modifiers cmd --allow-submit --submit-intent agent-chat-route --allow-submit-reason core-qa-agent-chat-submit --main --strict --surface AgentChat`
   - `./scripts/agentic/agent-cargo.sh test --test agent_chat_runtime_seam_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test tab_ai_harness_submission -- --nocapture`
-- Pass evidence: Receipts show composer text, guarded submit dispatch, Agent Chat with Pi Backend/chat state transition, and chat harness/source contracts pass.
+- Pass evidence: Receipts show composer text, guarded submit dispatch, Agent Chat/chat state transition, and chat harness/source contracts pass.
 - Fail evidence: Submit blocked without clear gate, wrong target, no state transition, transcript unavailable, or contracts fail.
 
-### Agent Chat with Pi Backend context selector accepts @ items with receipts
+### Agent Chat context selector accepts @ items with receipts
 
 - Stable anchor: `agent-chat-with-pi-backend-context-selector-accepts-items-with-receipts`
 - Choice id: `agent_chat-context-selector-acceptance-receipts`
@@ -204,13 +204,13 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Probe receipt contains keyRoutes and acceptedItems with acceptedViaKey tab/enter, cursorAfter, and context state.
 - Fail evidence: Selector never opens, acceptedItems stays empty, cursor/chip count is wrong, event route is propagated incorrectly, or contract fails.
 
-### Detached Agent Chat with Pi Backend targets, reattaches, and cleans up
+### Detached Agent Chat targets, reattaches, and cleans up
 
 - Stable anchor: `detached-agent-chat-with-pi-backend-targets-reattaches-and-cleans-up`
 - Choice id: `agent_chat-detached-targeting-and-close-cleanup`
-- Surface: Agent Chat / Detached Agent Chat with Pi Backend
+- Surface: Agent Chat / Detached Agent Chat
 - Status: Active QA lock-in candidate
-- User contract: Detached Agent Chat with Pi Backend windows appear in listAutomationWindows, inspect target resolves by kind/id, reattach identity is stable, and close cleanup removes only the detached host.
+- User contract: Detached Agent Chat windows appear in listAutomationWindows, inspect target resolves by kind/id, reattach identity is stable, and close cleanup removes only the detached host.
 - Regression risk: Detached windows are prone to stale registry entries, wrong-window reads, and leaked popups after refactors.
 - Proof commands:
   - `bun scripts/devtools/inspect.ts --session core-qa --target-kind agentChatDetached --limit 200`
@@ -535,23 +535,23 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Inspect shows history rows or empty state and contracts pass for resume/mutation/export single path.
 - Fail evidence: Wrong conversation resumed, duplicate export routes, missing empty state, or tests fail.
 
-### Agent Chat with Pi Backend setup and onboarding offer recoverable actions
+### Agent Chat setup and onboarding offer recoverable actions
 
 - Stable anchor: `agent-chat-with-pi-backend-setup-and-onboarding-offer-recoverable-actions`
 - Choice id: `agent_chat-setup-onboarding-agent-picker`
 - Surface: Agent Chat / Setup
 - Status: Active QA lock-in candidate
-- User contract: Agent Chat with Pi Backend setup state exposes reasonCode/title/body/primaryAction, setup actions return updated state, and agent picker open/select/close states are observable.
+- User contract: Agent Chat setup state exposes reasonCode/title/body/primaryAction, setup actions return updated state, and agent picker open/select/close states are observable.
 - Regression risk: Setup regressions can strand users when agents are missing or auth/capabilities change.
 - Proof commands:
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"getAgentChatState","requestId":"core-qa-agent-chat-pi-backend-setup","target":{"type":"main"}}' --expect agent_chatStateResult --timeout 8000`
   - `./scripts/agentic/agent-cargo.sh test --test agent_chat_onboarding -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test ai_preflight_prompt_compiler_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test agent_chat_plugin_skill_thread_affinity_contract -- --nocapture`
-- Pass evidence: Agent Chat with Pi Backend state receipt has setup details when applicable and onboarding/preflight/thread-affinity contracts pass.
+- Pass evidence: Agent Chat state receipt has setup details when applicable and onboarding/preflight/thread-affinity contracts pass.
 - Fail evidence: Setup state absent for blocked condition, actions do nothing, picker selection stale, or tests fail.
 
-### Agent Chat with Pi Backend streaming can cancel and survive config reloads
+### Agent Chat streaming can cancel and survive config reloads
 
 - Stable anchor: `agent-chat-with-pi-backend-streaming-can-cancel-and-survive-config-reloads`
 - Choice id: `agent_chat-streaming-cancel-config-reload`
@@ -567,22 +567,22 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: RPC/contract output shows streaming status and cleanup invariants pass for cancel, config reload, and live subscriptions.
 - Fail evidence: Cancel ignored, duplicate subscription events, transcript corruption, provider reload drift, or tests fail.
 
-### Notes Agent Chat with Pi Backend actions match chat behavior without leaking host state
+### Notes Agent Chat actions match chat behavior without leaking host state
 
 - Stable anchor: `notes-agent-chat-with-pi-backend-actions-match-chat-behavior-without-leaking-host-state`
 - Choice id: `notes-agent_chat-actions-history-parity`
-- Surface: Notes / Hosted Agent Chat with Pi Backend
+- Surface: Notes / Hosted Agent Chat
 - Status: Active QA lock-in candidate
-- User contract: Notes Agent Chat with Pi Backend has targetable composer, note context chip/source, actions parity, history portal terminal state, and host isolation from main Agent Chat with Pi Backend.
-- Regression risk: Hosted Agent Chat with Pi Backend can accidentally use main chat state or lose note-specific context during refactors.
+- User contract: Notes Agent Chat has targetable composer, note context chip/source, actions parity, history portal terminal state, and host isolation from main Agent Chat.
+- Regression risk: Hosted Agent Chat can accidentally use main chat state or lose note-specific context during refactors.
 - Proof commands:
   - `bun scripts/devtools/notes.ts inspect --session core-qa --start --open --open-agent-chat-pi-backend --limit 200`
   - `./scripts/agentic/agent-cargo.sh test --test notes_ai_routing -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test notes_agent_chat_actions_parity_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test notes_agent_chat_history_portal_terminal_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test notes_hosted_agent_chat_host_isolation_contract -- --nocapture`
-- Pass evidence: Notes DevTools receipt shows hosted Agent Chat with Pi Backend state and contracts pass for routing, actions parity, history portal, and isolation.
-- Fail evidence: Notes Agent Chat with Pi Backend targets main chat, loses note context, actions differ without reason, or tests fail.
+- Pass evidence: Notes DevTools receipt shows hosted Agent Chat state and contracts pass for routing, actions parity, history portal, and isolation.
+- Fail evidence: Notes Agent Chat targets main chat, loses note context, actions differ without reason, or tests fail.
 
 ### Dictation setup, history, and overlay lifecycle are coherent
 
@@ -903,4 +903,4 @@ the matrix only through a future QA lock-in selection.
 - `spine-sigils-project-main-input-catalogs`: `>` no longer selects cwd; Tab is the cwd trigger.
 - One selected candidate was removed from active scope per product-scope feedback.
 - `mini-mode-toggle-size-filter-reveal`: documented as experimental/WIP only.
-- Overall: legacy Agent Chat backend naming is replaced with `Agent Chat with Pi Backend` in user-facing feature language.
+- Overall: user-facing feature language says `Agent Chat`, not the engine name.

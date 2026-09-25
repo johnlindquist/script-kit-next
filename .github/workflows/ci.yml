@@ -322,15 +322,14 @@ jobs:
           path: ${{ runner.temp }}/ci-unsigned-app.zip
           retention-days: 1
 
-  build-artifact-pi-sidecar:
-    name: Build CI Pi Sidecar
+  build-artifact-goose-sidecar:
+    name: Build CI goose sidecar
     runs-on: macos-14
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
-      PI_AGENT_RUST_REF: "3d1a3950c16ffdb10cd81780b26921c75c180770"
-      PI_AGENT_RUST_STRICT_REF: "1"
+      GOOSE_SIDECAR_REF: "302b60806639ea9f0ae8f053f49f8bf0e88b26f4"
     steps:
       - uses: actions/checkout@v4
 
@@ -342,36 +341,36 @@ jobs:
 
       - uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Cache Pi sidecar Cargo target
+      - name: Cache goose sidecar Cargo target
         uses: actions/cache@v4
         with:
           path: |
-            ${{ runner.temp }}/pi_agent_rust-target
+            ${{ runner.temp }}/goose-sidecar-target
             ~/.cargo/registry
             ~/.cargo/git
-          key: pi-sidecar-${{ runner.os }}-${{ runner.arch }}-${{ env.PI_AGENT_RUST_REF }}-${{ hashFiles('rust-toolchain.toml') }}
+          key: goose-sidecar-${{ runner.os }}-${{ runner.arch }}-${{ env.GOOSE_SIDECAR_REF }}-${{ hashFiles('rust-toolchain.toml') }}
 
-      - name: Prepare bundled Pi sidecar
+      - name: Prepare bundled goose sidecar
         env:
           SCRIPT_KIT_NONINTERACTIVE: "0"
-          PI_AGENT_RUST_TARGET_DIR: ${{ runner.temp }}/pi_agent_rust-target
-        run: bash scripts/prepare-pi-sidecar.sh
+          GOOSE_SIDECAR_TARGET_DIR: ${{ runner.temp }}/goose-sidecar-target
+        run: bash scripts/prepare-goose-sidecar.sh
 
-      - name: Verify Pi sidecar
+      - name: Verify goose sidecar
         run: |
-          test -x target/pi-sidecar/pi
-          file target/pi-sidecar/pi
+          test -x target/goose-sidecar/goose
+          file target/goose-sidecar/goose
 
-      - name: Zip Pi sidecar
+      - name: Zip goose sidecar
         run: |
-          cd target/pi-sidecar
-          /usr/bin/ditto -c -k pi "$RUNNER_TEMP/ci-pi-sidecar.zip"
+          cd target/goose-sidecar
+          /usr/bin/ditto -c -k goose "$RUNNER_TEMP/ci-goose-sidecar.zip"
 
-      - name: Upload Pi sidecar
+      - name: Upload goose sidecar
         uses: actions/upload-artifact@v4
         with:
-          name: ci-pi-sidecar
-          path: ${{ runner.temp }}/ci-pi-sidecar.zip
+          name: ci-goose-sidecar
+          path: ${{ runner.temp }}/ci-goose-sidecar.zip
           retention-days: 1
 
   assemble-artifact:
@@ -386,7 +385,7 @@ jobs:
       - test
       - typescript-tests
       - build-artifact-app
-      - build-artifact-pi-sidecar
+      - build-artifact-goose-sidecar
     steps:
       - uses: actions/checkout@v4
 
@@ -401,20 +400,20 @@ jobs:
           mkdir -p target/release/bundle/osx
           /usr/bin/ditto -x -k artifacts/app/ci-unsigned-app.zip target/release/bundle/osx
 
-      - name: Download Pi sidecar
+      - name: Download goose sidecar
         uses: actions/download-artifact@v4
         with:
-          name: ci-pi-sidecar
-          path: artifacts/pi
+          name: ci-goose-sidecar
+          path: artifacts/goose
 
-      - name: Restore Pi sidecar
+      - name: Restore goose sidecar
         run: |
-          mkdir -p target/pi-sidecar
-          /usr/bin/ditto -x -k artifacts/pi/ci-pi-sidecar.zip target/pi-sidecar
-          chmod 0755 target/pi-sidecar/pi
+          mkdir -p target/goose-sidecar
+          /usr/bin/ditto -x -k artifacts/goose/ci-goose-sidecar.zip target/goose-sidecar
+          chmod 0755 target/goose-sidecar/goose
 
-      - name: Install Pi sidecar into bundle
-        run: bash scripts/install-pi-sidecar-into-bundle.sh
+      - name: Install goose sidecar into bundle
+        run: bash scripts/install-goose-sidecar-into-bundle.sh
 
       - name: Verify bundled macOS app contents
         run: bash scripts/verify-macos-bundle.sh

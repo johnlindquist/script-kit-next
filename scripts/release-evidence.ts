@@ -141,7 +141,6 @@ const REQUIRED_PROOF_SUITES = [
   "scripts/agentic/cons-flow-ux/final-workflow-audit.test.ts",
   "scripts/agentic/cons-proof-gov/story-geometry-proof.test.ts",
   "scripts/agentic/cons-proof-gov/proof-foundation-safety.test.ts",
-  "scripts/agentic/quick-ai-latency-bench.test.ts",
   "scripts/mcp-cli.test.ts",
   "tests/sdk/runner-safety.test.ts",
 ] as const;
@@ -558,7 +557,7 @@ export function buildSigningAttestation(options: {
   requireCondition(/^[A-Z0-9]{10}$/.test(options.teamIdentifier),
     "distribution-security attestation requires an exact ten-character Apple team identifier");
   const executablePath = join(options.appPath, "Contents/MacOS/script-kit-gpui");
-  const sidecarPath = join(options.appPath, "Contents/MacOS/pi");
+  const sidecarPath = join(options.appPath, "Contents/MacOS/goose");
   verifyExecutable(executablePath);
   verifyExecutable(sidecarPath);
   const notarization = readJson(options.notarizationPath);
@@ -925,7 +924,7 @@ function releaseArchiveMembers(zipPath: string): ReleaseArchiveMembers {
 
     const requiredMembers = new Map<string, Buffer>([
       ["Contents/MacOS/script-kit-gpui", readMember("Contents/MacOS/script-kit-gpui")],
-      ["Contents/MacOS/pi", readMember("Contents/MacOS/pi")],
+      ["Contents/MacOS/goose", readMember("Contents/MacOS/goose")],
       ["Contents/Resources/scripts/kit-sdk.ts", readMember("Contents/Resources/scripts/kit-sdk.ts")],
       ["Contents/Info.plist", readMember("Contents/Info.plist")],
     ]);
@@ -952,7 +951,7 @@ function releaseArchiveMembers(zipPath: string): ReleaseArchiveMembers {
 
     return {
       executable: requiredMembers.get("Contents/MacOS/script-kit-gpui")!,
-      sidecar: requiredMembers.get("Contents/MacOS/pi")!,
+      sidecar: requiredMembers.get("Contents/MacOS/goose")!,
       sdk: requiredMembers.get("Contents/Resources/scripts/kit-sdk.ts")!,
       infoPlist: requiredMembers.get("Contents/Info.plist")!,
       contentTree: appContentTree(appEntries),
@@ -1495,7 +1494,7 @@ function packagedAssuranceSummary(
   requireCondition(receipt.provenance?.gitSha === sourceSha &&
     /^[a-f0-9]{64}$/.test(String(receipt.provenance.binarySha256)) &&
     /^[a-f0-9]{64}$/.test(String(receipt.provenance.sidecarSha256)),
-    `${gateId} must bind to the exact signed source, application, and Pi sidecar`);
+    `${gateId} must bind to the exact signed source, application, and goose sidecar`);
 
   const safety = receipt.safety;
   requireCondition(safety?.startsApplication === true &&
@@ -2212,7 +2211,7 @@ export function buildReleaseManifest(options: ManifestOptions): ReleaseManifest 
     `release tag ${options.tag} does not match version ${options.version}`);
 
   const executablePath = join(options.appPath, "Contents/MacOS/script-kit-gpui");
-  const sidecarPath = join(options.appPath, "Contents/MacOS/pi");
+  const sidecarPath = join(options.appPath, "Contents/MacOS/goose");
   const sdkPath = join(options.appPath, "Contents/Resources/scripts/kit-sdk.ts");
   const infoPlistPath = join(options.appPath, "Contents/Info.plist");
   verifyExecutable(executablePath);
@@ -2245,7 +2244,7 @@ export function buildReleaseManifest(options: ManifestOptions): ReleaseManifest 
   const signingGate = gates.find((gate) => gate.gateId === "packaged-signing");
   requireCondition(signingGate?.result?.binarySha256 === executableSha &&
     signingGate.result.sidecarSha256 === sha256File(sidecarPath),
-    "packaged signing attestation belongs to a different application executable or Pi sidecar");
+    "packaged signing attestation belongs to a different application executable or goose sidecar");
   requireCondition(signingGate.result.hardenedRuntime === true &&
     signingGate.result.stapled === true && signingGate.result.gatekeeperAccepted === true,
     "packaged signing attestation does not prove every distribution-security control");
@@ -2256,7 +2255,7 @@ export function buildReleaseManifest(options: ManifestOptions): ReleaseManifest 
       journey.result.binarySha256 === executableSha &&
       journey.result.sidecarSha256 === signingGate.result.sidecarSha256 &&
       /^[a-f0-9]{64}$/.test(String(journey.result.fixtureSha256)),
-      `${journeyId} does not belong to the exact signed application, Pi sidecar, and isolated fixture`);
+      `${journeyId} does not belong to the exact signed application, goose sidecar, and isolated fixture`);
   }
   for (const assurance of REQUIRED_PACKAGED_ASSURANCES) {
     const gate = gates.find((candidate) => candidate.gateId === assurance.gateId);
@@ -2264,7 +2263,7 @@ export function buildReleaseManifest(options: ManifestOptions): ReleaseManifest 
     requireCondition(gate?.result?.assuranceId === assurance.id &&
       gate.result.binarySha256 === executableSha &&
       gate.result.sidecarSha256 === signingGate.result.sidecarSha256,
-      `${assurance.id} does not belong to the exact signed application and Pi sidecar`);
+      `${assurance.id} does not belong to the exact signed application and goose sidecar`);
     if (assurance.id === "direct_matrix") {
       requireCondition(gate.result.surfaceContractSha256 === sha256File(options.contractsPath),
         "direct_matrix does not match the exact published surface-contract schema identity");
@@ -2304,7 +2303,7 @@ export function buildReleaseManifest(options: ManifestOptions): ReleaseManifest 
   requireCondition(archivedSha256(archived.executable) === executableSha,
     "release ZIP executable does not match the exact verified application binary");
   requireCondition(archivedSha256(archived.sidecar) === sha256File(sidecarPath),
-    "release ZIP Pi sidecar does not match the exact verified application");
+    "release ZIP goose sidecar does not match the exact verified application");
   requireCondition(archivedSha256(archived.sdk) === sha256File(sdkPath),
     "release ZIP SDK does not match the exact verified application");
   requireCondition(archivedSha256(archived.infoPlist) === sha256File(infoPlistPath),
@@ -2328,7 +2327,7 @@ export function buildReleaseManifest(options: ManifestOptions): ReleaseManifest 
         entry_count: signedApplicationTree.entryCount,
       },
       executable: { path: "Contents/MacOS/script-kit-gpui", sha256: executableSha },
-      sidecar: { path: "Contents/MacOS/pi", sha256: sha256File(sidecarPath) },
+      sidecar: { path: "Contents/MacOS/goose", sha256: sha256File(sidecarPath) },
     },
     sdk: {
       version: sdkVersion(sdkPath),
@@ -2500,7 +2499,7 @@ export function verifyReleaseManifest(options: {
   requireCondition(archivedSha256(archived.executable) === manifest.bundle.executable.sha256,
     "release ZIP executable does not match the verified manifest binary");
   requireCondition(archivedSha256(archived.sidecar) === manifest.bundle.sidecar.sha256,
-    "release ZIP Pi sidecar does not match the verified manifest");
+    "release ZIP goose sidecar does not match the verified manifest");
   requireCondition(archivedSha256(archived.sdk) === manifest.sdk.sha256,
     "release ZIP SDK does not match the verified manifest");
   requireCondition(archivedSha256(archived.infoPlist) === manifest.bundle.info_plist.sha256,
@@ -2521,7 +2520,7 @@ export function verifyReleaseManifest(options: {
   const security = manifest.distribution_security;
   requireCondition(signingGate?.result?.binarySha256 === manifest.bundle.executable.sha256 &&
     signingGate.result.sidecarSha256 === manifest.bundle.sidecar.sha256,
-    "packaged signing evidence does not match the published application and Pi sidecar");
+    "packaged signing evidence does not match the published application and goose sidecar");
   for (const journeyId of REQUIRED_PACKAGED_JOURNEYS) {
     const journey = manifest.verification.gates.find((gate) => gate.gateId === journeyId);
     if (!journey && isPackagedAdvisoryGate(journeyId)) continue;
@@ -2558,7 +2557,7 @@ export function verifyReleaseManifest(options: {
   requireCondition(typeof manifest.bundle.identifier === "string" && manifest.bundle.identifier.length > 0,
     "release manifest is missing its bundle identifier");
   requireCondition(/^[a-f0-9]{64}$/.test(manifest.bundle.sidecar.sha256),
-    "release manifest is missing its Pi sidecar identity");
+    "release manifest is missing its goose sidecar identity");
   requireCondition(typeof manifest.sdk?.version === "string" &&
     /^[a-f0-9]{64}$/.test(manifest.sdk.sha256),
     "release manifest is missing its SDK identity");
@@ -2575,7 +2574,7 @@ export function verifyReleaseManifest(options: {
       "packaged executable no longer matches the release manifest");
     requireCondition(manifest.bundle.sidecar.sha256 ===
       sha256File(join(options.appPath, manifest.bundle.sidecar.path)),
-      "packaged Pi sidecar no longer matches the release manifest");
+      "packaged goose sidecar no longer matches the release manifest");
     requireCondition(manifest.sdk.sha256 === sha256File(join(options.appPath, manifest.sdk.path)),
       "packaged SDK no longer matches the release manifest");
   }
@@ -2758,7 +2757,7 @@ export function assessPackagedJourneyReadiness(options: {
 } {
   requireSourceSha(options.sourceSha);
   const binarySha256 = sha256File(join(options.appPath, "Contents/MacOS/script-kit-gpui"));
-  const sidecarSha256 = sha256File(join(options.appPath, "Contents/MacOS/pi"));
+  const sidecarSha256 = sha256File(join(options.appPath, "Contents/MacOS/goose"));
   const journeys = REQUIRED_PACKAGED_JOURNEYS.map((id) => {
     const path = join(options.evidenceDirectory, `${id}.json`);
     if (!existsSync(path)) {
@@ -2818,7 +2817,7 @@ export function assessPackagedJourneyReadiness(options: {
         receipt.result?.assuranceId === requirement.id &&
         receipt.result.binarySha256 === binarySha256 &&
         receipt.result.sidecarSha256 === sidecarSha256,
-        "Candidate assurance is stale, unsafe, or bound to another source, app, or Pi sidecar.");
+        "Candidate assurance is stale, unsafe, or bound to another source, app, or goose sidecar.");
       requireValidGateResult(receipt as GateReceipt);
       return { ...requirement, status: "pass" as const };
     } catch (error) {

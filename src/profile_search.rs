@@ -16,8 +16,8 @@ fn create_profile_action_row(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
         id: CREATE_PROFILE_ROW_ID.to_string(),
         name: "Create New Profile…".to_string(),
         icon_name: Some("plus".to_string()),
-        backend: AgentChatBackend::Pi,
-        pi_binary: None,
+        backend: AgentChatBackend::Goose,
+        goose_binary: None,
         agent: None,
         provider: None,
         model: None,
@@ -181,7 +181,7 @@ pub(crate) fn source_label(source: AgentChatProfileSource) -> &'static str {
 
 pub(crate) fn backend_label(backend: AgentChatBackend) -> &'static str {
     match backend {
-        AgentChatBackend::Pi => "Pi",
+        AgentChatBackend::Goose => "goose",
     }
 }
 

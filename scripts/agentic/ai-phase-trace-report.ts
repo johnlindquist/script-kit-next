@@ -5,10 +5,8 @@
  *
  * # Why this is a sibling of quick-ai-latency-bench.ts rather than an extension
  *
- * The retained benchmark harness measures ONE surface by driving `codex exec`
- * as a subprocess it controls, pairing A/B variants of a command it builds
- * itself. Three of the four AI surfaces cannot be driven that way at all: they
- * only exist inside the running app, behind the Pi sidecar and the flow
+ * The AI surfaces cannot be driven as standalone subprocesses: they only
+ * exist inside the running app, behind the goose sidecar and the flow
  * session. So the measurement SHAPE differs — this reads traces the app
  * produced, rather than commanding a subprocess.
  *

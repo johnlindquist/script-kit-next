@@ -26,11 +26,11 @@ Build / dev loop:
   (watcher + emergency clean). Note: <25GiB free can SIGTERM agent builds.
 - `build-isolated-binary.sh`, `start-isolated.sh`, `preflight-isolated.sh` —
   isolated-binary path for runs that must not share `target/`.
-- `ensure-pi-sidecar.sh` — resolves the Pi sidecar for non-bundle dev builds;
-  `./dev.sh` runs it automatically. Without it, Agent Chat shows
-  "Pi Agent Chat is unavailable" (an environment gap, not an app bug).
+- `ensure-goose-sidecar.sh` — resolves the goose sidecar for non-bundle dev
+  builds; `./dev.sh` runs it automatically. Without it, Agent Chat shows
+  "Agent Chat is unavailable" (an environment gap, not an app bug).
 - `seed-sandbox-home.sh` — one-call sandbox auth seeding for live Agent
-  Chat/brain probes (APFS-clones `~/.pi` + `~/.codex/{auth.json,config.toml}`);
+  Chat/brain probes (APFS-clones `~/.scriptkit/goose/config` + `~/.codex/{auth.json,config.toml}`);
   also available as `Driver.launch({ seedAgentAuth: true })`.
 
 Session control (legacy named-session layer; prefer
@@ -57,8 +57,8 @@ Shared engine modules imported by probes (large; edit with care):
   and window query helpers (escalation beyond protocol).
 - `surface-navigator.ts`, `automation-window.ts`, `await-response.ts`,
   `target-thread.ts` — targeting/navigation/response helpers.
-- `mock-pi-rpc.js` — mock Pi RPC endpoint for Agent Chat probes without a
-  live agent.
+- `mock-goose-acp.ts` — deterministic goose ACP shim for Agent Chat probes
+  without a live model (`SCRIPT_KIT_GOOSE_BINARY`).
 
 ## One-shot probes (everything else)
 

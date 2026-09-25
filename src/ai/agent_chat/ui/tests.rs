@@ -414,7 +414,7 @@ fn agent_handoff_creates_agent_chat_view_for_tab() {
 #[test]
 fn agent_handoff_creates_agent_chat_thread_with_connection() {
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatThread::new"));
-    assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"));
+    assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_agent_chat_view_from_launch"));
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("warm_session_manager"));
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatPermissionBroker::new"));
 }
@@ -1200,23 +1200,6 @@ fn emit_key_route_telemetry_uses_real_permission_state() {
     );
 }
 
-#[test]
-fn call_sites_pass_real_permission_active() {
-    const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("view.rs");
-    // All call sites should read the real permission state from the thread.
-    let permission_reads = AGENT_CHAT_VIEW_SOURCE
-        .matches("pending_permission.is_some()")
-        .count();
-    let telemetry_calls = AGENT_CHAT_VIEW_SOURCE
-        .matches(".emit_key_route_telemetry(")
-        .count();
-    assert!(
-        permission_reads >= telemetry_calls,
-        "each emit_key_route_telemetry call site ({telemetry_calls}) must read \
-         pending_permission.is_some() ({permission_reads} found)"
-    );
-}
-
 // =========================================================================
 // Composer picker windowing — selected item always visible
 // =========================================================================
@@ -1296,8 +1279,8 @@ fn agent_handoff_preserves_source_or_offers_warm_recovery_when_blocked() {
         "a failed warm session must expose its typed recovery path"
     );
     assert!(
-        TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("pi_agent_chat_launch_resolution_failed")
-            && TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("pi_agent_chat_warm_failed_setup"),
+        TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("agent_chat_launch_resolution_failed")
+            && TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("agent_chat_warm_failed_setup"),
         "agent_handoff must log both blocked launch classes"
     );
 }
@@ -1380,7 +1363,7 @@ fn agent_handoff_derives_launch_requirements() {
         "agent_handoff must derive AgentChatLaunchRequirements"
     );
     // The legacy `agent_chat_open_retry_request_consumed` event was removed in
-    // the Pi-backend launch refactor. The surviving requirements-aware retry
+    // the goose-backend launch refactor. The surviving requirements-aware retry
     // decision is the hot-prewarm skip: a queued retry or non-default
     // requirements must bypass the prewarmed Agent Chat view.
     assert!(
@@ -1454,7 +1437,7 @@ fn agent_chat_retry_request_from_setup_state_without_agent() {
 fn agent_handoff_consumes_retry_request_on_open() {
     // Verify the open path checks for a staged retry request from the view.
     // (The legacy per-agent preference fallback was removed — all sessions
-    // use the Pi backend, so there is no agent preference to fall back to.)
+    // use the goose backend, so there is no agent preference to fall back to.)
     assert!(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("take_agent_chat_retry_request_for_open"),
         "agent_handoff must check for retry request from current view"

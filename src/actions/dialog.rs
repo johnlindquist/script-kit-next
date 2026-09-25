@@ -769,7 +769,7 @@ pub struct AgentChatActionsDialogContext<'a> {
     pub(crate) standing_approval_count: usize,
     /// Retained background threads, surfaced as a "Threads" switcher section.
     pub(crate) thread_summaries: &'a [crate::ai::agent_chat::ui::AgentChatThreadSummary],
-    /// Rewindable user messages (Pi fork checkpoints) for "Rewind & Edit".
+    /// Rewindable user messages (fork checkpoint) for "Rewind & Edit".
     pub(crate) fork_points: &'a [crate::ai::agent_chat::ui::AgentChatForkPoint],
     /// Live capability facts used to build executable conversation commands.
     pub(crate) command_facts:

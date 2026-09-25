@@ -310,8 +310,7 @@ impl AgentChatThread {
                 ));
             }
             lines.push(
-                "Grants live in the Pi session approval cache; starting a new session resets them."
-                    .to_string(),
+                "Grants last for this session; starting a new session resets them.".to_string(),
             );
             lines.join("\n")
         };

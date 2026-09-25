@@ -161,22 +161,63 @@ impl AgentChatView {
                         .read(cx)
                         .selected_model_id()
                         .map(str::to_string);
+                    let provider =
+                        crate::ai::agent_chat::goose::auth_recovery::resolve_auth_recovery_provider(
+                            selected_model_id.as_deref(),
+                        );
+                    // Browser sign-in providers: retry the saved turn. The
+                    // runtime starts the provider's login page on its own and
+                    // the reply continues once the user finishes signing in.
+                    if let Some(provider) = provider.as_deref().filter(|provider| {
+                        crate::ai::agent_chat::goose::sign_in::is_browser_sign_in_provider(provider)
+                    }) {
+                        let forgotten = match auth.mode {
+                            AuthRecoveryMode::SwitchAccount => {
+                                crate::ai::agent_chat::goose::sign_in::forget(provider)
+                            }
+                            AuthRecoveryMode::SignIn => Ok(()),
+                        };
+                        self.live_thread().update(cx, |thread, cx| match forgotten {
+                            Ok(()) => {
+                                // Choosing Sign In is the consent: the retried
+                                // turn opens the sign-in page without asking.
+                                thread.prepare_sign_in_retry();
+                                thread.complete_recovery_command(
+                                    auth.command_id,
+                                    RecoveryEffectResult::NoChange,
+                                    cx,
+                                );
+                                if let Err(error) = thread.resume_recovered_turn_from_view(cx) {
+                                    tracing::warn!(
+                                        target: "script_kit::agent_chat",
+                                        event = "agent_chat_sign_in_resume_failed",
+                                        error_code = %error,
+                                    );
+                                }
+                            }
+                            Err(error) => {
+                                let failure = crate::ai::reliability::provider_failure(
+                                    sk_protocol::ai_reliability::ProtocolComponent::Goose,
+                                    format!("stored sign-in could not be removed: {error}"),
+                                );
+                                thread.fail_recovery_command(auth.command_id, failure.failure, cx);
+                            }
+                        });
+                        continue;
+                    }
+                    // API-key and other providers: goose's own setup, in Terminal.
                     let action = match auth.mode {
                         AuthRecoveryMode::SignIn => {
-                            crate::ai::agent_chat::pi::auth_recovery::PiAuthRecoveryAction::SignInAgain
+                            crate::ai::agent_chat::goose::auth_recovery::AuthRecoveryAction::SignInAgain
                         }
                         AuthRecoveryMode::SwitchAccount => {
-                            crate::ai::agent_chat::pi::auth_recovery::PiAuthRecoveryAction::SwitchAccount
+                            crate::ai::agent_chat::goose::auth_recovery::AuthRecoveryAction::SwitchAccount
                         }
                     };
-                    let launched =
-                        crate::ai::agent_chat::pi::auth_recovery::resolve_auth_recovery_provider(
-                            selected_model_id.as_deref(),
-                            None,
-                        )
-                        .zip(crate::ai::agent_chat::pi::binary::default_pi_binary())
+                    let launched = provider
+                        .zip(crate::ai::agent_chat::goose::binary::default_goose_binary())
                         .is_some_and(|(provider, binary)| {
-                            crate::ai::agent_chat::pi::auth_recovery::launch_pi_auth_recovery(
+                            crate::ai::agent_chat::goose::auth_recovery::launch_auth_recovery(
                                 binary, provider, action,
                             )
                             .is_ok()
@@ -191,7 +232,7 @@ impl AgentChatView {
                         });
                     } else {
                         let failure = crate::ai::reliability::provider_failure(
-                            sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                            sk_protocol::ai_reliability::ProtocolComponent::Goose,
                             "authentication recovery could not start",
                         );
                         self.live_thread().update(cx, |thread, cx| {
@@ -238,7 +279,7 @@ impl AgentChatView {
                         sk_protocol::ai_reliability::ClientKind::Codex => {
                             "https://github.com/openai/codex/releases/latest"
                         }
-                        sk_protocol::ai_reliability::ClientKind::Pi
+                        sk_protocol::ai_reliability::ClientKind::Goose
                         | sk_protocol::ai_reliability::ClientKind::Mdflow
                         | sk_protocol::ai_reliability::ClientKind::LocalLlm
                         | sk_protocol::ai_reliability::ClientKind::Other => {
@@ -350,10 +391,11 @@ impl AgentChatView {
     }
 
     fn context_bootstrap_note_lane_active(&self, cx: &App) -> bool {
-        self.live_thread()
-            .read(cx)
-            .context_bootstrap_note()
-            .is_some_and(|note| !note.trim().is_empty())
+        let thread = self.live_thread().read(cx);
+        thread.sign_in_note().is_some()
+            || thread
+                .context_bootstrap_note()
+                .is_some_and(|note| !note.trim().is_empty())
     }
 
     fn render_message_queue_strip(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
@@ -616,12 +658,18 @@ impl AgentChatView {
     }
 
     fn render_context_bootstrap_note(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        // Provider sign-in status outranks context capture: until the user is
+        // signed in, nothing else in this lane can make progress.
         let (state, note) = {
             let thread = self.live_thread().read(cx);
-            (
-                thread.context_bootstrap_state(),
-                thread.context_bootstrap_note().map(|v| v.to_string()),
-            )
+            match (thread.sign_in_state(), thread.sign_in_note()) {
+                // Sign-in status is information, not an alert: the quiet style.
+                (Some(_), Some(note)) => (AgentChatContextBootstrapState::Ready, Some(note)),
+                _ => (
+                    thread.context_bootstrap_state(),
+                    thread.context_bootstrap_note().map(|v| v.to_string()),
+                ),
+            }
         };
 
         let Some(note) = note.filter(|v| !v.trim().is_empty()) else {

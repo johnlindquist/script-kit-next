@@ -33,19 +33,19 @@ recognise.
 
 **Defects this prevents.**
 
-- `SetupRequired { reason: "login required" }` was formatted as *"Pi Agent Chat
+- `SetupRequired { reason: "login required" }` was formatted as *"Agent Chat
   setup required: login required. Available methods: browser"*. No auth wording
   the classifier recognises, so it became `Unknown` and the user saw the generic
   "The AI request did not finish" card — **with no Sign In button, on the one
   failure a Sign In button fixes.**
 - A codex binary that exited on launch produced *"codex app-server exited — send
   again to reconnect"* → `Unknown` → no reconnect path.
-- A pi child that died produced *"Broken pipe (os error 32)"* → `Unknown`.
+- An engine child that died produced *"Broken pipe (os error 32)"* → `Unknown`.
 
 **Exception, and it matters.** When the runtime's stderr says *why* it died,
 that is real evidence and it must still win. `read_stdout` in
-`ai/agent_chat/pi/runtime.rs` keeps the provider classifier when a stderr hint
-exists ("No API key found for provider anthropic" must stay
+`ai/agent_chat/goose/runtime.rs` keeps the provider classifier when a stderr
+hint exists ("No API key found for provider anthropic" must stay
 `AuthenticationMissing`) and only falls back to `RuntimeClosed` when there is no
 evidence at all.
 
@@ -189,7 +189,7 @@ drift.
 - Record what *was* there, not only what was missing. A failure listing the full
   element id set is diagnosable; "not found" is not.
 - Kill every engine the surface might resolve to. A probe that replaced only the
-  pi binary silently exercised the codex path instead.
+  goose binary could silently exercise a different engine instead.
 
 ---
 
@@ -219,6 +219,8 @@ bun scripts/agentic/flow-ai-recovery-probe.ts        # flow surface, dead codex
 bun scripts/agentic/ai-recovery-surface-film.ts      # flow + Agent Chat, compared
 bun scripts/agentic/agent-chat-auth-recovery-probe.ts
 bun scripts/agentic/agent-chat-retry-recovery-probe.ts
+bun scripts/agentic/agent-chat-sign-in-probe.ts first-use   # automatic browser sign-in
+bun scripts/agentic/agent-chat-sign-in-probe.ts retry       # failed sign-in → Enter retries
 bun scripts/agentic/quick-ai-policy-probe.ts
 ```
 

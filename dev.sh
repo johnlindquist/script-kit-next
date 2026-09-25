@@ -318,16 +318,16 @@ if [ "${SCRIPT_KIT_REPORT_CACHE_SIZE:-1}" = "1" ]; then
     SCRIPT_KIT_DEV_CACHE_PID=$!
 fi
 
-# --- Pi sidecar availability ---------------------------------------------------
-# Dev runs execute the bare target binary, so the bundled Contents/MacOS/pi
-# never resolves. Make sure the repo-local Pi sidecar exists for Agent Chat
+# --- goose sidecar availability -----------------------------------------------
+# Dev runs execute the bare target binary, so the bundled Contents/MacOS/goose
+# never resolves. Make sure the repo-local goose sidecar exists for Agent Chat
 # (cmd+enter) before launching the app; otherwise the first session can start
-# with Pi unavailable while the sidecar is still building in the background.
-if [ "${SCRIPT_KIT_DEV_ENSURE_PI_SIDECAR:-1}" = "1" ]; then
-    bash scripts/agentic/ensure-pi-sidecar.sh
+# with goose unavailable while the sidecar is still building in the background.
+if [ "${SCRIPT_KIT_DEV_ENSURE_GOOSE_SIDECAR:-1}" = "1" ]; then
+    bash scripts/agentic/ensure-goose-sidecar.sh
 fi
 # Pin runtime lookup to the sidecar checked above; preserve explicit overrides.
-export SCRIPT_KIT_PI_BINARY="${SCRIPT_KIT_PI_BINARY:-${SCRIPT_KIT_DEV_PI_DIR}/pi}"
+export SCRIPT_KIT_GOOSE_BINARY="${SCRIPT_KIT_GOOSE_BINARY:-${SCRIPT_KIT_DEV_GOOSE_DIR}/goose}"
 
 # --- Crash watchdog -----------------------------------------------------------
 # Optional supervisor for the session app pid: loud banner + exact relaunch on

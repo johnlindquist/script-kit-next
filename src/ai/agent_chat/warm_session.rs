@@ -252,7 +252,7 @@ impl AgentChatWarmSessionManager {
                 // here used to print the internal `ai_adapter_error:<Code>`
                 // marker straight into the Agent Chat surface.
                 let failure = crate::ai::reliability::spawn_failure(
-                    sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                    sk_protocol::ai_reliability::ProtocolComponent::Goose,
                     &format!("{error:#}"),
                 );
                 let failure_message = failure.primary_message();
@@ -360,7 +360,7 @@ impl AgentChatWarmSessionManager {
             // the prose to the free-text classifier matched nothing and
             // produced `Unknown`.
             let failure = crate::ai::reliability::spawn_failure(
-                sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                sk_protocol::ai_reliability::ProtocolComponent::Goose,
                 &format!("warm prepare worker thread: {error}"),
             );
             let message = failure.primary_message();
@@ -431,7 +431,7 @@ impl AgentChatWarmSessionManager {
             // S11: raw `std::io::Error` text used to become the slot's
             // user-visible failure copy verbatim.
             let failure = crate::ai::reliability::spawn_failure(
-                sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                sk_protocol::ai_reliability::ProtocolComponent::Goose,
                 &format!("warm retry worker thread: {error}"),
             );
             let mut inner = self.inner.lock();
@@ -791,7 +791,7 @@ impl AgentChatWarmSessionManager {
                                 (
                                     AgentChatWarmSessionState::Failed,
                                     Some(crate::ai::reliability::provider_failure(
-                                        sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                                        sk_protocol::ai_reliability::ProtocolComponent::Goose,
                                         format!(
                                             "warm prepare timed out after {} ms",
                                             DEFAULT_PREPARE_READY_TIMEOUT.as_millis()
@@ -811,7 +811,7 @@ impl AgentChatWarmSessionManager {
                                 (
                                     AgentChatWarmSessionState::Failed,
                                     Some(crate::ai::reliability::process_failure(
-                                        sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                                        sk_protocol::ai_reliability::ProtocolComponent::Goose,
                                         crate::ai::reliability::ProcessFailureFacts::RuntimeClosed,
                                     )),
                                 )
@@ -860,7 +860,7 @@ impl AgentChatWarmSessionManager {
                     connection: None,
                     acquired_at: None,
                     failure: Some(crate::ai::reliability::spawn_failure(
-                        sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                        sk_protocol::ai_reliability::ProtocolComponent::Goose,
                         &format!("{error:#}"),
                     )),
                 }
@@ -905,7 +905,7 @@ fn wait_for_prepare_ready(events: AgentChatEventRx, timeout: Duration) -> Prepar
                 // generic "did not finish" card with no Sign In button.
                 return PrepareReadyOutcome::RuntimeFailed(
                     crate::ai::reliability::setup_required_failure(
-                        sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                        sk_protocol::ai_reliability::ProtocolComponent::Goose,
                         &reason,
                         &auth_methods,
                     ),

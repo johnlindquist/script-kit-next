@@ -161,21 +161,13 @@ impl ChatModel {
     }
 }
 
-/// Default models available in the chat
-/// NOTE: First model in list is the default
+/// Default models available in the chat: the goose model catalog, with the
+/// user's selected Agent Chat model first (the first model is the default).
 pub fn default_models() -> Vec<ChatModel> {
-    vec![
-        // Default: Claude Haiku 4.5 (fast, good quality)
-        ChatModel::new("claude-haiku-4-5-20250514", "Claude Haiku 4.5", "Anthropic"),
-        ChatModel::new("claude-3-5-haiku-20241022", "Claude 3.5 Haiku", "Anthropic"),
-        ChatModel::new(
-            "claude-3-5-sonnet-20241022",
-            "Claude 3.5 Sonnet",
-            "Anthropic",
-        ),
-        ChatModel::new("gpt-4o-mini", "GPT-4o mini", "OpenAI"),
-        ChatModel::new("gpt-4o", "GPT-4o", "OpenAI"),
-    ]
+    crate::ai::providers::goose_model_catalog()
+        .into_iter()
+        .map(|model| ChatModel::new(model.id, model.display_name, model.provider))
+        .collect()
 }
 
 /// One accepted, immutable request. Retry clones this Arc-backed value rather

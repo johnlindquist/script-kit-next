@@ -228,6 +228,7 @@ mod main_window_preflight;
 
 // MCP Server modules for AI agent integration
 mod computer_use;
+mod mcp_agent_tools;
 mod mcp_clipboard_tools;
 mod mcp_computer_use_tools;
 mod mcp_config_tools;

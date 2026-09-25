@@ -91,9 +91,10 @@ unsafe fn animate_tahoe_glass_child_appearance(
     );
 }
 
-/// Actions popup enter: replay the main window's SELECTED entry preset
-/// (2026-09-23 owner request: "have the actions menu appear/disappear
-/// animation mimic the main window"), so both surfaces share one timing,
+/// Actions popup and modal enter: replay the main window's SELECTED entry
+/// preset (2026-09-23 owner request: "have the actions menu appear/disappear
+/// animation mimic the main window"; modals joined 2026-09-24), so the
+/// surfaces share one timing,
 /// geometry, material, content, and defocus choreography and change together
 /// when the launcher preset changes. `PreviousCalibration` (legacy) restores
 /// the calibrated calibration-era pairing: grow-in here, shrink-out on exit.

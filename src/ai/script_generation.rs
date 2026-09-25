@@ -734,9 +734,7 @@ pub fn generate_script_from_prompt_with_receipt(
 
     let registry = ProviderRegistry::from_environment_with_config(config);
     if !registry.has_any_provider() {
-        anyhow::bail!(
-            "No AI providers configured. Configure an API key first (Vercel, OpenAI, Anthropic, etc.)."
-        );
+        anyhow::bail!("The goose AI engine is not installed.");
     }
 
     let (selected_model, provider) = select_generation_model(&registry)?;
@@ -1065,9 +1063,7 @@ pub(crate) fn select_generation_model(
 ) -> Result<(ModelInfo, Arc<dyn AiProvider>)> {
     let models = registry.get_all_models();
     let selected_model = models
-        .iter()
-        .find(|model| model.provider.eq_ignore_ascii_case("vercel"))
-        .or_else(|| models.first())
+        .first()
         .cloned()
         .context("No AI models available in provider registry")?;
 

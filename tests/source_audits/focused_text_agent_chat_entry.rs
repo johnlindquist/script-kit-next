@@ -113,10 +113,10 @@ fn agent_chat_view_can_stage_focused_text_as_host_owned_context() {
 #[test]
 fn focused_text_mini_uses_pi_text_profile_not_agent_chat_backend_fallback() {
     for required in [
-        "resolve_focused_text_pi_launch",
+        "resolve_focused_text_launch",
         "selected_profile_id: Some(BUILTIN_TEXT_PROFILE_ID.to_string())",
-        "AgentChatBackend::Pi",
-        "PiAgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))",
+        "AgentChatBackend::Goose",
+        "AgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))",
     ] {
         assert!(
             AGENT_CHAT_PI_LAUNCH.contains(required),

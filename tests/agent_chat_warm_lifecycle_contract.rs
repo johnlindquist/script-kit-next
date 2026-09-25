@@ -33,8 +33,8 @@ fn warm_session_lifecycle_symbols_are_explicit() {
 fn warm_session_manager_is_backend_neutral() {
     assert!(WARM_SESSION_SOURCE.contains("Arc<dyn AgentChatConnection>"));
     for forbidden in [
-        "PiRpcRuntime",
-        "PiLaunchSpec",
+        "GooseAcpRuntime",
+        "GooseLaunchSpec",
         "AgentChatView",
         "AppView",
         "ScriptListApp",
@@ -49,28 +49,28 @@ fn warm_session_manager_is_backend_neutral() {
 }
 
 #[test]
-fn warm_session_lifecycle_routes_pi_only_through_launch_helper() {
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch"));
+fn warm_session_lifecycle_routes_goose_only_through_launch_helper() {
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("warm_session_manager"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime::spawn"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("GooseAcpRuntime::spawn"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_launch_with_cwd_override"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_launch_with_cwd_override"));
     assert!(TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("manager.acquire_ready_or_spawn_cold"));
     assert!(TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"));
     assert!(
-        !AGENT_CHAT_SETUP_SOURCE.contains("PiRpcRuntime")
-            && !AGENT_CHAT_SETUP_SOURCE.contains("AgentChatBackend::Pi"),
-        "setup card routing must stay out of the Pi warm path"
+        !AGENT_CHAT_SETUP_SOURCE.contains("GooseAcpRuntime")
+            && !AGENT_CHAT_SETUP_SOURCE.contains("AgentChatBackend::Goose"),
+        "setup card routing must stay out of the goose warm path"
     );
 }
 
 #[test]
-fn startup_open_and_cwd_prewarm_share_selected_pi_cwd_launch_resolution() {
+fn startup_open_and_cwd_prewarm_share_selected_cwd_launch_resolution() {
     assert!(AGENT_CHAT_LAUNCH_SOURCE
-        .contains("pub(crate) fn resolve_selected_pi_launch_with_cwd_override"));
+        .contains("pub(crate) fn resolve_selected_launch_with_cwd_override"));
     assert!(
         AGENT_CHAT_LAUNCH_SOURCE
-            .contains("resolve_selected_pi_launch_with_cwd_override(ai, ctx, None)"),
+            .contains("resolve_selected_launch_with_cwd_override(ai, ctx, None)"),
         "default selected launch must delegate to the cwd-aware helper"
     );
 
@@ -93,13 +93,13 @@ fn startup_open_and_cwd_prewarm_share_selected_pi_cwd_launch_resolution() {
         ("cwd/profile prewarm", cwd_prewarm_body),
     ] {
         assert!(
-            body.contains("resolve_selected_pi_launch_with_cwd_override"),
-            "{name} must use shared selected-profile/cwd Pi launch resolution"
+            body.contains("resolve_selected_launch_with_cwd_override"),
+            "{name} must use shared selected-profile/cwd launch resolution"
         );
     }
 
     assert!(
-        !open_body.contains("PiAgentChatLaunch::from_profile_with_cwd_override"),
+        !open_body.contains("AgentChatLaunch::from_profile_with_cwd_override"),
         "open path must not hand-roll selected profile cwd launch resolution"
     );
 }

@@ -97,6 +97,10 @@ pub const OPACITY_ACTIVE: f32 = 0.90;
 pub const OPACITY_WHISPER_SURFACE_IDLE: f32 = OPACITY_GHOST;
 /// Focused prompt-field whisper surface.
 pub const OPACITY_WHISPER_SURFACE_FOCUSED: f32 = 0.10;
+/// Chat user-message bubble: a quiet tint of the primary text color, so the
+/// user's turn reads as a soft gray (dark) or light gray (light) panel beside
+/// unboxed assistant text — never an accent fill.
+pub const OPACITY_CHAT_USER_MESSAGE_SURFACE: f32 = 0.08;
 /// Idle prompt-field whisper border.
 pub const OPACITY_WHISPER_BORDER_IDLE: f32 = 0.13;
 /// Accent fill for checked controls that still sit on whisper surfaces.

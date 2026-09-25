@@ -49,7 +49,7 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 ## Roster
 
 - **[actions.md](./actions.md)** (workspace-write): Actions menu, trigger picker, confirm popup, action builders, and keyboard affordances.
-- **[agent-chat.md](./agent-chat.md)** (workspace-write): Agent Chat portal, AI context picker, file attachment parity, context mentions, and Pi handoff.
+- **[agent-chat.md](./agent-chat.md)** (workspace-write): Agent Chat portal, AI context picker, file attachment parity, context mentions, and goose handoff.
 - **[ai-core.md](./ai-core.md)** (workspace-write): AI capabilities outside Agent Chat: local LLM (ghost completion backend), dictation/whisper capture, computer use, OCR, camera, and AI vault.
 - **[auditor.md](./auditor.md)** (read-only): Read-only audit sweeps: UX inconsistencies, shared-component bypasses, hardcoded theme values, policy violations; prioritized findings, never edits.
 - **[brain.md](./brain.md)** (workspace-write): Day Page, Today behavior, brain markdown substrate, fragments, spine flows, and notes parity.
@@ -67,7 +67,7 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 - **[mcp.md](./mcp.md)** (workspace-write): MCP server, protocol handling, resources, script tools, schema compatibility, and tests.
 - **[migrate.md](./migrate.md)** (workspace-write): v1→v2 script migration engine: classifier, compat map, agent port pipeline, validator ladder, honesty pass, and the Migrate board built-in.
 - **[perf.md](./perf.md)** (workspace-write): Runtime performance medic: reproduces lag/jank complaints with real input events, CPU-profiles the live app with /usr/bin/sample, computes draw-share red/green deltas, and owns the frame-cost playbook (dev-profile opt levels, per-frame allocation churn, measure storms).
-- **[platform.md](./platform.md)** (workspace-write): macOS platform integration, app/window orchestration, panels, icons, tray/menu bar, permissions, and startup/Pi sidecar.
+- **[platform.md](./platform.md)** (workspace-write): macOS platform integration, app/window orchestration, panels, icons, tray/menu bar, permissions, and startup/goose sidecar.
 - **[prompts.md](./prompts.md)** (workspace-write): SDK prompt renderers and protocol-to-renderer contracts.
 - **[release.md](./release.md)** (workspace-write): Release pipeline: version bumps matching both Cargo.toml version fields, v* tag flow, pre-tag clippy gate, CI release workflow health.
 - **[scout.md](./scout.md)** (read-only): Read-only intake specialist for owner discovery, routing, and required context.

@@ -7,7 +7,7 @@
  *  2. Text + Tab         → Quick AI: Agent Chat opens with the quick-ai
  *     profile (zero-context flags, spark model) and the launcher filter is
  *     cleared. Verified via structured logs (quick_ai_tab_entry +
- *     pi_agent_chat_profile_launch_resolved with profile_id=quick-ai).
+ *     agent_chat_profile_launch_resolved with profile_id=quick-ai).
  *
  * Run: bun scripts/agentic/quickai-tab-probe.ts
  */

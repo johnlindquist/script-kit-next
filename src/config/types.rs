@@ -1085,14 +1085,14 @@ pub struct ScriptKitUserPreferences {
 
 /// Agent Chat backend selected for a profile or runtime preference.
 ///
-/// All profiles now resolve through Pi. Legacy `"agent_chat"` values in persisted
-/// config deserialize as `Pi` via the serde alias.
+/// Every profile runs on the goose engine. Values persisted by earlier engines
+/// (`"pi"`, `"agent_chat"`) deserialize as `Goose`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum AgentChatBackend {
     #[default]
-    #[serde(alias = "agent_chat")]
-    Pi,
+    #[serde(alias = "pi", alias = "agent_chat")]
+    Goose,
 }
 
 /// A user-defined `.style` for the spine prompt builder, declared in
@@ -1145,9 +1145,9 @@ pub struct AiPreferences {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_backend: Option<AgentChatBackend>,
 
-    /// Custom path to the Pi Rust agent binary used by Pi-backed Agent Chat profiles.
+    /// Custom path to the goose binary that runs Agent Chat profiles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pi_binary: Option<String>,
+    pub goose_binary: Option<String>,
 
     /// Pre-configured Agent Chat profiles. Each profile bundles a display name,
     /// optional agent id + model hint, and a custom system prompt.
@@ -1189,15 +1189,15 @@ pub struct AgentChatProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon_name: Option<String>,
 
-    /// Backend for this profile. All profiles resolve to Pi.
+    /// Backend for this profile. Every profile runs on goose.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<AgentChatBackend>,
 
-    /// Optional Pi Rust binary override for this profile.
+    /// Optional goose binary override for this profile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pi_binary: Option<String>,
+    pub goose_binary: Option<String>,
 
-    /// Optional agent identifier forwarded to the Pi backend.
+    /// Optional agent identifier (informational; goose selects by provider/model).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
 
@@ -1205,7 +1205,7 @@ pub struct AgentChatProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
 
-    /// Optional Pi provider id. This is not mapped onto Agent Chat launch args.
+    /// goose provider id (for example `chatgpt_codex`, `anthropic`, `ollama`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
 
@@ -1222,19 +1222,19 @@ pub struct AgentChatProfile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
 
-    /// Pi tool allow-list. `Some([])` means `--no-tools`; `None` keeps Pi defaults.
+    /// Tool allow-list. `Some([])` means no tools; `None` means the default set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<String>>,
 
-    /// Structured Pi tool policy. `allow` supersedes the legacy `tools` array.
+    /// Structured tool policy. `allow` supersedes the legacy `tools` array.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_policy: Option<AgentChatToolPolicyConfig>,
 
-    /// Runtime filesystem scope forwarded to Pi for read/write-capable tools.
+    /// Filesystem scope for Script Kit's read/write agent tools.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path_policy: Option<AgentChatPathPolicyConfig>,
 
-    /// Message Pi should return when a blocked capability/path is requested.
+    /// Reply the agent gives when a blocked capability/path is requested.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocked_action_message: Option<String>,
 
@@ -1269,7 +1269,7 @@ pub struct AgentChatProfile {
     pub session_durability: Option<String>,
 }
 
-/// Tool policy for Pi-backed Agent Chat profiles.
+/// Tool policy for Agent Chat profiles.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentChatToolPolicyConfig {
@@ -1277,7 +1277,7 @@ pub struct AgentChatToolPolicyConfig {
     pub allow: Option<Vec<String>>,
 }
 
-/// Filesystem policy for Pi-backed Agent Chat profiles.
+/// Filesystem policy for Agent Chat profiles.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentChatPathPolicyConfig {

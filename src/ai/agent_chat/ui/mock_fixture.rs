@@ -496,6 +496,7 @@ mod tests {
             blocks: Vec::new(),
             model_id: None,
             tool_policy: AgentChatToolPolicy::Full,
+            allow_interactive_sign_in: false,
         }
     }
 

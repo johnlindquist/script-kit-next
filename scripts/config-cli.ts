@@ -121,7 +121,7 @@ interface DictationPreferences {
   pushToTalk?: boolean;
 }
 
-type AgentChatBackend = "agent_chat" | "pi";
+type AgentChatBackend = "goose" | "pi" | "agent_chat";
 
 interface AgentChatToolPolicyConfig {
   allow?: string[];
@@ -138,7 +138,7 @@ interface AiProfile {
   name: string;
   iconName?: string;
   backend?: AgentChatBackend;
-  piBinary?: string;
+  gooseBinary?: string;
   agent?: string;
   provider?: string;
   model?: string;

@@ -280,6 +280,8 @@ impl McpServer {
         listener
             .set_nonblocking(true)
             .context("Failed to set non-blocking mode")?;
+        // Agent sessions reach Script Kit tools through this server.
+        crate::mcp_agent_tools::set_endpoint(self.port, &self.token);
 
         let running = self.running.clone();
         running.store(true, Ordering::SeqCst);
@@ -467,7 +469,43 @@ fn handle_connection(
             // Handle JSON-RPC request
             handle_rpc_request(&mut reader, &mut stream, &headers, runtime_context)
         }
+        ("POST", crate::mcp_agent_tools::AGENT_TOOLS_PATH) => {
+            handle_agent_tools_request(&mut reader, &mut stream, &headers)
+        }
+        // Streamable HTTP clients may probe for a server-sent event stream or
+        // close their session; agent tools answer every call inline.
+        ("GET", crate::mcp_agent_tools::AGENT_TOOLS_PATH) => {
+            send_response(&mut stream, 405, "Method Not Allowed", "")
+        }
+        ("DELETE", crate::mcp_agent_tools::AGENT_TOOLS_PATH) => {
+            send_response(&mut stream, 200, "OK", "")
+        }
         _ => send_response(&mut stream, 404, "Not Found", "Endpoint not found"),
+    }
+}
+
+/// Handle one MCP streamable-HTTP message on the agent-tools endpoint.
+fn handle_agent_tools_request(
+    reader: &mut BufReader<TcpStream>,
+    stream: &mut TcpStream,
+    headers: &std::collections::HashMap<String, String>,
+) -> Result<()> {
+    let content_length: usize = headers
+        .get("content-length")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    let mut body = vec![0u8; content_length];
+    reader.read_exact(&mut body)?;
+    let policy_id = headers
+        .get(crate::mcp_agent_tools::POLICY_HEADER)
+        .map(String::as_str);
+    match crate::mcp_agent_tools::handle_rpc(policy_id, &String::from_utf8_lossy(&body)) {
+        crate::mcp_agent_tools::AgentRpcReply::Json(reply) => {
+            send_response(stream, 200, "OK", &reply)
+        }
+        crate::mcp_agent_tools::AgentRpcReply::Accepted => {
+            send_response(stream, 202, "Accepted", "")
+        }
     }
 }
 /// Handle a JSON-RPC request on the /rpc endpoint

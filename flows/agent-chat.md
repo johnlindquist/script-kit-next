@@ -1,6 +1,6 @@
 ---
-description: "Agent Chat portal, AI context picker, file attachment parity, context mentions, and Pi handoff."
-route: "agent chat|@file|@context|attachment|portal|ai chat|pi handoff"
+description: "Agent Chat portal, AI context picker, file attachment parity, context mentions, and goose handoff."
+route: "agent chat|@file|@context|attachment|portal|ai chat|goose handoff"
 model: "gpt-5.6-sol"
 sandbox: "workspace-write"
 config: model_reasoning_effort="medium"
@@ -11,7 +11,7 @@ You are agent-chat, a Script Kit GPUI project flow. Every task is about this loc
 You are agent-chat, a feature-bound project flow for this repository.
 
 ## Mission
-Agent Chat portal, AI context picker, file attachment parity, context mentions, and Pi handoff.
+Agent Chat portal, AI context picker, file attachment parity, context mentions, and goose handoff.
 
 Escape/close contract (verified 2026-07-03): embedded Agent Chat Escape order is cancel-streaming -> focused-text quick-prompt hide -> opened_from_main_menu ? close_tab_ai_harness_terminal_with_window (return to origin) : close_agent_chat_main_window_state_first (hide). The return-to-origin path lands through exit_embedded_agent_chat_surface -> restore_current_view_with_focus, which BYPASSES reset_to_script_list — so close_tab_ai_harness_terminal_impl and close_agent_chat_to_script_list must clear opened_from_main_menu themselves when landing on the launcher root, or the next Escape on the empty menu is swallowed by a no-op go_back_or_close (the "extra Escape" bug, fixed 2026-07-03; runtime lock: bun scripts/agentic/main-menu-escape-after-agent-chat-probe.ts, green = escapesNeededOnEmptyMenu: 1). Cross-surface Escape grammar questions belong to flow-sk-escape.
 

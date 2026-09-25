@@ -141,6 +141,13 @@ impl AgentChatThread {
                 let result = (|| -> anyhow::Result<()> {
                     let (model, provider) =
                         crate::ai::script_generation::select_generation_model(&registry)?;
+                    // Titles are background work: never start a browser
+                    // sign-in for one.
+                    if model.id.split_once('/').is_some_and(|(provider_id, _)| {
+                        crate::ai::agent_chat::goose::sign_in::needs_sign_in(provider_id)
+                    }) {
+                        return Ok(());
+                    }
                     let messages = vec![
                         crate::ai::providers::ProviderMessage::system(
                             "You title chat conversations. Reply with ONLY a concise 3-6 word title. No quotes, no punctuation at the end.",

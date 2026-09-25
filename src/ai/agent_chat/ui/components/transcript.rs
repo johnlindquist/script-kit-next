@@ -178,6 +178,9 @@ pub struct AgentChatTranscript {
     /// the permanent synthetic tail row so visibility changes do not reset the
     /// whole measured list.
     show_activity_row: bool,
+    /// Hides the pending-activity row while the turn waits on something
+    /// other than the model (a provider sign-in).
+    activity_suppressed: bool,
     interaction_revision: std::cell::Cell<u64>,
 }
 
@@ -207,6 +210,7 @@ impl AgentChatTranscript {
             ui_variant: AgentChatUiVariant::Standard,
             anchor,
             show_activity_row: false,
+            activity_suppressed: false,
             interaction_revision: std::cell::Cell::new(0),
         };
         transcript.reconcile_message_views(cx);
@@ -495,6 +499,19 @@ impl AgentChatTranscript {
         cx.notify();
     }
 
+    pub(crate) fn set_activity_suppressed(&mut self, suppressed: bool, cx: &mut Context<Self>) {
+        if self.activity_suppressed == suppressed {
+            return;
+        }
+        self.activity_suppressed = suppressed;
+        cx.notify();
+    }
+
+    fn pending_activity_requested(&self, thread_status: AgentChatThreadStatus) -> bool {
+        !self.activity_suppressed
+            && (self.show_activity_row || matches!(thread_status, AgentChatThreadStatus::Streaming))
+    }
+
     pub fn set_show_activity_row(&mut self, show: bool, cx: &mut Context<Self>) {
         if self.show_activity_row == show {
             return;
@@ -598,8 +615,7 @@ impl AgentChatTranscript {
             pending_indicator_count: usize::from(!matches!(
                 pending_activity_placement(
                     &self.messages,
-                    self.show_activity_row
-                        || matches!(self.thread_status, AgentChatThreadStatus::Streaming),
+                    self.pending_activity_requested(self.thread_status),
                 ),
                 PendingActivityPlacement::Hidden
             )),
@@ -1190,7 +1206,7 @@ impl AgentChatTranscript {
     /// the thread state.
     const MAX_DIFF_ROWS: usize = 200;
 
-    /// Render the colored, line-numbered diff Pi emits for edit/write tools.
+    /// Render the colored, line-numbered diff the engine emits for edit/write tools.
     /// Lines are classified by their `+`/`-`/space marker prefix.
     fn render_diff_body(
         diff: &str,
@@ -1669,7 +1685,7 @@ impl Render for AgentChatTranscript {
         let expanded_heavy_markdown_count = self.expanded_heavy_markdown_ids.len();
         let pending_activity_placement = pending_activity_placement(
             &messages_snapshot,
-            self.show_activity_row || matches!(thread_status, AgentChatThreadStatus::Streaming),
+            self.pending_activity_requested(thread_status),
         );
         let transcript_content = if focused_text_preview {
             let mut preview = div().size_full().flex().flex_col().overflow_hidden();

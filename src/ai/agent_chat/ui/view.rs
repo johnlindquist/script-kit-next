@@ -43,7 +43,8 @@ use super::history_popup::{
 use super::thread::{
     decide_agent_chat_cwd_resolution, AgentChatContextBootstrapState,
     AgentChatCwdResolutionDecision, AgentChatHostWindowKind, AgentChatHostWindowState,
-    AgentChatThread, AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
+    AgentChatSignInPrompt, AgentChatSignInPromptKind, AgentChatSignInState, AgentChatThread,
+    AgentChatThreadMessage, AgentChatThreadMessageRole, AgentChatThreadStatus,
 };
 use super::types::{
     AgentChatComposerParentWindow, AgentChatComposerPickerSession, AgentChatComposerPickerTrigger,
@@ -745,7 +746,7 @@ pub(crate) struct AgentChatView {
     /// The Agent Chat session — either a live thread or inline setup state.
     pub(crate) session: AgentChatSession,
     /// Live background threads retained when the user starts or switches
-    /// threads. Each owns its own Pi connection and keeps streaming while
+    /// threads. Each owns its own goose connection and keeps streaming while
     /// inactive; the Cmd+K "Threads" section switches back to them.
     retained_threads: Vec<Entity<AgentChatThread>>,
     /// Message count last seen per `ui_thread_id`, for unread badges in the
@@ -755,6 +756,10 @@ pub(crate) struct AgentChatView {
     /// so swapping the session thread never double-registers an observer.
     thread_observers: std::collections::HashMap<gpui::EntityId, gpui::Subscription>,
     host_activation_subscription: Option<gpui::Subscription>,
+    /// The window hosting this view; sign-in modals attach to it.
+    host_window_handle: Option<gpui::AnyWindowHandle>,
+    /// Newest thread sign-in prompt already shown as a modal.
+    presented_sign_in_prompt_generation: u64,
     focus_handle: FocusHandle,
     /// Virtualized variable-height message list state.
     permission_index: usize,
@@ -1167,6 +1172,7 @@ impl AgentChatView {
         if window.is_owned_hidden() {
             return;
         }
+        self.host_window_handle = Some(window.window_handle());
         if self.host_activation_subscription.is_some() {
             return;
         }
@@ -1351,7 +1357,7 @@ impl AgentChatView {
                     crate::ai::agent_chat::profiles::AgentChatProfileSource::User => "Custom",
                     crate::ai::agent_chat::profiles::AgentChatProfileSource::Mdflow => "Markdown",
                 };
-                let backend = "Pi";
+                let backend = "goose";
                 let score = if query_lower.is_empty() {
                     100
                 } else if entry.name.to_ascii_lowercase().starts_with(&query_lower) {
@@ -5529,7 +5535,7 @@ text_style.text_inset_left,
         self.notify_semantic_change(cx);
     }
 
-    /// Start a fresh thread on a new Pi connection. The current thread keeps
+    /// Start a fresh thread on a new goose connection. The current thread keeps
     /// streaming in the background and appears in the Cmd+K Threads section.
     pub(crate) fn start_new_thread(&mut self, cx: &mut Context<Self>) -> bool {
         // BC-1 (Oracle seat 3): `start_new_thread` RETAINS the current thread
@@ -5617,8 +5623,8 @@ text_style.text_inset_left,
 
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let ai_preferences = crate::config::load_user_preferences().ai;
-        let pi_launch =
-            match crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
+        let agent_launch =
+            match crate::ai::agent_chat::launch::resolve_selected_launch_with_cwd_override(
                 &ai_preferences,
                 &profile_ctx,
                 Some(selected_cwd.clone()),
@@ -5628,7 +5634,7 @@ text_style.text_inset_left,
                     thread_entity.update(cx, |thread, cx| {
                         thread.push_notice(
                             "Working directory not changed",
-                            format!("Failed to resolve Pi Agent Chat session: {error}"),
+                            format!("Failed to resolve Agent Chat session: {error}"),
                             cx,
                         );
                     });
@@ -5643,13 +5649,13 @@ text_style.text_inset_left,
                 }
             };
         let manager = crate::ai::agent_chat::launch::warm_session_manager();
-        let (lease, origin) = match manager.acquire_ready_or_spawn_cold(pi_launch.warm_spec()) {
+        let (lease, origin) = match manager.acquire_ready_or_spawn_cold(agent_launch.warm_spec()) {
             Ok(result) => result,
             Err(error) => {
                 thread_entity.update(cx, |thread, cx| {
                     thread.push_notice(
                         "Working directory not changed",
-                        format!("Failed to start Pi Agent Chat session: {error}"),
+                        format!("Failed to start Agent Chat session: {error}"),
                         cx,
                     );
                 });
@@ -5670,22 +5676,22 @@ text_style.text_inset_left,
         // resolution as every launch path). If the user changed their selected
         // profile since this thread launched, the swap also changes the
         // thread's profile — surface that instead of switching silently.
-        let profile_changed = pi_launch.profile.id != current_profile_id;
-        let new_profile_name = pi_launch.profile.name.clone();
+        let profile_changed = agent_launch.profile.id != current_profile_id;
+        let new_profile_name = agent_launch.profile.name.clone();
         thread_entity.update(cx, |thread, cx| {
             thread.replace_pi_session(
                 lease.connection.clone(),
                 lease.ui_thread_id.clone(),
                 lease.cwd.clone(),
-                pi_launch.profile.id.clone(),
-                pi_launch.profile.name.clone().into(),
-                pi_launch.profile.icon_name.clone(),
-                pi_launch.available_models.clone(),
-                pi_launch.selected_model_id.clone(),
+                agent_launch.profile.id.clone(),
+                agent_launch.profile.name.clone().into(),
+                agent_launch.profile.icon_name.clone(),
+                agent_launch.available_models.clone(),
+                agent_launch.selected_model_id.clone(),
                 cx,
             );
             let mut message = format!(
-                "Working directory changed to `{}`. The Pi session was restarted for future turns; visible chat history was preserved.",
+                "Working directory changed to `{}`. The AI session was restarted for future turns; visible chat history was preserved.",
                 new_cwd.display()
             );
             if profile_changed {
@@ -5695,18 +5701,18 @@ text_style.text_inset_left,
             }
             thread.push_system_message(message, cx);
         });
-        // Record under the profile the thread now runs as (pi_launch.profile),
+        // Record under the profile the thread now runs as (agent_launch.profile),
         // not the pre-respawn profile — on profile drift the picker reads
         // recents for the live thread's profile, so recording under the old id
         // would silently misattribute the entry. The profile's own default cwd
         // is excluded as noise (it's already the Current row on fresh threads).
-        let default_cwd = pi_launch
+        let default_cwd = agent_launch
             .profile
             .cwd
             .clone()
             .unwrap_or_else(crate::setup::get_kit_path);
         crate::ai::agent_chat::ui::record_agent_chat_cwd_recent(
-            &pi_launch.profile.id,
+            &agent_launch.profile.id,
             new_cwd.clone(),
             Some(default_cwd.as_path()),
         );
@@ -5717,7 +5723,7 @@ text_style.text_inset_left,
             new_cwd = %new_cwd.display(),
             ui_thread_id = %new_ui_thread_id,
             old_profile_id = %current_profile_id,
-            new_profile_id = %pi_launch.profile.id,
+            new_profile_id = %agent_launch.profile.id,
             profile_changed = profile_changed,
             warm_origin = ?origin,
         );
@@ -5890,6 +5896,9 @@ text_style.text_inset_left,
             retained_thread_count: self.retained_threads.len(),
             fork_point_count: thread.fork_points().len(),
             awaiting_first_assistant_text: thread.awaiting_first_assistant_text(),
+            sign_in: thread
+                .sign_in_state()
+                .map(|state| state.as_str().to_string()),
             picker: self.build_agent_chat_picker_state_snapshot(),
             spine: self.build_agent_chat_spine_state_snapshot(),
             last_accepted_item: self.last_accepted_item.clone(),
@@ -6251,6 +6260,19 @@ text_style.text_inset_left,
                 return;
             }
 
+            let sign_in_pending = matches!(
+                thread.read(cx).sign_in_state(),
+                Some(AgentChatSignInState::AwaitingConsent | AgentChatSignInState::Waiting)
+            );
+            // A new sign-in question from the runtime: present it as a modal.
+            let sign_in_prompt = thread.read(cx).pending_sign_in_prompt();
+            if let Some(prompt) = sign_in_prompt
+                .filter(|prompt| prompt.generation > this.presented_sign_in_prompt_generation)
+            {
+                this.presented_sign_in_prompt_generation = prompt.generation;
+                this.present_sign_in_prompt(prompt, thread.downgrade(), cx);
+            }
+
             // Extract data from thread before mutable operations.
             let (
                 activity_row_visible,
@@ -6346,6 +6368,8 @@ text_style.text_inset_left,
                 transcript.update(cx, |transcript, cx| {
                     transcript.set_messages(messages, cx);
                     transcript.set_show_activity_row(activity_row_visible, cx);
+                    // Nothing is thinking while the turn waits on a sign-in.
+                    transcript.set_activity_suppressed(sign_in_pending, cx);
                     transcript.set_thread_status(status, cx);
                     transcript.set_fork_points(fork_points, cx);
                 });
@@ -6418,6 +6442,8 @@ text_style.text_inset_left,
             thread_last_seen: std::collections::HashMap::new(),
             thread_observers,
             host_activation_subscription: None,
+            host_window_handle: None,
+            presented_sign_in_prompt_generation: 0,
             focus_handle: cx.focus_handle(),
             permission_index: 0,
             permission_options_open: false,
@@ -6542,6 +6568,8 @@ text_style.text_inset_left,
             thread_last_seen: std::collections::HashMap::new(),
             thread_observers: std::collections::HashMap::new(),
             host_activation_subscription: None,
+            host_window_handle: None,
+            presented_sign_in_prompt_generation: 0,
             focus_handle: cx.focus_handle(),
             permission_index: 0,
             permission_options_open: false,
@@ -8301,7 +8329,7 @@ text_style.text_inset_left,
             } => {
                 // CWD resolution mirrors the main-menu behavior: strip the
                 // segment from the composer entirely and respawn/re-acquire
-                // the Pi session under the chosen directory. Pi binds cwd at
+                // the goose session under the chosen directory. goose binds cwd at
                 // launch time, so updating only `thread.cwd()` would make the
                 // footer chip lie while the agent kept using its original cwd.
                 // Other sources insert the resolved replacement token like
@@ -10490,13 +10518,20 @@ crate::components::main_view_chrome::MainViewInputShellIds::new(
         &self,
         cx: &App,
     ) -> Option<crate::ai::reliability::AiRecoveryCardSpec> {
-        self.live_thread().read(cx).recovery_card_spec()
+        let thread = self.live_thread().read(cx);
+        // Same rule as `render_ai_recovery`: the sign-in modal owns it.
+        (!thread.sign_in_failure_owns_recovery())
+            .then(|| thread.recovery_card_spec())
+            .flatten()
     }
 
     fn render_ai_recovery(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let spec = {
             let thread = self.live_thread().read(cx);
-            thread.recovery_card_spec()
+            // The sign-in modal presents sign-in failures; no in-window card.
+            (!thread.sign_in_failure_owns_recovery())
+                .then(|| thread.recovery_card_spec())
+                .flatten()
         };
         let Some(spec) = spec else {
             return div().id("agent-chat-recovery-empty").into_any_element();
@@ -13688,6 +13723,40 @@ impl AgentChatView {
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             let cursor_before = self.live_thread().read(cx).input.cursor();
             let permission_active = self.live_thread().read(cx).pending_permission.is_some();
+            // An empty composer under a recovery card: Enter runs the action
+            // the card labels ↵ (for example Sign in or Try again).
+            let recovery_enter_action = {
+                let thread = self.live_thread().read(cx);
+                if thread.input.text().trim().is_empty()
+                    && thread.pending_context_items().is_empty()
+                {
+                    thread
+                        .recovery_card_spec()
+                        .and_then(|spec| {
+                            crate::ai::reliability::plan_recovery_presentation(&spec).footer
+                        })
+                        .filter(|placed| placed.enabled)
+                        .map(|placed| placed.action)
+                } else {
+                    None
+                }
+            };
+            if let Some(action) = recovery_enter_action {
+                self.dispatch_recovery_action(action, cx);
+                self.emit_key_route_telemetry(
+                    key,
+                    AgentChatKeyRouteTelemetryArgs {
+                        route: crate::protocol::AgentChatKeyRoute::Composer,
+                        cursor_before,
+                        cursor_after: cursor_before,
+                        caused_submit: false,
+                        consumed: true,
+                        permission_active,
+                    },
+                );
+                cx.stop_propagation();
+                return;
+            }
             let should_paste_response = {
                 let thread = self.live_thread().read(cx);
                 thread.input.text().is_empty()
@@ -14648,6 +14717,7 @@ include!("view_history_navigation.rs");
 include!("view_permission_actions.rs");
 include!("view_spine_rich_results.rs");
 include!("view_recovery_and_transient.rs");
+include!("view_sign_in_modal.rs");
 include!("view_semantic_identity.rs");
 
 #[cfg(test)]

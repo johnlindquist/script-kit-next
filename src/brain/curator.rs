@@ -35,7 +35,7 @@ const STALE_PIN_DAYS: i64 = 14;
 
 /// Run the curator if it's due. Called from the indexer cycle.
 /// Env opt-in for the daily curator, which sends attention signals, activity
-/// journals, and recent chat turns to a CLOUD model (`pi_oneshot` defaults to
+/// journals, and recent chat turns to a CLOUD model (`ai_oneshot` defaults to
 /// openai-codex). It is OFF by default so the brain's "everything stays on this
 /// machine" promise holds unless the user explicitly turns distillation on.
 const CLOUD_CURATOR_ENV: &str = "SCRIPT_KIT_BRAIN_CLOUD_CURATOR";
@@ -127,7 +127,7 @@ pub fn run_focus_review() -> Result<bool> {
          ACTIVITY JOURNALS (newest first):\n{journal_block}"
     );
 
-    let Some(output) = super::pi_oneshot(&prompt)? else {
+    let Some(output) = super::ai_oneshot(&prompt)? else {
         return Ok(false); // No agent setup — curator waits.
     };
     let review = output.trim();
@@ -262,7 +262,7 @@ pub fn run_inbox_extraction() -> Result<usize> {
          RECENT CHATS (each labeled with its source id):\n{chat_block}"
     );
 
-    let Some(output) = super::pi_oneshot(&prompt)? else {
+    let Some(output) = super::ai_oneshot(&prompt)? else {
         tracing::debug!(target: "script_kit::brain", "inbox extraction: no agent setup");
         return Ok(0);
     };

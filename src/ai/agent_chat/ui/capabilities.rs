@@ -19,7 +19,7 @@ use crate::ai::message_parts::AiContextPart;
 /// Canonical backend identifier of the ONLY tool a web-search-only session is
 /// permitted to run. Tool admission is matched against this id ONLY — never
 /// against a human-readable display title, which the model (or a compromised
-/// turn) can spoof. Mirrors `profiles::QUICK_AI_PI_TOOLS` and the Codex
+/// turn) can spoof. Mirrors `profiles::QUICK_AI_TOOLS` and the Codex
 /// `allowedTools` list so all three enforcement layers name the same tool.
 pub(crate) const WEB_SEARCH_TOOL_ID: &str = "web_search";
 

@@ -17,8 +17,10 @@ use source_classification::{
 };
 pub(crate) use types::*;
 
-static AGENT_CHAT_OBSERVED_STATE_SYNC_GENERATION: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+/// Embedded Agent Chat views with an observed-state sync already scheduled.
+static AGENT_CHAT_OBSERVED_STATE_SYNC_PENDING: std::sync::LazyLock<
+    parking_lot::Mutex<std::collections::HashSet<gpui::EntityId>>,
+> = std::sync::LazyLock::new(|| parking_lot::Mutex::new(std::collections::HashSet::new()));
 
 #[allow(dead_code)]
 const AGENT_CHAT_ONBOARDING_SOURCE_AUDIT_ANCHORS: &str = r#"
@@ -224,27 +226,37 @@ impl ScriptListApp {
         self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
     }
 
-    fn schedule_embedded_agent_chat_observed_state_sync(
+    /// Sync the parent's view of an embedded Agent Chat (ready script, footer
+    /// snapshot) shortly after the child changes.
+    ///
+    /// The child can notify while it is still being updated, and pickers emit
+    /// bursts, so the read is deferred 50ms and always sees the latest state.
+    /// This is a throttle, not a trailing debounce: while a sync is pending,
+    /// further notifications join it instead of restarting the wait. A child
+    /// that notifies every frame (an animating caret) would otherwise starve
+    /// the sync forever and leave the footer showing Stop after a turn ends.
+    pub(crate) fn schedule_embedded_agent_chat_observed_state_sync(
         &mut self,
         view_entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
     ) {
+        let view_id = view_entity.entity_id();
+        if !AGENT_CHAT_OBSERVED_STATE_SYNC_PENDING
+            .lock()
+            .insert(view_id)
+        {
+            return;
+        }
         let view_weak = view_entity.downgrade();
-        let generation = AGENT_CHAT_OBSERVED_STATE_SYNC_GENERATION
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            + 1;
         cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(50))
                 .await;
 
             cx.update(|cx| {
-                if AGENT_CHAT_OBSERVED_STATE_SYNC_GENERATION
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                    != generation
-                {
-                    return;
-                }
+                AGENT_CHAT_OBSERVED_STATE_SYNC_PENDING
+                    .lock()
+                    .remove(&view_id);
                 let Some(app) = this.upgrade() else {
                     return;
                 };
@@ -259,7 +271,7 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn sync_embedded_agent_chat_observed_state(
+    pub(crate) fn sync_embedded_agent_chat_observed_state(
         &mut self,
         view_entity: &Entity<crate::ai::agent_chat::ui::AgentChatView>,
         cx: &mut Context<Self>,
@@ -275,6 +287,11 @@ impl ScriptListApp {
             let snapshot = view.footer_snapshot(cx);
             let changed = self.agent_chat_footer_snapshot.as_ref() != Some(&snapshot);
             if changed {
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "agent_chat_footer_snapshot_changed",
+                    buttons = ?snapshot.buttons.iter().map(|button| button.label).collect::<Vec<_>>(),
+                );
                 self.agent_chat_footer_dot_status = Some(snapshot.dot_status);
                 self.agent_chat_footer_model_display = Some(snapshot.model_display.clone());
                 self.agent_chat_footer_snapshot = Some(snapshot);
@@ -718,13 +735,13 @@ impl ScriptListApp {
     }
 
     /// Quick AI: launcher Tab-with-text entry. Sends `query` as the first
-    /// turn of a fresh zero-context session (Quick AI profile — spark model,
+    /// turn of a fresh zero-context session (Quick AI profile — pinned fast model,
     /// no tools/skills/memories/context) and clears the launcher filter so
     /// returning from the chat lands on a clean list.
     ///
     /// The `QuickAi` ui variant does the heavy lifting downstream: it derives a
     /// suppressed context policy, skips detached/embedded chat reuse, and routes
-    /// launch resolution to `resolve_quick_ai_pi_launch`.
+    /// launch resolution to `resolve_quick_ai_launch`.
     pub(crate) fn open_quick_ai_from_launcher(
         &mut self,
         query: String,
@@ -3274,7 +3291,7 @@ impl ScriptListApp {
         }
     }
 
-    /// Startup prewarm is opt-in so idle Pi workers cannot starve UI frames.
+    /// Startup prewarm is opt-in so idle goose workers cannot starve UI frames.
     pub(crate) fn warm_agent_chat_on_startup(&mut self, _cx: &mut Context<Self>) {
         if !Self::agent_chat_hot_prewarm_enabled() {
             tracing::info!(
@@ -3289,25 +3306,25 @@ impl ScriptListApp {
         let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let ai_prefs = crate::config::load_user_preferences().ai;
         let cwd_override = self.spine_cwd_for_agent_chat_launch();
-        match crate::ai::agent_chat::launch::resolve_selected_pi_launch_with_cwd_override(
+        match crate::ai::agent_chat::launch::resolve_selected_launch_with_cwd_override(
             &ai_prefs,
             &profile_ctx,
             cwd_override.clone(),
         ) {
-            Ok(pi_launch) => {
+            Ok(agent_launch) => {
                 match crate::ai::agent_chat::launch::warm_session_manager()
-                    .prepare_warm_background(pi_launch.warm_spec())
+                    .prepare_warm_background(agent_launch.warm_spec())
                 {
                     Ok(snapshot) => {
                         tracing::info!(
                             target: "script_kit::tab_ai",
-                            event = "pi_agent_chat_warm_started",
-                            profile_id = %pi_launch.profile.id,
+                            event = "agent_chat_warm_started",
+                            profile_id = %agent_launch.profile.id,
                             warm_key_sha256 = %crate::logging::log_private_user_value(
-                                &pi_launch.warm_key
+                                &agent_launch.warm_key
                             ),
                             cwd_sha256 = %crate::logging::log_private_user_value(
-                                &pi_launch.cwd.to_string_lossy()
+                                &agent_launch.cwd.to_string_lossy()
                             ),
                             cwd_override_sha256 = ?cwd_override.as_ref().map(|path| {
                                 crate::logging::log_private_user_value(&path.to_string_lossy())
@@ -3319,13 +3336,13 @@ impl ScriptListApp {
                     Err(error) => {
                         tracing::info!(
                             target: "script_kit::tab_ai",
-                            event = "pi_agent_chat_warm_unavailable",
-                            profile_id = %pi_launch.profile.id,
+                            event = "agent_chat_warm_unavailable",
+                            profile_id = %agent_launch.profile.id,
                             warm_key_sha256 = %crate::logging::log_private_user_value(
-                                &pi_launch.warm_key
+                                &agent_launch.warm_key
                             ),
                             cwd_sha256 = %crate::logging::log_private_user_value(
-                                &pi_launch.cwd.to_string_lossy()
+                                &agent_launch.cwd.to_string_lossy()
                             ),
                             cwd_override_sha256 = ?cwd_override.as_ref().map(|path| {
                                 crate::logging::log_private_user_value(&path.to_string_lossy())
@@ -3340,14 +3357,13 @@ impl ScriptListApp {
             Err(error) => {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
-                    event = "pi_agent_chat_warm_resolution_failed",
+                    event = "agent_chat_warm_resolution_failed",
                     error = %error,
                 );
             }
         }
 
-        match crate::ai::agent_chat::launch::resolve_focused_text_pi_launch(&ai_prefs, &profile_ctx)
-        {
+        match crate::ai::agent_chat::launch::resolve_focused_text_launch(&ai_prefs, &profile_ctx) {
             Ok(text_launch) => {
                 match crate::ai::agent_chat::launch::warm_session_manager()
                     .prepare_warm_background(text_launch.warm_spec())
@@ -3355,7 +3371,7 @@ impl ScriptListApp {
                     Ok(snapshot) => {
                         tracing::info!(
                             target: "script_kit::tab_ai",
-                            event = "pi_agent_chat_warm_started",
+                            event = "agent_chat_warm_started",
                             profile_id = %text_launch.profile.id,
                             warm_key = %text_launch.warm_key,
                             generation = snapshot.generation,
@@ -3365,7 +3381,7 @@ impl ScriptListApp {
                     Err(error) => {
                         tracing::info!(
                             target: "script_kit::tab_ai",
-                            event = "pi_agent_chat_warm_unavailable",
+                            event = "agent_chat_warm_unavailable",
                             profile_id = %text_launch.profile.id,
                             warm_key = %text_launch.warm_key,
                             error = %error,
@@ -3376,7 +3392,7 @@ impl ScriptListApp {
             Err(error) => {
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "pi_agent_chat_text_warm_resolution_skipped",
+                    event = "agent_chat_text_warm_resolution_skipped",
                     error = %error,
                 );
             }
@@ -3384,9 +3400,9 @@ impl ScriptListApp {
 
         // Quick AI (launcher Tab-with-text) must feel instant: prewarm its
         // session alongside the selected and Text profiles. Resolves through
-        // `resolve_quick_ai_pi_launch`, so a profile picked via Shift+Tab
+        // `resolve_quick_ai_launch`, so a profile picked via Shift+Tab
         // ("Use for Quick AI") is the one that gets warmed.
-        match crate::ai::agent_chat::launch::resolve_quick_ai_pi_launch(&ai_prefs, &profile_ctx) {
+        match crate::ai::agent_chat::launch::resolve_quick_ai_launch(&ai_prefs, &profile_ctx) {
             Ok(quick_ai_launch) => {
                 match crate::ai::agent_chat::launch::warm_session_manager()
                     .prepare_warm_background(quick_ai_launch.warm_spec())
@@ -3394,7 +3410,7 @@ impl ScriptListApp {
                     Ok(snapshot) => {
                         tracing::info!(
                             target: "script_kit::tab_ai",
-                            event = "pi_agent_chat_warm_started",
+                            event = "agent_chat_warm_started",
                             profile_id = %quick_ai_launch.profile.id,
                             warm_key = %quick_ai_launch.warm_key,
                             generation = snapshot.generation,
@@ -3404,7 +3420,7 @@ impl ScriptListApp {
                     Err(error) => {
                         tracing::info!(
                             target: "script_kit::tab_ai",
-                            event = "pi_agent_chat_warm_unavailable",
+                            event = "agent_chat_warm_unavailable",
                             profile_id = %quick_ai_launch.profile.id,
                             warm_key = %quick_ai_launch.warm_key,
                             error = %error,
@@ -3415,7 +3431,7 @@ impl ScriptListApp {
             Err(error) => {
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "pi_agent_chat_quick_ai_warm_resolution_skipped",
+                    event = "agent_chat_quick_ai_warm_resolution_skipped",
                     error = %error,
                 );
             }
@@ -3706,7 +3722,7 @@ impl ScriptListApp {
         );
         let closing_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
         let closing_agent_chat = matches!(self.current_view, AppView::AgentChatView { .. });
-        let closing_pi_agent_chat =
+        let closing_warm_agent_chat =
             closing_agent_chat && self.active_agent_chat_warm_lease.is_some();
 
         if !closing_quick_terminal && !closing_agent_chat {
@@ -3733,7 +3749,7 @@ impl ScriptListApp {
                 });
             }
             pending_warm_lease = self.active_agent_chat_warm_lease.take();
-            if closing_pi_agent_chat {
+            if closing_warm_agent_chat {
                 self.embedded_agent_chat = None;
             }
         }
@@ -4083,7 +4099,7 @@ impl ScriptListApp {
             crate::ai::agent_chat::launch::warm_session_manager().dismiss_reset_background(lease);
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "pi_agent_chat_warm_dismiss_reset_background",
+            event = "agent_chat_warm_dismiss_reset_background",
             warm_key = %key,
             generation,
             replacement_generation = snapshot.generation,
@@ -4104,7 +4120,7 @@ impl ScriptListApp {
             crate::ai::agent_chat::launch::warm_session_manager().release_for_detach_handoff(lease);
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "pi_agent_chat_warm_release_for_detach_handoff",
+            event = "agent_chat_warm_release_for_detach_handoff",
             warm_key = %key,
             generation,
             replacement_generation = snapshot.generation,
@@ -4118,7 +4134,7 @@ impl ScriptListApp {
         }
     }
 
-    /// Drop the cached embedded Agent Chat view together with the warm Pi lease
+    /// Drop the cached embedded Agent Chat view together with the warm goose lease
     /// tied to it (WP-B1). Used when a launch must NOT reuse the cache — a
     /// cross-policy mismatch, or a non-reusable incoming policy such as Quick
     /// AI (which never resurrects a prior transcript/draft, even QuickAi→

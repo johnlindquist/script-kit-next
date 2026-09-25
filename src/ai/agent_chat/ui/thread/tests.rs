@@ -345,6 +345,13 @@ fn test_thread_with_profile(
         last_local_stop: None,
         next_message_id: 1,
         host_window_state: None,
+        sign_in_wait: None,
+        sign_in_hid_main_window: false,
+        sign_in_consent: None,
+        sign_in_prompt: None,
+        sign_in_prompt_generation: 0,
+        sign_in_preapproved: false,
+        sign_in_failed: false,
         notification_debounce: AgentChatNotificationDebounce::default(),
         current_turn_id: 0,
         llm_title_attempted: false,
@@ -503,7 +510,7 @@ fn terminal_partial_history_preserves_flushed_text_without_sending_drafts_or_que
                 "failure" => thread.apply_event(
                     AgentChatEvent::TurnFailed {
                         failure: process_failure(
-                            ProtocolComponent::Pi,
+                            ProtocolComponent::Goose,
                             ProcessFailureFacts::RuntimeClosed,
                         ),
                     },
@@ -1640,7 +1647,7 @@ fn codex_upgrade_error_becomes_shared_recovery_without_raw_json() {
     );
     let raw = r#"{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-5.6-sol' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again."}}"#;
     thread.apply_event_test(AgentChatEvent::failed(
-        sk_protocol::ai_reliability::ProtocolComponent::Pi,
+        sk_protocol::ai_reliability::ProtocolComponent::Goose,
         raw,
     ));
 

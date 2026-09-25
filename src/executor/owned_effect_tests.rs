@@ -1,4 +1,4 @@
-use crate::ai::providers::{AiProvider, OpenAiProvider};
+use crate::ai::providers::{AiProvider, GooseProvider};
 use crate::platform::accessibility::{mutation, FocusedTextSessionId, TextMutationOptions};
 use crate::runtime_policy::{install_owned_evaluation, owned_evaluation, OwnedEvaluationPolicy};
 
@@ -44,9 +44,9 @@ fn owned_effect_boundaries_refuse_before_resources() {
         "system_clipboard_forbidden"
     );
 
-    // The intentionally invalid transport URL cannot contact a provider, even
-    // on regression. The observable error must come from policy, not transport.
-    let provider = OpenAiProvider::with_base_url("fixture-only-key", "not-a-url");
+    // The provider path must refuse from policy before resolving or starting
+    // the goose engine.
+    let provider = GooseProvider;
     assert_eq!(
         provider
             .send_message(&[], "fixture-model")

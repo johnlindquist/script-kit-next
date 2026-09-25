@@ -331,7 +331,7 @@ fn failure_copy(failure: &AiFailure) -> FailureCopy {
             CapabilityFailure::ClientTooOld { client, .. } => FailureCopy {
                 title: match client {
                     ClientKind::Codex => "Codex needs an update for this model",
-                    ClientKind::Pi => "Pi needs an update for this model",
+                    ClientKind::Goose => "Script Kit needs an update for this model",
                     ClientKind::Mdflow => "mdflow needs an update for this model",
                     ClientKind::LocalLlm | ClientKind::Other => "AI client update needed",
                 },
@@ -636,7 +636,9 @@ fn component_for_failure(failure: &AiFailure) -> ProtocolComponent {
         AiFailureKind::Configuration(ConfigurationFailure::MdflowMissing) => {
             ProtocolComponent::Mdflow
         }
-        AiFailureKind::Configuration(ConfigurationFailure::SidecarMissing) => ProtocolComponent::Pi,
+        AiFailureKind::Configuration(ConfigurationFailure::SidecarMissing) => {
+            ProtocolComponent::Goose
+        }
         _ => ProtocolComponent::Provider,
     }
 }

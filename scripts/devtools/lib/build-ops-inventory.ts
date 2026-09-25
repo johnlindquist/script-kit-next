@@ -133,7 +133,7 @@ export function buildStorage(root: string, external = true, budgetOnly = false) 
   try { storageRoot = managedStorageRoot(root); } catch { /* targetAgent carries the refusal. */ }
   const seen = new Set<string>(), poolSeen = new Set<string>();
   const categories = [
-    ["dev-target", "target", ["pi-sidecar"], false],
+    ["dev-target", "target", ["goose-sidecar"], false],
     ["agent-pools", "target-agent/pools", [], true],
     ["legacy-exclusive-targets", "target-agent/agents", [], true],
     ["shared-caches", "target-agent/shared", [], false],
@@ -154,7 +154,7 @@ export function buildStorage(root: string, external = true, budgetOnly = false) 
   const cargoHome = process.env.CARGO_HOME || join(homedir(), ".cargo");
   const kitHome = process.env.SK_PATH || join(homedir(), ".scriptkit");
   const candidates = [["cargo-registry", join(cargoHome, "registry")], ["cargo-git", join(cargoHome, "git")],
-    ["toolchains", process.env.RUSTUP_HOME || join(homedir(), ".rustup")], ["pi-sidecar", join(root, "target/pi-sidecar")],
+    ["toolchains", process.env.RUSTUP_HOME || join(homedir(), ".rustup")], ["goose-sidecar", join(root, "target/goose-sidecar")],
     ["models-candidate", join(kitHome, "models")], ["tools-candidate", join(kitHome, "bin")]];
   if (process.env.SCCACHE_DIR) candidates.push(["configured-sccache", resolve(process.env.SCCACHE_DIR)]);
   const externalObservations = external ? candidates.map(([category, path]) => ({ category, path, deletionScope: "never", ...allocation(path!) })) : [];
@@ -189,14 +189,14 @@ function executable(path: string | null): boolean {
 }
 export function buildDependencies(root: string) {
   const kitHome = process.env.SK_PATH || join(homedir(), ".scriptkit");
-  const explicit = process.env.SCRIPT_KIT_PI_BINARY;
-  const candidates = explicit ? [explicit.replace(/^~(?=\/|$)/, homedir())] : [join(root, "target/pi-sidecar/pi"), join(homedir(), "dev/pi_agent_rust/target/release/pi"), join(homedir(), "dev/pi_agent_rust/target/debug/pi")];
+  const explicit = process.env.SCRIPT_KIT_GOOSE_BINARY;
+  const candidates = explicit ? [explicit.replace(/^~(?=\/|$)/, homedir())] : [join(root, "target/goose-sidecar/goose")];
   const lock = existsSync(join(root, "Cargo.lock")) ? Bun.TOML.parse(readFileSync(join(root, "Cargo.lock"), "utf8")) as { package?: Array<{ name: string; version: string }> } : {};
   return {
     tools: ["bun", "python3", "git", "rustup", "cargo-watch", "sccache", "clang", "cmake", "xcrun", "cargo-bundle"].map(name => {
       const path = Bun.which(name); return { name, path, executablePresent: executable(path), health: "not-executed", version: null };
     }),
-    pi: { candidates: candidates.map(path => ({ path, executablePresent: executable(path) })), health: "not-probed", owner: "scripts/prepare-pi-sidecar.sh" },
+    goose: { candidates: candidates.map(path => ({ path, executablePresent: executable(path) })), health: "not-probed", owner: "scripts/prepare-goose-sidecar.sh" },
     models: [join(kitHome, "models/whisper-medium-q4_1.bin"), join(kitHome, "models/parakeet-tdt-0.6b-v3-int8")].map(path => ({ path, present: existsSync(path), validity: "not-loaded" })),
     lockedLibraries: (lock.package ?? []).filter(value => ["transcribe-rs", "whisper-rs-sys", "ort-sys", "llama-cpp-sys-2"].includes(value.name)).map(({ name, version }) => ({ name, version })),
     metal: { owner: "vendor/gpui_macos/build.rs", requiredTools: ["xcrun metal", "xcrun metallib"], nativeBuild: "not-executed" },

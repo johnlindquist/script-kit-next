@@ -27,7 +27,7 @@ pub fn mdflow_profiles_dir(ctx: &AgentChatProfileContext) -> PathBuf {
 /// pi-flag passthrough shape so the file doubles as a runnable mdflow agent.
 pub const MDFLOW_PROFILE_TEMPLATE: &str = r#"---
 name: My Profile
-model: openai-codex/gpt-5.3-codex-spark
+model: openai-codex/gpt-6-luna
 tools: web_search
 no-session: true
 ---
@@ -180,8 +180,8 @@ pub fn parse_mdflow_profile(stem: &str, content: &str) -> Result<ResolvedAgentCh
         id: stem.to_string(),
         name,
         icon_name,
-        backend: AgentChatBackend::Pi,
-        pi_binary: None,
+        backend: AgentChatBackend::Goose,
+        goose_binary: None,
         agent: None,
         provider,
         model,
@@ -189,7 +189,7 @@ pub fn parse_mdflow_profile(stem: &str, content: &str) -> Result<ResolvedAgentCh
         append_system_prompt,
         cwd: cwd
             .or(fallback_cwd)
-            .map(|value| crate::ai::agent_chat::pi::binary::expand_tilde_path(&value)),
+            .map(|value| crate::ai::agent_chat::goose::binary::expand_tilde_path(&value)),
         tool_policy: tools.as_ref().map(|tools| AgentChatToolPolicyConfig {
             allow: Some(tools.clone()),
         }),

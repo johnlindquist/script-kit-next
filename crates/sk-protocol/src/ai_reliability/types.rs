@@ -425,7 +425,10 @@ pub enum CapabilityFailure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientKind {
     Codex,
-    Pi,
+    /// The goose ACP engine. Records written before the engine change carry
+    /// `"Pi"` and deserialize onto this variant.
+    #[serde(alias = "Pi")]
+    Goose,
     Mdflow,
     LocalLlm,
     Other,
@@ -530,7 +533,10 @@ pub enum ProtocolFailure {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProtocolComponent {
     Codex,
-    Pi,
+    /// The goose ACP engine. Records written before the engine change carry
+    /// `"Pi"` and deserialize onto this variant.
+    #[serde(alias = "Pi")]
+    Goose,
     Mdflow,
     Provider,
     LocalLlm,

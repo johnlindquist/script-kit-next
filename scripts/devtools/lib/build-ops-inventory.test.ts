@@ -120,7 +120,7 @@ test("complete scope includes exports, pending, shared, quarantine, runtime, lea
   expect(before.targetAgentComplete).toBe(true);
   expect(before.targetAgentAllocatedBytes).toBe(expected.allocatedBytes);
   expect(before.targetAgentAllocatedBytes).toBeGreaterThan(before.agentPoolAllocatedBytes);
-  file(root, "target/dev-output"); file(root, ".test-output/evidence/payload"); file(root, "target/pi-sidecar/sidecar");
+  file(root, "target/dev-output"); file(root, ".test-output/evidence/payload"); file(root, "target/goose-sidecar/sidecar");
   for (const name of ["cargo", "rustup", "kit", "sccache"]) file(root, `outside/${name}/payload`);
   process.env.CARGO_HOME = join(root, "outside/cargo"); process.env.RUSTUP_HOME = join(root, "outside/rustup");
   process.env.SK_PATH = join(root, "outside/kit"); process.env.SCCACHE_DIR = join(root, "outside/sccache");
@@ -128,7 +128,7 @@ test("complete scope includes exports, pending, shared, quarantine, runtime, lea
   expect(full.targetAgentAllocatedBytes).toBe(before.targetAgentAllocatedBytes);
   expect(full.categories.find(item => item.category === "dev-target")!.allocatedBytes).toBeGreaterThan(0);
   expect(full.categories.find(item => item.category === "evidence-and-tasks")!.allocatedBytes).toBeGreaterThan(0);
-  expect(full.external.find(item => item.category === "pi-sidecar")!.allocatedBytes).toBeGreaterThan(0);
+  expect(full.external.find(item => item.category === "goose-sidecar")!.allocatedBytes).toBeGreaterThan(0);
   expect(full.external.find(item => item.category === "configured-sccache")!.allocatedBytes).toBeGreaterThan(0);
 });
 

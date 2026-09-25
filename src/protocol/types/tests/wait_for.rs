@@ -462,6 +462,7 @@ fn agent_chat_state_result_round_trips() {
         retained_thread_count: 0,
         fork_point_count: 0,
         awaiting_first_assistant_text: false,
+        sign_in: None,
         picker: None,
         spine: None,
         last_accepted_item: None,

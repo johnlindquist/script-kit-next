@@ -3,7 +3,6 @@
   "src/actions/window.rs": 2348,
   "src/ai/agent_chat/ui/thread.rs": 4051,
   "src/ai/agent_chat/ui/view.rs": 14516,
-  "src/ai/providers.rs": 2434,
   "src/ai/tab_context.rs": 2942,
   "src/app_actions/handle_action/mod.rs": 2450,
   "src/app_execute/builtin_execution.rs": 8236,

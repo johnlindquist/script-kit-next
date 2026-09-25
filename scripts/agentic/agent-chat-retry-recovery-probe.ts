@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { Driver, type Json } from "../devtools/driver.ts";
@@ -21,39 +22,8 @@ function sleep(ms: number): Promise<void> {
 
 const dir = await mkdtemp(join(tmpdir(), "sk-agent-chat-recovery-"));
 const readyMarker = join(dir, "ready");
-const mockPi = join(dir, "pi");
-await writeFile(
-	mockPi,
-	`#!/usr/bin/env bun
-import { existsSync } from "node:fs";
-const marker = ${JSON.stringify(readyMarker)};
-let buffer = "";
-for await (const chunk of Bun.stdin.stream()) {
-  buffer += new TextDecoder().decode(chunk, { stream: true });
-  let newline = buffer.indexOf("\\n");
-  while (newline >= 0) {
-    const line = buffer.slice(0, newline).trim();
-    buffer = buffer.slice(newline + 1);
-    newline = buffer.indexOf("\\n");
-    if (!line) continue;
-    const command = JSON.parse(line);
-    if (command.type === "get_available_models") {
-      console.log(JSON.stringify({ type: "response", id: command.id, command: command.type, success: true, data: { models: [{ provider: "openai-codex", id: "gpt-5.4", name: "Mock GPT", contextWindow: 256000 }] } }));
-    } else if (command.type === "set_model" || command.type === "abort") {
-      console.log(JSON.stringify({ type: "response", id: command.id, command: command.type, success: true, data: {} }));
-    } else if (command.type === "prompt") {
-      if (existsSync(marker)) {
-        console.log(JSON.stringify({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Recovery verified." } }));
-        console.log(JSON.stringify({ type: "agent_end" }));
-      } else {
-        console.log(JSON.stringify({ type: "agent_end", error: "connection lost" }));
-      }
-    }
-  }
-}
-`,
-);
-await chmod(mockPi, 0o755);
+// The mock fails every prompt until the ready marker exists, then answers.
+const mockGoose = resolve(import.meta.dir, "mock-goose-acp.ts");
 await mkdir(resolve(".test-output"), { recursive: true });
 await mkdir(resolve(".test-screenshots/agent-chat-retry-recovery"), {
 	recursive: true,
@@ -63,7 +33,7 @@ const receipt: Json = {
 	schemaVersion: 1,
 	verifier: "agent-chat-retry-recovery-probe",
 	binary,
-	mockPi,
+	mockGoose,
 	status: "fail",
 };
 
@@ -74,11 +44,21 @@ const driver = await Driver.launch({
 	readyTimeoutMs: 20_000,
 	defaultTimeoutMs: 12_000,
 	env: {
-		SCRIPT_KIT_PI_BINARY: mockPi,
+		SCRIPT_KIT_GOOSE_BINARY: mockGoose,
+		MOCK_GOOSE_READY_MARKER: readyMarker,
 		SCRIPT_KIT_AGENT_CHAT_HOT_PREWARM: "1",
 		SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
 	},
 });
+
+// The mock stands in for a signed-in ChatGPT account, so seed its stored
+// sign-in; the sign-in flow itself is covered by agent-chat-sign-in-probe.ts.
+{
+	const tokens = join(driver.sessionDir, "home", ".scriptkit", "goose", "config", "chatgpt_codex");
+	mkdirSync(tokens, { recursive: true });
+	writeFileSync(join(tokens, "tokens.json"), JSON.stringify({ mock: true }));
+}
+
 
 try {
 	await driver.request({ type: "show" });

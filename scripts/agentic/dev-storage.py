@@ -65,14 +65,14 @@ def resolve_layout(repo, env):
     if not volume.is_absolute() or ".." in volume.parts:
         raise Refused("invalid_volume", "Use an absolute SSD mount path without traversal")
     root = volume / "sk" / hashlib.sha256(str(repo).encode()).hexdigest()[:12]
-    target, pi = root / "target", root / "pi-sidecar"
+    target, goose = root / "target", root / "goose-sidecar"
     paths = {
         "SCRIPT_KIT_DEV_VOLUME": str(volume),
         "SCRIPT_KIT_DEV_STORAGE_ROOT": str(root),
         "CARGO_TARGET_DIR": str(target),
-        "SCRIPT_KIT_DEV_PI_DIR": str(pi),
-        "PI_AGENT_RUST_CACHE_DIR": str(pi / "cache"),
-        "PI_AGENT_RUST_TARGET_DIR": str(pi / "cache/cargo-target"),
+        "SCRIPT_KIT_DEV_GOOSE_DIR": str(goose),
+        "GOOSE_SIDECAR_CACHE_DIR": str(goose / "cache"),
+        "GOOSE_SIDECAR_TARGET_DIR": str(goose / "cache/cargo-target"),
         "SCRIPT_KIT_METAL_MODULE_CACHE_DIR": str(root / "clang-modules"),
         "CLANG_MODULE_CACHE_PATH": str(root / "clang-modules"),
         "SCCACHE_DIR": str(root / "sccache"),
@@ -97,7 +97,7 @@ def inspect_layout(repo, volume, root, paths, env):
     marker = root / MARKER
     owned_paths = [value for key, value in paths.items() if key != "SCRIPT_KIT_DEV_VOLUME_UUID"]
     reject_symlinks(volume, [*owned_paths, marker, root / ".locks", root / "target/release",
-                             root / "pi-sidecar/pi", root / "pi-sidecar/cache/cargo-target/release"])
+                             root / "goose-sidecar/goose", root / "goose-sidecar/cache/cargo-target/release"])
     mount = observe_volume(volume)
     paths["SCRIPT_KIT_DEV_VOLUME_UUID"] = mount["uuid"]
     expected_uuid = env.get("SCRIPT_KIT_DEV_VOLUME_UUID")
@@ -145,7 +145,7 @@ def main(argv=None):
                     output.write(json.dumps(expected) + "\n")
                     output.flush()
                     os.fsync(output.fileno())
-            for child in ("target", "pi-sidecar/cache/cargo-target", "clang-modules", "sccache", "tmp", ".locks"):
+            for child in ("target", "goose-sidecar/cache/cargo-target", "clang-modules", "sccache", "tmp", ".locks"):
                 (root / child).mkdir(mode=0o700, parents=True, exist_ok=True)
             mount, expected, prepared = inspect_layout(repo, volume, root, paths, os.environ)
         if args.shell:

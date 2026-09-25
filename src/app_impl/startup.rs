@@ -135,6 +135,7 @@ impl ScriptListApp {
             cwd_revision: initial_spine_cwd_revision,
             agent_label: initial_spine_agent_label,
             model_label: initial_spine_model_label,
+            provider_id: initial_spine_provider_id,
             background_effect,
             background_effect_intensity,
             reduced_motion,
@@ -591,6 +592,7 @@ impl ScriptListApp {
             agent_model_picker_active: false,
             spine_agent_label: initial_spine_agent_label,
             spine_model_label: initial_spine_model_label,
+            spine_provider_id: initial_spine_provider_id,
             spine_live_preview_cache: Default::default(),
             shown_selection_hint_text: None,
             shown_selection_hint_token: 0,
@@ -1212,7 +1214,7 @@ impl ScriptListApp {
 
                             // Quick AI: Tab with a non-empty query sends the
                             // typed text to the zero-context Quick AI profile
-                            // (spark model, no tools/skills/memories). This is
+                            // (pinned Quick AI model, no tools/skills/memories). This is
                             // the header Tab chip's advertised action whenever
                             // the input has text, so it runs BEFORE root-file
                             // directory completion — only path-shaped queries

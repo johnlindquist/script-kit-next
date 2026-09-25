@@ -35,7 +35,10 @@ fn main_window_options(
         is_movable: !host_policy.is_hidden(),
         is_resizable: !host_policy.is_hidden(),
         is_minimizable: !host_policy.is_hidden(),
-        window_min_size: Some(size(px(crate::window_resize::MAIN_WINDOW_MIN_WIDTH), px(crate::window_resize::MAIN_WINDOW_MIN_HEIGHT))),
+        window_min_size: Some(size(
+            px(crate::window_resize::MAIN_WINDOW_MIN_WIDTH),
+            px(crate::window_resize::MAIN_WINDOW_MIN_HEIGHT),
+        )),
         window_background,
         show: false,
         focus: false,
@@ -56,22 +59,33 @@ fn register_main_runtime_window(
     cx: &mut gpui::App,
 ) -> anyhow::Result<crate::protocol::AutomationWindowInfo> {
     let info = crate::protocol::AutomationWindowInfo {
-        id: "main".into(), kind: crate::protocol::AutomationWindowKind::Main,
-        title: Some("Script Kit".into()), focused: false, visible: false,
-        semantic_surface: Some("scriptList".into()), bounds: Some(automation_window_bounds_from_gpui(bounds)),
-        parent_window_id: None, parent_window_generation: None, parent_kind: None,
-        generation: None, pid: Some(std::process::id()),
+        id: "main".into(),
+        kind: crate::protocol::AutomationWindowKind::Main,
+        title: Some("Script Kit".into()),
+        focused: false,
+        visible: false,
+        semantic_surface: Some("scriptList".into()),
+        bounds: Some(automation_window_bounds_from_gpui(bounds)),
+        parent_window_id: None,
+        parent_window_generation: None,
+        parent_kind: None,
+        generation: None,
+        pid: Some(std::process::id()),
     };
     let info = crate::windows::register_runtime_window_instance(info, handle, cx)?;
     crate::set_main_window_handle(handle);
     if !cx.has_global::<MainWindowCloseObserver>() {
         let subscription = cx.on_window_closed(|cx, closed| {
             crate::footer_popup::retire_closed_footer_owner(closed, cx);
-            if let Some(handle) = crate::get_main_window_handle().filter(|handle| handle.window_id() == closed) {
+            if let Some(handle) =
+                crate::get_main_window_handle().filter(|handle| handle.window_id() == closed)
+            {
                 crate::clear_main_window_handle_if_matches(handle);
             }
         });
-        cx.set_global(MainWindowCloseObserver { _subscription: subscription });
+        cx.set_global(MainWindowCloseObserver {
+            _subscription: subscription,
+        });
     }
     Ok(info)
 }
@@ -92,19 +106,32 @@ fn sync_main_automation_window(
     visible: bool,
     focused: bool,
 ) {
-    let Some(handle) = crate::get_main_window_handle() else { return; };
-    let Some(mut info) = crate::windows::automation_window_by_id("main") else { return; };
-    let Some(generation) = info.generation else { return; };
-    if crate::windows::get_runtime_window_handle_for_generation("main", generation) != Some(handle) { return; }
+    let Some(handle) = crate::get_main_window_handle() else {
+        return;
+    };
+    let Some(mut info) = crate::windows::automation_window_by_id("main") else {
+        return;
+    };
+    let Some(generation) = info.generation else {
+        return;
+    };
+    if crate::windows::get_runtime_window_handle_for_generation("main", generation) != Some(handle)
+    {
+        return;
+    }
     if crate::runtime_policy::is_owned_evaluation() && (visible || focused) {
-        let _ = crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeVisibility);
+        let _ =
+            crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeVisibility);
         return;
     }
     info.visible = visible;
     info.focused = focused;
     info.bounds = bounds.or_else(|| {
-        if crate::runtime_policy::is_owned_evaluation() { info.bounds.clone() }
-        else { current_main_automation_bounds() }
+        if crate::runtime_policy::is_owned_evaluation() {
+            info.bounds.clone()
+        } else {
+            current_main_automation_bounds()
+        }
     });
     crate::windows::upsert_automation_window(info);
 }
@@ -343,6 +370,16 @@ fn show_main_window_helper(
                 "VISIBILITY",
                 "Restoring embedded Agent Chat exactly after focus-loss hide",
             );
+            // The chat may have changed while hidden (a turn finished or
+            // failed); refresh the footer before the first visible frame so
+            // it never shows a stale Stop.
+            if let AppView::AgentChatView { entity } = &view.current_view {
+                let entity = entity.clone();
+                view.sync_embedded_agent_chat_observed_state(&entity, ctx);
+                // Changes that land while the window is still coming back
+                // (a reply finishing) are picked up by one more settled sync.
+                view.schedule_embedded_agent_chat_observed_state_sync(entity, ctx);
+            }
             view.request_focus(FocusTarget::AgentChat, ctx);
         } else if !matches!(view.current_view, AppView::ScriptList) {
             logging::log(
@@ -797,8 +834,8 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // One shared owner for the calibrated exit: fade, locked removal delay,
     // completion-gated native hide, and the ScriptList reset only after AppKit
     // confirms the window hidden (exit-fade regression receipts, 2026-08-13).
-    let helper_geometry_cycle_id = platform::main_window_geometry_trace_enabled()
-        .then_some(geometry_cycle_id);
+    let helper_geometry_cycle_id =
+        platform::main_window_geometry_trace_enabled().then_some(geometry_cycle_id);
     app_entity.update(cx, |view, ctx| {
         view.defer_calibrated_main_window_hide(
             ctx,

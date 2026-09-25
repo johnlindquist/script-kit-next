@@ -135,8 +135,16 @@ debounce, footer capsules, runtime receipt, and hidden-park restore stay gated
 on the physical main NSWindow), and exits with the main window's fixed-frame
 fade (`glass_exit_mode_for_preset`). Under `PreviousCalibration` the Actions
 popup restores its calibrated grow-in entry and shrink-out + blur exit, so the
-calibration captures above remain valid. Confirm, inline, shortcut-recorder,
-and footer popups keep their calibrated motion. The Actions popup also settles
+calibration captures above remain valid. Inline, shortcut-recorder, and footer
+popups keep their calibrated motion.
+
+**2026-09-24 modals mirror Actions (user-authorized):** the owner asked for the
+modal animation to "match the animation that we use for the actions menu where
+it doesn't change its width anymore." The confirm popup (every parent confirm
+and action dialog, including Agent Chat sign-in) now uses
+`GlassMorphVariant::MirrorMainEntry` and the Actions exit/material rules
+exactly; under `PreviousCalibration` it restores its calibrated grow-in and
+shrink-out + blur. The Actions popup also settles
 untinted (`NativeGlassSurfaceRole::PopupBackdrop`, under every preset): it sits
 over the already-tinted main glass, and its own stability tint snapped the
 glassy entry to a washed-out gray (owner report and A/B capture, 2026-09-23).

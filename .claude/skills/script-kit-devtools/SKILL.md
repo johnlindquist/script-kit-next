@@ -38,14 +38,14 @@ The loop:
 
 Binary-path: with no explicit override, the driver and `session.sh` auto-pick the freshest (by mtime) of `target/debug/script-kit-gpui` (owned by `./dev.sh`) and `target-agent/pools/agent-debug/debug/script-kit-gpui` (agent-cargo's pool), and print which they chose to stderr — read that line and confirm it names the binary you just built. Pin explicitly with `Driver.launch({ binary: ... })` or `SCRIPT_KIT_GPUI_BINARY=...` when the choice matters (e.g. another loop may rebuild either path mid-run). For a stable per-task path that survives later rebuilds, export an artifact clone: `SCRIPT_KIT_AGENT_ARTIFACT_NAME=<task> ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui` then launch `target-agent/artifacts/<task>/script-kit-gpui`.
 
-### Pi Sidecar Availability (Agent Chat)
+### goose Sidecar Availability (Agent Chat)
 
-Dev/agent-built binaries run outside a `.app` bundle, so the bundled `Contents/MacOS/pi` sidecar never resolves; debug builds fall back to `target/pi-sidecar/pi`, then `~/dev/pi_agent_rust/target/{release,debug}/pi` (see `src/ai/agent_chat/pi/binary.rs`). When this skill is invoked, run `bash scripts/agentic/ensure-pi-sidecar.sh` once before launching or driving the app — it exits instantly when a Pi binary already resolves and otherwise builds the repo-local sidecar via `scripts/prepare-pi-sidecar.sh`. Without it, cmd+enter / Agent Chat surfaces show "Pi Agent Chat is unavailable", which is an environment gap, not an app bug. `./dev.sh` runs the same check automatically.
+Dev/agent-built binaries run outside a `.app` bundle, so the bundled `Contents/MacOS/goose` sidecar never resolves; debug builds fall back to `target/goose-sidecar/goose` (see `src/ai/agent_chat/goose/binary.rs`). When this skill is invoked, run `bash scripts/agentic/ensure-goose-sidecar.sh` once before launching or driving the app — it exits instantly when a healthy goose binary already resolves; `--repair` builds the pinned sidecar via `scripts/prepare-goose-sidecar.sh`. Without it, cmd+enter / Agent Chat surfaces show "Agent Chat is unavailable", which is an environment gap, not an app bug. For provider-free Agent Chat runs, point `SCRIPT_KIT_GOOSE_BINARY` at `scripts/agentic/mock-goose-acp.ts`. `./dev.sh` runs the same check automatically.
 
 Driver rules of thumb:
 
 - Use `sandboxHome: true` unless the bug specifically needs real user data; it keeps runs reproducible and protects real Script Kit state.
-- For live Agent Chat/brain probes add `seedAgentAuth: true` (or run `bash scripts/agentic/seed-sandbox-home.sh <sandbox-home>`) — it APFS-clones `~/.pi` plus `~/.codex/{auth.json,config.toml}` into the sandbox in one call.
+- For live Agent Chat/brain probes add `seedAgentAuth: true` (or run `bash scripts/agentic/seed-sandbox-home.sh <sandbox-home>`) — it APFS-clones `~/.scriptkit/goose/config` plus `~/.codex/{auth.json,config.toml}` into the sandbox in one call.
 - Use `await driver.waitForSettle()` instead of hardcoded sleeps before the first submit after opening a surface (the old `sleep(1500)` set_model-race workaround): it polls until N consecutive identical states and typically returns in ~300ms.
 - Whole-scenario `batch` (setInput → waitFor → select) is one round trip and the fastest proof shape; per-command calls are still fast and easier to interleave with assertions.
 - Always `await driver.close()` (use try/finally) so no app instance outlives the probe.

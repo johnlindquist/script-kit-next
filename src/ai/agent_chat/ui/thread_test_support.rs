@@ -114,6 +114,13 @@ impl AgentChatThread {
             last_local_stop: None,
             next_message_id: 1,
             host_window_state: None,
+            sign_in_wait: None,
+            sign_in_hid_main_window: false,
+            sign_in_consent: None,
+            sign_in_prompt: None,
+            sign_in_prompt_generation: 0,
+            sign_in_preapproved: false,
+            sign_in_failed: false,
             notification_debounce: AgentChatNotificationDebounce::default(),
             current_turn_id: 0,
             llm_title_attempted: false,
@@ -164,7 +171,7 @@ impl AgentChatThread {
             self.status = AgentChatThreadStatus::Idle;
         } else {
             let failure =
-                process_failure(ProtocolComponent::Pi, ProcessFailureFacts::RuntimeClosed);
+                process_failure(ProtocolComponent::Goose, ProcessFailureFacts::RuntimeClosed);
             self.transition_reliability_test(AiOperationEvent::Failed(failure.failure));
             self.push_message(
                 AgentChatThreadMessageRole::Error,
@@ -415,7 +422,23 @@ impl AgentChatThread {
                 // only the GPUI fork-point refresh is omitted here.
                 self.apply_fork_completed_state(text);
             }
+            super::AgentChatEvent::SignInRequired { provider, consent } => {
+                self.request_sign_in_consent(&provider, consent);
+            }
+            super::AgentChatEvent::SignInStarted { provider } => {
+                // No host window in tests: record the wait without hiding.
+                self.sign_in_wait = Some(AgentChatSignInWait {
+                    provider: crate::ai::agent_chat::goose::sign_in::provider_display_name(
+                        &provider,
+                    ),
+                    completed: false,
+                });
+            }
+            super::AgentChatEvent::SignInCompleted { provider } => {
+                self.complete_sign_in_wait(&provider);
+            }
             super::AgentChatEvent::TurnCompleted { .. } => {
+                self.end_sign_in_wait();
                 self.set_status(AgentChatThreadStatus::Idle);
                 if !self.queue_paused {
                     if let Some(message) = self.queued_messages.pop_front() {
@@ -461,13 +484,14 @@ impl AgentChatThread {
                 // matched no auth wording, so this classified to `Unknown` and
                 // the card lost its Sign In action.
                 let failure = crate::ai::reliability::setup_required_failure(
-                    ProtocolComponent::Pi,
+                    ProtocolComponent::Goose,
                     &reason,
                     &auth_methods,
                 );
                 self.transition_reliability_test(AiOperationEvent::Failed(failure.failure));
             }
             super::AgentChatEvent::TurnFailed { failure } => {
+                self.end_sign_in_wait();
                 if matches!(self.reliability_state.phase, AiPhase::Ready) {
                     let request = TurnRequestRef::from("test-request");
                     self.transition_reliability_test(AiOperationEvent::SubmitRequested {

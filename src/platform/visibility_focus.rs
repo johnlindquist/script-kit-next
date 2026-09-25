@@ -202,6 +202,31 @@ pub fn defer_hide_main_window(cx: &mut gpui::App) {
     .detach();
 }
 
+/// Hide the main window without dismissing its surface: the next show brings
+/// back the current view (embedded Agent Chat, typed filter) exactly, as after
+/// a Space change. Deferred to the next event-loop tick like
+/// [`defer_hide_main_window`], so it is safe from GPUI callbacks. Returns
+/// whether a visible main window was hidden.
+pub fn defer_hide_main_window_preserving_state(cx: &mut gpui::App, reason: &'static str) -> bool {
+    if !native_effect_allowed(crate::runtime_policy::ExternalEffect::NativeVisibility) {
+        return false;
+    }
+    if !crate::is_main_window_visible() {
+        return false;
+    }
+    crate::set_main_window_visible(false);
+    crate::mark_main_state_restore_after_focus_loss();
+    cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
+        hide_main_window();
+        logging::log(
+            "PANEL",
+            &format!("Main window hidden with its view preserved: {reason}"),
+        );
+    })
+    .detach();
+    true
+}
+
 /// Hide the main window outside the current GPUI borrow and report the verified
 /// native outcome to `completion`.
 ///

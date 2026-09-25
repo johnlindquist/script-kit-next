@@ -240,8 +240,8 @@ export default {
   dictation: { selectedDeviceId: "usb-mic" },
   ai: {
     selectedProfileId: "script-kit",
-    selectedBackend: "pi",
-    selectedModelId: "openai-codex/gpt-5.4"
+    selectedBackend: "goose",
+    selectedModelId: "chatgpt_codex/gpt-6-luna"
   },
   windowManagement: { snapMode: "expanded" }
 };
@@ -249,55 +249,71 @@ export default {
 
 ### Agent Chat Configuration
 
-Agent Chat with Pi Backend uses profiles in `~/.scriptkit/config.ts`. Codex is
-the default provider; alternative providers belong in advanced profile
-configuration rather than the primary setup flow.
+Agent Chat runs on the bundled [goose](https://github.com/aaif-goose/goose)
+engine over the Agent Client Protocol and uses profiles in
+`~/.scriptkit/config.ts`. The ChatGPT (Codex) subscription is the default
+provider. Any goose provider works in a profile, including `anthropic`,
+`google`, `openrouter`, and local models through `ollama` or `lmstudio`.
 
 ```typescript
 ai: {
-  selectedBackend: "pi",
+  selectedBackend: "goose",
   selectedProfileId: "script-kit",
-  selectedModelId: "openai-codex/gpt-5.4",
+  selectedModelId: "chatgpt_codex/gpt-6-luna",
   profiles: [
     {
       id: "script-kit",
       name: "Script Kit",
-      backend: "pi",
-      provider: "openai-codex",
-      model: "gpt-5.4",
+      backend: "goose",
+      provider: "chatgpt_codex",
+      model: "gpt-6-luna",
       cwd: "~/.scriptkit",
-      tools: ["read", "write", "edit", "bash", "grep", "find", "ls", "hashline_edit"],
-      disableExtensions: true,
-      disableSkills: true,
-      disablePromptTemplates: true
+      tools: ["read", "write", "edit", "bash", "grep", "find", "ls", "web_search"]
+    },
+    {
+      id: "local",
+      name: "Local",
+      provider: "ollama",
+      model: "qwen3:4b",
+      tools: ["web_search", "read"]
     }
   ]
 }
 ```
 
-Pi-backed Agent Chat uses the bundled Pi sidecar in release builds. Developers
-and support builds can override it with `SCRIPT_KIT_PI_BINARY`, `ai.piBinary`,
-or a per-profile `piBinary`.
+Tools come from two places. `web_search`, `web_fetch`, `read`, `grep`, `find`,
+`ls`, and `create_file` are Script Kit tools, confined to the profile's
+`pathPolicy`. `write`, `edit`, and `bash` are goose's developer tools. A profile
+gets only the tools it lists.
 
-Use the Agent Chat actions menu to change profile or model. Compatibility
-settings for other command-line agents may still be honored when explicitly
-configured, but they are not the primary Agent Chat setup flow.
+The launcher and Agent Chat say "Not signed in" until you sign in to a
+subscription provider (ChatGPT, Gemini, or xAI). The first time you use an AI
+feature, a "Sign in to ChatGPT" dialog asks first: ↵ opens sign-in in your
+browser, Esc means not now. While you sign in, Script Kit steps aside; when you
+finish, it comes back and your message continues. If sign-in doesn't finish,
+↵ Try Again returns you to the browser. Switch Account in the Actions menu (⌘K)
+forgets the stored sign-in. Sign-ins are stored in `~/.scriptkit/goose`,
+separate from the Codex CLI's own login. API keys saved with the Configure
+OpenAI/Anthropic/Vercel API Key commands are passed to goose automatically.
+
+Release builds use the bundled goose engine. Developers and support builds can
+override it with `SCRIPT_KIT_GOOSE_BINARY`, `ai.gooseBinary`, or a per-profile
+`gooseBinary`.
+
+Use the Agent Chat actions menu to change profile or model.
 
 ### Advanced Provider Configuration
 
-These keys are for legacy direct-provider AI features and advanced provider
-setups, not for the default Codex-backed Agent Chat flow. Agent Chat setup
-should go through profiles in `config.ts`.
+Script Kit passes these keys to the goose engine under the names its providers
+read. Other goose providers (OpenRouter, xAI, Bedrock, and more) are set up with
+`goose configure`. Agent Chat setup should go through profiles in `config.ts`.
 
 ```bash
-# Direct providers
 export SCRIPT_KIT_OPENAI_API_KEY="sk-..."
 export SCRIPT_KIT_ANTHROPIC_API_KEY="sk-ant-..."
-
-# Additional providers
 export SCRIPT_KIT_GOOGLE_API_KEY="..."
 export SCRIPT_KIT_GROQ_API_KEY="..."
-export SCRIPT_KIT_OPENROUTER_API_KEY="..."
+export SCRIPT_KIT_VERCEL_API_KEY="..."
 ```
 
 After adding, restart your terminal or run `source ~/.zshrc`.
@@ -641,9 +657,9 @@ cargo build --release --bin script-kit-gpui
 
 # macOS app bundle
 cargo install cargo-bundle
-bash scripts/prepare-pi-sidecar.sh
+bash scripts/prepare-goose-sidecar.sh
 cargo bundle --release --bin script-kit-gpui
-bash scripts/install-pi-sidecar-into-bundle.sh
+bash scripts/install-goose-sidecar-into-bundle.sh
 
 # Verify bundle contents
 bash scripts/verify-macos-bundle.sh

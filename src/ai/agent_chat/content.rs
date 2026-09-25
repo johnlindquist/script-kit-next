@@ -1,6 +1,6 @@
 //! Canonical Agent Chat content-block boundary.
 //!
-//! Agent Chat owns these payload types locally so the Pi-backed runtime does
+//! Agent Chat owns these payload types locally so the goose-backed runtime does
 //! not depend on the deprecated backend client library.
 
 #[derive(Debug, Clone, PartialEq, Eq)]

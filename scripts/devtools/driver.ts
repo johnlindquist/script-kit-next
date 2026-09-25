@@ -228,9 +228,9 @@ export interface DriverOptions {
    */
   sharedModels?: boolean;
   /**
-   * With sandboxHome, seed the sandbox with the Pi/Codex auth state live
+   * With sandboxHome, seed the sandbox with the goose/Codex auth state live
    * Agent Chat probes need (runs scripts/agentic/seed-sandbox-home.sh:
-   * APFS-clones ~/.pi plus ~/.codex/{auth.json,config.toml}). Default false —
+   * APFS-clones ~/.scriptkit/goose/config plus ~/.codex/{auth.json,config.toml}). Default false —
    * leave it off unless the probe drives a live agent.
    */
   seedAgentAuth?: boolean;

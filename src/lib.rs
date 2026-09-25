@@ -307,6 +307,9 @@ pub mod mcp_server;
 // Provides real-time event streaming and tool call audit logs
 pub mod mcp_streaming;
 
+// MCP Agent Tools - Script Kit tools for goose agent sessions (/mcp/agent)
+pub(crate) mod mcp_agent_tools;
+
 // MCP Protocol - JSON-RPC 2.0 protocol handler for MCP
 // Handles request parsing, method routing, and response generation
 pub mod mcp_protocol;

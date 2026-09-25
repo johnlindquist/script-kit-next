@@ -44,7 +44,7 @@ pub(crate) struct AgentChatFixtureReceipt {
 fn retryable_failure() -> AgentChatEvent {
     AgentChatEvent::TurnFailed {
         failure: crate::ai::reliability::runtime_closed_failure(
-            sk_protocol::ai_reliability::ProtocolComponent::Pi,
+            sk_protocol::ai_reliability::ProtocolComponent::Goose,
             "controlled fixture transport closed",
         ),
     }

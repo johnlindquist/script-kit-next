@@ -64,14 +64,17 @@ bash scripts/agentic/ai-phase-trace-check.sh
   read-only `ping.md`. A heavyweight flow would spend longer in tool calls, so
   treat 2035 ms as the transport's floor rather than a typical flow turn.
 
+The measurements below were taken on the previous engines (Pi RPC and a cold
+`codex exec` for Quick AI). Since 2026-09-24 those surfaces run on the goose
+ACP sidecar (`goose-acp` transport); re-measure before comparing numbers.
+
 ## Pieces
 
 | Path | Role |
 |---|---|
 | `src/ai/phase_trace.rs` | The shared writer, vocabulary, and redaction posture |
-| `src/ai/agent_chat/pi/runtime.rs` | Pi transport (Agent Chat, Text, Mini) |
+| `src/ai/agent_chat/goose/runtime.rs` | goose ACP transport (Agent Chat, Quick AI, Text, Mini) |
 | `src/flows/codex_client.rs` | Flows transport (`codex app-server`) |
-| `src/ai/agent_chat/codex_exec.rs` | Quick AI, mirrored onto the shared trace |
 | `ai-phase-trace-report.ts` | Trace → per-surface numbers and verdict |
 | `ai-phase-trace-probe.ts` | Drives real turns through the real app |
 | `fixtures/ai-phase-trace-receipt.ndjson` | The committed measured run |

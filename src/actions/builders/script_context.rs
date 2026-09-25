@@ -1464,7 +1464,7 @@ fn agent_chat_model_switch_description(
 }
 
 fn agent_chat_profile_backend_label(_backend: crate::config::AgentChatBackend) -> &'static str {
-    "Pi"
+    "goose"
 }
 
 fn agent_chat_profile_source_label(
@@ -1527,7 +1527,7 @@ fn agent_chat_profile_picker_actions(
 /// Build the root-level Agent Chat actions list. Includes the profile and model
 /// picker entries (which trigger drill-down) plus the standard Agent Chat chat
 /// actions. (The legacy "Change Agent" picker was removed — all sessions use
-/// the Pi backend, with provider/model chosen via the Shift+Tab picker.)
+/// the goose backend, with provider/model chosen via the Shift+Tab picker.)
 pub(crate) fn get_agent_chat_root_actions(
     available_models: &[crate::ai::agent_chat::ui::config::AgentChatModelEntry],
     selected_model_id: Option<&str>,

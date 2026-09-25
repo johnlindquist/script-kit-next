@@ -59,7 +59,7 @@ impl ScriptListApp {
         );
     }
 
-    pub(super) fn show_pi_agent_chat_unavailable_setup_view(
+    pub(super) fn show_agent_chat_unavailable_setup_view(
         &mut self,
         source_view: AppView,
         error: String,
@@ -68,12 +68,12 @@ impl ScriptListApp {
     ) {
         tracing::error!(
             target: "script_kit::tab_ai",
-            event = "pi_agent_chat_unavailable",
+            event = "agent_chat_unavailable",
             error = %error,
         );
         let setup = crate::ai::agent_chat::ui::AgentChatInlineSetupState {
             reason_code: "piAgentChatUnavailable",
-            title: "Pi Agent Chat is unavailable".into(),
+            title: "Agent Chat is unavailable".into(),
             body: error.into(),
             primary_action: crate::ai::agent_chat::ui::AgentChatSetupAction::Retry,
             secondary_action: None,
@@ -86,7 +86,7 @@ impl ScriptListApp {
         self.show_embedded_agent_chat_setup_view(source_view, setup, session_policy, cx);
     }
 
-    pub(super) fn show_pi_agent_chat_warming_setup_view(
+    pub(super) fn show_agent_chat_warming_setup_view(
         &mut self,
         source_view: AppView,
         profile_name: String,
@@ -94,12 +94,12 @@ impl ScriptListApp {
     ) {
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "pi_agent_chat_warming_setup",
+            event = "agent_chat_warming_setup",
             profile_name = %profile_name,
         );
         let setup = crate::ai::agent_chat::ui::AgentChatInlineSetupState {
             reason_code: "piAgentChatWarming",
-            title: "Starting Pi Agent Chat".into(),
+            title: "Starting Agent Chat".into(),
             body: format!("{profile_name} is starting. Try again in a moment.").into(),
             primary_action: crate::ai::agent_chat::ui::AgentChatSetupAction::Retry,
             secondary_action: None,
@@ -107,7 +107,7 @@ impl ScriptListApp {
             catalog_entries: Vec::new(),
             launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
         };
-        // Warming is a Pi-general path (every variant) — default Full.
+        // Warming is a goose-general path (every variant) — default Full.
         self.show_embedded_agent_chat_setup_view(
             source_view,
             setup,

@@ -218,7 +218,7 @@ pub(crate) struct AgentChatToolCallState {
     pub status: String,
     /// Latest body text (e.g. file contents, command output).
     pub body: Option<String>,
-    /// Raw Pi tool name (e.g. "bash", "edit") when the event carried one.
+    /// Raw tool name (e.g. "bash", "edit") when the event carried one.
     pub tool_name: Option<String>,
     /// One-line subject extracted from the tool args (path, command, query).
     pub subject: Option<String>,
@@ -504,12 +504,12 @@ pub(crate) struct AgentChatThread {
     /// O(1) lookup from tool_call_id to index in `active_tool_calls`.
     tool_call_lookup: HashMap<String, usize>,
     /// Session-scoped "Allow always" grants the user has made, in grant
-    /// order. Pi owns the live approval cache; this mirror keeps the grants
-    /// visible and reviewable in the UI. Survives `clear_messages` (same Pi
+    /// order. The engine owns the live approval cache; this mirror keeps the grants
+    /// visible and reviewable in the UI. Survives `clear_messages` (same goose
     /// session keeps its cache) and resets with the session.
     standing_approvals: Vec<super::permission_broker::AgentChatStandingApproval>,
 
-    /// User messages the live Pi session can rewind to, in conversation
+    /// User messages the live goose session can rewind to, in conversation
     /// order (refreshed after every finished turn via `get_fork_messages`).
     fork_points: Vec<super::events::AgentChatForkPoint>,
     /// Ordinal (index into `fork_points`) of an in-flight rewind request.
@@ -567,6 +567,19 @@ pub(crate) struct AgentChatThread {
 
     /// Host-window state last observed by the AgentChatView render/activation hooks.
     host_window_state: Option<AgentChatHostWindowState>,
+    /// Provider browser sign-in the current turn is waiting on, if any.
+    sign_in_wait: Option<AgentChatSignInWait>,
+    /// Whether this thread hid the main window while the login page is open.
+    sign_in_hid_main_window: bool,
+    /// The runtime's open question: may this turn open the sign-in page?
+    sign_in_consent: Option<async_channel::Sender<bool>>,
+    /// The sign-in modal the view should present, if any.
+    sign_in_prompt: Option<AgentChatSignInPrompt>,
+    sign_in_prompt_generation: u64,
+    /// Try Again already consented to the retried turn's sign-in.
+    sign_in_preapproved: bool,
+    /// The current failure is a sign-in failure the modal presents.
+    sign_in_failed: bool,
     notification_debounce: AgentChatNotificationDebounce,
     current_turn_id: u64,
     llm_title_attempted: bool,
@@ -714,11 +727,10 @@ impl AgentChatThread {
             AgentChatSessionPolicy::QuickAi => AiSurfaceIdentity::QuickAi {
                 profile_id: ProfileId::from(profile_id),
                 provider_id: Self::provider_id_from_model(model_id).unwrap_or_else(|| {
-                    ProviderId::from(crate::ai::agent_chat::profiles::DEFAULT_PI_PROVIDER)
+                    ProviderId::from(crate::ai::agent_chat::profiles::DEFAULT_PROVIDER)
                 }),
                 model_id: ModelId::from(
-                    model_id
-                        .unwrap_or(crate::ai::agent_chat::codex_exec::QUICK_AI_SELECTED_MODEL_ID),
+                    model_id.unwrap_or(crate::ai::agent_chat::profiles::QUICK_AI_MODEL),
                 ),
             },
             AgentChatSessionPolicy::Full => AiSurfaceIdentity::AgentChat {
@@ -1049,6 +1061,8 @@ impl AgentChatThread {
             blocks,
             model_id: self.selected_model_id.clone(),
             tool_policy: self.session_policy.tool_policy(),
+            // A person started this turn: they are asked before sign-in opens.
+            allow_interactive_sign_in: true,
         }
     }
 
@@ -1281,6 +1295,13 @@ impl AgentChatThread {
             last_local_stop: None,
             next_message_id: 1,
             host_window_state: None,
+            sign_in_wait: None,
+            sign_in_hid_main_window: false,
+            sign_in_consent: None,
+            sign_in_prompt: None,
+            sign_in_prompt_generation: 0,
+            sign_in_preapproved: false,
+            sign_in_failed: false,
             notification_debounce: AgentChatNotificationDebounce::default(),
             current_turn_id: 0,
             llm_title_attempted: false,
@@ -2111,7 +2132,7 @@ impl AgentChatThread {
         }
         self.pending_context_consumed = false;
         self.status = AgentChatThreadStatus::Error;
-        let failure = process_failure(ProtocolComponent::Pi, ProcessFailureFacts::SpawnFailed);
+        let failure = process_failure(ProtocolComponent::Goose, ProcessFailureFacts::SpawnFailed);
         tracing::warn!(
             target: "script_kit::tab_ai",
             event = "agent_chat_context_resolution_failed",
@@ -2238,6 +2259,7 @@ impl AgentChatThread {
 }
 
 include!("thread_recovery.rs");
+include!("thread_sign_in.rs");
 
 impl AgentChatThread {
     // ── Private helpers ────────────────────────────────────────────
@@ -2805,8 +2827,18 @@ impl AgentChatThread {
                 changed |= self.flush_streaming_text_buffer();
                 changed |= self.apply_fork_completed(text, cx);
             }
+            AgentChatEvent::SignInRequired { provider, consent } => {
+                changed |= self.request_sign_in_consent(&provider, consent);
+            }
+            AgentChatEvent::SignInStarted { provider } => {
+                changed |= self.begin_sign_in_wait(&provider, cx);
+            }
+            AgentChatEvent::SignInCompleted { provider } => {
+                changed |= self.complete_sign_in_wait(&provider);
+            }
             AgentChatEvent::TurnCompleted { .. } => {
                 changed |= self.flush_streaming_text_buffer();
+                changed |= self.end_sign_in_wait();
                 if self.pending_permission.take().is_some() {
                     changed = true;
                 }
@@ -2938,7 +2970,7 @@ impl AgentChatThread {
                 // matched no auth wording, so this classified to `Unknown` and
                 // the card lost its Sign In action.
                 let failure = crate::ai::reliability::setup_required_failure(
-                    ProtocolComponent::Pi,
+                    ProtocolComponent::Goose,
                     &reason,
                     &auth_methods,
                 );
@@ -2947,6 +2979,8 @@ impl AgentChatThread {
             }
             AgentChatEvent::TurnFailed { failure } => {
                 let _ = self.flush_streaming_text_buffer();
+                // The arm always repaints; ending the wait needs no flag.
+                self.end_sign_in_wait();
                 if self.session_policy == AgentChatSessionPolicy::QuickAi
                     && matches!(self.reliability_state.phase, AiPhase::Running { .. })
                 {
@@ -2977,9 +3011,14 @@ impl AgentChatThread {
                     safe_message.clone(),
                 );
                 let _ = self.pending_permission.take();
+                // A missing sign-in is a setup step, not an error: the sign-in
+                // modal presents it instead of an error row and card.
+                let sign_in_modal = self.present_sign_in_failure(&failure);
                 let _ = self.transition_reliability(AiOperationEvent::Failed(failure.failure), cx);
                 changed = true;
-                changed |= self.push_message(AgentChatThreadMessageRole::Error, safe_message);
+                if !sign_in_modal {
+                    changed |= self.push_message(AgentChatThreadMessageRole::Error, safe_message);
+                }
                 self.save_conversation_history(cx);
             }
         }
@@ -3036,7 +3075,7 @@ impl AgentChatThread {
             }
         } else {
             let failure =
-                process_failure(ProtocolComponent::Pi, ProcessFailureFacts::RuntimeClosed);
+                process_failure(ProtocolComponent::Goose, ProcessFailureFacts::RuntimeClosed);
             let message = failure.primary_message().to_string();
             let _ = self.transition_reliability(AiOperationEvent::Failed(failure.failure), cx);
             self.push_message(AgentChatThreadMessageRole::Error, message);
@@ -3579,6 +3618,9 @@ impl AgentChatThread {
                 blocks,
                 model_id: self.selected_model_id.clone(),
                 tool_policy: self.session_policy.tool_policy(),
+                // Variations run beside the thread's own turn, which owns the
+                // sign-in prompt; they follow its login instead of asking.
+                allow_interactive_sign_in: false,
             })
             .map_err(|error| error.to_string())
     }
@@ -3644,6 +3686,7 @@ impl AgentChatThread {
             return;
         }
         self.flush_streaming_text_buffer();
+        self.end_sign_in_wait();
         self.queue_paused = true;
         self.context_resolution_id = self.context_resolution_id.wrapping_add(1);
         let _ = self.transition_reliability(AiOperationEvent::StopRequested, cx);
@@ -3751,7 +3794,7 @@ impl AgentChatThread {
             );
         let sources = source_texts
             .flat_map(str::split_whitespace)
-            .filter_map(crate::ai::agent_chat::codex_exec::canonical_http_url)
+            .filter_map(canonical_http_url)
             .filter(|url| seen.insert(url.clone()))
             .collect::<Vec<_>>();
 
@@ -4237,4 +4280,19 @@ impl AgentChatThread {
     pub(crate) fn brain_decision_generation(&self) -> u64 {
         self.context_resolution_id
     }
+}
+
+/// A whitespace-delimited token as a canonical http(s) URL, with the
+/// sentence punctuation and markdown wrapping that trail links in prose
+/// removed. Fragments are dropped so one page is listed once.
+fn canonical_http_url(token: &str) -> Option<String> {
+    let trimmed = token
+        .trim_start_matches(['(', '<', '[', '"', '\''])
+        .trim_end_matches([')', '>', ']', '.', ',', ';', ':', '!', '?', '"', '\'', '*']);
+    let mut url = url::Url::parse(trimmed).ok()?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return None;
+    }
+    url.set_fragment(None);
+    Some(url.to_string())
 }

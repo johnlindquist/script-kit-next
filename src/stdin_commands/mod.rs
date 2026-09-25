@@ -512,7 +512,7 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open focused-text mini Agent Chat with fixture focused text and real Pi submission.
+    /// Open focused-text mini Agent Chat with fixture focused text and real goose submission.
     OpenFocusedTextAgentChatWithPiData {
         #[serde(default)]
         text: Option<String>,

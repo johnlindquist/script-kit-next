@@ -67,7 +67,7 @@ pub(crate) fn warm_recovery_state(
     // safe copy would erase actionable auth/config/runtime recovery details.
     let failure = failure.cloned().unwrap_or_else(|| {
         provider_failure(
-            sk_protocol::ai_reliability::ProtocolComponent::Pi,
+            sk_protocol::ai_reliability::ProtocolComponent::Goose,
             "warm prepare failed before reporting available models",
         )
     });
@@ -147,7 +147,7 @@ mod tests {
     use sk_protocol::ai_reliability::{AiPhase, RecoveryActionKind};
 
     fn pi_failure(raw: &str) -> crate::ai::reliability::AppFailureRecord {
-        provider_failure(sk_protocol::ai_reliability::ProtocolComponent::Pi, raw)
+        provider_failure(sk_protocol::ai_reliability::ProtocolComponent::Goose, raw)
     }
 
     #[test]
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn warm_recovery_keeps_the_typed_failure_instead_of_reclassifying_its_own_copy() {
         let typed = crate::ai::reliability::setup_required_failure(
-            sk_protocol::ai_reliability::ProtocolComponent::Pi,
+            sk_protocol::ai_reliability::ProtocolComponent::Goose,
             "login required",
             &["browser".to_string()],
         );

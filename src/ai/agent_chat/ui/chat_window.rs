@@ -209,7 +209,7 @@ fn chat_window_open_route(is_open: bool) -> ChatWindowOpenRoute {
     }
 }
 
-/// Open (or focus) the detached Agent Chat window with a real Pi thread.
+/// Open (or focus) the detached Agent Chat window with a real goose thread.
 pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
     match chat_window_open_route(is_chat_window_open()) {
         ChatWindowOpenRoute::ActivateExisting => {

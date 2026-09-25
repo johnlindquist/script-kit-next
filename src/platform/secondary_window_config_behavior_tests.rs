@@ -406,7 +406,7 @@ fn main_backdrop_fills_the_window_but_keeps_the_partitioned_host_policy() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn exit_mode_follows_calibration_set_and_actions_mirrors_main_preset() {
+fn exit_mode_follows_calibration_set_and_actions_and_modals_mirror_main_preset() {
     // The calibrated exit motion keys off the fixed-frame-exit set, NOT
     // the backdrop layout — Notes stays fade-only with zero inset.
     for legacy_preset in [false, true] {
@@ -416,23 +416,23 @@ fn exit_mode_follows_calibration_set_and_actions_mirrors_main_preset() {
                 super::GlassExitMode::DetachedRegionsFadeOnly
             );
         }
-        for window_name in ["Confirm popup", "Inline popup"] {
-            assert_eq!(
-                super::glass_exit_mode_for_preset(window_name, legacy_preset),
-                super::GlassExitMode::PopupTransformAndBlur
-            );
-        }
+        assert_eq!(
+            super::glass_exit_mode_for_preset("Inline popup", legacy_preset),
+            super::GlassExitMode::PopupTransformAndBlur
+        );
     }
-    // Actions mirrors the main window's fade under every catalog preset;
-    // PreviousCalibration restores its calibrated shrink-out + blur.
-    assert_eq!(
-        super::glass_exit_mode_for_preset("Actions popup", false),
-        super::GlassExitMode::DetachedRegionsFadeOnly
-    );
-    assert_eq!(
-        super::glass_exit_mode_for_preset("Actions popup", true),
-        super::GlassExitMode::PopupTransformAndBlur
-    );
+    // Actions and modals mirror the main window's fade under every catalog
+    // preset; PreviousCalibration restores their calibrated shrink-out + blur.
+    for window_name in ["Actions popup", "Confirm popup"] {
+        assert_eq!(
+            super::glass_exit_mode_for_preset(window_name, false),
+            super::GlassExitMode::DetachedRegionsFadeOnly
+        );
+        assert_eq!(
+            super::glass_exit_mode_for_preset(window_name, true),
+            super::GlassExitMode::PopupTransformAndBlur
+        );
+    }
     assert_eq!(super::glass_exit_remove_delay().as_millis(), 135);
 }
 

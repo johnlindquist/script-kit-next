@@ -5,10 +5,9 @@ mod prompt_handler_message_tests {
         escape_windows_cmd_open_target, is_read_only_automation_query,
         persist_script_error_agent_chat_context_bundle_in_dir, prompt_coming_soon_warning,
         prompt_message_from_protocol_message, replies_to_automation_client,
-        resolve_ai_start_chat_provider, should_restore_main_window_after_script_exit,
-        unhandled_message_warning, PromptConversionSource, PromptMessageRoute,
+        should_restore_main_window_after_script_exit, unhandled_message_warning,
+        PromptConversionSource, PromptMessageRoute,
     };
-    use crate::ai::providers::OpenAiProvider;
     use crate::PromptMessage;
 
     /// Stdin automation reads are answered on the app's stdout even while a
@@ -337,28 +336,6 @@ mod prompt_handler_message_tests {
         assert!(should_restore_main_window_after_script_exit(true, true));
         assert!(!should_restore_main_window_after_script_exit(true, false));
         assert!(!should_restore_main_window_after_script_exit(false, true));
-    }
-
-    #[test]
-    fn test_resolve_ai_start_chat_provider_returns_registered_provider_for_model() {
-        let mut registry = crate::ai::ProviderRegistry::new();
-        registry.register(std::sync::Arc::new(OpenAiProvider::new("test-key")));
-
-        assert_eq!(
-            resolve_ai_start_chat_provider(&registry, "gpt-4o"),
-            Some("openai".to_string())
-        );
-    }
-
-    #[test]
-    fn test_resolve_ai_start_chat_provider_returns_none_for_unknown_model() {
-        let mut registry = crate::ai::ProviderRegistry::new();
-        registry.register(std::sync::Arc::new(OpenAiProvider::new("test-key")));
-
-        assert_eq!(
-            resolve_ai_start_chat_provider(&registry, "claude-3-5-sonnet-20241022"),
-            None
-        );
     }
 
     #[test]

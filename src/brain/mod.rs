@@ -118,57 +118,24 @@ pub fn recall_context_block(query: &str) -> Result<Option<String>> {
     Ok((!block.is_empty()).then_some(block))
 }
 
-/// Timeout for one-shot pi completions (curator, Telegram bridge).
-const PI_ONESHOT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+/// Timeout for one-shot completions (curator, Telegram bridge).
+const ONESHOT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// One-shot `pi -p --no-tools` completion, shared by the curator and the
-/// Telegram bridge. Uses the same binary resolution as Agent Chat; returns
-/// `Ok(None)` when no pi binary is installed (callers degrade gracefully).
-pub(crate) fn pi_oneshot(prompt: &str) -> Result<Option<String>> {
-    let Some(pi_binary) = crate::ai::agent_chat::pi::binary::default_pi_binary() else {
+/// One-shot tool-free completion through the goose engine, shared by the
+/// curator and the Telegram bridge. Returns `Ok(None)` when the goose engine
+/// is not installed (callers degrade gracefully).
+pub(crate) fn ai_oneshot(prompt: &str) -> Result<Option<String>> {
+    if crate::ai::agent_chat::goose::binary::default_goose_binary().is_none() {
         return Ok(None);
-    };
-    run_pi_print(&pi_binary, prompt).map(Some)
-}
-
-fn run_pi_print(pi_binary: &std::path::Path, prompt: &str) -> Result<String> {
-    use anyhow::Context as _;
-    let mut child = std::process::Command::new(pi_binary)
-        .args([
-            "-p",
-            "--no-tools",
-            "--provider",
-            crate::ai::agent_chat::profiles::DEFAULT_PI_PROVIDER,
-            "--model",
-            crate::ai::agent_chat::profiles::DEFAULT_PI_MODEL,
-            prompt,
-        ])
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .context("spawn brain pi")?;
-    let deadline = std::time::Instant::now() + PI_ONESHOT_TIMEOUT;
-    loop {
-        match child.try_wait().context("brain pi wait")? {
-            Some(status) => {
-                let mut output = String::new();
-                if let Some(mut stdout) = child.stdout.take() {
-                    use std::io::Read as _;
-                    let _ = stdout.read_to_string(&mut output);
-                }
-                if !status.success() {
-                    anyhow::bail!("brain pi exited with {status}");
-                }
-                return Ok(output);
-            }
-            None if std::time::Instant::now() > deadline => {
-                let _ = child.kill();
-                anyhow::bail!("brain pi timed out");
-            }
-            None => std::thread::sleep(std::time::Duration::from_millis(250)),
-        }
     }
+    crate::ai::agent_chat::goose::oneshot::complete(
+        crate::ai::agent_chat::goose::oneshot::OneshotRequest {
+            prompt: prompt.to_string(),
+            timeout: Some(ONESHOT_TIMEOUT),
+            ..Default::default()
+        },
+    )
+    .map(Some)
 }
 
 /// Record that the user asked the brain something (attention signal).

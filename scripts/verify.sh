@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
   echo "usage: bash scripts/verify.sh [--skip-bundle] [--only <phase>]" >&2
-  echo "phases: fmt check clippy test test-compile integration-tests domain-tests first-run-fixtures permissions-fixtures mock-ai-fixtures privacy-fixtures proof-contracts consistency-catalog sdk-types sdk-tests pi-sidecar bundle bundle-sidecar bundle-verify" >&2
+  echo "phases: fmt check clippy test test-compile integration-tests domain-tests first-run-fixtures permissions-fixtures mock-ai-fixtures privacy-fixtures proof-contracts consistency-catalog sdk-types sdk-tests goose-sidecar bundle bundle-sidecar bundle-verify" >&2
   echo "proof-contracts uses source-bound project artifact fixtures: run it only while all Cargo builds and native evaluators are idle" >&2
 }
 
@@ -246,7 +246,6 @@ require_clean_source_identity() {
     scripts/agentic/build-isolated-binary.sh
     scripts/agentic/cargo-timings-summary.ts
     scripts/agentic/cargo-timings-summary.test.ts
-    scripts/agentic/quick-ai-latency-bench.test.ts
     scripts/agentic/ai-phase-trace-report.test.ts
     scripts/agentic/root-typing-lag-benchmark.test.ts
     scripts/agentic/root-search-frame-stability.test.ts
@@ -610,7 +609,6 @@ run_phase() {
         ./scripts/agentic/cons-proof-gov/story-geometry-proof.test.ts \
         ./scripts/agentic/cons-proof-gov/proof-foundation-safety.test.ts \
         ./scripts/agentic/cargo-timings-summary.test.ts \
-        ./scripts/agentic/quick-ai-latency-bench.test.ts \
         ./scripts/agentic/ai-phase-trace-report.test.ts \
         ./scripts/agentic/root-typing-lag-benchmark.test.ts \
         ./scripts/agentic/root-search-frame-stability.test.ts \
@@ -634,15 +632,15 @@ run_phase() {
     sdk-tests)
       run_step "sdk-tests" run_sdk_tests
       ;;
-    pi-sidecar)
-      run_step "pi-sidecar" bash scripts/prepare-pi-sidecar.sh
+    goose-sidecar)
+      run_step "goose-sidecar" bash scripts/prepare-goose-sidecar.sh
       ;;
     bundle)
       run_step_quiet "bundle-lock" "$CARGO_CMD" metadata --locked --format-version=1 --no-deps
       run_step "bundle" "$CARGO_CMD" bundle --release --bin script-kit-gpui
       ;;
     bundle-sidecar)
-      run_step "bundle-sidecar" bash scripts/install-pi-sidecar-into-bundle.sh "${BUNDLE_APP_PATH}"
+      run_step "bundle-sidecar" bash scripts/install-goose-sidecar-into-bundle.sh "${BUNDLE_APP_PATH}"
       ;;
     bundle-verify)
       run_step "bundle-verify" bash scripts/verify-macos-bundle.sh "${BUNDLE_APP_PATH}"
@@ -664,7 +662,7 @@ if [[ -n "$ONLY" ]]; then
       printf "\n[verify] COMPLETE skip_bundle=%s only=%s\n" "$SKIP_BUNDLE" "$ONLY"
       exit 0
       ;;
-    pi-sidecar|bundle|bundle-sidecar|bundle-verify)
+    goose-sidecar|bundle|bundle-sidecar|bundle-verify)
       if [[ "$SKIP_BUNDLE" -eq 1 ]]; then
         echo "verify phase '$ONLY' is disabled by --skip-bundle" >&2
         exit 64
@@ -697,7 +695,7 @@ run_phase "sdk-types"
 run_phase "sdk-tests"
 
 if [[ "$SKIP_BUNDLE" -eq 0 ]]; then
-  run_phase "pi-sidecar"
+  run_phase "goose-sidecar"
   run_phase "bundle"
   run_phase "bundle-sidecar"
   run_phase "bundle-verify"

@@ -50,7 +50,7 @@ or reinvent them.
   windows, and only when the OS layer is what's under test.
 - **Fixture files via the file tool**, never shell heredocs/`printf`
   (multibyte/quoting mangling).
-- **Environment ≠ bug.** Missing pi sidecar, unauth LLM, denied TCC
+- **Environment ≠ bug.** Missing goose sidecar, unauth LLM, denied TCC
   permission, machine load, stale binary, your own harness mistake — classify
   as environment, never inflate the count.
 - **Fix, then lock.** Every accepted bug/design-drift fix gets a
@@ -66,8 +66,8 @@ or reinvent them.
 SCRIPT_KIT_AGENT_ARTIFACT_NAME=chaos ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui
 export SCRIPT_KIT_GPUI_BINARY=target-agent/artifacts/chaos/script-kit-gpui
 
-# 2. Pi sidecar (Agent Chat / brain stories show "unavailable" without it):
-bash scripts/agentic/ensure-pi-sidecar.sh
+# 2. goose sidecar (Agent Chat / brain stories show "unavailable" without it):
+bash scripts/agentic/ensure-goose-sidecar.sh
 
 # 3. Baseline must be green BEFORE fuzzing (and after every fix):
 ./scripts/agentic/agent-cargo.sh test 2>&1 | tail -8

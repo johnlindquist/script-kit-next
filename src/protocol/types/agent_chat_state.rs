@@ -82,7 +82,7 @@ pub struct AgentChatStateSnapshot {
     #[serde(default)]
     pub retained_thread_count: usize,
 
-    /// Number of rewindable user messages (Pi fork checkpoints) the
+    /// Number of rewindable user messages (fork checkpoint) the
     /// "Rewind & Edit" action can target.
     #[serde(default)]
     pub fork_point_count: usize,
@@ -90,6 +90,12 @@ pub struct AgentChatStateSnapshot {
     /// True when a submitted user turn is streaming before assistant text lands.
     #[serde(default)]
     pub awaiting_first_assistant_text: bool,
+
+    /// Provider browser sign-in for the thread's model: `notSignedIn`,
+    /// `waitingForBrowser`, or `signedIn` (just finished, turn continuing).
+    /// Absent when the provider needs no browser sign-in or is signed in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sign_in: Option<String>,
 
     /// Picker state (None when picker is closed).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -233,6 +239,7 @@ impl Default for AgentChatStateSnapshot {
             retained_thread_count: 0,
             fork_point_count: 0,
             awaiting_first_assistant_text: false,
+            sign_in: None,
             picker: None,
             spine: None,
             last_accepted_item: None,
@@ -1167,6 +1174,7 @@ mod tests {
             retained_thread_count: 0,
             fork_point_count: 0,
             awaiting_first_assistant_text: true,
+            sign_in: None,
             picker: None,
             spine: Some(AgentChatSpineSnapshot {
                 owns_list: true,

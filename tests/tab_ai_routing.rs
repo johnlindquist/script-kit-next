@@ -144,24 +144,24 @@ fn quick_terminal_cmd_enter_does_not_add_new_agent_chat_surface_mutation_path() 
 fn pi_warmup_branch_opens_visible_chat_instead_of_warming_setup() {
     let launch_body = source_block_after(
         TAB_AI_AGENT_CHAT_LAUNCH_SOURCE,
-        "fn open_tab_ai_pi_view_from_launch(",
+        "fn open_tab_ai_agent_chat_view_from_launch(",
         6500,
     );
 
     assert!(
         launch_body.contains("acquire_ready_or_spawn_cold(warm_spec)"),
-        "Pi Agent Chat warm miss must acquire a ready lease or cold-spawn an acquired lease"
+        "Agent Chat warm miss must acquire a ready lease or cold-spawn an acquired lease"
     );
     assert!(
         launch_body.contains("enter_embedded_agent_chat_surface"),
-        "Pi Agent Chat open must still switch into the visible Agent Chat view"
+        "Agent Chat open must still switch into the visible Agent Chat view"
     );
     assert!(
-        !launch_body.contains("show_pi_agent_chat_warming_setup_view"),
+        !launch_body.contains("show_agent_chat_warming_setup_view"),
         "Ordinary Empty/Preparing warm misses must not show the retry-only warming setup"
     );
     assert!(
-        !launch_body.contains("Starting Pi Agent Chat. Try again in a moment."),
+        !launch_body.contains("Starting Agent Chat. Try again in a moment."),
         "Ordinary Empty/Preparing warm misses must not toast a retry-only waiting state"
     );
 }

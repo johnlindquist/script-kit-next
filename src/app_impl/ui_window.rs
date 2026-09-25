@@ -1558,19 +1558,29 @@ impl ScriptListApp {
             })
     }
 
-    /// Combined "Agent · Model" footer label, derived from the persisted Pi
+    /// Combined "Agent · Model" footer label, derived from the persisted goose
     /// provider/model selection (`spine_agent_label` / `spine_model_label`).
     /// Returns `None` when neither label is known so the chip stays hidden.
     pub(crate) fn agent_model_footer_label(&self) -> Option<String> {
-        match (
+        let label = match (
             self.spine_agent_label.as_ref(),
             self.spine_model_label.as_ref(),
         ) {
-            (Some(agent), Some(model)) => Some(format!("{agent} · {model}")),
-            (Some(agent), None) => Some(agent.clone()),
-            (None, Some(model)) => Some(model.clone()),
-            (None, None) => None,
-        }
+            (Some(agent), Some(model)) => format!("{agent} · {model}"),
+            (Some(agent), None) => agent.clone(),
+            (None, Some(model)) => model.clone(),
+            (None, None) => return None,
+        };
+        // Cached lookup; the first AI use starts the browser sign-in.
+        let signed_out = self
+            .spine_provider_id
+            .as_deref()
+            .is_some_and(crate::ai::agent_chat::goose::sign_in::needs_sign_in);
+        Some(if signed_out {
+            format!("{label} · Not signed in")
+        } else {
+            label
+        })
     }
 
     pub(crate) fn prompt_header_context(

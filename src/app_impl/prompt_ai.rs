@@ -51,12 +51,7 @@ pub(crate) fn build_ai_script_generation_user_prompt(description: &str) -> Strin
 pub(crate) fn select_default_ai_script_model(
     registry: &crate::ai::ProviderRegistry,
 ) -> Option<crate::ai::ModelInfo> {
-    let all_models = registry.get_all_models();
-    all_models
-        .iter()
-        .find(|model| model.provider.eq_ignore_ascii_case("vercel"))
-        .cloned()
-        .or_else(|| all_models.first().cloned())
+    registry.get_all_models().first().cloned()
 }
 
 pub(crate) fn extract_generated_script_source(raw_response: &str) -> Option<String> {
@@ -401,7 +396,7 @@ impl ScriptListApp {
 
     /// Show inline AI chat prompt with built-in AI provider support.
     /// This switches to the ChatPrompt view with direct AI integration (no SDK needed).
-    /// Prefers Vercel AI Gateway if configured, otherwise uses the first available provider.
+    /// Uses the first model the provider registry lists (the preferred goose model).
     pub fn show_inline_ai_chat(&mut self, initial_query: Option<String>, cx: &mut Context<Self>) {
         use crate::ai::ProviderRegistry;
         use crate::prompts::ChatPrompt;
@@ -522,7 +517,7 @@ impl ScriptListApp {
                 crate::components::conversation_actions::ActiveWorkDismissal::RequiresExplicitStop,
             callback: dismiss_callback,
         })
-        .with_builtin_ai(registry, true) // true = prefer Vercel AI Gateway
+        .with_builtin_ai(registry)
         .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
 
         tracing::info!(

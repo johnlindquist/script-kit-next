@@ -391,7 +391,7 @@ export function normalizeCompilerPolicy(root: string, args: readonly string[] = 
   }
   Object.assign(env, agentIncrementalEnvironment);
   for (const name of ["CARGO_BUILD_BUILD_DIR", "CARGO_RESOLVER_LOCKFILE_PATH"]) if (env[name]) refuse("configuration_stale", `Cargo storage relocation is unqualified: ${name}`);
-  const pool = env.SCRIPT_KIT_AGENT_REGISTERED_TASK === "pi-sidecar" ? join(root, "target/pi-sidecar/cache/cargo-target") : join(root, "target-agent/pools/agent-debug");
+  const pool = env.SCRIPT_KIT_AGENT_REGISTERED_TASK === "goose-sidecar" ? join(root, "target/goose-sidecar/cache/cargo-target") : join(root, "target-agent/pools/agent-debug");
   for (const name of ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"]) if (env[name] && resolve(root, env[name]) !== pool) refuse("configuration_stale", `Cargo storage relocation escapes protected destination: ${name}`);
   for (const name of ["SCRIPT_KIT_METAL_MODULE_CACHE_DIR", "CLANG_MODULE_CACHE_PATH"]) if (env[name] && !resolve(root, env[name]).startsWith(join(root, "target-agent/shared") + sep)) refuse("configuration_stale", `shader cache relocation escapes protected storage: ${name}`);
   const separator = args.indexOf("--"), cargoArgs = separator < 0 ? args : args.slice(0, separator);
@@ -784,8 +784,8 @@ function emitWrapperResult(root: string, result: Record<string, unknown>, task: 
 
 export async function runWrapperCargo(args: string[]): Promise<number> {
   const root = realpathSync(process.env.SCRIPT_KIT_REPO_ROOT || resolve(import.meta.dir, "../.."));
-  const registeredInputs = process.env.SCRIPT_KIT_AGENT_REGISTERED_TASK === "pi-sidecar"
-    ? ["target/pi-sidecar/cache/source-3d1a3950c16ffdb10cd81780b26921c75c180770"] : [];
+  const registeredInputs = process.env.SCRIPT_KIT_AGENT_REGISTERED_TASK === "goose-sidecar"
+    ? ["target/goose-sidecar/cache/source-302b60806639ea9f0ae8f053f49f8bf0e88b26f4"] : [];
   const observeSource = () => observeArtifactSource(root, registeredInputs);
   const lockPath = join(root, "target-agent/.locks/pool-agent-debug.lock");
   const generation = process.env.SCRIPT_KIT_AGENT_LEASE_GENERATION || "";
@@ -1090,7 +1090,7 @@ export async function publishSignedBundle(root: string, task: ManagedTask, input
   const signedExecutable = join(bundle, "Contents/MacOS/script-kit-gpui"), attestation = readOwnedJson(attestationPath);
   const signedHash = hashArtifactFile(signedExecutable), treeHash = bundleTreeHash(bundle);
   if (attestation.sourceSha !== input.manifest.source.gitHead || attestation.binarySha256 !== signedHash
-    || attestation.sidecarSha256 !== hashArtifactFile(join(bundle, "Contents/MacOS/pi"))
+    || attestation.sidecarSha256 !== hashArtifactFile(join(bundle, "Contents/MacOS/goose"))
     || !isHash(attestation.notarizedArchiveSha256) || !/^[A-Z0-9]{10}$/.test(attestation.teamIdentifier)
     || attestation.hardenedRuntime !== true || attestation.stapled !== true || attestation.gatekeeperAccepted !== true
     || unsignedMachOPayloadSha256(input.executablePath) !== unsignedMachOPayloadSha256(signedExecutable)) refuse("binary_hash_mismatch", "signed bundle is not the attested compiler artifact derivation");

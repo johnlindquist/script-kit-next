@@ -208,6 +208,11 @@ english-to-cron = "0.1"        # Convert natural language schedules to cron
 
 # HTTP client for AI provider API calls
 ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
+# Agent tools (src/mcp_agent_tools): URL handling, file walking, glob matching
+url = "2"
+percent-encoding = "2"
+walkdir = "2"
+globset = "0.4"
 
 which = "8.0.0"
 hex = "0.4.3"

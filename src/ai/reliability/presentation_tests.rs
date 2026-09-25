@@ -172,7 +172,7 @@ fn representative_failures() -> Vec<AiFailure> {
         ),
         AiFailure::new(
             AiFailureKind::Protocol(ProtocolFailure::SequenceViolation {
-                component: ProtocolComponent::Pi,
+                component: ProtocolComponent::Goose,
             }),
             never,
         ),

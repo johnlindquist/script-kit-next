@@ -1147,7 +1147,7 @@ fn representative_failure_kinds() -> Vec<AiFailureKind> {
             component: ProtocolComponent::Mdflow,
         }),
         AiFailureKind::Protocol(ProtocolFailure::MalformedResponse {
-            component: ProtocolComponent::Pi,
+            component: ProtocolComponent::Goose,
         }),
         AiFailureKind::Protocol(ProtocolFailure::MissingTerminal {
             component: ProtocolComponent::Provider,

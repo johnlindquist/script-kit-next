@@ -448,7 +448,7 @@ pub fn classify_runtime_closed(
 ///
 /// This event is a FACT the agent runtime states directly: the user is not
 /// signed in, and here are the auth methods it accepts. It used to be
-/// formatted into prose (`"Pi Agent Chat setup required: login required.
+/// formatted into prose (`"Agent Chat setup required: login required.
 /// Available methods: browser"`) and handed to `classify_provider_failure`,
 /// which matches English. None of that wording is auth wording the classifier
 /// recognises, so it fell through to `AiFailureKind::Unknown` and the user got
@@ -737,13 +737,13 @@ fn requires_newer_client(value: &str) -> bool {
     (value.contains("requires a newer version")
         || value.contains("client is too old")
         || value.contains("upgrade to the latest app or cli"))
-        && contains_any(value, &["codex", "pi", "mdflow", "client", "app", "cli"])
+        && contains_any(value, &["codex", "goose", "mdflow", "client", "app", "cli"])
 }
 
 fn client_for_component(component: ProtocolComponent) -> ClientKind {
     match component {
         ProtocolComponent::Codex => ClientKind::Codex,
-        ProtocolComponent::Pi => ClientKind::Pi,
+        ProtocolComponent::Goose => ClientKind::Goose,
         ProtocolComponent::Mdflow => ClientKind::Mdflow,
         ProtocolComponent::LocalLlm => ClientKind::LocalLlm,
         ProtocolComponent::Provider => ClientKind::Other,
@@ -755,8 +755,8 @@ fn client_for_failure_text(value: &str, component: ProtocolComponent) -> ClientK
         ClientKind::Codex
     } else if value.contains("mdflow") {
         ClientKind::Mdflow
-    } else if value.contains(" pi ") || value.starts_with("pi ") {
-        ClientKind::Pi
+    } else if value.contains("goose") {
+        ClientKind::Goose
     } else {
         client_for_component(component)
     }

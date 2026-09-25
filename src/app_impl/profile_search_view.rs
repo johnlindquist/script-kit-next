@@ -282,6 +282,7 @@ impl ScriptListApp {
             } else {
                 self.spine_agent_label = Some(result.profile.name.clone());
                 self.spine_model_label = result.profile.model.clone();
+                self.spine_provider_id = result.profile.provider.clone();
                 self.mark_main_data_changed();
             }
         }

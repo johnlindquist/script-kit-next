@@ -16,7 +16,7 @@ function record(fields: Record<string, unknown>): string {
     schemaVersion: 1,
     runId: "r",
     surface: "agent-chat",
-    transport: "pi-rpc",
+    transport: "goose-acp",
     seq: 1,
     ...fields,
   });
@@ -184,7 +184,7 @@ describe("reportForSurface", () => {
 
 describe("buildReport", () => {
   test("separates surfaces that share a transport", () => {
-    // Agent Chat, Text, and Mini all ride pi-rpc. Pooling them would hide a
+    // Agent Chat, Text, and Mini all ride goose-acp. Pooling them would hide a
     // slow surface behind two fast ones.
     const text = [
       ...Array.from({ length: 5 }, (_, index) =>
@@ -222,21 +222,21 @@ describe("overlapping turns under one runId", () => {
    *
    * Splitting at `turn_start` is only valid while a run's turns are sequential.
    * The focused-text variation fan-out opens several Mini turns at once under
-   * the constant id `"pi-isolated"`, so their phases interleave and every
+   * the constant id `"goose-isolated"`, so their phases interleave and every
    * median built from them describes a turn nobody ran.
    */
   const overlapping = [
-    record({ runId: "pi-isolated", surface: "mini", event: "turn_start", elapsedMs: 0 }),
+    record({ runId: "goose-isolated", surface: "mini", event: "turn_start", elapsedMs: 0 }),
     // Second turn opens BEFORE the first terminates — the whole problem.
-    record({ runId: "pi-isolated", surface: "mini", event: "turn_start", elapsedMs: 10 }),
+    record({ runId: "goose-isolated", surface: "mini", event: "turn_start", elapsedMs: 10 }),
     record({
-      runId: "pi-isolated",
+      runId: "goose-isolated",
       surface: "mini",
       event: "first_visible_output",
       elapsedMs: 900,
     }),
     record({
-      runId: "pi-isolated",
+      runId: "goose-isolated",
       surface: "mini",
       event: "terminal",
       elapsedMs: 1000,
@@ -245,7 +245,7 @@ describe("overlapping turns under one runId", () => {
       toolCalls: 0,
     }),
     record({
-      runId: "pi-isolated",
+      runId: "goose-isolated",
       surface: "mini",
       event: "terminal",
       elapsedMs: 1100,

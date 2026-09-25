@@ -45,7 +45,7 @@ before/after bug proof -> bun scripts/devtools/compare.ts redgreen --red <receip
 coverage gap / missing primitive -> bun scripts/devtools/coverage.ts --surface <id> ; source-backed backlog -> bun scripts/devtools/surfaces.ts
 deterministic UI without live agents -> fixtures (openConfirmPrompt, openAgentChatKitchenSinkFixture, openAiWithMockData, ...) instead of live provider state
 fresh stable binary for probes -> SCRIPT_KIT_AGENT_ARTIFACT_NAME=<task> ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui
-Agent Chat / brain probes -> bash scripts/agentic/ensure-pi-sidecar.sh once first; seed sandbox auth via seedAgentAuth: true or scripts/agentic/seed-sandbox-home.sh
+Agent Chat / brain probes -> bash scripts/agentic/ensure-goose-sidecar.sh once first; seed sandbox auth via seedAgentAuth: true or scripts/agentic/seed-sandbox-home.sh
 verify changed behavior -> run the exact primitive/probe and read its actual receipt — green means the same user-path symptom that failed red now passes, never that a recipe passed
 verify changed behavior -> bun scripts/devtools/driver.ts smoke when the driver layer itself is suspect
 verify changed behavior -> after any UI pass: escape -> hide -> getState must show windowVisible:false
@@ -95,7 +95,7 @@ agent-cargo SIGTERM mid-build / target-agent missing -> the low-disk watcher evi
 configured model unavailable -> stop and report the exact runtime error; never silently switch models
 rg exits 1 (no matches) -> broaden the pattern once, then report the absence plus the exact command used
 test target not found under --lib -> app_impl tests live in the binary target: ./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui
-"Pi Agent Chat is unavailable" -> environment gap, not an app bug: run bash scripts/agentic/ensure-pi-sidecar.sh and relaunch
+"Agent Chat is unavailable" -> environment gap, not an app bug: run bash scripts/agentic/ensure-goose-sidecar.sh --repair and relaunch
 "window not found" log spam -> known noise lead (~180k lines); do not chase it as the primary bug
 screenshot returns TCC/permission error -> the binary was rebuilt and lost screen-capture grant; fall back to protocol receipts (state/elements/layout)
 probe drove a stale binary -> the driver auto-picks the freshest of target/debug and the agent pool and prints its choice to stderr; pin with SCRIPT_KIT_GPUI_BINARY or an artifact clone

@@ -1335,19 +1335,21 @@ impl ScriptListApp {
     }
 
     /// Resolve the persisted Agent Chat profile/model into footer display
-    /// labels. Returns `(profile_display_name, model_display_name)`.
-    pub(crate) fn resolve_agent_model_footer_labels() -> (Option<String>, Option<String>) {
+    /// labels. Returns `(profile_display_name, model_display_name, provider_id)`.
+    pub(crate) fn resolve_agent_model_footer_labels(
+    ) -> (Option<String>, Option<String>, Option<String>) {
         let prefs = crate::config::load_user_preferences();
         let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
         let profile = crate::ai::agent_chat::profiles::resolve_effective_profile(&prefs.ai, &ctx);
         let profile_label = Some(profile.name.clone());
+        let provider_id = profile.provider.clone();
 
         let Some(model_id) = profile.model.as_deref() else {
-            return (profile_label, None);
+            return (profile_label, None, provider_id);
         };
 
         let model_label = profile.provider.as_deref().and_then(|provider_id| {
-            crate::ai::agent_chat::profiles::pi_provider_model_catalog()
+            crate::ai::agent_chat::profiles::provider_model_catalog()
                 .iter()
                 .find(|entry| entry.id == provider_id)
                 .and_then(|entry| {
@@ -1362,15 +1364,17 @@ impl ScriptListApp {
         (
             profile_label,
             Some(model_label.unwrap_or_else(|| model_id.to_string())),
+            provider_id,
         )
     }
 
     /// Refresh the cached footer agent/model labels from persisted preferences.
     /// Called after the Profile Switcher persists a new selection.
     pub(crate) fn refresh_agent_model_footer_labels(&mut self) {
-        let (agent_label, model_label) = Self::resolve_agent_model_footer_labels();
+        let (agent_label, model_label, provider_id) = Self::resolve_agent_model_footer_labels();
         self.spine_agent_label = agent_label;
         self.spine_model_label = model_label;
+        self.spine_provider_id = provider_id;
     }
 
     pub(crate) fn toggle_root_unified_result_actions(

@@ -4,7 +4,7 @@ fn append_agent_chat_design_tokens(
     def: MainMenuThemeDef,
     colors: &crate::theme::ColorScheme,
 ) {
-    // ── Agent Chat (embedded Pi chat surface) ────────────────────────────
+    // ── Agent Chat (embedded Agent Chat surface) ────────────────────────────
     // Production contract only: `conversation_style::production_conversation_style()`.
     // Every theme-color × authored-alpha byte routes through the SAME
     // `conversation_style` resolvers `components/transcript.rs` and `view.rs`
@@ -805,13 +805,26 @@ fn append_agent_chat_design_tokens(
         );
     }
     for (id, value, path) in [
-        ("agentChat.assistant.bgAlpha", chat.assistant_message.bg_alpha,
-            "ConversationMessageStyle(assistant).bg_alpha"),
-        ("agentChat.activity.labelAlpha", agent_chat_contract::CONVERSATION_ACTIVITY_LABEL_ALPHA,
-            "conversation_style::CONVERSATION_ACTIVITY_LABEL_ALPHA"),
+        (
+            "agentChat.assistant.bgAlpha",
+            chat.assistant_message.bg_alpha,
+            "ConversationMessageStyle(assistant).bg_alpha",
+        ),
+        (
+            "agentChat.activity.labelAlpha",
+            agent_chat_contract::CONVERSATION_ACTIVITY_LABEL_ALPHA,
+            "conversation_style::CONVERSATION_ACTIVITY_LABEL_ALPHA",
+        ),
     ] {
-        b.add(id, TokenStage::Source, None, TokenValue::AlphaByte { value: value.get() },
-            Some(path), false, &[]);
+        b.add(
+            id,
+            TokenStage::Source,
+            None,
+            TokenValue::AlphaByte { value: value.get() },
+            Some(path),
+            false,
+            &[],
+        );
     }
 
     // ── Agent Chat conflicts (recorded, not collapsed) ──────────────────

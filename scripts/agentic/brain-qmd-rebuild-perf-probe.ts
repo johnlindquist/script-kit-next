@@ -456,7 +456,7 @@ const receipt: Record<string, unknown> = {
   timezone,
   sandboxHome,
   derivedDbPath: dbPath,
-  protectedDirtyFiles: ["dev.sh", "scripts/agentic/ensure-pi-sidecar.sh"],
+  protectedDirtyFiles: ["dev.sh", "scripts/agentic/ensure-goose-sidecar.sh"],
   budgets,
   pass: false,
   failures: [] as string[],
@@ -467,7 +467,7 @@ let activeDriver: Driver | null = null;
 try {
   const protectedBefore = {
     dev: protectedDiff("dev.sh"),
-    pi: protectedDiff("scripts/agentic/ensure-pi-sidecar.sh"),
+    pi: protectedDiff("scripts/agentic/ensure-goose-sidecar.sh"),
   };
   const fixtures = writeCanonicalFixtures();
   const expectedBySource = fixtures.reduce<Record<string, number>>((counts, fixture) => {
@@ -550,7 +550,7 @@ try {
   const preIndexProof = receipt.preIndexProof as Json;
   const protectedAfter = {
     dev: protectedDiff("dev.sh"),
-    pi: protectedDiff("scripts/agentic/ensure-pi-sidecar.sh"),
+    pi: protectedDiff("scripts/agentic/ensure-goose-sidecar.sh"),
   };
   receipt.protectedDirtyFilesUnchanged =
     protectedBefore.dev === protectedAfter.dev && protectedBefore.pi === protectedAfter.pi;

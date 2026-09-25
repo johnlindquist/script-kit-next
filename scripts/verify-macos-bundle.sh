@@ -12,7 +12,7 @@ SOURCE_MIGRATE_DIR="${SOURCE_SCRIPTS_DIR}/migrate"
 BUNDLED_SCRIPTS_DIR="${RESOURCES_DIR}/scripts"
 BUNDLED_MIGRATE_DIR="${BUNDLED_SCRIPTS_DIR}/migrate"
 EXPECTED_BIN="${MACOS_DIR}/script-kit-gpui"
-EXPECTED_PI_BIN="${MACOS_DIR}/pi"
+EXPECTED_GOOSE_BIN="${MACOS_DIR}/goose"
 INFO_PLIST="${APP_PATH}/Contents/Info.plist"
 
 reject_symbolic_link() {
@@ -40,10 +40,10 @@ reject_symbolic_link "${SOURCE_ASSETS_DIR}"
 reject_symbolic_link "${SOURCE_SCRIPTS_DIR}"
 reject_symbolic_link "${SOURCE_MIGRATE_DIR}"
 reject_symbolic_link "${EXPECTED_BIN}"
-reject_symbolic_link "${EXPECTED_PI_BIN}"
+reject_symbolic_link "${EXPECTED_GOOSE_BIN}"
 reject_symbolic_link "${INFO_PLIST}"
 test -x "${EXPECTED_BIN}"
-test -x "${EXPECTED_PI_BIN}"
+test -x "${EXPECTED_GOOSE_BIN}"
 test -f "${INFO_PLIST}"
 
 if [[ ! -x /usr/libexec/PlistBuddy ]]; then
@@ -71,34 +71,34 @@ if [[ "${actual_bundle_executable}" != "script-kit-gpui" ]]; then
 fi
 
 app_sha256="$(shasum -a 256 "${EXPECTED_BIN}" | awk '{print $1}')"
-pi_sha256="$(shasum -a 256 "${EXPECTED_PI_BIN}" | awk '{print $1}')"
+goose_sha256="$(shasum -a 256 "${EXPECTED_GOOSE_BIN}" | awk '{print $1}')"
 
 if [[ -n "${SCRIPT_KIT_EXPECTED_APP_SHA256:-}" && "${app_sha256}" != "${SCRIPT_KIT_EXPECTED_APP_SHA256}" ]]; then
   echo "bundle_verify app_identity_mismatch expected=${SCRIPT_KIT_EXPECTED_APP_SHA256} actual=${app_sha256}" >&2
   exit 1
 fi
-if [[ -n "${SCRIPT_KIT_EXPECTED_PI_SHA256:-}" && "${pi_sha256}" != "${SCRIPT_KIT_EXPECTED_PI_SHA256}" ]]; then
-  echo "bundle_verify pi_identity_mismatch expected=${SCRIPT_KIT_EXPECTED_PI_SHA256} actual=${pi_sha256}" >&2
+if [[ -n "${SCRIPT_KIT_EXPECTED_GOOSE_SHA256:-}" && "${goose_sha256}" != "${SCRIPT_KIT_EXPECTED_GOOSE_SHA256}" ]]; then
+  echo "bundle_verify goose_identity_mismatch expected=${SCRIPT_KIT_EXPECTED_GOOSE_SHA256} actual=${goose_sha256}" >&2
   exit 1
 fi
 
-echo "bundle_verify identity bundle_id=${actual_bundle_id} version=${actual_bundle_version} app_sha256=${app_sha256} pi_sha256=${pi_sha256}"
+echo "bundle_verify identity bundle_id=${actual_bundle_id} version=${actual_bundle_version} app_sha256=${app_sha256} goose_sha256=${goose_sha256}"
 
 echo "bundle_verify macos_dir_listing"
 find "${MACOS_DIR}" -maxdepth 1 -type f -print | sort
 
 if command -v file >/dev/null 2>&1; then
   file "${EXPECTED_BIN}"
-  file "${EXPECTED_PI_BIN}"
+  file "${EXPECTED_GOOSE_BIN}"
 fi
 
-UNEXPECTED="$(find "${MACOS_DIR}" -maxdepth 1 -type f ! -name 'script-kit-gpui' ! -name 'pi' -print || true)"
+UNEXPECTED="$(find "${MACOS_DIR}" -maxdepth 1 -type f ! -name 'script-kit-gpui' ! -name 'goose' -print || true)"
 if [[ -n "${UNEXPECTED}" ]]; then
   echo "bundle_verify unexpected=${UNEXPECTED}" >&2
   exit 1
 fi
 
-echo "bundle_verify sidecar=${EXPECTED_PI_BIN}"
+echo "bundle_verify sidecar=${EXPECTED_GOOSE_BIN}"
 echo "bundle_verify resources_dir=${RESOURCES_DIR}"
 
 test -d "${ASSETS_DIR}/icons"

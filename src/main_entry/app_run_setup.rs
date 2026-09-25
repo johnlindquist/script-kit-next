@@ -2844,7 +2844,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
                             }
                             ExternalCommand::OpenFocusedTextAgentChatWithPiData { text, instruction, request_id } => {
-                                logging::log("STDIN", "Opening focused-text Agent Chat real Pi fixture");
+                                logging::log("STDIN", "Opening focused-text Agent Chat real goose fixture");
                                 let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
                                 let instruction_length = instruction
                                     .as_ref()
@@ -2863,18 +2863,18 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     Err(error) => {
                                         logging::log(
                                             "STDIN",
-                                            &format!("Failed to open focused-text Agent Chat real Pi fixture: {error}"),
+                                            &format!("Failed to open focused-text Agent Chat real goose fixture: {error}"),
                                         );
                                         let error_text = error.to_string();
                                         if error_text.contains("SCRIPT_KIT_INLINE_AGENT_REAL_PI_FIXTURE") {
                                             (
                                                 Some("gated_off".to_string()),
-                                                Some("Focused-text Agent Chat real Pi fixture is gated off".to_string()),
+                                                Some("Focused-text Agent Chat real goose fixture is gated off".to_string()),
                                             )
                                         } else {
                                             (
                                                 Some("open_failed".to_string()),
-                                                Some("Focused-text Agent Chat real Pi fixture open failed".to_string()),
+                                                Some("Focused-text Agent Chat real goose fixture open failed".to_string()),
                                             )
                                         }
                                     }

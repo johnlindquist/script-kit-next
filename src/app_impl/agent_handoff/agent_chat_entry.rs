@@ -459,7 +459,9 @@ impl ScriptListApp {
             host,
             thread_id,
             state: view.collect_agent_chat_state_snapshot(cx),
-            accepted_submission: thread.accepted_submission().map(|(id, text)| (id, text.to_string())),
+            accepted_submission: thread
+                .accepted_submission()
+                .map(|(id, text)| (id, text.to_string())),
             context_ids: thread.staged_context_identities(),
         })
     }
@@ -485,10 +487,16 @@ impl ScriptListApp {
         let observed = self.agent_chat_entry_snapshot(cx)?;
         let same_destination = plan.baseline.host == Some(observed.host)
             && plan.baseline.thread_id.as_deref() == Some(observed.thread_id.as_str());
-        let submitted = observed.accepted_submission.as_ref().is_some_and(|(turn, text)| {
-            (!same_destination || plan.baseline.accepted_turn != Some(*turn))
-                && plan.seed_text.as_deref().is_none_or(|seed| text == seed.trim())
-        });
+        let submitted = observed
+            .accepted_submission
+            .as_ref()
+            .is_some_and(|(turn, text)| {
+                (!same_destination || plan.baseline.accepted_turn != Some(*turn))
+                    && plan
+                        .seed_text
+                        .as_deref()
+                        .is_none_or(|seed| text == seed.trim())
+            });
         let text_staged = match plan.seed_text.as_deref() {
             None => true,
             Some(_)
@@ -499,7 +507,9 @@ impl ScriptListApp {
             }
             Some(seed) => observed.state.input_text == seed,
         };
-        let context_staged = observed.context_ids.iter()
+        let context_staged = observed
+            .context_ids
+            .iter()
             .any(|id| !same_destination || !plan.baseline.context_ids.contains(id));
         let submission = if matches!(
             plan.verb,

@@ -17,7 +17,7 @@ fn context(status: Option<u16>) -> FailureContext {
 fn codex_named_upgrade_error_wins_over_pi_transport_component() {
     let vault = DiagnosticVault::default();
     let mut pi_context = context(Some(400));
-    pi_context.component = ProtocolComponent::Pi;
+    pi_context.component = ProtocolComponent::Goose;
     let record = classify_provider_failure(
         &pi_context,
         r#"{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-5.6-sol' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again."}}"#,
@@ -298,7 +298,7 @@ fn primary_record_has_no_raw_payload_field_or_debug_leak() {
 #[test]
 fn typed_classifiers_never_return_unknown_and_their_copy_is_not_evidence() {
     let vault = DiagnosticVault::default();
-    let component = ProtocolComponent::Pi;
+    let component = ProtocolComponent::Goose;
     let cases: Vec<(&str, AppFailureRecord, AiFailureCode)> = vec![
         (
             "SetupRequired",

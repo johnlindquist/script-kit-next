@@ -219,8 +219,9 @@ impl GlassMorphVariant {
         }
     }
 
-    /// The Actions popup (the only `MirrorMainEntry` surface) settles on the
-    /// untinted popup material; every other surface keeps the window backdrop.
+    /// Popups that mirror the main window (the Actions menu and modals) sit
+    /// over the already-tinted main glass and settle on the untinted popup
+    /// material; every other surface keeps the window backdrop.
     fn backdrop_role(self) -> NativeGlassSurfaceRole {
         match self {
             Self::MirrorMainEntry => NativeGlassSurfaceRole::PopupBackdrop,
@@ -1181,13 +1182,15 @@ pub fn configure_child_attached_overlay_window_glass(
         if ns_window.is_null() {
             return;
         }
-        configure_window_vibrancy_common(
-            ns_window,
-            log_target,
-            window_name,
-            is_dark,
-            GlassMorphVariant::ContentLayer,
-        );
+        // This call creates the glass, so it owns the entry motion: modals
+        // mirror the main window (like Actions); other overlays keep the
+        // calibrated child grow-in.
+        let morph_variant = if window_name_mirrors_main_motion(window_name) {
+            GlassMorphVariant::MirrorMainEntry
+        } else {
+            GlassMorphVariant::ContentLayer
+        };
+        configure_window_vibrancy_common(ns_window, log_target, window_name, is_dark, morph_variant);
     }
 }
 
@@ -1646,6 +1649,11 @@ pub fn configure_inline_dropdown_popup_window(_window: *mut std::ffi::c_void, _i
 /// actions popup. Reuses the shared popup vibrancy path so confirm dialogs
 /// get native macOS blur.
 ///
+/// Modals move like the Actions menu (2026-09-24 owner request: "the modal
+/// animation needs to match the animation that we use for the actions menu
+/// where it doesn't change its width anymore"): they replay the selected
+/// main-window preset and exit with its fixed-frame fade.
+///
 /// # Safety
 /// Same invariants as `configure_actions_popup_window`.
 #[cfg(target_os = "macos")]
@@ -1655,7 +1663,7 @@ pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
         is_dark,
         "CONFIRM",
         "Confirm popup",
-        GlassMorphVariant::ContentLayer,
+        GlassMorphVariant::MirrorMainEntry,
     );
 }
 

@@ -28,7 +28,7 @@ cd "$PROJECT_ROOT"
 DEV_STORAGE_ENV="$(python3 -B scripts/agentic/dev-storage.py --repo "$PROJECT_ROOT" prepare --shell)"
 eval "$DEV_STORAGE_ENV"
 unset DEV_STORAGE_ENV
-export SCRIPT_KIT_PI_BINARY="${SCRIPT_KIT_PI_BINARY:-${SCRIPT_KIT_DEV_PI_DIR}/pi}"
+export SCRIPT_KIT_GOOSE_BINARY="${SCRIPT_KIT_GOOSE_BINARY:-${SCRIPT_KIT_DEV_GOOSE_DIR}/goose}"
 export CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
 if [[ "$CMAKE_GENERATOR" == "Ninja" ]] && ! command -v ninja >/dev/null 2>&1; then
     echo "[dev.sh] REFUSED: Ninja is required for native dev builds (brew install ninja)" >&2

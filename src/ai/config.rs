@@ -1,7 +1,8 @@
-//! AI provider configuration and environment variable detection.
+//! Provider API keys Script Kit manages, and model descriptors.
 //!
-//! This module handles automatic discovery of AI provider API keys from environment
-//! variables and the system keyring using the `SCRIPT_KIT_*_API_KEY` pattern for security.
+//! Keys are discovered from environment variables and the system keyring using
+//! the `SCRIPT_KIT_*_API_KEY` pattern, then handed to the goose engine under the
+//! variable names its providers read.
 //!
 //! # Key Detection Order
 //!
@@ -15,9 +16,9 @@
 //! # Environment Variable Pattern
 //!
 //! API keys are detected with the `SCRIPT_KIT_` prefix:
-//! - `SCRIPT_KIT_OPENAI_API_KEY` -> OpenAI provider
-//! - `SCRIPT_KIT_ANTHROPIC_API_KEY` -> Anthropic provider
-//! - `SCRIPT_KIT_VERCEL_API_KEY` -> Vercel AI Gateway
+//! - `SCRIPT_KIT_OPENAI_API_KEY` -> goose `openai`
+//! - `SCRIPT_KIT_ANTHROPIC_API_KEY` -> goose `anthropic`
+//! - `SCRIPT_KIT_VERCEL_API_KEY` -> goose Vercel AI Gateway
 //!
 //! This prefix ensures users explicitly configure keys for Script Kit,
 //! rather than accidentally exposing keys from other applications.
@@ -89,66 +90,6 @@ impl AsRef<str> for SecretString {
     }
 }
 
-/// Represents a detected AI provider configuration.
-#[derive(Clone)]
-pub struct ProviderConfig {
-    /// Unique identifier for the provider (e.g., "openai", "anthropic")
-    pub provider_id: String,
-    /// Human-readable name (e.g., "OpenAI", "Anthropic")
-    pub display_name: String,
-    /// The API key (should never be logged or displayed)
-    api_key: SecretString,
-    /// Base URL for the API (for custom endpoints)
-    pub base_url: Option<String>,
-}
-
-impl ProviderConfig {
-    /// Create a new provider configuration.
-    pub fn new(
-        provider_id: impl Into<String>,
-        display_name: impl Into<String>,
-        api_key: impl Into<String>,
-    ) -> Self {
-        Self {
-            provider_id: provider_id.into(),
-            display_name: display_name.into(),
-            api_key: SecretString::new(api_key),
-            base_url: None,
-        }
-    }
-
-    /// Create a provider configuration with a custom base URL.
-    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.base_url = Some(base_url.into());
-        self
-    }
-
-    /// Get the API key for making requests.
-    ///
-    /// # Security Note
-    /// This method intentionally returns a reference to prevent accidental
-    /// copies of the API key. Never log or display the returned value.
-    pub fn api_key(&self) -> &str {
-        self.api_key.expose()
-    }
-
-    /// Check if this provider has a valid (non-empty) API key.
-    pub fn has_valid_key(&self) -> bool {
-        !self.api_key.is_empty()
-    }
-}
-
-impl std::fmt::Debug for ProviderConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ProviderConfig")
-            .field("provider_id", &self.provider_id)
-            .field("display_name", &self.display_name)
-            .field("api_key", &"<redacted>")
-            .field("base_url", &self.base_url)
-            .finish()
-    }
-}
-
 /// Information about an AI model.
 #[derive(Debug, Clone)]
 pub struct ModelInfo {
@@ -181,20 +122,6 @@ impl ModelInfo {
             context_window,
         }
     }
-
-    /// Check if this model is from a mock/placeholder provider.
-    ///
-    /// Currently all providers have real API implementations, so this always returns false.
-    /// Kept for backwards compatibility in case future providers are added as stubs.
-    pub fn is_mock_provider(&self) -> bool {
-        false
-    }
-
-    /// Log a warning if this is a mock provider model.
-    /// Currently a no-op since all providers have real implementations.
-    pub fn warn_if_mock(&self) {
-        // No-op: all providers are real
-    }
 }
 
 /// Environment variable names for API keys.
@@ -209,18 +136,6 @@ pub mod env_vars {
     pub const GROQ_API_KEY: &str = "SCRIPT_KIT_GROQ_API_KEY";
     /// Vercel API key environment variable
     pub const VERCEL_API_KEY: &str = "SCRIPT_KIT_VERCEL_API_KEY";
-
-    // Claude Code CLI configuration
-    /// Path to the `claude` CLI binary (default: "claude")
-    pub const CLAUDE_CODE_PATH: &str = "SCRIPT_KIT_CLAUDE_PATH";
-    /// Permission mode for Claude Code: "plan", "dontAsk", etc. (default: "plan")
-    pub const CLAUDE_CODE_PERMISSION_MODE: &str = "SCRIPT_KIT_CLAUDE_PERMISSION_MODE";
-    /// Comma-separated list of allowed tools (e.g., "Bash(git:*),Read,Edit")
-    pub const CLAUDE_CODE_ALLOWED_TOOLS: &str = "SCRIPT_KIT_CLAUDE_ALLOWED_TOOLS";
-    /// Comma-separated paths to add to the Claude Code workspace
-    pub const CLAUDE_CODE_ADD_DIRS: &str = "SCRIPT_KIT_CLAUDE_ADD_DIRS";
-    /// Enable Claude Code CLI provider (set to "1" or "true" to enable)
-    pub const CLAUDE_CODE_ENABLED: &str = "SCRIPT_KIT_CLAUDE_CODE_ENABLED";
 }
 
 /// Read an environment variable, trimming whitespace and filtering empty values.
@@ -342,140 +257,9 @@ impl DetectedKeys {
     }
 }
 
-/// Default models for each provider.
-pub mod default_models {
-    use super::ModelInfo;
-
-    /// Get default OpenAI models.
-    pub fn openai() -> Vec<ModelInfo> {
-        vec![
-            ModelInfo::new("gpt-4o", "GPT-4o", "openai", true, 128_000),
-            ModelInfo::new("gpt-4o-mini", "GPT-4o Mini", "openai", true, 128_000),
-            ModelInfo::new("gpt-4-turbo", "GPT-4 Turbo", "openai", true, 128_000),
-            ModelInfo::new("gpt-3.5-turbo", "GPT-3.5 Turbo", "openai", true, 16_385),
-        ]
-    }
-
-    /// Get default Anthropic models.
-    /// NOTE: The FIRST model in this list is the default model for new chats
-    pub fn anthropic() -> Vec<ModelInfo> {
-        vec![
-            // Default: Claude Haiku 4.5 (fast, cheap, good quality)
-            ModelInfo::new(
-                "claude-haiku-4-5-20250514",
-                "Claude Haiku 4.5",
-                "anthropic",
-                true,
-                200_000,
-            ),
-            ModelInfo::new(
-                "claude-3-5-sonnet-20241022",
-                "Claude 3.5 Sonnet",
-                "anthropic",
-                true,
-                200_000,
-            ),
-            ModelInfo::new(
-                "claude-3-opus-20240229",
-                "Claude 3 Opus",
-                "anthropic",
-                true,
-                200_000,
-            ),
-        ]
-    }
-
-    /// Get default Google (Gemini) models.
-    pub fn google() -> Vec<ModelInfo> {
-        vec![
-            ModelInfo::new(
-                "gemini-2.0-flash",
-                "Gemini 2.0 Flash",
-                "google",
-                true,
-                1_000_000,
-            ),
-            ModelInfo::new(
-                "gemini-2.0-flash-lite",
-                "Gemini 2.0 Flash Lite",
-                "google",
-                true,
-                1_000_000,
-            ),
-            ModelInfo::new(
-                "gemini-1.5-pro",
-                "Gemini 1.5 Pro",
-                "google",
-                true,
-                2_000_000,
-            ),
-            ModelInfo::new(
-                "gemini-1.5-flash",
-                "Gemini 1.5 Flash",
-                "google",
-                true,
-                1_000_000,
-            ),
-        ]
-    }
-
-    /// Get default Groq models.
-    pub fn groq() -> Vec<ModelInfo> {
-        vec![
-            ModelInfo::new(
-                "llama-3.3-70b-versatile",
-                "Llama 3.3 70B Versatile",
-                "groq",
-                true,
-                128_000,
-            ),
-            ModelInfo::new(
-                "llama-3.1-8b-instant",
-                "Llama 3.1 8B Instant",
-                "groq",
-                true,
-                128_000,
-            ),
-            ModelInfo::new("mixtral-8x7b-32768", "Mixtral 8x7B", "groq", true, 32_768),
-        ]
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_provider_config_creation() {
-        let config = ProviderConfig::new("openai", "OpenAI", "sk-test-key");
-        assert_eq!(config.provider_id, "openai");
-        assert_eq!(config.display_name, "OpenAI");
-        assert_eq!(config.api_key(), "sk-test-key");
-        assert!(config.has_valid_key());
-    }
-
-    #[test]
-    fn test_provider_config_empty_key() {
-        let config = ProviderConfig::new("openai", "OpenAI", "");
-        assert!(!config.has_valid_key());
-    }
-
-    #[test]
-    fn test_provider_config_with_base_url() {
-        let config = ProviderConfig::new("openai", "OpenAI", "sk-test")
-            .with_base_url("https://api.custom.com");
-        assert_eq!(config.base_url, Some("https://api.custom.com".to_string()));
-    }
-
-    #[test]
-    fn test_model_info_creation() {
-        let model = ModelInfo::new("gpt-4o", "GPT-4o", "openai", true, 128_000);
-        assert_eq!(model.id, "gpt-4o");
-        assert_eq!(model.display_name, "GPT-4o");
-        assert_eq!(model.provider, "openai");
-        assert!(model.supports_streaming);
-        assert_eq!(model.context_window, 128_000);
-    }
 
     #[test]
     fn test_detected_keys_empty() {
@@ -497,45 +281,6 @@ mod tests {
         };
         assert!(keys.has_any());
         assert_eq!(keys.available_providers(), vec!["OpenAI"]);
-    }
-
-    #[test]
-    fn test_default_models() {
-        let openai_models = default_models::openai();
-        assert!(!openai_models.is_empty());
-        assert!(openai_models.iter().any(|m| m.id == "gpt-4o"));
-
-        let anthropic_models = default_models::anthropic();
-        assert!(!anthropic_models.is_empty());
-        assert!(anthropic_models.iter().any(|m| m.id.contains("claude")));
-    }
-
-    #[test]
-    fn test_anthropic_default_models_have_unique_model_ids() {
-        let models = default_models::anthropic();
-        let mut unique_ids = std::collections::HashSet::new();
-
-        for model in &models {
-            assert!(
-                unique_ids.insert(model.id.clone()),
-                "Duplicate Anthropic model ID found: {}",
-                model.id
-            );
-        }
-    }
-
-    #[test]
-    fn test_provider_config_debug_redacts_api_key() {
-        let config = ProviderConfig::new("openai", "OpenAI", "sk-super-secret-key-12345");
-        let debug_output = format!("{:?}", config);
-
-        // The API key should NOT appear in debug output
-        assert!(!debug_output.contains("sk-super-secret-key-12345"));
-        // Instead, it should show <redacted>
-        assert!(debug_output.contains("<redacted>"));
-        // Other fields should still be visible
-        assert!(debug_output.contains("openai"));
-        assert!(debug_output.contains("OpenAI"));
     }
 
     #[test]
@@ -616,69 +361,5 @@ mod tests {
     fn test_secret_string_expose_returns_inner_value() {
         let secret = SecretString::new("sk-test-super-secret");
         assert_eq!(secret.expose(), "sk-test-super-secret");
-    }
-
-    #[test]
-    fn test_is_not_mock_provider_google() {
-        let model = ModelInfo::new(
-            "gemini-2.0-flash",
-            "Gemini 2.0 Flash",
-            "google",
-            true,
-            1_000_000,
-        );
-        assert!(!model.is_mock_provider());
-    }
-
-    #[test]
-    fn test_is_not_mock_provider_groq() {
-        let model = ModelInfo::new(
-            "llama-3.3-70b-versatile",
-            "Llama 3.3 70B Versatile",
-            "groq",
-            true,
-            128_000,
-        );
-        assert!(!model.is_mock_provider());
-    }
-
-    #[test]
-    fn test_is_not_mock_provider_openai() {
-        let model = ModelInfo::new("gpt-4o", "GPT-4o", "openai", true, 128_000);
-        assert!(!model.is_mock_provider());
-    }
-
-    #[test]
-    fn test_is_not_mock_provider_anthropic() {
-        let model = ModelInfo::new(
-            "claude-3-5-sonnet",
-            "Claude 3.5 Sonnet",
-            "anthropic",
-            true,
-            200_000,
-        );
-        assert!(!model.is_mock_provider());
-    }
-
-    #[test]
-    fn test_google_models_always_available() {
-        let google_models = default_models::google();
-        assert!(
-            !google_models.is_empty(),
-            "Google models should always be available"
-        );
-        assert!(google_models.iter().any(|m| m.id == "gemini-2.0-flash"));
-    }
-
-    #[test]
-    fn test_groq_models_always_available() {
-        let groq_models = default_models::groq();
-        assert!(
-            !groq_models.is_empty(),
-            "Groq models should always be available"
-        );
-        assert!(groq_models
-            .iter()
-            .any(|m| m.id == "llama-3.3-70b-versatile"));
     }
 }

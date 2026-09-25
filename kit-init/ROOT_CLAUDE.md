@@ -27,9 +27,9 @@ Use this plain-text route first:
 - Skills are the preferred way to package reusable AI behavior — plugins are the package boundary
 
 ### Agent Chat profile
-- Use for isolated Pi-backed Agent Chat runtime boundaries
+- Use for isolated goose-backed Agent Chat runtime boundaries
 - Write one markdown file to `~/.scriptkit/profiles/<id>.md` (mdflow format)
-- YAML frontmatter takes pi-flag keys (`name`, `model: provider/id`, `tools: web_search`, `no-session: true`); the markdown body is the profile's instructions
+- YAML frontmatter takes profile keys (`name`, `model: provider/id`, `tools: web_search`, `no-session: true`); the markdown body is the profile's instructions
 
 ### mdflow agent (compatibility)
 - Use only when you need a specific backend suffix or legacy mdflow features
@@ -120,7 +120,7 @@ Use this plain-text route first:
 
 ### Agent Chat Profile Rules
 - Create one markdown file at `~/.scriptkit/profiles/<id>.md` (mdflow format)
-- Use YAML frontmatter with pi-flag keys: `name`, `model: provider/id` (e.g. `openai-codex/gpt-5.3-codex-spark`), `tools: web_search`, `no-session: true`
+- Use YAML frontmatter with profile keys: `name`, `model: provider/id` (e.g. `chatgpt_codex/gpt-6-luna`), `tools: web_search`, `no-session: true`
 - The markdown body becomes the profile's instructions
 - Do not put profile artifacts in `agents/`; agents are a compatibility/import source
 

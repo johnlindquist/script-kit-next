@@ -138,16 +138,15 @@ async function filmFlowSession() {
 
 // --------------------------------------------------------------- agent chat
 async function filmAgentChat() {
-	// The default profile may resolve to EITHER engine, so kill both. An
-	// earlier version only replaced pi and the run silently exercised the
-	// codex path instead (identity.providerId reported `openai-codex`).
-	const pi = await deadEngine("pi");
+	// Every Agent Chat profile runs on goose; a goose that exits on launch
+	// must surface the typed runtime-closed recovery card.
+	const goose = await deadEngine("goose");
 	const codex = await deadEngine("codex");
 	const d = await Driver.launch({
 		sandboxHome: true,
 		sessionName: "film-agent-chat",
 		binary, immutableArtifact: artifact.reference,
-		env: { SCRIPT_KIT_PI_BIN: pi, SCRIPT_KIT_CODEX_BIN: codex },
+		env: { SCRIPT_KIT_GOOSE_BINARY: goose, SCRIPT_KIT_CODEX_BIN: codex },
 	});
 	try {
 		await d.request({ type: "show" });

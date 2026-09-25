@@ -486,7 +486,7 @@ validates, prompts, or hopes to support later.
 | Validated | Config, schema, or artifact checks reject invalid inputs before launch or runtime selection. | Say the artifact or configuration is validated, not sandboxed. |
 | Prompt-policy or advisory | The profile prompt, tool posture, path policy, or blocked-action message guides behavior without filesystem enforcement. | Be explicit that this is policy posture, not native enforcement. |
 | Receipted | Logs, transcripts, state, or action receipts show what happened and who acted. | Use receipts to support attribution and auditability. |
-| Future aspiration | A claim depends on future Pi, native, or wrapper-level enforcement work. | Keep it out of launch promises until source and receipts prove it. |
+| Future aspiration | A claim depends on future engine, native, or wrapper-level enforcement work. | Keep it out of launch promises until source and receipts prove it. |
 
 ### Skills Are Recipes, Not Ambient Magic
 
@@ -541,7 +541,7 @@ remain in the source.
   profiles, and compatibility agent artifacts.
 - A legacy agent is an import or compatibility source. Durable behavior should
   become an explicit profile or skill before it is treated as launch-facing.
-- Pi is backend/runtime implementation detail unless the UI is intentionally
+- goose is backend/runtime implementation detail unless the UI is intentionally
   showing model, provider, or backend attribution.
 - Agent Chat and `tab_ai` are compatibility or implementation names. They should not
   create a second user-facing AI chat concept.

@@ -1219,6 +1219,7 @@ mod tests {
                 "selectedBackend": "pi",
                 "selectedProfileName": "Legacy",
                 "piBinary": "~/dev/pi_agent_rust/target/debug/pi",
+                "gooseBinary": "~/bin/goose",
                 "profiles": [
                     {
                         "id": "script-kit",
@@ -1226,6 +1227,7 @@ mod tests {
                         "iconName": "terminal",
                         "backend": "pi",
                         "piBinary": "~/dev/pi_agent_rust/target/release/pi",
+                        "gooseBinary": "~/bin/profile-goose",
                         "provider": "openai-codex",
                         "model": "gpt-5.4",
                         "systemPrompt": "replace prompt",
@@ -1258,22 +1260,17 @@ mod tests {
         let ai = config.ai.as_ref().expect("ai preferences should parse");
         assert_eq!(ai.selected_model_id.as_deref(), Some("gpt-5.4"));
         assert_eq!(ai.selected_profile_id.as_deref(), Some("general"));
-        assert_eq!(ai.selected_backend, Some(AgentChatBackend::Pi));
+        assert_eq!(ai.selected_backend, Some(AgentChatBackend::Goose));
         assert_eq!(ai.selected_profile_name.as_deref(), Some("Legacy"));
-        assert_eq!(
-            ai.pi_binary.as_deref(),
-            Some("~/dev/pi_agent_rust/target/debug/pi")
-        );
+        // A previous engine's binary path must never be launched as goose.
+        assert_eq!(ai.goose_binary.as_deref(), Some("~/bin/goose"));
 
         let profile = ai.profiles.first().expect("profile should parse");
         assert_eq!(profile.id.as_deref(), Some("script-kit"));
         assert_eq!(profile.name, "Script Kit");
         assert_eq!(profile.icon_name.as_deref(), Some("terminal"));
-        assert_eq!(profile.backend, Some(AgentChatBackend::Pi));
-        assert_eq!(
-            profile.pi_binary.as_deref(),
-            Some("~/dev/pi_agent_rust/target/release/pi")
-        );
+        assert_eq!(profile.backend, Some(AgentChatBackend::Goose));
+        assert_eq!(profile.goose_binary.as_deref(), Some("~/bin/profile-goose"));
         assert_eq!(profile.provider.as_deref(), Some("openai-codex"));
         assert_eq!(profile.agent.as_deref(), None);
         assert_eq!(profile.model.as_deref(), Some("gpt-5.4"));

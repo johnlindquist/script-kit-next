@@ -1712,15 +1712,16 @@ export interface DictationPreferences {
 /**
  * Agent Chat runtime preferences stored in `~/.scriptkit/config.ts`.
  */
-export type AgentChatBackend = "agent_chat" | "pi";
+/** Agent Chat engine. Every profile runs on goose; `"pi"` and `"agent_chat"` are older spellings that still load. */
+export type AgentChatBackend = "goose" | "pi" | "agent_chat";
 
 /**
- * Structured Pi tool policy for an Agent Chat profile.
+ * Structured tool policy for an Agent Chat profile.
  * `allow` supersedes the legacy `tools` array.
  */
 export interface AgentChatToolPolicyConfig {
   /**
-   * Tool allow-list. `[]` means no tools; omit to keep Pi defaults.
+   * Tool allow-list. `[]` means no tools; omit to keep the profile default tools.
    *
    * @example ["read", "grep"]
    */
@@ -1728,7 +1729,7 @@ export interface AgentChatToolPolicyConfig {
 }
 
 /**
- * Runtime filesystem scope forwarded to Pi for read/write-capable tools.
+ * Filesystem scope for Script Kit read/write agent tools.
  */
 export interface AgentChatPathPolicyConfig {
   /**
@@ -1756,7 +1757,7 @@ export interface AiProfile {
   name: string;
   iconName?: string;
   backend?: AgentChatBackend;
-  piBinary?: string;
+  gooseBinary?: string;
   agent?: string;
   provider?: string;
   model?: string;

@@ -12,14 +12,23 @@ pub const BUILTIN_SCRIPT_KIT_PROFILE_ID: &str = "script-kit";
 pub const BUILTIN_TEXT_PROFILE_ID: &str = "text";
 pub const BUILTIN_BRAIN_PROFILE_ID: &str = "brain";
 pub const BUILTIN_QUICK_AI_PROFILE_ID: &str = "quick-ai";
-pub const DEFAULT_PI_PROVIDER: &str = "openai-codex";
-pub const DEFAULT_PI_MODEL: &str = "gpt-5.6-sol";
-pub const DEFAULT_PI_THINKING: &str = "medium";
-const DEFAULT_MEDIUM_THINKING_MODELS: [&str; 3] = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
-/// Quick AI (launcher Tab-with-text) is pinned to the fastest Codex model so
+/// goose provider for the ChatGPT (Codex) subscription.
+pub const DEFAULT_PROVIDER: &str = "chatgpt_codex";
+pub const DEFAULT_MODEL: &str = "gpt-6-luna";
+pub const DEFAULT_THINKING: &str = "medium";
+const DEFAULT_MEDIUM_THINKING_MODELS: [&str; 5] = [
+    "gpt-6-sol",
+    "gpt-6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+];
+/// Quick AI (launcher Tab-with-text) is pinned to a fast Codex model so
 /// answers stream back with minimal latency. It intentionally ignores the
-/// user's selected Agent Chat model.
-pub const QUICK_AI_PI_MODEL: &str = "gpt-5.3-codex-spark";
+/// user's selected Agent Chat model. (The Codex backend rejects
+/// `gpt-5.3-codex-spark` and `gpt-5.4-mini` for ChatGPT accounts reached
+/// through goose; GPT-6 Luna answered in ~1.3s in the 2026-09-24 survey.)
+pub const QUICK_AI_MODEL: &str = "gpt-6-luna";
 /// Maximum number of app-admitted native web transactions a Quick AI turn may run.
 ///
 /// Exceeding this budget is a typed policy outcome, never a provider error.
@@ -27,20 +36,18 @@ pub const QUICK_AI_FOCUSED_SEARCH_BUDGET: u8 = 1;
 /// The Text/rewrite mini surface is likewise pinned to the fastest Codex
 /// model: the instant rewrite flow fires three variation turns per submit and
 /// they must stream back near-instantly — speed over depth. Resolved via
-/// `resolve_focused_text_pi_launch`, which refuses the global model override.
-pub const TEXT_PI_MODEL: &str = QUICK_AI_PI_MODEL;
+/// `resolve_focused_text_launch`, which refuses the global model override.
+pub const TEXT_MODEL: &str = QUICK_AI_MODEL;
 
-/// A curated Pi provider ("Agent") and its selectable models for Agent Chat
-/// model pickers.
+/// A curated goose provider ("Agent") and its selectable models for Agent
+/// Chat model pickers.
 ///
-/// The live provider/model catalog is advertised dynamically by the `pi` agent
-/// at runtime (`get_available_models`); this static fallback lets the launcher
-/// pre-select a provider/model WITHOUT a live session. The primary launcher
-/// catalog is Codex-only; alternative providers are available through advanced
-/// configuration paths. Selections persist as the namespaced
-/// `selectedModelId = "<provider>/<model>"` that the Pi launch reads (see
+/// The live model list comes from the goose session's config options at
+/// runtime; this static catalog lets the launcher pre-select a provider/model
+/// WITHOUT a live session. Selections persist as the namespaced
+/// `selectedModelId = "<provider>/<model>"` the launch reads (see
 /// [`parse_provider_model_selection`]).
-pub struct PiProviderCatalogEntry {
+pub struct ProviderCatalogEntry {
     pub id: &'static str,
     pub display_name: &'static str,
     /// `(model_id, model_display_name)` pairs; `model_id` is the bare model
@@ -48,47 +55,55 @@ pub struct PiProviderCatalogEntry {
     pub models: Vec<(&'static str, &'static str)>,
 }
 
-/// Primary static Pi provider → model catalog for the launcher picker.
-pub fn pi_provider_model_catalog() -> Vec<PiProviderCatalogEntry> {
-    vec![PiProviderCatalogEntry {
-        id: "openai-codex",
+/// Primary provider → model catalog for the launcher picker: the ChatGPT
+/// (Codex) subscription.
+pub fn provider_model_catalog() -> Vec<ProviderCatalogEntry> {
+    vec![ProviderCatalogEntry {
+        id: DEFAULT_PROVIDER,
         display_name: "Codex",
         models: vec![
+            ("gpt-6-sol", "GPT-6 SOL"),
+            ("gpt-6-luna", "GPT-6 LUNA"),
             ("gpt-5.6-sol", "GPT-5.6 SOL"),
             ("gpt-5.6-terra", "GPT-5.6 TERRA"),
             ("gpt-5.6-luna", "GPT-5.6 LUNA"),
-            // The fastest model a ChatGPT-account Codex subscription offers.
-            // (gpt-5-mini / *-codex-mini are rejected for ChatGPT accounts:
-            // "not supported when using Codex with a ChatGPT account".)
-            ("gpt-5.3-codex-spark", "GPT-5.3 Spark"),
         ],
     }]
 }
 
-/// Advanced static provider catalog retained for settings/configuration flows.
-pub fn advanced_pi_provider_model_catalog() -> Vec<PiProviderCatalogEntry> {
+/// Additional goose providers offered in settings/configuration flows.
+pub fn advanced_provider_model_catalog() -> Vec<ProviderCatalogEntry> {
     vec![
-        PiProviderCatalogEntry {
+        ProviderCatalogEntry {
             id: "anthropic",
             display_name: "Claude",
             models: vec![
-                ("claude-opus-4-6", "Opus 4.6"),
-                ("claude-sonnet-4-6", "Sonnet 4.6"),
-                ("claude-sonnet-4-5", "Sonnet 4.5"),
+                ("claude-opus-5-5", "Opus 5.5"),
+                ("claude-sonnet-5", "Sonnet 5"),
                 ("claude-haiku-4-5", "Haiku 4.5"),
             ],
         },
-        PiProviderCatalogEntry {
+        ProviderCatalogEntry {
+            id: "claude_code",
+            display_name: "Claude Code",
+            models: vec![("default", "Claude Code default")],
+        },
+        ProviderCatalogEntry {
             id: "google",
             display_name: "Gemini",
             models: vec![
+                ("gemini-3.8-flash", "Gemini 3.8 Flash"),
                 ("gemini-2.5-pro", "Gemini 2.5 Pro"),
-                ("gemini-2.5-flash", "Gemini 2.5 Flash"),
             ],
+        },
+        ProviderCatalogEntry {
+            id: "ollama",
+            display_name: "Ollama (local)",
+            models: vec![("qwen3:4b", "Qwen3 4B"), ("gpt-oss:20b", "gpt-oss 20B")],
         },
     ]
 }
-pub const GENERAL_PI_TOOLS: [&str; 7] = [
+pub const GENERAL_TOOLS: [&str; 7] = [
     "web_search",
     "desktop_search",
     "read",
@@ -97,7 +112,7 @@ pub const GENERAL_PI_TOOLS: [&str; 7] = [
     "find",
     "ls",
 ];
-pub const SCRIPT_KIT_PI_TOOLS: [&str; 9] = [
+pub const SCRIPT_KIT_TOOLS: [&str; 9] = [
     "web_search",
     "read",
     "write",
@@ -112,12 +127,12 @@ pub const SCRIPT_KIT_PI_TOOLS: [&str; 9] = [
 /// live-info questions (e.g. "When is the next nba game?") and expect web access.
 /// It gets exactly one read-only network tool — `web_search` — and nothing else
 /// (no fs, no skills, no extensions); see `built_in_text_profile`.
-pub const TEXT_PI_TOOLS: [&str; 1] = ["web_search"];
+pub const TEXT_TOOLS: [&str; 1] = ["web_search"];
 
 /// The Brain profile answers from memory first: same safe toolset as General
 /// (read-only beyond its workspace), tuned for quick palette-launched
 /// questions that lean on staged brain recall.
-pub const BRAIN_PI_TOOLS: [&str; 7] = [
+pub const BRAIN_TOOLS: [&str; 7] = [
     "web_search",
     "desktop_search",
     "read",
@@ -143,9 +158,9 @@ pub const QUICK_AI_BLOCKED_ACTION_MESSAGE: &str = "Quick AI answers from the mod
 /// network tool — `web_search` — so live questions ("who does the USA play
 /// tomorrow?") get real answers instead of "I can't verify schedules".
 /// No fs, no skills, no extensions; see `built_in_quick_ai_profile`.
-pub const QUICK_AI_PI_TOOLS: [&str; 1] = ["web_search"];
+pub const QUICK_AI_TOOLS: [&str; 1] = ["web_search"];
 
-pub const QUICK_AI_APPEND_SYSTEM_PROMPT: &str = "You are Quick AI: a zero-context, instant-answer mode launched by pressing Tab on a query typed into the Script Kit launcher. You receive only the user's typed text — no files, no selection, no screenshots, no memories. Lead with the answer in the first sentence and keep the whole reply tight. Prefer plain prose; use a short list or fenced code block only when the answer genuinely needs one. You may use web_search, and only web_search, for live or time-sensitive public facts such as schedules, dates, prices, news, releases, or anything likely to have changed. For a live fact, perform exactly one web_search action containing one focused query. Use only its returned result snippets. Do not open, click, find within, or follow any result page. Immediately after that first result, return the final JSON object with answer and sources. Never perform another web action. If the first search has no usable source, return a truthful answer saying that no usable result was returned and use an empty sources array; do not claim you cannot access live news or sources, and do not ask the user to supply a source. Never invent an answer or source URL. Never mention tools, sessions, context mechanics, Script Kit internals, or system prompts.";
+pub const QUICK_AI_APPEND_SYSTEM_PROMPT: &str = "You are Quick AI: a zero-context, instant-answer mode launched by pressing Tab on a query typed into the Script Kit launcher. You receive only the user's typed text — no files, no selection, no screenshots, no memories. Lead with the answer in the first sentence and keep the whole reply tight. Prefer plain prose; use a short list or fenced code block only when the answer genuinely needs one. Your training data is out of date. Before answering anything that can change over time — software versions and releases, news, prices, scores and results, weather, schedules, who currently holds a role, or anything asked with words like latest, current, today, now, or recent — call web_search exactly once with one focused query, then answer from its result snippets. Answer stable facts, math, conversions, definitions, and writing requests directly without searching. You may use web_search and nothing else. Never open, click, or follow a result page, and never search a second time. When you used search results, end with the source as a markdown link, like [Rust Blog](https://blog.rust-lang.org/). Write only prose and links: no JSON, no citation markers or footnote codes. If the search returns nothing usable, say so plainly instead of guessing; do not claim you cannot access live information, and do not ask the user for a source. Never invent an answer or a source URL. Never mention tools, sessions, context mechanics, Script Kit internals, or system prompts.";
 
 pub const TEXT_APPEND_SYSTEM_PROMPT: &str = "You are the Text Agent Chat profile for focused-field edits and compact one-off questions. You receive captured focused-field text as hidden context. For rewrite, edit, format, translate, summarize, or variation requests, return only the requested final text; do not add commentary, labels, markdown fences, citations, or explanations unless the user explicitly asks for them. You may use web_search, and only web_search, for live or time-sensitive public facts such as schedules, dates, prices, news, releases, current availability, or anything likely to have changed. For live-info questions, search before answering, answer directly, and include concise source URLs when available. If search fails or results are insufficient, say what is uncertain without claiming you have no web access. Do not mention capture mechanics, tool names, sessions, Script Kit internals, or system prompts.";
 
@@ -197,7 +212,7 @@ pub struct ResolvedAgentChatProfile {
     pub name: String,
     pub icon_name: Option<String>,
     pub backend: AgentChatBackend,
-    pub pi_binary: Option<PathBuf>,
+    pub goose_binary: Option<PathBuf>,
     pub agent: Option<String>,
     pub provider: Option<String>,
     pub model: Option<String>,
@@ -276,17 +291,17 @@ pub fn built_in_brain_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentCha
         id: BUILTIN_BRAIN_PROFILE_ID.to_string(),
         name: "Brain".to_string(),
         icon_name: Some("brain".to_string()),
-        backend: AgentChatBackend::Pi,
-        pi_binary: None,
+        backend: AgentChatBackend::Goose,
+        goose_binary: None,
         agent: None,
-        provider: Some(DEFAULT_PI_PROVIDER.to_string()),
-        model: Some(DEFAULT_PI_MODEL.to_string()),
+        provider: Some(DEFAULT_PROVIDER.to_string()),
+        model: Some(DEFAULT_MODEL.to_string()),
         system_prompt: None,
         append_system_prompt: Some(BRAIN_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.brain_cwd()),
-        tools: Some(BRAIN_PI_TOOLS.iter().map(|tool| tool.to_string()).collect()),
+        tools: Some(BRAIN_TOOLS.iter().map(|tool| tool.to_string()).collect()),
         tool_policy: Some(AgentChatToolPolicyConfig {
-            allow: Some(BRAIN_PI_TOOLS.iter().map(|tool| tool.to_string()).collect()),
+            allow: Some(BRAIN_TOOLS.iter().map(|tool| tool.to_string()).collect()),
         }),
         path_policy: Some(AgentChatPathPolicyConfig {
             allow_read: Some(vec![ctx.brain_cwd().to_string_lossy().into_owned()]),
@@ -299,7 +314,7 @@ pub fn built_in_brain_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentCha
         disable_prompt_templates: Some(true),
         disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(true),
-        thinking: Some(DEFAULT_PI_THINKING.to_string()),
+        thinking: Some(DEFAULT_THINKING.to_string()),
         extension_policy: None,
         session_dir: None,
         no_session: Some(false),
@@ -313,27 +328,17 @@ pub fn built_in_general_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentC
         id: BUILTIN_GENERAL_PROFILE_ID.to_string(),
         name: "General".to_string(),
         icon_name: Some("sparkles".to_string()),
-        backend: AgentChatBackend::Pi,
-        pi_binary: None,
+        backend: AgentChatBackend::Goose,
+        goose_binary: None,
         agent: None,
-        provider: Some(DEFAULT_PI_PROVIDER.to_string()),
-        model: Some(DEFAULT_PI_MODEL.to_string()),
+        provider: Some(DEFAULT_PROVIDER.to_string()),
+        model: Some(DEFAULT_MODEL.to_string()),
         system_prompt: None,
         append_system_prompt: Some(GENERAL_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.general_cwd()),
-        tools: Some(
-            GENERAL_PI_TOOLS
-                .iter()
-                .map(|tool| tool.to_string())
-                .collect(),
-        ),
+        tools: Some(GENERAL_TOOLS.iter().map(|tool| tool.to_string()).collect()),
         tool_policy: Some(AgentChatToolPolicyConfig {
-            allow: Some(
-                GENERAL_PI_TOOLS
-                    .iter()
-                    .map(|tool| tool.to_string())
-                    .collect(),
-            ),
+            allow: Some(GENERAL_TOOLS.iter().map(|tool| tool.to_string()).collect()),
         }),
         path_policy: Some(AgentChatPathPolicyConfig {
             allow_read: Some(vec![ctx.general_cwd().to_string_lossy().into_owned()]),
@@ -346,7 +351,7 @@ pub fn built_in_general_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentC
         disable_prompt_templates: Some(true),
         disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(true),
-        thinking: Some(DEFAULT_PI_THINKING.to_string()),
+        thinking: Some(DEFAULT_THINKING.to_string()),
         extension_policy: None,
         session_dir: None,
         no_session: Some(false),
@@ -360,23 +365,23 @@ pub fn built_in_script_kit_profile(ctx: &AgentChatProfileContext) -> ResolvedAge
         id: BUILTIN_SCRIPT_KIT_PROFILE_ID.to_string(),
         name: "Script Kit".to_string(),
         icon_name: Some("code".to_string()),
-        backend: AgentChatBackend::Pi,
-        pi_binary: None,
+        backend: AgentChatBackend::Goose,
+        goose_binary: None,
         agent: None,
-        provider: Some(DEFAULT_PI_PROVIDER.to_string()),
-        model: Some(DEFAULT_PI_MODEL.to_string()),
+        provider: Some(DEFAULT_PROVIDER.to_string()),
+        model: Some(DEFAULT_MODEL.to_string()),
         system_prompt: None,
         append_system_prompt: Some(SCRIPT_KIT_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.script_kit_cwd()),
         tools: Some(
-            SCRIPT_KIT_PI_TOOLS
+            SCRIPT_KIT_TOOLS
                 .iter()
                 .map(|tool| tool.to_string())
                 .collect(),
         ),
         tool_policy: Some(AgentChatToolPolicyConfig {
             allow: Some(
-                SCRIPT_KIT_PI_TOOLS
+                SCRIPT_KIT_TOOLS
                     .iter()
                     .map(|tool| tool.to_string())
                     .collect(),
@@ -393,7 +398,7 @@ pub fn built_in_script_kit_profile(ctx: &AgentChatProfileContext) -> ResolvedAge
         disable_prompt_templates: Some(true),
         disable_context_files: Some(true),
         hide_cwd_in_prompt: Some(false),
-        thinking: Some(DEFAULT_PI_THINKING.to_string()),
+        thinking: Some(DEFAULT_THINKING.to_string()),
         extension_policy: None,
         session_dir: None,
         no_session: Some(false),
@@ -407,17 +412,17 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
         id: BUILTIN_TEXT_PROFILE_ID.to_string(),
         name: "Text".to_string(),
         icon_name: Some("file-text".to_string()),
-        backend: AgentChatBackend::Pi,
-        pi_binary: None,
+        backend: AgentChatBackend::Goose,
+        goose_binary: None,
         agent: None,
-        provider: Some(DEFAULT_PI_PROVIDER.to_string()),
-        model: Some(TEXT_PI_MODEL.to_string()),
+        provider: Some(DEFAULT_PROVIDER.to_string()),
+        model: Some(TEXT_MODEL.to_string()),
         system_prompt: None,
         append_system_prompt: Some(TEXT_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.text_cwd()),
-        tools: Some(TEXT_PI_TOOLS.iter().map(|tool| tool.to_string()).collect()),
+        tools: Some(TEXT_TOOLS.iter().map(|tool| tool.to_string()).collect()),
         tool_policy: Some(AgentChatToolPolicyConfig {
-            allow: Some(TEXT_PI_TOOLS.iter().map(|tool| tool.to_string()).collect()),
+            allow: Some(TEXT_TOOLS.iter().map(|tool| tool.to_string()).collect()),
         }),
         path_policy: Some(AgentChatPathPolicyConfig {
             allow_read: Some(Vec::new()),
@@ -442,11 +447,11 @@ pub fn built_in_text_profile(ctx: &AgentChatProfileContext) -> ResolvedAgentChat
 ///
 /// Everything local is stripped: no extensions, no skills, no prompt
 /// templates, no context files, no session persistence, and an empty path
-/// policy. The single allowed tool is `web_search` ([`QUICK_AI_PI_TOOLS`])
+/// policy. The single allowed tool is `web_search` ([`QUICK_AI_TOOLS`])
 /// so live-info questions get real answers — same posture as the Text
-/// profile. The model is pinned to [`QUICK_AI_PI_MODEL`] and must
+/// profile. The model is pinned to [`QUICK_AI_MODEL`] and must
 /// not be overridden by the user's Agent Chat model selection — resolve it
-/// via `resolve_quick_ai_pi_launch`, never through `apply_ai_fallbacks`.
+/// via `resolve_quick_ai_launch`, never through `apply_ai_fallbacks`.
 ///
 /// Intentionally NOT listed in [`built_in_profiles`]: Quick AI is a launch
 /// mode, not a pickable profile.
@@ -456,17 +461,17 @@ pub fn built_in_quick_ai_profile(ctx: &AgentChatProfileContext) -> ResolvedAgent
         id: BUILTIN_QUICK_AI_PROFILE_ID.to_string(),
         name: "Quick AI".to_string(),
         icon_name: Some("zap".to_string()),
-        backend: AgentChatBackend::Pi,
-        pi_binary: None,
+        backend: AgentChatBackend::Goose,
+        goose_binary: None,
         agent: None,
-        provider: Some(DEFAULT_PI_PROVIDER.to_string()),
-        model: Some(QUICK_AI_PI_MODEL.to_string()),
+        provider: Some(DEFAULT_PROVIDER.to_string()),
+        model: Some(QUICK_AI_MODEL.to_string()),
         system_prompt: None,
         append_system_prompt: Some(QUICK_AI_APPEND_SYSTEM_PROMPT.to_string()),
         cwd: Some(ctx.quick_ai_cwd()),
-        tools: Some(QUICK_AI_PI_TOOLS.iter().map(|s| s.to_string()).collect()),
+        tools: Some(QUICK_AI_TOOLS.iter().map(|s| s.to_string()).collect()),
         tool_policy: Some(AgentChatToolPolicyConfig {
-            allow: Some(QUICK_AI_PI_TOOLS.iter().map(|s| s.to_string()).collect()),
+            allow: Some(QUICK_AI_TOOLS.iter().map(|s| s.to_string()).collect()),
         }),
         path_policy: Some(AgentChatPathPolicyConfig {
             allow_read: Some(Vec::new()),
@@ -590,7 +595,7 @@ pub fn resolve_effective_profile_decision(
 /// `quick-ai` id keeps the pinned fast zero-context default. Picked profiles
 /// go through `apply_ai_fallbacks` so they behave exactly as they do when
 /// selected in Agent Chat; the default stays pinned (never fallback-mapped)
-/// so the spark model can't be overridden by the global model selection.
+/// so the pinned Quick AI model can't be overridden by the global model selection.
 pub fn resolve_quick_ai_profile(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
@@ -738,12 +743,12 @@ pub fn persist_agent_chat_profile_selection(
 
     ai.selected_profile_id = Some(entry.id.clone());
     ai.selected_profile_name = None;
-    ai.selected_backend = Some(AgentChatBackend::Pi);
+    ai.selected_backend = Some(AgentChatBackend::Goose);
     Some(entry)
 }
 
 pub fn resolve_user_profile(profile: &AgentChatProfile) -> ResolvedAgentChatProfile {
-    let backend = profile.backend.unwrap_or(AgentChatBackend::Pi);
+    let backend = profile.backend.unwrap_or(AgentChatBackend::Goose);
     ResolvedAgentChatProfile {
         source: AgentChatProfileSource::User,
         id: profile
@@ -755,8 +760,8 @@ pub fn resolve_user_profile(profile: &AgentChatProfile) -> ResolvedAgentChatProf
         name: profile.name.trim().to_string(),
         icon_name: clean_opt(profile.icon_name.as_deref()).map(str::to_string),
         backend,
-        pi_binary: clean_opt(profile.pi_binary.as_deref())
-            .map(crate::ai::agent_chat::pi::binary::expand_tilde_path),
+        goose_binary: clean_opt(profile.goose_binary.as_deref())
+            .map(crate::ai::agent_chat::goose::binary::expand_tilde_path),
         agent: clean_opt(profile.agent.as_deref()).map(str::to_string),
         provider: clean_opt(profile.provider.as_deref()).map(str::to_string),
         model: clean_opt(profile.model.as_deref()).map(str::to_string),
@@ -764,7 +769,7 @@ pub fn resolve_user_profile(profile: &AgentChatProfile) -> ResolvedAgentChatProf
         append_system_prompt: clean_opt(profile.append_system_prompt.as_deref())
             .map(str::to_string),
         cwd: clean_opt(profile.cwd.as_deref())
-            .map(crate::ai::agent_chat::pi::binary::expand_tilde_path),
+            .map(crate::ai::agent_chat::goose::binary::expand_tilde_path),
         tools: resolved_profile_tools(profile),
         tool_policy: profile.tool_policy.clone(),
         path_policy: profile.path_policy.clone(),
@@ -796,10 +801,10 @@ pub fn apply_ai_fallbacks(
     mut profile: ResolvedAgentChatProfile,
     ai: &AiPreferences,
 ) -> ResolvedAgentChatProfile {
-    if profile.pi_binary.is_none() {
-        profile.pi_binary = clean_opt(ai.pi_binary.as_deref())
-            .map(crate::ai::agent_chat::pi::binary::expand_tilde_path)
-            .or_else(crate::ai::agent_chat::pi::binary::default_pi_binary);
+    if profile.goose_binary.is_none() {
+        profile.goose_binary = clean_opt(ai.goose_binary.as_deref())
+            .map(crate::ai::agent_chat::goose::binary::expand_tilde_path)
+            .or_else(crate::ai::agent_chat::goose::binary::default_goose_binary);
     }
 
     if let Some(selected_model) = clean_opt(ai.selected_model_id.as_deref()) {
@@ -811,13 +816,16 @@ pub fn apply_ai_fallbacks(
         }
     }
 
+    // The Text/rewrite profile stays on the model's fastest setting; the
+    // default reasoning level is for full Agent Chat profiles.
     if profile.thinking.is_none()
+        && profile.id != BUILTIN_TEXT_PROFILE_ID
         && profile
             .model
             .as_deref()
             .is_some_and(|model| DEFAULT_MEDIUM_THINKING_MODELS.contains(&model.trim()))
     {
-        profile.thinking = Some(DEFAULT_PI_THINKING.to_string());
+        profile.thinking = Some(DEFAULT_THINKING.to_string());
     }
 
     profile
@@ -917,38 +925,7 @@ mod quick_ai_profile_selection_tests {
         let ai = AiPreferences::default();
         let profile = resolve_quick_ai_profile(&ai, &ctx());
         assert_eq!(profile.id, BUILTIN_QUICK_AI_PROFILE_ID);
-        assert_eq!(profile.model.as_deref(), Some(QUICK_AI_PI_MODEL));
-    }
-
-    #[test]
-    fn quick_ai_empty_search_fallback_is_bounded_and_truthful() {
-        assert_eq!(QUICK_AI_FOCUSED_SEARCH_BUDGET, 1);
-        let prompt = QUICK_AI_APPEND_SYSTEM_PROMPT;
-
-        // BOUNDED: one search, and no follow-on web action of any kind.
-        // `Never call web_search again` was dropped in 52e66fb88; it was
-        // always redundant with the broader `Never perform another web
-        // action`, which forbids page follows too, so only the broad
-        // guarantee is asserted now.
-        assert!(prompt.contains("exactly one web_search action containing one focused query"));
-        assert!(prompt.contains("Immediately after that first result"));
-        assert!(prompt.contains("Never perform another web action"));
-
-        // TRUTHFUL: an empty search must produce an honest empty-sources
-        // answer, and must NOT degrade into the two failure modes this
-        // profile exists to prevent — claiming no web access (see the
-        // `QUICK_AI_PI_TOOLS` doc comment: web_search exists so live
-        // questions get real answers "instead of 'I can't verify
-        // schedules'") or pushing the work back onto the user.
-        assert!(prompt.contains("first search has no usable source"));
-        assert!(prompt.contains("no usable result was returned"));
-        assert!(prompt.contains("do not claim you cannot access live news or sources"));
-        assert!(prompt.contains("do not ask the user to supply a source"));
-
-        // NEVER FABRICATE: added in 52e66fb88 and previously unasserted.
-        // This is the prompt-side counterpart to the source-provenance
-        // check; without it the model may invent a plausible source URL.
-        assert!(prompt.contains("Never invent an answer or source URL"));
+        assert_eq!(profile.model.as_deref(), Some(QUICK_AI_MODEL));
     }
 
     #[test]

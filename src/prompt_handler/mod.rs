@@ -6017,7 +6017,7 @@ impl ScriptListApp {
                             provider_count = registry.provider_ids().len(),
                             "Enabling built-in AI"
                         );
-                        chat_prompt = chat_prompt.with_builtin_ai(registry, true);
+                        chat_prompt = chat_prompt.with_builtin_ai(registry);
                         // Auto-respond if there are initial user messages (scriptlets with pre-populated messages)
                         if chat_prompt
                             .messages

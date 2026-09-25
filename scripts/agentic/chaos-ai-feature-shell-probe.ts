@@ -435,7 +435,7 @@ try {
 				: ROW.startsWith("r89-")
 					? {
 							EDITOR: "/bin/echo",
-							SCRIPT_KIT_PI_BINARY: resolve(PROBE_DIR, "mock-pi-rpc.js"),
+							SCRIPT_KIT_GOOSE_BINARY: resolve(PROBE_DIR, "mock-goose-acp.ts"),
 							SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
 						}
 					: { EDITOR: "/bin/echo" },
@@ -1529,7 +1529,7 @@ try {
 	const message = error instanceof Error ? error.message : String(error);
 	const environmentBlocked =
 		message.includes("did not become ready") ||
-		message.includes("Pi Agent Chat is unavailable") ||
+		message.includes("Agent Chat is unavailable") ||
 		message.includes("Binary not found");
 	receipt.pass = false;
 	receipt.verdict = "ABORTED";

@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Seed a driver/session sandbox HOME with the auth state a live Agent Chat or
-# brain probe needs, in one call. Replaces the order-sensitive manual dance of
-# copying ~/.pi and ~/.codex into the sandbox after launch and before the
-# first openAi/agent-chat command.
+# Seed a driver/session sandbox HOME with the auth state a live Agent Chat,
+# brain, or Flows probe needs, in one call, before the first AI command.
 #
 # Copies via APFS clonefile (cp -c, ~0 bytes, instant):
-#   ~/.pi                -> <sandbox>/.pi          (Pi agent auth + state, ~300MB logical)
-#   ~/.codex/auth.json   -> <sandbox>/.codex/auth.json
-#   ~/.codex/config.toml -> <sandbox>/.codex/config.toml   (when present)
-# ~/.codex is NOT copied wholesale — it can be tens of GB of session history.
+#   ~/.scriptkit/goose/config -> <sandbox>/.scriptkit/goose/config
+#                                (goose provider sign-ins and config.yaml)
+#   ~/.codex/auth.json        -> <sandbox>/.codex/auth.json   (Flows / Codex)
+#   ~/.codex/config.toml      -> <sandbox>/.codex/config.toml (when present)
+# goose sessions and ~/.codex history are NOT copied — they can be large.
 #
 # Usage:
 #   bash scripts/agentic/seed-sandbox-home.sh <sandbox-home-dir>
@@ -37,27 +36,21 @@ clone() {
   fi
 }
 
-if [ -d "$SOURCE_HOME/.pi" ]; then
-  if [ -e "$SANDBOX_HOME/.pi" ]; then
-    skipped+=("$SOURCE_HOME/.pi (already present in sandbox)")
+seed() {
+  # seed <relative-path> — clone one path from the source home when present.
+  local relative="$1"
+  if [ ! -e "$SOURCE_HOME/$relative" ]; then
+    skipped+=("$SOURCE_HOME/$relative (missing)")
+  elif [ -e "$SANDBOX_HOME/$relative" ]; then
+    skipped+=("$SOURCE_HOME/$relative (already present in sandbox)")
   else
-    clone "$SOURCE_HOME/.pi" "$SANDBOX_HOME/.pi"
+    clone "$SOURCE_HOME/$relative" "$SANDBOX_HOME/$relative"
   fi
-else
-  skipped+=("$SOURCE_HOME/.pi (missing)")
-fi
+}
 
-for file in auth.json config.toml; do
-  if [ -f "$SOURCE_HOME/.codex/$file" ]; then
-    if [ -e "$SANDBOX_HOME/.codex/$file" ]; then
-      skipped+=("$SOURCE_HOME/.codex/$file (already present in sandbox)")
-    else
-      clone "$SOURCE_HOME/.codex/$file" "$SANDBOX_HOME/.codex/$file"
-    fi
-  else
-    skipped+=("$SOURCE_HOME/.codex/$file (missing)")
-  fi
-done
+seed ".scriptkit/goose/config"
+seed ".codex/auth.json"
+seed ".codex/config.toml"
 
 json_array() {
   local out="" item

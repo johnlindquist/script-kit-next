@@ -260,11 +260,11 @@
  * theme: { presetId: "nord" },
  * dictation: { selectedDeviceId: "usb-mic" },
  * ai: {
- *   selectedBackend: "pi",
+ *   selectedBackend: "goose",
  *   selectedProfileId: "script-kit",
- *   selectedModelId: "openai-codex/gpt-5.4",
+ *   selectedModelId: "chatgpt_codex/gpt-5.6-sol",
  *   profiles: [
- *     { id: "script-kit", name: "Script Kit", backend: "pi", provider: "openai-codex", model: "gpt-5.4" }
+ *     { id: "script-kit", name: "Script Kit", backend: "goose", provider: "chatgpt_codex", model: "gpt-5.6-sol" }
  *   ]
  * },
  * windowManagement: { snapMode: "expanded" },
@@ -686,7 +686,7 @@
  * | dictation.selectedDeviceId | string | unset                      | no       |
  * | ai.selectedModelId | string         | unset                       | no       |
  * | ai.selectedAgentChatAgentId | string      | unset                       | no       |
- * | ai.piBinary       | string         | bundled Pi sidecar          | no       |
+ * | ai.gooseBinary    | string         | bundled goose engine        | no       |
  * | ai.profiles       | AiProfile[]    | unset                       | no       |
  * | ai.activeProfileId | string         | unset                       | no       |
  * | windowManagement.snapMode | SnapMode | unset                     | no       |
@@ -1288,15 +1288,16 @@ export interface UpdatesConfig {
   autoCheck?: boolean;
 }
 
-export type AgentChatBackend = "agent_chat" | "pi";
+/** Agent Chat engine. Every profile runs on goose; `"pi"` and `"agent_chat"` are older spellings that still load. */
+export type AgentChatBackend = "goose" | "pi" | "agent_chat";
 
 /**
- * Structured Pi tool policy for an Agent Chat profile.
+ * Structured tool policy for an Agent Chat profile.
  * `allow` supersedes the legacy `tools` array.
  */
 export interface AgentChatToolPolicyConfig {
   /**
-   * Tool allow-list. `[]` means no tools; omit to keep Pi defaults.
+   * Tool allow-list. `[]` means no tools; omit to keep the profile default tools.
    *
    * @example ["read", "grep"]
    */
@@ -1304,7 +1305,7 @@ export interface AgentChatToolPolicyConfig {
 }
 
 /**
- * Runtime filesystem scope forwarded to Pi for read/write-capable tools.
+ * Filesystem scope for Script Kit read/write agent tools.
  */
 export interface AgentChatPathPolicyConfig {
   /**
@@ -1361,20 +1362,20 @@ export interface AiProfile {
   backend?: AgentChatBackend;
 
   /**
-   * Optional Pi sidecar binary override for this profile. Most users should
-   * omit this and use the bundled Pi binary.
+   * Optional goose engine binary override for this profile. Most users should
+   * omit this and use the bundled goose binary.
    *
-   * @example "~/dev/pi_agent_rust/target/debug/pi"
+   * @example "~/bin/goose"
    */
-  piBinary?: string;
+  gooseBinary?: string;
 
   /**
-   * Legacy Agent Chat agent id. Ignored by Pi profiles.
+   * Legacy Agent Chat agent id. Informational only.
    */
   agent?: string;
 
   /**
-   * Pi provider id.
+   * goose provider id (for example `chatgpt_codex`, `anthropic`, `ollama`).
    */
   provider?: string;
 
@@ -1391,25 +1392,25 @@ export interface AiProfile {
   tools?: string[];
 
   /**
-   * Structured Pi tool policy. `allow` supersedes the legacy `tools` array.
+   * Structured tool policy. `allow` supersedes the legacy `tools` array.
    *
-   * @default undefined (Pi default tools)
+   * @default undefined (profile default tools)
    * @example { allow: ["read", "grep"] }
    */
   toolPolicy?: AgentChatToolPolicyConfig;
 
   /**
-   * Runtime filesystem scope forwarded to Pi for read/write-capable tools.
+   * Filesystem scope for Script Kit read/write agent tools.
    *
-   * @default undefined (Pi default scope)
+   * @default undefined (unrestricted)
    * @example { allowRead: ["~/notes/**"], deny: ["~/.ssh/**"] }
    */
   pathPolicy?: AgentChatPathPolicyConfig;
 
   /**
-   * Message Pi should return when a blocked capability/path is requested.
+   * Reply the agent gives when a blocked capability/path is requested.
    *
-   * @default undefined (Pi default message)
+   * @default undefined (no fixed reply)
    * @example "This profile is scoped to notes only."
    */
   blockedActionMessage?: string;
@@ -1484,12 +1485,12 @@ export interface AiPreferences {
   selectedBackend?: AgentChatBackend;
 
   /**
-   * Optional global Pi sidecar binary override. Release builds use the bundled
-   * Pi binary when this is omitted.
+   * Optional global goose engine binary override. Release builds use the bundled
+   * goose binary when this is omitted.
    *
-   * @example "~/dev/pi_agent_rust/target/debug/pi"
+   * @example "~/bin/goose"
    */
-  piBinary?: string;
+  gooseBinary?: string;
 
   /**
    * Named AI configuration profiles available for quick switching.
@@ -1681,22 +1682,22 @@ export interface Config extends BaseConfig {
   /**
    * Agent Chat runtime preferences.
    *
-   * Codex-backed Pi profiles are the primary setup flow. Legacy top-level
+   * Codex-backed goose profiles are the primary setup flow. Legacy top-level
    * selections remain backward-compatible input.
    *
    * @default undefined (use Agent Chat defaults)
    * @example
    * ```typescript
  * ai: {
- *   selectedBackend: "pi",
+ *   selectedBackend: "goose",
  *   selectedProfileId: "script-kit",
- *   selectedModelId: "openai-codex/gpt-5.4",
+ *   selectedModelId: "chatgpt_codex/gpt-5.6-sol",
  *   profiles: [
  *     {
  *       id: "script-kit",
  *       name: "Script Kit",
- *       backend: "pi",
- *       provider: "openai-codex",
+ *       backend: "goose",
+ *       provider: "chatgpt_codex",
  *       model: "gpt-5.4"
  *     }
    *   ]

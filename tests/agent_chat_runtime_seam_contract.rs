@@ -29,8 +29,8 @@ fn agent_chat_connection_trait_is_backend_neutral_and_object_safe_by_shape() {
         "runtime seam must remain object-safe"
     );
     assert!(
-        !AGENT_CHAT_RUNTIME_SOURCE.contains("PiLaunchSpec"),
-        "Phase 2 seam must not know about Pi launch specs"
+        !AGENT_CHAT_RUNTIME_SOURCE.contains("GooseLaunchSpec"),
+        "Phase 2 seam must not know about goose launch specs"
     );
 }
 
@@ -65,24 +65,24 @@ fn phase_two_keeps_view_out_of_runtime_refactor() {
         "AgentChatView should keep owning UI state only; runtime seam belongs in AgentChatThread"
     );
     assert!(
-        !AGENT_CHAT_VIEW_SOURCE.contains("PiLaunchSpec"),
-        "Phase 2 must not route the view toward Pi"
+        !AGENT_CHAT_VIEW_SOURCE.contains("GooseLaunchSpec"),
+        "Phase 2 must not route the view toward goose"
     );
 }
 
 #[test]
-fn pi_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime::spawn"));
+fn engine_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch::from_profile"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("GooseAcpRuntime::spawn"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatWarmSessionSpec"));
     assert!(
-        TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
-        "Tab launch should route selected Pi profiles through an explicit helper"
+        TAB_AI_AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_agent_chat_view_from_launch"),
+        "Tab launch should route selected profiles through an explicit helper"
     );
     assert!(
         AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_effective_profile")
-            && AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"),
+            && AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch::from_profile"),
         "Tab launch must branch on the effective Agent Chat profile"
     );
 
@@ -91,37 +91,36 @@ fn pi_routing_is_owned_by_agent_chat_launch_and_tab_entry_only() {
         ("agent_chat_thread", AGENT_CHAT_THREAD_SOURCE),
     ] {
         assert!(
-            !source.contains("PiLaunchSpec"),
-            "{} must stay backend-neutral and not import PiLaunchSpec",
+            !source.contains("GooseLaunchSpec"),
+            "{} must stay backend-neutral and not import GooseLaunchSpec",
             name
         );
         assert!(
-            !source.contains("agent_chat::pi"),
-            "{} must stay backend-neutral and not import Pi runtime modules",
+            !source.contains("agent_chat::goose"),
+            "{} must stay backend-neutral and not import goose runtime modules",
             name
         );
     }
 }
 
 #[test]
-fn tab_launch_uses_pi_warm_path_without_agent_chat_runtime_fallback() {
+fn tab_launch_uses_goose_warm_path_without_agent_chat_runtime_fallback() {
     assert!(
         !AGENT_CHAT_LAUNCH_SOURCE.contains("spawn_with_approval"),
         "Agent Chat launch must not instantiate the legacy Agent Chat runtime"
     );
     assert!(
-        AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime")
-            || AGENT_CHAT_LAUNCH_SOURCE.contains("PiRpcRuntime"),
-        "Pi profiles should be routed to the Pi RPC runtime"
+        AGENT_CHAT_LAUNCH_SOURCE.contains("GooseAcpRuntime"),
+        "profiles should be routed to the goose ACP runtime"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"),
-        "Agent Chat close must reset the acquired Pi warm lease"
+        "Agent Chat close must reset the acquired goose warm lease"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("closing_pi_agent_chat")
+        TAB_AI_MODE_SOURCE.contains("closing_warm_agent_chat")
             && TAB_AI_MODE_SOURCE.contains("self.embedded_agent_chat = None;"),
-        "Normal Pi Agent Chat dismissal must not leave the old embedded entity reusable"
+        "Normal Agent Chat dismissal must not leave the old embedded entity reusable"
     );
     assert!(
         APP_STATE_SOURCE.contains("active_agent_chat_warm_lease"),

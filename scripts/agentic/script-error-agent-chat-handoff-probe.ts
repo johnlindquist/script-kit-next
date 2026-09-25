@@ -13,14 +13,14 @@ import { Driver, type Json } from "../devtools/driver.ts";
 
 const DEFAULT_BINARY =
   "/Users/johnlindquist/dev/script-kit-gpui/target-agent/artifacts/ratchet-layout-final/script-kit-gpui";
-const DEFAULT_PI_BINARY =
-  "/Users/johnlindquist/dev/script-kit-gpui/target/pi-sidecar/pi";
+const DEFAULT_GOOSE_BINARY =
+  "/Users/johnlindquist/dev/script-kit-gpui/target/goose-sidecar/goose";
 const binary = process.env.PROBE_BINARY ?? DEFAULT_BINARY;
-const configuredPiBinary = process.env.SCRIPT_KIT_PI_BINARY;
-const piBinary = configuredPiBinary ?? DEFAULT_PI_BINARY;
+const configuredGooseBinary = process.env.SCRIPT_KIT_GOOSE_BINARY;
+const gooseBinary = configuredGooseBinary ?? DEFAULT_GOOSE_BINARY;
 const expectedAgentProvider =
-  process.env.PROBE_AGENT_PROVIDER ?? "openai-codex";
-const expectedAgentModel = process.env.PROBE_AGENT_MODEL ?? "gpt-5.6-sol";
+  process.env.PROBE_AGENT_PROVIDER ?? "chatgpt_codex";
+const expectedAgentModel = process.env.PROBE_AGENT_MODEL ?? "gpt-6-luna";
 const scriptPath = resolve("tests/smoke/test-error-display.ts");
 const receiptPath = resolve(
   ".test-output/script-error-agent-chat-handoff-probe.json",
@@ -51,9 +51,9 @@ const receipt: Json = {
     fixtureSubstitutionUsed: false,
   },
   binary,
-  piSidecar: {
-    path: piBinary,
-    source: configuredPiBinary ? "SCRIPT_KIT_PI_BINARY" : "repo-existing-sidecar",
+  gooseSidecar: {
+    path: gooseBinary,
+    source: configuredGooseBinary ? "SCRIPT_KIT_GOOSE_BINARY" : "repo-existing-sidecar",
     injectedIntoApp: false,
     expectedProvider: expectedAgentProvider,
     expectedModel: expectedAgentModel,
@@ -118,10 +118,10 @@ function relevantAppLogLines(source: string): string[] {
     "Captured stderr from buffer",
     "Script error received",
     "Toast created for script error",
-    "pi_rpc_stdout_closed",
+    "goose_acp_stdout_closed",
     "warm_prepare_slot_runtime_failed",
-    "pi_agent_chat_warm_failed_setup",
-    "pi_agent_chat_unavailable",
+    "agent_chat_warm_failed_setup",
+    "agent_chat_unavailable",
     "script_error_agent_chat_stage_failed",
     "=== ScriptExit message received ===",
     "Failed to write to script stdin",
@@ -133,15 +133,15 @@ function relevantAppLogLines(source: string): string[] {
 }
 
 function diagnosePiSidecar(sandboxHome: string): Json {
-  if (!isExecutableFile(piBinary)) {
+  if (!isExecutableFile(gooseBinary)) {
     return {
       attempted: false,
-      reason: "configured Pi sidecar is not an executable file",
+      reason: "configured goose sidecar is not an executable file",
     };
   }
 
   const command = [
-    piBinary,
+    gooseBinary,
     "--mode",
     "rpc",
     "--provider",
@@ -324,17 +324,17 @@ function recordAgentChatRuntimeUnavailable(appLog: string): void {
   receipt.agentChat = {
     status: "setup",
     source: "app-log",
-    setupTitle: "Pi Agent Chat is unavailable",
+    setupTitle: "Agent Chat is unavailable",
   };
   receipt.agentChatRuntime = {
     available: false,
     status: "setup",
     appEvents: relevantAppLogLines(appLog).filter((line) =>
       [
-        "pi_rpc_stdout_closed",
+        "goose_acp_stdout_closed",
         "warm_prepare_slot_runtime_failed",
-        "pi_agent_chat_warm_failed_setup",
-        "pi_agent_chat_unavailable",
+        "agent_chat_warm_failed_setup",
+        "agent_chat_unavailable",
         "script_error_agent_chat_stage_failed",
       ].some((needle) => line.includes(needle)),
     ),
@@ -347,7 +347,7 @@ function recordAgentChatRuntimeUnavailable(appLog: string): void {
     missingPrimitive: null,
     detail:
       sidecarDiagnostic.stderr ||
-      "The injected Pi sidecar exited before RPC model readiness; see appEvents.",
+      "The injected goose sidecar exited before ACP session readiness; see appEvents.",
   };
 }
 
@@ -356,8 +356,8 @@ try {
     throw new Error(`PROBE_BINARY is not executable or does not exist: ${binary}`);
   }
 
-  const injectedPiBinary = isExecutableFile(piBinary) ? piBinary : undefined;
-  (receipt.piSidecar as Json).injectedIntoApp = Boolean(injectedPiBinary);
+  const injectedGooseBinary = isExecutableFile(gooseBinary) ? gooseBinary : undefined;
+  (receipt.gooseSidecar as Json).injectedIntoApp = Boolean(injectedGooseBinary);
 
   launchAttempted = true;
   driver = await Driver.launch({
@@ -369,8 +369,8 @@ try {
     defaultTimeoutMs: 15_000,
     env: {
       SCRIPT_KIT_PANEL_INVARIANTS_ALLOW_MISMATCH: "1",
-      ...(injectedPiBinary
-        ? { SCRIPT_KIT_PI_BINARY: injectedPiBinary }
+      ...(injectedGooseBinary
+        ? { SCRIPT_KIT_GOOSE_BINARY: injectedGooseBinary }
         : {}),
     },
   });
@@ -421,7 +421,7 @@ try {
   recordContextBundle(bundle);
 
   if (
-    appLog.includes("pi_agent_chat_unavailable") ||
+    appLog.includes("agent_chat_unavailable") ||
     appLog.includes("script_error_agent_chat_stage_failed")
   ) {
     recordAgentChatRuntimeUnavailable(appLog);
@@ -558,7 +558,7 @@ try {
     addMissingPrimitive(
       "getAgentChatState with messageCount, contextChipCount, and contextSummary",
     );
-  } else if (/setup|auth|credential|Pi Agent Chat is unavailable/i.test(message)) {
+  } else if (/setup|auth|credential|Agent Chat is unavailable/i.test(message)) {
     receipt.classification = "needs-user-info";
   } else if (runReachedScriptError) {
     receipt.classification = "reproduced";

@@ -104,7 +104,7 @@ fn agent_chat_hot_prewarm_helper_uses_pi_warm_session() {
         "warm_agent_chat_on_startup must use the same cwd override as Agent Chat launch"
     );
     assert!(
-        body.contains("resolve_selected_pi_launch_with_cwd_override"),
+        body.contains("resolve_selected_launch_with_cwd_override"),
         "warm_agent_chat_on_startup must share selected-profile/cwd launch resolution with the open path"
     );
     assert!(
@@ -242,7 +242,7 @@ fn agent_chat_open_uses_pi_warm_session_without_fresh_agent_chat_runtime() {
     );
 
     assert!(
-        body.contains("open_tab_ai_pi_view_from_launch"),
+        body.contains("open_tab_ai_agent_chat_view_from_launch"),
         "open path must route through Pi warm Agent Chat launch"
     );
     assert!(
@@ -255,7 +255,10 @@ fn agent_chat_open_uses_pi_warm_session_without_fresh_agent_chat_runtime() {
 fn pi_tab_open_does_not_prepare_warm_synchronously_before_view_switch() {
     let agent_chat_launch = fs::read_to_string("src/app_impl/agent_handoff/agent_chat_launch.rs")
         .expect("read Agent Chat launch source");
-    let body = fn_body(&agent_chat_launch, "fn open_tab_ai_pi_view_from_launch(");
+    let body = fn_body(
+        &agent_chat_launch,
+        "fn open_tab_ai_agent_chat_view_from_launch(",
+    );
 
     assert!(
         body.contains("acquire_ready_or_spawn_cold"),

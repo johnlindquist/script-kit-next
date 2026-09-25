@@ -1,8 +1,8 @@
 use crate::ui_foundation::hex_to_rgba_with_opacity;
 
 use super::opacity::{
-    OPACITY_GHOST, OPACITY_GHOST_SOFT, OPACITY_WHISPER_BORDER_IDLE,
-    OPACITY_WHISPER_SURFACE_FOCUSED, OPACITY_WHISPER_SURFACE_IDLE,
+    OPACITY_CHAT_USER_MESSAGE_SURFACE, OPACITY_GHOST, OPACITY_GHOST_SOFT,
+    OPACITY_WHISPER_BORDER_IDLE, OPACITY_WHISPER_SURFACE_FOCUSED, OPACITY_WHISPER_SURFACE_IDLE,
 };
 use super::Theme;
 
@@ -50,6 +50,8 @@ pub(crate) struct AppChromeColors {
     pub whisper_surface_focused_rgba: u32,
     /// Low-opacity card/field border matching form-field whisper chrome.
     pub whisper_border_rgba: u32,
+    /// Chat user-message bubble surface (quiet primary-text tint).
+    pub chat_user_message_surface_rgba: u32,
     /// Dialog surface with vibrancy-aware opacity floor — use for all popup
     /// windows (actions dialog, slash picker, composer picker) so they share
     /// the same apparent background density.
@@ -545,6 +547,10 @@ impl AppChromeColors {
             whisper_border_rgba: hex_to_rgba_with_opacity(
                 colors.ui.border,
                 OPACITY_WHISPER_BORDER_IDLE,
+            ),
+            chat_user_message_surface_rgba: hex_to_rgba_with_opacity(
+                colors.text.primary,
+                OPACITY_CHAT_USER_MESSAGE_SURFACE,
             ),
             popup_surface_rgba: {
                 // Match the actions dialog: use vibrancy_background.

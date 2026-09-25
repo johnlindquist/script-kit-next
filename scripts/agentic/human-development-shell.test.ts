@@ -44,7 +44,7 @@ if os.environ.get("CARGO_TARGET_DIR") not in (None, str(target)):
     sys.exit(78)
 values = {
     "CARGO_TARGET_DIR": str(target),
-    "SCRIPT_KIT_DEV_PI_DIR": str(root / "pi-sidecar"),
+    "SCRIPT_KIT_DEV_GOOSE_DIR": str(root / "goose-sidecar"),
     "SCRIPT_KIT_GPUI_BINARY": str(target / "debug/script-kit-gpui"),
     "SCRIPT_KIT_GHOST_LLM_HELPER": str(target / "debug/script-kit-ghost-llm-helper"),
     "SCRIPT_KIT_METAL_MODULE_CACHE_DIR": str(root / "clang-modules"),
@@ -63,7 +63,7 @@ else:
   mkdirSync(env.HOME!, { recursive: true });
   mkdirSync(env.TMPDIR!, { recursive: true });
   writeFileSync(events, "");
-  writeFileSync(join(localScripts, "ensure-pi-sidecar.sh"), '#!/bin/bash\nprintf \'{"kind":"sidecar"}\\n\' >> "$WATCHER_EVENTS"\n');
+  writeFileSync(join(localScripts, "ensure-goose-sidecar.sh"), '#!/bin/bash\nprintf \'{"kind":"sidecar"}\\n\' >> "$WATCHER_EVENTS"\n');
   writeFileSync(join(localScripts, "session.sh"), `#!/bin/bash
 printf '{"kind":"session","action":"%s","binary":"%s"}\\n' "$1" "$SCRIPT_KIT_GPUI_BINARY" >> "$WATCHER_EVENTS"
 if [[ "$1" == "stop" && "\${FIXTURE_SESSION_STOP_REFUSED:-0}" == "1" ]]; then exit 78; fi
@@ -396,7 +396,7 @@ describe("human development shell behavior", () => {
 
   test("authorized sidecar opt-out leaves provisioning disabled while watcher operation continues", () => {
     const workspace = fixture();
-    Object.assign(workspace.env, { SCRIPT_KIT_DEV_ENSURE_PI_SIDECAR: "0", FIXTURE_WATCH_ONLY: "1" });
+    Object.assign(workspace.env, { SCRIPT_KIT_DEV_ENSURE_GOOSE_SIDECAR: "0", FIXTURE_WATCH_ONLY: "1" });
     const result = run(workspace, "dev.sh", [], true);
     expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(workspace.records().filter(record => record.kind === "sidecar")).toEqual([]);
@@ -407,19 +407,19 @@ describe("human development shell behavior", () => {
   test("build-ops inspection neither provisions nor health-probes the sidecar", () => {
     const workspace = createBuildWorkspace(mkdtempSync(join(tmpdir(), "script-kit-passive-sidecar-")));
     roots.push(workspace.root);
-    const events = join(workspace.root, "sidecar-events"), sidecar = join(workspace.root, "target/pi-sidecar/pi");
-    mkdirSync(join(workspace.root, "target/pi-sidecar"), { recursive: true });
+    const events = join(workspace.root, "sidecar-events"), sidecar = join(workspace.root, "target/goose-sidecar/goose");
+    mkdirSync(join(workspace.root, "target/goose-sidecar"), { recursive: true });
     const sentinel = "#!/bin/bash\nprintf 'unexpected invocation\\n' >> \"$SIDECAR_EVENTS\"\nexit 93\n";
     writeFileSync(sidecar, sentinel, { mode: 0o755 });
-    writeFileSync(join(workspace.root, "scripts/agentic/ensure-pi-sidecar.sh"), sentinel, { mode: 0o755 });
+    writeFileSync(join(workspace.root, "scripts/agentic/ensure-goose-sidecar.sh"), sentinel, { mode: 0o755 });
     const result = Bun.spawnSync([process.execPath, join(scripts, "../devtools/build-ops.ts"), "inspect"], {
       cwd: workspace.root,
-      env: { ...workspace.env, HOME: workspace.root, SIDECAR_EVENTS: events, SCRIPT_KIT_PI_BINARY: sidecar },
+      env: { ...workspace.env, HOME: workspace.root, SIDECAR_EVENTS: events, SCRIPT_KIT_GOOSE_BINARY: sidecar },
       stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 20_000,
     });
     expect(result.exitCode, result.stderr.toString()).toBe(0);
     const receipt = JSON.parse(result.stdout.toString());
-    expect(receipt.buildOps.result).toMatchObject({ performedInstallation: false, performedBuild: false, dependencies: { pi: { health: "not-probed" } } });
+    expect(receipt.buildOps.result).toMatchObject({ performedInstallation: false, performedBuild: false, dependencies: { goose: { health: "not-probed" } } });
     expect(existsSync(events)).toBe(false);
     expect(existsSync(workspace.invocations)).toBe(false);
     expect(readFileSync(sidecar, "utf8")).toBe(sentinel);

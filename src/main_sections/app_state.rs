@@ -1638,6 +1638,9 @@ pub(crate) struct ScriptListApp {
     /// Resolved display name of the globally-selected model (e.g. "Sonnet
     /// 4.6"), shown alongside the agent in the footer marker.
     pub(crate) spine_model_label: Option<String>,
+    /// goose provider of the globally-selected model, used to mark the model
+    /// label "Not signed in" until the provider's browser sign-in is stored.
+    pub(crate) spine_provider_id: Option<String>,
     spine_live_preview_cache: crate::spine::live_preview::SpineLivePreviewCache,
     /// Passive AX-only sniff of the frontmost app's selected text, refreshed
     /// on every main-window show. Powers the "Rewrite selection" hint chip in
@@ -1891,7 +1894,7 @@ pub(crate) struct ScriptListApp {
     /// Hidden, never-shown Agent Chat chat entity warmed at startup. It is consumed
     /// by the first compatible Agent Chat open so prompt submit avoids initialization.
     pub(crate) prewarmed_agent_chat: Option<Entity<crate::ai::agent_chat::ui::view::AgentChatView>>,
-    /// Active Pi-backed Agent Chat warm lease, reset on chat dismissal so the
+    /// Active goose-backed Agent Chat warm lease, reset on chat dismissal so the
     /// next Agent Chat open starts from a fresh warm session.
     pub(crate) active_agent_chat_warm_lease:
         Option<crate::ai::agent_chat::warm_session::AgentChatWarmSessionLease>,

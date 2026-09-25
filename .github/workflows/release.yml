@@ -336,15 +336,14 @@ jobs:
           path: ${{ runner.temp }}/Script-Kit-unsigned-app.zip
           retention-days: 1
 
-  build-pi-sidecar:
-    name: Build Pi sidecar
+  build-goose-sidecar:
+    name: Build goose sidecar
     runs-on: macos-14
     needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
-      PI_AGENT_RUST_REF: "3d1a3950c16ffdb10cd81780b26921c75c180770"
-      PI_AGENT_RUST_STRICT_REF: "1"
+      GOOSE_SIDECAR_REF: "302b60806639ea9f0ae8f053f49f8bf0e88b26f4"
     steps:
       - uses: actions/checkout@v4
 
@@ -356,42 +355,36 @@ jobs:
 
       - uses: mozilla-actions/sccache-action@v0.0.9
 
-      - name: Cache Pi sidecar Cargo target
+      - name: Cache goose sidecar Cargo target
         uses: actions/cache@v4
         with:
           path: |
-            ${{ runner.temp }}/pi_agent_rust-target
+            ${{ runner.temp }}/goose-sidecar-target
             ~/.cargo/registry
             ~/.cargo/git
-          key: pi-sidecar-${{ runner.os }}-${{ runner.arch }}-${{ env.PI_AGENT_RUST_REF }}-${{ hashFiles('rust-toolchain.toml') }}
+          key: goose-sidecar-${{ runner.os }}-${{ runner.arch }}-${{ env.GOOSE_SIDECAR_REF }}-${{ hashFiles('rust-toolchain.toml') }}
 
-      - name: Prepare bundled Pi sidecar
+      - name: Prepare bundled goose sidecar
         env:
           SCRIPT_KIT_NONINTERACTIVE: "0"
-          PI_AGENT_RUST_TARGET_DIR: ${{ runner.temp }}/pi_agent_rust-target
-          # The pinned CLI needs a credential before entering its read-only model RPC.
-          # This synthetic fixture never sends an inference request or uses real secrets.
-          PI_CODING_AGENT_DIR: ${{ runner.temp }}/pi-sidecar-health-agent
-          PI_PROVIDER: openai
-          PI_MODEL: gpt-5.4
-          OPENAI_API_KEY: script-kit-ci-metadata-only-fixture
-        run: bash scripts/prepare-pi-sidecar.sh
+          GOOSE_SIDECAR_TARGET_DIR: ${{ runner.temp }}/goose-sidecar-target
+        run: bash scripts/prepare-goose-sidecar.sh
 
-      - name: Verify Pi sidecar
+      - name: Verify goose sidecar
         run: |
-          test -x target/pi-sidecar/pi
-          file target/pi-sidecar/pi
+          test -x target/goose-sidecar/goose
+          file target/goose-sidecar/goose
 
-      - name: Zip Pi sidecar
+      - name: Zip goose sidecar
         run: |
-          cd target/pi-sidecar
-          /usr/bin/ditto -c -k pi "$RUNNER_TEMP/pi-sidecar.zip"
+          cd target/goose-sidecar
+          /usr/bin/ditto -c -k goose "$RUNNER_TEMP/goose-sidecar.zip"
 
-      - name: Upload Pi sidecar
+      - name: Upload goose sidecar
         uses: actions/upload-artifact@v4
         with:
-          name: pi-sidecar
-          path: ${{ runner.temp }}/pi-sidecar.zip
+          name: goose-sidecar
+          path: ${{ runner.temp }}/goose-sidecar.zip
           retention-days: 1
 
   sign-notarize-macos:
@@ -400,7 +393,7 @@ jobs:
     needs:
       - validate-release-gates
       - build-macos-app
-      - build-pi-sidecar
+      - build-goose-sidecar
     steps:
       - uses: actions/checkout@v4
       - name: Install root-pinned Rust toolchain
@@ -446,17 +439,17 @@ jobs:
           mkdir -p target/release/bundle/osx
           /usr/bin/ditto -x -k artifacts/app/Script-Kit-unsigned-app.zip target/release/bundle/osx
 
-      - name: Download Pi sidecar
+      - name: Download goose sidecar
         uses: actions/download-artifact@v4
         with:
-          name: pi-sidecar
-          path: artifacts/pi
+          name: goose-sidecar
+          path: artifacts/goose
 
-      - name: Restore Pi sidecar
+      - name: Restore goose sidecar
         run: |
-          mkdir -p target/pi-sidecar
-          /usr/bin/ditto -x -k artifacts/pi/pi-sidecar.zip target/pi-sidecar
-          chmod 0755 target/pi-sidecar/pi
+          mkdir -p target/goose-sidecar
+          /usr/bin/ditto -x -k artifacts/goose/goose-sidecar.zip target/goose-sidecar
+          chmod 0755 target/goose-sidecar/goose
 
       - name: Build and install the exact pre-sign compile artifact
         env:
@@ -471,8 +464,8 @@ jobs:
           cp "$COMPILE_BINARY" "target/release/bundle/osx/Script Kit.app/Contents/MacOS/script-kit-gpui"
           chmod 0755 "target/release/bundle/osx/Script Kit.app/Contents/MacOS/script-kit-gpui"
 
-      - name: Install Pi sidecar into bundle
-        run: bash scripts/install-pi-sidecar-into-bundle.sh
+      - name: Install goose sidecar into bundle
+        run: bash scripts/install-goose-sidecar-into-bundle.sh
 
       - name: Verify bundled macOS app contents
         run: bash scripts/verify-macos-bundle.sh
@@ -518,8 +511,8 @@ jobs:
           find "$APP_PATH" \( -name "*.dylib" -o -name "*.so" \) -type f -print0 | xargs -0 codesign --force --options runtime --sign "$IDENTITY"
 
           # Sign bundled executables before the outer app bundle.
-          codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/pi"
-          codesign --verify --verbose=4 "$APP_PATH/Contents/MacOS/pi"
+          codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/goose"
+          codesign --verify --verbose=4 "$APP_PATH/Contents/MacOS/goose"
           codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/script-kit-gpui"
 
           # Sign the entire app bundle

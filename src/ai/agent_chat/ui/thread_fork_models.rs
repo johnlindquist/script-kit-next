@@ -12,9 +12,9 @@ impl AgentChatThread {
         &self.fork_points
     }
 
-    /// Resolve the Pi fork point for a transcript user message. Primary mapping
-    /// is conversation ordinal: nth visible user message maps to nth Pi fork
-    /// point. If the local transcript and Pi fork list are out of sync, fall
+    /// Resolve the fork point for a transcript user message. Primary mapping
+    /// is conversation ordinal: nth visible user message maps to nth fork
+    /// point. If the local transcript and fork list are out of sync, fall
     /// back to exact user-message text matching.
     pub(crate) fn fork_point_for_message_id<'a>(
         messages: &[AgentChatThreadMessage],
@@ -209,7 +209,7 @@ impl AgentChatThread {
             prefill_chars,
             retry_payload_cleared = true,
         );
-        // Pi rebuilt the session with fresh entry ids; refetch the list.
+        // The engine rebuilt the session with fresh entry ids; refetch the list.
         self.fork_points.clear();
         self.refresh_fork_points(cx);
         true
@@ -293,23 +293,24 @@ impl AgentChatThread {
             // Persist selection to config.ts (non-fatal).
             let id = entry.id.clone();
             if !self.is_provider_free_fixture() {
-            std::thread::Builder::new()
-                .name("agent_chat-save-model".into())
-                .spawn(move || {
-                    let mut prefs = crate::config::load_user_preferences();
-                    prefs.ai.selected_model_id = Some(id.clone());
-                    if let Err(error) = crate::config::save_user_preferences(&prefs) {
-                        let safe_error = crate::logging::log_private_user_value(&error.to_string());
-                        tracing::warn!(
-                            error_bytes = safe_error.raw_bytes,
-                            error_sha256 = %safe_error.sha256,
-                            "failed_to_persist_model_selection"
-                        );
-                    } else {
-                        tracing::info!(model = %id, "model_selection_persisted");
-                    }
-                })
-                .ok();
+                std::thread::Builder::new()
+                    .name("agent_chat-save-model".into())
+                    .spawn(move || {
+                        let mut prefs = crate::config::load_user_preferences();
+                        prefs.ai.selected_model_id = Some(id.clone());
+                        if let Err(error) = crate::config::save_user_preferences(&prefs) {
+                            let safe_error =
+                                crate::logging::log_private_user_value(&error.to_string());
+                            tracing::warn!(
+                                error_bytes = safe_error.raw_bytes,
+                                error_sha256 = %safe_error.sha256,
+                                "failed_to_persist_model_selection"
+                            );
+                        } else {
+                            tracing::info!(model = %id, "model_selection_persisted");
+                        }
+                    })
+                    .ok();
             }
 
             let recovering_selection_command = match &self.reliability_state.phase {

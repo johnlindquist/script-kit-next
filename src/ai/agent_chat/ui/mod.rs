@@ -1,7 +1,7 @@
 //! Agent Chat UI implementation.
 //!
 //! This module is the live implementation of the Agent Chat chat surface. The
-//! The active backend is Pi (`crate::ai::agent_chat`). Feature-level code should
+//! The active backend is goose (`crate::ai::agent_chat`). Feature-level code should
 //! import Agent Chat UI types from this module.
 //!
 //! # Module Layout
@@ -115,10 +115,10 @@ pub(crate) fn open_or_focus_chat_with_input(
 
     let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
     let ai_preferences = crate::config::load_user_preferences().ai;
-    let pi_launch =
-        crate::ai::agent_chat::launch::resolve_selected_pi_launch(&ai_preferences, &profile_ctx)
+    let agent_launch =
+        crate::ai::agent_chat::launch::resolve_selected_launch(&ai_preferences, &profile_ctx)
             .map_err(|error| error.to_string())?;
-    let warm_spec = pi_launch.warm_spec();
+    let warm_spec = agent_launch.warm_spec();
     let manager = crate::ai::agent_chat::launch::warm_session_manager();
     // Acquire without blocking the UI thread: a Ready slot is reused, an
     // in-flight Preparing slot is joined, and only a true miss cold-spawns —
@@ -126,7 +126,7 @@ pub(crate) fn open_or_focus_chat_with_input(
     // prepare_warm call blocked this thread for the full warm-up on a miss.
     let (lease, _origin) = manager
         .acquire_ready_or_spawn_cold(warm_spec)
-        .map_err(|error| format!("Failed to start Pi Agent Chat session: {error}"))?;
+        .map_err(|error| format!("Failed to start Agent Chat session: {error}"))?;
 
     let (_broker, permission_rx) = AgentChatPermissionBroker::new();
     let thread = cx.new(|cx| {
@@ -138,15 +138,15 @@ pub(crate) fn open_or_focus_chat_with_input(
                 cwd: lease.cwd.clone(),
                 initial_input: Some(input),
                 initial_context_parts: Vec::new(),
-                display_name: pi_launch.profile.name.clone().into(),
-                profile_id: pi_launch.profile.id.clone(),
-                profile_display_name: Some(pi_launch.profile.name.clone().into()),
-                profile_icon_name: pi_launch.profile.icon_name.clone(),
+                display_name: agent_launch.profile.name.clone().into(),
+                profile_id: agent_launch.profile.id.clone(),
+                profile_display_name: Some(agent_launch.profile.name.clone().into()),
+                profile_icon_name: agent_launch.profile.icon_name.clone(),
                 selected_agent: None,
                 available_agents: Vec::new(),
                 launch_requirements: AgentChatLaunchRequirements::default(),
-                available_models: pi_launch.available_models.clone(),
-                selected_model_id: pi_launch.selected_model_id.clone(),
+                available_models: agent_launch.available_models.clone(),
+                selected_model_id: agent_launch.selected_model_id.clone(),
                 session_policy: capabilities::AgentChatSessionPolicy::Full,
             },
             cx,

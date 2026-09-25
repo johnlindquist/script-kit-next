@@ -75,7 +75,7 @@ impl AgentChatApprovalOption {
 /// A session-scoped permission grant recorded when the user picks a
 /// persistent "Allow always" option.
 ///
-/// Pi's runtime owns the actual approval cache; this record exists so the UI
+/// goose owns the actual approval cache; this record exists so the UI
 /// can show the user which standing grants are active in the session instead
 /// of letting "Allow always" decisions vanish invisibly.
 #[derive(Debug, Clone, PartialEq, Eq)]

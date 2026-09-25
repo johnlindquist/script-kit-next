@@ -161,7 +161,7 @@ function writeSyntheticZip(path: string, members: SyntheticZipMember[]): void {
 function syntheticAppMembers(appPath: string): SyntheticZipMember[] {
   const required = [
     "Contents/MacOS/script-kit-gpui",
-    "Contents/MacOS/pi",
+    "Contents/MacOS/goose",
     "Contents/Resources/scripts/kit-sdk.ts",
     "Contents/Info.plist",
   ];
@@ -411,7 +411,7 @@ function makeFixture(): ReleaseFixture {
 
   const appPath = join(root, "Script Kit.app");
   const executablePath = join(appPath, "Contents/MacOS/script-kit-gpui");
-  const sidecarPath = join(appPath, "Contents/MacOS/pi");
+  const sidecarPath = join(appPath, "Contents/MacOS/goose");
   const sdkPath = join(appPath, "Contents/Resources/scripts/kit-sdk.ts");
   const zipPath = join(root, "Script-Kit-macos.zip");
   const contractsPath = join(root, "docs/ai/contracts/surface-contracts.json");
@@ -425,7 +425,7 @@ function makeFixture(): ReleaseFixture {
   mkdirSync(join(appPath, "Contents/Resources/assets"), { recursive: true });
   mkdirSync(join(appPath, "Contents/_CodeSignature"), { recursive: true });
   writeFileSync(executablePath, "application-binary", { mode: 0o755 });
-  writeFileSync(sidecarPath, "pi-sidecar-binary", { mode: 0o755 });
+  writeFileSync(sidecarPath, "goose-sidecar-binary", { mode: 0o755 });
   writeFileSync(sdkPath, "export const SDK_VERSION = '0.2.0';\n");
   writeFileSync(join(appPath, "Contents/Info.plist"),
     "<plist><dict><key>CFBundleIdentifier</key><string>com.scriptkit.app</string></dict></plist>");
@@ -537,13 +537,12 @@ function makeFixture(): ReleaseFixture {
     "scripts/agentic/cons-flow-ux/final-workflow-audit.test.ts:",
     "scripts/agentic/cons-proof-gov/story-geometry-proof.test.ts:",
     "scripts/agentic/cons-proof-gov/proof-foundation-safety.test.ts:",
-    "scripts/agentic/quick-ai-latency-bench.test.ts:",
     "scripts/mcp-cli.test.ts:",
     "tests/sdk/runner-safety.test.ts:",
     " 355 pass",
     " 0 fail",
     " 1112 expect() calls",
-    "Ran 355 tests across 25 files. [8.20s]",
+    "Ran 355 tests across 24 files. [8.20s]",
   ].join("\n"));
 
   const designResultPath = join(root, "generated-design-contracts-result.json");
@@ -684,7 +683,7 @@ function makeFixture(): ReleaseFixture {
       provenance: {
         gitSha: SOURCE_SHA,
         binarySha256: hash("application-binary"),
-        sidecarSha256: hash("pi-sidecar-binary"),
+        sidecarSha256: hash("goose-sidecar-binary"),
         fixtureSha256: hash(`fixture:${journeyId}`),
       },
       safety: {
@@ -731,7 +730,7 @@ function makeFixture(): ReleaseFixture {
       provenance: {
         gitSha: SOURCE_SHA,
         binarySha256: hash("application-binary"),
-        sidecarSha256: hash("pi-sidecar-binary"),
+        sidecarSha256: hash("goose-sidecar-binary"),
         ...(painted ? {} : {
           surfaceContractSha256: hash(readFileSync(contractsPath, "utf8")),
         }),
@@ -922,7 +921,7 @@ describe("fail-closed release evidence", () => {
       .toBe(syntheticAppMembers(fixture.appPath).length);
     expect(manifest.bundle.content_tree.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(manifest.bundle.executable.sha256).toBe(hash("application-binary"));
-    expect(manifest.bundle.sidecar.sha256).toBe(hash("pi-sidecar-binary"));
+    expect(manifest.bundle.sidecar.sha256).toBe(hash("goose-sidecar-binary"));
     expect(manifest.sdk.version).toBe("0.2.0");
     expect(manifest.surface_contracts.schema_version).toBe(2);
     expect(manifest.verification.visibility).toEqual({
@@ -959,7 +958,7 @@ describe("fail-closed release evidence", () => {
     expect(manifest.verification.gates.find((gate) => gate.gateId === "privacy-fixtures")?.result)
       .toEqual({ passed: 1, failed: 0, skipped: 0 });
     expect(manifest.verification.gates.find((gate) => gate.gateId === "proof-contracts")?.result)
-      .toEqual({ passed: 355, failed: 0, skipped: 0, files: 25, assertions: 1112 });
+      .toEqual({ passed: 355, failed: 0, skipped: 0, files: 24, assertions: 1112 });
     const directMatrix = manifest.verification.gates.find((gate) =>
       gate.gateId === "packaged-direct-matrix")?.result;
     expect(directMatrix?.rawEvidenceSha256).toBe(hash(readFileSync(
@@ -1960,7 +1959,7 @@ describe("fail-closed release evidence", () => {
     })).toThrow("nonintrusive hidden-window safety");
   });
 
-  test("rejects a missing, nonexecutable, or changed Pi sidecar", () => {
+  test("rejects a missing, nonexecutable, or changed goose sidecar", () => {
     const fixture = makeFixture();
     chmodSync(fixture.sidecarPath, 0o644);
     expect(() => buildReleaseManifest(options(fixture))).toThrow("not executable");
@@ -1971,7 +1970,7 @@ describe("fail-closed release evidence", () => {
     writeFileSync(fixture.sidecarPath, "different-sidecar");
 
     expect(() => verifyReleaseManifest(verificationOptions(fixture)))
-      .toThrow("Pi sidecar no longer matches");
+      .toThrow("goose sidecar no longer matches");
   });
 
   test("rejects missing mandatory gates and discloses missing advisory measurements", () => {
@@ -2339,7 +2338,7 @@ describe("fail-closed release evidence", () => {
 
     receipt.result.sidecarSha256 = "f".repeat(64);
     json(signingPath, receipt);
-    expect(() => buildReleaseManifest(options(fixture))).toThrow("different application executable or Pi sidecar");
+    expect(() => buildReleaseManifest(options(fixture))).toThrow("different application executable or goose sidecar");
   });
 
   test("publication verifier rejects changed archives and stripped proof", () => {
@@ -2408,7 +2407,7 @@ describe("fail-closed release evidence", () => {
     const fixture = makeFixture();
     const cases = [
       { suffix: "/script-kit-gpui", expected: "ZIP executable" },
-      { suffix: "/pi", expected: "ZIP Pi sidecar" },
+      { suffix: "/goose", expected: "ZIP goose sidecar" },
       { suffix: "/kit-sdk.ts", expected: "ZIP SDK" },
       { suffix: "/Info.plist", expected: "ZIP Info.plist" },
     ];
@@ -2427,7 +2426,7 @@ describe("fail-closed release evidence", () => {
     const fixture = makeFixture();
     const substitutions = [
       { suffix: "/script-kit-gpui", expected: "ZIP executable" },
-      { suffix: "/pi", expected: "ZIP Pi sidecar" },
+      { suffix: "/goose", expected: "ZIP goose sidecar" },
       { suffix: "/kit-sdk.ts", expected: "ZIP SDK" },
       { suffix: "/Info.plist", expected: "ZIP Info.plist" },
     ];
@@ -2750,8 +2749,8 @@ process.exit(${mode === "fail" ? 73 : 0});
       "test", "--isolate", "--timeout", "30000", "--reporter=junit", "--reporter-outfile",
     ]);
     const suites = result.call.args.slice(7);
-    expect(suites).toHaveLength(54);
-    expect(new Set(suites).size).toBe(54);
+    expect(suites).toHaveLength(53);
+    expect(new Set(suites).size).toBe(53);
     expect(suites.every((suite) => suite.startsWith("./") && suite.endsWith(".test.ts"))).toBe(true);
     for (const file of result.reporter.files) expect(suites).toContain(`./${file}`);
     expect(result.call.existed).toBe(false);
@@ -3417,7 +3416,7 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
       env: {
         ...process.env,
         SCRIPT_KIT_EXPECTED_APP_SHA256: options.expectedAppSha ?? "",
-        SCRIPT_KIT_EXPECTED_PI_SHA256: options.expectedSidecarSha ?? "",
+        SCRIPT_KIT_EXPECTED_GOOSE_SHA256: options.expectedSidecarSha ?? "",
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -3442,7 +3441,7 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
     writeFileSync(join(appPath, "Contents/MacOS/script-kit-gpui"), "synthetic-app", {
       mode: 0o755,
     });
-    writeFileSync(join(appPath, "Contents/MacOS/pi"), "synthetic-pi", {
+    writeFileSync(join(appPath, "Contents/MacOS/goose"), "synthetic-goose", {
       mode: 0o755,
     });
     writeFileSync(join(appPath, "Contents/Info.plist"), `<?xml version="1.0" encoding="UTF-8"?>
@@ -3539,7 +3538,7 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
       env: {
         ...process.env,
         SCRIPT_KIT_EXPECTED_APP_SHA256: "",
-        SCRIPT_KIT_EXPECTED_PI_SHA256: "",
+        SCRIPT_KIT_EXPECTED_GOOSE_SHA256: "",
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -3558,11 +3557,11 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
     expect(inspectBundle({ executable: "wrong-entry" }).output).toContain("bundle_executable_mismatch");
   });
 
-  test("rejects a packaged application or Pi sidecar with the wrong expected identity", () => {
+  test("rejects a packaged application or goose sidecar with the wrong expected identity", () => {
     expect(inspectBundle({ expectedAppSha: "f".repeat(64) }).output)
       .toContain("app_identity_mismatch");
     expect(inspectBundle({ expectedSidecarSha: "f".repeat(64) }).output)
-      .toContain("pi_identity_mismatch");
+      .toContain("goose_identity_mismatch");
   });
 
   test("accepts an isolated synthetic bundle only when every packaged asset matches its source", () => {
@@ -3599,7 +3598,7 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
     "Contents/Resources/scripts/migrate",
     "Contents/Resources/scripts/migrate/prompts",
     "Contents/MacOS/script-kit-gpui",
-    "Contents/MacOS/pi",
+    "Contents/MacOS/goose",
     "Contents/Info.plist",
     "Contents/Resources/icon.icns",
     "Contents/Resources/assets/logo.svg",

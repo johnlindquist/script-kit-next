@@ -69,10 +69,10 @@ class StorageTests(unittest.TestCase):
         self.env.update(exports)
         self.assertEqual(self.invoke("prepare", shell=True), (0, out, ""))
         self.assertEqual(marker.stat().st_mtime_ns, before)
-        for name in ("CARGO_TARGET_DIR", "PI_AGENT_RUST_TARGET_DIR", "CLANG_MODULE_CACHE_PATH", "SCCACHE_DIR", "TMPDIR"):
+        for name in ("CARGO_TARGET_DIR", "GOOSE_SIDECAR_TARGET_DIR", "CLANG_MODULE_CACHE_PATH", "SCCACHE_DIR", "TMPDIR"):
             self.assertTrue(Path(exports[name]).is_dir())
             self.assertTrue(Path(exports[name]).is_relative_to(self.volume))
-        self.assertNotIn("SCRIPT_KIT_PI_BINARY", exports)
+        self.assertNotIn("SCRIPT_KIT_GOOSE_BINARY", exports)
         self.assertFalse((self.repo / "target").exists())
 
     def test_swapped_uuid_and_foreign_marker_are_protected(self):
@@ -120,7 +120,7 @@ class StorageTests(unittest.TestCase):
 
     def test_target_cache_and_build_dir_conflicts_precede_mutation(self):
         for key in ("CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR", "CARGO_BUILD_BUILD_DIR",
-                    "CARGO_RESOLVER_LOCKFILE_PATH", "PI_AGENT_RUST_TARGET_DIR", "SCCACHE_DIR"):
+                    "CARGO_RESOLVER_LOCKFILE_PATH", "GOOSE_SIDECAR_TARGET_DIR", "SCCACHE_DIR"):
             with self.subTest(key=key):
                 self.env[key] = str(self.repo / "wrong")
                 self.refused("conflicting_target")

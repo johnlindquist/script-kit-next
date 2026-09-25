@@ -152,7 +152,7 @@ pub(crate) enum FooterAction {
     /// can change their current working directory.
     Cwd,
     /// Click the Agent · Model footer chip — opens the Shift+Tab Agent & Model
-    /// picker so the user can change the agent (Pi provider) and model used by
+    /// picker so the user can change the agent (goose provider) and model used by
     /// the next launch.
     AgentModel,
     Tips,

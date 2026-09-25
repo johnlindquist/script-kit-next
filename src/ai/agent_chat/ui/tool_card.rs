@@ -1,6 +1,6 @@
 //! Structured tool-call card metadata for the Agent Chat transcript.
 //!
-//! Pi tool events carry the tool name, raw input `args`, and (for edit/write
+//! Tool events carry the tool name, raw input `args`, and (for edit/write
 //! tools) a pre-rendered diff in `result.details.diff`. This module turns
 //! those protocol fields into typed metadata the transcript can render as a
 //! card — status badge, kind glyph, subject line, and colored diff body —
@@ -8,7 +8,7 @@
 
 use serde_json::Value;
 
-/// Semantic kind of a tool call, derived from the Pi tool name.
+/// Semantic kind of a tool call, derived from the tool name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentChatToolKind {
     Read,
@@ -48,7 +48,7 @@ impl AgentChatToolKind {
     }
 }
 
-/// Lifecycle status of a tool call, derived from Pi status strings.
+/// Lifecycle status of a tool call, derived from tool status strings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentChatToolStatus {
     Pending,
@@ -89,7 +89,7 @@ impl AgentChatToolStatus {
 /// Typed card metadata attached to a Tool transcript message.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct AgentChatToolCardMeta {
-    /// Raw Pi tool name (e.g. "bash", "edit").
+    /// Raw tool name (e.g. "bash", "edit").
     pub tool_name: String,
     pub kind: AgentChatToolKind,
     pub status: AgentChatToolStatus,
@@ -149,9 +149,9 @@ fn compact_single_line(text: &str) -> String {
     joined
 }
 
-/// Classification of one line in a Pi-rendered diff string.
+/// Classification of one line in a rendered diff string.
 ///
-/// Pi's `generate_diff_string` emits `+<num> <line>`, `-<num> <line>`, and
+/// Diffs are emitted as `+<num> <line>`, `-<num> <line>`, and
 /// ` <num> <line>` context rows (plus ` ... ` skip markers).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DiffLineKind {
@@ -168,7 +168,7 @@ pub(crate) fn classify_diff_line(line: &str) -> DiffLineKind {
     }
 }
 
-/// Extract `details.diff` from a Pi tool result value (`result` or
+/// Extract `details.diff` from a tool result value (`result` or
 /// `partialResult`), if present.
 pub(crate) fn diff_from_tool_result(result: &Value) -> Option<String> {
     let diff = result.get("details")?.get("diff")?.as_str()?;

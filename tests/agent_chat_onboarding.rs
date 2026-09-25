@@ -20,7 +20,7 @@ const VERIFY_MACOS_BUNDLE_SOURCE: &str = include_str!("../scripts/verify-macos-b
 #[test]
 fn agent_handoff_uses_pi_agent_chat_launch_not_legacy_catalog_loader() {
     assert!(
-        AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
+        AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_agent_chat_view_from_launch"),
         "agent_handoff must route Agent Chat through Pi warm launch"
     );
     assert!(
@@ -113,11 +113,11 @@ fn tab_runtime_routes_pi_profiles_without_removing_agent_chat_entrypoint() {
         "Tab Agent Chat should keep the current Agent Chat entry point"
     );
     assert!(
-        (AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override")
+        (AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_launch_with_cwd_override")
             || AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_effective_profile"))
-            && (AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_focused_text_pi_launch")
-                || AGENT_CHAT_LAUNCH_SOURCE.contains("PiAgentChatLaunch::from_profile"))
-            && AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_pi_view_from_launch"),
+            && (AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_focused_text_launch")
+                || AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch::from_profile"))
+            && AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_agent_chat_view_from_launch"),
         "Tab Agent Chat launch must route selected Pi profiles through the Pi launch helper"
     );
     assert!(
@@ -125,7 +125,7 @@ fn tab_runtime_routes_pi_profiles_without_removing_agent_chat_entrypoint() {
         "Pi-backed Agent Chat dismissal must reset and rewarm a fresh session"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("closing_pi_agent_chat")
+        TAB_AI_MODE_SOURCE.contains("closing_warm_agent_chat")
             && TAB_AI_MODE_SOURCE.contains("self.embedded_agent_chat = None;"),
         "Pi-backed Agent Chat dismissal must clear the reusable embedded chat cache"
     );

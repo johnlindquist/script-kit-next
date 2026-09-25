@@ -16,6 +16,10 @@ pub(crate) struct AgentChatTurnRequest {
     /// authoritative session policy instead of re-deriving it. Defaults to
     /// [`AgentChatToolPolicy::Full`] for constructions that predate the field.
     pub tool_policy: crate::ai::agent_chat::ui::capabilities::AgentChatToolPolicy,
+    /// Whether this turn may start a provider's browser sign-in when the user
+    /// is not signed in yet. True for turns a person started; false for
+    /// background work, which must never open a browser on its own.
+    pub allow_interactive_sign_in: bool,
 }
 
 pub(crate) struct IsolatedTurnHandle {

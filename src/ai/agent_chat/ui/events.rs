@@ -8,10 +8,10 @@
 pub(crate) type AgentChatEventTx = async_channel::Sender<AgentChatEvent>;
 pub(crate) type AgentChatEventRx = async_channel::Receiver<AgentChatEvent>;
 
-/// A user message the live session can rewind to (Pi fork checkpoint).
+/// A user message the live session can rewind to (fork checkpoint).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AgentChatForkPoint {
-    /// Pi session entry id for the user message.
+    /// goose session entry id for the user message.
     pub entry_id: String,
     /// The user message text (used for switcher labels and composer prefill).
     pub text: String,
@@ -34,7 +34,7 @@ pub(crate) enum AgentChatEvent {
         tool_call_id: String,
         title: String,
         status: String,
-        /// Raw Pi tool name (e.g. "bash", "edit") for kind derivation.
+        /// Raw tool name (e.g. "bash", "edit") for kind derivation.
         tool_name: Option<String>,
         /// Raw tool input args, used to derive the card subject line.
         raw_input: Option<serde_json::Value>,
@@ -45,7 +45,7 @@ pub(crate) enum AgentChatEvent {
         title: Option<String>,
         status: Option<String>,
         body: Option<String>,
-        /// Raw tool input args (present on Pi execution updates; backfills
+        /// Raw tool input args (present on tool execution updates; backfills
         /// orphan tool calls whose start event was missed).
         raw_input: Option<serde_json::Value>,
         /// Pre-rendered diff from `result.details.diff` for edit/write tools.
@@ -78,6 +78,19 @@ pub(crate) enum AgentChatEvent {
     /// message's original text, returned so the composer can prefill it for
     /// editing.
     ForkCompleted { text: String },
+    /// The provider needs a browser sign-in before this turn can run. The
+    /// runtime waits for an answer on `consent` before opening the browser:
+    /// `true` signs in, `false` (or dropping the sender) cancels the turn.
+    SignInRequired {
+        provider: String,
+        consent: async_channel::Sender<bool>,
+    },
+    /// The browser sign-in is under way (this turn's login page is open, or
+    /// another turn's login is in flight); the turn continues by itself once
+    /// the user finishes signing in.
+    SignInStarted { provider: String },
+    /// The provider sign-in finished; the waiting turn is continuing.
+    SignInCompleted { provider: String },
     /// The turn reached a typed non-failure terminal outcome.
     TurnCompleted {
         outcome: crate::ai::reliability::AiTurnRuntimeOutcome,

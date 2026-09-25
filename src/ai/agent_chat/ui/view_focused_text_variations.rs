@@ -176,7 +176,7 @@ impl AgentChatView {
                 // rendered straight into the variation card. Classify it, then
                 // show the same safe copy every other AI surface shows.
                 let failure = crate::ai::reliability::setup_required_failure(
-                    sk_protocol::ai_reliability::ProtocolComponent::Pi,
+                    sk_protocol::ai_reliability::ProtocolComponent::Goose,
                     &reason,
                     &auth_methods,
                 );
@@ -194,7 +194,11 @@ impl AgentChatView {
             | AgentChatEvent::UsageUpdated { .. }
             | AgentChatEvent::ModelsAvailable { .. }
             | AgentChatEvent::ForkPointsAvailable { .. }
-            | AgentChatEvent::ForkCompleted { .. } => {}
+            | AgentChatEvent::ForkCompleted { .. }
+            // The canonical thread turn owns the sign-in status line.
+            | AgentChatEvent::SignInRequired { .. }
+            | AgentChatEvent::SignInStarted { .. }
+            | AgentChatEvent::SignInCompleted { .. } => {}
         }
 
         self.select_first_completed_focused_text_variation();

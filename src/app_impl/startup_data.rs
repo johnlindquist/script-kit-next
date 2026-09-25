@@ -23,6 +23,9 @@ pub(crate) struct MainInitialData {
     pub cwd_revision: u64,
     pub agent_label: Option<String>,
     pub model_label: Option<String>,
+    /// goose provider of the launcher's Agent Chat selection, for the
+    /// "Not signed in" marker beside the model label.
+    pub provider_id: Option<String>,
     pub background_effect: Option<crate::effects::BackgroundEffect>,
     pub background_effect_intensity: f32,
     pub reduced_motion: bool,
@@ -280,6 +283,7 @@ impl MainInitialData {
             cwd_revision: 1,
             agent_label: Some("Fixture Agent".into()),
             model_label: Some("Provider-free".into()),
+            provider_id: None,
             background_effect: None,
             background_effect_intensity: 1.0,
             reduced_motion: false,
@@ -458,7 +462,7 @@ impl MainInitialData {
         };
         // Resolve the persisted profile/model into header display labels so the
         // selection (Shift+Tab Profile Switcher) is visible on first paint.
-        let (initial_spine_agent_label, initial_spine_model_label) =
+        let (initial_spine_agent_label, initial_spine_model_label, initial_spine_provider_id) =
             ScriptListApp::resolve_agent_model_footer_labels();
         let mut input_history = input_history::InputHistory::new();
         if let Err(error) = input_history.load() {
@@ -486,6 +490,7 @@ impl MainInitialData {
             cwd_revision: initial_spine_cwd_revision,
             agent_label: initial_spine_agent_label,
             model_label: initial_spine_model_label,
+            provider_id: initial_spine_provider_id,
             background_effect: crate::effects::initial_background_effect(),
             background_effect_intensity: crate::effects::initial_background_effect_intensity(),
             reduced_motion: crate::platform::prefers_reduced_motion(),

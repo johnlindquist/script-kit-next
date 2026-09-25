@@ -9,7 +9,7 @@ pub enum AgentChatUiVariant {
     Sidecar,
     FocusedTextMini,
     /// Zero-context instant answers: launcher Tab-with-text. Pinned to the
-    /// Quick AI profile (spark model, web_search only, no skills/context). Not listed in
+    /// Quick AI profile (pinned fast model, web_search only, no skills/context). Not listed in
     /// EXPERIMENTS — it is a launch mode, not a pickable chat design.
     QuickAi,
 }

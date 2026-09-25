@@ -587,20 +587,10 @@ impl ChatPrompt {
 
     /// Enable built-in AI mode with the given provider registry.
     /// When enabled, the ChatPrompt will handle AI calls directly instead of using the SDK callback.
-    /// If prefer_vercel is true and Vercel is available, it will be used as the default provider.
-    pub fn with_builtin_ai(mut self, registry: ProviderRegistry, prefer_vercel: bool) -> Self {
+    /// The registry lists the preferred model first; it becomes the default.
+    pub fn with_builtin_ai(mut self, registry: ProviderRegistry) -> Self {
         let available_models = registry.get_all_models();
-
-        // Select default model: prefer Vercel models if available and preferred, otherwise first available
-        let selected_model = if prefer_vercel {
-            available_models
-                .iter()
-                .find(|m| m.provider.to_lowercase() == "vercel")
-                .or_else(|| available_models.first())
-                .cloned()
-        } else {
-            available_models.first().cloned()
-        };
+        let selected_model = available_models.first().cloned();
 
         // Update display models list from provider registry
         self.models = available_models
@@ -674,23 +664,9 @@ impl ChatPrompt {
 
     /// Mutably set the provider registry after construction (e.g., when background loading completes).
     /// Clears loading_providers and updates available models.
-    pub fn set_provider_registry(
-        &mut self,
-        registry: ProviderRegistry,
-        prefer_vercel: bool,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_provider_registry(&mut self, registry: ProviderRegistry, cx: &mut Context<Self>) {
         let available_models = registry.get_all_models();
-
-        let selected_model = if prefer_vercel {
-            available_models
-                .iter()
-                .find(|m| m.provider.to_lowercase() == "vercel")
-                .or_else(|| available_models.first())
-                .cloned()
-        } else {
-            available_models.first().cloned()
-        };
+        let selected_model = available_models.first().cloned();
 
         self.models = available_models
             .iter()

@@ -75,12 +75,12 @@ validate_worker_count "$test_workers" "RUST_TEST_THREADS" "$max_workers"
 # Sole reviewed external workspace. It is not an arbitrary manifest escape.
 registered_sidecar=0
 unset SCRIPT_KIT_AGENT_REGISTERED_TASK SCRIPT_KIT_AGENT_SIDECAR_SOURCE
-if [[ "${1:-}" == "pi-sidecar-build" ]]; then
+if [[ "${1:-}" == "goose-sidecar-build" ]]; then
   [[ $# -eq 1 ]] || worker_failure "registered sidecar task accepts no Cargo arguments"
-  [[ "${PI_AGENT_RUST_URL:-https://github.com/Dicklesworthstone/pi_agent_rust.git}" == "https://github.com/Dicklesworthstone/pi_agent_rust.git" ]] || worker_failure "sidecar URL override is not registered"
+  [[ "${GOOSE_SIDECAR_URL:-https://github.com/aaif-goose/goose.git}" == "https://github.com/aaif-goose/goose.git" ]] || worker_failure "sidecar URL override is not registered"
   registered_sidecar=1
-  export SCRIPT_KIT_AGENT_REGISTERED_TASK=pi-sidecar
-  set -- build --locked --release --bin pi
+  export SCRIPT_KIT_AGENT_REGISTERED_TASK=goose-sidecar
+  set -- build --locked --release -p goose-cli --bin goose --no-default-features --features rustls-tls,disable-update
 fi
 requested_args=("$@")
 
@@ -457,10 +457,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 if [[ "$registered_sidecar" == "1" ]]; then
-  sidecar_source="${REPO_ROOT}/target/pi-sidecar/cache/source-3d1a3950c16ffdb10cd81780b26921c75c180770"
-  sidecar_target="${REPO_ROOT}/target/pi-sidecar/cache/cargo-target"
-  [[ "${PI_AGENT_RUST_CACHE_DIR:-${REPO_ROOT}/target/pi-sidecar/cache}" == "${REPO_ROOT}/target/pi-sidecar/cache" ]] || worker_failure "unregistered sidecar cache"
-  [[ "${PI_AGENT_RUST_TARGET_DIR:-$sidecar_target}" == "$sidecar_target" ]] || worker_failure "unregistered sidecar target"
+  sidecar_source="${REPO_ROOT}/target/goose-sidecar/cache/source-302b60806639ea9f0ae8f053f49f8bf0e88b26f4"
+  sidecar_target="${REPO_ROOT}/target/goose-sidecar/cache/cargo-target"
+  [[ "${GOOSE_SIDECAR_CACHE_DIR:-${REPO_ROOT}/target/goose-sidecar/cache}" == "${REPO_ROOT}/target/goose-sidecar/cache" ]] || worker_failure "unregistered sidecar cache"
+  [[ "${GOOSE_SIDECAR_TARGET_DIR:-$sidecar_target}" == "$sidecar_target" ]] || worker_failure "unregistered sidecar target"
   [[ -f "${sidecar_source}/Cargo.toml" && ! -L "$sidecar_source" && ! -L "$sidecar_target" ]] || worker_failure "registered sidecar source missing/unsafe"
   export CARGO_TARGET_DIR="$sidecar_target"
   export SCRIPT_KIT_AGENT_SIDECAR_SOURCE="$sidecar_source"

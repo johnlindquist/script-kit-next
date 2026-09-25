@@ -44,12 +44,12 @@ function parseArgs(): Args {
     // surfaces cannot all be driven in a single app session.
     keep: argv.includes("--keep"),
     binary: value("--binary"),
-    // The repo-pinned Pi sidecar does not carry every model the app's static
+    // The pinned goose sidecar may not offer every model the app's static
     // catalog names, so a run can die on "Model ... not found" before it ever
     // reaches the code under measurement. Pinning the model here keeps that
     // environment fact out of the numbers WITHOUT editing a product default.
     model: value("--model"),
-    // Pi sidecars are prewarmed. Measuring with prewarm forced off is how we
+    // goose sidecars are prewarmed. Measuring with prewarm forced off is how we
     // separate per-turn cost from one-time process spawn cost.
     prewarm: prewarmFlag === undefined ? undefined : prewarmFlag !== "off",
     flowName: value("--flow-name"),
@@ -283,7 +283,7 @@ async function main() {
       }
     }
     // ---- Text / Mini: the focused-text rewrite surface, driven against real
-    // Pi rather than the deterministic mock twin. A non-empty `instruction` is
+    // goose rather than the deterministic mock twin. A non-empty `instruction` is
     // what makes the fixture actually submit (`requested_submit =
     // instruction_length > 0`), so an empty one would open the window and
     // measure nothing. One submit fans out into variation turns; the primary

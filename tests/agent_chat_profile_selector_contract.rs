@@ -137,7 +137,7 @@ fn spine_profile_submission_persists_pi_profile_before_launch() {
     assert!(body.contains("save_user_preferences(&prefs)"));
     assert!(body.contains("Agent Chat profile: {profile_name}"));
     assert!(PROFILES_SOURCE.contains("ai.selected_profile_id = Some(entry.id.clone());"));
-    assert!(PROFILES_SOURCE.contains("ai.selected_backend = Some(AgentChatBackend::Pi);"));
+    assert!(PROFILES_SOURCE.contains("ai.selected_backend = Some(AgentChatBackend::Goose);"));
 }
 
 #[test]
@@ -163,13 +163,12 @@ fn profile_selection_updates_live_agent_chat_footer_without_relaunch() {
 
 #[test]
 fn agent_chat_launch_uses_effective_profile_for_agent_chat_agent_and_model() {
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_pi_launch_with_cwd_override"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_focused_text_pi_launch"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_launch_with_cwd_override"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_focused_text_launch"));
     assert!(AGENT_CHAT_LAUNCH_SOURCE
-        .contains("profile_display_name: Some(pi_launch.profile.name.clone().into())"));
-    assert!(
-        AGENT_CHAT_LAUNCH_SOURCE.contains("profile_icon_name: pi_launch.profile.icon_name.clone()")
-    );
+        .contains("profile_display_name: Some(agent_launch.profile.name.clone().into())"));
+    assert!(AGENT_CHAT_LAUNCH_SOURCE
+        .contains("profile_icon_name: agent_launch.profile.icon_name.clone()"));
 }
 
 #[test]
@@ -177,24 +176,6 @@ fn provider_scoped_pi_model_selection_is_split_before_launch() {
     assert!(PROFILES_SOURCE.contains("parse_provider_model_selection"));
     assert!(PROFILES_SOURCE.contains("profile.provider = Some(provider);"));
     assert!(PROFILES_SOURCE.contains("profile.model = Some(model);"));
-}
-
-#[test]
-fn primary_pi_provider_catalog_is_codex_only_with_advanced_alternatives() {
-    let primary = fn_body(PROFILES_SOURCE, "pub fn pi_provider_model_catalog()");
-    assert!(primary.contains(r#"id: "openai-codex""#));
-    assert!(primary.contains(r#"display_name: "Codex""#));
-    assert!(
-        !primary.contains(r#"id: "anthropic""#) && !primary.contains(r#"id: "google""#),
-        "primary Agent Chat provider catalog must not surface alternate providers"
-    );
-
-    let advanced = fn_body(
-        PROFILES_SOURCE,
-        "pub fn advanced_pi_provider_model_catalog()",
-    );
-    assert!(advanced.contains(r#"id: "anthropic""#));
-    assert!(advanced.contains(r#"id: "google""#));
 }
 
 #[test]

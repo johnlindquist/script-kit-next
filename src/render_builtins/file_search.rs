@@ -948,7 +948,7 @@ impl ScriptListApp {
                                             this.spine_cwd_revision.wrapping_add(1);
                                         this.cwd_pick_mode = false;
                                         this.invalidate_grouped_cache();
-                                        // Warm a Pi session for this cwd now
+                                        // Warm a goose session for this cwd now
                                         // so the next Cmd+Enter launches the
                                         // agent in the chosen directory
                                         // without a cold-start "try again".

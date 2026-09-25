@@ -225,7 +225,7 @@ const protectedBefore = {
     cwd: process.cwd(),
     stdout: "pipe",
   }).stdout.toString(),
-  pi: Bun.spawnSync(["git", "diff", "--", "scripts/agentic/ensure-pi-sidecar.sh"], {
+  pi: Bun.spawnSync(["git", "diff", "--", "scripts/agentic/ensure-goose-sidecar.sh"], {
     cwd: process.cwd(),
     stdout: "pipe",
   }).stdout.toString(),
@@ -390,7 +390,7 @@ const protectedAfter = {
     cwd: process.cwd(),
     stdout: "pipe",
   }).stdout.toString(),
-  pi: Bun.spawnSync(["git", "diff", "--", "scripts/agentic/ensure-pi-sidecar.sh"], {
+  pi: Bun.spawnSync(["git", "diff", "--", "scripts/agentic/ensure-goose-sidecar.sh"], {
     cwd: process.cwd(),
     stdout: "pipe",
   }).stdout.toString(),
