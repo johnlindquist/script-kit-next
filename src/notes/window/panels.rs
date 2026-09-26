@@ -404,11 +404,12 @@ impl NotesApp {
                             error_sha256 = %safe_error.sha256,
                             "Failed to load note from switcher"
                         );
-                        window.push_notification(
-                            gpui_component::notification::Notification::error(
-                                "Selected note could not be loaded",
-                            )
-                            .id1::<NotesApp>("notes-switcher-load-failed"),
+                        super::render::show_notes_toast(
+                            window,
+                            "notes-switcher-load-failed",
+                            "Selected note could not be loaded",
+                            crate::toast_popup::ToastPopupKind::Error,
+                            Some(super::render::NOTES_ERROR_TOAST_MS),
                             cx,
                         );
                         cx.notify();
@@ -439,11 +440,12 @@ impl NotesApp {
                 notes_len = self.notes.len(),
                 "notes_note_switcher_selected_note_not_found",
             );
-            window.push_notification(
-                gpui_component::notification::Notification::error(
-                    "Selected note could not be found",
-                )
-                .id1::<NotesApp>("notes-switcher-not-found"),
+            super::render::show_notes_toast(
+                window,
+                "notes-switcher-not-found",
+                "Selected note could not be found",
+                crate::toast_popup::ToastPopupKind::Error,
+                Some(super::render::NOTES_ERROR_TOAST_MS),
                 cx,
             );
             cx.notify();

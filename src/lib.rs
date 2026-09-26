@@ -89,6 +89,10 @@ pub mod test_support;
 pub mod theme;
 pub mod tips;
 pub mod toast_manager;
+#[allow(dead_code)]
+pub(crate) mod toast_popup;
+#[allow(dead_code)]
+pub(crate) mod undo_offer;
 
 pub mod tray;
 pub mod ui;

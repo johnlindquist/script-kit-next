@@ -7198,7 +7198,7 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
   };
   const notesTarget = { type: "kind", kind: "notes", index: 0 };
   const promptPopupTarget = { type: "kind", kind: "promptPopup", index: 0 };
-  const noteText = `Notes delete confirm route proof ${new Date().toISOString()}\nCancel must keep this sandbox note active.`;
+  const noteText = `Notes delete confirm route proof ${new Date().toISOString()}\nCancel must keep this sandbox note in the Trash.`;
   let startReceipt: Record<string, unknown> = {};
   let readyReceipt: Record<string, unknown> | null = null;
   let stopReceipt: Record<string, unknown> | null = null;
@@ -7208,6 +7208,10 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
   let createNoteReceipt: Record<string, unknown> | null = null;
   let setInputReceipt: Record<string, unknown> | null = null;
   let notesStateAfterInput: Record<string, unknown> | null = null;
+  let trashShortcutReceipt: Record<string, unknown> | null = null;
+  let dbAfterTrash: Record<string, unknown> | null = null;
+  let listAfterTrash: Record<string, unknown> | null = null;
+  let trashViewReceipt: Record<string, unknown> | null = null;
   let dbBeforeDelete: Record<string, unknown> | null = null;
   let deleteShortcutReceipt: Record<string, unknown> | null = null;
   let popupList: Record<string, unknown> | null = null;
@@ -7268,6 +7272,32 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
       target: notesTarget,
       summaryOnly: true,
     }, "stateResult", 8000, env));
+
+    // Outside the Trash, delete is reversible: it trashes at once, no modal.
+    trashShortcutReceipt = await rpc(opts.session, {
+      type: "simulateGpuiEvent",
+      requestId: "notes-trash-cmd-shift-backspace",
+      target: notesTarget,
+      event: { type: "keyDown", key: "backspace", modifiers: ["cmd", "shift"] },
+    }, "simulateGpuiEventResult", 8000, env);
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      dbAfterTrash = await notesDbSummary(notesDbPath);
+      if (Number(dbAfterTrash.deletedCount ?? 0) >= 1) break;
+      await Bun.sleep(200);
+    }
+    listAfterTrash = await rpc(opts.session, {
+      type: "listAutomationWindows",
+      requestId: "notes-delete-confirm-after-trash-list",
+    }, "automationWindowListResult", 8000, env);
+
+    // In the Trash, delete is permanent and asks first.
+    trashViewReceipt = await rpc(opts.session, {
+      type: "simulateGpuiEvent",
+      requestId: "notes-trash-view-cmd-shift-t",
+      target: notesTarget,
+      event: { type: "keyDown", key: "t", modifiers: ["cmd", "shift"] },
+    }, "simulateGpuiEventResult", 8000, env);
+    await Bun.sleep(400);
     dbBeforeDelete = await notesDbSummary(notesDbPath);
 
     deleteShortcutReceipt = await rpc(opts.session, {
@@ -7337,6 +7367,8 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
     const panel = semanticNode(popupElements, "panel:confirm-dialog");
     const popupFocusedSemanticId = String(popupElements?.focusedSemanticId ?? popupState?.focusedSemanticId ?? "");
     const openedRealNotesWindow = notesWindow?.kind === "notes" && notesWindow.visible === true;
+    const trashedWithoutModal = Number(dbAfterTrash?.deletedCount ?? 0) >= 1
+      && promptPopupWindowFromList(listAfterTrash ?? {}) == null;
     const usedSandboxNotesDb = notesDbPath.startsWith("/tmp/confirm-modal-notes-delete-proof/");
     const triggeredViaRealNotesDeleteShortcut = rpcResponse(deleteShortcutReceipt).success !== false;
     const popupWindowId = String(popupWindow?.id ?? "");
@@ -7351,22 +7383,23 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
     ) || cancelReceipt.success === true;
     const popupClosedAfterCancel = afterCancelPopup == null;
     const notesWindowStillOpen = afterCancelNotesWindow?.kind === "notes" && afterCancelNotesWindow.visible === true;
-    const sandboxNoteDeleted = (Number(dbAfterCancel?.deletedCount ?? 0) > Number(dbBeforeDelete?.deletedCount ?? 0))
-      || Number(dbAfterCancel?.activeCount ?? 0) < Number(dbBeforeDelete?.activeCount ?? 0);
+    const sandboxNoteDeleted = Number(dbAfterCancel?.totalCount ?? 0) < Number(dbBeforeDelete?.totalCount ?? 0)
+      || Number(dbAfterCancel?.deletedCount ?? 0) < Number(dbBeforeDelete?.deletedCount ?? 0);
     const userDataMutationDetected = false;
     const status = openedRealNotesWindow
       && usedSandboxNotesDb
-      && Number(dbBeforeDelete?.activeCount ?? 0) >= 1
+      && trashedWithoutModal
+      && Number(dbBeforeDelete?.deletedCount ?? 0) >= 1
       && triggeredViaRealNotesDeleteShortcut
       && popupWindowId === "confirm-popup"
       && popupWindowKind === "promptPopup"
       && popupSemanticSurface === "confirmDialog"
       && popupParentWindowId === "notes"
-      && popupTitle === "Move note to Trash"
+      && popupTitle === "Delete note permanently"
       && panel != null
-      && confirmText === "Delete"
+      && confirmText === "Delete permanently"
       && cancelText === "Cancel"
-      && popupFocusedSemanticId === "button:0:confirm"
+      && popupFocusedSemanticId === "button:1:cancel"
       && cancelledViaButton
       && popupClosedAfterCancel
       && notesWindowStillOpen
@@ -7398,6 +7431,10 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
         createNoteReceipt,
         setInputReceipt,
         notesStateAfterInput,
+        trashShortcutReceipt,
+        dbAfterTrash,
+        listAfterTrash,
+        trashViewReceipt,
         dbBeforeDelete,
         deleteShortcutReceipt,
         popupList,
@@ -7415,6 +7452,7 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
         promptPopupTarget,
         openedRealNotesWindow,
         usedSandboxNotesDb,
+        trashedWithoutModal,
         triggeredViaRealNotesDeleteShortcut,
         popup: {
           windowId: popupWindowId,
@@ -7451,15 +7489,16 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
         sandboxNotesStore: true,
       },
       steps: [
-        { name: "open-sandbox-notes-and-create-note", status: openedRealNotesWindow && usedSandboxNotesDb && Number(dbBeforeDelete?.activeCount ?? 0) >= 1 ? "pass" : "fail", output: { notesDbPath, openedRealNotesWindow, usedSandboxNotesDb, dbBeforeDelete } },
+        { name: "open-sandbox-notes-and-create-note", status: openedRealNotesWindow && usedSandboxNotesDb ? "pass" : "fail", output: { notesDbPath, openedRealNotesWindow, usedSandboxNotesDb } },
+        { name: "trash-note-without-modal", status: trashedWithoutModal ? "pass" : "fail", output: { trashShortcutReceipt, dbAfterTrash } },
         { name: "trigger-real-notes-delete-shortcut", status: triggeredViaRealNotesDeleteShortcut && popupWindowId === "confirm-popup" ? "pass" : "fail", output: { deleteShortcutReceipt, popup: { popupWindowId, popupWindowKind, popupSemanticSurface, popupParentWindowId, popupTitle } } },
-        { name: "inspect-confirm-popup-shared-route", status: popupSemanticSurface === "confirmDialog" && popupParentWindowId === "notes" && confirmText === "Delete" && cancelText === "Cancel" && popupFocusedSemanticId === "button:0:confirm" ? "pass" : "fail", output: { confirmText, cancelText, popupFocusedSemanticId, popupElements } },
+        { name: "inspect-confirm-popup-shared-route", status: popupSemanticSurface === "confirmDialog" && popupParentWindowId === "notes" && confirmText === "Delete permanently" && cancelText === "Cancel" && popupFocusedSemanticId === "button:1:cancel" ? "pass" : "fail", output: { confirmText, cancelText, popupFocusedSemanticId, popupElements } },
         { name: "cancel-without-note-mutation", status: cancelledViaButton && popupClosedAfterCancel && notesWindowStillOpen && !sandboxNoteDeleted ? "pass" : "fail", output: { cancelledViaButton, popupClosedAfterCancel, notesWindowStillOpen, dbBeforeDelete, dbAfterCancel } },
       ],
       failure: status === "pass" ? undefined : {
         code: "missing_notes_delete_confirm_route_receipt",
         stepName: "notes-delete-confirm-route-proof",
-        message: "Notes delete confirm route did not prove real Notes shortcut -> attached confirm-popup -> Cancel without sandbox note mutation.",
+        message: "Notes delete confirm route did not prove: delete trashes without a modal, then permanent delete from the Trash opens an attached confirm-popup focused on Cancel, and Cancel keeps the note.",
       },
       warnings: status === "pass" ? [] : ["file_linear:notes_delete_confirm_route_receipt_missing"],
     };
@@ -7485,6 +7524,9 @@ export async function runNotesDeleteConfirmRouteProofScenario(opts: {
         createNoteReceipt,
         setInputReceipt,
         notesStateAfterInput,
+        trashShortcutReceipt,
+        dbAfterTrash,
+        trashViewReceipt,
         dbBeforeDelete,
         deleteShortcutReceipt,
         popupList,

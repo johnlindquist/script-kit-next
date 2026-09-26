@@ -872,6 +872,22 @@ pub fn configure_confirm_popup_window(_window: *mut std::ffi::c_void, _is_dark: 
     // No-op on non-macOS platforms
 }
 
+/// Configure an attached toast with the confirm popup's material, so it
+/// enters and leaves with the same glass animation.
+///
+/// # Safety
+/// Same invariants as `configure_actions_popup_window`.
+#[cfg(target_os = "macos")]
+pub unsafe fn configure_toast_popup_window(window: id, is_dark: bool) {
+    configure_attached_popup_window(
+        window,
+        is_dark,
+        "TOAST",
+        "Toast popup",
+        NativeGlassSurfaceRole::PopupBackdrop,
+    );
+}
+
 /// Configure the child-attached shortcut recorder with its own morph receipt.
 ///
 /// # Safety

@@ -1912,4 +1912,25 @@ mod tests {
             error
         );
     }
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_move_to_trash_then_restore_puts_the_file_back_and_never_overwrites() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let original = dir.path().join("undo-roundtrip.txt");
+        std::fs::write(&original, "keep me").expect("write fixture");
+
+        let trashed = move_to_trash(original.to_str().expect("utf8 path")).expect("trash");
+        assert!(!original.exists(), "the file should leave its folder");
+        assert!(trashed.exists(), "the reported Trash path should exist");
+
+        std::fs::write(&original, "newcomer").expect("write newcomer");
+        let refused = restore_from_trash(&trashed, &original).unwrap_err();
+        assert!(refused.contains("already there"), "got: {refused}");
+        assert_eq!(std::fs::read_to_string(&original).unwrap(), "newcomer");
+
+        std::fs::remove_file(&original).expect("remove newcomer");
+        restore_from_trash(&trashed, &original).expect("restore");
+        assert_eq!(std::fs::read_to_string(&original).unwrap(), "keep me");
+        assert!(!trashed.exists(), "the item should leave the Trash");
+    }
 }

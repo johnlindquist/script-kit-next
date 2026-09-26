@@ -135,27 +135,114 @@ fn move_destination_default_directory(path: &str, is_dir: bool) -> String {
     terminal_working_directory(path, false)
 }
 
-/// Move a path to Trash.
-pub fn move_to_trash(path: &str) -> Result<(), String> {
+/// Move a path to Trash and return where macOS put it, so the move can be
+/// undone with [`restore_from_trash`].
+pub fn move_to_trash(path: &str) -> Result<std::path::PathBuf, String> {
     #[cfg(target_os = "macos")]
     {
-        let escaped_path = crate::utils::escape_applescript_string(path);
-        let script = format!(
-            r#"tell application "Finder"
-                delete POSIX file "{}"
-            end tell"#,
-            escaped_path
-        );
+        use cocoa::base::{id, nil};
+        use cocoa::foundation::NSString as _;
+        use objc::{sel, sel_impl};
 
-        crate::platform::run_osascript(&script, "file_search_move_to_trash")
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        unsafe fn ns_string_text(value: id) -> Option<String> {
+            if value == nil {
+                return None;
+            }
+            // SAFETY: `value` is a live NSString; UTF8String stays valid for
+            // the enclosing autorelease pool.
+            let utf8: *const std::os::raw::c_char = unsafe { objc::msg_send![value, UTF8String] };
+            (!utf8.is_null()).then(|| {
+                // SAFETY: UTF8String returns a NUL-terminated C string.
+                unsafe { std::ffi::CStr::from_ptr(utf8) }
+                    .to_string_lossy()
+                    .into_owned()
+            })
+        }
+
+        objc::rc::autoreleasepool(|| {
+            // SAFETY: every object is created and used within this pool, the
+            // NSString is released after use, and out-pointers are valid locals.
+            unsafe {
+                let ns_path = cocoa::foundation::NSString::alloc(nil).init_str(path);
+                if ns_path == nil {
+                    return Err("Could not read the path".to_string());
+                }
+                let url: id = objc::msg_send![objc::class!(NSURL), fileURLWithPath: ns_path];
+                let manager: id = objc::msg_send![objc::class!(NSFileManager), defaultManager];
+                let mut resulting: id = nil;
+                let mut error: id = nil;
+                let moved: objc::runtime::BOOL = objc::msg_send![
+                    manager,
+                    trashItemAtURL: url
+                    resultingItemURL: &mut resulting
+                    error: &mut error
+                ];
+                let _: () = objc::msg_send![ns_path, release];
+                if moved == objc::runtime::NO {
+                    let description: id = if error == nil {
+                        nil
+                    } else {
+                        objc::msg_send![error, localizedDescription]
+                    };
+                    return Err(ns_string_text(description).unwrap_or_else(|| {
+                        "The item could not be moved to the Trash".to_string()
+                    }));
+                }
+                let trashed: id = if resulting == nil {
+                    nil
+                } else {
+                    objc::msg_send![resulting, path]
+                };
+                ns_string_text(trashed)
+                    .filter(|trashed| !trashed.is_empty())
+                    .map(std::path::PathBuf::from)
+                    .ok_or_else(|| "macOS did not report where the item went".to_string())
+            }
+        })
     }
 
     #[cfg(not(target_os = "macos"))]
     {
         let _ = path;
         Err("Move to Trash is currently only supported on macOS".to_string())
+    }
+}
+
+/// Move an item [`move_to_trash`] trashed back to its original path. Never
+/// replaces anything: if the original path is taken again, the item stays in
+/// the Trash and the error says why.
+pub fn restore_from_trash(trashed: &Path, original: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::ffi::OsStrExt as _;
+
+        let from = std::ffi::CString::new(trashed.as_os_str().as_bytes())
+            .map_err(|_| "Trash path contains a NUL byte".to_string())?;
+        let to = std::ffi::CString::new(original.as_os_str().as_bytes())
+            .map_err(|_| "Original path contains a NUL byte".to_string())?;
+        // SAFETY: both pointers are valid NUL-terminated strings for the call.
+        let status = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
+        if status == 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        Err(match error.kind() {
+            std::io::ErrorKind::AlreadyExists => format!(
+                "Something named \"{}\" is already there",
+                original
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| original.display().to_string())
+            ),
+            std::io::ErrorKind::NotFound => "It is no longer in the Trash".to_string(),
+            _ => error.to_string(),
+        })
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (trashed, original);
+        Err("Restoring from Trash is currently only supported on macOS".to_string())
     }
 }
 

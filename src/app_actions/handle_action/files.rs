@@ -305,33 +305,21 @@ impl FileSearchTrashHandlerAction {
         }
     }
 
-    fn confirm_title(self) -> &'static str {
-        match self {
-            Self::MoveToTrash => "Move to Trash",
-        }
-    }
-
-    fn confirm_message(self, name: &str) -> String {
-        match self {
-            Self::MoveToTrash => format!("Move \"{name}\" to Trash?"),
-        }
-    }
-
-    fn confirm_button(self) -> &'static str {
-        match self {
-            Self::MoveToTrash => "Move to Trash",
-        }
-    }
-
-    fn confirmation_failure_message(self) -> &'static str {
-        match self {
-            Self::MoveToTrash => "Failed to open confirmation dialog",
-        }
-    }
-
     fn success_hud(self, name: &str) -> String {
         match self {
-            Self::MoveToTrash => format!("Moved to Trash: {name}"),
+            Self::MoveToTrash => format!("Moved \"{name}\" to Trash"),
+        }
+    }
+
+    fn restored_message(self, name: &str) -> String {
+        match self {
+            Self::MoveToTrash => format!("Restored \"{name}\""),
+        }
+    }
+
+    fn restore_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::MoveToTrash => format!("Couldn't restore: {error}"),
         }
     }
 
@@ -1113,92 +1101,62 @@ impl ScriptListApp {
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
 
-                cx.spawn(async move |this, cx| {
-                    let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
-                        trash_action.confirm_title(),
-                        trash_action.confirm_message(&name),
-                        trash_action.confirm_button(),
-                    );
-
-                    match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &trace_id)
-                        .await
-                    {
-                        Ok(true) => {}
-                        Ok(false) => {
-                            tracing::info!(
-                                trace_id = %trace_id,
-                                status = "cancelled",
-                                duration_ms = start.elapsed().as_millis() as u64,
-                                "Async action cancelled: move_to_trash"
-                            );
-                            let _ = this.update(cx, |this, cx| {
-                                this.clear_file_search_action_target();
-                                this.restore_file_search_input_focus(cx);
-                            });
-                            return;
-                        }
-                        Err(e) => {
-                            let _ = this.update(cx, |this, cx| {
-                                tracing::error!(
-                                    trace_id = %trace_id,
-                                    status = "failed",
-                                    duration_ms = start.elapsed().as_millis() as u64,
-                                    error = %e,
-                                    "failed to open confirmation modal"
-                                );
-                                this.clear_file_search_action_target();
-                                this.show_error_toast_with_code(
-                                    trash_action.confirmation_failure_message(),
-                                    Some(crate::action_helpers::ERROR_MODAL_FAILED),
-                                    cx,
-                                );
-                                this.restore_file_search_input_focus(cx);
-                            });
-                            return;
-                        }
+                let trashed = match crate::file_search::move_to_trash(&path) {
+                    Ok(trashed) => trashed,
+                    Err(e) => {
+                        tracing::error!(
+                            trace_id = %trace_id,
+                            status = "failed",
+                            duration_ms = start.elapsed().as_millis() as u64,
+                            error = %e,
+                            path = %path,
+                            "failed to move to trash"
+                        );
+                        self.clear_file_search_action_target();
+                        self.show_error_toast(trash_action.failure_message(e), cx);
+                        self.restore_file_search_input_focus(cx);
+                        return DispatchOutcome::success();
                     }
+                };
+                tracing::info!(
+                    trace_id = %trace_id,
+                    status = "completed",
+                    duration_ms = start.elapsed().as_millis() as u64,
+                    path = %path,
+                    "file moved to trash"
+                );
+                self.clear_file_search_action_target();
+                self.refresh_file_search_after_mutation(&path, None, previous_display_index, cx);
+                self.restore_file_search_input_focus(cx);
 
-                    let _ = this.update(cx, |this, cx| {
-                        match crate::file_search::move_to_trash(&path) {
+                let owner = cx.entity().downgrade();
+                crate::undo_offer::offer_main_window_undo(
+                    trash_action.success_hud(&name),
+                    move |_window, cx| {
+                        let restored = crate::file_search::restore_from_trash(
+                            &trashed,
+                            std::path::Path::new(&path),
+                        );
+                        let Some(owner) = owner.upgrade() else {
+                            return;
+                        };
+                        owner.update(cx, |this, cx| match restored {
                             Ok(()) => {
-                                tracing::info!(
-                                    trace_id = %trace_id,
-                                    status = "completed",
-                                    duration_ms = start.elapsed().as_millis() as u64,
-                                    path = %path,
-                                    "file moved to trash"
-                                );
-                                this.clear_file_search_action_target();
-                                this.show_hud(
-                                    trash_action.success_hud(&name),
-                                    Some(HUD_MEDIUM_MS),
-                                    cx,
-                                );
                                 this.refresh_file_search_after_mutation(
                                     &path,
-                                    None,
+                                    Some(&path),
                                     previous_display_index,
                                     cx,
                                 );
-                                this.restore_file_search_input_focus(cx);
+                                this.show_success_toast(trash_action.restored_message(&name), cx);
                             }
                             Err(e) => {
-                                tracing::error!(
-                                    trace_id = %trace_id,
-                                    status = "failed",
-                                    duration_ms = start.elapsed().as_millis() as u64,
-                                    error = %e,
-                                    path = %path,
-                                    "failed to move to trash"
-                                );
-                                this.clear_file_search_action_target();
-                                this.show_error_toast(trash_action.failure_message(e), cx);
-                                this.restore_file_search_input_focus(cx);
+                                this.show_error_toast(trash_action.restore_failure_message(e), cx)
                             }
-                        }
-                    });
-                })
-                .detach();
+                        });
+                    },
+                    cx,
+                );
 
                 DispatchOutcome::success()
             }

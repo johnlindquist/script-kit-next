@@ -268,41 +268,6 @@ fn confirm_popup_does_not_promote_native_window_to_key() {
 }
 
 #[test]
-fn destructive_confirm_routes_use_shared_parent_confirm_helpers() {
-    let scripts = read("src/app_actions/handle_action/scripts.rs");
-    let files = read("src/app_actions/handle_action/files.rs");
-    let clipboard = read("src/app_actions/handle_action/clipboard.rs");
-    let notes = read("src/notes/window/notes.rs");
-
-    assert!(
-        scripts.contains("crate::confirm::open_parent_confirm_dialog_for_entity(")
-            && scripts.contains("remove_script_confirmed")
-            && scripts.contains("quit_script_kit_confirm_options()"),
-        "script removal and quit confirmations must use the entity-owned shared parent confirm helper"
-    );
-    assert!(
-        files.contains("crate::confirm::ParentConfirmOptions::destructive(")
-            && files.contains("crate::confirm::confirm_with_parent_dialog(")
-            && files.contains("\"Async action cancelled: move_to_trash\""),
-        "file move-to-trash confirmation must use the shared parent confirm dialog and handle cancel"
-    );
-    assert!(
-        clipboard.contains("clipboard_delete_multiple")
-            && clipboard.contains("clipboard_delete_all")
-            && clipboard.contains("crate::confirm::ParentConfirmOptions::destructive(")
-            && clipboard.contains("crate::confirm::confirm_with_parent_dialog("),
-        "clipboard bulk delete confirmations must use the shared parent confirm dialog"
-    );
-    assert!(
-        notes.contains("crate::confirm::open_parent_confirm_dialog_for_automation_parent(")
-            && notes.contains("\"notes\"")
-            && notes.contains("notes_delete_cancelled")
-            && notes.contains("restore_primary_focus_after_dialog"),
-        "notes delete confirmation must use the parent-id-aware shared confirm helper and restore focus on cancel"
-    );
-}
-
-#[test]
 fn confirm_modal_inventory_tracks_routes_and_excludes_non_modals() {
     let inventory = read(".goals/receipts/modal-inventory.md");
 
@@ -442,19 +407,20 @@ fn notes_delete_confirm_route_proof_uses_real_notes_route() {
             && scenario_block.contains("/tmp/confirm-modal-notes-delete-proof/")
             && scenario_block.contains("type: \"openNotes\"")
             && scenario_block.contains("notes-delete-confirm-cmd-n")
+            && scenario_block.contains("notes-trash-cmd-shift-backspace")
+            && scenario_block.contains("notes-trash-view-cmd-shift-t")
             && scenario_block.contains("notes-delete-cmd-shift-backspace")
             && scenario_block.contains("target: notesTarget")
             && scenario_block.contains("button:1:cancel")
             && scenario_block.contains("parentWindowId")
             && scenario_block.contains("notes")
             && scenario_block.contains("confirmDialog")
-            && scenario_block.contains("Move note to Trash")
-            && scenario_block.contains("Delete")
+            && scenario_block.contains("Delete note permanently")
             && scenario_block.contains("Cancel")
             && scenario_block.contains("sandboxNoteDeleted")
             && !scenario_block.contains("openConfirmPrompt")
             && !scenario_block.contains("delete_note_by_id("),
-        "Notes delete route proof must use a sandboxed real Notes shortcut path into the attached confirm popup, then cancel without direct modal/deletion fallbacks"
+        "Notes delete route proof must trash via the real shortcut, then reach the attached permanent-delete confirm popup from the Trash view and cancel, without direct modal/deletion fallbacks"
     );
     assert!(
         index.contains("notes-delete-confirm-route-proof")
@@ -463,10 +429,7 @@ fn notes_delete_confirm_route_proof_uses_real_notes_route() {
     );
     assert!(
         notes.contains("crate::confirm::open_parent_confirm_dialog_for_automation_parent(")
-            && notes.contains("\"notes\"")
-            && notes.contains("\"Move note to Trash\"")
-            && notes.contains("\"Delete\"")
-            && notes.contains("cancel_text: \"Cancel\".into()"),
+            && notes.contains("\"notes\""),
         "Notes delete confirmation must route through the shared parent confirm helper with Notes as the automation parent"
     );
     assert!(

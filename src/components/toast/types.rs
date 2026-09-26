@@ -197,6 +197,8 @@ pub struct ToastAction {
     pub id: ToastActionId,
     /// Label text for the action button
     pub label: SharedString,
+    /// Keyboard shortcut drawn as keycaps beside the label (e.g. "⌘Z")
+    pub shortcut: Option<SharedString>,
     /// Callback when the action is clicked
     pub callback: Rc<ToastActionCallback>,
 }
@@ -211,8 +213,15 @@ impl ToastAction {
         Self {
             id: ToastActionId::new(id),
             label: label.into(),
+            shortcut: None,
             callback: Rc::new(callback),
         }
+    }
+
+    /// Show the shortcut that performs this action while the toast is up.
+    pub fn with_shortcut(mut self, shortcut: impl Into<SharedString>) -> Self {
+        self.shortcut = Some(shortcut.into());
+        self
     }
 }
 

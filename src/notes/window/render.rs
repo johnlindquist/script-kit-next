@@ -67,30 +67,60 @@ impl NotesApp {
         }
 
         if let Some((message, kind)) = self.action_feedback.take() {
-            use crate::components::document_status::{
-                DocumentFeedbackKind, DocumentSaveFailureNotification,
+            use crate::components::document_status::DocumentFeedbackKind;
+            use crate::toast_popup::ToastPopupKind;
+            let (key, toast_kind, duration_ms) = match kind {
+                DocumentFeedbackKind::SaveFailure => {
+                    (NOTES_SAVE_FAILURE_TOAST_KEY, ToastPopupKind::Error, None)
+                }
+                DocumentFeedbackKind::Error => (
+                    "notes-action-error",
+                    ToastPopupKind::Error,
+                    Some(NOTES_ERROR_TOAST_MS),
+                ),
+                DocumentFeedbackKind::SaveRecovered => (
+                    "notes-action-feedback",
+                    ToastPopupKind::Success,
+                    Some(ACTION_FEEDBACK_MS),
+                ),
+                DocumentFeedbackKind::Information => (
+                    "notes-action-feedback",
+                    ToastPopupKind::Info,
+                    Some(ACTION_FEEDBACK_MS),
+                ),
             };
-            if kind == DocumentFeedbackKind::SaveRecovered {
-                window.remove_notification::<DocumentSaveFailureNotification>(cx);
-            }
-            let notification = if kind.is_error() {
-                gpui_component::notification::Notification::error(message).autohide(false)
-            } else {
-                gpui_component::notification::Notification::info(message)
-                    .autohide_after(Duration::from_millis(ACTION_FEEDBACK_MS))
-            };
-            let notification = if kind == DocumentFeedbackKind::SaveFailure {
-                notification.id::<DocumentSaveFailureNotification>()
-            } else {
-                notification.id1::<NotesApp>(if kind.is_error() {
-                    "notes-action-error"
-                } else {
-                    "notes-action-feedback"
-                })
-            };
-            window.push_notification(notification, cx);
+            show_notes_toast(window, key, message, toast_kind, duration_ms, cx);
         }
     }
+}
+
+/// Key of the save-failure toast, which stays until a save succeeds.
+pub(super) const NOTES_SAVE_FAILURE_TOAST_KEY: &str = "notes-save-failure";
+
+/// How long a Notes error toast stays before it hides itself.
+pub(super) const NOTES_ERROR_TOAST_MS: u64 = 8_000;
+
+/// Notes toasts open in an attached popup window: a toast drawn inside the
+/// window has no blur over the editor text behind it.
+pub(super) fn show_notes_toast(
+    window: &mut Window,
+    key: &'static str,
+    message: impl Into<gpui::SharedString>,
+    kind: crate::toast_popup::ToastPopupKind,
+    duration_ms: Option<u64>,
+    cx: &mut App,
+) {
+    crate::toast_popup::show_toast_popup(
+        window,
+        crate::toast_popup::ToastPopupRequest {
+            key: key.into(),
+            message: message.into(),
+            kind,
+            duration_ms,
+            action: None,
+        },
+        cx,
+    );
 }
 
 impl Render for NotesApp {

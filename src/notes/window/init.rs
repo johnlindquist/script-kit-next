@@ -559,12 +559,12 @@ impl NotesApp {
             return true;
         }
 
-        window.push_notification(
-            gpui_component::notification::Notification::error(
-                super::navigation::NOTES_SAVE_FAILURE_MESSAGE,
-            )
-            .autohide(false)
-            .id::<crate::components::document_status::DocumentSaveFailureNotification>(),
+        super::render::show_notes_toast(
+            window,
+            super::render::NOTES_SAVE_FAILURE_TOAST_KEY,
+            super::navigation::NOTES_SAVE_FAILURE_MESSAGE,
+            crate::toast_popup::ToastPopupKind::Error,
+            None,
             cx,
         );
         cx.notify();

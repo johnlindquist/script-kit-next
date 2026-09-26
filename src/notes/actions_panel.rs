@@ -205,7 +205,8 @@ impl NotesAction {
             NotesAction::Format => None,
             NotesAction::DeleteNote => Some("shift+cmd+backspace"),
             NotesAction::RestoreNote => Some("cmd+z"),
-            NotesAction::PermanentlyDeleteNote => None,
+            // Same key as Delete Note: the Trash view shows only this one.
+            NotesAction::PermanentlyDeleteNote => Some("shift+cmd+backspace"),
             NotesAction::EnableAutoSizing => None,
             NotesAction::ResetWindowPosition => None,
             NotesAction::SendToAi => Some("cmd+enter"),
@@ -524,12 +525,10 @@ mod tests {
             vec!["⇧", "⌘", "⌫"]
         );
 
-        // PermanentlyDeleteNote has no shortcut
-        assert!(NotesAction::PermanentlyDeleteNote.shortcut_hint().is_none());
-        assert!(NotesAction::PermanentlyDeleteNote
-            .shortcut_tokens()
-            .is_empty());
-        assert_eq!(NotesAction::PermanentlyDeleteNote.shortcut_display(), "");
+        assert_eq!(
+            NotesAction::PermanentlyDeleteNote.shortcut_tokens(),
+            vec!["⇧", "⌘", "⌫"]
+        );
     }
 
     #[test]
@@ -544,7 +543,6 @@ mod tests {
                     | NotesAction::CopyBacklinks
                     | NotesAction::CopySaveDetails
                     | NotesAction::Format
-                    | NotesAction::PermanentlyDeleteNote
                     | NotesAction::EnableAutoSizing
                     | NotesAction::ResetWindowPosition
             ) {
@@ -736,6 +734,15 @@ mod tests {
             notes_action_for_keystroke(context, "backspace", &shift_command)
                 .map(|descriptor| descriptor.action),
             Some(NotesAction::DeleteNote)
+        );
+        let trash = NotesActionContext {
+            surface: NotesActionSurface::Trash,
+            ..context
+        };
+        assert_eq!(
+            notes_action_for_keystroke(trash, "backspace", &shift_command)
+                .map(|descriptor| descriptor.action),
+            Some(NotesAction::PermanentlyDeleteNote)
         );
         assert_eq!(
             notes_action_for_keystroke(context, "t", &shift_command)

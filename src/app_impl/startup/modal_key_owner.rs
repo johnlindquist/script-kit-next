@@ -10,9 +10,14 @@ impl ScriptListApp {
     /// alias editor, the Tab AI save offer). It never becomes the key window,
     /// so the keys meant for it arrive at its parent — main, Notes, Dictation,
     /// or detached Agent Chat — and are routed to it here.
+    ///
+    /// With no modal open, ⌘Z takes a pending Undo offer (see
+    /// `crate::undo_offer`) before it can reach a text field's own undo.
     fn install_modal_key_owner_interceptor(&mut self, cx: &mut Context<Self>) {
         let interceptor = cx.intercept_keystrokes(|event, window, cx| {
-            if crate::confirm::route_window_key_to_confirm_popup(window, &event.keystroke, cx) {
+            if crate::confirm::route_window_key_to_confirm_popup(window, &event.keystroke, cx)
+                || crate::undo_offer::route_window_key(window, &event.keystroke, cx)
+            {
                 cx.stop_propagation();
             }
         });

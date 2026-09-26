@@ -3,7 +3,7 @@ use std::time::Duration;
 use gpui::{App, IntoElement as _, Window};
 use gpui_component::notification::Notification;
 
-use crate::components::ToastAction;
+use crate::components::{ToastAction, ToastId};
 
 use super::PendingToast;
 
@@ -31,7 +31,9 @@ pub fn pending_toast_to_notification(toast: PendingToast) -> Notification {
                     (original)(event, window, cx);
                     notification.dismiss_from_control(window, cx);
                 });
-                rendered = rendered.action(ToastAction::new(action_id, label, Box::new(handler)));
+                let mut rebuilt = ToastAction::new(action_id, label, Box::new(handler));
+                rebuilt.shortcut = action.shortcut.clone();
+                rendered = rendered.action(rebuilt);
             }
 
             if model.is_dismissible() {
@@ -55,4 +57,13 @@ pub fn pending_toast_to_notification(toast: PendingToast) -> Notification {
         Some(duration_ms) => notification.autohide_after(Duration::from_millis(duration_ms)),
         None => notification.autohide(false),
     }
+}
+
+/// Close the notification a toast was converted into, if it is still shown.
+pub fn dismiss_toast_notification(toast_id: &ToastId, window: &mut Window, cx: &mut App) {
+    use gpui_component::WindowExt as _;
+    window.remove_notification1::<ScriptKitToastNotification>(
+        toast_id.control_id("notification"),
+        cx,
+    );
 }

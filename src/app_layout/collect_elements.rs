@@ -1777,6 +1777,13 @@ impl ScriptListApp {
         }
 
         self.append_footer_elements(&mut outcome, limit);
+        if let Some(undo) = crate::undo_offer::semantic_element(crate::undo_offer::UndoSurface::Main)
+        {
+            outcome.total_count += 1;
+            if outcome.elements.len() < limit {
+                outcome.elements.push(undo);
+            }
+        }
         outcome
     }
 

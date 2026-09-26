@@ -616,7 +616,8 @@ pub use mdfind::{
 };
 pub use os_open::{
     duplicate_path, move_path, move_to_trash, open_file, open_with, prompt_move_destination_dir,
-    prompt_rename_target_name, quick_look, rename_path, reveal_in_finder, show_info,
+    prompt_rename_target_name, quick_look, rename_path, restore_from_trash, reveal_in_finder,
+    show_info,
 };
 
 pub fn parent_folder_search_query(path: &str) -> Option<String> {

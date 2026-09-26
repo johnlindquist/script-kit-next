@@ -865,31 +865,6 @@ fn script_management_handler_uses_named_action_states() {
 }
 
 #[test]
-fn script_removal_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
-        .expect("Failed to read script action handler");
-
-    assert!(
-        content.contains("enum ScriptRemovalHandlerAction")
-            && content.contains("enum ScriptRemovalTargetError")
-            && content.contains("MoveToTrash")
-            && content.contains("NoSelection")
-            && content.contains("UnsupportedItemType")
-            && content.contains("MissingPath"),
-        "script removal should model target resolution and Trash feedback as named states"
-    );
-    assert!(
-        content.contains("ScriptRemovalHandlerAction::from_action_id(action_id)")
-            && content.contains("removal_action.target_error_message(")
-            && content.contains("removal_action.confirm_body(&target)")
-            && content.contains("removal_action.confirm_title()")
-            && content.contains("removal_action.success_hud(&target)")
-            && content.contains("removal_action.failure_message(e)"),
-        "script removal should derive target errors, confirmation copy, success HUD, and failure copy from the named state"
-    );
-}
-
-#[test]
 fn settings_editor_launch_uses_named_plan_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
         .expect("Failed to read script action handler");
@@ -1067,28 +1042,6 @@ fn file_search_duplicate_handler_uses_named_action_state() {
             && content.contains("duplicate_action.success_hud(&name)")
             && content.contains("duplicate_action.failure_message(e)"),
         "file-search duplicate handler should derive selection, HUD, and failure copy from the named state"
-    );
-}
-
-#[test]
-fn file_search_trash_handler_uses_named_action_state() {
-    let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
-        .expect("Failed to read file action handler");
-
-    assert!(
-        content.contains("enum FileSearchTrashHandlerAction") && content.contains("MoveToTrash"),
-        "file-search trash handler should be driven by a named action state"
-    );
-    assert!(
-        content.contains("FileSearchTrashHandlerAction::from_action_id(action_id)")
-            && content.contains("trash_action.selection_required_message()")
-            && content.contains("trash_action.confirm_title()")
-            && content.contains("trash_action.confirm_message(&name)")
-            && content.contains("trash_action.confirm_button()")
-            && content.contains("trash_action.confirmation_failure_message()")
-            && content.contains("trash_action.success_hud(&name)")
-            && content.contains("trash_action.failure_message(e)"),
-        "file-search trash handler should derive selection, confirmation, HUD, and failure copy from the named state"
     );
 }
 

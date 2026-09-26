@@ -250,34 +250,6 @@ fn script_removal_target_from_result(
     }
 }
 
-fn move_path_to_trash(path: &std::path::Path) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        let escaped_path = crate::utils::escape_applescript_string(&path.to_string_lossy());
-        let script = format!(
-            r#"tell application "Finder"
-    delete POSIX file "{}"
-end tell"#,
-            escaped_path
-        );
-
-        crate::platform::run_osascript(&script, "app_actions_move_path_to_trash")
-            .map(|_| ())
-            .map_err(|error| error.to_string())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        if path.is_dir() {
-            std::fs::remove_dir_all(path)
-                .map_err(|err| format!("failed to remove directory '{}': {err}", path.display()))
-        } else {
-            std::fs::remove_file(path)
-                .map_err(|err| format!("failed to remove file '{}': {err}", path.display()))
-        }
-    }
-}
-
 #[cfg(test)]
 mod app_actions_tests {
     use super::{

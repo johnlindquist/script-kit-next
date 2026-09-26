@@ -452,6 +452,16 @@ impl ScriptListApp {
         self.show_error_toast_with_code(message, None, cx);
     }
 
+    /// Show a short success toast in the main window.
+    fn show_success_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        let msg: String = message.into();
+        self.toast_manager.push(
+            components::toast::Toast::success(msg, &self.theme)
+                .duration_ms(Some(TOAST_SUCCESS_MS)),
+        );
+        cx.notify();
+    }
+
     /// Like `show_error_toast` but also logs a stable error code.
     fn show_error_toast_with_code(
         &mut self,

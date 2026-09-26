@@ -70,14 +70,20 @@ fn failed_save_keeps_notes_open_for_escape_and_cmd_w(cx: &mut gpui::TestAppConte
                     assert_eq!(app.entry_reveal, reveal_before, "{key} must not begin exit");
                 });
                 let layers = Root::read(window, cx).layer_snapshot(cx);
-                assert_eq!(
-                    layers.notifications.len(),
-                    1,
-                    "{key}: repeat close must not spam: {:?}",
+                assert!(
+                    layers.notifications.is_empty(),
+                    "{key}: Notes toasts belong in the attached popup: {:?}",
                     layers.notifications
                 );
+                let toast = crate::toast_popup::semantic_element(window.window_handle())
+                    .unwrap_or_else(|| panic!("{key}: save failure must show a toast"));
                 assert_eq!(
-                    layers.notifications[0].message.as_deref(),
+                    toast.semantic_id,
+                    format!("toast:{}", super::render::NOTES_SAVE_FAILURE_TOAST_KEY),
+                    "{key}: repeat close must reuse the one save-failure toast"
+                );
+                assert_eq!(
+                    toast.text.as_deref(),
                     Some(super::navigation::NOTES_SAVE_FAILURE_MESSAGE)
                 );
             }
@@ -326,4 +332,85 @@ fn theme_recolors_existing_links_without_manufacturing_a_data_revision(
             );
         })
         .expect("theme recoloring");
+}
+
+/// Trashing the last note clears the editor, leaves nothing to save, and ⌘Z
+/// brings the note back with the text typed just before the trash.
+#[gpui::test]
+fn trashing_a_note_clears_the_editor_and_cmd_z_restores_it(cx: &mut gpui::TestAppContext) {
+    let _guard = crate::notes::storage::notes_db_test_guard();
+    crate::notes::storage::init_notes_db().expect("sandboxed notes db");
+    cx.update(crate::theme::gpui_kit_bridge::init_component_libraries);
+    let note = Note::with_content("");
+    let note_id = note.id;
+    crate::notes::storage::save_note(&note).expect("seed note");
+    let app_slot = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let app_slot_for_window = app_slot.clone();
+    let handle = cx.update(|cx| {
+        cx.open_window(
+            WindowOptions {
+                show: false,
+                focus: false,
+                ..Default::default()
+            },
+            |window, cx| {
+                let app = cx.new(|cx| {
+                    NotesApp::from_initial_data(
+                        NotesInitialData {
+                            notes: vec![note],
+                            deleted_notes: Vec::new(),
+                            host_policy: crate::runtime_policy::WindowHostPolicy::OwnedHidden,
+                            ghost_clipboard: Some(Vec::new()),
+                            now: None,
+                        },
+                        window,
+                        cx,
+                    )
+                });
+                *app_slot_for_window.borrow_mut() = Some(app.clone());
+                cx.new(|cx| Root::new(app, window, cx))
+            },
+        )
+        .expect("isolated Notes window")
+    });
+    let app = app_slot.borrow().clone().expect("Notes entity");
+    let window: gpui::AnyWindowHandle = handle.into();
+    let typed = "Audit note";
+    window
+        .update(cx, |_, window, cx| {
+            app.update(cx, |app, cx| {
+                assert_eq!(app.selected_note_id, Some(note_id));
+                app.set_editor_text_for_automation(typed.into(), window, cx);
+                assert!(app.has_unsaved_changes);
+                app.request_delete_selected_note(window, cx);
+            })
+        })
+        .expect("trash the note");
+    cx.run_until_parked();
+    app.update(cx, |app, cx| {
+        assert_eq!(app.selected_note_id, None);
+        assert!(app.notes.is_empty());
+        assert_eq!(app.deleted_notes.first().map(|n| n.id), Some(note_id));
+        assert_eq!(
+            app.editor_text(cx),
+            "",
+            "the trashed note must leave the editor"
+        );
+        assert!(!app.has_unsaved_changes, "nothing is left to save");
+        assert!(app.save_current_note(), "a later autosave must not fail");
+        assert!(app.save_failure.is_none());
+    });
+    window
+        .update(cx, |_, window, cx| {
+            let undo = gpui::Keystroke::parse("cmd-z").expect("undo shortcut");
+            assert!(crate::undo_offer::route_window_key(window, &undo, cx));
+        })
+        .expect("take the undo offer");
+    cx.run_until_parked();
+    app.update(cx, |app, cx| {
+        assert_eq!(app.selected_note_id, Some(note_id));
+        assert!(app.deleted_notes.is_empty());
+        assert_eq!(app.editor_text(cx), typed, "undo restores the typed text");
+    });
+    crate::notes::storage::delete_note_permanently(note_id).expect("clean up fixture note");
 }

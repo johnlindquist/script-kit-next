@@ -137,78 +137,55 @@ impl ScriptListApp {
                 }
             }
             PathAction::MoveToTrash => {
-                let path_info = path_info.clone();
-                let path_prompt_entity = path_prompt_entity.clone();
-                let message = format!("Move \"{}\" to Trash?", path_info.name);
+                let path_str = path_info.path.clone();
+                let name = path_info.name.clone();
+                match crate::file_search::move_to_trash(&path_str) {
+                    Ok(trashed) => {
+                        logging::log("UI", &format!("Moved to trash: {}", path_str));
+                        self.last_output =
+                            Some(SharedString::from(format!("Moved to Trash: {}", name)));
+                        Self::refresh_path_prompt(&path_prompt_entity, cx);
 
-                cx.spawn(async move |this, cx| {
-                    let confirmed = match crate::confirm::confirm_with_parent_dialog(
-                        cx,
-                        crate::confirm::ParentConfirmOptions::destructive(
-                            "Move to Trash",
-                            message,
-                            "Move to Trash",
-                        ),
-                        "execution_path_move_to_trash",
-                    )
-                    .await
-                    {
-                        Ok(confirmed) => confirmed,
-                        Err(e) => {
-                            let _ = this.update(cx, move |this, cx| {
-                                tracing::error!(
-                                    event = "execution_path_dialog_open_failed",
-                                    error = %e,
-                                    "Failed to open execution path move-to-trash dialog"
+                        let owner = cx.entity().downgrade();
+                        let path_prompt_entity = path_prompt_entity.clone();
+                        crate::undo_offer::offer_main_window_undo(
+                            format!("Moved \"{}\" to Trash", name),
+                            move |_window, cx| {
+                                let restored = crate::file_search::restore_from_trash(
+                                    &trashed,
+                                    std::path::Path::new(&path_str),
                                 );
-                                this.show_error_toast("Failed to open confirmation dialog", cx);
-                            });
-                            return;
-                        }
-                    };
-
-                    if !confirmed {
-                        return;
-                    }
-
-                    let _ = this.update(cx, move |this, cx| {
-                        let path_str = path_info.path.clone();
-                        let name = path_info.name.clone();
-
-                        match crate::file_search::move_to_trash(&path_str) {
-                            Ok(()) => {
-                                logging::log("UI", &format!("Moved to trash: {}", path_str));
-                                this.last_output =
-                                    Some(SharedString::from(format!("Moved to Trash: {}", name)));
-                                this.show_hud(
-                                    format!("Moved to Trash: {}", name),
-                                    Some(HUD_MEDIUM_MS),
-                                    cx,
-                                );
-                                // Refresh the path prompt to show the file is gone
-                                path_prompt_entity.update(cx, |prompt, cx| {
-                                    let current = prompt.current_path.clone();
-                                    prompt.navigate_to(&current, cx);
+                                let Some(owner) = owner.upgrade() else {
+                                    return;
+                                };
+                                owner.update(cx, |this, cx| match restored {
+                                    Ok(()) => {
+                                        Self::refresh_path_prompt(&path_prompt_entity, cx);
+                                        this.show_success_toast(format!("Restored \"{}\"", name), cx);
+                                    }
+                                    Err(e) => this
+                                        .show_error_toast(format!("Couldn't restore: {}", e), cx),
                                 });
-                            }
-                            Err(e) => {
-                                logging::log("ERROR", &format!("Failed to move to trash: {}", e));
-                                this.last_output =
-                                    Some(SharedString::from("Failed to move to Trash"));
-                                this.show_error_toast(
-                                    format!("Failed to move to Trash: {}", e),
-                                    cx,
-                                );
-                            }
-                        }
-                        cx.notify();
-                    });
-                })
-                .detach();
-                return;
+                            },
+                            cx,
+                        );
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to move to trash: {}", e));
+                        self.last_output = Some(SharedString::from("Failed to move to Trash"));
+                        self.show_error_toast(format!("Failed to move to Trash: {}", e), cx);
+                    }
+                }
             }
         }
 
         cx.notify();
+    }
+
+    fn refresh_path_prompt(path_prompt_entity: &Entity<PathPrompt>, cx: &mut Context<Self>) {
+        path_prompt_entity.update(cx, |prompt, cx| {
+            let current = prompt.current_path.clone();
+            prompt.navigate_to(&current, cx);
+        });
     }
 }

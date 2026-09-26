@@ -138,6 +138,8 @@ mod clipboard_history;
 mod clipboard_preview_helpers;
 mod file_search;
 mod toast_manager;
+mod toast_popup;
+mod undo_offer;
 mod window_control;
 
 // Render helper data (proper modules so tests are discoverable)

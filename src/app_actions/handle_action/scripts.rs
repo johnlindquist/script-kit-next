@@ -141,21 +141,21 @@ impl ScriptRemovalHandlerAction {
         }
     }
 
-    fn confirm_title(self) -> &'static str {
-        match self {
-            Self::MoveToTrash => "Move to Trash",
-        }
-    }
-
-    fn confirm_body(self, target: &ScriptRemovalTarget) -> String {
-        match self {
-            Self::MoveToTrash => format!("Move \"{}\" to Trash?", target.name),
-        }
-    }
-
     fn success_hud(self, target: &ScriptRemovalTarget) -> String {
         match self {
-            Self::MoveToTrash => format!("Moved '{}' to Trash", target.name),
+            Self::MoveToTrash => format!("Moved \"{}\" to Trash", target.name),
+        }
+    }
+
+    fn restored_message(self, target: &ScriptRemovalTarget) -> String {
+        match self {
+            Self::MoveToTrash => format!("Restored \"{}\"", target.name),
+        }
+    }
+
+    fn restore_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::MoveToTrash => format!("Couldn't restore: {error}"),
         }
     }
 
@@ -440,94 +440,72 @@ impl ScriptListApp {
                     );
                 }
 
-                let body: gpui::SharedString = removal_action.confirm_body(&target).into();
-
-                let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
-                let weak_entity = cx.entity().downgrade();
-                let owner = weak_entity.clone();
-
-                crate::confirm::open_parent_confirm_dialog_for_entity(
-                    window,
-                    cx,
-                    owner,
-                    crate::confirm::ParentConfirmOptions {
-                        title: removal_action.confirm_title().into(),
-                        body,
-                        confirm_text: removal_action.confirm_title().into(),
-                        cancel_text: "Cancel".into(),
-                        risk: crate::confirm::ConfirmRisk::Destructive,
-                        width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-                    },
-                    {
-                        let trace_id = trace_id.clone();
-                        let target = target.clone();
-                        move |_window, cx| {
-                            tracing::info!(
+                let trashed =
+                    match crate::file_search::move_to_trash(&target.path.to_string_lossy()) {
+                        Ok(trashed) => trashed,
+                        Err(e) => {
+                            tracing::error!(
                                 trace_id = %trace_id,
-                                event = "remove_script_confirmed",
+                                status = "failed",
+                                duration_ms = start.elapsed().as_millis() as u64,
                                 item_kind = target.item_kind,
                                 name = %target.name,
-                                "remove_script_confirmed"
+                                path = %target.path.display(),
+                                error = %e,
+                                "Action failed: remove_script"
                             );
-                            let trace_id = trace_id.clone();
-                            let target = target.clone();
-                            if let Some(entity) = weak_entity.upgrade() {
-                                entity.update(cx, move |this, cx| {
-                                    match move_path_to_trash(&target.path) {
-                                        Ok(()) => {
-                                            tracing::info!(
-                                                category = "UI",
-                                                trace_id = %trace_id,
-                                                status = "completed",
-                                                duration_ms = start.elapsed().as_millis() as u64,
-                                                item_kind = target.item_kind,
-                                                name = %target.name,
-                                                path = %target.path.display(),
-                                                "Async action completed: remove_script"
-                                            );
-                                            this.refresh_scripts(cx);
-                                            this.show_hud(
-                                                removal_action.success_hud(&target),
-                                                Some(HUD_2200_MS),
-                                                cx,
-                                            );
-                                            this.hide_main_and_reset(cx);
-                                            cx.notify();
-                                        }
-                                        Err(e) => {
-                                            tracing::error!(
-                                                trace_id = %trace_id,
-                                                status = "failed",
-                                                duration_ms = start.elapsed().as_millis() as u64,
-                                                item_kind = target.item_kind,
-                                                name = %target.name,
-                                                path = %target.path.display(),
-                                                error = %e,
-                                                "Async action failed: remove_script"
-                                            );
-                                            this.show_error_toast_with_code(
-                                                removal_action.failure_message(e),
-                                                Some(crate::action_helpers::ERROR_TRASH_FAILED),
-                                                cx,
-                                            );
-                                        }
-                                    }
-                                });
+                            self.show_error_toast_with_code(
+                                removal_action.failure_message(e),
+                                Some(crate::action_helpers::ERROR_TRASH_FAILED),
+                                cx,
+                            );
+                            return DispatchOutcome::success();
+                        }
+                    };
+                tracing::info!(
+                    category = "UI",
+                    trace_id = %trace_id,
+                    status = "completed",
+                    duration_ms = start.elapsed().as_millis() as u64,
+                    item_kind = target.item_kind,
+                    name = %target.name,
+                    path = %target.path.display(),
+                    "Action completed: remove_script"
+                );
+                self.refresh_scripts(cx);
+                cx.notify();
+
+                let owner = cx.entity().downgrade();
+                crate::undo_offer::offer_undo(
+                    crate::undo_offer::UndoSurface::Main,
+                    removal_action.success_hud(&target),
+                    move |_window, cx| {
+                        let restored =
+                            crate::file_search::restore_from_trash(&trashed, &target.path);
+                        let Some(owner) = owner.upgrade() else {
+                            return;
+                        };
+                        owner.update(cx, |this, cx| {
+                            match restored {
+                                Ok(()) => {
+                                    this.refresh_scripts(cx);
+                                    this.show_success_toast(
+                                        removal_action.restored_message(&target),
+                                        cx,
+                                    );
+                                }
+                                Err(e) => this.show_error_toast_with_code(
+                                    removal_action.restore_failure_message(e),
+                                    Some(crate::action_helpers::ERROR_TRASH_FAILED),
+                                    cx,
+                                ),
                             }
-                        }
+                            cx.notify();
+                        });
                     },
-                    {
-                        let trace_id = trace_id.clone();
-                        move |_window, _cx| {
-                            tracing::info!(
-                                trace_id = %trace_id,
-                                status = "cancelled",
-                                event = "remove_script_cancelled",
-                                "remove_script_cancelled"
-                            );
-                        }
-                    },
+                    window,
+                    cx,
                 );
                 DispatchOutcome::success()
             }

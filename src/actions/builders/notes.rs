@@ -354,7 +354,10 @@ mod tests {
         assert_eq!(restore_note.section.as_deref(), Some("Trash"));
 
         assert_eq!(permanently_delete_note.title, "Delete Permanently");
-        assert_eq!(permanently_delete_note.shortcut.as_deref(), None);
+        assert_eq!(
+            permanently_delete_note.shortcut.as_deref(),
+            Some("shift+cmd+backspace")
+        );
         assert_eq!(
             permanently_delete_note.description.as_deref(),
             Some("Permanently deletes the current note")

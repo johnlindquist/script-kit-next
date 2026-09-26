@@ -167,9 +167,15 @@ impl NotesApp {
                     .when(window_hovered, |d| d.opacity(1.0))
                     .when(in_focus_mode, |d| d.opacity(0.))
                     .when(is_pinned && !in_focus_mode, |d| {
-                        d.child(div().text_xs().text_color(accent_color).child("●"))
+                        d.child(
+                            div()
+                                .flex_shrink_0()
+                                .text_xs()
+                                .text_color(accent_color)
+                                .child("●"),
+                        )
                     })
-                    .child(title),
+                    .child(div().min_w(px(0.)).truncate().child(title)),
             )
             // Center: the one-shot Ask AI command (replaces the removed
             // Notes/Agent mode switcher). Fades with focus mode like the rest
@@ -183,7 +189,8 @@ impl NotesApp {
                     })
                     .child(self.render_ask_ai_button(cx)),
             )
-            // Trailing lane: save status + trash/actions cluster.
+            // Trailing lane: save status + trash/actions cluster. Clipped to
+            // its lane so a long status never paints over the center button.
             .child(
                 div()
                     .flex_1()
@@ -192,6 +199,7 @@ impl NotesApp {
                     .items_center()
                     .justify_end()
                     .gap_1()
+                    .overflow_hidden()
                     .when(in_focus_mode && window_hovered, |d| {
                         d.child(
                             div()
@@ -203,8 +211,8 @@ impl NotesApp {
                     .child(
                         div()
                             .id("notes-titlebar-save-status")
-                            .flex()
-                            .items_center()
+                            .min_w(px(0.))
+                            .truncate()
                             .text_xs()
                             .text_color(status_color)
                             .when(in_focus_mode, |d| d.opacity(0.))

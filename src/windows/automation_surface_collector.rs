@@ -1248,6 +1248,14 @@ fn collect_notes_snapshot(
         .ok()?;
     let mut snapshot = collect_notes_elements(&entity, usize::MAX, cx);
     append_root_layer_elements(&mut snapshot, &layers);
+    if let Some(toast) = crate::toast_popup::semantic_element(handle.into()) {
+        snapshot.elements.push(toast);
+        snapshot.total_count = snapshot.elements.len();
+    }
+    if let Some(undo) = crate::undo_offer::semantic_element(crate::undo_offer::UndoSurface::Notes) {
+        snapshot.elements.push(undo);
+        snapshot.total_count = snapshot.elements.len();
+    }
     Some(snapshot)
 }
 

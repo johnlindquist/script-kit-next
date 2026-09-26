@@ -109,6 +109,10 @@ impl RenderOnce for Toast {
             for action in self.actions {
                 let callback = action.callback.clone();
                 let label = action.label.clone();
+                let shortcut = action
+                    .shortcut
+                    .as_ref()
+                    .map(|shortcut| shortcut.to_string());
                 let action_control_id =
                     toast_id.control_id(format_args!("action:{}", action.id.as_str()));
                 let button_colors = ButtonColors {
@@ -127,6 +131,7 @@ impl RenderOnce for Toast {
                 };
                 let action_btn = Button::new(action_control_id, label.clone(), button_colors)
                     .variant(ButtonVariant::Ghost)
+                    .shortcut_opt(shortcut)
                     .on_click(Box::new(move |event, window, cx| {
                         tracing::debug!(action = %label, "Toast action button clicked");
                         (callback)(event, window, cx);

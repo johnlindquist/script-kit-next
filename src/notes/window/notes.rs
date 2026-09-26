@@ -552,10 +552,10 @@ impl NotesApp {
         });
     }
 
-    /// Request deletion of the currently selected note with a confirmation dialog.
+    /// Delete the currently selected note.
     ///
-    /// Opens the shared parent confirm dialog; the actual soft-delete happens
-    /// only after the user confirms via `WeakEntity::update_in`.
+    /// In All Notes this moves the note to Trash right away and offers Undo.
+    /// In Trash it deletes permanently, which asks first with Cancel focused.
     pub(super) fn request_delete_selected_note(
         &mut self,
         window: &mut Window,
@@ -582,6 +582,11 @@ impl NotesApp {
             .map(|n| n.title.clone())
             .unwrap_or_default();
 
+        if self.view_mode != NotesViewMode::Trash {
+            self.trash_note_with_undo(note_id, &note_title, window, cx);
+            return;
+        }
+
         let viewport_width: f32 = window.viewport_size().width.into();
         let bounds_width: f32 = window.bounds().size.width.into();
         let source_width =
@@ -599,7 +604,6 @@ impl NotesApp {
             note_id = %note_id.as_str(),
             note_title_length = note_title.chars().count(),
             note_title_fingerprint = %Self::devtools_text_fingerprint(&note_title),
-            is_trash_view = (self.view_mode == NotesViewMode::Trash),
             viewport_width,
             bounds_width,
             viewport_viable,
@@ -609,38 +613,14 @@ impl NotesApp {
             "notes_delete_confirmation_requested"
         );
 
-        let is_trash_view = self.view_mode == NotesViewMode::Trash;
-
-        let (title, body, confirm_text): (
-            gpui::SharedString,
-            gpui::SharedString,
-            gpui::SharedString,
-        ) = if is_trash_view {
-            let body = if note_title.is_empty() {
-                "Delete this note permanently? This cannot be undone.".into()
-            } else {
-                format!(
-                    "Delete \"{}\" permanently? This cannot be undone.",
-                    note_title
-                )
-                .into()
-            };
-            (
-                "Delete note permanently".into(),
-                body,
-                "Delete permanently".into(),
-            )
+        let body: gpui::SharedString = if note_title.is_empty() {
+            "Delete this note permanently? This cannot be undone.".into()
         } else {
-            let body = if note_title.is_empty() {
-                "Move this note to Trash? You can restore it later with \u{2318}\u{21e7}T.".into()
-            } else {
-                format!(
-                    "Move \"{}\" to Trash? You can restore it later with \u{2318}\u{21e7}T.",
-                    note_title
-                )
-                .into()
-            };
-            ("Move note to Trash".into(), body, "Delete".into())
+            format!(
+                "Delete \"{}\" permanently? This cannot be undone.",
+                note_title
+            )
+            .into()
         };
 
         self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
@@ -659,12 +639,12 @@ impl NotesApp {
             cx,
             "notes",
             crate::confirm::ParentConfirmOptions {
-                title,
-                body,
-                confirm_text,
-                cancel_text: "Cancel".into(),
-                risk: crate::confirm::ConfirmRisk::Destructive,
                 width: dialog_width,
+                ..crate::confirm::ParentConfirmOptions::irreversible(
+                    "Delete note permanently",
+                    body,
+                    "Delete permanently",
+                )
             },
             {
                 let weak_notes = weak_notes.clone();
@@ -672,7 +652,6 @@ impl NotesApp {
                     tracing::info!(
                         event = "notes_delete_confirmed",
                         note_id = %confirm_note_id.as_str(),
-                        delete_mode = if is_trash_view { "permanent" } else { "soft" },
                         "notes_delete_confirmed"
                     );
 
@@ -680,25 +659,18 @@ impl NotesApp {
                         return;
                     };
                     let deleted = entity.update(cx, |this, cx| {
-                        if is_trash_view {
-                            this.permanently_delete_note_by_id(confirm_note_id, window, cx)
-                        } else {
-                            this.delete_note_by_id(confirm_note_id, window, cx);
-                            true
-                        }
+                        this.permanently_delete_note_by_id(confirm_note_id, window, cx)
                     });
                     if !deleted {
                         return;
                     }
 
-                    let msg = if is_trash_view {
-                        "Note deleted permanently"
-                    } else {
-                        "Note moved to Trash"
-                    };
-                    let notif_bg = crate::ui_foundation::get_vibrancy_surface_background(0.55);
-                    window.push_notification(
-                        gpui_component::notification::Notification::success(msg).bg(notif_bg),
+                    super::render::show_notes_toast(
+                        window,
+                        "notes-deleted-permanently",
+                        "Note deleted permanently",
+                        crate::toast_popup::ToastPopupKind::Success,
+                        Some(ACTION_FEEDBACK_MS),
                         cx,
                     );
                 }
@@ -707,7 +679,6 @@ impl NotesApp {
                 tracing::info!(
                     event = "notes_delete_cancelled",
                     note_id = %cancel_note_id.as_str(),
-                    delete_mode = if is_trash_view { "permanent" } else { "soft" },
                     "notes_delete_cancelled"
                 );
 
@@ -730,9 +701,40 @@ impl NotesApp {
         );
     }
 
-    /// Delete a specific note by ID (soft delete).
-    ///
-    /// This is the actual deletion logic, called after confirmation.
+    /// Move a note to Trash and offer Undo in the Notes window.
+    fn trash_note_with_undo(
+        &mut self,
+        note_id: NoteId,
+        note_title: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            event = "notes_note_trashed",
+            note_id = %note_id.as_str(),
+            "notes_note_trashed"
+        );
+        self.delete_note_by_id(note_id, window, cx);
+        let message = if note_title.is_empty() {
+            "Moved note to Trash".to_string()
+        } else {
+            format!("Moved \"{note_title}\" to Trash")
+        };
+        let weak_notes = cx.entity().downgrade();
+        crate::undo_offer::offer_undo(
+            crate::undo_offer::UndoSurface::Notes,
+            message,
+            move |window, cx| {
+                if let Some(entity) = weak_notes.upgrade() {
+                    entity.update(cx, |this, cx| this.restore_note_by_id(note_id, window, cx));
+                }
+            },
+            window,
+            cx,
+        );
+    }
+
+    /// Soft-delete a note by ID: it moves to Trash and can be restored.
     pub(super) fn delete_note_by_id(
         &mut self,
         note_id: NoteId,
@@ -744,13 +746,22 @@ impl NotesApp {
             let mut note = self.notes.remove(idx);
             note.soft_delete();
 
-            if let Err(e) = storage::save_note(&note) {
-                let safe_error = crate::logging::log_private_user_value(&e.to_string());
-                tracing::error!(
-                    error_bytes = safe_error.raw_bytes,
-                    error_sha256 = %safe_error.sha256,
-                    "Failed to delete note"
-                );
+            match storage::save_note(&note) {
+                // The save wrote the editor's latest text with the note, so
+                // switching away must not try to save it again from `notes`,
+                // which no longer holds it.
+                Ok(()) if self.selected_note_id == Some(note_id) => {
+                    self.has_unsaved_changes = false;
+                }
+                Ok(()) => {}
+                Err(e) => {
+                    let safe_error = crate::logging::log_private_user_value(&e.to_string());
+                    tracing::error!(
+                        error_bytes = safe_error.raw_bytes,
+                        error_sha256 = %safe_error.sha256,
+                        "Failed to delete note"
+                    );
+                }
             }
 
             // Move to deleted notes
@@ -770,7 +781,6 @@ impl NotesApp {
         }
 
         self.request_focus_surface(self.primary_focus_surface(), window, cx);
-        self.show_action_feedback("Deleted · ⌘⇧T trash", false);
         cx.notify();
     }
 
@@ -845,32 +855,36 @@ impl NotesApp {
     /// Restore the selected note from trash
     pub(super) fn restore_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(id) = self.selected_note_id {
-            if let Some(idx) = self.deleted_notes.iter().position(|n| n.id == id) {
-                let mut note = self.deleted_notes.remove(idx);
-                note.restore();
-
-                if let Err(e) = storage::save_note(&note) {
-                    let safe_error = crate::logging::log_private_user_value(&e.to_string());
-                    tracing::error!(
-                        error_bytes = safe_error.raw_bytes,
-                        error_sha256 = %safe_error.sha256,
-                        "Failed to restore note"
-                    );
-                    self.deleted_notes.insert(idx, note);
-                    return;
-                }
-
-                // Move back to active notes
-                self.notes.insert(0, note);
-            }
-
-            self.view_mode = NotesViewMode::AllNotes;
-            self.selected_note_id = Some(id);
-            self.select_note(id, window, cx);
-
-            info!(note_id = %id, "Note restored");
-            cx.notify();
+            self.restore_note_by_id(id, window, cx);
         }
+    }
+
+    /// Bring a trashed note back to All Notes and select it.
+    fn restore_note_by_id(&mut self, id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(idx) = self.deleted_notes.iter().position(|n| n.id == id) else {
+            return;
+        };
+        let mut note = self.deleted_notes.remove(idx);
+        note.restore();
+
+        if let Err(e) = storage::save_note(&note) {
+            let safe_error = crate::logging::log_private_user_value(&e.to_string());
+            tracing::error!(
+                error_bytes = safe_error.raw_bytes,
+                error_sha256 = %safe_error.sha256,
+                "Failed to restore note"
+            );
+            self.deleted_notes.insert(idx, note);
+            return;
+        }
+
+        self.notes.insert(0, note);
+        self.view_mode = NotesViewMode::AllNotes;
+        self.selected_note_id = Some(id);
+        self.select_note(id, window, cx);
+
+        info!(note_id = %id, "Note restored");
+        cx.notify();
     }
 
     /// Switch view mode
@@ -925,7 +939,9 @@ impl NotesApp {
                 // and render the content as preformatted text
                 format!(
                     "<!DOCTYPE html>\n<html>\n<head><title>{}</title></head>\n<body>\n<h1>{}</h1>\n<pre>{}</pre>\n</body>\n</html>",
-                    escape_literal_html(&title), escape_literal_html(&title), escape_literal_html(&note_content)
+                    escape_literal_html(&title),
+                    escape_literal_html(&title),
+                    escape_literal_html(&note_content)
                 )
             }
         };
@@ -1146,94 +1162,6 @@ mod notes_search_and_delete_regression_tests {
     }
 
     #[test]
-    fn test_request_delete_selected_note_uses_shared_parent_confirm_helper() {
-        let source = fs::read_to_string("src/notes/window/notes.rs")
-            .expect("Failed to read src/notes/window/notes.rs");
-
-        let delete_request = extract_section(
-            &source,
-            "pub(super) fn request_delete_selected_note",
-            "/// Delete a specific note by ID (soft delete).",
-        );
-        let normalized = normalize_ws(delete_request);
-
-        assert!(
-            normalized
-                .contains("crate::confirm::open_parent_confirm_dialog_for_automation_parent("),
-            "Notes delete should use the parent-id-aware confirm helper so the popup pins to the Notes window"
-        );
-        assert!(
-            normalized.contains("\"notes\""),
-            "Notes delete should explicitly parent the confirm popup to automation id \"notes\""
-        );
-        assert!(
-            !normalized.contains("window.open_dialog(cx, move |dialog"),
-            "Notes delete should not inline dialog construction"
-        );
-        assert!(
-            !normalized.contains("This note will move to Trash."),
-            "Notes delete should use the simplified single-sentence dialog body"
-        );
-    }
-
-    #[test]
-    fn test_request_delete_selected_note_routes_through_weak_entity() {
-        let source = fs::read_to_string("src/notes/window/notes.rs")
-            .expect("Failed to read src/notes/window/notes.rs");
-
-        let delete_request = extract_section(
-            &source,
-            "pub(super) fn request_delete_selected_note",
-            "/// Delete a specific note by ID (soft delete).",
-        );
-        let normalized = normalize_ws(delete_request);
-
-        assert!(
-            normalized.contains("let weak_notes = cx.entity().downgrade();")
-                && normalized.contains("entity.update(cx, |this, cx|")
-                && normalized.contains("this.delete_note_by_id(confirm_note_id, window, cx);"),
-            "confirmed deletes should still route through delete_note_by_id via WeakEntity"
-        );
-        assert!(
-            !normalized.contains("crate::confirm::open_confirm_window")
-                && !normalized.contains("async_channel::bounded::<bool>(1)"),
-            "notes delete confirmation should not use the separate confirm popup window"
-        );
-    }
-
-    #[test]
-    fn test_request_delete_selected_note_clamps_width_and_notifies() {
-        let source = fs::read_to_string("src/notes/window/notes.rs")
-            .expect("Failed to read src/notes/window/notes.rs");
-        let normalized = normalize_ws(&source);
-
-        assert!(
-            normalized.contains("fn notes_delete_dialog_width(window: &Window) -> gpui::Pixels"),
-            "Notes delete should define a Notes-specific dialog width helper"
-        );
-        assert!(
-            normalized.contains("fn clamp_notes_delete_dialog_width(window_width: f32) -> f32"),
-            "Notes delete should define a testable width clamp helper"
-        );
-
-        let delete_request = extract_section(
-            &source,
-            "pub(super) fn request_delete_selected_note",
-            "/// Delete a specific note by ID (soft delete).",
-        );
-        let delete_request = normalize_ws(delete_request);
-
-        assert!(
-            delete_request.contains("width: dialog_width,"),
-            "Notes delete should use the computed Notes dialog width"
-        );
-        assert!(
-            delete_request.contains("cx.notify();"),
-            "Notes delete should request a repaint after opening the dialog"
-        );
-    }
-
-    #[test]
     fn test_notes_delete_dialog_width_shrinks_for_narrow_windows() {
         // 240px window → available = 216, no min clamp → 216
         assert_eq!(
@@ -1256,39 +1184,6 @@ mod notes_search_and_delete_regression_tests {
         assert_eq!(
             super::NotesApp::clamp_notes_delete_dialog_width(472.0),
             448.0
-        );
-    }
-
-    #[test]
-    fn test_request_delete_selected_note_uses_entity_owned_confirm_helper() {
-        let source = fs::read_to_string("src/notes/window/notes.rs")
-            .expect("Failed to read src/notes/window/notes.rs");
-
-        let delete_request = extract_section(
-            &source,
-            "pub(super) fn request_delete_selected_note",
-            "/// Delete a specific note by ID (soft delete).",
-        );
-        let normalized = normalize_ws(delete_request);
-
-        assert!(
-            normalized
-                .contains("crate::confirm::open_parent_confirm_dialog_for_automation_parent("),
-            "Notes delete should use the parent-id-aware confirm helper"
-        );
-        assert!(
-            normalized.contains("weak_notes.clone()"),
-            "Notes delete dialog should pass the WeakEntity for lifecycle binding"
-        );
-    }
-
-    #[test]
-    fn test_notes_delete_confirmation_opened_log_reports_dialog_state() {
-        const NOTES_SOURCE: &str = include_str!("notes.rs");
-        assert!(
-            NOTES_SOURCE.contains("has_active_dialog = window.has_active_dialog(cx),")
-                && NOTES_SOURCE.contains("pending_focus_surface = ?self.pending_focus_surface,"),
-            "Notes delete open log should report dialog state so invisible-dialog failures are diagnosable"
         );
     }
 }

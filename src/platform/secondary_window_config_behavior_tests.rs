@@ -65,8 +65,8 @@ fn main_backdrop_fills_the_window_but_keeps_the_partitioned_host_policy() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn only_actions_and_modals_use_the_popup_backdrop() {
-    for window_name in ["Actions popup", "Confirm popup"] {
+fn only_actions_modals_and_toasts_use_the_popup_backdrop() {
+    for window_name in ["Actions popup", "Confirm popup", "Toast popup"] {
         assert!(super::window_name_uses_popup_backdrop(window_name));
     }
     for window_name in [
