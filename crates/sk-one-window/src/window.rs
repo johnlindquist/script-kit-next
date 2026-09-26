@@ -87,9 +87,13 @@ pub enum ViewOp {
     Open(ViewSpec),
     Replace(ViewSpec),
     Back,
-    Home { text: String },
+    Home {
+        text: String,
+    },
     Park,
     Reopen(ViewSpec),
+    /// The open view's crumb changed words; nothing opened.
+    Label(String),
 }
 
 /// Something finished.

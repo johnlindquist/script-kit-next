@@ -45,6 +45,11 @@ impl OneWindow {
                 self.cause = Some((ContentCause::Home, now));
                 self.set_input(now, String::new(), fx);
             }
+            ViewOp::Label(label) => {
+                if let Some(top) = self.views.top_mut() {
+                    top.label = label;
+                }
+            }
         }
     }
 

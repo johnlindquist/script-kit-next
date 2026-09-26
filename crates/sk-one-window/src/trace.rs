@@ -11,6 +11,7 @@ use crate::enter::EnterTarget;
 use crate::height::HeightMode;
 use crate::ledger::{Entry, EntryState, Risk};
 use crate::row::Row;
+use crate::slot::{SlotKind, SlotLine};
 use crate::stage::{Subject, SubjectKind};
 use crate::window::{
     Done, Effect, Event, HeldOp, Key, OneWindow, RunHow, Snapshot, ViewOp, ViewSpec,
@@ -101,8 +102,8 @@ fn held_words(op: HeldOp) -> &'static str {
     }
 }
 
-pub fn slot_kind_words(kind: crate::slot::SlotKind) -> &'static str {
-    use crate::slot::SlotKind::*;
+pub fn slot_kind_words(kind: SlotKind) -> &'static str {
+    use SlotKind::*;
     match kind {
         Focused => "focused",
         Recent => "recent",
@@ -385,6 +386,32 @@ pub enum Ev {
         app: Option<String>,
     },
     Summon,
+    /// What ⌘K would act on changed without a key.
+    Focused(FocusedIn),
+    /// A view or page set (or cleared) the line above the input.
+    Line(LineIn),
+    /// The open view changed its crumb without opening anything.
+    ViewLabel {
+        label: String,
+    },
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct LineIn {
+    #[serde(default)]
+    pub clear: bool,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub sub: String,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(default)]
+    pub hints: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -645,5 +672,81 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
             }]
         }
         Ev::Summon => vec![Event::Summon],
+        Ev::Focused(f) => vec![Event::Focused(subject_of(f))],
+        Ev::Line(l) => vec![Event::Line(line_of(l))],
+        Ev::ViewLabel { label } => vec![Event::View(ViewOp::Label(label))],
+    }
+}
+
+fn line_of(l: LineIn) -> Option<SlotLine> {
+    if l.clear {
+        return None;
+    }
+    let kind = match l.kind.as_str() {
+        "focused" => SlotKind::Focused,
+        "recent" => SlotKind::Recent,
+        "holding" => SlotKind::Holding,
+        "voice" | "typing" => SlotKind::Typing,
+        _ => SlotKind::Staged,
+    };
+    let mut line = SlotLine::new(kind, l.label, l.title)
+        .with_icon(l.icon)
+        .with_sub(l.sub);
+    for (key, words) in l.hints {
+        line = line.with_hint(key, words);
+    }
+    Some(line)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fed(lines: &[&str]) -> OneWindow {
+        let mut win = OneWindow::default();
+        for (t, text) in lines.iter().enumerate() {
+            let Line::Ev(line) = parse_line(text).expect("json") else {
+                panic!("not an input: {text}");
+            };
+            for ev in events_of(line.ev, None) {
+                win.handle(t as Ms, ev);
+            }
+        }
+        win
+    }
+
+    #[test]
+    fn a_view_relabels_its_crumb_without_opening() {
+        let win = fed(&[
+            r#"{"t":0,"ev":"view","op":"open","name":"answer","label":"Answer","takesInput":false}"#,
+            r#"{"t":1,"ev":"viewLabel","label":"How Jev reads it"}"#,
+        ]);
+        assert_eq!(win.snapshot(2).crumb, "How Jev reads it");
+    }
+
+    #[test]
+    fn a_line_shows_until_cleared() {
+        let win = fed(&[
+            r#"{"t":0,"ev":"line","kind":"voice","label":"Typing into","title":"Mail","sub":"To · Re: beta","icon":"type","hints":[["esc","drop"]]}"#,
+        ]);
+        let slot = win.slot_line(1);
+        assert_eq!(slot.kind, SlotKind::Typing);
+        assert_eq!(slot.label, "Typing into");
+        assert_eq!(slot.hints, vec![("esc".to_string(), "drop".to_string())]);
+        let win = fed(&[
+            r#"{"t":0,"ev":"line","kind":"voice","label":"Typing into","title":"Mail"}"#,
+            r#"{"t":1,"ev":"line","clear":true}"#,
+        ]);
+        assert_eq!(win.slot_line(2).kind, SlotKind::Focused);
+    }
+
+    #[test]
+    fn focus_changes_what_the_line_calls_focused() {
+        let win = fed(&[
+            r#"{"t":0,"ev":"focused","kind":"selection","label":"Selected","title":"“the footer kept the old label”","sub":"in Chrome","icon":"type"}"#,
+        ]);
+        let slot = win.slot_line(1);
+        assert_eq!(slot.title, "“the footer kept the old label”");
+        assert_eq!(slot.sub, "in Chrome");
     }
 }
