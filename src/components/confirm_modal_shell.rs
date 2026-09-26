@@ -20,6 +20,11 @@ pub(crate) const MODAL_ACTION_ROW_TOP_MARGIN_PX: f32 = 12.0;
 pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_WIDTH: f32 = 2.0;
 pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_HEIGHT: f32 = 14.0;
 pub(crate) const CONFIRM_MODAL_HEADER_GAP: f32 = 8.0;
+/// Title row height. Fixed rather than derived from the theme font size, so
+/// modal heights computed from it match what is painted.
+pub(crate) const CONFIRM_MODAL_TITLE_LINE_HEIGHT: f32 = 22.0;
+/// The shell's `border_1()`; modal height math counts it on both edges.
+pub(crate) const CONFIRM_MODAL_BORDER_WIDTH: f32 = 1.0;
 pub(crate) const CONFIRM_MODAL_RADIUS: f32 = 8.0;
 /// Gap kept between a modal and the edges of the screen's visible area.
 pub(crate) const MODAL_SCREEN_MARGIN_PX: f32 = 12.0;
@@ -90,6 +95,8 @@ pub(crate) struct ModalActionRowButton {
     pub(crate) height_px: f32,
     pub(crate) selected: bool,
     pub(crate) enabled: bool,
+    /// Destructive action: the label is drawn in the theme's error color.
+    pub(crate) danger: bool,
     pub(crate) layout: FooterHintButtonLayoutOverrides,
     pub(crate) on_click: FooterClickCallback,
 }
@@ -105,6 +112,7 @@ pub(crate) fn confirm_modal_header(
 
     div()
         .w_full()
+        .h(px(CONFIRM_MODAL_TITLE_LINE_HEIGHT))
         .flex()
         .flex_row()
         .items_center()
@@ -121,6 +129,7 @@ pub(crate) fn confirm_modal_header(
                 .min_w(px(0.0))
                 .truncate()
                 .text_sm()
+                .line_height(px(CONFIRM_MODAL_TITLE_LINE_HEIGHT))
                 .font_weight(gpui::FontWeight::SEMIBOLD)
                 .text_color(title_color)
                 .child(title.into()),
@@ -154,6 +163,7 @@ pub(crate) fn modal_action_row(
                     slot_width_px: button.slot_width_px,
                     height_px: button.height_px,
                     selected: button.selected,
+                    danger: button.danger,
                     key_first: false,
                     justify: FooterHintContentJustify::Center,
                     layout: button.layout,

@@ -1034,6 +1034,7 @@ fn universal_footer_button_frame(
             slot_width_px,
             height_px,
             selected: false,
+            danger: false,
             key_first: false,
             justify: FooterHintContentJustify::Center,
             layout: FooterHintButtonLayoutOverrides {

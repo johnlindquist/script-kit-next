@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// What confirming a script's `confirm()` question costs the user.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ConfirmPromptRisk {
+    /// Stops or discards something: the confirm button is drawn red.
+    Destructive,
+    /// Permanently destroys data: red, and Cancel starts focused.
+    Irreversible,
+}
+
 /// Mouse data for mouse actions
 ///
 /// Contains coordinates and optional button for click events.

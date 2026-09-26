@@ -175,12 +175,18 @@ macro_rules! protocol_message_variants_prompts_media {
     ///
     /// # Example
     /// ```json
-    /// {"type":"confirm","id":"123","message":"Delete this file?","confirmText":"Delete","cancelText":"Keep"}
+    /// {"type":"confirm","id":"123","title":"Delete File?","message":"Delete this file?","confirmText":"Delete","cancelText":"Keep","risk":"irreversible"}
     /// ```
     #[serde(rename = "confirm")]
     Confirm {
         id: String,
         message: String,
+        /// Modal title (default: "Confirm")
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        /// What confirming costs; absent means nothing is lost.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        risk: Option<ConfirmPromptRisk>,
         /// Text for the confirm button (default: "OK")
         #[serde(rename = "confirmText", skip_serializing_if = "Option::is_none")]
         confirm_text: Option<String>,

@@ -2221,6 +2221,7 @@ fn render_static_action_rail(
                 slot_width_px: footer_action_slot_width(FooterActionSlot::Run),
                 height_px: button_height,
                 selected: false,
+                danger: false,
                 key_first: false,
                 justify: FooterHintContentJustify::Center,
                 layout: FooterHintButtonLayoutOverrides {
@@ -3239,7 +3240,7 @@ impl DictationOverlay {
                 body: format!("{message}\n\nDiagnostic: {diagnostic}").into(),
                 confirm_text: "Refresh device list".into(),
                 cancel_text: "Dismiss".into(),
-                confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                risk: crate::confirm::ConfirmRisk::Safe,
                 width: px(crate::confirm::PARENT_MODAL_WIDTH_PX),
             },
             move |window, cx| {

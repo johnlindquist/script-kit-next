@@ -865,7 +865,7 @@ pub(crate) fn main_overlay_elements(
         save.selectable = Some(save.action_disabled.is_none());
         elements.push(save);
         if state.has_alias {
-            let mut clear = ElementInfo::button(1, "Remove Alias");
+            let mut clear = ElementInfo::button(1, "Remove");
             clear.semantic_id = "alias-input:clear".into();
             elements.push(clear);
         }

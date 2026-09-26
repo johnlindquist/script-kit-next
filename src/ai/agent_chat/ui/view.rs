@@ -3628,6 +3628,7 @@ text_style.text_inset_left,
                 slot_width_px,
                 height_px: height,
                 selected,
+                danger: false,
                 key_first: true,
                 justify: crate::components::footer_chrome::FooterHintContentJustify::Center,
                 layout: crate::components::footer_chrome::FooterHintButtonLayoutOverrides::default(

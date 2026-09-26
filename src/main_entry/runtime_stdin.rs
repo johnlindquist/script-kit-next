@@ -518,7 +518,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     body: body.unwrap_or_else(|| "This action changes local Script Kit state. Confirm to continue or cancel to return to the launcher.".to_string()).into(),
                                     confirm_text: confirm_text.unwrap_or_else(|| "Delete".to_string()).into(),
                                     cancel_text: cancel_text.unwrap_or_else(|| "Cancel".to_string()).into(),
-                                    confirm_variant: gpui_component::button::ButtonVariant::Danger,
+                                    risk: crate::confirm::ConfirmRisk::Destructive,
                                     width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
                                 };
                                 view.open_main_window_confirm(

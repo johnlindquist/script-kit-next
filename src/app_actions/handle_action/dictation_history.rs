@@ -252,7 +252,7 @@ impl ScriptListApp {
                     window,
                     cx,
                     owner,
-                    crate::confirm::ParentConfirmOptions::destructive(
+                    crate::confirm::ParentConfirmOptions::irreversible(
                         "Delete Dictation?",
                         body,
                         "Delete",

@@ -153,11 +153,15 @@ fn convert_protocol_prompt_message(
         Message::Confirm {
             id,
             message,
+            title,
+            risk,
             confirm_text,
             cancel_text,
         } => Ok(PromptMessage::ShowConfirm {
             id,
             message,
+            title,
+            risk,
             confirm_text,
             cancel_text,
         }),

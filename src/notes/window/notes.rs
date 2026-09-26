@@ -663,7 +663,7 @@ impl NotesApp {
                 body,
                 confirm_text,
                 cancel_text: "Cancel".into(),
-                confirm_variant: gpui_component::button::ButtonVariant::Danger,
+                risk: crate::confirm::ConfirmRisk::Destructive,
                 width: dialog_width,
             },
             {

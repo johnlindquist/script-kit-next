@@ -319,6 +319,9 @@ pub(crate) struct FooterHintActionButtonFrameSpec {
     pub(crate) slot_width_px: f32,
     pub(crate) height_px: f32,
     pub(crate) selected: bool,
+    /// Draw the label in the theme's error color: the action destroys or
+    /// stops something (delete, quit). Keycaps keep their neutral color.
+    pub(crate) danger: bool,
     pub(crate) key_first: bool,
     pub(crate) justify: FooterHintContentJustify,
     pub(crate) layout: FooterHintButtonLayoutOverrides,
@@ -592,6 +595,7 @@ where
                 slot_width_px: footer_action_slot_width(footer_config_action_slot(action)),
                 height_px: button_height,
                 selected: button.selected,
+                danger: false,
                 key_first,
                 justify,
                 layout: FooterHintButtonLayoutOverrides {
@@ -724,6 +728,7 @@ pub(crate) fn render_static_footer_hint_action_rail_with_leading(
                     slot_width_px: footer_action_slot_width(FooterActionSlot::Run),
                     height_px: button_height,
                     selected: false,
+                    danger: false,
                     key_first: false,
                     justify: FooterHintContentJustify::Center,
                     layout: FooterHintButtonLayoutOverrides {
@@ -781,6 +786,7 @@ pub(crate) fn render_clickable_footer_hint_action_rail(
                 slot_width_px: footer_action_slot_width(FooterActionSlot::Run),
                 height_px: button_height,
                 selected: false,
+                danger: false,
                 key_first: false,
                 justify: FooterHintContentJustify::Center,
                 layout: FooterHintButtonLayoutOverrides {
@@ -1037,6 +1043,7 @@ pub(crate) fn render_footer_hint_content(
         false,
         FooterHintButtonLayoutOverrides::default(),
         false,
+        None,
     )
 }
 
@@ -1074,6 +1081,7 @@ pub(crate) fn render_footer_hint_content_flex_for_state(
         justify,
         FooterHintButtonLayoutOverrides::default(),
         selected,
+        None,
     )
 }
 
@@ -1087,6 +1095,7 @@ fn render_footer_hint_content_flex_with_layout(
     justify: FooterHintContentJustify,
     layout: FooterHintButtonLayoutOverrides,
     selected: bool,
+    label_color: Option<gpui::Rgba>,
 ) -> AnyElement {
     let row_states = resolved_footer_button_visual_colors(theme).row_states;
     let base_state = if selected {
@@ -1102,6 +1111,10 @@ fn render_footer_hint_content_flex_with_layout(
     let footer_text = gpui::rgba(base_state.primary_foreground_rgba);
     let hover_text: gpui::Hsla = gpui::rgba(hover_state.primary_foreground_rgba).into();
     let hover_glyph = hover_text;
+    let (label_text, label_hover_text) = match label_color {
+        Some(color) => (color, color.into()),
+        None => (footer_text, hover_text),
+    };
     let metrics = current_main_menu_footer_metrics();
     let default_edge_padding_x = match justify {
         FooterHintContentJustify::KeyAnchored => metrics.run_button_padding_x,
@@ -1120,8 +1133,8 @@ fn render_footer_hint_content_flex_with_layout(
     let labelcap = render_footer_labelcap_constrained(
         label,
         theme,
-        footer_text,
-        hover_text,
+        label_text,
+        label_hover_text,
         None,
         false,
         None,
@@ -1173,16 +1186,6 @@ fn render_footer_hint_content_flex_with_layout(
     }
 }
 
-pub(crate) fn render_footer_hint_button_like_with_layout(
-    spec: FooterHintButtonSpec,
-    layout: FooterHintButtonLayoutOverrides,
-    theme: &Theme,
-) -> AnyElement {
-    render_footer_hint_button_like_with_layout_and_shrinkable_label(
-        spec, layout, false, false, theme,
-    )
-}
-
 /// Footer-language hint content whose label yields to its keycaps under real
 /// flex pressure. Header context chips use this so long cwd/profile labels
 /// ellipsize inside their lane instead of painting across the opposite lane.
@@ -1195,6 +1198,7 @@ pub(crate) fn render_footer_hint_button_like_shrinkable(
         FooterHintButtonLayoutOverrides::default(),
         true,
         false,
+        None,
         theme,
     )
 }
@@ -1204,6 +1208,7 @@ fn render_footer_hint_button_like_with_layout_and_shrinkable_label(
     layout: FooterHintButtonLayoutOverrides,
     shrinkable_label: bool,
     selected: bool,
+    label_color: Option<gpui::Rgba>,
     theme: &Theme,
 ) -> AnyElement {
     render_footer_hint_content_impl(
@@ -1224,6 +1229,7 @@ fn render_footer_hint_button_like_with_layout_and_shrinkable_label(
         shrinkable_label,
         layout,
         selected,
+        label_color,
     )
 }
 
@@ -1252,6 +1258,7 @@ pub(crate) fn render_footer_hint_action_button_frame(
     };
     let hover_bg = gpui::rgba(themed_footer_button_hover_rgba(theme));
     let active_bg = gpui::rgba(themed_footer_button_active_rgba(theme));
+    let label_color = spec.danger.then(|| gpui::rgb(theme.colors.ui.error));
 
     // Flexbox-native frame: when shrinking to content, the highlight pill hugs
     // the rendered label + keycaps (no estimated text widths), bounded by the
@@ -1267,6 +1274,7 @@ pub(crate) fn render_footer_hint_action_button_frame(
             spec.justify,
             content_layout,
             spec.selected,
+            label_color,
         )
     } else {
         let button_spec = FooterHintButtonSpec {
@@ -1283,17 +1291,14 @@ pub(crate) fn render_footer_hint_action_button_frame(
             hover_glyph_alpha: None,
             hover_keycap_border_alpha: None,
         };
-        if spec.selected {
-            render_footer_hint_button_like_with_layout_and_shrinkable_label(
-                button_spec,
-                content_layout,
-                false,
-                true,
-                theme,
-            )
-        } else {
-            render_footer_hint_button_like_with_layout(button_spec, content_layout, theme)
-        }
+        render_footer_hint_button_like_with_layout_and_shrinkable_label(
+            button_spec,
+            content_layout,
+            false,
+            spec.selected,
+            label_color,
+            theme,
+        )
     };
 
     let hug_frame = spec.layout.hug_frame_to_content;
@@ -1381,6 +1386,7 @@ fn render_footer_hint_content_impl(
     shrinkable_label: bool,
     layout: FooterHintButtonLayoutOverrides,
     selected: bool,
+    label_color: Option<gpui::Rgba>,
 ) -> AnyElement {
     let row_states = resolved_footer_button_visual_colors(theme).row_states;
     let base_state = if selected {
@@ -1410,6 +1416,10 @@ fn render_footer_hint_content_impl(
     } else {
         footer_hover_glyph_color(theme, hover_glyph_alpha)
     };
+    let (label_text, label_hover_text) = match label_color {
+        Some(color) => (color, color.into()),
+        None => (footer_text, hover_text),
+    };
     let metrics = current_main_menu_footer_metrics();
     let default_edge_padding_x = match justify {
         FooterHintContentJustify::KeyAnchored => metrics.run_button_padding_x,
@@ -1429,8 +1439,8 @@ fn render_footer_hint_content_impl(
         let shrinkable_labelcap = render_footer_labelcap_constrained(
             label,
             theme,
-            footer_text,
-            hover_text,
+            label_text,
+            label_hover_text,
             None,
             false,
             label_font_size_px,
@@ -1451,7 +1461,13 @@ fn render_footer_hint_content_impl(
             shrinkable_labelcap
         }
     } else {
-        render_footer_labelcap(label, theme, footer_text, hover_text, label_font_size_px)
+        render_footer_labelcap(
+            label,
+            theme,
+            label_text,
+            label_hover_text,
+            label_font_size_px,
+        )
     };
     let keycaps = match mode {
         FooterHintKeyMode::Shortcut => render_footer_shortcut_keycaps_with_metrics(

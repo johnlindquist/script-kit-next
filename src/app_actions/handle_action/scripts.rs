@@ -456,7 +456,7 @@ impl ScriptListApp {
                         body,
                         confirm_text: removal_action.confirm_title().into(),
                         cancel_text: "Cancel".into(),
-                        confirm_variant: gpui_component::button::ButtonVariant::Danger,
+                        risk: crate::confirm::ConfirmRisk::Destructive,
                         width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
                     },
                     {

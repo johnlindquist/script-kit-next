@@ -2900,6 +2900,15 @@ export interface ArgConfig {
 export interface ConfirmConfig {
   /** The message to display */
   message: string;
+  /** Title shown above the message (default: "Confirm") */
+  title?: string;
+  /** Confirming stops or discards something: the confirm button is red */
+  destructive?: boolean;
+  /**
+   * Confirming permanently destroys data: the confirm button is red and
+   * Cancel starts focused, so a reflexive Enter does nothing harmful
+   */
+  irreversible?: boolean;
   /** Text for the confirm button (default: "OK") */
   confirmText?: string;
   /** Text for the cancel button (default: "Cancel") */
@@ -3055,6 +3064,8 @@ interface ConfirmMessage {
   type: 'confirm';
   id: string;
   message: string;
+  title?: string;
+  risk?: 'destructive' | 'irreversible';
   confirmText?: string;
   cancelText?: string;
 }
@@ -5503,6 +5514,14 @@ globalThis.div = async function div(
  *
  * // Shorthand with custom buttons
  * const yes = await confirm("Continue?", "Yes", "No");
+ *
+ * // Permanent deletion: red button, Cancel focused first
+ * const erase = await confirm({
+ *   title: "Delete Backups?",
+ *   message: "Permanently delete 12 backups?",
+ *   confirmText: "Delete",
+ *   irreversible: true,
+ * });
  * ```
  *
  * @param messageOrConfig - Message string or ConfirmConfig object
@@ -5519,6 +5538,8 @@ globalThis.div = async function div(
 
   // Parse arguments to extract message and button text
   let message: string;
+  let title: string | undefined;
+  let risk: ConfirmMessage['risk'];
   let confirmBtn: string | undefined;
   let cancelBtn: string | undefined;
 
@@ -5533,6 +5554,12 @@ globalThis.div = async function div(
   } else {
     // confirm({ message, confirmText, cancelText })
     message = messageOrConfig.message;
+    title = messageOrConfig.title;
+    risk = messageOrConfig.irreversible
+      ? 'irreversible'
+      : messageOrConfig.destructive
+        ? 'destructive'
+        : undefined;
     confirmBtn = messageOrConfig.confirmText;
     cancelBtn = messageOrConfig.cancelText;
   }
@@ -5556,6 +5583,8 @@ globalThis.div = async function div(
       type: 'confirm',
       id,
       message,
+      title,
+      risk,
       confirmText: confirmBtn,
       cancelText: cancelBtn,
     };

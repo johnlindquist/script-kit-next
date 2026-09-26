@@ -243,7 +243,7 @@ pub(crate) fn run_deeplink_confirm_options(
         .into(),
         confirm_text: "Run".into(),
         cancel_text: "Cancel".into(),
-        confirm_variant: gpui_component::button::ButtonVariant::Danger,
+        risk: crate::confirm::ConfirmRisk::Destructive,
         width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
     }
 }

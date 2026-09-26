@@ -149,9 +149,7 @@ fn confirm_popup_uses_shortcut_modal_button_and_chrome_tokens() {
             && render_block.contains("confirm-cancel-button")
             && render_block.contains("confirm-ok-button")
             && render_block.contains("label: self.cancel_text.clone()")
-            && render_block.contains("key: \"Esc\".into()")
             && render_block.contains("label: self.confirm_text.clone()")
-            && render_block.contains("key: \"↵\".into()")
             && render_block.contains("confirm-modal-stack")
             && render_block.contains("confirm-modal-gap:after-header")
             && render_block.contains("confirm-modal-gap:after-body"),

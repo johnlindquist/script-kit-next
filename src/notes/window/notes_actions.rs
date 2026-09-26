@@ -334,7 +334,7 @@ impl NotesApp {
                 .into(),
                 confirm_text: "Reveal parent".into(),
                 cancel_text: "Dismiss".into(),
-                confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                risk: crate::confirm::ConfirmRisk::Safe,
                 width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
             },
             move |_window, cx| {
@@ -498,7 +498,7 @@ impl NotesApp {
                 body: body.into(),
                 confirm_text: "Copy link".into(),
                 cancel_text: "Dismiss".into(),
-                confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                risk: crate::confirm::ConfirmRisk::Safe,
                 width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
             },
             move |_window, cx| {
@@ -580,7 +580,7 @@ impl NotesApp {
                 .into(),
                 confirm_text: "Empty Trash".into(),
                 cancel_text: "Cancel".into(),
-                confirm_variant: gpui_component::button::ButtonVariant::Danger,
+                risk: crate::confirm::ConfirmRisk::Irreversible,
                 width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
             },
             move |_window, cx| {

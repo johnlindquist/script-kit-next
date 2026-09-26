@@ -89,6 +89,8 @@ enum PromptMessage {
     ShowConfirm {
         id: String,
         message: String,
+        title: Option<String>,
+        risk: Option<protocol::ConfirmPromptRisk>,
         confirm_text: Option<String>,
         cancel_text: Option<String>,
     },

@@ -118,6 +118,7 @@ impl Render for ShortcutRecorder {
             height_px: action_button_height,
             selected: self.focused_action == ShortcutRecorderFocusedAction::Save,
             enabled: can_save,
+            danger: false,
             layout: action_button_layout,
             on_click: Box::new(move |event, window, cx| {
                 if can_save {
@@ -134,6 +135,7 @@ impl Render for ShortcutRecorder {
             height_px: action_button_height,
             selected: self.focused_action == ShortcutRecorderFocusedAction::Clear,
             enabled: can_clear,
+            danger: false,
             layout: action_button_layout,
             on_click: Box::new(move |event, window, cx| {
                 if can_clear {
@@ -150,6 +152,7 @@ impl Render for ShortcutRecorder {
             height_px: action_button_height,
             selected: self.focused_action == ShortcutRecorderFocusedAction::Cancel,
             enabled: true,
+            danger: false,
             layout: action_button_layout,
             on_click: Box::new(move |event, window, cx| {
                 cancel_handler(event, window, cx);

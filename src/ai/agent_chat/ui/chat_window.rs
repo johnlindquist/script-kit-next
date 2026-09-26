@@ -1347,7 +1347,7 @@ fn request_detached_agent_chat_history_deletion(
                 window,
                 cx,
                 dialog_owner,
-                crate::confirm::ParentConfirmOptions::destructive(
+                crate::confirm::ParentConfirmOptions::irreversible(
                     "Delete All History?",
                     "Permanently delete every saved Agent Chat conversation and submitted prompt. This cannot be undone.",
                     "Delete All History",

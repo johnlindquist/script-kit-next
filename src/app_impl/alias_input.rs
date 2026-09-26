@@ -9,7 +9,7 @@ fn alias_problem(text: &str) -> Option<SharedString> {
 
 impl ScriptListApp {
     /// Ask for a command's alias in the shared confirm modal: a field with
-    /// the current alias, ↵ Save, Remove Alias when one exists, Esc Cancel.
+    /// the current alias, ↵ Save, Remove when one exists, Esc Cancel.
     pub(crate) fn show_alias_input(
         &mut self,
         command_id: String,
@@ -66,7 +66,7 @@ impl ScriptListApp {
             title: format!("Alias for \u{201c}{command_name}\u{201d}").into(),
             body: ALIAS_HINT.into(),
             primary_text: "Save".into(),
-            secondary_text: has_alias.then(|| "Remove Alias".into()),
+            secondary_text: has_alias.then(|| "Remove".into()),
             dismiss_text: "Cancel".into(),
             width: px(crate::confirm::PARENT_MODAL_WIDTH_PX),
         };

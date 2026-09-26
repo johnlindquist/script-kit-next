@@ -1878,7 +1878,7 @@ impl DayPageView {
                 body: body.into(),
                 confirm_text: "Copy link".into(),
                 cancel_text: "Dismiss".into(),
-                confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                risk: crate::confirm::ConfirmRisk::Safe,
                 width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
             },
             sender,

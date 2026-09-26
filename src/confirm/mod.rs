@@ -35,8 +35,8 @@ pub(crate) use crate::components::confirm_modal_shell::PARENT_MODAL_WIDTH_PX;
 pub(crate) use parent_dialog::{
     confirm_with_parent_dialog, open_parent_action_dialog, open_parent_confirm_dialog,
     open_parent_confirm_dialog_for_automation_parent, open_parent_confirm_dialog_for_entity,
-    open_parent_confirm_dialog_with_lifecycle, open_parent_input_dialog, ParentActionDialogOptions,
-    ParentConfirmOptions,
+    open_parent_confirm_dialog_with_lifecycle, open_parent_input_dialog, queued_modal_count,
+    ConfirmRisk, ParentActionDialogOptions, ParentConfirmOptions,
 };
 #[allow(unused_imports)]
 pub(crate) use window::refresh_confirm_popup;

@@ -993,7 +993,7 @@ impl ScriptListApp {
                 }
 
                 let delete_count = ids_to_delete.len();
-                let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
+                let confirm_options = crate::confirm::ParentConfirmOptions::irreversible(
                     bulk_delete_action.confirm_title(),
                     bulk_delete_action.confirm_message(delete_count),
                     bulk_delete_action.confirm_button(),
@@ -1109,7 +1109,7 @@ impl ScriptListApp {
                     return DispatchOutcome::success();
                 };
 
-                let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
+                let confirm_options = crate::confirm::ParentConfirmOptions::irreversible(
                     bulk_delete_action.confirm_title(),
                     bulk_delete_action.confirm_message(unpinned_count),
                     bulk_delete_action.confirm_button(),

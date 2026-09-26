@@ -1713,7 +1713,7 @@ impl ScriptListApp {
                 "Log out of the current macOS session?",
                 "Log Out",
             ),
-            "builtin/empty-trash" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/empty-trash" => crate::confirm::ParentConfirmOptions::irreversible(
                 "Empty Trash",
                 "Empty Trash now? This cannot be undone.",
                 "Empty Trash",
@@ -1725,17 +1725,18 @@ impl ScriptListApp {
                 cancel_text: "Cancel".into(),
                 ..Default::default()
             },
-            "builtin/force-quit" => crate::confirm::ParentConfirmOptions::destructive(
-                "Open Force Quit Apps",
-                "Open Force Quit Apps?",
-                "Open",
-            ),
+            "builtin/force-quit" => crate::confirm::ParentConfirmOptions {
+                title: "Open Force Quit Apps".into(),
+                body: "Open Force Quit Apps?".into(),
+                confirm_text: "Open".into(),
+                ..Default::default()
+            },
             "builtin/stop-all-processes" => crate::confirm::ParentConfirmOptions::destructive(
                 "Stop All Processes",
                 "Stop all running Script Kit processes?",
                 "Stop All",
             ),
-            "builtin/clear-suggested" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/clear-suggested" => crate::confirm::ParentConfirmOptions::irreversible(
                 "Clear Suggested",
                 "Clear suggested items and reset their ranking data?",
                 "Clear Suggested",

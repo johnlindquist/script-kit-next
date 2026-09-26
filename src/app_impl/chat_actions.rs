@@ -96,7 +96,7 @@ impl ScriptListApp {
                 cx.spawn(async move |this, cx| {
                     let confirmed = match crate::confirm::confirm_with_parent_dialog(
                         cx,
-                        crate::confirm::ParentConfirmOptions::destructive(
+                        crate::confirm::ParentConfirmOptions::irreversible(
                             "Clear Conversation",
                             message,
                             "Clear",

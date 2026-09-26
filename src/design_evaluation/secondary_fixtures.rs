@@ -266,7 +266,7 @@ pub(crate) fn mount_secondary_fixture(
                     cancel_text: "Cancel".into(),
                     secondary_text: (fixture_id == "secondary.confirm-three-button")
                         .then(|| "Keep editing".into()),
-                    confirm_variant: gpui_component::button::ButtonVariant::Primary,
+                    risk: crate::confirm::ConfirmRisk::Safe,
                     width: px(360.0),
                     input: None,
                 },

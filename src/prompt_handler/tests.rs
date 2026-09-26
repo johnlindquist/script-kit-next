@@ -58,6 +58,8 @@ mod prompt_handler_message_tests {
         let message = PromptMessage::ShowConfirm {
             id: "confirm-id".to_string(),
             message: "Continue?".to_string(),
+            title: None,
+            risk: None,
             confirm_text: Some("Yes".to_string()),
             cancel_text: Some("No".to_string()),
         };
@@ -270,6 +272,8 @@ mod prompt_handler_message_tests {
                 Message::Confirm {
                     id: id(),
                     message: String::new(),
+                    title: None,
+                    risk: None,
                     confirm_text: None,
                     cancel_text: None,
                 },

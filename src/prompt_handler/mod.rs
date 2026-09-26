@@ -5811,6 +5811,8 @@ impl ScriptListApp {
             PromptMessage::ShowConfirm {
                 id,
                 message,
+                title,
+                risk,
                 confirm_text,
                 cancel_text,
             } => {
@@ -5822,7 +5824,10 @@ impl ScriptListApp {
                 );
 
                 let options = crate::confirm::ParentConfirmOptions {
-                    title: "Confirm".into(),
+                    title: title
+                        .filter(|title| !title.trim().is_empty())
+                        .map(gpui::SharedString::from)
+                        .unwrap_or("Confirm".into()),
                     body: gpui::SharedString::from(message),
                     confirm_text: confirm_text
                         .map(gpui::SharedString::from)
@@ -5830,6 +5835,15 @@ impl ScriptListApp {
                     cancel_text: cancel_text
                         .map(gpui::SharedString::from)
                         .unwrap_or("Cancel".into()),
+                    risk: match risk {
+                        None => crate::confirm::ConfirmRisk::Safe,
+                        Some(crate::protocol::ConfirmPromptRisk::Destructive) => {
+                            crate::confirm::ConfirmRisk::Destructive
+                        }
+                        Some(crate::protocol::ConfirmPromptRisk::Irreversible) => {
+                            crate::confirm::ConfirmRisk::Irreversible
+                        }
+                    },
                     ..Default::default()
                 };
 

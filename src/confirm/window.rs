@@ -13,8 +13,8 @@ use gpui::{
     Focusable, Pixels, Render, SharedString, Task, Window, WindowBackgroundAppearance,
     WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
-use gpui_component::button::ButtonVariant as ConfirmButtonVariant;
 
+use super::parent_dialog::ConfirmRisk;
 use super::text_field::{
     render_confirm_text_field, SharedConfirmTextField, CONFIRM_TEXT_FIELD_HEIGHT,
 };
@@ -22,7 +22,8 @@ use crate::runtime_policy::WindowHostPolicy;
 use crate::{
     components::confirm_modal_shell::{
         confirm_modal_header, confirm_modal_shell, modal_action_row, modal_bounds_over_parent,
-        ConfirmModalShellConfig, ModalActionRowButton, CONFIRM_MODAL_RADIUS, MODAL_WIDTH_PX,
+        ConfirmModalShellConfig, ModalActionRowButton, CONFIRM_MODAL_BORDER_WIDTH,
+        CONFIRM_MODAL_RADIUS, CONFIRM_MODAL_TITLE_LINE_HEIGHT, MODAL_WIDTH_PX,
     },
     components::footer_chrome::{
         current_main_menu_footer_height, current_main_menu_footer_metrics,
@@ -37,14 +38,14 @@ use crate::{
 const CONFIRM_PADDING_X: f32 = 24.0;
 const CONFIRM_PADDING_Y: f32 = 20.0;
 const CONFIRM_SECTION_GAP: f32 = 10.0;
-const CONFIRM_TITLE_LINE_HEIGHT: f32 = 16.0;
 const CONFIRM_MODAL_DEFAULT_BODY_LINE_HEIGHT: f32 = 16.0;
-const CONFIRM_MIN_HEIGHT: f32 = 132.0;
 const CONFIRM_MAX_HEIGHT: f32 = 240.0;
 const CONFIRM_BODY_MAX_LINES: usize = 5;
 /// The body renders with `.text_xs()` — 0.75rem at the default 16px rem.
 const CONFIRM_BODY_FONT_SIZE: f32 = 12.0;
 const CONFIRM_LIFECYCLE_POLL_MS: u64 = 120;
+/// A waiting modal opens just after the closing one's 135ms exit removal.
+const QUEUED_MODAL_OPEN_DELAY_MS: u64 = 150;
 /// NSWindowOrderingMode::NSWindowAbove — place child above parent.
 const NS_WINDOW_ABOVE: i64 = 1;
 
@@ -93,7 +94,7 @@ pub(crate) struct ConfirmWindowOptions {
     pub confirm_text: SharedString,
     pub cancel_text: SharedString,
     pub secondary_text: Option<SharedString>,
-    pub confirm_variant: ConfirmButtonVariant,
+    pub risk: ConfirmRisk,
     pub width: Pixels,
     /// A single-line field shown between the title and the buttons. The
     /// body then becomes a one-line hint under the field.
@@ -206,12 +207,13 @@ fn confirm_window_height_from_body_lines(has_body: bool, body_lines: usize) -> f
     let gaps = confirm_modal_stack_gaps(has_body);
 
     (confirm_shell_padding_y() * 2.0
-        + CONFIRM_TITLE_LINE_HEIGHT
+        + CONFIRM_MODAL_BORDER_WIDTH * 2.0
+        + CONFIRM_MODAL_TITLE_LINE_HEIGHT
         + gaps.after_header_px
         + body_height
         + gaps.after_body_px.unwrap_or(0.0)
         + confirm_action_button_height())
-    .clamp(CONFIRM_MIN_HEIGHT, CONFIRM_MAX_HEIGHT)
+    .min(CONFIRM_MAX_HEIGHT)
 }
 
 fn confirm_window_dynamic_height(width: Pixels, body: &str, has_input: bool, cx: &App) -> f32 {
@@ -578,6 +580,15 @@ pub(crate) fn batch_select_confirm_button_by_semantic_id(
     )
 }
 
+/// The button a modal opens with: Cancel for irreversible actions, so a
+/// reflexive Enter never destroys anything; the primary button otherwise.
+fn initial_focused_button(risk: ConfirmRisk) -> FocusedButton {
+    match risk {
+        ConfirmRisk::Irreversible => FocusedButton::Cancel,
+        ConfirmRisk::Safe | ConfirmRisk::Destructive => FocusedButton::Confirm,
+    }
+}
+
 fn next_confirm_focused_button(
     current: FocusedButton,
     reverse: bool,
@@ -645,6 +656,7 @@ pub(crate) struct ConfirmPopupSnapshot {
     /// Why the field's text cannot be submitted, when it cannot.
     pub(crate) input_problem: Option<String>,
     pub(crate) primary_enabled: bool,
+    pub(crate) risk: ConfirmRisk,
 }
 
 /// Read the confirm popup snapshot if the popup window is open.
@@ -694,6 +706,7 @@ pub(crate) fn get_confirm_popup_snapshot(
                     .and_then(|field| field.borrow().problem())
                     .map(|problem| problem.to_string()),
                 primary_enabled: popup.primary_enabled(),
+                risk: popup.risk,
             })
         },
     )
@@ -747,6 +760,21 @@ fn close_confirm_window_if_generation(generation: u64, cx: &mut App) {
         close_confirm_window(cx);
     }
 }
+/// Open the next waiting modal once the one that just closed has left the
+/// screen.
+fn schedule_next_queued_modal(cx: &mut App) {
+    if super::parent_dialog::queued_modal_count() == 0 {
+        return;
+    }
+    cx.spawn(async move |cx| {
+        cx.background_executor()
+            .timer(std::time::Duration::from_millis(QUEUED_MODAL_OPEN_DELAY_MS))
+            .await;
+        let _ = cx.update(super::parent_dialog::open_next_queued_modal);
+    })
+    .detach();
+}
+
 pub(crate) fn close_confirm_window(cx: &mut App) {
     let handle = CONFIRM_WINDOW
         .get()
@@ -774,6 +802,7 @@ pub(crate) fn close_confirm_window(cx: &mut App) {
             );
         }
     });
+    schedule_next_queued_modal(cx);
 }
 
 pub(crate) struct ConfirmPopupParentWindow {
@@ -898,6 +927,7 @@ pub(crate) fn open_confirm_popup_window(
                     notify_confirm_parent_window(cx);
                 }
                 retire_confirm_lifetime(handle, Some(generation));
+                schedule_next_queued_modal(cx);
             }
         });
         handle.update(cx, |popup, _, _| {
@@ -1058,7 +1088,7 @@ pub(crate) struct ConfirmPopupWindow {
     confirm_text: SharedString,
     cancel_text: SharedString,
     secondary_text: Option<SharedString>,
-    confirm_variant: ConfirmButtonVariant,
+    risk: ConfirmRisk,
     focus_handle: FocusHandle,
     focused_button: FocusedButton,
     keep_open_while: Rc<dyn Fn() -> bool>,
@@ -1108,9 +1138,9 @@ impl ConfirmPopupWindow {
             confirm_text: options.confirm_text,
             cancel_text: options.cancel_text,
             secondary_text: options.secondary_text,
-            confirm_variant: options.confirm_variant,
+            risk: options.risk,
             focus_handle: cx.focus_handle(),
-            focused_button: FocusedButton::Confirm,
+            focused_button: initial_focused_button(options.risk),
             keep_open_while,
             result_tx,
             lifecycle_task: None,
@@ -1371,7 +1401,7 @@ impl Render for ConfirmPopupWindow {
             is_active,
             resolved = self.resolved,
             focused_button = ?self.focused_button,
-            confirm_variant_is_danger = matches!(self.confirm_variant, ConfirmButtonVariant::Danger),
+            risk = ?self.risk,
             did_request_focus = self.did_request_focus,
             "ConfirmPopupWindow::render"
         );
@@ -1405,6 +1435,11 @@ impl Render for ConfirmPopupWindow {
         let cancel_focused = current_focused == FocusedButton::Cancel;
         let secondary_focused = current_focused == FocusedButton::Secondary;
         let confirm_focused = current_focused == FocusedButton::Confirm;
+        // ↵ activates whichever button has focus, so its keycap follows focus;
+        // the others show the key that reaches them from anywhere.
+        let keycap = |focused: bool, otherwise: &'static str| -> SharedString {
+            if focused { "↵" } else { otherwise }.into()
+        };
 
         let entity = cx.entity();
         let cancel_entity = entity.clone();
@@ -1421,11 +1456,12 @@ impl Render for ConfirmPopupWindow {
         let mut action_buttons = vec![ModalActionRowButton {
             id: "confirm-ok-button",
             label: self.confirm_text.clone(),
-            key: "↵".into(),
+            key: keycap(confirm_focused, ""),
             slot_width_px: confirm_slot_width,
             height_px: action_button_height,
             selected: confirm_focused,
             enabled: self.primary_enabled(),
+            danger: self.risk != ConfirmRisk::Safe,
             layout: action_button_layout,
             on_click: Box::new(move |_, window, cx| {
                 confirm_entity.update(cx, |this: &mut Self, cx| {
@@ -1437,11 +1473,12 @@ impl Render for ConfirmPopupWindow {
             action_buttons.push(ModalActionRowButton {
                 id: "confirm-secondary-button",
                 label,
-                key: "".into(),
+                key: keycap(secondary_focused, "⌘I"),
                 slot_width_px: cancel_slot_width,
                 height_px: action_button_height,
                 selected: secondary_focused,
                 enabled: true,
+                danger: false,
                 layout: action_button_layout,
                 on_click: Box::new(move |_, window, cx| {
                     secondary_entity.update(cx, |this: &mut Self, cx| {
@@ -1453,11 +1490,12 @@ impl Render for ConfirmPopupWindow {
         action_buttons.push(ModalActionRowButton {
             id: "confirm-cancel-button",
             label: self.cancel_text.clone(),
-            key: "Esc".into(),
+            key: keycap(cancel_focused, "Esc"),
             slot_width_px: cancel_slot_width,
             height_px: action_button_height,
             selected: cancel_focused,
             enabled: true,
+            danger: false,
             layout: action_button_layout,
             on_click: Box::new(move |_, window, cx| {
                 cancel_entity.update(cx, |this: &mut Self, cx| {
@@ -1757,7 +1795,6 @@ mod tests {
             "body lines must clamp at CONFIRM_BODY_MAX_LINES"
         );
         assert!(many_lines <= CONFIRM_MAX_HEIGHT);
-        assert!(no_body >= CONFIRM_MIN_HEIGHT);
     }
 
     fn rect(x: f32, y: f32, width: f32, height: f32) -> Bounds<Pixels> {

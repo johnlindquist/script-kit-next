@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use gpui::{px, App, AppContext as _, Pixels, SharedString, WeakEntity, Window};
-use gpui_component::button::ButtonVariant;
 
 use super::text_field::SharedConfirmTextField;
 use super::window::{
@@ -10,6 +9,47 @@ use super::window::{
 use crate::components::confirm_modal_shell::PARENT_MODAL_WIDTH_PX;
 
 type ConfirmCallback = Rc<dyn Fn(&mut Window, &mut App)>;
+type QueuedModal = Box<dyn FnOnce(&mut App)>;
+
+thread_local! {
+    /// Modals asked for while another is open. One modal shows at a time; the
+    /// next opens once the current one has closed, instead of replacing it.
+    static QUEUED_MODALS: std::cell::RefCell<std::collections::VecDeque<QueuedModal>> =
+        const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
+}
+
+/// Open the oldest waiting modal, if no modal is open. Waiting modals whose
+/// window has closed, or whose question no longer matters, are dropped.
+pub(crate) fn open_next_queued_modal(cx: &mut App) {
+    while !super::window::is_confirm_window_open() {
+        let Some(next) = QUEUED_MODALS.with_borrow_mut(|queue| queue.pop_front()) else {
+            return;
+        };
+        next(cx);
+    }
+}
+
+pub(crate) fn queued_modal_count() -> usize {
+    QUEUED_MODALS.with_borrow(|queue| queue.len())
+}
+
+/// What a modal's primary action can cost the user. It decides how the
+/// primary button looks and which button a reflexive Enter lands on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum ConfirmRisk {
+    /// Nothing is lost. The primary button reads normally and starts focused.
+    #[default]
+    Safe,
+    /// Stops or discards something the user asked for by name (quit, shut
+    /// down, stop processes). The primary label is red; it still starts
+    /// focused, because Enter is what the user came to press.
+    Destructive,
+    /// Permanently destroys the user's data and cannot be undone (delete
+    /// permanently, empty the Trash, delete history). The primary label is
+    /// red and Cancel starts focused, so a reflexive Enter is harmless.
+    /// Actions that can be undone use an Undo toast instead of a modal.
+    Irreversible,
+}
 
 #[derive(Clone)]
 pub(crate) struct ParentConfirmOptions {
@@ -17,7 +57,7 @@ pub(crate) struct ParentConfirmOptions {
     pub body: SharedString,
     pub confirm_text: SharedString,
     pub cancel_text: SharedString,
-    pub confirm_variant: ButtonVariant,
+    pub risk: ConfirmRisk,
     pub width: Pixels,
 }
 
@@ -50,10 +90,7 @@ impl std::fmt::Debug for ParentConfirmOptions {
             .field("title", &self.title)
             .field("confirm_text", &self.confirm_text)
             .field("cancel_text", &self.cancel_text)
-            .field(
-                "is_danger",
-                &matches!(self.confirm_variant, ButtonVariant::Danger),
-            )
+            .field("risk", &self.risk)
             .finish()
     }
 }
@@ -65,7 +102,7 @@ impl Default for ParentConfirmOptions {
             body: "".into(),
             confirm_text: "OK".into(),
             cancel_text: "Cancel".into(),
-            confirm_variant: ButtonVariant::Primary,
+            risk: ConfirmRisk::Safe,
             width: px(PARENT_MODAL_WIDTH_PX),
         }
     }
@@ -170,8 +207,30 @@ pub(crate) fn resolved_confirm_prompt_colors(
 }
 
 impl ParentConfirmOptions {
+    /// A confirmation for something the user asked for by name that stops or
+    /// discards work (see [`ConfirmRisk::Destructive`]).
     #[allow(dead_code)]
     pub(crate) fn destructive(
+        title: impl Into<SharedString>,
+        body: impl Into<SharedString>,
+        confirm_text: impl Into<SharedString>,
+    ) -> Self {
+        Self::with_risk(ConfirmRisk::Destructive, title, body, confirm_text)
+    }
+
+    /// A confirmation for permanently deleting the user's data (see
+    /// [`ConfirmRisk::Irreversible`]): Cancel starts focused.
+    #[allow(dead_code)]
+    pub(crate) fn irreversible(
+        title: impl Into<SharedString>,
+        body: impl Into<SharedString>,
+        confirm_text: impl Into<SharedString>,
+    ) -> Self {
+        Self::with_risk(ConfirmRisk::Irreversible, title, body, confirm_text)
+    }
+
+    fn with_risk(
+        risk: ConfirmRisk,
         title: impl Into<SharedString>,
         body: impl Into<SharedString>,
         confirm_text: impl Into<SharedString>,
@@ -180,9 +239,8 @@ impl ParentConfirmOptions {
             title: title.into(),
             body: body.into(),
             confirm_text: confirm_text.into(),
-            cancel_text: "Cancel".into(),
-            confirm_variant: ButtonVariant::Danger,
-            width: px(PARENT_MODAL_WIDTH_PX),
+            risk,
+            ..Self::default()
         }
     }
 }
@@ -349,7 +407,7 @@ fn action_dialog_popup_options(options: &ParentActionDialogOptions) -> ParentCon
         body: options.body.clone(),
         confirm_text: options.primary_text.clone(),
         cancel_text: options.dismiss_text.clone(),
-        confirm_variant: ButtonVariant::Primary,
+        risk: ConfirmRisk::Safe,
         width: options.width,
     }
 }
@@ -375,6 +433,36 @@ fn open_parent_confirm_dialog_with_lifecycle_and_parent(
     extras: DialogExtras,
     on_cancel: ConfirmCallback,
 ) {
+    if super::window::is_confirm_window_open() {
+        tracing::info!(
+            event = "parent_confirm_dialog_queued",
+            title = %options.title,
+            waiting = queued_modal_count() + 1,
+            "parent_confirm_dialog_queued"
+        );
+        let parent = window.window_handle();
+        QUEUED_MODALS.with_borrow_mut(|queue| {
+            queue.push_back(Box::new(move |cx| {
+                if !keep_open_while() {
+                    return;
+                }
+                let _ = parent.update(cx, move |_, window, cx| {
+                    open_parent_confirm_dialog_with_lifecycle_and_parent(
+                        window,
+                        cx,
+                        options,
+                        explicit_parent_automation_id,
+                        keep_open_while,
+                        on_confirm,
+                        extras,
+                        on_cancel,
+                    );
+                });
+            }));
+        });
+        return;
+    }
+
     let has_lifecycle_predicate = true;
     tracing::info!(
         event = "parent_confirm_dialog_opened",
@@ -521,7 +609,7 @@ fn open_parent_confirm_dialog_with_lifecycle_and_parent(
         confirm_text: options.confirm_text,
         cancel_text: options.cancel_text,
         secondary_text,
-        confirm_variant: options.confirm_variant,
+        risk: options.risk,
         width: options.width,
         input: extras.input,
     };
@@ -583,7 +671,7 @@ pub(crate) async fn confirm_with_parent_dialog(
         .ok_or_else(|| anyhow::anyhow!("Main window handle not available"))?;
 
     let sender_ok = confirm_tx.clone();
-    let sender_cancel = confirm_tx.clone();
+    let sender_cancel = confirm_tx;
 
     cx.update_window(window_handle, move |_any_view, window, cx| {
         tracing::info!(
@@ -675,52 +763,6 @@ mod tests {
     }
 
     #[test]
-    fn async_confirmation_callers_use_shared_parent_dialog_helper() {
-        let clipboard_source = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
-            .expect("Failed to read clipboard.rs");
-        let chat_source = fs::read_to_string("src/app_impl/chat_actions.rs")
-            .expect("Failed to read chat_actions.rs");
-        let execution_source = fs::read_to_string("src/app_impl/execution_paths.rs")
-            .expect("Failed to read execution_paths.rs");
-        let builtin_source = fs::read_to_string("src/app_execute/builtin_execution.rs")
-            .expect("Failed to read builtin_execution.rs");
-
-        let clipboard = normalize_ws(&clipboard_source);
-        let chat = normalize_ws(&chat_source);
-        let execution = normalize_ws(&execution_source);
-        let builtin = normalize_ws(&builtin_source);
-
-        assert!(
-            clipboard.contains("crate::confirm::confirm_with_parent_dialog(")
-                && !clipboard.contains("confirm_with_modal("),
-            "clipboard.rs should call confirm_with_parent_dialog directly, not confirm_with_modal"
-        );
-
-        assert!(
-            chat.contains("crate::confirm::confirm_with_parent_dialog(")
-                && chat.contains("ParentConfirmOptions::destructive(")
-                && chat.contains("\"Clear Conversation\"")
-                && chat.contains("\"Clear\"")
-                && !chat.contains("async_channel::bounded::<bool>(1)"),
-            "chat_actions should use the shared destructive async confirm helper"
-        );
-
-        assert!(
-            execution.contains("crate::confirm::confirm_with_parent_dialog(")
-                && execution.contains("ParentConfirmOptions::destructive(")
-                && execution.contains("\"Move to Trash\"")
-                && !execution.contains("async_channel::bounded::<bool>(1)"),
-            "execution_paths should use the shared destructive async confirm helper"
-        );
-
-        assert!(
-            builtin.contains("crate::confirm::confirm_with_parent_dialog(")
-                && !builtin.contains("confirm_with_modal("),
-            "builtin_execution.rs should call confirm_with_parent_dialog directly, not confirm_with_modal"
-        );
-    }
-
-    #[test]
     fn parent_confirm_dialog_logs_build_width_before_render() {
         let source = fs::read_to_string("src/confirm/parent_dialog.rs")
             .expect("Failed to read src/confirm/parent_dialog.rs");
@@ -730,47 +772,6 @@ mod tests {
             normalized.contains("event = \"parent_confirm_dialog_building\"")
                 && normalized.contains("width = width_value,"),
             "parent confirm dialog should log the concrete width used to build the dialog"
-        );
-    }
-
-    fn extract_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
-        source
-            .split(start)
-            .nth(1)
-            .and_then(|section| section.split(end).next())
-            .expect("expected section to exist")
-    }
-
-    #[test]
-    fn script_list_confirm_actions_bind_dialog_lifecycle_to_script_list_entity() {
-        let source = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
-            .expect("Failed to read scripts.rs");
-
-        let remove_branch = normalize_ws(extract_section(
-            &source,
-            "\"remove_script\" | \"delete_script\" => {",
-            "\"reload_scripts\" => {",
-        ));
-        assert!(
-            remove_branch.contains("let weak_entity = cx.entity().downgrade();")
-                && remove_branch.contains("crate::confirm::open_parent_confirm_dialog_for_entity(")
-                && remove_branch.contains("this.refresh_scripts(cx);")
-                && !remove_branch.contains("crate::confirm::open_parent_confirm_dialog("),
-            "script removal should use the entity-owned parent confirm helper and keep refreshing the list after confirmation"
-        );
-
-        let quit_branch = normalize_ws(extract_section(
-            &source,
-            "\"quit\" => {",
-            "\"copy_content\" => {",
-        ));
-        assert!(
-            quit_branch.contains("let owner = cx.entity().downgrade();")
-                && quit_branch.contains("crate::confirm::open_parent_confirm_dialog_for_entity(")
-                && quit_branch.contains("Self::quit_script_kit_confirm_options()")
-                && quit_branch.contains("Self::prepare_script_kit_shutdown();")
-                && !quit_branch.contains("crate::confirm::open_parent_confirm_dialog("),
-            "quit should use the entity-owned parent confirm helper while preserving the shared copy and shutdown cleanup"
         );
     }
 

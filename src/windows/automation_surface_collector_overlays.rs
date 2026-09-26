@@ -381,7 +381,7 @@ fn collect_confirm_popup_snapshot(
     let cancel_focused = snap.focused_button == "cancel";
     let has_secondary = snap.secondary_text.is_some();
 
-    let mut elements = vec![element(
+    let mut panel = element(
         "panel:confirm-dialog",
         ElementType::Panel,
         Some(snap.title),
@@ -389,7 +389,21 @@ fn collect_confirm_popup_snapshot(
         None,
         None,
         None,
-    )];
+    );
+    panel.kind = Some(
+        match snap.risk {
+            crate::confirm::ConfirmRisk::Safe => "safe",
+            crate::confirm::ConfirmRisk::Destructive => "destructive",
+            crate::confirm::ConfirmRisk::Irreversible => "irreversible",
+        }
+        .to_string(),
+    );
+    let waiting = crate::confirm::queued_modal_count();
+    if waiting > 0 {
+        panel.status_kind = Some(format!("{waiting} waiting"));
+    }
+    let danger = snap.risk != crate::confirm::ConfirmRisk::Safe;
+    let mut elements = vec![panel];
     if let Some(text) = snap.input_text {
         // The field owns typing for as long as the modal is open.
         let mut field = element(
@@ -414,6 +428,9 @@ fn collect_confirm_popup_snapshot(
         Some(confirm_focused),
         Some(0),
     );
+    if danger {
+        confirm.status_kind = Some("danger".to_string());
+    }
     if !snap.primary_enabled {
         confirm.action_disabled = Some("input_invalid".to_string());
         confirm.selectable = Some(false);

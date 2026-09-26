@@ -988,7 +988,7 @@ pub(crate) fn execute_root_unified_result_action(
                 window,
                 cx,
                 owner,
-                crate::confirm::ParentConfirmOptions::destructive(
+                crate::confirm::ParentConfirmOptions::irreversible(
                     "Delete Dictation?",
                     body,
                     "Delete",
