@@ -11,6 +11,9 @@
  * defect this probe exists to catch.
  *
  * For each modal it proves:
+ *   - its risk reads right: a destructive or irreversible primary is marked
+ *     danger (red), and an irreversible modal opens with Cancel focused so
+ *     Enter never destroys anything unasked;
  *   - it is a real modal: a popup over its window, never a state that
  *     replaces the window's content;
  *   - it fits on screen: fully inside one display's visible area (menu bar
@@ -23,13 +26,25 @@
  *   - no key leaks to the window underneath (filter text, list selection,
  *     note text, composer text, Actions, Agent Chat);
  *   - after dismissal the keyboard is back where it was;
- *   - a modal closes with its parent window.
+ *   - a modal closes with its parent window;
+ *   - a second modal waits for the first instead of replacing it.
  *
- * Surfaces: launcher confirm (Delete Script), Agent Chat sign-in consent,
- * Notes delete, detached Agent Chat "Delete All History?", the confirm
- * fixture over the main window, SDK `confirm()` from a running script, the
- * Add Alias editor, and the main hotkey hiding a window with a modal open.
- * Screenshots of each modal land in .test-screenshots/modal-audit/.
+ * Every modal is also measured from its painted layout: equal left/right
+ * insets, equal top/bottom insets, parts inside the modal, one button row of
+ * equal-height, non-overlapping, evenly spaced buttons at least 28pt tall,
+ * and the same header/body/action gaps. A final `layout-consistency` entry
+ * proves every measured modal uses the same insets, gaps, and button height.
+ *
+ * Reversible actions have no modal: deleting a script or a note happens at
+ * once and ⌘Z undoes it; typing withdraws the offer.
+ *
+ * Surfaces: launcher confirm (Clear Suggested Items), launcher Delete Script
+ * with Undo, Agent Chat sign-in consent, Notes delete with Undo and permanent
+ * delete from the Trash, detached Agent Chat "Delete All History?", the
+ * confirm fixture over the main window (and a queued second one), SDK
+ * `confirm()` with a title and `irreversible`, the Add Alias editor, and the
+ * main hotkey hiding a window with a modal open.
+ * Screenshots (2x) of each modal land in .test-screenshots/modal-audit/.
  *
  * Run: bun scripts/agentic/modal-keyboard-audit-probe.ts [--receipt <path>]
  *      [--keep-sessions] [scenario ...]
@@ -50,10 +65,12 @@ const receiptPath = receiptArg >= 0 ? args[receiptArg + 1] : undefined;
 const keepSessions = args.includes("--keep-sessions");
 const SCENARIOS = [
 	"launcher-confirm",
+	"launcher-undo",
 	"agent-chat-consent",
 	"notes-delete",
 	"detached-chat-confirm",
 	"fixture-confirm",
+	"modal-variants",
 	"sdk-confirm",
 	"alias-editor",
 	"hotkey-hides-modal",
@@ -170,6 +187,12 @@ interface ModalSnapshot {
 	/** The field's problem, when its text cannot be submitted. */
 	fieldProblem: string | null;
 	primaryDisabled: boolean;
+	/** The primary is painted as dangerous (red). */
+	primaryDanger: boolean;
+	/** "safe", "destructive", or "irreversible". */
+	risk: string | null;
+	/** Modals waiting behind this one. */
+	waiting: number;
 	buttons: string[];
 }
 
@@ -210,6 +233,7 @@ function makeHelpers(driver: Driver): ModalHelpers {
 		const elements = (snapshot.elements ?? []) as Json[];
 		const field = elements.find((element) => element.semanticId === "input:confirm-field");
 		const primary = elements.find((element) => element.semanticId === "button:0:confirm");
+		const panel = elements.find((element) => element.semanticId === "panel:confirm-dialog");
 		const focusedId: string = snapshot.focusedSemanticId ?? "";
 		return {
 			title: popup.title,
@@ -219,6 +243,9 @@ function makeHelpers(driver: Driver): ModalHelpers {
 			field: field ? String(field.value ?? "") : null,
 			fieldProblem: field?.actionDisabled ?? null,
 			primaryDisabled: Boolean(primary?.actionDisabled),
+			primaryDanger: primary?.statusKind === "danger",
+			risk: panel?.kind ?? null,
+			waiting: Number.parseInt(String(panel?.statusKind ?? "0"), 10) || 0,
 			buttons: elements
 				.filter((element) => String(element.semanticId).startsWith("button:"))
 				.map((element) => String(element.text ?? "")),
@@ -313,7 +340,7 @@ async function appPid(h: ModalHelpers): Promise<number> {
 async function shot(driver: Driver, scenario: string, name: string, target: Json, receiptOut: Json) {
 	const savePath = join(shotDir, `${scenario}-${name}.png`);
 	const result = (await driver
-		.captureScreenshot({ target, savePath, timeoutMs: 10_000 })
+		.captureScreenshot({ target, savePath, hiDpi: true, timeoutMs: 10_000 })
 		.catch((error: unknown) => ({ error: String(error) }))) as Json;
 	receiptOut[`shot:${name}`] = result?.error ?? savePath;
 }
@@ -364,48 +391,213 @@ async function leakKeys(h: ModalHelpers, target: Json) {
 	await h.settle();
 }
 
-/** Tab / ⇧Tab / arrows move focus in a two-button modal. */
+/**
+ * Tab / ⇧Tab / arrows move focus in a two-button modal. Focus starts on the
+ * primary, or on Cancel for an irreversible modal; it ends on the primary.
+ */
 async function focusCycles(h: ModalHelpers, target: Json, checks: Checks, prefix: string) {
-	checks[`${prefix}.defaultFocusIsPrimary`] = (await h.modal())?.focused === "confirm";
+	const opened = await h.modal();
+	const start = opened?.risk === "irreversible" ? "cancel" : "confirm";
+	const other = start === "confirm" ? "cancel" : "confirm";
+	checks[`${prefix}.defaultFocus.${start}`] = opened?.focused === start;
 	await h.key("tab", [], target);
-	checks[`${prefix}.tabMovesToCancel`] = (await h.modal())?.focused === "cancel";
+	checks[`${prefix}.tabMoves`] = (await h.modal())?.focused === other;
 	await h.key("tab", [], target);
-	checks[`${prefix}.tabWrapsToPrimary`] = (await h.modal())?.focused === "confirm";
+	checks[`${prefix}.tabWraps`] = (await h.modal())?.focused === start;
 	await h.key("tab", ["shift"], target);
-	checks[`${prefix}.shiftTabMovesBack`] = (await h.modal())?.focused === "cancel";
+	checks[`${prefix}.shiftTabMovesBack`] = (await h.modal())?.focused === other;
 	await h.key("right", [], target);
-	checks[`${prefix}.arrowsMoveFocus`] = (await h.modal())?.focused === "confirm";
+	checks[`${prefix}.arrowsMoveFocus`] = (await h.modal())?.focused === start;
+	if ((await h.modal())?.focused !== "confirm") await h.key("tab", [], target);
+}
+
+async function elementsOf(driver: Driver, target: Json): Promise<Json[]> {
+	const snapshot = (await driver.getElements({ target, limit: 400 }, { timeoutMs: 5_000 })) as Json;
+	return (snapshot.elements ?? []) as Json[];
+}
+
+/** The pending Undo offer projected on `target`, if any. */
+async function undoOffer(driver: Driver, target: Json): Promise<Json | null> {
+	return (await elementsOf(driver, target)).find((element) => element.semanticId === "button:undo") ?? null;
+}
+
+/** A modal's measured spacing, compared across every modal the probe opens. */
+interface ModalGeometry {
+	insetLeft: number;
+	insetRight: number;
+	insetTop: number;
+	insetBottom: number;
+	headerHeight: number;
+	/** Header to the first part under it. */
+	headerGap: number;
+	/** Body (or field hint) to the button row, when there is a body. */
+	bodyGap: number | null;
+	buttonHeight: number;
+	/** Space between neighbouring buttons, when there are two or more. */
+	buttonGap: number | null;
+}
+const measuredModals: Array<{ modal: string; geometry: ModalGeometry }> = [];
+const GEOMETRY_SLACK = 0.5;
+const MIN_HIT_HEIGHT = 28;
+
+function rectOf(value: Json): Rect {
+	return { x: Number(value?.x ?? 0), y: Number(value?.y ?? 0), width: Number(value?.width ?? 0), height: Number(value?.height ?? 0) };
+}
+const right = (rect: Rect) => rect.x + rect.width;
+const bottom = (rect: Rect) => rect.y + rect.height;
+const near = (a: number, b: number) => Math.abs(a - b) <= GEOMETRY_SLACK;
+
+/**
+ * Measure the open confirm popup from its painted layout and check that its
+ * spacing is symmetric and its parts line up.
+ */
+async function measureModal(driver: Driver, modal: string, checks: Checks, receiptOut: Json) {
+	const layout = (await driver.request(
+		{ type: "getLayoutInfo", target: CONFIRM },
+		{ expect: "layoutInfoResult", timeoutMs: 10_000 },
+	)) as Json;
+	const parts = new Map<string, Rect>(
+		((layout.components ?? []) as Json[]).map((component) => [String(component.name), rectOf(component.bounds)]),
+	);
+	const root = parts.get("confirm-popup-root");
+	const stack = parts.get("confirm-modal-stack");
+	const header = parts.get("confirm-modal-header");
+	const row = parts.get("confirm-modal-action-row");
+	const prefix = `${modal}.geometry`;
+	checks[`${prefix}.measured`] = Boolean(root && stack && header && row);
+	if (!root || !stack || !header || !row) {
+		receiptOut[`${modal}.geometry`] = { missing: true, parts: [...parts.keys()] };
+		return;
+	}
+	const field = parts.get("confirm-text-field");
+	const body = parts.get("confirm-modal-body");
+	const buttons = ["confirm-ok-button", "confirm-secondary-button", "confirm-cancel-button"]
+		.map((name) => parts.get(name))
+		.filter((rect): rect is Rect => Boolean(rect))
+		.sort((a, b) => a.x - b.x);
+	const underHeader = [field, body, row].filter((rect): rect is Rect => Boolean(rect)).sort((a, b) => a.y - b.y);
+	const buttonGaps = buttons.slice(1).map((button, index) => button.x - right(buttons[index]));
+	const geometry: ModalGeometry = {
+		insetLeft: stack.x - root.x,
+		insetRight: right(root) - right(stack),
+		insetTop: stack.y - root.y,
+		insetBottom: bottom(root) - bottom(row),
+		headerHeight: header.height,
+		headerGap: underHeader[0].y - bottom(header),
+		bodyGap: body ? row.y - bottom(body) : null,
+		buttonHeight: buttons[0]?.height ?? 0,
+		buttonGap: buttonGaps[0] ?? null,
+	};
+	receiptOut[`${modal}.geometry`] = { geometry, window: { width: root.width, height: root.height }, row, buttons };
+	measuredModals.push({ modal, geometry });
+
+	checks[`${prefix}.partsInsideModal`] = [...parts.values()].every((rect) => contains(root, rect));
+	checks[`${prefix}.leftEqualsRight`] = near(geometry.insetLeft, geometry.insetRight);
+	checks[`${prefix}.topEqualsBottom`] = near(geometry.insetTop, geometry.insetBottom);
+	checks[`${prefix}.rowEndsTheStack`] = near(bottom(row), bottom(stack));
+	checks[`${prefix}.partsSpanTheStack`] = [header, row, ...(body ? [body] : []), ...(field ? [field] : [])].every(
+		(rect) => near(rect.x, stack.x) && near(right(rect), right(stack)),
+	);
+	checks[`${prefix}.partsInOrder`] = underHeader.every(
+		(rect, index) => rect.y >= bottom(index === 0 ? header : underHeader[index - 1]) - GEOMETRY_SLACK,
+	);
+	checks[`${prefix}.bodyGapEqualsHeaderGap`] = geometry.bodyGap === null || near(geometry.bodyGap, geometry.headerGap);
+	checks[`${prefix}.buttonsInRow`] =
+		buttons.length > 0 && buttons.every((button) => contains(row, button) && near(button.y, buttons[0].y));
+	checks[`${prefix}.buttonsSameHeight`] = buttons.every((button) => near(button.height, geometry.buttonHeight));
+	checks[`${prefix}.buttonsMeetHitSize`] = buttons.every((button) => button.height >= MIN_HIT_HEIGHT - GEOMETRY_SLACK);
+	checks[`${prefix}.buttonsDoNotOverlap`] = buttonGaps.every((gap) => gap >= -GEOMETRY_SLACK);
+	checks[`${prefix}.buttonsEvenlySpaced`] = buttonGaps.every((gap) => near(gap, buttonGaps[0]));
+	checks[`${prefix}.buttonsEndAtRowEdge`] = buttons.length > 0 && near(right(buttons.at(-1) as Rect), right(row));
+}
+
+/** Every measured modal uses the same insets, gaps, and button height. */
+function layoutConsistency(): Json {
+	const checks: Checks = {};
+	const metrics = Object.keys(measuredModals[0]?.geometry ?? {}) as Array<keyof ModalGeometry>;
+	const values: Json = {};
+	for (const metric of metrics) {
+		const seen = measuredModals
+			.map(({ modal, geometry }) => ({ modal, value: geometry[metric] }))
+			.filter((entry) => entry.value !== null);
+		values[metric] = Object.fromEntries(seen.map(({ modal, value }) => [modal, value]));
+		checks[`same.${metric}`] = seen.every(({ value }) => near(Number(value), Number(seen[0].value)));
+	}
+	checks["measuredSeveralModals"] = measuredModals.length >= 2;
+	return { checks, modals: measuredModals.length, values };
+}
+
+/**
+ * The attached toast popup over `parentBounds`: bottom-centered, inset 12pt,
+ * inside the parent. It is not an automation window, so it is found and
+ * photographed through the window server.
+ */
+async function checkToastPopup(
+	h: ModalHelpers,
+	parentId: string,
+	checks: Checks,
+	prefix: string,
+	scenario: string,
+	receiptOut: Json,
+) {
+	const parent = (await h.windows()).find((window) => window.id === parentId);
+	const pid = Number(parent?.pid ?? (await appPid(h)));
+	const frames = await windowServerFrames(pid);
+	const parentFrame = frameOfSize(frames, parent?.bounds ?? null);
+	const toast =
+		frames.find(
+			(frame) =>
+				Math.abs(frame.height - 44) <= 1 &&
+				Boolean(parentFrame) &&
+				contains(parentFrame as Rect, frame),
+		) ?? null;
+	receiptOut[`${prefix}.frames`] = { parent: parentFrame, toast };
+	checks[`${prefix}.visible`] = Boolean(toast);
+	if (!toast || !parentFrame) return;
+	const inset = 12;
+	checks[`${prefix}.centered`] = Math.abs(toast.x + toast.width / 2 - (parentFrame.x + parentFrame.width / 2)) <= 1;
+	checks[`${prefix}.bottomInset`] = Math.abs(bottom(parentFrame) - bottom(toast) - inset) <= 1;
+	checks[`${prefix}.sideInsets`] = toast.x - parentFrame.x >= inset - 1 && right(parentFrame) - right(toast) >= inset - 1;
+	const savePath = join(shotDir, `${scenario}-${prefix}-composite.png`);
+	const region = [parentFrame.x, parentFrame.y, parentFrame.width, parentFrame.height].map(Math.round).join(",");
+	const capture = Bun.spawnSync(["screencapture", "-x", "-R", region, savePath]);
+	receiptOut[`shot:${prefix}-composite`] = capture.exitCode === 0 ? savePath : capture.stderr.toString();
 }
 
 const runners: Record<Scenario, () => Promise<Json>> = {
 	async "launcher-confirm"() {
-		const { driver, kit } = await launch("launcher-confirm");
+		const { driver } = await launch("launcher-confirm");
 		const h = makeHelpers(driver);
 		const checks: Checks = {};
 		const out: Json = { checks };
 		try {
-			const name = "Modal Audit Delete Target";
-			const file = await addFixtureScript(driver, kit, name);
-			const openDelete = async () => {
-				await openLauncherAction(h, "delete");
+			// Irreversible and harmless in a sandbox: the modal must open on Cancel.
+			const openClear = async () => {
+				await driver.setFilterAndWait("Clear Suggested Items", { timeoutMs: 8_000 });
+				await h.key("enter");
 				return until(() => h.modal());
 			};
-			const before = await h.main();
 			const pid = await appPid(h);
-			// Covers the Actions menu, typing, and the modal's entry animation.
-			const [opened, entry] = await Promise.all([openDelete(), sampleFramesDuringEntry(pid, 4_000)]);
+			const launcherView = (await h.main()).view;
+			const [opened, entry] = await Promise.all([openClear(), sampleFramesDuringEntry(pid, 2_500)]);
+			const before = await h.main();
 			out.entryFrames = entry;
 			checks["entry.allFramesOnScreen"] = entry.samples > 0 && entry.offScreen.length === 0;
 			checks["opened.byKeyboard"] = Boolean(opened?.title);
 			checks["opened.parentIsMain"] = opened?.parent === "main";
-			checks["opened.windowNotReplaced"] = (await h.main()).view === before.view;
+			checks["opened.windowNotReplaced"] = before.view === launcherView && before.view !== "confirmPrompt";
+			checks["risk.irreversible"] = opened?.risk === "irreversible";
+			checks["risk.primaryIsDanger"] = opened?.primaryDanger === true;
+			checks["risk.opensOnCancel"] = opened?.focused === "cancel";
 			await checkPlacement(h, checks, "layout", out);
 			await shot(driver, "launcher-confirm", "modal", CONFIRM, out);
+			await measureModal(driver, "launcher-confirm", checks, out);
 			await shot(driver, "launcher-confirm", "parent", MAIN, out);
 
-			// focusCycles leaves focus on the destructive primary, so a leaked
-			// ⌘↵ in leakKeys would delete the script.
+			// focusCycles leaves focus on the irreversible primary, so a leaked
+			// ⌘↵ in leakKeys would run it and close the modal.
 			await focusCycles(h, MAIN, checks, "focus");
+			await shot(driver, "launcher-confirm", "primary-focused", CONFIRM, out);
 			await leakKeys(h, MAIN);
 			const during = await h.main();
 			checks["noLeak.modalStillOpen"] = Boolean(await h.modal());
@@ -414,33 +606,64 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			checks["noLeak.selectionUnchanged"] = during.selected === before.selected;
 			checks["noLeak.noActionsPopup"] = !(await h.windows()).some((window) => window.kind === "actionsDialog");
 			checks["noLeak.stillLauncher"] = during.view === before.view && during.visible;
-			checks["cmdEnter.didNotDelete"] = existsSync(file);
 
-			// Enter on Cancel dismisses without deleting.
+			// Enter on Cancel dismisses.
 			await h.key("tab");
 			checks["enterOnCancel.focusedCancel"] = (await h.modal())?.focused === "cancel";
-			// Never press Enter on the destructive primary: it trashes the fixture.
 			await h.key(checks["enterOnCancel.focusedCancel"] ? "enter" : "escape");
 			checks["enterOnCancel.closes"] = Boolean(await until(async () => !(await h.modal())));
-			checks["enterOnCancel.keptScript"] = existsSync(file);
 
 			// Keyboard is back on the filter.
+			const afterClose = await h.main();
 			await h.type("x");
-			checks["afterDismiss.typingReachesFilter"] = (await h.main()).input === `${before.input}x`;
-			await h.key("backspace");
+			checks["afterDismiss.typingReachesFilter"] = (await h.main()).input === `${afterClose.input}x`;
 
 			// Esc dismisses; ⌘W dismisses only the modal.
-			await openDelete();
+			await openClear();
 			await h.key("escape");
 			checks["escape.closes"] = Boolean(await until(async () => !(await h.modal())));
 			checks["escape.keptWindow"] = (await h.main()).visible;
-			await openDelete();
+			await openClear();
 			await h.key("w", ["cmd"]);
 			checks["cmdW.closesModal"] = Boolean(await until(async () => !(await h.modal())));
 			checks["cmdW.keptWindow"] = (await h.main()).visible;
-			checks["end.scriptKept"] = existsSync(file);
 			return out;
 		} finally {
+			await driver.close();
+		}
+	},
+
+	async "launcher-undo"() {
+		const { driver, kit } = await launch("launcher-undo");
+		const h = makeHelpers(driver);
+		const checks: Checks = {};
+		const out: Json = { checks };
+		const name = "Modal Audit Delete Target";
+		let file = "";
+		try {
+			file = await addFixtureScript(driver, kit, name);
+			await openLauncherAction(h, "delete");
+			checks["delete.trashedAtOnce"] = Boolean(await until(async () => !existsSync(file), 8_000));
+			checks["delete.noModal"] = !(await h.modal());
+			checks["delete.launcherStaysOpen"] = (await h.main()).visible;
+			const offer = await until(() => undoOffer(driver, MAIN));
+			out.offer = offer;
+			checks["undo.offered"] = Boolean(offer);
+			await shot(driver, "launcher-undo", "offer", MAIN, out);
+
+			await h.key("z", ["cmd"]);
+			checks["undo.restored"] = Boolean(await until(async () => existsSync(file), 8_000));
+			checks["undo.offerGone"] = Boolean(await until(async () => !(await undoOffer(driver, MAIN))));
+			checks["undo.scriptBackInLauncher"] = Boolean(
+				await until(async () => {
+					await driver.setFilterAndWait("", { timeoutMs: 8_000 });
+					await driver.setFilterAndWait(name, { timeoutMs: 8_000 });
+					return (await h.main()).selected === name;
+				}, 15_000),
+			);
+			return out;
+		} finally {
+			out.fixtureLeftInTrash = Boolean(file) && !existsSync(file);
 			await driver.close();
 		}
 	},
@@ -463,6 +686,7 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			checks["opened.chatStaysUnderneath"] = (await h.main()).view === "agentChatChat";
 			await checkPlacement(h, checks, "layout", out);
 			await shot(driver, "agent-chat-consent", "modal", CONFIRM, out);
+			await measureModal(driver, "agent-chat-consent", checks, out);
 			await h.type("hi");
 			await h.key("backspace");
 			await h.key("k", ["cmd"]);
@@ -511,6 +735,42 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			const text = await note();
 			checks["notes.typed"] = text === "Audit note";
 
+			// Outside the Trash, delete has no modal: it trashes and offers Undo.
+			const trashNote = async () => {
+				await h.key("backspace", ["cmd", "shift"], NOTES);
+				return until(async () => ((await note()) !== text ? true : null));
+			};
+			checks["trash.noteLeft"] = Boolean(await trashNote());
+			checks["trash.noModal"] = !(await h.modal());
+			const offer = await until(() => undoOffer(driver, NOTES));
+			out.offer = offer;
+			checks["trash.undoOffered"] = Boolean(offer);
+			// Notes toasts are an attached glass window, never an in-window layer.
+			const notesElements = await elementsOf(driver, NOTES);
+			checks["trash.toastIsPopup"] = notesElements.some((element) => element.semanticId === "toast:undo-offer");
+			checks["trash.noInWindowToast"] = !notesElements.some((element) =>
+				String(element.semanticId).startsWith("root-notification:"),
+			);
+			await shot(driver, "notes-delete", "undo-offer", NOTES, out);
+			await checkToastPopup(h, "notes", checks, "toast", "notes-delete", out);
+			await h.key("z", ["cmd"], NOTES);
+			checks["undo.noteBack"] = Boolean(await until(async () => (await note()) === text));
+			checks["undo.offerGone"] = Boolean(await until(async () => !(await undoOffer(driver, NOTES))));
+
+			// Typing withdraws the offer, so ⌘Z goes back to meaning text undo.
+			await trashNote();
+			await until(() => undoOffer(driver, NOTES));
+			await h.type("q", NOTES);
+			checks["withdraw.typingWithdrawsOffer"] = Boolean(
+				await until(async () => !(await undoOffer(driver, NOTES))),
+			);
+			await h.key("z", ["cmd"], NOTES);
+			await h.settle();
+			checks["withdraw.cmdZDoesNotRestore"] = (await note()) !== text;
+
+			// In the Trash, delete is permanent: an irreversible modal on Cancel.
+			await h.key("t", ["cmd", "shift"], NOTES);
+			checks["trashView.showsNote"] = Boolean(await until(async () => (await note()) === text));
 			const openDelete = async () => {
 				await h.key("backspace", ["cmd", "shift"], NOTES);
 				return until(() => h.modal());
@@ -520,11 +780,15 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			out.entryFrames = entry;
 			checks["entry.allFramesOnScreen"] = entry.samples > 0 && entry.offScreen.length === 0;
 			checks["opened.parentIsNotes"] = opened?.parent === "notes";
+			checks["risk.irreversible"] = opened?.risk === "irreversible";
+			checks["risk.primaryIsDanger"] = opened?.primaryDanger === true;
+			checks["risk.opensOnCancel"] = opened?.focused === "cancel";
 			await checkPlacement(h, checks, "layout", out);
 			await shot(driver, "notes-delete", "modal", CONFIRM, out);
+			await measureModal(driver, "notes-permanent-delete", checks, out);
 			await shot(driver, "notes-delete", "parent", NOTES, out);
 			await focusCycles(h, NOTES, checks, "focus");
-			// Focus is back on Delete: a leaked ⌘↵ or Enter here would delete.
+			// Focus is on Delete: a leaked ⌘↵ or Enter here would delete.
 			await h.type("xy", NOTES);
 			await h.key("enter", ["cmd"], NOTES);
 			await h.key("enter", ["shift"], NOTES);
@@ -537,25 +801,36 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			await h.key("escape", [], NOTES);
 			checks["escape.closesModal"] = Boolean(await until(async () => !(await h.modal())));
 			checks["escape.keptNotesOpen"] = await notesOpen();
-			await h.type("!", NOTES);
-			checks["afterDismiss.typingReachesEditor"] = (await note()) === `${text}!`;
-			await h.key("backspace", [], NOTES);
 
 			await openDelete();
 			await h.key("w", ["cmd"], NOTES);
 			checks["cmdW.closesModalOnly"] = Boolean(await until(async () => !(await h.modal()))) && (await notesOpen());
 
+			// Enter right away lands on Cancel and keeps the note.
 			await openDelete();
 			await h.key("enter", [], NOTES);
-			checks["enter.closesModal"] = Boolean(await until(async () => !(await h.modal())));
-			checks["enter.deletedNote"] = Boolean(await until(async () => (await note()) !== text));
-			checks["enter.noNewlineInserted"] = !(await note()).startsWith(`${text}\n`);
+			checks["enterAtOnce.closesModal"] = Boolean(await until(async () => !(await h.modal())));
+			await h.settle();
+			checks["enterAtOnce.keptNote"] = (await note()) === text;
+
+			// Tab to Delete, then Enter deletes for good.
+			await openDelete();
+			await h.key("tab", [], NOTES);
+			checks["enterOnDelete.focusedDelete"] = (await h.modal())?.focused === "confirm";
+			await h.key("enter", [], NOTES);
+			checks["enterOnDelete.closesModal"] = Boolean(await until(async () => !(await h.modal())));
+			checks["enterOnDelete.deletedNote"] = Boolean(await until(async () => (await note()) !== text));
 
 			// A modal closes with its parent window.
+			await h.key("escape", [], NOTES);
 			await h.key("n", ["cmd"], NOTES);
 			await Bun.sleep(400);
 			await h.type("Second", NOTES);
+			await trashNote();
+			await h.key("t", ["cmd", "shift"], NOTES);
+			await Bun.sleep(400);
 			await openDelete();
+			checks["parentClosed.modalOpened"] = Boolean(await h.modal());
 			driver.send({ type: "openNotes", requestId: "modal-audit-toggle-notes" });
 			await until(async () => !(await notesOpen()), 5_000);
 			checks["parentClosed.modalClosed"] = Boolean(await until(async () => !(await h.modal()), 3_000));
@@ -592,8 +867,11 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			await h.key("enter", [], target);
 			const opened = await until(() => h.modal());
 			checks["opened.parentIsDetachedChat"] = opened?.parent === detached.id;
+			checks["risk.irreversible"] = opened?.risk === "irreversible";
+			checks["risk.opensOnCancel"] = opened?.focused === "cancel";
 			await checkPlacement(h, checks, "layout", out);
 			await shot(driver, "detached-chat-confirm", "modal", CONFIRM, out);
+			await measureModal(driver, "detached-chat-confirm", checks, out);
 			await focusCycles(h, target, checks, "focus");
 			await h.type("zz", target);
 			await h.key("enter", ["cmd"], target);
@@ -632,8 +910,11 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			const opened = await open();
 			checks["opened"] = opened?.title === "Replace the file?";
 			checks["opened.windowNotReplaced"] = (await h.main()).view === before.view;
+			checks["risk.destructive"] = opened?.risk === "destructive";
+			checks["risk.primaryIsDanger"] = opened?.primaryDanger === true;
 			await checkPlacement(h, checks, "layout", out);
 			await shot(driver, "fixture-confirm", "modal", CONFIRM, out);
+			await measureModal(driver, "fixture-confirm", checks, out);
 			await shot(driver, "fixture-confirm", "parent", MAIN, out);
 			await focusCycles(h, MAIN, checks, "focus");
 			await leakKeys(h, MAIN);
@@ -650,6 +931,82 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			checks["enter.resolves"] = Boolean(await until(async () => !(await h.modal())));
 			await h.type("x");
 			checks["afterDismiss.typingReachesFilter"] = (await h.main()).input === `${before.input}x`;
+			await h.key("backspace");
+
+			// A second modal waits for the first instead of replacing it.
+			await open();
+			driver.send({
+				type: "openConfirmPrompt",
+				title: "Overwrite the backup?",
+				body: "Queued behind the first modal",
+				confirmText: "Overwrite",
+				cancelText: "Cancel",
+				requestId: `modal-audit-fixture-queued-${Date.now()}`,
+			});
+			const waiting = await until(async () => {
+				const modal = await h.modal();
+				return modal && modal.waiting === 1 ? modal : null;
+			});
+			checks["queue.firstStaysOpen"] = waiting?.title === "Replace the file?";
+			checks["queue.secondWaits"] = waiting?.waiting === 1;
+			await h.key("escape");
+			const next = await until(async () => {
+				const modal = await h.modal();
+				return modal?.title === "Overwrite the backup?" ? modal : null;
+			});
+			checks["queue.secondOpensAfterFirst"] = Boolean(next);
+			checks["queue.nothingLeftWaiting"] = next?.waiting === 0;
+			await shot(driver, "fixture-confirm", "queued", CONFIRM, out);
+			await measureModal(driver, "fixture-queued", checks, out);
+			await h.key("escape");
+			checks["queue.allClosed"] = Boolean(await until(async () => !(await h.modal())));
+			return out;
+		} finally {
+			await driver.close();
+		}
+	},
+
+	async "modal-variants"() {
+		const { driver } = await launch("modal-variants");
+		const h = makeHelpers(driver);
+		const checks: Checks = {};
+		const out: Json = { checks };
+		const long =
+			"This permanently deletes every conversation, attachment, and saved draft from this Mac. Shared links stop working. This cannot be undone, even from a backup you made earlier today.";
+		const variants: Record<string, Json> = {
+			"no-body": { title: "Replace the file?", body: "" },
+			"one-line": { title: "Replace the file?", body: "Modal keyboard audit" },
+			"several-lines": { title: "Delete all history?", body: long },
+			"scrolling-body": { title: "Delete all history?", body: `${long} `.repeat(3) },
+			"long-labels": { title: "Move everything to the Trash?", body: "Modal keyboard audit", confirmText: "Move to Trash", cancelText: "Keep Everything" },
+		};
+		try {
+			const heights: Record<string, number> = {};
+			for (const [name, variant] of Object.entries(variants)) {
+				driver.send({
+					type: "openConfirmPrompt",
+					confirmText: "Replace",
+					cancelText: "Cancel",
+					...variant,
+					requestId: `modal-audit-variant-${name}-${Date.now()}`,
+				});
+				const opened = await until(async () => {
+					const modal = await h.modal();
+					return modal?.title === variant.title ? modal : null;
+				});
+				checks[`${name}.opened`] = Boolean(opened);
+				await Bun.sleep(400);
+				await shot(driver, "modal-variants", name, CONFIRM, out);
+				await measureModal(driver, `variant-${name}`, checks, out);
+				heights[name] = opened?.bounds?.height ?? 0;
+				await h.key("escape");
+				checks[`${name}.closed`] = Boolean(await until(async () => !(await h.modal())));
+				await Bun.sleep(300);
+			}
+			out.heights = heights;
+			checks["height.growsWithBody"] =
+				heights["no-body"] < heights["one-line"] && heights["one-line"] < heights["several-lines"];
+			checks["height.capsLongBody"] = heights["scrolling-body"] <= 240 && heights["scrolling-body"] >= heights["several-lines"];
 			return out;
 		} finally {
 			await driver.close();
@@ -668,25 +1025,29 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 				driver,
 				kit,
 				name,
-				`const confirmed = await confirm({ message: "Proceed with the audit?", confirmText: "Proceed", cancelText: "Stop" });\nawait Bun.write(${JSON.stringify(resultPath)}, JSON.stringify({ confirmed }));`,
+				`const confirmed = await confirm({ title: "Delete the audit log?", message: "This cannot be undone.", confirmText: "Delete", cancelText: "Keep", irreversible: true });\nawait Bun.write(${JSON.stringify(resultPath)}, JSON.stringify({ confirmed }));`,
 			);
 			await h.key("enter");
 			const opened = await until(() => h.modal(), 15_000);
-			checks["opened.byScript"] = opened?.buttons.includes("Proceed") === true && opened.buttons.includes("Stop");
+			checks["opened.byScript"] = opened?.buttons.includes("Delete") === true && opened.buttons.includes("Keep");
+			checks["opened.titleFromScript"] = opened?.title === "Delete the audit log?";
+			checks["risk.irreversible"] = opened?.risk === "irreversible";
+			checks["risk.primaryIsDanger"] = opened?.primaryDanger === true;
+			checks["risk.opensOnKeep"] = opened?.focused === "cancel";
 			checks["opened.parentIsMain"] = opened?.parent === "main";
 			checks["opened.windowNotReplaced"] = (await h.main()).view !== "confirmPrompt";
 			out.viewUnderModal = (await h.main()).view;
 			await checkPlacement(h, checks, "layout", out);
 			await shot(driver, "sdk-confirm", "modal", CONFIRM, out);
-			await h.key("tab");
-			checks["focus.tabMovesToStop"] = (await h.modal())?.focused === "cancel";
+			await measureModal(driver, "sdk-confirm", checks, out);
+			// Enter right away answers Keep.
 			await h.key("enter");
-			checks["enterOnStop.closes"] = Boolean(await until(async () => !(await h.modal())));
+			checks["enterAtOnce.closes"] = Boolean(await until(async () => !(await h.modal())));
 			const result = await until(async () => {
 				if (!existsSync(resultPath)) return null;
 				return JSON.parse(readFileSync(resultPath, "utf8")) as Json;
 			}, 8_000);
-			checks["enterOnStop.scriptGotFalse"] = result?.confirmed === false;
+			checks["enterAtOnce.scriptGotFalse"] = result?.confirmed === false;
 			return out;
 		} finally {
 			await driver.close();
@@ -730,6 +1091,7 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			checks["field.invalidExplained"] = Boolean(invalid?.fieldProblem);
 			checks["field.saveDisabledWhenInvalid"] = invalid?.primaryDisabled === true;
 			await shot(driver, "alias-editor", "invalid", CONFIRM, out);
+			await measureModal(driver, "alias-editor", checks, out);
 			await h.key("enter");
 			checks["field.enterDoesNotSaveInvalid"] = Boolean(await h.modal()) && !aliases().includes('"a b"');
 			// Caret after "a b": one ← puts it after the space, ⌫ removes it.
@@ -752,14 +1114,17 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			checks["enter.aliasSaved"] = Boolean(await until(async () => aliases().includes('"mx"')));
 			checks["enter.didNotRunLauncherRow"] = (await h.main()).view === before.view;
 
-			// Reopen: the field holds the alias and Remove Alias is offered.
+			// Reopen: the field holds the alias and Remove is offered.
 			const reopened = await openEditor();
 			checks["reopen.showsAlias"] = reopened?.field === "mx";
-			checks["reopen.offersRemove"] = reopened?.buttons.includes("Remove Alias") === true;
+			checks["reopen.offersRemove"] = reopened?.buttons.includes("Remove") === true;
 			await shot(driver, "alias-editor", "existing", CONFIRM, out);
+			await measureModal(driver, "alias-editor-existing", checks, out);
 			await h.key("tab");
 			checks["remove.tabReachesRemove"] = (await h.modal())?.focused === "secondary";
-			await h.key("enter");
+			await h.key("tab", ["shift"]);
+			// ⌘I runs the secondary button from anywhere in the modal.
+			await h.key("i", ["cmd"]);
 			checks["remove.closes"] = Boolean(await until(async () => !(await h.modal())));
 			checks["remove.aliasRemoved"] = Boolean(await until(async () => !aliases().includes('"mx"')));
 
@@ -775,14 +1140,13 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 	},
 
 	async "hotkey-hides-modal"() {
-		const { driver, kit } = await launch("hotkey-hides-modal");
+		const { driver } = await launch("hotkey-hides-modal");
 		const h = makeHelpers(driver);
 		const checks: Checks = {};
 		const out: Json = { checks };
 		try {
-			const name = "Modal Audit Hotkey Target";
-			const file = await addFixtureScript(driver, kit, name);
-			await openLauncherAction(h, "delete");
+			await driver.setFilterAndWait("Clear Suggested Items", { timeoutMs: 8_000 });
+			await h.key("enter");
 			checks["opened"] = Boolean(await until(() => h.modal()));
 			for (const phase of ["down", "up"]) {
 				await driver.request(
@@ -793,7 +1157,6 @@ const runners: Record<Scenario, () => Promise<Json>> = {
 			}
 			checks["hotkey.hidesWindow"] = Boolean(await until(async () => !(await h.main()).visible));
 			checks["hotkey.closesModal"] = Boolean(await until(async () => !(await h.modal())));
-			checks["hotkey.keptScript"] = existsSync(file);
 			return out;
 		} finally {
 			await driver.close();
@@ -819,6 +1182,18 @@ for (const scenario of scenarios) {
 	console.error(
 		`${result.pass ? "PASS" : "FAIL"} ${scenario}${failed.length ? ` — ${failed.join(", ")}` : ""}${result.error ? ` — ${String(result.error).split("\n")[0]}` : ""}`,
 	);
+}
+
+if (measuredModals.length) {
+	const consistency = layoutConsistency();
+	const failed = Object.entries(consistency.checks as Checks)
+		.filter(([, ok]) => !ok)
+		.map(([name]) => name);
+	consistency.failedChecks = failed;
+	consistency.pass = failed.length === 0;
+	pass &&= consistency.pass;
+	receipt.scenarios["layout-consistency"] = consistency;
+	console.error(`${consistency.pass ? "PASS" : "FAIL"} layout-consistency${failed.length ? ` — ${failed.join(", ")}` : ""}`);
 }
 
 if (keepSessions) {
