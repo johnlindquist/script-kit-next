@@ -126,7 +126,7 @@ if [[ "$noninteractive_mode" == "1" ]]; then
       case "$cargo_subcommand" in
         test|nextest|run)
           case "$selected_package" in
-            script-kit-gpui|sk-clipboard|sk-protocol|sk-storage) ;;
+            script-kit-gpui|sk-clipboard|sk-one-window|sk-protocol|sk-storage) ;;
             gpui_macos|gpui-component)
               # These exact byte-only/TestAppContext contracts are reviewed, not
               # the vendor packages' other tests, binaries, or documentation.
@@ -239,7 +239,7 @@ if [[ "$noninteractive_mode" == "1" ]]; then
 
         if [[ -n "$package_name" ]]; then
           case "$package_name" in
-            sk-clipboard|sk-protocol|sk-storage) reviewed_domain_target=1 ;;
+            sk-clipboard|sk-one-window|sk-protocol|sk-storage) reviewed_domain_target=1 ;;
             *) unreviewed_package=1 ;;
           esac
         fi

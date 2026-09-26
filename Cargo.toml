@@ -3,6 +3,7 @@ members = [
     ".",
     "crates/ghost-llm-helper",
     "crates/sk-clipboard",
+    "crates/sk-one-window",
     "crates/sk-protocol",
     "crates/sk-storage",
 ]

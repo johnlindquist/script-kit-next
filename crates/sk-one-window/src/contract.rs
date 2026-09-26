@@ -1,0 +1,193 @@
+//! Every number, word and key the one-window spec fixes.
+//!
+//! `fixtures/contract.json` is generated from the prototype (`.notes/jev-intent`), and
+//! `tests/contract.rs` holds these constants to it. The prototype was drawn at video scale
+//! (52 px rows); the app draws at native scale (44 px rows), so geometry that the app owns is
+//! the prototype value times [`GEOMETRY_SCALE`], rounded, except where the app's existing Tahoe
+//! token is the reference the prototype copied (the list header and the floating buttons).
+
+/// Typing pauses this long before the window shrinks.
+pub const SHRINK_HOLD_MS: u64 = 300;
+/// A view that just opened keeps the window's height this long before it may shrink.
+pub const VIEW_HOLD_MS: u64 = 300;
+/// A shrink animates over this long.
+pub const SHRINK_ANIM_MS: u64 = 260;
+/// The shrink's cubic-bezier control points.
+pub const SHRINK_CURVE: [f32; 4] = [0.4, 0.0, 0.2, 1.0];
+/// Enter is ignored this long after its target changed without a keypress.
+pub const ENTER_GUARD_MS: u64 = 400;
+/// After a Jev row replaces another under the highlight, Enter still runs the old row this long.
+pub const ROW_ARM_MS: u64 = 300;
+/// What can't be taken back waits this long in the line above the input.
+pub const MESSAGE_HOLD_MS: u64 = 8_000;
+/// Jev is asked once the keys pause this long.
+pub const JEV_DEBOUNCE_MS: u64 = 70;
+/// Only the line's dimming eases, over this long.
+pub const SLOT_DIM_EASE_MS: u64 = 180;
+/// Launching an app fades the window out over this long.
+pub const DISMISS_FADE_MS: u64 = 160;
+/// Nothing in a window that is going away changes for this long; then the launch is recorded and
+/// the window goes home.
+pub const DISMISS_SETTLE_MS: u64 = 180;
+/// Summoning fades the window in over this long.
+pub const SUMMON_FADE_MS: u64 = 160;
+/// How often the prototype redrew a waiting message's seconds (the app redraws on each second).
+pub const HOLD_TICK_MS: u64 = 200;
+/// Rows kept for Jev from the first key of a sentence.
+pub const JEV_ROWS: usize = 3;
+/// Name rows shown above Jev's.
+pub const MAX_MATCHES: usize = 3;
+/// A name scoring below this is listed but never owns Enter.
+pub const WEAK_SCORE: u8 = 50;
+
+/// App geometry per prototype pixel.
+pub const GEOMETRY_SCALE: f32 = 44.0 / 52.0;
+
+/// Geometry as the prototype draws it (video scale).
+pub mod prototype {
+    pub const INPUT_ROW_PX: f32 = 68.0;
+    pub const SLOT_LINE_PX: f32 = 40.0;
+    pub const LIST_HEADER_PX: f32 = 30.0;
+    pub const ROW_PX: f32 = 52.0;
+    pub const TILE_PX: f32 = 28.0;
+    pub const TILE_RADIUS_PX: f32 = 9.0;
+    pub const CAPSULE_PX: f32 = 32.0;
+    pub const CAPSULE_GAP_PX: f32 = 6.0;
+    pub const CAPSULE_INSET_PX: f32 = 8.0;
+    pub const FOOTER_ZONE_PX: f32 = 48.0;
+    pub const CAPSULE_RADIUS_PX: f32 = 8.0;
+    pub const KEYCAP_PX: f32 = 22.0;
+    pub const WINDOW_RADIUS_PX: f32 = 18.0;
+    pub const WINDOW_WIDTH_PX: f32 = 860.0;
+}
+
+/// Geometry as the app draws it (native scale).
+pub mod app {
+    /// The line above the input: always present, one height.
+    pub const SLOT_LINE_PX: f32 = 34.0;
+    /// Every list's first header; the existing Tahoe section header height.
+    pub const LIST_HEADER_PX: f32 = 28.0;
+    pub const ROW_PX: f32 = 44.0;
+    /// The focused row's icon tile.
+    pub const TILE_PX: f32 = 24.0;
+    pub const TILE_RADIUS_PX: f32 = 8.0;
+}
+
+/// The focused row's tile color (0xRRGGBB) and alpha byte (95%).
+pub const TILE_RGB: u32 = 0xFB_BF_24;
+pub const TILE_ALPHA: u8 = 0xF2;
+/// Selected rows have no fill.
+pub const ROW_FILL_ALPHA: u8 = 0;
+
+/// How strongly the line above the input is drawn.
+pub mod slot_opacity {
+    /// What's focused and the last thing that ran are context, drawn dimmed.
+    pub const FOCUSED: f32 = 0.8;
+    pub const RECENT: f32 = 0.8;
+    /// Dimmer still while words are typed: the list is what matters then.
+    pub const TYPING_FOCUSED: f32 = 0.5;
+    pub const TYPING_RECENT: f32 = 0.5;
+    /// Inside a view, unless a message is waiting.
+    pub const IN_VIEW_NOT_HOLDING: f32 = 0.45;
+}
+
+/// Words the window shows. Pages and the app use these and no others.
+pub mod words {
+    pub const FOCUSED: &str = "Focused";
+    pub const LAST: &str = "Last";
+    pub const ACTING_ON: &str = "Acting on";
+    pub const SENDING: &str = "Sending";
+    pub const SHARING: &str = "Sharing";
+    pub const PAUSED: &str = "Paused while you type";
+    pub const JUST_NOW: &str = "just now";
+    pub const NOT_SENT: &str = "not sent";
+    pub const SENT: &str = "sent";
+
+    pub const SUGGESTED: &str = "Suggested";
+    pub const MATCHES: &str = "Matches";
+    pub const NO_MATCHES: &str = "No matches";
+    pub const PINNED: &str = "Pinned";
+    pub const JEV: &str = "Jev";
+    pub const STAGED: &str = "Say what to do with it, or pick one";
+    pub const SHARE_HOW: &str = "Share it how?";
+
+    pub const ENTER_WAITING: &str = "Runs when Jev is sure…";
+    pub const ENTER_JEV_FIRST: &str = "Runs what Jev understands";
+    pub const ENTER_WAIT: &str = "Wait for Jev, then run it";
+    pub const ENTER_NOTHING: &str = "Nothing yet";
+
+    /// "Sending in 8s".
+    pub fn sending_in(seconds: u64) -> String {
+        format!("Sending in {seconds}s")
+    }
+}
+
+/// Icons whose runs can be undone (the rest either wait or just happen).
+pub const UNDOABLE_ICONS: &[&str] = &[
+    "move", "schedule", "append", "again", "delegate", "steps", "triage", "learned", "edit",
+    "change",
+];
+
+/// The one TypeScript file every saved run lands in.
+pub const SAVED_SCRIPT_FILE: &str = "~/.scriptkit/plugins/main/scripts/saved.ts";
+pub const SAVED_SCRIPT_FILE_NAME: &str = "saved.ts";
+
+/// Rounds a prototype length to the app's scale.
+pub fn to_app_px(prototype_px: f32) -> f32 {
+    (prototype_px * GEOMETRY_SCALE).round()
+}
+
+/// The cubic-bezier easing of the shrink at progress `t` (0..=1), solved for x like CSS does.
+pub fn shrink_ease(t: f32) -> f32 {
+    let [x1, y1, x2, y2] = SHRINK_CURVE;
+    let t = t.clamp(0.0, 1.0);
+    let bez = |a: f32, b: f32, s: f32| {
+        let u = 1.0 - s;
+        3.0 * u * u * s * a + 3.0 * u * s * s * b + s * s * s
+    };
+    let (mut lo, mut hi) = (0.0f32, 1.0f32);
+    let mut s = t;
+    for _ in 0..40 {
+        let x = bez(x1, x2, s);
+        if (x - t).abs() < 1e-5 {
+            break;
+        }
+        if x < t {
+            lo = s;
+        } else {
+            hi = s;
+        }
+        s = (lo + hi) / 2.0;
+    }
+    bez(y1, y2, s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_geometry_is_the_prototype_scaled_where_the_app_owns_it() {
+        assert_eq!(to_app_px(prototype::ROW_PX), app::ROW_PX);
+        assert_eq!(to_app_px(prototype::SLOT_LINE_PX), app::SLOT_LINE_PX);
+        assert_eq!(to_app_px(prototype::TILE_PX), app::TILE_PX);
+        assert_eq!(to_app_px(prototype::TILE_RADIUS_PX), app::TILE_RADIUS_PX);
+    }
+
+    #[test]
+    fn tile_alpha_is_95_percent() {
+        assert_eq!(TILE_ALPHA, (0.95f32 * 255.0).round() as u8);
+    }
+
+    #[test]
+    fn shrink_ease_starts_ends_and_rises() {
+        assert!(shrink_ease(0.0).abs() < 1e-3);
+        assert!((shrink_ease(1.0) - 1.0).abs() < 1e-3);
+        let mut prev = 0.0;
+        for i in 1..=20 {
+            let v = shrink_ease(i as f32 / 20.0);
+            assert!(v >= prev - 1e-4, "ease must not go backwards");
+            prev = v;
+        }
+    }
+}

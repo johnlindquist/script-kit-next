@@ -1,0 +1,392 @@
+{
+  "color": {
+    "accent": "#fbbf24",
+    "focusedText": "#0f0f0f",
+    "jev": "#8fb8ff",
+    "rowFillAlpha": 0,
+    "tile": "#fbbf24",
+    "tileAlpha": 0.95
+  },
+  "counts": {
+    "jevRows": 3,
+    "maxMatches": 3,
+    "zeroRows": 5
+  },
+  "crossCheck": [
+    {
+      "field": "geometry.prototype.inputRowPx",
+      "ok": true,
+      "sourceValue": 68,
+      "spec": "Input row",
+      "specValue": 68
+    },
+    {
+      "field": "geometry.prototype.slotLinePx",
+      "ok": true,
+      "sourceValue": 40,
+      "spec": "Line above the input",
+      "specValue": 40
+    },
+    {
+      "field": "timing.slotDimEaseMs",
+      "ok": true,
+      "sourceValue": 180,
+      "spec": "Line above the input",
+      "specValue": 180
+    },
+    {
+      "field": "geometry.prototype.listHeaderPx",
+      "ok": true,
+      "sourceValue": 30,
+      "spec": "List section header",
+      "specValue": 30
+    },
+    {
+      "field": "counts.jevRows",
+      "ok": true,
+      "sourceValue": 3,
+      "spec": "Jev's rows",
+      "specValue": 3
+    },
+    {
+      "field": "timing.jevDebounceMs",
+      "ok": true,
+      "sourceValue": 70,
+      "spec": "When Jev is asked",
+      "specValue": 70
+    },
+    {
+      "field": "timing.shrinkHoldMs",
+      "ok": true,
+      "sourceValue": 300,
+      "spec": "Window shrinking",
+      "specValue": 300
+    },
+    {
+      "field": "timing.viewHoldMs",
+      "ok": true,
+      "sourceValue": 300,
+      "spec": "A view opening",
+      "specValue": 300
+    },
+    {
+      "field": "timing.enterGuardMs",
+      "ok": true,
+      "sourceValue": 400,
+      "spec": "Enter guard",
+      "specValue": 400
+    },
+    {
+      "field": "timing.messageHoldMs / 1000",
+      "ok": true,
+      "sourceValue": 8,
+      "spec": "A message waiting",
+      "specValue": 8
+    },
+    {
+      "field": "geometry.prototype.toastMaxWidthPx",
+      "ok": true,
+      "sourceValue": 420,
+      "spec": "Toasts and the Enter label",
+      "specValue": 420
+    },
+    {
+      "field": "geometry.prototype.tilePx",
+      "ok": true,
+      "sourceValue": 28,
+      "spec": "Focused row",
+      "specValue": 28
+    },
+    {
+      "field": "color.tileAlpha * 100",
+      "ok": true,
+      "sourceValue": 95,
+      "spec": "Focused row",
+      "specValue": 95
+    },
+    {
+      "field": "geometry.prototype.tileRadiusPx",
+      "ok": true,
+      "sourceValue": 9,
+      "spec": "Focused row",
+      "specValue": 9
+    },
+    {
+      "field": "geometry.prototype.capsulePx",
+      "ok": true,
+      "sourceValue": 32,
+      "spec": "Floating buttons",
+      "specValue": 32
+    },
+    {
+      "field": "geometry.prototype.capsuleGapPx",
+      "ok": true,
+      "sourceValue": 6,
+      "spec": "Floating buttons",
+      "specValue": 6
+    },
+    {
+      "field": "geometry.prototype.capsuleInsetPx",
+      "ok": true,
+      "sourceValue": 8,
+      "spec": "Floating buttons",
+      "specValue": 8
+    },
+    {
+      "field": "geometry.prototype.footerZonePx",
+      "ok": true,
+      "sourceValue": 48,
+      "spec": "Floating buttons",
+      "specValue": 48
+    },
+    {
+      "field": "color.tile",
+      "ok": true,
+      "sourceValue": "#fbbf24",
+      "spec": "Focused row",
+      "specValue": "#fbbf24"
+    }
+  ],
+  "enterLabels": {
+    "askOnce": "{title} — ↵ again",
+    "briefFill": "Fill in “{say}”",
+    "jevFirst": "Runs what Jev understands",
+    "nothing": "Nothing yet",
+    "wait": "Wait for Jev, then run it",
+    "waiting": "Runs when Jev is sure…"
+  },
+  "generatedFrom": [
+    "scratch/spec-entries.mjs",
+    "src/lab/lab.css",
+    "src/lab/window.css",
+    "src/lab/spec.css",
+    "src/lab/window.js",
+    "src/lab/spec.js",
+    "src/lab/stacked.js",
+    "src/lab/lab.js",
+    "src/lab/s03-names-first.html"
+  ],
+  "geometry": {
+    "prototype": {
+      "capsuleGapPx": 6,
+      "capsuleInsetPx": 8,
+      "capsulePx": 32,
+      "capsuleRadiusPx": 8,
+      "footerZonePx": 48,
+      "inputRowPx": 68,
+      "keycapPx": 22,
+      "listHeaderAfterRowsPx": 35,
+      "listHeaderPx": 30,
+      "rowPx": 52,
+      "slotLinePx": 40,
+      "tilePx": 28,
+      "tileRadiusPx": 9,
+      "toastMaxWidthPx": 420,
+      "windowBottomPaddingPx": 48,
+      "windowRadiusPx": 18,
+      "windowWidthPx": 860
+    }
+  },
+  "headers": {
+    "briefLater": "Later today",
+    "briefReading": "Before you type",
+    "empty": "Suggested",
+    "jev": "Jev",
+    "jevNote": "⌘1–3",
+    "matches": "Matches",
+    "noMatches": "No matches",
+    "pinned": "Pinned",
+    "share": "Share it how?",
+    "staged": "Say what to do with it, or pick one",
+    "zero": "Suggested now"
+  },
+  "keys": [
+    [
+      "↵",
+      "Run what the ↵ button at the bottom right says."
+    ],
+    [
+      "⌘↵",
+      "Do what I said: Jev's reading of the whole sentence, even when a name matches."
+    ],
+    [
+      "Esc",
+      "Back one step. With something in the line above the input, let go of it."
+    ],
+    [
+      "↑",
+      "From an empty input, act on the line above: the last thing you ran, or a message about to go."
+    ],
+    [
+      "⌘K",
+      "Put the focused thing, or the highlighted row, in the line above and list what you can do to it."
+    ],
+    [
+      "⌘J",
+      "Open whatever in the strip needs you first."
+    ],
+    [
+      "⌘Z",
+      "With nothing typed, stop the message that's about to go."
+    ],
+    [
+      "⇥",
+      "In a form, the next field."
+    ],
+    [
+      "⌘1–3",
+      "Pick one of Jev's rows."
+    ],
+    [
+      "hold fn",
+      "Talk. Let go to paste what you said at the cursor, or to do what you asked."
+    ]
+  ],
+  "missing": [],
+  "notes": {
+    "askLeadP": "s03-names-first.html gate: a held Enter asks once unless its row is Jev's top reading by at least this much",
+    "dismissSettleMs": "spec.js win.dismiss waits this long before anything in the fading window may change",
+    "rowFillAlpha": "derived: no background on `.row.selected` / `.launcher .row.selected` in lab.css",
+    "slotDimmed": "kinds whose own `.slot.<kind>` rule in spec.css sets opacity < 1; typing and open views dim further (slot.opacity)",
+    "viewHoldMs": "window.js paint(): resize(..., { hold: t ? HOLD_MS : 0 })"
+  },
+  "risk": {
+    "messageFormIsHold": true,
+    "names": {
+      "hold": "Waits before it goes",
+      "none": "Nothing to undo",
+      "undo": "Can be undone"
+    },
+    "otherFormIsUndo": true,
+    "otherwise": "none",
+    "undoableIcons": [
+      "move",
+      "schedule",
+      "append",
+      "again",
+      "delegate",
+      "steps",
+      "triage",
+      "learned",
+      "edit",
+      "change"
+    ]
+  },
+  "slot": {
+    "dimmed": [
+      "focused",
+      "recent"
+    ],
+    "hints": {
+      "focused": "⌘K",
+      "staged": "esc"
+    },
+    "kinds": [
+      "staged",
+      "holding",
+      "focused",
+      "recent"
+    ],
+    "labels": {
+      "focused": "Focused",
+      "holding": "Sending in {s}s",
+      "paused": "Paused while you type",
+      "recent": "Last",
+      "staged": "Acting on"
+    },
+    "opacity": {
+      "focused": 0.8,
+      "inViewNotHolding": 0.45,
+      "recent": 0.8,
+      "typingFocused": 0.5,
+      "typingRecent": 0.5
+    }
+  },
+  "specNumbers": [
+    [
+      "Input row",
+      "68 px, drawn in one place while the window is open"
+    ],
+    [
+      "Line above the input",
+      "40 px, always present; its words swap in place and only its dimming eases (180 ms)"
+    ],
+    [
+      "List section header",
+      "30 px, always the first thing in a list; typing changes its words only"
+    ],
+    [
+      "Jev's rows",
+      "3, reserved from the first key of a sentence and filled in place"
+    ],
+    [
+      "When Jev is asked",
+      "Once the keys pause for 70 ms"
+    ],
+    [
+      "Window growing",
+      "At once, the moment there's more to show"
+    ],
+    [
+      "Window shrinking",
+      "Animated, after typing pauses for 300 ms; a key stops a shrink where it is"
+    ],
+    [
+      "A view opening",
+      "Keeps the window's height for 300 ms, then shrinks once to fit"
+    ],
+    [
+      "Enter guard",
+      "400 ms after Enter's target changes without a keypress (a finished form, an arriving answer)"
+    ],
+    [
+      "A message waiting",
+      "8 s in the line above the input; typing pauses it, `⌘Z` stops it"
+    ],
+    [
+      "Toasts and the Enter label",
+      "One line with an ellipsis; toasts at most 420 px wide"
+    ],
+    [
+      "Focused row",
+      "Its icon on a 28 px yellow tile (#fbbf24 at 95%, radius 9); no row fill, no bar, no keycap"
+    ],
+    [
+      "Floating buttons",
+      "32 px Liquid Glass buttons, 6 px apart, 8 px in from the window's right and bottom edges (a 48 px zone)"
+    ]
+  ],
+  "thresholds": {
+    "askLeadP": 0.15,
+    "jevRowMinP": 0.03,
+    "weakMatchScore": 50
+  },
+  "timing": {
+    "dismissFadeMs": 160,
+    "dismissSettleMs": 180,
+    "doneToastMs": 1800,
+    "enterGuardMs": 400,
+    "formReadDebounceMs": 160,
+    "holdTickMs": 200,
+    "jevDebounceMs": 70,
+    "messageHoldMs": 8000,
+    "rowArmMs": 300,
+    "shrinkAnimMs": 260,
+    "shrinkCleanupMs": 280,
+    "shrinkCurve": [
+      0.4,
+      0,
+      0.2,
+      1
+    ],
+    "shrinkHoldMs": 300,
+    "slotDimEaseMs": 180,
+    "slotTickMs": 200,
+    "summonFadeMs": 160,
+    "summonSettleMs": 360,
+    "toastMs": 1600,
+    "viewFadeMs": 160,
+    "viewHoldMs": 300
+  },
+  "version": 1
+}
