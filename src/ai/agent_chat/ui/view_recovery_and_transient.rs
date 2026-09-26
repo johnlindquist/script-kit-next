@@ -18,7 +18,7 @@ impl AgentChatView {
         actions.extend(self.queue_actions(cx));
         if let Some(failure) = thread.brain_decision_failure() {
             for (operation, label) in [
-                ("memoryInspect", "Review Held Question"),
+                ("memoryEdit", "Edit Held Question"),
                 ("memoryRetry", "Retry Memory"),
                 ("memoryContinue", "Continue Without Memory"),
             ] {
@@ -482,13 +482,14 @@ impl AgentChatView {
                 .collect::<Vec<_>>()
                 .join(", ");
             actions.push(make(
-                "inspect",
+                "edit",
                 &message.id,
-                format!("Inspect: {preview}"),
-                format!(
-                    "{} frozen context items · {context}",
-                    message.context_items.len()
-                ),
+                format!("Edit: {preview}"),
+                if message.context_items.is_empty() {
+                    "Move this message back to the composer to read or change it.".to_string()
+                } else {
+                    format!("Move this message and its context back to the composer · {context}")
+                },
             ));
             actions.push(make(
                 "remove",
@@ -550,7 +551,7 @@ impl AgentChatView {
     pub(crate) fn execute_queue_action(
         &mut self,
         action_id: &str,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(payload) = action_id.strip_prefix("agent_chat_queue:") else {
@@ -572,75 +573,28 @@ impl AgentChatView {
                 })
             });
         }
-        if operation == "inspect" || operation == "memoryInspect" {
-            let message = if operation == "memoryInspect" {
-                target
-                    .parse::<u64>()
-                    .ok()
-                    .and_then(|generation| thread.read(cx).held_brain_request(generation))
-            } else {
-                thread
-                    .read(cx)
-                    .queued_messages()
-                    .iter()
-                    .find(|message| message.id == target)
-                    .cloned()
+        if operation == "edit" || operation == "memoryEdit" {
+            let edited = thread.update(cx, |thread, cx| {
+                if operation == "memoryEdit" {
+                    target
+                        .parse::<u64>()
+                        .map_err(|_| crate::ai::agent_chat::ui::thread::ComposerEditRefusal::Changed)
+                        .and_then(|generation| thread.edit_held_question(generation, cx))
+                } else {
+                    thread.edit_queued_message(target, cx)
+                }
+            });
+            self.command_status = match edited {
+                Ok(()) => None,
+                Err(crate::ai::agent_chat::ui::thread::ComposerEditRefusal::DraftInComposer) => {
+                    Some("Send or clear your current draft first, then edit this message.")
+                }
+                Err(crate::ai::agent_chat::ui::thread::ComposerEditRefusal::Changed) => Some(
+                    "This request changed or has already dispatched. Review the current requests in Actions.",
+                ),
             };
-            let Some(message) = message else {
-                self.command_status = Some("This request changed or has already dispatched. Review the current requests in Actions.");
-                self.notify_semantic_change(cx);
-                return false;
-            };
-            let parts: Vec<_> = message
-                .context_items
-                .iter()
-                .map(|item| &item.part)
-                .collect();
-            let body = format!(
-                "{}\n\nFrozen context ({}):\n{}",
-                message.text,
-                parts.len(),
-                serde_json::to_string_pretty(&parts).unwrap_or_default()
-            );
-            let owner = cx.entity().downgrade();
-            crate::confirm::open_parent_confirm_dialog_for_entity(
-                window,
-                cx,
-                owner,
-                crate::confirm::ParentConfirmOptions {
-                    title: if operation == "memoryInspect" {
-                        "Held Question"
-                    } else {
-                        "Queued Message"
-                    }
-                    .into(),
-                    body: body.into(),
-                    confirm_text: "Copy request text".into(),
-                    cancel_text: "Dismiss".into(),
-                    confirm_variant: gpui_component::button::ButtonVariant::Primary,
-                    width: px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-                },
-                move |window, cx| {
-                    use gpui_component::WindowExt as _;
-                    let notification = match crate::platform::copy_text(&message.text) {
-                        Ok(receipt) => gpui_component::notification::Notification::info(
-                            receipt.feedback("Copied request text".to_string()),
-                        ),
-                        Err(error) => {
-                            let diagnostic =
-                                crate::logging::log_private_user_value(&error.to_string());
-                            tracing::warn!(diagnostic_fingerprint = %diagnostic.sha256, "Request text copy failed");
-                            gpui_component::notification::Notification::error(
-                                "Couldn't copy this request. Review it in Actions and try again.",
-                            )
-                            .autohide(false)
-                        }
-                    };
-                    window.push_notification(notification.id1::<AgentChatView>("request-copy"), cx);
-                },
-                |_, _| {},
-            );
-            return true;
+            self.notify_semantic_change(cx);
+            return edited.is_ok();
         }
         let executed = thread.update(cx, |thread, cx| match operation {
             "remove" => thread.remove_queued_message(target, cx),

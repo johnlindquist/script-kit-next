@@ -3858,6 +3858,43 @@ impl AgentChatThread {
         true
     }
 
+    /// Take a queued message out of the queue and back into the composer,
+    /// with its context, to read or change it. Refuses while the composer
+    /// holds another draft, so nothing typed is lost.
+    pub(crate) fn edit_queued_message(
+        &mut self,
+        id: &str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), ComposerEditRefusal> {
+        let index = self
+            .queued_messages
+            .iter()
+            .position(|message| message.id == id)
+            .ok_or(ComposerEditRefusal::Changed)?;
+        if self.composer_has_draft() {
+            return Err(ComposerEditRefusal::DraftInComposer);
+        }
+        let Some(message) = self.queued_messages.remove(index) else {
+            return Err(ComposerEditRefusal::Changed);
+        };
+        self.return_to_composer(message.text, message.context_items);
+        self.notify_semantic_change(cx);
+        Ok(())
+    }
+
+    fn composer_has_draft(&self) -> bool {
+        !self.input.text().trim().is_empty() || !self.pending_context_items.is_empty()
+    }
+
+    fn return_to_composer(&mut self, text: String, context_items: Vec<StagedContextItem>) {
+        self.restore_draft_snapshot_inner(AgentChatThreadDraftSnapshot {
+            input_cursor: text.chars().count(),
+            input: text,
+            pending_context_items: context_items,
+            pending_context_consumed: false,
+        });
+    }
+
     pub(crate) fn clear_queued_messages(&mut self, expected: &str, cx: &mut Context<Self>) -> bool {
         if self.queue_revision() != expected {
             return false;
@@ -4280,6 +4317,46 @@ impl AgentChatThread {
     pub(crate) fn brain_decision_generation(&self) -> u64 {
         self.context_resolution_id
     }
+
+    /// Stop holding a question for the memory decision and put it back in
+    /// the composer, with its context, to read or change it.
+    pub(crate) fn edit_held_question(
+        &mut self,
+        generation: u64,
+        cx: &mut Context<Self>,
+    ) -> Result<(), ComposerEditRefusal> {
+        if generation != self.context_resolution_id {
+            return Err(ComposerEditRefusal::Changed);
+        }
+        let decision = self
+            .pending_brain_decision
+            .as_ref()
+            .ok_or(ComposerEditRefusal::Changed)?;
+        let composer_holds_question =
+            decision.clear_composer && self.input.revision() == decision.composer_revision;
+        if !composer_holds_question && self.composer_has_draft() {
+            return Err(ComposerEditRefusal::DraftInComposer);
+        }
+        let Some(decision) = self.pending_brain_decision.take() else {
+            return Err(ComposerEditRefusal::Changed);
+        };
+        let context_items = decision
+            .context_job
+            .map(|job| job.items)
+            .unwrap_or(decision.prepared.context_transition.attempted_items);
+        self.return_to_composer(decision.display_text, context_items);
+        self.notify_semantic_change(cx);
+        Ok(())
+    }
+}
+
+/// Why a queued or held message could not go back to the composer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ComposerEditRefusal {
+    /// The message already sent, or the queue changed since the action was built.
+    Changed,
+    /// The composer holds another draft; editing would overwrite it.
+    DraftInComposer,
 }
 
 /// A whitespace-delimited token as a canonical http(s) URL, with the
