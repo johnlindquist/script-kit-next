@@ -1836,7 +1836,7 @@ impl ScriptListApp {
                         && !event.keystroke.modifiers.alt
                         && !event.keystroke.modifiers.control =>
                     {
-                        if this.try_route_global_cmd_enter_to_agent_chat_context_capture(cx) {
+                        if this.route_main_window_cmd_enter(cx) {
                             cx.stop_propagation();
                         }
                     }

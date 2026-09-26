@@ -426,7 +426,7 @@ pub fn render_design_item(
                     Some(IconKind::Svg("ExclamationTriangle".to_string())),
                 ),
                 SearchResult::Intent(m) => (
-                    m.plan.title.clone(),
+                    m.title.clone(),
                     Some(m.subtitle.clone()),
                     None,
                     Some(IconKind::Svg("sparkles".to_string())),

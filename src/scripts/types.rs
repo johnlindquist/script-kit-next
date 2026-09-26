@@ -381,26 +381,67 @@ pub struct ScriptIssueMatch {
     pub score: i32,
 }
 
-/// Selection keys of intent rows start with this.
-pub const INTENT_ROW_KEY_PREFIX: &str = "intent/";
+/// One key for the intent row through its whole reading, so Jev's answer never moves
+/// the row or the highlight.
+pub const INTENT_ROW_KEY: &str = "intent/row";
 
-/// Jev's reading of the typed sentence, pinned first so Enter does what it asks.
+/// The second row of a sentence: what Jev reads it as. It shows a placeholder until Jev
+/// answers, and runs only a ready plan.
 #[derive(Clone, Debug)]
 pub struct IntentMatch {
-    pub plan: std::sync::Arc<crate::intent::Plan>,
+    pub request: String,
+    pub title: String,
     pub subtitle: String,
     pub verb: &'static str,
+    /// Jev hasn't answered; Enter on the row waits for it.
+    pub reading: bool,
+    /// Set only when Enter can run it.
+    pub plan: Option<std::sync::Arc<crate::intent::Plan>>,
     pub score: i32,
 }
 
 impl IntentMatch {
-    pub fn new(plan: std::sync::Arc<crate::intent::Plan>) -> Self {
+    pub fn from_row(row: &crate::intent::IntentRow) -> Self {
+        use crate::intent::RowState;
+        let (title, subtitle, verb) = match &row.state {
+            RowState::Reading => (
+                "Understanding…".to_string(),
+                "⌘↵ runs what you meant".to_string(),
+                "Run",
+            ),
+            RowState::Read(plan) if plan.ready => (
+                plan.title.clone(),
+                crate::intent::plan_subtitle(plan),
+                crate::intent::plan_verb(plan),
+            ),
+            RowState::Read(plan) => (
+                plan.title.clone(),
+                match plan.missing.as_deref() {
+                    Some(missing) => format!("Needs {missing}"),
+                    None => "Needs more to go on".to_string(),
+                },
+                crate::intent::plan_verb(plan),
+            ),
+            RowState::Failed => (
+                "Couldn't understand that".to_string(),
+                "Try saying it another way".to_string(),
+                "Run",
+            ),
+        };
         Self {
-            subtitle: crate::intent::plan_subtitle(&plan),
-            verb: crate::intent::plan_verb(&plan),
-            plan,
+            request: row.request.clone(),
+            title,
+            subtitle,
+            verb,
+            reading: matches!(row.state, RowState::Reading),
+            plan: row.runnable().cloned(),
             score: i32::MAX,
         }
+    }
+
+    /// Enter either runs the plan or waits for the reading.
+    pub fn is_actionable(&self) -> bool {
+        self.reading || self.plan.is_some()
     }
 }
 
@@ -690,7 +731,7 @@ impl SearchResult {
                 .as_deref()
                 .unwrap_or_else(|| fm.fallback.name()),
             SearchResult::ScriptIssue(issue) => &issue.title,
-            SearchResult::Intent(m) => &m.plan.title,
+            SearchResult::Intent(m) => &m.title,
             SearchResult::SpineProjection(row) => row.title.as_ref(),
         }
     }
@@ -925,7 +966,7 @@ impl SearchResult {
             SearchResult::Agent(am) => Some(format!("agent/{}", am.agent.path.display())),
             SearchResult::BrowserTab(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::ScriptIssue(_) => Some("script-issue/catalog-validation".to_string()),
-            SearchResult::Intent(m) => Some(format!("{INTENT_ROW_KEY_PREFIX}{}", m.plan.title)),
+            SearchResult::Intent(_) => Some(INTENT_ROW_KEY.to_string()),
             SearchResult::SpineProjection(row) => Some(row.id.to_string()),
             _ => self
                 .history_result_key()

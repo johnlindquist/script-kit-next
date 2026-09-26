@@ -149,8 +149,6 @@ pub(crate) fn project_main_menu_rows(
 
 /// Keep the current query's already displayed rows in place. Newly arriving
 /// matches remain reachable below them; the next query gets normal ranking.
-/// A plan for the sentence is the exception: it answers the query itself, so it
-/// leads, with the displayed rows in their order below it.
 pub(crate) fn preserve_displayed_main_menu_rows(
     previous_items: &[GroupedListItem],
     previous_rows: &[MainMenuRowProjection],
@@ -168,13 +166,6 @@ pub(crate) fn preserve_displayed_main_menu_rows(
     let mut retained = vec![false; rows.len()];
     let mut order = Vec::with_capacity(rows.len());
     let mut stable_items = Vec::with_capacity(items.len() + previous_items.len());
-    for (index, row) in rows.iter().enumerate() {
-        if row.stable_key.starts_with(scripts::INTENT_ROW_KEY_PREFIX) {
-            stable_items.push(items[row.grouped_index].clone());
-            retained[index] = true;
-            order.push(index);
-        }
-    }
     let mut header_start = None;
     let mut header_end = 0;
     for (index, item) in previous_items.iter().enumerate() {
@@ -352,25 +343,26 @@ mod canonical_row_projection_tests {
     }
 
     #[test]
-    fn a_plan_that_arrives_later_leads_the_rows_already_shown() {
+    fn the_intent_row_keeps_its_place_when_jev_answers() {
         let keys = |rows: &[MainMenuRowProjection]| {
             rows.iter()
                 .map(|row| row.stable_key.clone())
                 .collect::<Vec<_>>()
         };
-        let with_plan = || {
-            projected(&[
-                ("intent/Ask AI: where is the game", "Ask AI"),
-                ("second", "Second"),
-                ("first", "First"),
-            ])
-        };
-        let (items, rows) = projected(&[("first", "First"), ("second", "Second")]);
-        let (mut next_items, mut next_rows) = with_plan();
+        let (items, rows) = projected(&[
+            ("first", "First"),
+            (scripts::INTENT_ROW_KEY, "Understanding…"),
+            ("second", "Second"),
+        ]);
+        let (mut next_items, mut next_rows) = projected(&[
+            (scripts::INTENT_ROW_KEY, "Ask AI: where is the game"),
+            ("second", "Second"),
+            ("first", "First"),
+        ]);
         preserve_displayed_main_menu_rows(&items, &rows, &mut next_items, &mut next_rows);
         assert_eq!(
             keys(&next_rows),
-            ["intent/Ask AI: where is the game", "first", "second"]
+            ["first", scripts::INTENT_ROW_KEY, "second"]
         );
         assert_eq!(
             next_rows
@@ -379,15 +371,6 @@ mod canonical_row_projection_tests {
                 .collect::<Vec<_>>(),
             [Some(0), Some(1), Some(2)]
         );
-
-        let (mut again_items, mut again_rows) = with_plan();
-        preserve_displayed_main_menu_rows(
-            &next_items,
-            &next_rows,
-            &mut again_items,
-            &mut again_rows,
-        );
-        assert_eq!(keys(&again_rows), keys(&next_rows));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! How a plan reads in the launcher: the row subtitle and the Enter button's verb.
 
-use super::catalog::CommandKind;
+use super::catalog::{CommandKind, WindowAction};
 use super::engine::{Pathway, Plan, Step};
 
 /// The Enter button's label for a plan.
@@ -21,7 +21,12 @@ pub fn plan_verb(plan: &Plan) -> &'static str {
             }
         }
         Pathway::AppCommand => "Click",
-        Pathway::Window => "Arrange",
+        Pathway::Window => match window_action(plan) {
+            Some(WindowAction::Quit) => "Quit",
+            Some(WindowAction::Close) => "Close",
+            Some(WindowAction::Minimize) => "Minimize",
+            _ => "Arrange",
+        },
         Pathway::Capture => "Add",
         Pathway::Remember => "Remember",
         Pathway::Recall => "Search",
@@ -31,6 +36,13 @@ pub fn plan_verb(plan: &Plan) -> &'static str {
         Pathway::Automate => "Save Script",
         Pathway::None => "Run",
     }
+}
+
+fn window_action(plan: &Plan) -> Option<WindowAction> {
+    plan.steps.iter().find_map(|step| match step {
+        Step::Window { op, .. } => op.action(),
+        _ => None,
+    })
 }
 
 /// The row's second line: what kind of thing happens, and the launcher line that
@@ -45,7 +57,12 @@ pub fn plan_subtitle(plan: &Plan) -> String {
                 Some(Step::Menu { app, .. }) => format!("{app} menu"),
                 _ => "App menu".to_string(),
             },
-            Pathway::Window => "Moves a window".to_string(),
+            Pathway::Window => match window_action(plan) {
+                Some(WindowAction::Quit) => "Quits an app".to_string(),
+                Some(WindowAction::Close) => "Closes a window".to_string(),
+                Some(WindowAction::Minimize) => "Hides a window".to_string(),
+                _ => "Moves a window".to_string(),
+            },
             Pathway::Capture => "Writes it down".to_string(),
             Pathway::Remember => "Saves to your brain".to_string(),
             Pathway::Recall => "Searches your history".to_string(),

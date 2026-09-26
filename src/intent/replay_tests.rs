@@ -1,6 +1,6 @@
 //! Replays Jev answers recorded by the TypeScript prototype and requires the same plans.
 //!
-//! The fixture holds 132 requests across four screens, Jev's trimmed answers for each
+//! The fixture holds 138 requests across four screens, Jev's trimmed answers for each
 //! round, and the plan the prototype composed from exactly those answers.
 
 use std::collections::HashMap;

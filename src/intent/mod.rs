@@ -24,7 +24,9 @@ pub use catalog::{
 pub use context::{FrontApp, LastAction, LastStep, MenuCommand, OpenWindow, ScreenContext};
 pub use engine::{understand, EngineOptions, Pathway, Plan, Reading, Step, COMPLETE_THRESHOLD};
 pub use jev::{JevClient, JevConfig, JevError, Oracle};
-pub use launcher::{Finish, HeldOutcome, IntentLauncher, OracleSlot, TextChange, Ticket};
+pub use launcher::{
+    Finish, HeldOutcome, IntentLauncher, IntentRow, OracleSlot, RowState, TextChange, Ticket,
+};
 pub use present::{plan_subtitle, plan_verb};
 pub use script::{normalize_shortcut, plan_to_script, DraftScript, ScriptOptions};
 

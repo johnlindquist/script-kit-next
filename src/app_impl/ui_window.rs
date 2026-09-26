@@ -339,6 +339,7 @@ impl ScriptListApp {
                 } else if let AppView::FormPrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |form, cx| form.focus_next(window, cx));
+                } else if self.run_intent_for_current_input(cx) {
                 } else {
                     self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                 }
@@ -640,8 +641,13 @@ impl ScriptListApp {
             let style_owns_submit = self.spine_enabled
                 && crate::spine::prompt_plan::spine_parse_is_style_only(&self.spine_parse);
             if !style_owns_submit {
+                let label = if self.cmd_enter_runs_intent() {
+                    "Do It"
+                } else {
+                    "Agent"
+                };
                 buttons.push(
-                    FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "Agent")
+                    FooterButtonConfig::new(FooterAction::Ai, "⌘↵", label)
                         .enabled(!footer_disabled),
                 );
             }

@@ -464,8 +464,8 @@ impl ScriptListApp {
         // not publish even one stale-list frame: the input already echoed the
         // new text, so compute now instead of deferring. Same-family typing
         // keeps the coalescer so rapid keystrokes still skip intermediate
-        // computes. A pinned intent plan quotes the text it was read from, so
-        // leaving that text counts as a flip too.
+        // computes. An intent row showing Jev's reading quotes the text it was
+        // read from, so leaving that text counts as a flip too.
         let root_scope_changed = matches!(self.current_view, AppView::ScriptList)
             && self
                 .root_search
@@ -479,8 +479,7 @@ impl ScriptListApp {
             || filter_change_flips_list_structure(&self.computed_filter_text, &value)
             || self
                 .intent_launcher
-                .plan_for(&self.computed_filter_text)
-                .is_some()
+                .has_reading_for(&self.computed_filter_text)
         {
             self.filter_coalescer.reset();
             self.apply_filter_compute_now(value, cx);

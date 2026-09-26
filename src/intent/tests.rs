@@ -1054,7 +1054,9 @@ mod launcher_rules {
 
     use super::super::engine::{build_questions, compose_plan, EngineOptions};
     use super::super::jev::{Answer, Answers, JevError};
-    use super::super::launcher::{Finish, HeldOutcome, IntentLauncher, TextChange, Ticket};
+    use super::super::launcher::{
+        Finish, HeldOutcome, IntentLauncher, RowState, TextChange, Ticket,
+    };
     use super::super::wants_reading;
     use super::{catalog, choice_answer, screen};
     use crate::test_utils::property::assert_rule;
@@ -1096,23 +1098,23 @@ mod launcher_rules {
     enum Event {
         Type { text: usize, screen: u64 },
         Reply { back: usize, outcome: u8 },
-        Enter { anchored: bool },
-        Release { same_row: bool },
+        Enter,
+        Release { on_intent_row: bool },
     }
 
     fn event() -> impl Strategy<Value = Event> {
         prop_oneof![
             3 => (0..TEXTS.len(), 0..2u64).prop_map(|(text, screen)| Event::Type { text, screen }),
             3 => (0..3usize, 0..4u8).prop_map(|(back, outcome)| Event::Reply { back, outcome }),
-            1 => any::<bool>().prop_map(|anchored| Event::Enter { anchored }),
-            1 => any::<bool>().prop_map(|same_row| Event::Release { same_row }),
+            1 => Just(Event::Enter),
+            1 => any::<bool>().prop_map(|on_intent_row| Event::Release { on_intent_row }),
         ]
     }
 
     #[test]
-    fn a_plan_is_only_ever_shown_for_the_exact_current_text() {
+    fn the_intent_row_only_ever_shows_a_reading_of_the_exact_current_text() {
         assert_rule(
-            "only the latest reading of the current text can pin a plan; failures and stale replies pin nothing",
+            "a sentence has an intent row from its first frame; only the latest reading of the current text fills it, and only a ready plan runs",
             512,
             prop::collection::vec(event(), 1..40),
             |events| {
@@ -1130,6 +1132,10 @@ mod launcher_rules {
                             }
                             if let TextChange::Read(ticket) = change {
                                 prop_assert_eq!(&ticket.request, &current);
+                                prop_assert!(matches!(
+                                    launcher.row_for(&current).map(|row| &row.state),
+                                    Some(RowState::Reading)
+                                ));
                                 issued.push(ticket);
                             }
                         }
@@ -1139,7 +1145,7 @@ mod launcher_rules {
                             };
                             let was_current =
                                 launcher.is_current(&ticket) && ticket.request == current;
-                            let before = launcher.plan_for(&current).cloned();
+                            let before = launcher.cache_token(&current);
                             let result = match outcome {
                                 0 => Ok(plan(&ticket.request, true)),
                                 1 => Ok(plan(&ticket.request, false)),
@@ -1147,46 +1153,49 @@ mod launcher_rules {
                                 _ => Err(JevError::Transport("offline".into())),
                             };
                             let finish = launcher.finish(&ticket, &current, result);
+                            let state = launcher.row_for(&current).map(|row| row.state.clone());
                             if !was_current {
                                 prop_assert_eq!(finish, Finish::Stale);
-                                prop_assert_eq!(launcher.plan_for(&current).cloned(), before);
+                                prop_assert_eq!(launcher.cache_token(&current), before);
                             } else if outcome == 0 {
                                 prop_assert_eq!(finish, Finish::Shown);
+                                prop_assert!(launcher.plan_for(&current).is_some());
+                            } else if outcome == 1 {
+                                prop_assert_eq!(finish, Finish::NotReady);
+                                prop_assert!(matches!(state, Some(RowState::Read(_))));
+                                prop_assert!(launcher.plan_for(&current).is_none());
                             } else {
-                                prop_assert!(
-                                    launcher.plan_for(&current).is_none(),
-                                    "{finish:?} left a plan pinned"
-                                );
+                                prop_assert_eq!(finish, Finish::Failed);
+                                prop_assert!(matches!(state, Some(RowState::Failed)));
                             }
                         }
-                        Event::Enter { anchored } => {
+                        Event::Enter => {
                             let reading = launcher.is_reading(&current);
-                            let held = launcher.hold_enter(
-                                &current,
-                                anchored,
-                                Some("row".into()),
-                                Instant::now(),
-                            );
-                            prop_assert_eq!(held, reading && !anchored);
+                            prop_assert_eq!(launcher.hold_enter(&current, Instant::now()), reading);
                         }
-                        Event::Release { same_row } => {
+                        Event::Release { on_intent_row } => {
                             let held_for = launcher.held_enter().map(|held| held.request.clone());
-                            let outcome = launcher.release_enter(
-                                &current,
-                                Some(if same_row { "row" } else { "other" }),
-                            );
+                            let runnable = launcher.plan_for(&current).is_some();
+                            let outcome = launcher.release_enter(&current, on_intent_row);
                             match held_for {
                                 Some(request) if request == current => prop_assert_eq!(
                                     outcome,
-                                    Some(if same_row {
+                                    Some(if !on_intent_row {
+                                        HeldOutcome::Moved
+                                    } else if runnable {
                                         HeldOutcome::Run
                                     } else {
-                                        HeldOutcome::Changed
+                                        HeldOutcome::Wait
                                     })
                                 ),
                                 _ => prop_assert_eq!(outcome, None),
                             }
                         }
+                    }
+                    if wants_reading(&current) {
+                        prop_assert!(launcher.row_for(&current).is_some());
+                    } else {
+                        prop_assert!(launcher.row_for(&current).is_none());
                     }
                     if let Some(shown) = launcher.plan_for(&current) {
                         prop_assert_eq!(&shown.request, &current);
@@ -1194,11 +1203,106 @@ mod launcher_rules {
                     }
                     prop_assert_eq!(
                         launcher.cache_token(&current) == 0,
-                        launcher.plan_for(&current).is_none()
+                        launcher.row_for(&current).is_none()
                     );
                 }
                 Ok(())
             },
         );
     }
+}
+
+fn window_answers(op: &str, target: &str) -> Answers {
+    let mut answers = Answers::new();
+    answers.insert(
+        "pathway".into(),
+        choice_answer("window", &[("window", 0.9), ("none", 0.1)]),
+    );
+    answers.insert("complete".into(), Answer::Noul { noul: 0.9 });
+    answers.insert("window_op".into(), choice_answer(op, &[(op, 0.9)]));
+    answers.insert(
+        "window_target".into(),
+        choice_answer(target, &[(target, 1.0)]),
+    );
+    answers
+}
+
+#[test]
+fn quitting_or_closing_ends_only_the_app_the_user_named() {
+    let (ctx, catalog) = (screen(), catalog());
+    let front = "the front window (Google Chrome)";
+    let read = |request: &str, op: &str| {
+        let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+        let plan = compose_plan(request, &ctx, &catalog, &built, &window_answers(op, front));
+        (plan.title.clone(), plan.ready, plan.missing.clone())
+    };
+    assert_eq!(
+        read("quit slack", "Quit App"),
+        ("Quit Slack".to_string(), true, None)
+    );
+    assert_eq!(
+        read("close slack", "Close Window"),
+        ("Close Slack Window".to_string(), true, None)
+    );
+    assert_eq!(
+        read("quit spotify", "Quit App"),
+        (
+            "Quit an app".to_string(),
+            false,
+            Some("which app to quit".to_string())
+        )
+    );
+    assert_eq!(
+        read("close the thing", "Close Window"),
+        (
+            "Close a window".to_string(),
+            false,
+            Some("which window to close".to_string())
+        )
+    );
+    assert_eq!(
+        read("quit this app", "Quit App"),
+        ("Quit Google Chrome".to_string(), true, None)
+    );
+}
+
+#[test]
+fn closing_a_named_app_with_no_window_open_waits() {
+    let ctx = ScreenContext {
+        open_windows: screen()
+            .open_windows
+            .into_iter()
+            .filter(|w| w.app != "Slack")
+            .collect(),
+        ..screen()
+    };
+    let catalog = catalog();
+    let request = "close slack";
+    let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+    let answers = window_answers("Close Window", "the front window (Google Chrome)");
+    let plan = compose_plan(request, &ctx, &catalog, &built, &answers);
+    assert!(!plan.ready);
+    assert!(plan.steps.is_empty());
+    assert_eq!(plan.missing.as_deref(), Some("an open Slack window"));
+}
+
+#[test]
+fn a_quit_plan_reads_and_saves_as_a_quit() {
+    let (ctx, catalog) = (screen(), catalog());
+    let request = "quit slack";
+    let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+    let plan = compose_plan(
+        request,
+        &ctx,
+        &catalog,
+        &built,
+        &window_answers("Quit App", "Slack"),
+    );
+    assert_eq!(super::present::plan_verb(&plan), "Quit");
+    assert!(super::present::plan_subtitle(&plan).starts_with("Quits an app"));
+    let script = plan_to_script(&plan, &ScriptOptions::default());
+    assert!(script
+        .source
+        .contains(r#"await exec("osascript", ["-e", "tell application \"Slack\" to quit"]);"#));
+    assert!(!script.source.contains("closeWindow"));
 }

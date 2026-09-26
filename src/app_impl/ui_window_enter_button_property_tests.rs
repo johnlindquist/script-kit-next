@@ -124,12 +124,16 @@ struct EnterButton {
     disabled_reason: Option<String>,
 }
 
-/// The intent row pinned at the top of the list, if any.
+/// The intent row as the list shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Pinned {
+struct IntentSeen {
+    /// Position among the rows the highlight can land on.
+    index: usize,
     request: String,
     title: String,
     verb: String,
+    /// Still the placeholder: Jev hasn't answered.
+    reading: bool,
 }
 
 /// What the launcher showed after one step.
@@ -140,8 +144,11 @@ struct Frame {
     list_text: String,
     /// The Enter action of the row the list is painting as highlighted.
     highlighted_action: Option<String>,
+    highlighted_key: Option<String>,
+    /// Keys of the rows the highlight can land on, top to bottom.
+    rows: Vec<String>,
     button: EnterButton,
-    pinned: Option<Pinned>,
+    intent: Option<IntentSeen>,
 }
 
 impl fmt::Debug for Frame {
@@ -162,12 +169,16 @@ impl fmt::Debug for Frame {
                 )
             }
         )?;
-        if let Some(pinned) = &self.pinned {
-            write!(
-                f,
-                "  pinned: {:?} read from {:?}",
-                pinned.title, pinned.request
-            )?;
+        if let Some(intent) = &self.intent {
+            if intent.reading {
+                write!(f, "  row {}: reading {:?}", intent.index, intent.request)?;
+            } else {
+                write!(
+                    f,
+                    "  row {}: {:?} read from {:?}",
+                    intent.index, intent.title, intent.request
+                )?;
+            }
         }
         Ok(())
     }
@@ -210,28 +221,40 @@ fn read_frame(
         if !matches!(app.current_view, AppView::ScriptList) {
             return None;
         }
-        let highlighted_action =
-            app.painted_main_menu_selected_subject()
-                .map(|subject| match subject {
-                    ResolvedMainMenuSelection::SearchResult { result, .. } => {
-                        main_window_result_action_label(
-                            result,
-                            footer_frontmost_app_name().as_deref(),
-                        )
-                    }
-                    ResolvedMainMenuSelection::Calculator { .. } => "Copy".to_string(),
-                });
+        let (highlighted_action, highlighted_key) = app
+            .painted_main_menu_selected_subject()
+            .map(|subject| match subject {
+                ResolvedMainMenuSelection::SearchResult { row, result } => (
+                    main_window_result_action_label(result, footer_frontmost_app_name().as_deref()),
+                    row.stable_key.clone(),
+                ),
+                ResolvedMainMenuSelection::Calculator { row, .. } => {
+                    ("Copy".to_string(), row.stable_key.clone())
+                }
+            })
+            .unzip();
+        let rows: Vec<String> = app
+            .main_menu_committed_rows()
+            .iter()
+            .filter(|row| row.eligibility.selectable)
+            .map(|row| row.stable_key.clone())
+            .collect();
         let footer = app.main_window_footer_config_with_cx(Some(cx))?;
         let enter = footer
             .buttons
             .iter()
             .find(|button| button.action == FooterAction::Run)?;
         let (_, flat) = app.main_menu_result_caches.clone_grouped_results();
-        let pinned = flat.iter().find_map(|result| match result {
-            crate::scripts::SearchResult::Intent(m) => Some(Pinned {
-                request: m.plan.request.clone(),
-                title: m.plan.title.clone(),
+        let intent = flat.iter().find_map(|result| match result {
+            crate::scripts::SearchResult::Intent(m) => Some(IntentSeen {
+                index: rows
+                    .iter()
+                    .position(|key| key == crate::scripts::INTENT_ROW_KEY)
+                    .unwrap_or(usize::MAX),
+                request: m.request.clone(),
+                title: m.title.clone(),
                 verb: m.verb.to_string(),
+                reading: m.reading,
             }),
             _ => None,
         });
@@ -239,8 +262,10 @@ fn read_frame(
             step,
             text: app.filter_text.clone(),
             list_text: app.computed_filter_text.clone(),
-            pinned,
+            intent,
             highlighted_action,
+            highlighted_key,
+            rows,
             button: EnterButton {
                 label: enter.label.to_string(),
                 enabled: enter.enabled,
@@ -435,6 +460,27 @@ fn the_enter_button_names_the_highlighted_rows_action() {
     );
 }
 
+fn button_changes_at_most_once_per_keystroke(recording: &Recording) -> TestCaseResult {
+    let mut shown = recording.frames().next().map(|frame| frame.button.clone());
+    for frames in recording.keystrokes.iter().skip(1) {
+        let mut changes = 0;
+        for frame in frames {
+            if shown.as_ref() != Some(&frame.button) {
+                changes += 1;
+                shown = Some(frame.button.clone());
+            }
+        }
+        if changes > 1 {
+            let step = frames.first().map_or("?", |frame| frame.step.as_str());
+            return Err(broken(
+                format!("the Enter button changed {changes} times after {step:?}"),
+                recording,
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn one_keystroke_changes_the_enter_button_at_most_once() {
     assert_rule(
@@ -442,31 +488,14 @@ fn one_keystroke_changes_the_enter_button_at_most_once() {
         48,
         session(),
         |session| -> TestCaseResult {
-            let recording = run_session(&session);
-            let mut shown = recording.frames().next().map(|frame| frame.button.clone());
-            for frames in recording.keystrokes.iter().skip(1) {
-                let mut changes = 0;
-                for frame in frames {
-                    if shown.as_ref() != Some(&frame.button) {
-                        changes += 1;
-                        shown = Some(frame.button.clone());
-                    }
-                }
-                if changes > 1 {
-                    let step = frames.first().map_or("?", |frame| frame.step.as_str());
-                    return Err(broken(
-                        format!("the Enter button changed {changes} times after {step:?}"),
-                        &recording,
-                    ));
-                }
-            }
-            Ok(())
+            button_changes_at_most_once_per_keystroke(&run_session(&session))
         },
     );
 }
 
-/// Rules for the intent row: Jev reads the sentence while it is typed, and a
-/// ready plan for exactly the current text is pinned first.
+/// Rules for the intent row: every sentence Jev reads lists it second, under the
+/// closest match. It reads until Jev answers, then shows the plan in place, and ⌘↵
+/// runs it from any row.
 mod jev_rules {
     use super::*;
     use crate::intent::jev::{Answer, Answers, JevResult, Probabilities, Question, Questions};
@@ -564,125 +593,128 @@ mod jev_rules {
         session_with(READING_PAUSES_MS)
     }
 
-    #[test]
-    fn a_pinned_plan_offers_save_as_script_on_cmd_s() {
-        let (pinned, actions) = gpui::run_test_once(
-            0,
-            Box::new(|dispatcher| {
-                let mut cx = gpui::TestAppContext::build(dispatcher, Some("intent_actions"));
-                let (app, window) = launcher(&mut cx, Jev::Reading);
-                type_into_launcher(&mut cx, window, &app, "where is the game tonight");
-                cx.executor().advance_clock(Duration::from_millis(400));
-                cx.run_until_parked();
-                let seen = app.update(&mut cx, |app, _| {
-                    let pinned = app
-                        .selected_main_list_search_result_owned()
-                        .and_then(|result| match result {
-                            crate::scripts::SearchResult::Intent(m) => Some(m.plan.title.clone()),
-                            _ => None,
-                        });
-                    let actions: Vec<(String, Option<String>)> = app
-                        .get_focused_script_info()
-                        .map(|info| crate::actions::get_script_context_actions(&info))
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|action| (action.id.clone(), action.shortcut.clone()))
-                        .collect();
-                    (pinned, actions)
-                });
-                cx.update(|cx| cx.quit());
-                cx.run_until_parked();
-                seen
-            }),
-        );
-        assert!(
-            pinned.is_some(),
-            "the plan for the sentence is the highlighted row"
-        );
-        let save = actions.iter().find(|(id, _)| id == "save_intent_as_script");
-        assert_eq!(
-            save.and_then(|(_, shortcut)| shortcut.as_deref()),
-            Some("⌘S"),
-            "actions offered: {actions:?}"
-        );
-        assert!(
-            !actions
-                .iter()
-                .any(|(id, _)| id.contains("alias") || id.contains("favorite")),
-            "a sentence has no script preferences: {actions:?}"
-        );
+    fn select_intent_row(app: &mut ScriptListApp, cx: &mut gpui::Context<ScriptListApp>) -> bool {
+        let Some(index) = app
+            .main_menu_committed_rows()
+            .iter()
+            .find(|row| row.stable_key == crate::scripts::INTENT_ROW_KEY)
+            .map(|row| row.grouped_index)
+        else {
+            return false;
+        };
+        app.select_main_menu_row(index, crate::MainMenuSelectionOrigin::Keyboard, cx)
+    }
+
+    fn selected_intent(app: &mut ScriptListApp) -> Option<crate::scripts::IntentMatch> {
+        match app.selected_main_list_search_result_owned()? {
+            crate::scripts::SearchResult::Intent(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    fn footer_label(
+        app: &ScriptListApp,
+        cx: &mut gpui::Context<ScriptListApp>,
+        action: FooterAction,
+    ) -> Option<String> {
+        app.main_window_footer_config_with_cx(Some(cx))?
+            .buttons
+            .iter()
+            .find(|button| button.action == action)
+            .map(|button| button.label.to_string())
     }
 
     #[test]
-    fn a_plan_never_takes_the_highlight_from_a_row_the_user_picked() {
-        let (picked, highlighted, pinned) = gpui::run_test_once(
-            0,
-            Box::new(|dispatcher| {
-                let mut cx = gpui::TestAppContext::build(dispatcher, Some("intent_picked_row"));
-                let (app, window) = launcher(&mut cx, Jev::Reading);
-                type_into_launcher(&mut cx, window, &app, "where is the game tonight");
-                cx.executor().advance_clock(Duration::from_millis(20));
-                cx.run_until_parked();
-                let picked = app.update(&mut cx, |app, cx| {
-                    let (index, key) = app
-                        .main_menu_committed_rows()
-                        .iter()
-                        .filter(|row| row.eligibility.selectable)
-                        .nth(1)
-                        .map(|row| (row.grouped_index, row.stable_key.clone()))?;
-                    app.select_main_menu_row(index, crate::MainMenuSelectionOrigin::Keyboard, cx)
-                        .then_some(key)
-                });
-                cx.executor().advance_clock(Duration::from_millis(400));
-                cx.run_until_parked();
-                let seen = app.update(&mut cx, |app, _| {
-                    let highlighted =
-                        app.resolved_main_menu_selected_subject()
-                            .map(|subject| match subject {
-                                ResolvedMainMenuSelection::SearchResult { row, .. }
-                                | ResolvedMainMenuSelection::Calculator { row, .. } => {
-                                    row.stable_key.clone()
-                                }
-                            });
-                    let pinned = app
-                        .main_menu_committed_rows()
-                        .iter()
-                        .find(|row| row.eligibility.selectable)
-                        .is_some_and(|row| {
-                            row.stable_key
-                                .starts_with(crate::scripts::INTENT_ROW_KEY_PREFIX)
-                        });
-                    (highlighted, pinned)
-                });
-                cx.update(|cx| cx.quit());
-                cx.run_until_parked();
-                (picked, seen.0, seen.1)
-            }),
-        );
-        let picked = picked.expect("the sentence lists at least two rows to pick from");
-        assert!(pinned, "the plan for the sentence is the first row");
-        assert_eq!(highlighted.as_deref(), Some(picked.as_str()));
-    }
-
-    #[test]
-    fn a_plan_is_only_ever_pinned_for_the_text_on_screen() {
+    fn every_sentence_jev_reads_lists_the_intent_row_second() {
         assert_rule(
-            "The pinned intent row was read from exactly the text in the input",
+            "From the first frame that lists a sentence, the intent row is second, under the closest match, or first when nothing else matches",
             32,
             reading_session(),
             |session| -> TestCaseResult {
                 let recording = run_session_with(&session, Jev::Reading);
                 for frame in recording.frames() {
-                    if let Some(pinned) = &frame.pinned {
-                        if pinned.request != frame.text {
-                            return Err(broken(
-                                format!(
-                                    "after {:?} the list pins {:?}, read from {:?}, while the input says {:?}",
-                                    frame.step, pinned.title, pinned.request, frame.text
-                                ),
-                                &recording,
-                            ));
-                        }
+                    if frame.list_text != frame.text || !crate::intent::wants_reading(&frame.text)
+                    {
+                        continue;
+                    }
+                    let expected = 1.min(frame.rows.len().saturating_sub(1));
+                    let placed = frame
+                        .intent
+                        .as_ref()
+                        .is_some_and(|intent| intent.index == expected && intent.request == frame.text);
+                    if !placed {
+                        return Err(broken(
+                            format!(
+                                "after {:?} the list for {:?} shows the intent row as {:?}, not as row {expected}",
+                                frame.step, frame.text, frame.intent
+                            ),
+                            &recording,
+                        ));
+                    }
+                }
+                Ok(())
+            },
+        );
+    }
+
+    #[test]
+    fn jevs_answer_never_moves_a_row_or_the_highlight() {
+        assert_rule(
+            "When Jev answers, every row already listed keeps its place and the highlight stays where it was",
+            32,
+            reading_session(),
+            |session| -> TestCaseResult {
+                let recording = run_session_with(&session, Jev::Reading);
+                let frames: Vec<&Frame> = recording.frames().collect();
+                for pair in frames.windows(2) {
+                    let (before, after) = (pair[0], pair[1]);
+                    let answered = before.list_text == after.list_text
+                        && before.intent.as_ref().is_some_and(|intent| intent.reading)
+                        && after.intent.as_ref().is_some_and(|intent| !intent.reading);
+                    if !answered {
+                        continue;
+                    }
+                    if !after.rows.starts_with(&before.rows)
+                        || before.highlighted_key != after.highlighted_key
+                    {
+                        return Err(broken(
+                            format!(
+                                "when Jev answered after {:?} the rows went from {:?} to {:?} and the highlight from {:?} to {:?}",
+                                after.step,
+                                before.rows,
+                                after.rows,
+                                before.highlighted_key,
+                                after.highlighted_key
+                            ),
+                            &recording,
+                        ));
+                    }
+                }
+                Ok(())
+            },
+        );
+    }
+
+    #[test]
+    fn the_intent_row_only_shows_a_reading_of_the_text_on_screen() {
+        assert_rule(
+            "Whenever the intent row shows Jev's words, they were read from exactly the text in the input",
+            32,
+            reading_session(),
+            |session| -> TestCaseResult {
+                let recording = run_session_with(&session, Jev::Reading);
+                for frame in recording.frames() {
+                    let Some(intent) = &frame.intent else {
+                        continue;
+                    };
+                    if !intent.reading && intent.request != frame.text {
+                        return Err(broken(
+                            format!(
+                                "after {:?} the intent row shows {:?}, read from {:?}, while the input says {:?}",
+                                frame.step, intent.title, intent.request, frame.text
+                            ),
+                            &recording,
+                        ));
                     }
                 }
                 Ok(())
@@ -703,23 +735,51 @@ mod jev_rules {
     }
 
     #[test]
+    fn one_keystroke_changes_the_enter_button_at_most_once_while_jev_reads() {
+        assert_rule(
+            "With Jev reading, one keystroke changes the Enter button at most once, however Jev answers",
+            32,
+            reading_session(),
+            |session| -> TestCaseResult {
+                button_changes_at_most_once_per_keystroke(&run_session_with(&session, Jev::Reading))
+            },
+        );
+    }
+
+    /// The keystroke whose text the list at keystroke `at` was built for: the latest
+    /// one at or before `at` that left exactly that text in the input.
+    fn list_built_at(recording: &Recording, at: usize) -> Option<usize> {
+        let list_text = &recording.keystrokes[at].first()?.list_text;
+        (0..=at).rev().find(|&k| {
+            recording.keystrokes[k]
+                .first()
+                .is_some_and(|frame| &frame.text == list_text)
+        })
+    }
+
+    #[test]
     fn typing_never_waits_on_jev() {
         assert_rule(
-            "Right after each keystroke the launcher shows what it shows without Jev, or a list already rebuilt for exactly that text",
+            "Right after each keystroke the list is never further behind the typed text with Jev than without it, and when both show the list for the same text, they highlight the same row",
             24,
             reading_session(),
             |session| -> TestCaseResult {
                 let without = run_session_with(&session, Jev::Off);
                 let with = run_session_with(&session, Jev::Reading);
-                for (plain, read) in without.keystrokes.iter().zip(&with.keystrokes).skip(1) {
-                    let (Some(plain), Some(read)) = (plain.first(), read.first()) else {
+                let keystrokes = without.keystrokes.len().min(with.keystrokes.len());
+                for at in 1..keystrokes {
+                    let (Some(plain), Some(read)) =
+                        (without.keystrokes[at].first(), with.keystrokes[at].first())
+                    else {
                         continue;
                     };
-                    let caught_up = read.list_text == read.text;
-                    let same = plain.text == read.text
-                        && plain.highlighted_action == read.highlighted_action
-                        && plain.button == read.button;
-                    if !same && !caught_up {
+                    let plain_built = list_built_at(&without, at);
+                    let read_built = list_built_at(&with, at);
+                    let behind = read_built < plain_built;
+                    let differs = read_built == plain_built
+                        && (plain.highlighted_action != read.highlighted_action
+                            || plain.button != read.button);
+                    if behind || differs {
                         return Err(broken(
                             format!(
                                 "right after {:?} the launcher showed {read:?} with Jev but {plain:?} without",
@@ -735,19 +795,34 @@ mod jev_rules {
     }
 
     #[test]
-    fn when_jev_fails_the_launcher_is_exactly_the_launcher_without_jev() {
+    fn a_failing_jev_never_changes_what_enter_runs() {
         assert_rule(
-            "Every frame with a failing Jev matches the frame without Jev",
+            "With a failing Jev, every frame highlights the same row and shows the same Enter button as without Jev",
             24,
             reading_session(),
             |session| -> TestCaseResult {
-                let without = run_session_with(&session, Jev::Off).transcript();
+                let without = run_session_with(&session, Jev::Off);
                 let failing = run_session_with(&session, Jev::Failing);
-                if failing.transcript() != without {
+                let plain: Vec<&Frame> = without.frames().collect();
+                let failed: Vec<&Frame> = failing.frames().collect();
+                if plain.len() != failed.len() {
                     return Err(broken(
-                        format!("without Jev the launcher showed:\n{without}"),
+                        format!("without Jev the launcher showed:\n{}", without.transcript()),
                         &failing,
                     ));
+                }
+                for (plain, failed) in plain.iter().zip(&failed) {
+                    if plain.highlighted_key != failed.highlighted_key
+                        || plain.button != failed.button
+                    {
+                        return Err(broken(
+                            format!(
+                                "after {:?} a failing Jev showed {failed:?} but without Jev {plain:?}",
+                                failed.step
+                            ),
+                            &failing,
+                        ));
+                    }
                 }
                 Ok(())
             },
@@ -755,45 +830,213 @@ mod jev_rules {
     }
 
     #[test]
-    fn a_plan_moves_the_enter_button_at_most_once_after_a_keystroke() {
-        assert_rule(
-            "After a keystroke the Enter button changes at most once for the list and once more when Jev's plan for that text arrives, and that change names the plan",
-            32,
-            reading_session(),
-            |session| -> TestCaseResult {
-                let recording = run_session_with(&session, Jev::Reading);
-                let mut shown = recording.frames().next().map(|frame| frame.button.clone());
-                for frames in recording.keystrokes.iter().skip(1) {
-                    let mut list_changes = 0;
-                    let mut plan_changes = 0;
-                    for frame in frames {
-                        if shown.as_ref() == Some(&frame.button) {
-                            continue;
-                        }
-                        shown = Some(frame.button.clone());
-                        match &frame.pinned {
-                            Some(pinned)
-                                if pinned.request == frame.text
-                                    && frame.button.label == pinned.verb
-                                    && frame.step.starts_with('+') =>
-                            {
-                                plan_changes += 1
-                            }
-                            _ => list_changes += 1,
-                        }
+    fn a_reading_that_needs_more_says_what_and_runs_nothing() {
+        let (intent, activatable, listed) = gpui::run_test_once(
+            0,
+            Box::new(|dispatcher| {
+                let mut cx = gpui::TestAppContext::build(dispatcher, Some("intent_needs_more"));
+                let (app, window) = launcher(&mut cx, Jev::Reading);
+                type_into_launcher(&mut cx, window, &app, "game plan");
+                cx.executor().advance_clock(Duration::from_millis(400));
+                cx.run_until_parked();
+                let seen = app.update(&mut cx, |app, cx| {
+                    let listed = format!(
+                        "input {:?}, list for {:?}, rows {:?}, intent row {:?}",
+                        app.filter_text,
+                        app.computed_filter_text,
+                        app.main_menu_committed_rows()
+                            .iter()
+                            .map(|row| row.stable_key.clone())
+                            .collect::<Vec<_>>(),
+                        app.intent_launcher.row_for(&app.computed_filter_text),
+                    );
+                    if !select_intent_row(app, cx) {
+                        return (None, true, listed);
                     }
-                    if list_changes > 1 || plan_changes > 1 {
-                        let step = frames.first().map_or("?", |frame| frame.step.as_str());
-                        return Err(broken(
-                            format!(
-                                "after {step:?} the Enter button changed {list_changes} times for the list and {plan_changes} times for Jev"
-                            ),
-                            &recording,
-                        ));
-                    }
-                }
-                Ok(())
-            },
+                    let activatable = app
+                        .main_menu_committed_rows()
+                        .iter()
+                        .find(|row| row.stable_key == crate::scripts::INTENT_ROW_KEY)
+                        .is_some_and(|row| row.eligibility.activatable);
+                    (selected_intent(app), activatable, listed)
+                });
+                cx.update(|cx| cx.quit());
+                cx.run_until_parked();
+                seen
+            }),
         );
+        let intent = intent.unwrap_or_else(|| {
+            panic!("no intent row for a two-word sentence; the launcher showed {listed}")
+        });
+        assert!(!intent.reading, "Jev answered: {intent:?}");
+        assert!(intent.plan.is_none(), "a plan that isn't ready never runs: {intent:?}");
+        assert!(
+            intent.subtitle.starts_with("Needs "),
+            "the row says what it needs: {intent:?}"
+        );
+        assert!(!activatable, "Enter can't land on a plan that isn't ready");
+    }
+
+    #[test]
+    fn the_intent_row_offers_save_as_script_on_cmd_s() {
+        let (plan, actions) = gpui::run_test_once(
+            0,
+            Box::new(|dispatcher| {
+                let mut cx = gpui::TestAppContext::build(dispatcher, Some("intent_actions"));
+                let (app, window) = launcher(&mut cx, Jev::Reading);
+                type_into_launcher(&mut cx, window, &app, "where is the game tonight");
+                cx.executor().advance_clock(Duration::from_millis(400));
+                cx.run_until_parked();
+                let seen = app.update(&mut cx, |app, cx| {
+                    select_intent_row(app, cx);
+                    let plan = selected_intent(app).and_then(|m| m.plan);
+                    let actions: Vec<(String, Option<String>)> = app
+                        .get_focused_script_info()
+                        .map(|info| crate::actions::get_script_context_actions(&info))
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|action| (action.id.clone(), action.shortcut.clone()))
+                        .collect();
+                    (plan, actions)
+                });
+                cx.update(|cx| cx.quit());
+                cx.run_until_parked();
+                seen
+            }),
+        );
+        assert!(plan.is_some(), "the highlighted intent row carries a ready plan");
+        let save = actions.iter().find(|(id, _)| id == "save_intent_as_script");
+        assert_eq!(
+            save.and_then(|(_, shortcut)| shortcut.as_deref()),
+            Some("⌘S"),
+            "actions offered: {actions:?}"
+        );
+        assert!(
+            !actions
+                .iter()
+                .any(|(id, _)| id.contains("alias") || id.contains("favorite")),
+            "a sentence has no script preferences: {actions:?}"
+        );
+    }
+
+    #[test]
+    fn a_row_the_user_picked_keeps_the_highlight_when_jev_answers() {
+        let (picked, highlighted, intent_index) = gpui::run_test_once(
+            0,
+            Box::new(|dispatcher| {
+                let mut cx = gpui::TestAppContext::build(dispatcher, Some("intent_picked_row"));
+                let (app, window) = launcher(&mut cx, Jev::Reading);
+                type_into_launcher(&mut cx, window, &app, "where is the game tonight");
+                cx.executor().advance_clock(Duration::from_millis(20));
+                cx.run_until_parked();
+                let picked = app.update(&mut cx, |app, cx| {
+                    let (index, key) = app
+                        .main_menu_committed_rows()
+                        .iter()
+                        .filter(|row| row.eligibility.selectable)
+                        .filter(|row| row.stable_key != crate::scripts::INTENT_ROW_KEY)
+                        .nth(1)
+                        .map(|row| (row.grouped_index, row.stable_key.clone()))?;
+                    app.select_main_menu_row(index, crate::MainMenuSelectionOrigin::Keyboard, cx)
+                        .then_some(key)
+                });
+                cx.executor().advance_clock(Duration::from_millis(400));
+                cx.run_until_parked();
+                let seen = app.update(&mut cx, |app, _| {
+                    let highlighted =
+                        app.resolved_main_menu_selected_subject()
+                            .map(|subject| match subject {
+                                ResolvedMainMenuSelection::SearchResult { row, .. }
+                                | ResolvedMainMenuSelection::Calculator { row, .. } => {
+                                    row.stable_key.clone()
+                                }
+                            });
+                    let intent_index = app
+                        .main_menu_committed_rows()
+                        .iter()
+                        .filter(|row| row.eligibility.selectable)
+                        .position(|row| row.stable_key == crate::scripts::INTENT_ROW_KEY);
+                    (highlighted, intent_index)
+                });
+                cx.update(|cx| cx.quit());
+                cx.run_until_parked();
+                (picked, seen.0, seen.1)
+            }),
+        );
+        let picked = picked.expect("the sentence lists at least three rows to pick from");
+        assert_eq!(intent_index, Some(1), "the intent row is second");
+        assert_eq!(highlighted.as_deref(), Some(picked.as_str()));
+    }
+
+    #[test]
+    fn cmd_enter_runs_the_sentence_from_whatever_row_is_highlighted() {
+        let seen = gpui::run_test_once(
+            0,
+            Box::new(|dispatcher| {
+                let mut cx = gpui::TestAppContext::build(dispatcher, Some("intent_cmd_enter"));
+                let (app, window) = launcher(&mut cx, Jev::Reading);
+                type_into_launcher(&mut cx, window, &app, "where is the game tonight");
+                cx.executor().advance_clock(Duration::from_millis(20));
+                cx.run_until_parked();
+                let seen = app.update(&mut cx, |app, cx| {
+                    let before = app.resolved_main_menu_selected_subject().map(|subject| {
+                        match subject {
+                            ResolvedMainMenuSelection::SearchResult { row, .. }
+                            | ResolvedMainMenuSelection::Calculator { row, .. } => {
+                                row.stable_key.clone()
+                            }
+                        }
+                    });
+                    let label = footer_label(app, cx, FooterAction::Ai);
+                    let routed = app.route_main_window_cmd_enter(cx);
+                    let after = app.resolved_main_menu_selected_subject().map(|subject| {
+                        match subject {
+                            ResolvedMainMenuSelection::SearchResult { row, .. }
+                            | ResolvedMainMenuSelection::Calculator { row, .. } => {
+                                row.stable_key.clone()
+                            }
+                        }
+                    });
+                    let held = app.intent_launcher.held_enter().is_some();
+                    (before, label, routed, after, held)
+                });
+                cx.update(|cx| cx.quit());
+                cx.run_until_parked();
+                seen
+            }),
+        );
+        let (before, label, routed, after, held) = seen;
+        assert_ne!(
+            before.as_deref(),
+            Some(crate::scripts::INTENT_ROW_KEY),
+            "the closest match starts highlighted"
+        );
+        assert_eq!(label.as_deref(), Some("Do It"), "the footer names what ⌘↵ does");
+        assert!(routed, "⌘↵ runs the sentence instead of opening Agent Chat");
+        assert_eq!(
+            after.as_deref(),
+            Some(crate::scripts::INTENT_ROW_KEY),
+            "⌘↵ shows the row it runs"
+        );
+        assert!(held, "Enter waits on the intent row while Jev reads");
+    }
+
+    #[test]
+    fn without_jev_cmd_enter_stays_agent() {
+        let label = gpui::run_test_once(
+            0,
+            Box::new(|dispatcher| {
+                let mut cx = gpui::TestAppContext::build(dispatcher, Some("intent_off_footer"));
+                let (app, window) = launcher(&mut cx, Jev::Off);
+                type_into_launcher(&mut cx, window, &app, "where is the game tonight");
+                cx.executor().advance_clock(Duration::from_millis(400));
+                cx.run_until_parked();
+                let label = app.update(&mut cx, |app, cx| footer_label(app, cx, FooterAction::Ai));
+                cx.update(|cx| cx.quit());
+                cx.run_until_parked();
+                label
+            }),
+        );
+        assert_eq!(label.as_deref(), Some("Agent"));
     }
 }

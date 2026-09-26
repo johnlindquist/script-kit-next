@@ -217,6 +217,14 @@ fn emit_step(step: &Step, parameterize: bool, out: &mut Emitted) {
                 js(app)
             );
             let call = match op.action() {
+                Some(super::catalog::WindowAction::Quit) => {
+                    let quit = format!("tell application \"{}\" to quit", app.replace('"', "\\\""));
+                    out.lines.push(format!(
+                        "await exec(\"osascript\", [\"-e\", {}]);",
+                        js(&quit)
+                    ));
+                    return;
+                }
                 Some(action) => match action.sdk_position() {
                     Some(position) => format!("await tileWindow(win.windowId, {});", js(position)),
                     None => match action {

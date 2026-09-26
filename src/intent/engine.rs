@@ -89,7 +89,7 @@ impl Pathway {
                 "Do something inside the frontmost app using one of its own menu commands, like a new tab, reply, split pane, zoom, or reopen a closed tab"
             }
             Self::Window => {
-                "Move, resize, tile, center, maximize, minimize, or send a window to another display"
+                "Move, resize, tile, center, maximize, minimize, or close a window, send it to another display, or quit an app"
             }
             Self::Capture => {
                 "Write down a todo, a reminder, a calendar event, a link, a social post, or a line in today's note"
@@ -694,7 +694,7 @@ pub fn build_questions(
     questions.insert(
         "window_op",
         choice(
-            "If the user wants to do something to a window, like move, resize, tile, minimize, or close it, which action? Go by the words the user typed, not by what they did last.",
+            "If the user wants to do something to a window, like move, resize, tile, minimize, or close it, or to quit an app, which action? Go by the words the user typed, not by what they did last.",
             with_none(
                 listed(
                     window_op
@@ -1055,6 +1055,47 @@ fn widen(request: &str, b: &Built, from: usize, to: usize) -> String {
     request[b.words[from].start..b.words[to - 1].end].to_string()
 }
 
+/// Window steps that end something, so a named app must be the one they end.
+const QUIT_APP: &str = "Quit App";
+const CLOSE_WINDOW: &str = "Close Window";
+/// Words that point at the front window, the only one ended without being named.
+const FRONT_WORDS: &[&str] = &[
+    "this",
+    "it",
+    "that",
+    "current",
+    "front",
+    "frontmost",
+    "window",
+    "app",
+    "here",
+];
+
+/// The catalog app whose whole name the user said, the longest when several match.
+fn spoken_app<'a>(b: &Built, catalog: &'a Catalog) -> Option<&'a str> {
+    let spoken = format!(
+        " {} ",
+        b.words
+            .iter()
+            .map(|w| w.text.to_lowercase())
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    let utf16_len = |s: &str| s.encode_utf16().count();
+    let mut best: Option<&str> = None;
+    for command in &catalog.commands {
+        if command.kind != CommandKind::App
+            || !spoken.contains(&format!(" {} ", command.name.to_lowercase()))
+        {
+            continue;
+        }
+        if best.is_none_or(|best| utf16_len(&command.name) > utf16_len(best)) {
+            best = Some(&command.name);
+        }
+    }
+    best
+}
+
 /// How sure Jev must be of an app the user named before it beats the front window.
 const NAMED_APP_FLOOR: f64 = 0.2;
 
@@ -1179,7 +1220,7 @@ pub fn reading_for(
                 .and_then(|label| b.window_target.get(label))
                 .filter(|app| !app.is_empty())
                 .map_or(front, String::as_str);
-            let app = if app == front {
+            let mut app = if app == front {
                 named_window_app(b, answers, front).unwrap_or(app)
             } else {
                 app
@@ -1187,6 +1228,32 @@ pub fn reading_for(
             let Some(op) = op else {
                 return base("Arrange a window".into()).lacking("how to arrange the window");
             };
+            // Ending the front app is never the fallback: "quit spotify" with no Spotify
+            // window on screen quits Spotify or nothing.
+            if op.label == QUIT_APP || op.label == CLOSE_WINDOW {
+                let quits = op.label == QUIT_APP;
+                match spoken_app(b, catalog) {
+                    Some(named) if named.to_lowercase() != app.to_lowercase() => {
+                        let open = ctx
+                            .open_windows
+                            .iter()
+                            .any(|w| w.app.eq_ignore_ascii_case(named));
+                        if !quits && !open {
+                            return base(op.title_for(named))
+                                .lacking(format!("an open {named} window"));
+                        }
+                        app = named;
+                    }
+                    Some(_) => {}
+                    None if app == front && b.words.iter().any(|w| one_of(w, FRONT_WORDS)) => {}
+                    None if quits => {
+                        return base("Quit an app".into()).lacking("which app to quit");
+                    }
+                    None => {
+                        return base("Close a window".into()).lacking("which window to close");
+                    }
+                }
+            }
             let title = op.title_for(app);
             let mut reading = base(title.clone());
             reading.steps = vec![Step::Window {

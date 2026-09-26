@@ -55,6 +55,7 @@ pub enum WindowAction {
     PreviousDisplay,
     Minimize,
     Close,
+    Quit,
 }
 
 impl WindowAction {
@@ -267,6 +268,12 @@ const WINDOW_OPS: &[(&str, &str, &str, WindowAction)] = &[
         "Close {{app}} Window",
         "Close the frontmost the app window",
         WindowAction::Close,
+    ),
+    (
+        "Quit App",
+        "Quit {{app}}",
+        "Quit the app entirely, not just its window",
+        WindowAction::Quit,
     ),
 ];
 

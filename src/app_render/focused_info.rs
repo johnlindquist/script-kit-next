@@ -1093,7 +1093,11 @@ fn render_focused_info_for_result(
             let _ = shortcut_display;
         }
         scripts::SearchResult::Intent(intent_match) => {
-            if let Some(typed) = intent_match.plan.typed.as_deref() {
+            if let Some(typed) = intent_match
+                .plan
+                .as_ref()
+                .and_then(|plan| plan.typed.as_deref())
+            {
                 content = content.child(focused_info_labeled_section("TYPED", typed, style));
             }
             content = content
@@ -1544,7 +1548,7 @@ impl ScriptListApp {
                         "Inspect",
                     )),
                     scripts::SearchResult::Intent(m) => Some(ScriptInfo::with_action_verb(
-                        &m.plan.title,
+                        &m.title,
                         "intent".to_string(),
                         false,
                         m.verb,

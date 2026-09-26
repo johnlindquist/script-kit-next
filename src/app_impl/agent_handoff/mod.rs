@@ -4730,9 +4730,9 @@ impl ScriptListApp {
                 "warningCount": m.warning_count,
             }),
             scripts::SearchResult::Intent(m) => serde_json::json!({
-                "title": m.plan.title,
-                "pathway": m.plan.pathway.key(),
-                "typed": m.plan.typed,
+                "title": m.title,
+                "pathway": m.plan.as_ref().map(|plan| plan.pathway.key()),
+                "typed": m.plan.as_ref().and_then(|plan| plan.typed.clone()),
             }),
             scripts::SearchResult::SpineProjection(_) => serde_json::json!({}),
         };

@@ -3053,7 +3053,7 @@ impl ScriptListApp {
         {
             (grouped_items, flat_results)
         } else {
-            self.pin_intent_row(
+            self.place_intent_row(
                 grouped_items,
                 flat_results,
                 raw_filter_text,

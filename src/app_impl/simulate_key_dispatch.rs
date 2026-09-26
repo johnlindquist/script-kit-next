@@ -368,19 +368,18 @@ impl ScriptListApp {
                         && !_has_alt
                         && !_has_ctrl
                     {
-                        // Mirrors the live GPUI handler at
-                        // src/render_script_list/mod.rs:881-890: Cmd+Enter
-                        // (no shift/alt/ctrl) routes the current ScriptList
-                        // selection into Agent Chat as an explicit
-                        // FocusedTarget context part rather than the plain
-                        // frontmost-app context. Without this arm, automation
-                        // callers of SimulateKey fell through to the plain
-                        // `enter` case and executed the selected item.
+                        // Mirrors the live GPUI handler in
+                        // src/render_script_list/mod.rs: Cmd+Enter (no
+                        // shift/alt/ctrl) runs what the typed sentence means,
+                        // and opens Agent Chat with the current selection when
+                        // there's no sentence to read. Without this arm,
+                        // automation callers of SimulateKey fell through to the
+                        // plain `enter` case and executed the selected item.
                         logging::log(
                             "STDIN",
-                            "SimulateKey: Cmd+Enter - route to Agent Chat context capture",
+                            "SimulateKey: Cmd+Enter - run the sentence or open Agent Chat",
                         );
-                        view.try_route_global_cmd_enter_to_agent_chat_context_capture(ctx);
+                        view.route_main_window_cmd_enter(ctx);
                     } else if view.handle_menu_syntax_form_key_input(
                         &key_lower,
                         key_char,

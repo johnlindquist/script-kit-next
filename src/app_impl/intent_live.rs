@@ -44,6 +44,10 @@ pub fn catalog_from_launcher(
     let mut commands = Vec::new();
     let mut text_tools = Vec::new();
     for entry in builtins {
+        // The app_command pathway already reaches the front app's menus.
+        if entry.id == "builtin/do-in-current-app" {
+            continue;
+        }
         commands.push(Command {
             id: builtin_command_id(entry),
             kind: CommandKind::Builtin,
@@ -248,6 +252,13 @@ pub fn run_window_step(op: &WindowOp, app: &str) -> anyhow::Result<()> {
     let action = op
         .action()
         .ok_or_else(|| anyhow::anyhow!("unknown window operation {}", op.label))?;
+    if action == WindowAction::Quit {
+        let script = format!(
+            r#"tell application "{}" to quit"#,
+            crate::utils::escape_applescript_string(app)
+        );
+        return crate::platform::run_osascript(&script, "intent_quit_app").map(|_| ());
+    }
     let window = wc::list_windows()?
         .into_iter()
         .filter(|w| w.app.eq_ignore_ascii_case(app))
@@ -259,6 +270,7 @@ pub fn run_window_step(op: &WindowOp, app: &str) -> anyhow::Result<()> {
         WindowAction::PreviousDisplay => wc::move_to_previous_display(window.id),
         WindowAction::Minimize => wc::minimize_window(window.id),
         WindowAction::Close => wc::close_window(window.id),
+        WindowAction::Quit => unreachable!("quit returns before the window lookup"),
     }
 }
 

@@ -927,8 +927,15 @@ impl ScriptListApp {
                         self.open_script_issues_view(cx);
                     }
                     scripts::SearchResult::Intent(intent_match) => {
+                        let Some(plan) = intent_match.plan else {
+                            self.update_main_menu_dispatch_status(
+                                "refused",
+                                Some("intent_row_not_ready"),
+                            );
+                            anyhow::bail!("intent_row_not_ready");
+                        };
                         self.set_main_menu_dispatch_observation(observation.clone());
-                        if let Err(reason) = self.execute_intent_plan(&intent_match.plan, cx) {
+                        if let Err(reason) = self.execute_intent_plan(&plan, cx) {
                             self.update_main_menu_dispatch_status("refused", Some(reason));
                             anyhow::bail!(reason);
                         }

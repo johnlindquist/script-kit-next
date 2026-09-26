@@ -2,7 +2,8 @@
 //!
 //! Typing never waits on Jev: every keystroke bumps the generation, and a reading that
 //! comes back for anything but the current text at the current generation is dropped.
-//! A plan is only ever shown for the exact text it was read from.
+//! The intent row exists for a sentence from its first frame, reading until Jev answers,
+//! and only ever shows a reading of the exact text in the input.
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -15,7 +16,7 @@ use super::jev::{JevError, Oracle};
 
 /// How long typing must pause before Jev is asked.
 pub const DEBOUNCE: Duration = Duration::from_millis(140);
-/// Enter pressed during a reading waits this long for it, then runs what was shown.
+/// Enter on the intent row during a reading waits this long for it.
 pub const HELD_ENTER_LIMIT: Duration = Duration::from_millis(1500);
 const RECENT_LIMIT: usize = 24;
 
@@ -46,11 +47,11 @@ pub struct Ticket {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TextChange {
-    /// Nothing to read; any shown plan is gone.
+    /// No intent row for this text.
     Skip,
     /// A plan read earlier for this same text and screen is shown again at once.
     Recalled,
-    /// Ask Jev after the debounce.
+    /// The row reads until Jev answers, asked after the debounce.
     Read(Ticket),
 }
 
@@ -58,29 +59,54 @@ pub enum TextChange {
 pub enum Finish {
     /// For older text or an older keystroke; nothing changes.
     Stale,
-    /// A ready plan for the current text; the list should refresh.
+    /// A ready plan for the current text.
     Shown,
-    /// Jev answered but the plan isn't ready; nothing is pinned.
+    /// Jev answered but the plan needs more; the row says what.
     NotReady,
-    /// Jev failed; the launcher behaves as if Jev were off.
+    /// Jev failed; the row says so and never runs.
     Failed,
 }
 
-/// Enter pressed while a reading for the same text was in flight.
+/// What the intent row says.
+#[derive(Debug, Clone)]
+pub enum RowState {
+    Reading,
+    /// Runs only when the plan is ready.
+    Read(Arc<Plan>),
+    Failed,
+}
+
+#[derive(Debug, Clone)]
+pub struct IntentRow {
+    pub request: String,
+    pub state: RowState,
+}
+
+impl IntentRow {
+    /// The plan Enter runs, if Jev's reading is ready.
+    pub fn runnable(&self) -> Option<&Arc<Plan>> {
+        match &self.state {
+            RowState::Read(plan) if plan.ready => Some(plan),
+            _ => None,
+        }
+    }
+}
+
+/// Enter pressed on the intent row while it was still reading.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeldEnter {
     pub request: String,
     pub pressed_at: Instant,
-    /// The row Enter would have run, so a changed selection is noticed.
-    pub shown_key: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HeldOutcome {
-    /// The selection is still what the user saw: run it.
+    /// The reading is ready and the intent row is still highlighted: run it.
     Run,
-    /// A different row took the selection: show it and wait for another Enter.
-    Changed,
+    /// The reading needs more, failed, or hasn't come back in time.
+    Wait,
+    /// The user moved off the intent row while it read.
+    Moved,
 }
 
 #[derive(Debug)]
@@ -89,7 +115,7 @@ pub struct IntentLauncher {
     generation: u64,
     epoch: u64,
     in_flight: Option<Ticket>,
-    plan: Option<Arc<Plan>>,
+    row: Option<IntentRow>,
     held: Option<HeldEnter>,
     last_action: Option<LastAction>,
     recent: VecDeque<(String, u64, Arc<Plan>)>,
@@ -109,7 +135,7 @@ impl IntentLauncher {
             generation: 0,
             epoch: 0,
             in_flight: None,
-            plan: None,
+            row: None,
             held: None,
             last_action: None,
             recent: VecDeque::new(),
@@ -156,19 +182,23 @@ impl IntentLauncher {
         if self.held.as_ref().is_some_and(|held| held.request != text) {
             self.held = None;
         }
-        if self.plan.as_ref().is_some_and(|plan| plan.request != text) {
-            self.plan = None;
-        }
         if !eligible || self.is_off() {
-            self.plan = None;
+            if self.row.is_some() {
+                self.set_row(None);
+            }
             return TextChange::Skip;
         }
         if let Some(plan) = self.recalled(text, context_key) {
-            if plan.ready {
-                self.show(plan);
-            }
+            self.set_row(Some(IntentRow {
+                request: text.to_string(),
+                state: RowState::Read(plan),
+            }));
             return TextChange::Recalled;
         }
+        self.set_row(Some(IntentRow {
+            request: text.to_string(),
+            state: RowState::Reading,
+        }));
         let ticket = Ticket {
             generation: self.generation,
             request: text.to_string(),
@@ -193,9 +223,9 @@ impl IntentLauncher {
         self.recent.truncate(RECENT_LIMIT);
     }
 
-    fn show(&mut self, plan: Arc<Plan>) {
-        self.plan = Some(plan);
-        self.epoch = self.epoch.wrapping_add(1);
+    fn set_row(&mut self, row: Option<IntentRow>) {
+        self.row = row;
+        self.epoch = self.epoch.wrapping_add(1).max(1);
     }
 
     /// Whether a ticket is still the one the launcher is waiting on.
@@ -213,42 +243,51 @@ impl IntentLauncher {
             return Finish::Stale;
         }
         self.in_flight = None;
-        match result {
-            Ok(plan) if plan.request != ticket.request => {
-                self.plan = None;
-                Finish::Failed
-            }
+        let (state, finish) = match result {
+            Ok(plan) if plan.request != ticket.request => (RowState::Failed, Finish::Failed),
             Ok(plan) => {
                 let plan = Arc::new(plan);
                 self.remember(ticket.context_key, plan.clone());
-                if plan.ready {
-                    self.show(plan);
+                let finish = if plan.ready {
                     Finish::Shown
                 } else {
-                    self.plan = None;
                     Finish::NotReady
-                }
+                };
+                (RowState::Read(plan), finish)
             }
             Err(error) => {
-                self.plan = None;
                 if matches!(error, JevError::MissingKey | JevError::Refused(_)) {
                     self.oracle = OracleSlot::Off("unavailable");
                 }
-                Finish::Failed
+                (RowState::Failed, Finish::Failed)
             }
-        }
+        };
+        self.set_row(Some(IntentRow {
+            request: ticket.request.clone(),
+            state,
+        }));
+        finish
     }
 
-    /// The plan to pin for this text, only if it was read from exactly this text.
+    /// The intent row for exactly this text.
+    pub fn row_for(&self, text: &str) -> Option<&IntentRow> {
+        self.row.as_ref().filter(|row| row.request == text)
+    }
+
+    /// The plan Enter on the intent row runs, only if read from exactly this text.
     pub fn plan_for(&self, text: &str) -> Option<&Arc<Plan>> {
-        self.plan
-            .as_ref()
-            .filter(|plan| plan.ready && plan.request == text)
+        self.row_for(text).and_then(IntentRow::runnable)
     }
 
-    /// Part of the list's cache key, so a new plan for the same text rebuilds the list.
+    /// Whether the row shows Jev's words for this text rather than a placeholder.
+    pub fn has_reading_for(&self, text: &str) -> bool {
+        self.row_for(text)
+            .is_some_and(|row| matches!(row.state, RowState::Read(_)))
+    }
+
+    /// Part of the list's cache key, so a changed row for the same text rebuilds the list.
     pub fn cache_token(&self, text: &str) -> u64 {
-        self.plan_for(text).map_or(0, |_| self.epoch)
+        self.row_for(text).map_or(0, |_| self.epoch)
     }
 
     pub fn is_reading(&self, text: &str) -> bool {
@@ -257,22 +296,14 @@ impl IntentLauncher {
             .is_some_and(|ticket| ticket.request == text)
     }
 
-    /// Enter was pressed. Holds it when a reading for this text is in flight and the
-    /// user hasn't picked a row themselves.
-    pub fn hold_enter(
-        &mut self,
-        text: &str,
-        anchored: bool,
-        shown_key: Option<String>,
-        now: Instant,
-    ) -> bool {
-        if anchored || !self.is_reading(text) {
+    /// Enter on the intent row. Holds it when a reading for this text is in flight.
+    pub fn hold_enter(&mut self, text: &str, now: Instant) -> bool {
+        if !self.is_reading(text) {
             return false;
         }
         self.held = Some(HeldEnter {
             request: text.to_string(),
             pressed_at: now,
-            shown_key,
         });
         true
     }
@@ -282,16 +313,18 @@ impl IntentLauncher {
     }
 
     /// Resolve a held Enter once the reading settles or the wait runs out.
-    pub fn release_enter(&mut self, text: &str, selected_key: Option<&str>) -> Option<HeldOutcome> {
+    pub fn release_enter(&mut self, text: &str, on_intent_row: bool) -> Option<HeldOutcome> {
         let held = self.held.take()?;
         if held.request != text {
             return None;
         }
-        if held.shown_key.as_deref() == selected_key {
-            Some(HeldOutcome::Run)
+        Some(if !on_intent_row {
+            HeldOutcome::Moved
+        } else if self.plan_for(text).is_some() {
+            HeldOutcome::Run
         } else {
-            Some(HeldOutcome::Changed)
-        }
+            HeldOutcome::Wait
+        })
     }
 
     pub fn record(&mut self, action: LastAction) {
@@ -314,16 +347,11 @@ impl IntentLauncher {
         self.catalog = Some((revision, catalog));
     }
 
-    /// Stop waiting on the reading in flight; its answer will be dropped.
-    pub fn abandon_reading(&mut self) {
-        self.in_flight = None;
-    }
-
-    /// Forget the shown plan, e.g. when the launcher hides.
+    /// Forget the row, e.g. when the launcher hides.
     pub fn reset_reading(&mut self) {
         self.generation = self.generation.wrapping_add(1);
         self.in_flight = None;
-        self.plan = None;
         self.held = None;
+        self.set_row(None);
     }
 }

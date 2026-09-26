@@ -78,7 +78,7 @@ pub use self::types::{
     FallbackConfig, FallbackMatch, FileMatch, FlowMatch, IntentMatch, MatchEvidence,
     MatchEvidenceField, MatchIndices, NoteMatch, RootWindowEntry, Script, ScriptBody,
     ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch,
-    SearchResult, SkillMatch, TodoMatch, WindowMatch, INTENT_ROW_KEY_PREFIX,
+    SearchResult, SkillMatch, TodoMatch, WindowMatch, INTENT_ROW_KEY,
 };
 #[allow(unused_imports)]
 pub use self::validation::{

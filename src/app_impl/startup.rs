@@ -67,7 +67,7 @@ impl ScriptListApp {
     ) -> bool {
         match intent {
             MainWindowGlobalKeyIntent::OpenAgentChatWithCurrentContext => {
-                self.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)
+                self.route_main_window_cmd_enter(cx)
             }
         }
     }

@@ -719,9 +719,10 @@ impl SearchResult {
                 digest.number(item.warning_count as u64);
             }
             Self::Intent(item) => {
-                digest.text(item.plan.pathway.key());
-                digest.text(&item.plan.request);
-                digest.text(&item.plan.title);
+                digest.text(&item.request);
+                digest.text(&item.title);
+                digest.text(&item.subtitle);
+                digest.text(item.verb);
             }
             Self::SpineProjection(row) => digest.spine(row),
         }
@@ -1131,8 +1132,15 @@ impl SearchResult {
             | Self::ClipboardHistory(_)
             | Self::DictationHistory(_)
             | Self::Fallback(_)
-            | Self::ScriptIssue(_)
-            | Self::Intent(_) => {}
+            | Self::ScriptIssue(_) => {}
+            Self::Intent(item) => {
+                if !item.is_actionable() {
+                    descriptor.availability = CommandAvailability::TemporarilyUnavailable;
+                    if let Some(primary) = descriptor.actions.first_mut() {
+                        primary.availability = descriptor.availability.clone();
+                    }
+                }
+            }
         }
         descriptor.validate()?;
         Ok(descriptor)
