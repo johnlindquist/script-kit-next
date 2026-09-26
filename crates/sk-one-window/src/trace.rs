@@ -4,6 +4,8 @@
 //! are what the reducer must reproduce. The [`Observer`] writes the reducer's own output lines in the
 //! same shape so the two can be compared.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::Ms;
@@ -118,6 +120,8 @@ pub fn slot_kind_words(kind: SlotKind) -> &'static str {
 pub struct Observer {
     last: Option<Snapshot>,
     lines: Vec<OutLine>,
+    /// Each held message's words as last reported: the page names a rewrite by the words it had.
+    held_labels: HashMap<u64, String>,
 }
 
 impl Observer {
@@ -151,10 +155,16 @@ impl Observer {
                     px: d.px,
                     mode: mode_words(d.mode).into(),
                 },
-                Effect::Held { op, label, .. } => Out::Held {
-                    op: held_words(*op).into(),
-                    label: label.clone(),
-                },
+                Effect::Held { op, id, label, .. } => {
+                    let was = self.held_labels.insert(*id, label.clone());
+                    Out::Held {
+                        op: held_words(*op).into(),
+                        label: match op {
+                            HeldOp::Rewritten => was.unwrap_or_else(|| label.clone()),
+                            _ => label.clone(),
+                        },
+                    }
+                }
                 _ => continue,
             };
             self.push(now, out);
@@ -377,6 +387,10 @@ pub enum Ev {
     Rewrite {
         label: String,
         text: String,
+    },
+    /// Stop a waiting message by its words, or `"all"`.
+    Unsend {
+        label: String,
     },
     Content {
         px: f32,
@@ -661,6 +675,9 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
             target: label,
             text,
         }],
+        Ev::Unsend { label } => vec![Event::Unsend {
+            target: (label != "all").then_some(label),
+        }],
         Ev::Content { px } => vec![Event::Content { px }],
         Ev::Dismiss { app } => {
             let row = last_run.cloned().unwrap_or_else(|| {
@@ -748,5 +765,52 @@ mod tests {
         let slot = win.slot_line(1);
         assert_eq!(slot.title, "“the footer kept the old label”");
         assert_eq!(slot.sub, "in Chrome");
+    }
+
+    #[test]
+    fn a_rewrite_is_reported_by_the_words_it_had() {
+        let mut win = OneWindow::default();
+        let mut obs = Observer::new();
+        let out = win.handle(
+            0,
+            Event::Hold {
+                label: "To Sarah: “It'll be friday”".into(),
+                request: "tell Sarah It'll be friday".into(),
+            },
+        );
+        obs.observe(0, &win, &out.effects);
+        let out = win.handle(
+            10,
+            Event::Rewrite {
+                target: "To Sarah: “It'll be friday”".into(),
+                text: "It'll be thursday".into(),
+            },
+        );
+        obs.observe(10, &win, &out.effects);
+        let held: Vec<String> = obs
+            .drain()
+            .into_iter()
+            .filter_map(|l| match l.out {
+                Out::Held { op, label } => Some(format!("{op}|{label}")),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            held[..2],
+            [
+                "start|To Sarah: “It'll be friday”",
+                "rewrite|To Sarah: “It'll be friday”"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unsend_stops_the_named_message_once() {
+        let win = fed(&[
+            r#"{"t":0,"ev":"hold","label":"To #launcher: “The beta slipped a week”"}"#,
+            r#"{"t":1,"ev":"unsend","label":"To #launcher: “The beta slipped a week”"}"#,
+            r#"{"t":2,"ev":"unsend","label":"To #launcher: “The beta slipped a week”"}"#,
+        ]);
+        assert_eq!(win.holds().live_count(), 0);
     }
 }
