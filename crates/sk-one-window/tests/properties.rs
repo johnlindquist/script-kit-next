@@ -199,9 +199,17 @@ impl Run {
                 snap.items
             );
         }
+        let live = match snap.slot.kind {
+            SlotKind::Holding | SlotKind::Typing => true,
+            SlotKind::Staged => snap.view.is_none(),
+            SlotKind::Focused | SlotKind::Recent => false,
+        };
         assert_eq!(
-            snap.slot.dimmed(),
-            matches!(snap.slot.kind, SlotKind::Focused | SlotKind::Recent)
+            snap.slot_opacity >= 1.0,
+            live,
+            "context and anything behind a view read as background: {:?} in {:?}",
+            snap.slot.kind,
+            snap.view
         );
         assert!(
             !snap.slot.label.is_empty(),
@@ -266,19 +274,22 @@ impl Run {
                     ..Done::default()
                 }));
                 if !stay {
+                    self.nav_at = Some(self.now);
                     self.guard_until = self.guard_until.max(self.now + ENTER_GUARD_MS);
                 }
             }
             Step::Content(px) => self.send(Event::Content { px: px as f32 }),
             Step::Open | Step::OpenUnprompted => {
                 self.advance(self.now + 1);
+                let target_before = self.win.enter_target(self.now).id;
                 self.send(Event::View(ViewOp::Open(ViewSpec {
                     name: "form".into(),
                     label: "Remind me".into(),
                     enter: Some(EnterTarget::new("form", "Remind me")),
                     ..ViewSpec::default()
                 })));
-                if matches!(s, Step::OpenUnprompted) {
+                let changed = self.win.enter_target(self.now).id != target_before;
+                if matches!(s, Step::OpenUnprompted) && changed {
                     self.guard_until = self.guard_until.max(self.now + ENTER_GUARD_MS);
                 }
             }

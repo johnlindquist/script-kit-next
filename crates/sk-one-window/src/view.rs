@@ -11,6 +11,8 @@ pub struct ViewFrame {
     pub label: String,
     /// The words that were in the input when it opened, restored on the way back.
     pub saved_text: String,
+    /// What the view leaves in the input on the way back instead, like nothing after an agent.
+    pub leave_text: Option<String>,
     pub enter: Option<EnterTarget>,
     /// Typing goes to the view; otherwise typing closes views and searches.
     pub takes_input: bool,

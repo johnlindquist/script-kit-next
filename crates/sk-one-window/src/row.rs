@@ -33,6 +33,9 @@ pub struct Row {
     /// Stable identity: the same thing keeps the same key across renders.
     pub key: String,
     pub title: String,
+    /// The muted line under the title ("or say “undo that”", "App · 12 min ago").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enter_label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -51,6 +54,18 @@ pub struct Row {
     pub head: Option<String>,
     #[serde(default)]
     pub act: RowAct,
+    /// Jev's confidence in this reading, 0..=1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub p: Option<f32>,
+    /// What Jev's reading acts on ("Sarah", "Linear").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    /// The reading's verb, when it does something to the target rather than open it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verb: Option<String>,
+    /// The sentence Jev read the words as.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill: Option<String>,
 }
 
 fn full_score() -> u8 {
@@ -69,6 +84,11 @@ impl Row {
 
     pub fn with_enter_label(mut self, label: impl Into<String>) -> Self {
         self.enter_label = Some(label.into());
+        self
+    }
+
+    pub fn with_sub(mut self, sub: impl Into<String>) -> Self {
+        self.sub = Some(sub.into());
         self
     }
 

@@ -39,6 +39,8 @@ pub const JEV_ROWS: usize = 3;
 pub const MAX_MATCHES: usize = 3;
 /// A name scoring below this is listed but never owns Enter.
 pub const WEAK_SCORE: u8 = 50;
+/// Jev's readings less likely than this don't get a row.
+pub const MIN_READING_P: f32 = 0.03;
 
 /// App geometry per prototype pixel.
 pub const GEOMETRY_SCALE: f32 = 44.0 / 52.0;

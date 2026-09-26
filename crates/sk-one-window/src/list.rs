@@ -5,7 +5,7 @@
 //! it is there. A row read from older words never owns Enter, and a weak fuzzy name never does.
 
 use crate::Ms;
-use crate::contract::{JEV_ROWS, ROW_ARM_MS, words};
+use crate::contract::{JEV_ROWS, MIN_READING_P, ROW_ARM_MS, words};
 use crate::enter::EnterTarget;
 use crate::row::{Row, RowAct};
 
@@ -157,6 +157,33 @@ impl JevSlots {
             .map(|s| s.shown_at + ROW_ARM_MS)
             .min()
     }
+}
+
+/// Jev's readings worth a place: likely enough, not a sentence already learned, and not a name
+/// that's already listed (unless the reading does something to it).
+pub fn fresh_readings(rows: Vec<Row>, names: &[Row]) -> Vec<Row> {
+    let strong: Vec<String> = names
+        .iter()
+        .filter(|r| r.is_strong())
+        .map(|r| r.title.to_lowercase())
+        .collect();
+    let learned: Vec<&str> = names
+        .iter()
+        .filter(|r| r.learned)
+        .map(|r| r.key.strip_prefix("learned:").unwrap_or(&r.key))
+        .collect();
+    rows.into_iter()
+        .filter(|r| r.p.is_none_or(|p| p >= MIN_READING_P))
+        .filter(|r| !learned.contains(&r.key.strip_prefix("jev:").unwrap_or(&r.key)))
+        .filter(|r| {
+            let target = r.target.as_deref().unwrap_or_default().to_lowercase();
+            !(r.verb.is_none() && strong.contains(&target))
+        })
+        .filter(|r| {
+            let fill = r.fill.as_deref().unwrap_or_default().to_lowercase();
+            fill.is_empty() || !strong.contains(&fill)
+        })
+        .collect()
 }
 
 /// What Jev's reserved rows become when it doesn't answer. None is a reading of the sentence and

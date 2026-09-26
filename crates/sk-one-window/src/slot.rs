@@ -3,7 +3,8 @@
 //! It is always there and always one height. Its words swap in place; only its dimming eases.
 //! What it says, first match wins: an override a view set, the staged subject ("Acting on"),
 //! the newest message waiting to go ("Sending in 8s"), the last thing that ran ("Last", dimmed),
-//! and before anything ran, what "this" means ("Focused", dimmed).
+//! and before anything ran, what "this" means ("Focused", dimmed). How dim it is depends on the
+//! window too, so the window decides it (`OneWindow::slot_opacity`).
 
 use serde::{Deserialize, Serialize};
 
@@ -20,13 +21,6 @@ pub enum SlotKind {
     Holding,
     /// Words heard by voice are landing in the front app.
     Typing,
-}
-
-impl SlotKind {
-    /// Focused and Last read as background; the others are live.
-    pub fn dimmed(self) -> bool {
-        matches!(self, SlotKind::Focused | SlotKind::Recent)
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -47,10 +41,6 @@ pub struct SlotLine {
 }
 
 impl SlotLine {
-    pub fn dimmed(&self) -> bool {
-        self.kind.dimmed()
-    }
-
     pub fn new(kind: SlotKind, label: impl Into<String>, title: impl Into<String>) -> Self {
         Self {
             kind,

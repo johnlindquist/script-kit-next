@@ -53,6 +53,26 @@ pub enum Out {
         label: String,
         op: String,
     },
+    List {
+        rows: Vec<ListRowOut>,
+        #[serde(default)]
+        sel: usize,
+    },
+    /// Outputs the reducer doesn't produce (toasts, the page setting the input).
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ListRowOut {
+    #[serde(default)]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub jev: bool,
+    #[serde(default)]
+    pub reading: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -140,10 +160,9 @@ impl Observer {
         }
         let snap = win.snapshot(now);
         let prev = self.last.take();
-        if prev
-            .as_ref()
-            .is_none_or(|p| !p.slot.same_words(&snap.slot) || p.slot.dimmed() != snap.slot.dimmed())
-        {
+        if prev.as_ref().is_none_or(|p| {
+            !p.slot.same_words(&snap.slot) || (p.slot_opacity < 1.0) != (snap.slot_opacity < 1.0)
+        }) {
             self.push(
                 now,
                 Out::Slot {
@@ -151,7 +170,7 @@ impl Observer {
                     label: snap.slot.label.clone(),
                     title: snap.slot.title.clone(),
                     sub: snap.slot.sub.clone(),
-                    dimmed: snap.slot.dimmed(),
+                    dimmed: snap.slot_opacity < 1.0,
                 },
             );
         }
@@ -214,12 +233,29 @@ pub struct RowIn {
     pub fallback: bool,
     #[serde(default)]
     pub learned: bool,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub sub: Option<String>,
+    #[serde(default)]
+    pub p: Option<f32>,
+    #[serde(default)]
+    pub target: Option<String>,
+    #[serde(default)]
+    pub verb: Option<String>,
+    #[serde(default)]
+    pub fill: Option<String>,
 }
 
 impl From<RowIn> for Row {
     fn from(r: RowIn) -> Self {
         let mut row = Row::new(r.key, r.title);
         row.enter_label = r.enter_label;
+        row.sub = r.sub;
+        row.p = r.p;
+        row.target = r.target;
+        row.verb = r.verb;
+        row.fill = r.fill;
         row.icon = r.icon;
         row.score = r.score.map(|s| s.clamp(0.0, 255.0) as u8).unwrap_or(100);
         row.head = r.head;
@@ -310,7 +346,9 @@ pub enum Ev {
         #[serde(default)]
         text: Option<String>,
         #[serde(default)]
-        takes_input: bool,
+        takes_input: Option<bool>,
+        #[serde(default)]
+        leave: Option<String>,
     },
     ViewEnter {
         #[serde(default)]
@@ -352,8 +390,32 @@ pub enum Ev {
 #[derive(Clone, Debug, Deserialize)]
 pub struct EvLine {
     pub t: Ms,
+    /// What caused this input on the page, when another input did ("key:Enter", "done").
+    #[serde(default)]
+    pub via: Option<String>,
     #[serde(flatten)]
     pub ev: Ev,
+}
+
+/// Whether a recorded input is something the host does (and a replay must feed), rather than a
+/// consequence the reducer produces itself from an earlier input.
+pub fn replayable(line: &EvLine) -> bool {
+    let via = line.via.as_deref().unwrap_or("");
+    let by_key = via.starts_with("key:");
+    match &line.ev {
+        Ev::View { op, .. } => match op.as_str() {
+            "home" => {
+                via.is_empty()
+                    || matches!(&line.ev, Ev::View { text: Some(t), .. } if !t.is_empty())
+            }
+            "back" => !by_key,
+            _ => true,
+        },
+        Ev::Done { .. } => via != "unsend",
+        Ev::Hold { .. } => via != "done",
+        Ev::Key { .. } => !by_key,
+        _ => true,
+    }
 }
 
 /// One parsed line of a trace file.
@@ -461,6 +523,29 @@ pub fn history_entry(h: HistoryIn) -> Entry {
     }
 }
 
+/// Which of the prototype's views read typing themselves (the rest close when you type), for
+/// traces recorded before views carried `takesInput`.
+fn prototype_view_takes_input(name: &str) -> bool {
+    matches!(
+        name,
+        "form"
+            | "agent"
+            | "note"
+            | "note-open"
+            | "dictation"
+            | "steps"
+            | "set"
+            | "save"
+            | "list"
+            | "chat"
+    )
+}
+
+/// Which of the prototype's views clear the input on the way back rather than restore what was typed.
+fn prototype_view_leaves_empty(name: &str) -> bool {
+    matches!(name, "agent" | "dictation" | "shape")
+}
+
 /// The reducer events one input line stands for. `last_run` is the last row the reducer ran, for
 /// dismissals that follow launching it.
 pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
@@ -471,7 +556,15 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
             .collect(),
         Ev::Text { text } => vec![Event::Text(text)],
         Ev::Key { key } => vec![Event::Key(parse_key(&key))],
-        Ev::Names { rows, .. } => vec![Event::Names(rows.into_iter().map(Row::from).collect())],
+        Ev::Names { text, rows } => {
+            let pinned = !rows.is_empty() && rows.iter().all(|r| r.pinned);
+            let rows: Vec<Row> = rows.into_iter().map(Row::from).collect();
+            if pinned && text.trim().is_empty() {
+                vec![Event::Suggested(rows)]
+            } else {
+                vec![Event::Names(rows)]
+            }
+        }
         Ev::Jev { text, rows, down } => {
             if down {
                 vec![Event::JevDown { text }]
@@ -489,7 +582,10 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
             enter,
             text,
             takes_input,
+            leave,
         } => {
+            let takes_input = takes_input.unwrap_or_else(|| prototype_view_takes_input(&name));
+            let leave_text = leave.or_else(|| prototype_view_leaves_empty(&name).then(String::new));
             let spec = ViewSpec {
                 label: if label.is_empty() {
                     name.clone()
@@ -500,6 +596,7 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
                 enter: enter.map(|e| EnterTarget::new(e.id, e.label)),
                 takes_input,
                 text,
+                leave_text,
             };
             let op = match op.as_str() {
                 "open" => ViewOp::Open(spec),

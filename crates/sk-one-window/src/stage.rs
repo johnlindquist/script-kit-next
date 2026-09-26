@@ -127,17 +127,16 @@ pub fn row_subject(row: &Row) -> Subject {
     }
 }
 
-fn act(icon: &str, title: &str, act: RowAct) -> Row {
-    Row {
-        key: format!("act:{title}"),
-        title: title.to_string(),
-        enter_label: Some(title.to_string()),
-        icon: Some(icon.to_string()),
-        score: 100,
-        head: None,
-        learned: false,
-        fallback: false,
-        act,
+/// A row that acts on the staged subject. `say` is the sentence that does the same thing.
+fn act(icon: &str, title: &str, say: &str, act: RowAct) -> Row {
+    let row = Row::new(format!("act:{title}"), title)
+        .with_enter_label(title)
+        .with_icon(icon)
+        .with_act(act);
+    if say.is_empty() {
+        row
+    } else {
+        row.with_sub(format!("or say “{say}”"))
     }
 }
 
@@ -146,37 +145,142 @@ fn act(icon: &str, title: &str, act: RowAct) -> Row {
 pub fn entry_rows(entry: &Entry) -> Vec<Row> {
     let mut rows = Vec::new();
     if entry.state == EntryState::Holding {
-        rows.push(act("undo", "Don't send it", RowAct::Unsend));
-        rows.push(act("message", "Send it now", RowAct::SendNow));
+        rows.push(act(
+            "undo",
+            "Don't send it",
+            "wait, don't send",
+            RowAct::Unsend,
+        ));
+        rows.push(act(
+            "message",
+            "Send it now",
+            "send it now",
+            RowAct::SendNow,
+        ));
     } else {
         if entry.risk == crate::ledger::Risk::Undo && entry.state == EntryState::Done {
-            rows.push(act("undo", "Undo it", RowAct::Undo));
+            rows.push(act("undo", "Undo it", "undo that", RowAct::Undo));
         }
         if entry.state != EntryState::Undone || entry.held.is_some() {
-            rows.push(act("again", "Run it again", RowAct::Again));
+            rows.push(act("again", "Run it again", "do that again", RowAct::Again));
         }
     }
     if let Some(name) = &entry.script {
         rows.push(act(
             "script",
             &format!("Open “{name}” in {SAVED_SCRIPT_FILE_NAME}"),
+            "open that script",
             RowAct::OpenScript,
         ));
     }
-    rows.push(act("copy", "Share it", RowAct::Share));
+    rows.push(act(
+        "copy",
+        "Share it",
+        "share my last action",
+        RowAct::Share,
+    ));
     rows
 }
 
 /// How to share an entry: copy it as a script, copy a link, send it to someone.
-pub fn share_rows(entry: &Entry) -> Vec<Row> {
-    let name = entry.script.clone().unwrap_or_else(|| entry.title.clone());
+pub fn share_rows() -> Vec<Row> {
     vec![
-        Row::new("share:copy", "Copy it to the clipboard as a script")
-            .with_icon("copy")
-            .with_enter_label(format!("Copy “{name}”")),
-        Row::new("share:link", "Copy a link anyone on the team can open").with_icon("open"),
-        Row::new("share:send", "Send it to someone").with_icon("message"),
+        act(
+            "copy",
+            "Copy it to the clipboard as a script",
+            "copy it",
+            RowAct::Host,
+        ),
+        act(
+            "open",
+            "Copy a link anyone on the team can open",
+            "copy a link",
+            RowAct::Host,
+        ),
+        act(
+            "message",
+            "Send it to someone",
+            "send it to sarah",
+            RowAct::Host,
+        ),
     ]
+}
+
+/// What you can do to something that isn't an entry, until the host offers its own actions.
+pub fn default_actions(subject: &Subject) -> Vec<Row> {
+    let lower = subject.title.to_lowercase();
+    match subject.kind {
+        SubjectKind::App => vec![
+            act("app", "Open it", &format!("open {lower}"), RowAct::Host),
+            act("hide", "Quit it", "quit it", RowAct::Host),
+            act(
+                "shortcut",
+                "Give it a keyboard shortcut",
+                "give it a shortcut",
+                RowAct::Host,
+            ),
+            act(
+                "open",
+                "Show it in Finder",
+                "show it in finder",
+                RowAct::Host,
+            ),
+        ],
+        SubjectKind::Selection => vec![
+            act("transform", "Rewrite it", "make it shorter", RowAct::Host),
+            act("ask", "Explain it", "what does this mean", RowAct::Host),
+            act(
+                "message",
+                "Send it to someone",
+                "send this to mike",
+                RowAct::Host,
+            ),
+            act(
+                "append",
+                "Add it to today's note",
+                "add this to my notes",
+                RowAct::Host,
+            ),
+        ],
+        SubjectKind::Window => vec![
+            act("window", "Tile it left", "tile it left", RowAct::Host),
+            act("window", "Tile it right", "tile it right", RowAct::Host),
+            act(
+                "window",
+                "Make it full screen",
+                "make it full screen",
+                RowAct::Host,
+            ),
+            act("hide", "Close it", "close it", RowAct::Host),
+        ],
+        SubjectKind::Message => {
+            let first = lower
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_string();
+            vec![
+                act("reply", "Reply", &format!("reply to {first}"), RowAct::Host),
+                act(
+                    "schedule",
+                    "Remind me about it later",
+                    "remind me about this at 4",
+                    RowAct::Host,
+                ),
+                act("check", "Mark it done", "mark it done", RowAct::Host),
+            ]
+        }
+        SubjectKind::Entry | SubjectKind::Script | SubjectKind::Thing => vec![
+            act("open", "Open it", "open it", RowAct::Host),
+            act("copy", "Copy it", "copy it", RowAct::Host),
+            act(
+                "message",
+                "Send it to someone",
+                "send this to sarah",
+                RowAct::Host,
+            ),
+        ],
+    }
 }
 
 /// A short name for a sentence that did several things: each step's verb and what it was about.

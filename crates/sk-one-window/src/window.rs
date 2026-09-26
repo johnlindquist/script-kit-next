@@ -14,7 +14,8 @@ use crate::list::{Item, ListState};
 use crate::row::{Row, RowAct};
 use crate::slot::{SlotKind, SlotLine};
 use crate::stage::{
-    Staged, Subject, SubjectKind, entry_rows, entry_subject, row_subject, script_name, share_rows,
+    Staged, Subject, SubjectKind, default_actions, entry_rows, entry_subject, row_subject,
+    script_name, share_rows,
 };
 use crate::view::{ViewFrame, ViewStack};
 
@@ -69,6 +70,8 @@ pub struct ViewSpec {
     pub takes_input: bool,
     /// Words the view puts in the input when it opens.
     pub text: Option<String>,
+    /// Words it leaves in the input when you go back; `None` restores what you'd typed.
+    pub leave_text: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -230,6 +233,8 @@ pub struct Outcome {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Snapshot {
     pub slot: SlotLine,
+    /// 1 is live; below 1 the line reads as background.
+    pub slot_opacity: f32,
     pub header: String,
     pub view: Option<String>,
     pub crumb: String,
@@ -415,6 +420,7 @@ impl OneWindow {
                 if text != self.text {
                     return false;
                 }
+                let rows = crate::list::fresh_readings(rows, &self.list.names);
                 self.list.jev.assign(now, &text, rows);
                 self.list.move_sel(0);
                 if let Some(i) = self.list.held.take() {
@@ -878,7 +884,7 @@ impl OneWindow {
                     label: words::SHARING.into(),
                     ..entry_subject(entry, words::SHARING)
                 };
-                self.stage(now, subject, Some(share_rows(entry)), words::SHARE_HOW, fx);
+                self.stage(now, subject, Some(share_rows()), words::SHARE_HOW, fx);
             }
             RowAct::Host | RowAct::AskJevAgain => {}
         }
@@ -900,7 +906,7 @@ impl OneWindow {
             (None, Some(e)) => (entry_rows(e), false),
             (None, None) => {
                 fx.push(Effect::ActionsFor(subject.clone()));
-                (Vec::new(), true)
+                (default_actions(&subject), false)
             }
         };
         self.staged = Some(Staged {
@@ -972,13 +978,14 @@ impl OneWindow {
                         .unwrap_or_else(|| EnterTarget::new(top.name.clone(), ""));
                     self.cause = Some((ContentCause::ViewOpened, now));
                     self.guard.observe_view(now, &target.id, user);
-                    fx.push(Effect::SetInput(popped.saved_text.clone()));
-                    self.text = popped.saved_text;
+                    let restore = popped.leave_text.unwrap_or(popped.saved_text);
+                    fx.push(Effect::SetInput(restore.clone()));
+                    self.text = restore;
                 } else {
                     self.guard.forget_view();
                     self.guard.arm_unless_user(now, user);
                     self.cause = Some((ContentCause::Home, now));
-                    self.set_input(now, popped.saved_text, fx);
+                    self.set_input(now, popped.leave_text.unwrap_or(popped.saved_text), fx);
                 }
             }
             ViewOp::Home { text } => self.home(now, text, fx),
@@ -997,6 +1004,7 @@ impl OneWindow {
             name: spec.name.clone(),
             label: spec.label.clone(),
             saved_text: self.text.clone(),
+            leave_text: spec.leave_text.clone(),
             enter: spec.enter.clone(),
             takes_input: spec.takes_input,
         }
@@ -1366,8 +1374,10 @@ impl OneWindow {
 
     pub fn snapshot(&self, now: Ms) -> Snapshot {
         let view = self.views.top().map(|t| t.name.clone());
+        let slot = self.slot_line(now);
         Snapshot {
-            slot: self.slot_line(now),
+            slot_opacity: self.slot_opacity(&slot),
+            slot,
             header: if view.is_some() {
                 String::new()
             } else {
@@ -1380,6 +1390,23 @@ impl OneWindow {
             items: self.list.layout(),
             sel: self.list.sel,
             text: self.text.clone(),
+        }
+    }
+
+    /// Context (what's focused, what ran last) reads as background and fainter while you type; in a
+    /// view everything steps back except a message waiting to go and words landing by voice.
+    fn slot_opacity(&self, slot: &SlotLine) -> f32 {
+        use crate::contract::slot_opacity as o;
+        let typing = !self.text.trim().is_empty();
+        match slot.kind {
+            SlotKind::Holding => 1.0,
+            SlotKind::Typing if !self.views.is_empty() => 1.0,
+            _ if !self.views.is_empty() => o::IN_VIEW_NOT_HOLDING,
+            SlotKind::Focused if typing => o::TYPING_FOCUSED,
+            SlotKind::Focused => o::FOCUSED,
+            SlotKind::Recent if typing => o::TYPING_RECENT,
+            SlotKind::Recent => o::RECENT,
+            SlotKind::Staged | SlotKind::Typing => 1.0,
         }
     }
 
