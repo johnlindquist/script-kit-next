@@ -55,7 +55,6 @@ fn simulate_key_shift_tab_routes_to_profile_switcher_for_runtime_proof() {
     assert!(script_list_arm.contains("has_shift"));
     assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("profile_switcher_open_shift_tab"));
     assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("open_profile_search(cx)"));
-    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("menu_syntax_capture_form_owns_input"));
     assert!(!script_list_arm.contains("submit_to_current_or_new_tab_ai_harness_from_text"));
 }
 

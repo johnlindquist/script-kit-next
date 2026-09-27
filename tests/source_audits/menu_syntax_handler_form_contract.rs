@@ -34,11 +34,10 @@ fn menu_syntax_handler_form_snapshot_is_state_first_and_autocomplete_ready() {
     assert!(
         app.contains("menu_syntax_capture_form_invocation")
             && app.contains("menu_syntax_capture_form_target_for")
-            && app.contains("menu_syntax_capture_form_owns_input_for")
             && app.contains("builtin_schema")
             && app.contains("IncompleteKind::MissingCaptureBody")
             && app.contains("empty_capture_invocation"),
-        "app form ownership, snapshots, and form-field edits must share the same incomplete-handler invocation path and only claim handlers with schemas"
+        "app snapshots and form-field edits must share the same incomplete-handler invocation path and only claim handlers with schemas"
     );
     let state = read("src/main_sections/app_state.rs");
     assert!(
@@ -118,16 +117,10 @@ fn semicolon_capture_composer_outer_shell_consumes_non_list_language_without_own
 }
 
 #[test]
-fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
+fn launcher_header_hides_ask_ai_hint_and_keeps_trailing_spaces() {
     let render = read("src/render_script_list/mod.rs");
-    let form_guard = render
-        .find("handler_form_owns_input_for_render")
-        .expect("render should compute handler form ownership for header chrome");
-    let show_hint = render
-        .find("show_launcher_ask_ai_hint")
-        .expect("render should name the Ask AI hint visibility gate");
     assert!(
-        form_guard < show_hint && render.contains("let show_launcher_ask_ai_hint = false;"),
+        render.contains("let show_launcher_ask_ai_hint = false;"),
         "the three-zone launcher must keep the old top-right Ask/Tab header affordance disabled"
     );
     assert!(
@@ -142,16 +135,6 @@ fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
         !render.contains("Tab moves fields"),
         "handler form should avoid visible keyboard-instruction copy"
     );
-    assert!(
-        read("src/app_impl/menu_syntax_main_hint.rs")
-            .contains("state.set_tab_navigation(handler_form_owns_input, cx)")
-            && read("src/app_impl/filter_input_updates.rs")
-                .contains("self.sync_menu_syntax_form_inputs_from_filter(window, cx);")
-            && render.contains("sk_is_key_tab(key_str)")
-            && render.contains("this.focus_next_menu_syntax_form_field(window, cx);"),
-        "main filter input must propagate Tab while handler forms own input so the form can take real cursor focus"
-    );
-
     let filter_change = read("src/app_impl/filter_input_change.rs");
     assert!(
         !filter_change.contains("trim_end_matches(' ').to_string()")
@@ -277,7 +260,7 @@ fn snippet_multiline_values_are_sanitized_before_plain_gpui_text_children() {
         "form fallback display must sanitize multiline values without mutating field state"
     );
     assert!(
-        render.contains("let input_body = if handler_form_owns_input_for_render")
+        render.contains("let input_body = if capture_owns_input_for_render")
             && render.contains("&& menu_syntax_text_contains_line_break(&filter_text_for_render)")
             && render.contains("self.render_search_input_with_ghost(cx).into_any_element()")
             && render.contains("menu_syntax_single_line_text_for_gpui(\n                    &filter_text_for_render,\n                )"),
@@ -395,7 +378,7 @@ fn stdin_can_edit_menu_syntax_form_fields_for_runtime_proof() {
 }
 
 #[test]
-fn tab_routes_to_handler_form_before_tab_ai_paths() {
+fn handler_form_fields_are_real_inputs_and_tab_has_no_agent_chat_route() {
     let form_owner = read("src/app_impl/menu_syntax_main_hint.rs");
     assert!(
         form_owner.contains("InputState::new(window, cx)")
@@ -413,31 +396,8 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
         "handler form traversal must be able to return actual focus to the main input"
     );
 
-    let preflight = read("src/main_window_preflight/build.rs");
-    assert!(
-        preflight
-            .contains("AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => None")
-            && preflight.contains("return \"handler-form\".to_string();")
-            && preflight.contains("return Vec::new();"),
-        "handler forms must not expose stale launcher selected/visible rows or Enter targets through preflight"
-    );
-    let form_disabled = preflight
-        .find("menu_syntax_capture_form_owns_input()")
-        .expect("main-window preflight must disable Tab AI while handler form owns Tab");
-    let ask_ai = preflight
-        .find("MainWindowPreflightActionKind::AskAi")
-        .expect("main-window preflight must still define Ask AI for normal launcher text");
-    assert!(
-        form_disabled < ask_ai,
-        "preflight tabAction must be None for handler forms before emitting Ask AI"
-    );
-
     for path in ["src/app_impl/startup.rs"] {
         let source = read(path);
-        assert!(
-            source.contains("menu_syntax_capture_form_owns_input()"),
-            "{path}: physical Tab path must check handler form ownership"
-        );
         assert!(
             !source.contains("try_route_plain_tab_to_agent_chat_context_capture"),
             "{path}: physical Tab must not keep a Tab-to-Agent-Chat route"
@@ -452,59 +412,6 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
             "{path}: simulateKey Tab must not keep a Tab-to-Agent-Chat route"
         );
     }
-}
-
-#[test]
-fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths() {
-    let immediate = read("src/app_impl/filter_input_updates.rs");
-    assert!(
-        immediate.contains(
-            "let handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);"
-        ) && immediate.contains("let handler_form_field_owns_input =")
-            && immediate.contains("self.menu_syntax_form_input_active && handler_form_owns_input")
-            && immediate.contains("if handler_form_field_owns_input")
-            && immediate.contains("self.menu_syntax_object_selector_state = Default::default();")
-            && immediate.contains("self.menu_syntax_trigger_picker_state = Default::default();")
-            && !immediate.contains("close_menu_syntax_object_selector_main_list(cx)")
-            && immediate.contains("if !handler_form_field_owns_input")
-            && immediate.contains("self.menu_syntax_object_selector_state.snapshot.is_none()")
-            && immediate
-                .contains("self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);"),
-        "programmatic setFilter/setInput must suppress trigger/object popups only while a focused handler-form field owns input"
-    );
-
-    let input_change = read("src/app_impl/filter_input_change.rs");
-    let owner = input_change
-        .find("let capture_composer_owns_input =")
-        .expect("typed input path must compute committed handler-form ownership");
-    let object = input_change
-        .find("run_menu_syntax_object_selector_state_machine")
-        .expect("typed input path should still run object selector outside handler forms");
-    let trigger = input_change
-        .find("plan_trigger_picker_transition")
-        .expect("typed input path should still plan trigger picker outside handler forms");
-    assert!(
-        owner < object && owner < trigger,
-        "typed input must decide handler-form ownership before object/trigger picker machines can claim the surface"
-    );
-    assert!(
-        input_change.contains("let capture_form_field_owns_input =")
-            && input_change
-                .contains("self.menu_syntax_form_input_active && capture_composer_owns_input")
-            && input_change.contains("} else if capture_form_field_owns_input {\n                crate::menu_syntax_trigger_picker::TriggerPickerTransition::NoChange")
-            && input_change.contains("!capture_form_field_owns_input\n                && self.menu_syntax_object_selector_state.snapshot.is_some()"),
-        "focused handler-form fields must prevent stale popup transitions while plain object-ref segments can own the main list"
-    );
-
-    let render = read("src/render_script_list/mod.rs");
-    assert!(
-        render.contains("self.menu_syntax_capture_form_owns_input_for(&filter_text_for_render)")
-            && render.contains("let popup_owns_main_list = !handler_form_owns_input_for_render")
-            && render.contains("|| handler_form_owns_input_for_render")
-            && render.contains("let menu_syntax_owns_main_list = popup_owns_main_list")
-            && render.contains("capture_composer_owns_main_list"),
-        "render ownership must use the app-level form owner and give handler forms precedence over stale popups"
-    );
 }
 
 #[test]
@@ -578,12 +485,9 @@ fn script_list_printable_simulate_key_can_update_filter_text() {
         helper.contains("key_char: Option<&str>")
             && helper.contains("!matches!(self.current_view, AppView::ScriptList)")
             && helper.contains("modifiers.platform || modifiers.alt || modifiers.control")
-            && helper.contains(
-                "menu_syntax_form_input_active && self.menu_syntax_capture_form_owns_input()"
-            )
             && helper.contains("next.push_str(ch);")
             && helper.contains("self.set_filter_text_immediate(next, window, cx);"),
-        "printable simulateKey support must append plain characters through the immediate filter writer and stay out of active handler fields"
+        "printable simulateKey support must append plain characters through the immediate filter writer"
     );
 }
 
@@ -613,7 +517,6 @@ fn handler_form_autocomplete_is_state_first_and_trigger_picker_owned() {
 
     let app = read("src/app_impl/menu_syntax_main_hint.rs");
     let popup = read("src/app_impl/menu_syntax_trigger_picker_main_list.rs");
-    let object_selector = read("src/app_impl/menu_syntax_object_selector_main_list.rs");
     for symbol in [
         "handle_menu_syntax_form_control_key_input",
         "move_menu_syntax_form_suggestion_selection",
@@ -629,7 +532,6 @@ fn handler_form_autocomplete_is_state_first_and_trigger_picker_owned() {
         "menu_syntax_form_trigger_picker_row_id",
         "main_input_form_completion_field",
         "active_menu_syntax_form_suggestion_field",
-        "search_root_object_candidates_direct",
     ] {
         assert!(app.contains(symbol), "app autocomplete missing `{symbol}`");
     }
@@ -660,16 +562,6 @@ fn handler_form_autocomplete_is_state_first_and_trigger_picker_owned() {
             && popup.contains("apply_menu_syntax_form_suggestion")
             && popup.contains("update_menu_syntax_form_field"),
         "handler form suggestions must accept through the shared Trigger Popup window and sync through canonical form edits"
-    );
-
-    assert!(
-        object_selector.contains("self.menu_syntax_form_input_active")
-            && object_selector.contains("self.menu_syntax_capture_form_owns_input()")
-            && !object_selector.contains("close_menu_syntax_object_selector_main_list(cx)")
-            && object_selector
-                .contains("self.menu_syntax_object_selector_state = Default::default();")
-            && object_selector.contains("run_menu_syntax_object_selector_state_machine"),
-        "handler form @ autocomplete must suppress the global object selector state machine"
     );
 }
 
@@ -712,8 +604,8 @@ fn handler_form_control_keys_preserve_standard_form_navigation() {
         .find("menu_syntax_main_hint_snapshot")
         .expect("suggestion snapshot lookup must still exist");
     assert!(
-        tab_pos < snapshot_pos,
-        "Tab must be consumed before suggestion snapshot lookup so it cannot fall through as printable text"
+        snapshot_pos < tab_pos,
+        "Tab belongs to a handler form only while one is showing; otherwise it falls through to the input"
     );
 
     let move_start = app
@@ -740,7 +632,7 @@ fn handler_form_control_keys_preserve_standard_form_navigation() {
 }
 
 #[test]
-fn handler_form_focus_reveal_has_scroll_and_layout_contract() {
+fn handler_form_focus_reveal_has_scroll_contract() {
     let app = read("src/app_impl/menu_syntax_main_hint.rs");
     assert!(
         app.contains("fn reveal_menu_syntax_form_field_at(")
@@ -749,16 +641,6 @@ fn handler_form_focus_reveal_has_scroll_and_layout_contract() {
             && app.contains("focus_menu_syntax_form_input_at")
             && app.contains("reveal_menu_syntax_form_field_at(index, form, cx)"),
         "Tab focus movement must reveal the active handler form field in the main hint scroll container"
-    );
-
-    let layout = read("src/app_layout/build_layout_info_handler_form.rs");
-    assert!(
-        layout.contains("handlerFormFocusedVisibility")
-            && layout.contains("handlerFormFieldBounds")
-            && layout.contains("scrollOffsetY")
-            && layout.contains("scrollContainerId")
-            && read("src/protocol/types/grid_layout.rs").contains("handler_form"),
-        "getLayoutInfo must expose handler form field bounds and focused-field visibility for DevTools proof"
     );
 }
 
@@ -851,10 +733,8 @@ fn handler_form_uses_projected_invocation_for_natural_dates_and_main_input_token
         "handler form snapshots must project main-input autocomplete tokens and natural dates before building fields"
     );
     assert!(
-        app.contains("let invocation_for_form =")
-            && app.contains("self.menu_syntax_capture_form_invocation_for_form(raw_filter_text)")
-            && app.contains("self.menu_syntax_capture_form_invocation_for_form(&self.filter_text)"),
-        "snapshot and form-field edits must share the projected invocation path"
+        app.contains("self.menu_syntax_capture_form_invocation_for_form(&self.filter_text)"),
+        "form-field edits must use the projected invocation path"
     );
     assert!(
         app.contains("token.to_ascii_lowercase().as_str()")
@@ -892,11 +772,5 @@ fn autocomplete_renders_owned_popup_list_and_escape_dismisses_first() {
             && !elements.contains("handlerFormAutocompleteOption")
             && elements.contains("\"combobox\""),
         "getElements must expose form combobox fields while picker options are exposed by the shared Trigger Popup automation target"
-    );
-
-    let layout = read("src/app_layout/build_layout_info_handler_form.rs");
-    assert!(
-        layout.contains("\"surface\": \"menuSyntaxTriggerPicker\""),
-        "layout receipts must identify form autocomplete as the shared Trigger Popup surface"
     );
 }

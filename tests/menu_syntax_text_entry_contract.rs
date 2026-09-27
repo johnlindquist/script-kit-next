@@ -273,20 +273,45 @@ fn enter_in_capture_composer_executes_capture_not_main_selection() {
     let execute_selected = source_after(&source, "pub(crate) fn execute_selected");
 
     let capture_route = execute_selected
-        .find("capture_for(&self.filter_text)")
-        .expect("execute_selected must first check for capture composer input");
+        .find("capture_composer_owns_input_for(&self.filter_text)")
+        .expect("execute_selected must check for a typed capture");
     let grouped_results = execute_selected
         .find("self.run_selected_row(")
         .expect("execute_selected still resolves main-list rows for normal search");
-
     assert!(
-        capture_route < grouped_results,
-        "Enter in capture composer must route to capture execution before main-list selection"
+        capture_route < grouped_results
+            && execute_selected[capture_route..grouped_results]
+                .contains("self.submit_typed_capture(cx)"),
+        "Enter on a typed capture must save it before main-list selection"
     );
+
+    let submit = source_after(&source, "pub(crate) fn submit_typed_capture");
     assert!(
-        source.contains("rank_handlers_for_target")
-            && source.contains("execute_menu_syntax_capture_script"),
-        "capture composer Enter should execute the ranked capture handler"
+        submit.contains("capture_for(&self.filter_text)")
+            && submit.contains("rank_handlers_for_target")
+            && submit.contains("execute_menu_syntax_capture_script"),
+        "saving a typed capture should execute the ranked capture handler"
+    );
+
+    let host = fs::read_to_string("src/one_window/host.rs")
+        .expect("Failed to read src/one_window/host.rs");
+    let names = source_after(&host, "fn one_window_names(");
+    assert!(
+        names.find("self.one_window_capture_row(text)") < names.find("for item in grouped"),
+        "a typed capture must be the first row in the one-window list, above any name match"
+    );
+    let run = source_after(&host, "fn one_window_run(");
+    assert!(
+        run.find("self.one_window_run_capture(&row, cx)")
+            < run.find("self.one_window_run_act(&row, cx)"),
+        "Enter on the capture row must save the capture before any other row handling"
+    );
+    let capture = fs::read_to_string("src/one_window/capture.rs")
+        .expect("Failed to read src/one_window/capture.rs");
+    assert!(
+        source_after(&capture, "fn one_window_run_capture(")
+            .contains("self.submit_typed_capture(cx)"),
+        "the capture row must save through submit_typed_capture"
     );
 }
 
