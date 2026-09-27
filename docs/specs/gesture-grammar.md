@@ -62,8 +62,8 @@ Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
 2. **No window swaps.** Launcher, Day Page, and Agent Chat are surfaces of the
    main window (the architecture already morphs content in place:
    `MainWindowMode` in `src/main_sections/app_view_state.rs`, Chat Prompt in
-   `src/render_prompts/other.rs`). The Notes window remains separate (see
-   Notes Window below) but the Day Page never opens as a second window.
+   `src/render_prompts/other.rs`). Notes open as a view under the same input
+   (see Notes below), and the Day Page never opens as a second window.
 3. **Geometrically calm morphs.** The input row keeps its position and size
    across launcher ↔ Day Page; the results list folds away and editor space
    expands beneath. The transformation must read as "the window grew a body,"
@@ -78,19 +78,19 @@ Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
    removed.)
 6. **Tap-to-dismiss remains.** Tap-while-open closes the main window, matching
    the established launcher hotkey convention. Esc remains a dismiss path too.
-7. **Shared editor entity.** The Day Page hosts the same editor entity as the
-   Notes window. The editor body must be extracted from `NotesApp`
-   (`src/notes/window/`) into a shared component (per the shared component
-   contract in `CLAUDE.md`) so note behavior does not fork. No note feature may
-   change behavior as part of the extraction.
+7. **Shared note behavior.** The Day Page and the note view under the main
+   input must not fork note behavior: day notes stay `brain/days/<date>.md`
+   and other notes stay in the notes database, whichever surface writes them
+   (per the shared component contract in `CLAUDE.md`).
 
-## Notes Window
+## Notes
 
-The floating Notes window survives with its current behavior. Its role: a note
-about something *other than* today — pinned reference material, a document
-being drafted alongside other work. The Day Page (in the main window) and a
-note (in the Notes window) must feel identical because they are the same
-editor entity in different shells.
+The floating Notes window was retired on 2026-09-27. A note opens as a view
+under the main input: its lines are rows under a `NOTE · <name>` header and the
+input never moves. Its role is unchanged: a note about something *other than*
+today — pinned reference material, a document being drafted alongside other
+work. The Day Page and a note must feel identical because they share the same
+storage and the same input.
 
 ## Day Page Content Rendering
 

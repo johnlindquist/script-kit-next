@@ -18,8 +18,8 @@ All of these are on by default and configurable in `~/.scriptkit/config.ts` (eac
 
 | Default | Feature | Config key |
 | --- | --- | --- |
-| `⌘⇧Space` | Agent Chat window | `aiHotkey` |
-| `⌘⌃N` | Notes window | `notesHotkey` |
+| `⌘⇧Space` | Agent Chat, under the main input | `aiHotkey` |
+| `⌘⌃N` | Today's note, under the main input | `notesHotkey` |
 | `⌘⇧;` | Dictation (push-to-talk by default) | `dictationHotkey` |
 | `⌘⌃I` | Inline AI edit of the focused text field | `inlineAiHotkey` |
 | `⌘⌃R` | Instant Rewrite — streams rewrite variations of the focused text | `rewriteHotkey` |
@@ -69,7 +69,7 @@ Search these in the launcher:
 | `apps` | App Launcher |
 | `window` | Window Switcher |
 | `tabs` | Browser Tabs |
-| `notes` | Notes window / note search |
+| `notes` | Notes and note search |
 | `emoji` | Emoji Picker |
 | `files` | File Search |
 | `process` | Process Manager (view/kill script processes) |
@@ -101,14 +101,15 @@ Everything captured lands as plain markdown under `~/.scriptkit/brain/`:
 └── trash/       # deleted notes (restorable)
 ```
 
-## Notes Window Power Features
+## Notes Power Features
 
-Open with `⌘⌃N`:
+`⌘⌃N` opens today's note under the main input. A note's lines are rows under a `NOTE · <name>` header; the input never moves:
 
-- `⌘P` — note switcher (search and jump between notes, including day notes)
-- `⌘⇧P` — toggle the MD/TXT badge: markdown preview vs. plain-text editing
-- `⌘N` — new note
-- Hover footer — word/char counts, and a `trash (n)` badge that opens the trash view for restore/empty
+- Type and press `↵` — append a line
+- `↵` on a line — put its words in the input; `↵` again saves them in place (its time and bullet are kept)
+- `⌘⌫` — delete a line; it waits 8 s in the line above the input, and `⌘Z` stops it
+- `⌘P` — list notes by name under `NOTES` (including day notes)
+- `⌘↵` — hand the note to Agent Chat
 
 ## Clipboard History Power Actions
 
