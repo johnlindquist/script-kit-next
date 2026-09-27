@@ -451,24 +451,3 @@ export async function targetedRpc(opts: {
     durationMs: Date.now() - start,
   };
 }
-
-export async function listNativePeerWindows(opts: {
-  family: "agentChatDetached" | "promptPopup";
-}): Promise<Array<Record<string, unknown>>> {
-  const result = await runTool(["bun", "scripts/agentic/window.ts", "list"], "window-list");
-  if (result.exitCode !== 0) return [];
-  const parsed = parseJson(result.stdout);
-  const surfaces = (parsed.data as { surfaces?: Array<Record<string, unknown>> } | undefined)
-    ?.surfaces ?? [];
-  if (opts.family === "agentChatDetached") {
-    return surfaces.filter((surface) => {
-      const surfaceId = String(surface.surfaceId ?? "");
-      const title = String(surface.title ?? "");
-      return surfaceId.includes("agent_chat") || title.toLowerCase().includes("agent");
-    });
-  }
-  return surfaces.filter((surface) => {
-    const title = String(surface.title ?? "");
-    return title.toLowerCase().includes("popup") || title.toLowerCase().includes("prompt");
-  });
-}
