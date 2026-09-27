@@ -145,8 +145,8 @@ the Actions menu, Notes, and every other window. The contract:
 - the Actions menu settles on the untinted popup material
   (`NativeGlassSurfaceRole::PopupBackdrop`) over the already-tinted main
   glass (confirm modals are retired); every other window uses the window material;
-- Notes reveals its body with the fade (reveal delay `0ms`) and unlocks native
-  resizing at `configured_at + settle_duration_ms`;
+- the Notes window is retired (2026-09-27): notes open as a view under the main
+  input, so there is no Notes reveal or resize unlock;
 - glass material: stability tint floor `0.35` and capsule veil `0.0`
   (`src/ui/chrome/tokens.rs`).
 
@@ -233,6 +233,27 @@ Launcher-sourced Agent Chat opens stage the currently selected launcher row as a
 - Only entries where the user deliberately targeted a row (Cmd+Enter on a selection, actions payloads, explicit handoffs) may stage the focused row — and Cmd+Enter already suppresses the *default auto-selected* row via its empty-input guard in `agent_handoff/mod.rs`. Mirror that guard's intent in any new launcher-sourced entry.
 - The contract is locked by `quick_question_entry_suppresses_all_implicit_context` in `src/app_impl/agent_handoff/agent_chat_entry.rs`; keep new entry points honest against it rather than weakening the test.
 
+## Notes Live Under the Main Input
+
+There is no Notes window. The 2026-09-27 one-window build deleted `src/notes/window/**`
+(creation, placement, focus handoff, automation registration, settings, and their tests). Every
+way into a note — the Notes hotkey, tray, deeplink, stdin/SDK `openNotes`, MCP note tools, the
+Notes built-ins, root note results, the day page's "Open as a Note", the Add Note fallback, and
+"Add it to today's note" — calls `crate::notes::open_note(cx, NoteTarget)`, or
+`ScriptListApp::one_window_show_note` from inside the app entity. The binary's hook shows the main
+window first when it is hidden, then opens the note view (`src/one_window/notes.rs`) under the
+same input.
+
+- A note's lines are rows under a `NOTE · <name>` header and scroll inside the list; the input
+  never moves. Typing + ↵ appends a line, ↵ on a line puts its words in the input and ↵ saves
+  them in place (its time and bullet are kept), ⌘⌫ deletes a line through the 8 s hold with ⌘Z in
+  the line above the input, ⌘P lists notes by name under `NOTES`, and ⌘↵ hands the note to the
+  model's chat view.
+- Storage is unchanged: day notes are `brain/days/<date>.md` (appends go through the substrate),
+  other notes stay in the notes database.
+- Do not bring back a Notes window, a Notes-only editor host, or a confirm dialog for deleting a
+  line.
+
 ## Hold, Undo, and the Line (replaces the Modal Contract)
 
 There are no modals, toasts, HUD windows, or banners. The main window is the only window, and
@@ -245,7 +266,7 @@ everything that used to pop up now lands in the line above the input, which the
   Trash, clear history, permanent deletes, anything in `DEFAULT_CONFIRMATION_COMMANDS`) waits
   8 s in the line ("Runs in 8s" / "Sending in 8s") and runs only when the wait runs out
   untouched: `ScriptListApp::one_window_hold` / `one_window_hold_or_stop` in the main window,
-  `crate::line_notice::hold` from Notes, Agent Chat, Dictation or any lib-side code. Typing with
+  `crate::line_notice::hold` from Agent Chat, Dictation or any lib-side code. Typing with
   the list showing pauses it ("Paused while you type"); ⌘Z on an empty input or the staged
   "Don't send it" row stops it, and the line says "Didn't run: …".
 - Reversible actions happen at once and offer ⌘Z in the line:
