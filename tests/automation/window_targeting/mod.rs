@@ -47,7 +47,7 @@ fn cleanup(prefix: &str, ids: &[&str]) {
 
 #[test]
 fn automation_window_target_round_trip_kind() {
-    let json = r#"{"type":"kind","kind":"agentChatDetached","index":0}"#;
+    let json = r#"{"type":"kind","kind":"snapOverlay","index":0}"#;
     let parsed: AutomationWindowTarget =
         serde_json::from_str(json).expect("target should deserialize");
     let out = serde_json::to_string(&parsed).expect("target should serialize");
@@ -60,7 +60,7 @@ fn automation_window_target_round_trip_all_kinds() {
     let kinds = [
         AutomationWindowKind::Main,
         AutomationWindowKind::Notes,
-        AutomationWindowKind::AgentChatDetached,
+        AutomationWindowKind::SnapOverlay,
         AutomationWindowKind::ActionsDialog,
         AutomationWindowKind::PromptPopup,
     ];
@@ -85,7 +85,7 @@ fn simulate_gpui_event_dispatches_to_target_window() {
     let json = r#"{
         "type": "simulateGpuiEvent",
         "requestId": "gpui-target-1",
-        "target": {"type": "kind", "kind": "notes"},
+        "target": {"type": "kind", "kind": "snapOverlay"},
         "event": {"type": "keyDown", "key": "escape", "modifiers": []}
     }"#;
     let msg: Message = serde_json::from_str(json).expect("parse simulateGpuiEvent");
@@ -100,7 +100,7 @@ fn simulate_gpui_event_dispatches_to_target_window() {
             let target = target.expect("target should be present");
             match target {
                 AutomationWindowTarget::Kind { kind, .. } => {
-                    assert_eq!(kind, AutomationWindowKind::Notes);
+                    assert_eq!(kind, AutomationWindowKind::SnapOverlay);
                 }
                 other => panic!("Expected Kind target, got: {:?}", other),
             }
@@ -150,13 +150,9 @@ fn registry_resolves_each_kind_independently() {
     main.semantic_surface = Some("scriptList".into());
     script_kit_gpui::windows::upsert_automation_window(main);
 
-    let mut notes = make_info(&p, "notes", AutomationWindowKind::Notes);
-    notes.semantic_surface = Some("notes".into());
-    script_kit_gpui::windows::upsert_automation_window(notes);
-
-    let mut agent_chat = make_info(&p, "agent_chat", AutomationWindowKind::AgentChatDetached);
-    agent_chat.semantic_surface = Some("agentChatChat".into());
-    script_kit_gpui::windows::upsert_automation_window(agent_chat);
+    let mut snap = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
+    snap.semantic_surface = Some("snapOverlay".into());
+    script_kit_gpui::windows::upsert_automation_window(snap);
 
     // Resolve each by kind
     let resolved_main =
@@ -170,31 +166,29 @@ fn registry_resolves_each_kind_independently() {
         Some("scriptList")
     );
 
-    let resolved_notes =
+    let resolved_snap =
+        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Kind {
+            kind: AutomationWindowKind::SnapOverlay,
+            index: None,
+        }))
+        .expect("resolve snap overlay");
+    assert_eq!(
+        resolved_snap.semantic_surface.as_deref(),
+        Some("snapOverlay")
+    );
+    assert_ne!(resolved_main.id, resolved_snap.id);
+
+    // There is no Notes window: targeting one finds nothing rather than falling back to main.
+    assert!(
         script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Kind {
             kind: AutomationWindowKind::Notes,
             index: None,
         }))
-        .expect("resolve notes");
-    assert_eq!(resolved_notes.semantic_surface.as_deref(), Some("notes"));
-
-    let resolved_agent_chat =
-        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
-            index: None,
-        }))
-        .expect("resolve agent_chat");
-    assert_eq!(
-        resolved_agent_chat.semantic_surface.as_deref(),
-        Some("agentChatChat")
+        .is_err(),
+        "no Notes window is registered"
     );
 
-    // All three have distinct IDs
-    assert_ne!(resolved_main.id, resolved_notes.id);
-    assert_ne!(resolved_main.id, resolved_agent_chat.id);
-    assert_ne!(resolved_notes.id, resolved_agent_chat.id);
-
-    cleanup(&p, &["main", "notes", "agent_chat"]);
+    cleanup(&p, &["main", "snap"]);
 }
 
 #[test]
@@ -206,22 +200,22 @@ fn focused_resolution_tracks_across_windows() {
     main.focused = true;
     script_kit_gpui::windows::upsert_automation_window(main);
 
-    let notes = make_info(&p, "notes", AutomationWindowKind::Notes);
-    script_kit_gpui::windows::upsert_automation_window(notes);
+    let snap = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
+    script_kit_gpui::windows::upsert_automation_window(snap);
 
     // Initially main is focused
     let focused =
         script_kit_gpui::windows::resolve_automation_window(None).expect("resolve focused");
     assert_eq!(focused.kind, AutomationWindowKind::Main);
 
-    // Shift focus to notes
-    script_kit_gpui::windows::set_automation_focus(&format!("{p}:notes"));
+    // Shift focus to the snap overlay
+    script_kit_gpui::windows::set_automation_focus(&format!("{p}:snap"));
 
     let focused = script_kit_gpui::windows::resolve_automation_window(None)
         .expect("resolve focused after shift");
-    assert_eq!(focused.kind, AutomationWindowKind::Notes);
+    assert_eq!(focused.kind, AutomationWindowKind::SnapOverlay);
 
-    cleanup(&p, &["main", "notes"]);
+    cleanup(&p, &["main", "snap"]);
 }
 
 // ============================================================
@@ -281,26 +275,20 @@ fn list_automation_windows_returns_all_registered() {
     ));
     script_kit_gpui::windows::upsert_automation_window(make_info(
         &p,
-        "notes",
-        AutomationWindowKind::Notes,
-    ));
-    script_kit_gpui::windows::upsert_automation_window(make_info(
-        &p,
-        "agent_chat",
-        AutomationWindowKind::AgentChatDetached,
+        "snap",
+        AutomationWindowKind::SnapOverlay,
     ));
 
     let all = script_kit_gpui::windows::list_automation_windows();
     let ours: Vec<_> = all.iter().filter(|w| w.id.starts_with(&p)).collect();
-    assert_eq!(ours.len(), 3);
+    assert_eq!(ours.len(), 2);
 
     // Verify distinct kinds
     let kinds: std::collections::HashSet<_> = ours.iter().map(|w| w.kind).collect();
     assert!(kinds.contains(&AutomationWindowKind::Main));
-    assert!(kinds.contains(&AutomationWindowKind::Notes));
-    assert!(kinds.contains(&AutomationWindowKind::AgentChatDetached));
+    assert!(kinds.contains(&AutomationWindowKind::SnapOverlay));
 
-    cleanup(&p, &["main", "notes", "agent_chat"]);
+    cleanup(&p, &["main", "snap"]);
 }
 
 // ============================================================
@@ -317,13 +305,13 @@ fn simulate_gpui_event_constructor_includes_target() {
             text: None,
         },
         Some(AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::SnapOverlay,
             index: Some(0),
         }),
     );
     let json = serde_json::to_string(&msg).expect("serialize");
     assert!(json.contains("simulateGpuiEvent"));
-    assert!(json.contains("agentChatDetached"));
+    assert!(json.contains("snapOverlay"));
     assert!(json.contains("evt-target-1"));
 }
 
@@ -441,7 +429,7 @@ fn error_result_round_trips_with_error_code() {
     let msg = Message::simulate_gpui_event_result_error(
         "rt-1".into(),
         "target_ambiguous".into(),
-        "2 visible windows share kind AgentChatDetached".into(),
+        "2 visible windows share kind SnapOverlay".into(),
         None,
         Some("agent_chat-thread-1".into()),
     );

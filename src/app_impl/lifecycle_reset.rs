@@ -19,8 +19,6 @@ pub(crate) enum MainWindowPostHide {
         reason: &'static str,
         reset_mini_bounds_after_hidden_reset: bool,
     },
-    /// Reset a prepared Agent Chat surface back to ScriptList.
-    ResetPreparedAgentChat { reason: &'static str },
     /// Keep the view state exactly as-is (focus-loss / escape preserve hides).
     PreserveState { reason: &'static str },
     /// Native hide completed; reset the root menu, then queue one guarded re-show.
@@ -35,7 +33,6 @@ impl MainWindowPostHide {
     fn reason(self) -> &'static str {
         match self {
             Self::ResetScriptList { reason, .. }
-            | Self::ResetPreparedAgentChat { reason }
             | Self::PreserveState { reason }
             | Self::AnimationReplay { reason, .. } => reason,
         }
@@ -200,13 +197,8 @@ impl ScriptListApp {
     /// transitions. Whenever we hide the main window, return to ScriptList, or
     /// otherwise abandon the owner surface, call this to guarantee they cannot
     /// survive past their owner.
-    pub(crate) fn close_floating_popups_for_owner_loss(
-        &mut self,
-        reason: &'static str,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn close_floating_popups_for_owner_loss(&mut self, reason: &'static str) {
         self.menu_syntax_trigger_picker_state = Default::default();
-        crate::ai::agent_chat::ui::history_popup::close_history_popup_window_for_owner_loss(cx);
         tracing::info!(
             target: "script_kit::popup_owner",
             event = "floating_popups_closed_for_owner_loss",
@@ -260,7 +252,7 @@ impl ScriptListApp {
             return None;
         }
         logging::log("VISIBILITY", "=== Close and reset window ===");
-        self.close_floating_popups_for_owner_loss(reason, cx);
+        self.close_floating_popups_for_owner_loss(reason);
         clear_main_state_restore_after_focus_loss();
 
         // Reset pin state when window is closed. Agent Chat defers mode
@@ -310,26 +302,10 @@ impl ScriptListApp {
             self.cancel_script_execution_without_view_reset();
         }
 
-        // Check if the Agent Chat window is open BEFORE hiding
-        let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
-        logging::log(
-            "VISIBILITY",
-            &format!("Secondary windows: agent_chat_open={}", agent_chat_open),
-        );
-
-        // CRITICAL: Always hide only the main window. App-level hide conceals the
-        // entire app (all windows), so any false-negative secondary-window
-        // check can hide Notes together with main.
+        // CRITICAL: Always hide only the main window, never the whole app.
         // Must be deferred: orderOut: triggers window_did_change_key_status
         // synchronously, which re-enters GPUI's App RefCell and panics.
-        let secondary_windows_open = agent_chat_open;
-        logging::log(
-            "VISIBILITY",
-            &format!(
-                "Prepared main-only hide, secondary_windows_open={}",
-                secondary_windows_open
-            ),
-        );
+        logging::log("VISIBILITY", "Prepared main-only hide");
         Some(script_kit_gpui::main_window_visibility_generation())
     }
 
@@ -432,21 +408,6 @@ impl ScriptListApp {
                                                 app.complete_hidden_main_window_script_list_reset(
                                                     request, cx,
                                                 );
-                                            });
-                                        }
-                                    });
-                                }
-                                MainWindowPostHide::ResetPreparedAgentChat { reason } => {
-                                    let request = HiddenMainWindowResetRequest {
-                                        _native_hidden: native_hidden,
-                                        visibility_generation: expected_visibility_generation,
-                                        reason,
-                                        reset_mini_bounds_after_hidden_reset: false,
-                                    };
-                                    cx.update(|cx| {
-                                        if let Some(app_entity) = app_entity.upgrade() {
-                                            app_entity.update(cx, |app, cx| {
-                                                app.complete_hidden_main_window_reset(request, cx);
                                             });
                                         }
                                     });
@@ -577,72 +538,6 @@ impl ScriptListApp {
         logging::log("VISIBILITY", "=== Window closed ===");
     }
 
-    /// Agent Chat's strict close barrier: native `orderOut:` must complete and
-    /// AppKit must report the window hidden before ScriptList can be rendered.
-    pub(crate) fn close_agent_chat_and_reset_window_after_native_hide(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        logging::log(
-            "VISIBILITY",
-            "=== Close Agent Chat with native hide/reset barrier ===",
-        );
-        let Some(visibility_generation) = self.prepare_main_window_close(
-            cx,
-            "close_agent_chat_native_hide_barrier",
-            false,
-            false,
-        ) else {
-            return;
-        };
-        self.defer_calibrated_main_window_hide(
-            cx,
-            visibility_generation,
-            None,
-            MainWindowPostHide::ResetPreparedAgentChat {
-                reason: "close_agent_chat_native_hide_barrier",
-            },
-        );
-    }
-
-    fn complete_hidden_main_window_reset(
-        &mut self,
-        request: HiddenMainWindowResetRequest,
-        cx: &mut Context<Self>,
-    ) {
-        if !hidden_main_window_reset_is_current(
-            request.visibility_generation,
-            script_kit_gpui::main_window_visibility_generation(),
-            script_kit_gpui::is_main_window_visible(),
-        ) {
-            logging::log(
-                "VISIBILITY",
-                &format!(
-                    "Skipping stale Agent Chat hidden reset after {}",
-                    request.reason
-                ),
-            );
-            return;
-        }
-
-        logging::log(
-            "VISIBILITY",
-            &format!(
-                "Resetting prepared Agent Chat in hidden main window to ScriptList after {}",
-                request.reason
-            ),
-        );
-        let was_mini = self.main_window_mode == MainWindowMode::Mini;
-        self.reset_to_script_list_after_agent_chat_prepared(cx);
-        let post_reset_is_mini = self.main_window_mode == MainWindowMode::Mini;
-        self.rekey_main_automation_surface_from_current_view();
-        crate::windows::set_automation_visibility("main", false);
-        let hidden_reset_is_mini = was_mini || post_reset_is_mini;
-        if request.reset_mini_bounds_after_hidden_reset || hidden_reset_is_mini {
-            crate::window_resize::resize_to_mini_main_window_sync();
-        }
-    }
-
     /// Reset the ordinary launcher route only after AppKit has confirmed the
     /// native main window hidden. Changing mode or rendering ScriptList during
     /// the fade produces a duplicate in-window footer beside the still-visible
@@ -695,7 +590,6 @@ impl ScriptListApp {
             && self.is_dismissable_view()
             && script_kit_gpui::is_main_window_visible()
             && !self.is_pinned
-            && !ai::agent_chat::ui::chat_window::is_chat_window_open()
             && !crate::dictation::is_dictation_recording()
             && self.tab_ai_save_offer_state.is_none()
             && self.shortcut_recorder_state.is_none()
@@ -710,7 +604,7 @@ impl ScriptListApp {
             "VISIBILITY",
             "=== Hide main window after focus loss, preserving ScriptList state ===",
         );
-        self.close_floating_popups_for_owner_loss("focus_loss_hide", cx);
+        self.close_floating_popups_for_owner_loss("focus_loss_hide");
 
         if !matches!(self.current_view, AppView::ScriptList) {
             logging::log(
@@ -734,19 +628,9 @@ impl ScriptListApp {
         self.was_window_focused = false;
         mark_main_state_restore_after_focus_loss();
 
-        let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
         logging::log(
             "VISIBILITY",
-            &format!("Secondary windows: agent_chat_open={}", agent_chat_open),
-        );
-
-        let secondary_windows_open = agent_chat_open;
-        logging::log(
-            "VISIBILITY",
-            &format!(
-                "Using calibrated main-window hide - preserving state with main-only hide, secondary_windows_open={}",
-                secondary_windows_open
-            ),
+            "Using calibrated main-window hide - preserving state with main-only hide",
         );
         let visibility_generation = script_kit_gpui::main_window_visibility_generation();
         self.defer_calibrated_main_window_hide(
@@ -800,9 +684,6 @@ impl ScriptListApp {
             }
             AppView::FavoritesBrowseView { filter, .. } if !filter.is_empty() => {
                 Some("FavoritesBrowse filter")
-            }
-            AppView::AgentChatHistoryView { filter, .. } if !filter.is_empty() => {
-                Some("AgentChatHistory filter")
             }
             AppView::BrowserHistoryView { filter, .. } if !filter.is_empty() => {
                 Some("BrowserHistory filter")
@@ -920,14 +801,6 @@ impl ScriptListApp {
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.builtin_row_stack_scroll_handle.scroll_to_item(0);
-            }
-            AppView::AgentChatHistoryView {
-                filter,
-                selected_index,
-            } => {
-                Self::clear_builtin_query_state(filter, selected_index);
-                self.agent_chat_history_scroll_handle
-                    .scroll_to_top_of_item(0);
             }
             AppView::BrowserHistoryView {
                 filter,

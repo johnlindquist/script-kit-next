@@ -26,6 +26,6 @@ pub use core::{TextInputState, TextSelection};
 pub(crate) use core::normalize_single_line_text;
 #[allow(unused_imports)]
 pub(crate) use render::{
-    placeholder_cursor_anchor, pulse_cursor_bar, render_text_input_cursor_selection,
-    TextHighlightRange, TextInlinePillRange, TextInputRenderConfig, TextInputRenderIndicator,
+    pulse_cursor_bar, render_text_input_cursor_selection, TextHighlightRange, TextInlinePillRange,
+    TextInputRenderConfig, TextInputRenderIndicator,
 };

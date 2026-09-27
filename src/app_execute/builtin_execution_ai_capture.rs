@@ -68,7 +68,7 @@ impl ScriptListApp {
                     );
 
                     this.update(cx, |this, cx| {
-                        this.open_agent_chat_after_already_hidden(
+                        this.open_chat_for_action(
                             "SendScreenToAi",
                             &trace_id,
                             DeferredAgentChatAction::SetInputWithImage {
@@ -190,7 +190,7 @@ impl ScriptListApp {
                             cx.notify();
                         }
 
-                        this.open_agent_chat_after_already_hidden(
+                        this.open_chat_for_action(
                             "SendFocusedWindowToAi",
                             &trace_id,
                             DeferredAgentChatAction::SetInputWithImage {
@@ -292,7 +292,7 @@ impl ScriptListApp {
                     );
 
                     this.update(cx, |this, cx| {
-                        this.open_agent_chat_after_already_hidden(
+                        this.open_chat_for_action(
                             "SendScreenAreaToAi",
                             &trace_id,
                             DeferredAgentChatAction::SetInputWithImage {
@@ -401,7 +401,7 @@ impl ScriptListApp {
 
             let _ = this.update(cx, |this, cx| match result {
                 Ok(DeferredAiCapturedText::Ready(captured)) => {
-                    this.open_agent_chat_after_already_hidden(
+                    this.open_chat_for_action(
                         source_action,
                         &trace_id,
                         DeferredAgentChatAction::SetInput {

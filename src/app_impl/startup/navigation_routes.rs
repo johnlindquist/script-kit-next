@@ -1,23 +1,3 @@
-struct SecondarySurfaceWindowState {
-    is_detached_agent_chat: bool,
-}
-
-impl SecondarySurfaceWindowState {
-    fn inspect(window: &Window) -> Self {
-        Self {
-            is_detached_agent_chat: crate::ai::agent_chat::ui::chat_window::is_chat_window(window),
-        }
-    }
-
-    fn is_secondary(&self) -> bool {
-        self.is_detached_agent_chat
-    }
-}
-
-fn is_secondary_surface_window(window: &Window) -> bool {
-    SecondarySurfaceWindowState::inspect(window).is_secondary()
-}
-
 #[inline]
 fn is_plain_platform_cmd_w(event: &gpui::KeystrokeEvent) -> bool {
     let key = event.keystroke.key.as_str();
@@ -36,10 +16,6 @@ impl ScriptListApp {
             let app_entity = app_entity_for_cmd_w;
             move |event, window, cx| {
                 if !is_plain_platform_cmd_w(event) {
-                    return;
-                }
-
-                if is_secondary_surface_window(window) {
                     return;
                 }
 
@@ -184,16 +160,6 @@ impl ScriptListApp {
         match &self.current_view {
             AppView::QuickTerminalView { .. } => {
                 self.close_quick_terminal_main_window_state_first(cx);
-            }
-            AppView::AgentChatView { entity } => {
-                let entity = entity.clone();
-                entity.update(cx, |chat, cx| {
-                    let _ = chat.request_conversation_dismiss(
-                        crate::components::conversation_actions::ConversationDismissTrigger::CommandW,
-                        window,
-                        cx,
-                    );
-                });
             }
             AppView::ThemeChooserView { .. } => {
                 // Memory-only restore: a cancelled Theme Designer session never

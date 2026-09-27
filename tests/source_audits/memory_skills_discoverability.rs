@@ -62,19 +62,12 @@ fn root_filter_keeps_type_skill_qualifier_without_new_drawer() {
 }
 
 #[test]
-fn existing_skill_contract_tests_cover_duplicate_slugs_and_staging() {
+fn existing_skill_contract_tests_cover_duplicate_slugs() {
     let plugin_skill_search = read("tests/plugin_skill_search.rs");
-    let agent_chat_tests = read("src/ai/agent_chat/ui/tests.rs");
 
     assert!(
         plugin_skill_search.contains("duplicate_skill_slugs_across_plugins_are_distinct_results")
             && plugin_skill_search.contains("skill_frecency_key_is_plugin_qualified"),
         "plugin skill search tests must keep duplicate skill slugs distinct"
-    );
-    assert!(
-        agent_chat_tests.contains("agent_chat_plugin_slash_accept_stages_selected_skill_prompt")
-            && agent_chat_tests
-                .contains("agent_chat_claude_skill_staged_prompt_uses_claude_owner_phrase"),
-        "Agent Chat tests must keep skill slash acceptance staged as context parts"
     );
 }

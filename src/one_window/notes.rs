@@ -8,7 +8,6 @@
 use anyhow::{anyhow, Result};
 use chrono::NaiveDate;
 use gpui::Context;
-use sk_one_window::work::WorkEvent;
 use sk_one_window::{Done, EnterTarget, Event, Key};
 
 use super::views::HostedView;
@@ -21,6 +20,8 @@ pub(crate) const NOTES: &str = "notes";
 pub(crate) const DELETE_LINE_KEY: &str = "cmd-backspace";
 /// Lists the notes by name from inside one.
 pub(crate) const FIND_NOTE_KEY: &str = "cmd-p";
+/// The source a note handed to the model's chat is tagged with.
+const NOTE_SOURCE: &str = "note";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum NoteDoc {
@@ -470,14 +471,20 @@ impl ScriptListApp {
         match key {
             Key::Enter => self.one_window_note_enter(cx),
             Key::CmdEnter => {
-                let asked = view.line.trim();
-                let ask = if asked.is_empty() {
-                    "What does this note say?"
-                } else {
-                    asked
+                let note = crate::ai::message_parts::AiContextPart::TextBlock {
+                    label: format!("Note · {}", view.title),
+                    source: NOTE_SOURCE.to_string(),
+                    text: view.text(),
+                    mime_type: None,
                 };
-                let sentence = format!("{ask}\n\nMy note “{}”:\n{}", view.title, view.text());
-                vec![Event::Work(WorkEvent::AskModel { sentence })]
+                let asked = view.line.trim();
+                let entry = if asked.is_empty() {
+                    crate::one_window::chat_entry::ChatEntry::quick()
+                } else {
+                    crate::one_window::chat_entry::ChatEntry::sending(asked)
+                };
+                self.one_window_open_chat(entry.with(note), cx);
+                Vec::new()
             }
             Key::Other(k) if k == DELETE_LINE_KEY => {
                 self.one_window_note_delete(cx);

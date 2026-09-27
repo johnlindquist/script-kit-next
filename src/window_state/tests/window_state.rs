@@ -266,7 +266,7 @@ mod tests {
             .nth(1)
             .and_then(|body| body.split("\n    }").next())
             .expect("reset_to_script_list should exist in app_impl/registries_state.rs");
-        assert!(entry.contains("self.reset_to_script_list_impl(false, cx)"));
+        assert!(entry.contains("self.reset_to_script_list_impl(cx)"));
         let body = content
             .split("fn reset_to_script_list_impl(")
             .nth(1)
@@ -289,9 +289,9 @@ mod tests {
         );
     }
 
-    /// Verify close_and_reset_window records Notes/AI state for diagnostics.
+    /// There is one window; closing it must not consult a Notes or chat window that no longer exists.
     #[test]
-    fn test_close_and_reset_window_checks_secondary_windows() {
+    fn test_close_and_reset_window_goes_through_one_main_window_preparation() {
         let content = read_source_file("app_impl/lifecycle_reset.rs");
         let prepare_start = content
             .find("fn prepare_main_window_close")
@@ -301,12 +301,13 @@ mod tests {
             .expect("close_and_reset_window should exist");
         let prepare_body = &content[prepare_start..close_start];
         assert!(
-            prepare_body.contains("agent_chat_open"),
-            "the shared main-window close preparation must inspect the Agent Chat window's state"
+            !prepare_body.contains("is_notes_window_open")
+                && !prepare_body.contains("is_chat_window_open"),
+            "there is one window: the shared main-window close preparation has no secondary window to inspect"
         );
 
         let close_body = content[close_start..]
-            .split("/// Agent Chat's strict close barrier")
+            .split("\n    fn ")
             .next()
             .expect("close_and_reset_window body should have a boundary");
         assert!(

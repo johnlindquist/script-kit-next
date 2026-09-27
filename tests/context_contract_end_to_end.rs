@@ -93,10 +93,10 @@ fn explicit_context_surfaces_share_one_contract_end_to_end() {
     );
     assert_eq!(receipt.context.attempted, 3);
     assert_eq!(receipt.context.resolved, 3);
-    assert!(
-        receipt.context.failures.is_empty(),
+    assert_eq!(
+        receipt.context.failed, 0,
         "unexpected failures: {:?}",
-        receipt.context.failures
+        receipt.outcomes
     );
 
     // Verify the resolved content contains expected URI markers
@@ -181,10 +181,10 @@ fn provider_backed_mentions_resolve_end_to_end() {
     );
     assert_eq!(receipt.context.attempted, 4);
     assert_eq!(receipt.context.resolved, 4);
-    assert!(
-        receipt.context.failures.is_empty(),
+    assert_eq!(
+        receipt.context.failed, 0,
         "unexpected failures: {:?}",
-        receipt.context.failures
+        receipt.outcomes
     );
 }
 

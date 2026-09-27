@@ -1,78 +1,5 @@
 use super::super::AppView;
 
-/// Single-source policy describing how an Agent Chat launch treats the source
-/// surface's implicit focused row and any explicit context.
-///
-/// This is the one authority for context staging: it replaces the former
-/// suppression bool + staging enum pair, which could encode contradictions
-/// (a false suppression flag beside a suppressing staging). There is
-/// deliberately NO `Default`; every request constructor must choose a policy
-/// explicitly.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum AgentChatContextPolicy {
-    /// The source surface may contribute its focused row. If it has no focused
-    /// row, the existing Ask Anything / ambient fallback may run.
-    AmbientOrFocused,
-    /// Do not inherit the source surface's implicit focused row.
-    ///
-    /// This does NOT suppress explicit context parts or an explicit
-    /// FullScreen/FocusedWindow/etc. capture kind — it is not `NoContext`.
-    SuppressFocused,
-    /// Admit no implicit, ambient, profile-standing, or focused context. Used
-    /// only by entry modes that promise a genuinely clean conversation.
-    NoContext,
-    /// Explicit host-provided context parts. The supported contract is exactly
-    /// one part; the dispatcher fails closed on any other cardinality.
-    Parts {
-        parts: Vec<crate::ai::message_parts::AiContextPart>,
-        source: &'static str,
-    },
-    /// Explicit actions-payload target (Cmd+Enter from an actions dialog etc.).
-    ActionsPayload {
-        target: crate::ai::TabAiTargetContext,
-    },
-    /// A plugin skill selected from the main menu. The specialized staging
-    /// helper preserves slash-picker identity and cursor semantics.
-    PluginSkill { skill: crate::plugins::PluginSkill },
-}
-
-impl AgentChatContextPolicy {
-    /// Derive the launcher policy for a given Agent Chat UI variant.
-    ///
-    /// Standard launcher entry may inherit the selected launcher row; every
-    /// other (nonstandard) variant is a menu preset / launch mode, not a
-    /// context source, so it suppresses the implicit focused row. This match is
-    /// exhaustive over all eight variants and contains no wildcard arm.
-    pub(crate) fn for_main_launcher_variant(
-        variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
-    ) -> Self {
-        use crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant;
-        match variant {
-            AgentChatUiVariant::Standard => Self::AmbientOrFocused,
-            AgentChatUiVariant::UserBold
-            | AgentChatUiVariant::RoleSplit
-            | AgentChatUiVariant::BottomDock
-            | AgentChatUiVariant::DenseLog
-            | AgentChatUiVariant::Sidecar
-            | AgentChatUiVariant::FocusedTextMini => Self::SuppressFocused,
-            AgentChatUiVariant::QuickAi => Self::NoContext,
-        }
-    }
-
-    /// Whether this policy permits staging the source surface's implicit
-    /// focused row. Only `AmbientOrFocused` does.
-    pub(crate) fn admits_implicit_focused_part(&self) -> bool {
-        match self {
-            Self::AmbientOrFocused => true,
-            Self::SuppressFocused
-            | Self::NoContext
-            | Self::Parts { .. }
-            | Self::ActionsPayload { .. }
-            | Self::PluginSkill { .. } => false,
-        }
-    }
-}
-
 /// Resolved Tab AI context payload ready for harness submission.
 #[derive(Debug, Clone)]
 pub(crate) struct TabAiResolvedContext {
@@ -84,21 +11,14 @@ pub(crate) struct TabAiResolvedContext {
 /// Typed launch choices selected before the source surface is snapshotted.
 #[derive(Debug, Clone)]
 pub(crate) struct TabAiHarnessEntryOptions {
-    pub(crate) entry: super::agent_chat_entry::AgentChatEntryIntent,
-    pub(crate) context_policy: AgentChatContextPolicy,
+    /// Words for the harness or the chat.
+    pub(crate) text: Option<String>,
+    /// The words go now; otherwise they wait to be sent.
+    pub(crate) submit: bool,
+    /// The source surface's focused item goes along.
+    pub(crate) stage_focused: bool,
     pub(crate) quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
     pub(crate) capture_kind: crate::ai::TabAiCaptureKind,
-    pub(crate) force_agent_chat_surface: bool,
-    pub(crate) ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
-}
-
-/// Context projection choices applied after the authoritative launch request exists.
-#[derive(Debug, Clone)]
-pub(crate) struct TabAiAgentChatOpenOptions {
-    pub(crate) focused_part: Option<crate::ai::message_parts::AiContextPart>,
-    pub(crate) use_ask_anything_fallback: bool,
-    pub(crate) explicit_ambient_chip_label: Option<String>,
-    pub(crate) force_agent_chat_surface: bool,
 }
 
 /// Pre-switch snapshot of the UI state captured at the Tab interception
@@ -110,14 +30,9 @@ pub(crate) struct TabAiAgentChatOpenOptions {
 pub(crate) struct TabAiLaunchRequest {
     /// The `AppView` that was active when Tab was pressed.
     pub(crate) source_view: AppView,
-    /// Typed entry verb and optional text. Submission is permitted only for
-    /// `Ask` and `Send`; `Open`, `Add`, and `Continue` are composer-only.
-    pub(crate) entry: super::agent_chat_entry::AgentChatEntryIntent,
-    /// Agent Chat presentation variant. Standard preserves the existing UI.
-    pub(crate) ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant,
-    /// Single-source context policy: whether this launch inherits the source
-    /// surface's implicit focused row, suppresses it, or carries explicit parts.
-    pub(crate) context_policy: AgentChatContextPolicy,
+    /// Words for the harness; they go now when `submit` is set.
+    pub(crate) text: Option<String>,
+    pub(crate) submit: bool,
     /// Quick-submit plan from the deterministic planner (fallback / dictation).
     pub(crate) quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
     /// UI snapshot taken synchronously before the view switch.
@@ -132,14 +47,14 @@ pub(crate) struct TabAiLaunchRequest {
 
 impl TabAiLaunchRequest {
     pub(crate) fn entry_text(&self) -> Option<&str> {
-        self.entry.seed_text()
+        self.text.as_deref()
     }
 
     pub(crate) fn requests_submission(&self) -> bool {
         self.quick_submit_plan
             .as_ref()
             .map(|plan| plan.submit)
-            .unwrap_or_else(|| self.entry.requests_submission())
+            .unwrap_or(self.submit)
     }
 }
 

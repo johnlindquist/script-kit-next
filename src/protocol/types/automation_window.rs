@@ -35,7 +35,6 @@ pub enum AutomationWindowTarget {
 pub enum AutomationWindowKind {
     Main,
     Notes,
-    AgentChatDetached,
     ActionsDialog,
     PromptPopup,
     /// Production snap target overlay, independent of a launcher parent.
@@ -51,7 +50,6 @@ impl AutomationWindowKind {
         match self {
             AutomationWindowKind::Main => "main",
             AutomationWindowKind::Notes => "notes",
-            AutomationWindowKind::AgentChatDetached => "agentChatDetached",
             AutomationWindowKind::ActionsDialog => "actionsDialog",
             AutomationWindowKind::PromptPopup => "promptPopup",
             AutomationWindowKind::SnapOverlay => "snapOverlay",

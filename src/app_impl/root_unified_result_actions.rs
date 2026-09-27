@@ -949,12 +949,13 @@ pub(crate) fn execute_root_unified_result_action(
             RootUnifiedActionSubject::Dictation { id, .. },
         ) => {
             if let Some(entry) = crate::dictation::get_history_entry(id) {
-                app.open_tab_ai_agent_chat_with_context_part(
-                    crate::ai::AiContextPart::ResourceUri {
-                        uri: entry.resource_uri(),
-                        label: format!("Dictation: {}", entry.preview),
-                    },
-                    "root_dictation_history_add",
+                app.one_window_open_chat(
+                    crate::one_window::chat_entry::ChatEntry::quick().with(
+                        crate::ai::AiContextPart::ResourceUri {
+                            uri: entry.resource_uri(),
+                            label: format!("Dictation: {}", entry.preview),
+                        },
+                    ),
                     cx,
                 );
             }

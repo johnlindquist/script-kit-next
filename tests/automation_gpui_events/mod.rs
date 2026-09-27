@@ -65,14 +65,14 @@ fn visible_count(prefix: &str, kind: AutomationWindowKind) -> usize {
 fn single_visible_window_is_not_ambiguous() {
     let p = prefix();
 
-    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
+    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
     script_kit_gpui::windows::upsert_automation_window(info);
 
-    let count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
+    let count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     // With exactly one visible window, the ambiguity guard should NOT fire
     assert_eq!(
         count, 1,
-        "Expected exactly 1 visible AgentChatDetached window under prefix {p}, got {count}"
+        "Expected exactly 1 visible SnapOverlay window under prefix {p}, got {count}"
     );
 
     cleanup(&p, &["agent_chat-0"]);
@@ -86,16 +86,16 @@ fn single_visible_window_is_not_ambiguous() {
 fn multiple_visible_windows_same_kind_is_ambiguous() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
-    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
+    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::SnapOverlay);
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    let count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
+    let count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     // With 2+ visible windows sharing a kind, the ambiguity guard fires
     assert!(
         count > 1,
-        "Expected >1 visible AgentChatDetached windows under prefix {p}, got {count}"
+        "Expected >1 visible SnapOverlay windows under prefix {p}, got {count}"
     );
 
     cleanup(&p, &["agent_chat-0", "agent_chat-1"]);
@@ -109,14 +109,14 @@ fn multiple_visible_windows_same_kind_is_ambiguous() {
 fn hidden_window_not_counted_for_ambiguity() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
-    let mut info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
+    let mut info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::SnapOverlay);
     info1.visible = false; // hidden
 
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    let count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
+    let count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     assert_eq!(
         count, 1,
         "Hidden window should not be counted; expected 1 under prefix {p}, got {count}"
@@ -133,25 +133,25 @@ fn hidden_window_not_counted_for_ambiguity() {
 fn different_kinds_are_not_ambiguous_with_each_other() {
     let p = prefix();
 
-    let agent_chat = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
-    let notes = make_visible(&p, "notes-0", AutomationWindowKind::Notes);
+    let agent_chat = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
+    let main = make_visible(&p, "main-0", AutomationWindowKind::Main);
 
     script_kit_gpui::windows::upsert_automation_window(agent_chat);
-    script_kit_gpui::windows::upsert_automation_window(notes);
+    script_kit_gpui::windows::upsert_automation_window(main);
 
-    let agent_chat_count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
-    let notes_count = visible_count(&p, AutomationWindowKind::Notes);
+    let agent_chat_count = visible_count(&p, AutomationWindowKind::SnapOverlay);
+    let main_count = visible_count(&p, AutomationWindowKind::Main);
 
     assert_eq!(
         agent_chat_count, 1,
-        "AgentChatDetached should have 1 visible window under prefix {p}"
+        "SnapOverlay should have 1 visible window under prefix {p}"
     );
     assert_eq!(
-        notes_count, 1,
-        "Notes should have 1 visible window under prefix {p}"
+        main_count, 1,
+        "Main should have 1 visible window under prefix {p}"
     );
 
-    cleanup(&p, &["agent_chat-0", "notes-0"]);
+    cleanup(&p, &["agent_chat-0", "main-0"]);
 }
 
 // ============================================================
@@ -162,17 +162,17 @@ fn different_kinds_are_not_ambiguous_with_each_other() {
 fn removing_window_clears_ambiguity() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
-    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
+    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::SnapOverlay);
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    assert!(visible_count(&p, AutomationWindowKind::AgentChatDetached) > 1);
+    assert!(visible_count(&p, AutomationWindowKind::SnapOverlay) > 1);
 
     // Remove one window — ambiguity should clear
     script_kit_gpui::windows::remove_automation_window(&format!("{p}:agent_chat-1"));
 
-    let count = visible_count(&p, AutomationWindowKind::AgentChatDetached);
+    let count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     assert_eq!(
         count, 1,
         "After removing one window, should have 1 visible under prefix {p}, got {count}"
@@ -189,11 +189,11 @@ fn removing_window_clears_ambiguity() {
 fn plain_kind_target_resolves_when_single_window() {
     let p = prefix();
 
-    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::AgentChatDetached);
+    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
     script_kit_gpui::windows::upsert_automation_window(info);
 
     let target = script_kit_gpui::protocol::AutomationWindowTarget::Kind {
-        kind: AutomationWindowKind::AgentChatDetached,
+        kind: AutomationWindowKind::SnapOverlay,
         index: None,
     };
     let resolved = script_kit_gpui::windows::resolve_automation_window(Some(&target));
@@ -217,7 +217,7 @@ fn simulate_gpui_event_result_with_error_serializes() {
         "requestId": "gpui-ambiguous",
         "success": false,
         "errorCode": "target_ambiguous",
-        "error": "Resolved target agentChatDetached:thread-1 (AgentChatDetached) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
+        "error": "Resolved target snapOverlay:thread-1 (SnapOverlay) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
     });
 
     let success = result["success"].as_bool().expect("success field");
@@ -374,28 +374,28 @@ fn attached_surface_without_bounds_fails_closed() {
 fn detached_window_bounds_not_required_for_dispatch() {
     let p = prefix();
 
-    // Detached windows (Notes, AgentChatDetached) do not need coordinate rebasing
-    let notes = make_with_bounds(
+    // Detached windows (the snap overlay) do not need coordinate rebasing
+    let snap = make_with_bounds(
         &p,
-        "notes",
-        AutomationWindowKind::Notes,
+        "snap",
+        AutomationWindowKind::SnapOverlay,
         None, // no bounds — still fine for detached
     );
-    script_kit_gpui::windows::upsert_automation_window(notes);
+    script_kit_gpui::windows::upsert_automation_window(snap);
 
     let target = AutomationWindowTarget::Id {
-        id: format!("{p}:notes"),
+        id: format!("{p}:snap"),
     };
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
     // Detached windows are dispatched directly via their runtime handle,
     // not through the main window. No coordinate rebasing needed.
-    assert_eq!(resolved.kind, AutomationWindowKind::Notes);
+    assert_eq!(resolved.kind, AutomationWindowKind::SnapOverlay);
     // bounds can be None — dispatch doesn't fail for detached
     assert!(resolved.bounds.is_none());
 
-    cleanup(&p, &["notes"]);
+    cleanup(&p, &["snap"]);
 }
 
 #[test]
@@ -451,10 +451,10 @@ fn prompt_popup_is_also_attached_surface() {
 fn inspect_geometry_detached_window_bounds_at_origin() {
     let p = prefix();
 
-    let notes = make_with_bounds(
+    let snap = make_with_bounds(
         &p,
-        "notes",
-        AutomationWindowKind::Notes,
+        "snap",
+        AutomationWindowKind::SnapOverlay,
         Some(AutomationWindowBounds {
             x: 500.0,
             y: 300.0,
@@ -462,13 +462,13 @@ fn inspect_geometry_detached_window_bounds_at_origin() {
             height: 600.0,
         }),
     );
-    script_kit_gpui::windows::upsert_automation_window(notes);
+    script_kit_gpui::windows::upsert_automation_window(snap);
 
     let target = AutomationWindowTarget::Id {
-        id: format!("{p}:notes"),
+        id: format!("{p}:snap"),
     };
     let resolved = script_kit_gpui::windows::resolve_automation_window(Some(&target))
-        .expect("should resolve notes");
+        .expect("should resolve the snap overlay");
 
     let bounds_in_screenshot =
         script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved).expect("should compute");
@@ -478,25 +478,25 @@ fn inspect_geometry_detached_window_bounds_at_origin() {
     assert!((bounds_in_screenshot.width - 800.0).abs() < f64::EPSILON);
     assert!((bounds_in_screenshot.height - 600.0).abs() < f64::EPSILON);
 
-    cleanup(&p, &["notes"]);
+    cleanup(&p, &["snap"]);
 }
 
 #[test]
 fn inspect_geometry_no_bounds_returns_none() {
     let p = prefix();
 
-    let notes = make_with_bounds(&p, "notes", AutomationWindowKind::Notes, None);
-    script_kit_gpui::windows::upsert_automation_window(notes);
+    let snap = make_with_bounds(&p, "snap", AutomationWindowKind::SnapOverlay, None);
+    script_kit_gpui::windows::upsert_automation_window(snap);
 
     let target = AutomationWindowTarget::Id {
-        id: format!("{p}:notes"),
+        id: format!("{p}:snap"),
     };
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
     let result = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved);
     assert!(result.is_none(), "No bounds should return None");
 
-    cleanup(&p, &["notes"]);
+    cleanup(&p, &["snap"]);
 }
 
 #[test]
@@ -798,7 +798,7 @@ fn inspect_hit_point_lands_inside_target_bounds() {
     cleanup(&p, &["main", "actions"]);
 }
 
-/// Detached windows (Notes, AgentChatDetached) must NOT have their coordinates
+/// Detached windows (the snap overlay) must NOT have their coordinates
 /// rebased — the inspect geometry should place them at (0, 0).
 #[test]
 fn detached_windows_are_not_rebased() {
@@ -815,21 +815,10 @@ fn detached_windows_are_not_rebased() {
             height: 600.0,
         }),
     );
-    let notes = make_with_bounds(
-        &p,
-        "notes",
-        AutomationWindowKind::Notes,
-        Some(AutomationWindowBounds {
-            x: 500.0,
-            y: 300.0,
-            width: 350.0,
-            height: 280.0,
-        }),
-    );
     let agent_chat = make_with_bounds(
         &p,
         "agent_chat",
-        AutomationWindowKind::AgentChatDetached,
+        AutomationWindowKind::SnapOverlay,
         Some(AutomationWindowBounds {
             x: 900.0,
             y: 100.0,
@@ -838,10 +827,9 @@ fn detached_windows_are_not_rebased() {
         }),
     );
     script_kit_gpui::windows::upsert_automation_window(main);
-    script_kit_gpui::windows::upsert_automation_window(notes);
     script_kit_gpui::windows::upsert_automation_window(agent_chat);
 
-    for (id_suffix, kind) in [("notes", "Notes"), ("agent_chat", "AgentChatDetached")] {
+    for (id_suffix, kind) in [("agent_chat", "SnapOverlay")] {
         let target = AutomationWindowTarget::Id {
             id: format!("{p}:{id_suffix}"),
         };
@@ -862,113 +850,12 @@ fn detached_windows_are_not_rebased() {
         );
     }
 
-    cleanup(&p, &["main", "notes", "agent_chat"]);
+    cleanup(&p, &["main", "agent_chat"]);
 }
 
 // ============================================================
 // Parent-aware rebasing: popups use recorded parent, not Main
 // ============================================================
-
-/// When an attached popup has `parent_window_id` pointing to a non-Main
-/// window (e.g. Notes), coordinate rebasing must use the parent's bounds
-/// instead of hard-coded Main.
-#[test]
-fn attached_popup_rebases_against_recorded_parent_not_main() {
-    let p = prefix();
-
-    // Register Main at (100, 50)
-    let main = make_with_bounds(
-        &p,
-        "main",
-        AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 100.0,
-            y: 50.0,
-            width: 800.0,
-            height: 600.0,
-        }),
-    );
-    // Register Notes (the real parent) at (500, 300)
-    let notes = make_with_bounds(
-        &p,
-        "notes",
-        AutomationWindowKind::Notes,
-        Some(AutomationWindowBounds {
-            x: 500.0,
-            y: 300.0,
-            width: 600.0,
-            height: 400.0,
-        }),
-    );
-    script_kit_gpui::windows::upsert_automation_window(main);
-    script_kit_gpui::windows::upsert_automation_window(notes);
-
-    // Register attached popup with parent pointing to Notes
-    script_kit_gpui::windows::register_attached_popup(
-        format!("{p}:actions"),
-        AutomationWindowKind::ActionsDialog,
-        Some("Actions".into()),
-        None,
-        Some(AutomationWindowBounds {
-            x: 600.0,
-            y: 400.0,
-            width: 360.0,
-            height: 300.0,
-        }),
-        Some(&format!("{p}:notes")),
-    )
-    .expect("should register popup with Notes parent");
-
-    // Resolve the popup and verify parent metadata
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:actions"),
-    };
-    let resolved = script_kit_gpui::windows::resolve_automation_window(Some(&target))
-        .expect("should resolve actions");
-    assert_eq!(
-        resolved.parent_window_id.as_deref(),
-        Some(format!("{p}:notes").as_str()),
-        "Popup must record Notes as parent"
-    );
-    assert_eq!(
-        resolved.parent_kind,
-        Some(AutomationWindowKind::Notes),
-        "Popup must record Notes kind"
-    );
-
-    // The offset should be against Notes (500, 300), NOT Main (100, 50).
-    // popup at (600, 400) - notes at (500, 300) = offset (100, 100)
-    let bounds = resolved.bounds.as_ref().expect("popup must have bounds");
-    let notes_target = AutomationWindowTarget::Id {
-        id: format!("{p}:notes"),
-    };
-    let notes_resolved = script_kit_gpui::windows::resolve_automation_window(Some(&notes_target))
-        .expect("should resolve notes");
-    let notes_bounds = notes_resolved
-        .bounds
-        .as_ref()
-        .expect("notes must have bounds");
-
-    let offset_x = bounds.x - notes_bounds.x;
-    let offset_y = bounds.y - notes_bounds.y;
-    assert!(
-        (offset_x - 100.0).abs() < f64::EPSILON,
-        "Expected offset_x=100 (against Notes parent), got {offset_x}"
-    );
-    assert!(
-        (offset_y - 100.0).abs() < f64::EPSILON,
-        "Expected offset_y=100 (against Notes parent), got {offset_y}"
-    );
-
-    // If we had wrongly used Main (100, 50), the offset would be (500, 350) — very different.
-    let wrong_offset_x = bounds.x - 100.0;
-    assert!(
-        (wrong_offset_x - offset_x).abs() > 1.0,
-        "Parent-aware offset must differ from Main-based offset"
-    );
-
-    cleanup(&p, &["main", "notes", "actions"]);
-}
 
 /// When an attached popup has NO parent_window_id metadata,
 /// the rebasing logic must fail closed with an explicit error
@@ -1037,93 +924,6 @@ fn attached_popup_without_parent_metadata_fails_closed() {
     );
 
     cleanup(&p, &["main", "actions"]);
-}
-
-/// Inspect geometry uses the recorded parent bounds when parent_window_id
-/// is set, instead of falling back to Main.
-#[test]
-fn inspect_geometry_uses_parent_bounds_for_attached_popup() {
-    let p = prefix();
-
-    // Main at (100, 50)
-    let main = make_with_bounds(
-        &p,
-        "main",
-        AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 100.0,
-            y: 50.0,
-            width: 800.0,
-            height: 600.0,
-        }),
-    );
-    // Notes (parent) at (500, 300)
-    let notes = make_with_bounds(
-        &p,
-        "notes",
-        AutomationWindowKind::Notes,
-        Some(AutomationWindowBounds {
-            x: 500.0,
-            y: 300.0,
-            width: 600.0,
-            height: 400.0,
-        }),
-    );
-    script_kit_gpui::windows::upsert_automation_window(main);
-    script_kit_gpui::windows::upsert_automation_window(notes);
-
-    // Register popup with Notes as parent
-    script_kit_gpui::windows::register_attached_popup(
-        format!("{p}:popup"),
-        AutomationWindowKind::PromptPopup,
-        Some("Popup".into()),
-        None,
-        Some(AutomationWindowBounds {
-            x: 650.0,
-            y: 450.0,
-            width: 300.0,
-            height: 200.0,
-        }),
-        Some(&format!("{p}:notes")),
-    )
-    .expect("should register popup");
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:popup"),
-    };
-    let resolved = script_kit_gpui::windows::resolve_automation_window(Some(&target))
-        .expect("should resolve popup");
-
-    // target_bounds_in_screenshot should use Notes (500, 300) as parent
-    // offset = popup(650, 450) - notes(500, 300) = (150, 150)
-    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved)
-        .expect("should compute bounds");
-    assert!(
-        (bounds.x - 150.0).abs() < f64::EPSILON,
-        "Expected offset_x=150 (against Notes), got {}",
-        bounds.x
-    );
-    assert!(
-        (bounds.y - 150.0).abs() < f64::EPSILON,
-        "Expected offset_y=150 (against Notes), got {}",
-        bounds.y
-    );
-    assert!(
-        (bounds.width - 300.0).abs() < f64::EPSILON,
-        "Width must be preserved"
-    );
-    assert!(
-        (bounds.height - 200.0).abs() < f64::EPSILON,
-        "Height must be preserved"
-    );
-
-    // If Main were used, offset would be (650-100, 450-50) = (550, 400) — wrong.
-    assert!(
-        (bounds.x - 550.0).abs() > 1.0,
-        "Must NOT use Main-based offset"
-    );
-
-    cleanup(&p, &["main", "notes", "popup"]);
 }
 
 /// When main window has no bounds, attached surface geometry must return None

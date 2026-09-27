@@ -411,7 +411,7 @@ impl ScriptListApp {
             "User selected AI preset from search"
         );
         let trace_id = uuid::Uuid::new_v4().to_string();
-        self.open_agent_chat_after_main_hide(
+        self.open_chat_for_action(
             "select_ai_preset",
             &trace_id,
             DeferredAgentChatAction::ApplyPreset {
@@ -441,7 +441,11 @@ impl ScriptListApp {
                 *active_field = (active + 1) % 3;
                 cx.notify();
             } else if crate::ui_foundation::is_key_enter(key) {
-                if self.prompt_completion.as_ref().is_some_and(|binding| binding.observation().completed) {
+                if self
+                    .prompt_completion
+                    .as_ref()
+                    .is_some_and(|binding| binding.observation().completed)
+                {
                     return;
                 }
                 let form_action = CreateAiPresetFormAction::Submit;
@@ -458,7 +462,8 @@ impl ScriptListApp {
                             "AI preset created"
                         );
                         if let Some(binding) = &self.prompt_completion {
-                            let outcome = serde_json::to_value(&preset).map(crate::protocol::SubmitValue::Json)
+                            let outcome = serde_json::to_value(&preset)
+                                .map(crate::protocol::SubmitValue::Json)
                                 .map(crate::prompt_completion::PromptOutcome::Submitted);
                             match outcome {
                                 Ok(outcome) => {

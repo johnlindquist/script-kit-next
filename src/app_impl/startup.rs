@@ -15,7 +15,6 @@ enum MainWindowGlobalKeyIntent {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MainWindowActionsKeyIntent {
     ToggleActions,
-    CloseEmbeddedAgentChatWindow,
 }
 
 fn main_window_global_key_intent(
@@ -37,7 +36,6 @@ fn main_window_global_key_intent(
 }
 
 fn main_window_actions_key_intent(
-    current_view: &AppView,
     event: &gpui::KeystrokeEvent,
 ) -> Option<MainWindowActionsKeyIntent> {
     let key = event.keystroke.key.as_str();
@@ -46,14 +44,6 @@ fn main_window_actions_key_intent(
 
     if has_cmd && key.eq_ignore_ascii_case("k") && !has_shift {
         return Some(MainWindowActionsKeyIntent::ToggleActions);
-    }
-
-    if has_cmd
-        && key.eq_ignore_ascii_case("w")
-        && !has_shift
-        && matches!(current_view, AppView::AgentChatView { .. })
-    {
-        return Some(MainWindowActionsKeyIntent::CloseEmbeddedAgentChatWindow);
     }
 
     None
@@ -86,20 +76,6 @@ impl ScriptListApp {
                 } else {
                     self.handle_cmd_k_actions_toggle(window, cx)
                 }
-            }
-            MainWindowActionsKeyIntent::CloseEmbeddedAgentChatWindow => {
-                let entity = match &self.current_view {
-                    AppView::AgentChatView { entity } => entity.clone(),
-                    _ => return false,
-                };
-                entity.update(cx, |chat, cx| {
-                    let _ = chat.request_conversation_dismiss(
-                        crate::components::conversation_actions::ConversationDismissTrigger::CommandW,
-                        window,
-                        cx,
-                    );
-                });
-                true
             }
         }
     }
@@ -582,7 +558,6 @@ impl ScriptListApp {
             spine_cwd_revision: initial_spine_cwd_revision,
             ghost_context_cache: crate::scripts::search::ghost::GhostContextCache::default(),
             cwd_pick_mode: false,
-            agent_model_picker_active: false,
             spine_agent_label: initial_spine_agent_label,
             spine_model_label: initial_spine_model_label,
             spine_provider_id: initial_spine_provider_id,
@@ -713,14 +688,6 @@ impl ScriptListApp {
             agent_chat_return_route: AgentChatReturnRoute::Direct,
             tab_ai_harness_script_list_trigger: None,
             tab_ai_harness_apply_back_route: None,
-            embedded_agent_chat: None,
-            embedded_agent_chat_focus_handle: None,
-            prewarmed_agent_chat: None,
-            active_agent_chat_warm_lease: None,
-            agent_chat_ready_script_path: None,
-            agent_chat_footer_dot_status: None,
-            agent_chat_footer_model_display: None,
-            agent_chat_footer_snapshot: None,
             attachment_portal_host_snapshot: None,
             attachment_portal_return_view: None,
             attachment_portal_return_focus_target: None,
@@ -729,8 +696,6 @@ impl ScriptListApp {
             spine_mention_portal_segment: None,
             spine_mention_aliases: std::collections::HashMap::new(),
             day_page_context_return: None,
-            agent_chat_surface_state:
-                crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState::Hidden,
             // Input history for shell-like up/down navigation
             input_history,
             // API key configuration state
@@ -836,18 +801,6 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Skip keystrokes from secondary windows — interceptors are
-                // GLOBAL and fire for ALL windows.  Secondary windows own
-                // their own Tab/Cmd+Enter handling.
-                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-                if is_detached_agent_chat {
-                    tracing::debug!(
-                        target: "script_kit::keyboard",
-                        event = "tab_interceptor_skipped_secondary_window",
-                        is_detached_agent_chat,
-                    );
-                    return;
-                }
 
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
@@ -981,7 +934,6 @@ impl ScriptListApp {
                         app.update(cx, |this, cx| {
                             let owner = match &this.current_view {
                                 AppView::ScriptList => "script_list",
-                                AppView::AgentChatView { .. } => "embedded_agent_chat",
                                 AppView::QuickTerminalView { .. } => "quick_terminal",
                                 AppView::FileSearchView { .. } => "file_search",
                                 AppView::ChatPrompt { .. } => "chat_prompt",
@@ -1266,30 +1218,6 @@ impl ScriptListApp {
                             // Profile picker via the window-aware entry point. We
                             // Keep this on the in-chat profile picker; the
                             // main-window Profile Search is only for ScriptList.
-                            if let AppView::AgentChatView { entity, .. } = &this.current_view {
-                                if has_shift {
-                                    cx.stop_propagation();
-                                    if this.show_actions_popup {
-                                        return;
-                                    }
-                                    tracing::info!(
-                                        target: "script_kit::keyboard",
-                                        event = "agent_chat_shift_tab_profile_switcher",
-                                        "Opening Agent Chat Profile picker from Shift+Tab"
-                                    );
-                                    let entity = entity.clone();
-                                    entity.update(cx, |chat, cx| {
-                                        chat.open_profile_trigger_picker_in_window(window, cx);
-                                    });
-                                    return;
-                                }
-                                let handled = entity
-                                    .update(cx, |chat, cx| chat.handle_tab_key(false, window, cx));
-                                if handled {
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                            }
 
                             // Forward Tab/Shift+Tab directly to the harness
                             // terminal PTY.  We must NOT call cx.propagate()
@@ -1403,14 +1331,6 @@ impl ScriptListApp {
                                 }
                                 let _dispatch = this.execute_selected(cx);
                                 cx.stop_propagation();
-                                return;
-                            }
-                            if let AppView::AgentChatView { entity, .. } = &this.current_view {
-                                let handled =
-                                    entity.update(cx, |chat, cx| chat.handle_enter_key(cx));
-                                if handled {
-                                    cx.stop_propagation();
-                                }
                             }
                         });
                     }
@@ -1431,13 +1351,6 @@ impl ScriptListApp {
                     return;
                 }
 
-                // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
-                // Keep main list arrow routing scoped to the main window so AI/actions
-                // windows receive their own navigation key events.
-                if crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
-                {
-                    return;
-                }
 
                 let key = event.keystroke.key.as_str();
                 let is_up = crate::ui_foundation::is_key_up(key);
@@ -1764,41 +1677,6 @@ impl ScriptListApp {
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
-                                        cx.notify();
-                                    }
-                                    cx.stop_propagation();
-                                }
-                                AppView::AgentChatHistoryView {
-                                    selected_index,
-                                    filter,
-                                } => {
-                                    let filtered_len = if filter.is_empty() {
-                                        crate::ai::agent_chat::ui::history::load_history().len()
-                                    } else {
-                                        let filter_lower = filter.to_lowercase();
-                                        crate::ai::agent_chat::ui::history::load_history()
-                                            .into_iter()
-                                            .filter(|entry| {
-                                                entry
-                                                    .first_message
-                                                    .to_lowercase()
-                                                    .contains(&filter_lower)
-                                                    || entry
-                                                        .timestamp
-                                                        .to_lowercase()
-                                                        .contains(&filter_lower)
-                                            })
-                                            .count()
-                                    };
-                                    if is_up && *selected_index > 0 {
-                                        *selected_index -= 1;
-                                        this.agent_chat_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    } else if is_down && *selected_index + 1 < filtered_len {
-                                        *selected_index += 1;
-                                        this.agent_chat_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
                                         cx.notify();
                                     }
                                     cx.stop_propagation();
@@ -2257,11 +2135,6 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Skip processing if this keystroke is from a secondary window
-                if crate::ai::agent_chat::ui::chat_window::is_chat_window(window) {
-                    return;
-                }
-
                 let key = event.keystroke.key.as_str();
                 let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
 
@@ -2314,9 +2187,6 @@ impl ScriptListApp {
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
-                let secondary_window = SecondarySurfaceWindowState::inspect(window);
-                let is_secondary_surface_window = secondary_window.is_secondary();
-
                 let key = event.keystroke.key.as_str();
                 let key_lower = key.to_ascii_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
@@ -2326,20 +2196,6 @@ impl ScriptListApp {
                 let key_char = event.keystroke.key_char.as_deref();
                 let is_actions_close_key = crate::ui_foundation::is_key_escape(key)
                     || (has_cmd && key.eq_ignore_ascii_case("k") && !has_shift);
-
-                // The global interceptor sees every app window. Secondary parent
-                // surfaces own their own Cmd+K/Escape routing; do not lease the
-                // main ScriptListApp before their host callbacks can handle it.
-                if is_secondary_surface_window {
-                    tracing::debug!(
-                        target: "script_kit::keyboard",
-                        event = "actions_interceptor_skipped_secondary_window",
-                        is_detached_agent_chat = secondary_window.is_detached_agent_chat,
-                        key = %key,
-                        is_actions_close_key,
-                    );
-                    return;
-                }
 
                 // Agent Chat can open the shared actions dialog from its own focused
                 // composer even when the launcher visibility flag is false.
@@ -2388,7 +2244,6 @@ impl ScriptListApp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_main_window_hidden",
-                        is_detached_agent_chat = secondary_window.is_detached_agent_chat,
                     );
                     return;
                 }
@@ -2566,7 +2421,7 @@ impl ScriptListApp {
                         }
 
                         if let Some(intent) =
-                            main_window_actions_key_intent(&this.current_view, event)
+                            main_window_actions_key_intent(event)
                         {
                             if this.handle_main_window_actions_key_intent(intent, window, cx) {
                                 if matches!(intent, MainWindowActionsKeyIntent::ToggleActions) {
@@ -2576,20 +2431,6 @@ impl ScriptListApp {
                                         host = ?host,
                                     );
                                 }
-                                cx.stop_propagation();
-                                return;
-                            }
-                        }
-
-                        if crate::ui_foundation::is_key_escape(key)
-                            && !has_cmd
-                            && !has_shift
-                        {
-                            if let AppView::AgentChatView { entity } = &this.current_view {
-                                let entity = entity.clone();
-                                entity.update(cx, |chat, cx| {
-                                    chat.handle_conversation_escape(window, cx);
-                                });
                                 cx.stop_propagation();
                                 return;
                             }

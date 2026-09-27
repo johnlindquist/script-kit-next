@@ -6,7 +6,9 @@
 //! the current time and applies the [`window::Effect`]s it gets back.
 
 pub mod answer;
+pub mod asks;
 pub mod chat;
+pub mod chat_with;
 pub mod clipboard;
 pub mod connect;
 pub mod contract;
@@ -19,7 +21,9 @@ pub mod ledger;
 pub mod lessons;
 pub mod list;
 pub mod marks;
+pub mod models;
 pub mod notice;
+pub mod past_chats;
 pub mod row;
 pub mod setup;
 pub mod slot;

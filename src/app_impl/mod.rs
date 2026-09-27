@@ -4,8 +4,6 @@ mod about_route;
 mod actions_dialog;
 #[path = "actions_toggle.rs"]
 mod actions_toggle;
-#[path = "agent_chat_surface_transitions.rs"]
-mod agent_chat_surface_transitions;
 mod agent_handoff;
 #[path = "alias_input.rs"]
 mod alias_input;

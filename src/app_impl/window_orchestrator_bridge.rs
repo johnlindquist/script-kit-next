@@ -26,7 +26,6 @@ impl ScriptListApp {
                 | AppView::CreateAiPresetView { .. }
                 | AppView::SettingsView { .. }
                 | AppView::FavoritesBrowseView { .. }
-                | AppView::AgentChatHistoryView { .. }
                 | AppView::BrowserHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::CurrentAppCommandsView { .. }
@@ -58,15 +57,13 @@ impl ScriptListApp {
                 AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
                 // Flow sessions compose in the shared MAIN input.
                 AppView::FlowSessionView { .. } => FocusTarget::MainFilter,
-                AppView::AgentChatView { .. } => FocusTarget::AgentChat,
                 AppView::DayPage { .. } => FocusTarget::EditorPrompt,
                 AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
                 AppView::PermissionsWizardView { .. } => FocusTarget::AppRoot,
             }),
             crate::window_orchestrator::FocusToken::ChatComposer => Some(FocusTarget::AgentChat),
             crate::window_orchestrator::FocusToken::TermInput => Some(FocusTarget::TermPrompt),
-            crate::window_orchestrator::FocusToken::DetachedAiComposer
-            | crate::window_orchestrator::FocusToken::None => None,
+            crate::window_orchestrator::FocusToken::None => None,
         }
     }
 

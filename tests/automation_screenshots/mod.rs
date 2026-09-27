@@ -184,7 +184,7 @@ fn main_target_penalizes_secondary_windows() {
 #[test]
 fn identical_candidates_tie() {
     let resolved = make_info(
-        AutomationWindowKind::AgentChatDetached,
+        AutomationWindowKind::SnapOverlay,
         None,
         false,
         Some((600.0, 400.0)),
@@ -199,7 +199,7 @@ fn identical_candidates_tie() {
 #[test]
 fn size_difference_breaks_tie() {
     let resolved = make_info(
-        AutomationWindowKind::AgentChatDetached,
+        AutomationWindowKind::SnapOverlay,
         None,
         false,
         Some((600.0, 400.0)),
@@ -217,7 +217,7 @@ fn size_difference_breaks_tie() {
 #[test]
 fn focus_difference_breaks_tie_when_sizes_equal() {
     let resolved = make_info(
-        AutomationWindowKind::AgentChatDetached,
+        AutomationWindowKind::SnapOverlay,
         None,
         true,
         Some((600.0, 400.0)),
@@ -237,8 +237,8 @@ fn focus_difference_breaks_tie_when_sizes_equal() {
 #[test]
 fn ambiguous_error_message_contains_candidates_and_score() {
     // Simulate what capture_resolved_window would produce for a tie
-    let id = "agentChatDetached:thread-1";
-    let kind = AutomationWindowKind::AgentChatDetached;
+    let id = "snapOverlay:thread-1";
+    let kind = AutomationWindowKind::SnapOverlay;
     let title_a = "Script Kit Agent Chat";
     let title_b = "Script Kit Agent Chat";
     let tied_score = 5100;
@@ -251,7 +251,7 @@ fn ambiguous_error_message_contains_candidates_and_score() {
 
     assert!(error.contains("Ambiguous"));
     assert!(error.contains(id));
-    assert!(error.contains("AgentChatDetached"));
+    assert!(error.contains("SnapOverlay"));
     assert!(error.contains(title_a));
     assert!(error.contains(&tied_score.to_string()));
 }
@@ -435,7 +435,7 @@ fn detached_window_bounds_at_origin_in_screenshot() {
     make_registered(
         &p,
         "agent_chat",
-        AutomationWindowKind::AgentChatDetached,
+        AutomationWindowKind::SnapOverlay,
         Some(AutomationWindowBounds {
             x: 900.0,
             y: 200.0,
@@ -666,7 +666,7 @@ fn popup_receipt_attached_with_bounds() {
 fn popup_receipt_detached() {
     let receipt = make_popup_receipt(
         PopupCaptureStrategy::DirectWindowCapture,
-        "AgentChatDetached",
+        "SnapOverlay",
         None,
         true,
     );

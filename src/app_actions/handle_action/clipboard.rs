@@ -411,8 +411,7 @@ impl ScriptListApp {
             };
 
             if !filtered_entries.is_empty() {
-                *selected_index =
-                    (*selected_index).min(filtered_entries.len().saturating_sub(1));
+                *selected_index = (*selected_index).min(filtered_entries.len().saturating_sub(1));
                 self.clipboard_list_scroll_handle
                     .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
                 self.focused_clipboard_entry_id = filtered_entries
@@ -671,7 +670,7 @@ impl ScriptListApp {
                             };
                             let _ = this.update(cx, |this, cx| match result {
                                 Ok(image_base64) => {
-                                    this.open_agent_chat_after_main_hide(
+                                    this.open_chat_for_action(
                                         &action_id_owned2,
                                         &trace_id,
                                         DeferredAgentChatAction::SetInputWithImage {
@@ -710,7 +709,7 @@ impl ScriptListApp {
                     }
                 };
 
-                self.open_agent_chat_after_main_hide(action_id, &dctx.trace_id, deferred_action, cx);
+                self.open_chat_for_action(action_id, &dctx.trace_id, deferred_action, cx);
                 DispatchOutcome::success()
             }
             "clipboard_quick_look" => {
@@ -822,8 +821,7 @@ impl ScriptListApp {
                                 return DispatchOutcome::success();
                             };
 
-                            let Some(png_bytes) =
-                                clipboard_history::content_to_png_bytes(&content)
+                            let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
                             else {
                                 self.notice_failed(
                                     cleanshot_action.decode_failure_message(),
@@ -846,7 +844,10 @@ impl ScriptListApp {
 
                             let path_str = temp_path.to_string_lossy();
                             let encoded_path = self.percent_encode_for_url(&path_str);
-                            format!("cleanshot://open-annotate?filepath={}&action=upload", encoded_path)
+                            format!(
+                                "cleanshot://open-annotate?filepath={}&action=upload",
+                                encoded_path
+                            )
                         }
                     };
 
@@ -883,7 +884,11 @@ impl ScriptListApp {
                 // Check if we already have cached OCR text
                 if let Some(ref cached_text) = entry.ocr_text {
                     if !cached_text.trim().is_empty() {
-                        tracing::debug!(category = "UI", event = "clipboard_ocr_cached", "using cached OCR text");
+                        tracing::debug!(
+                            category = "UI",
+                            event = "clipboard_ocr_cached",
+                            "using cached OCR text"
+                        );
                         self.copy_to_clipboard_with_feedback(
                             cached_text,
                             ocr_action.copied_hud().to_string(),
@@ -913,11 +918,7 @@ impl ScriptListApp {
                     tracing::debug!(width, height, "starting OCR on image");
 
                     let entry_id = entry.id.clone();
-                    match script_kit_gpui::ocr::extract_text_from_rgba(
-                        width,
-                        height,
-                        &rgba_bytes,
-                    ) {
+                    match script_kit_gpui::ocr::extract_text_from_rgba(width, height, &rgba_bytes) {
                         Ok(text) => {
                             if text.trim().is_empty() {
                                 tracing::debug!(category = "UI", event = "clipboard_ocr_empty", "no text found in image");
@@ -1063,7 +1064,10 @@ impl ScriptListApp {
                     Box::new(move |this, cx| {
                         match clipboard_history::clear_unpinned_history() {
                             Ok(()) => {
-                                tracing::info!(count = unpinned_count, "deleted unpinned clipboard entries");
+                                tracing::info!(
+                                    count = unpinned_count,
+                                    "deleted unpinned clipboard entries"
+                                );
                                 this.cached_clipboard_entries =
                                     clipboard_history::get_cached_entries(CLIPBOARD_CACHE_SIZE);
 
@@ -1103,8 +1107,7 @@ impl ScriptListApp {
                     | clipboard_history::ContentType::File
                     | clipboard_history::ContentType::Color => (content.into_bytes(), "txt"),
                     clipboard_history::ContentType::Image => {
-                        let Some(png_bytes) =
-                            clipboard_history::content_to_png_bytes(&content)
+                        let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
                         else {
                             self.notice_failed(save_file_action.decode_failure_message(), cx);
                             return DispatchOutcome::success();
@@ -1114,8 +1117,7 @@ impl ScriptListApp {
                 };
 
                 // Get save location (Desktop or home)
-                let home =
-                    dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+                let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
                 let desktop = home.join("Desktop");
                 let save_dir = if desktop.exists() { desktop } else { home };
 
@@ -1247,11 +1249,9 @@ impl ScriptListApp {
                             f.write_all(snippet_entry.as_bytes())
                         })
                 } else {
-                    let header = "# Clipboard Snippets\n\nSnippets created from clipboard history.\n";
-                    std::fs::write(
-                        &snippets_file,
-                        format!("{}{}", header, snippet_entry),
-                    )
+                    let header =
+                        "# Clipboard Snippets\n\nSnippets created from clipboard history.\n";
+                    std::fs::write(&snippets_file, format!("{}{}", header, snippet_entry))
                 };
 
                 match result {

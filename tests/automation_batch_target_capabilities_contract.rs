@@ -59,15 +59,6 @@ fn supported_command_lists_are_named_by_target_kind() {
             ][..],
         ),
         (
-            "AutomationBatchTargetKind::AgentChatDetached",
-            &[
-                "\"setInput\"",
-                "\"waitFor\"",
-                "\"selectByValue\"",
-                "\"selectBySemanticId\"",
-            ][..],
-        ),
-        (
             "AutomationBatchTargetKind::Notes",
             &[
                 "\"setInput\"",
@@ -154,7 +145,6 @@ fn unsupported_command_errors_are_generated_by_the_helper() {
     );
 
     for required in [
-        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::AgentChatDetached",
         "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::Notes",
         "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::ActionsDialog",
         "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::PromptPopup",
@@ -164,44 +154,6 @@ fn unsupported_command_errors_are_generated_by_the_helper() {
             "target branch must call the shared unsupported helper: {required}"
         );
     }
-}
-
-#[test]
-fn agent_chat_wait_condition_classification_is_shared() {
-    let helper_body = source_between(
-        PROMPT_HANDLER,
-        "fn is_agent_chat_wait_condition(",
-        "\n/// Resolve an automation target",
-    );
-
-    for condition in [
-        "AgentChatReady",
-        "AgentChatPickerOpen",
-        "AgentChatPickerClosed",
-        "AgentChatItemAccepted",
-        "AgentChatCursorAt",
-        "AgentChatStatus",
-        "AgentChatInputMatch",
-        "AgentChatInputContains",
-        "AgentChatAcceptedViaKey",
-        "AgentChatAcceptedLabel",
-        "AgentChatAcceptedCursorAt",
-        "AgentChatInputLayoutMatch",
-        "AgentChatSetupVisible",
-        "AgentChatSetupReasonCode",
-        "AgentChatSetupPrimaryAction",
-        "AgentChatSetupAgentPickerOpen",
-        "AgentChatSetupSelectedAgent",
-    ] {
-        assert!(
-            helper_body.contains(condition),
-            "Agent Chat wait classifier must include {condition}"
-        );
-    }
-
-    assert!(PROMPT_HANDLER
-        .contains("let is_agent_chat_condition = is_agent_chat_wait_condition(&condition);"));
-    assert!(PROMPT_HANDLER.contains("let is_agent_chat = is_agent_chat_wait_condition(condition);"));
 }
 
 #[test]
@@ -215,19 +167,4 @@ fn batch_prompt_popup_routing_uses_the_resolved_target_kind() {
     assert!(body
         .contains("let batch_target_kind = batch_target_kind_for_resolved_target(&batch_target);"));
     assert!(body.contains("batch_target_kind == AutomationBatchTargetKind::PromptPopup"));
-}
-
-#[test]
-fn automation_ai_target_routes_to_live_agent_chat_entity_for_batch_and_reads() {
-    for marker in [
-        "fn active_agent_chat_entity(",
-        "automation.target.ai_routed_to_agent_chat_entity",
-        "automation.agent_chat_target.ai_resolved_to_entity",
-        "self.embedded_agent_chat_automation_entity().as_ref()",
-    ] {
-        assert!(
-            PROMPT_HANDLER.contains(marker),
-            "prompt_handler must include Ai→Agent Chat routing marker: {marker}"
-        );
-    }
 }

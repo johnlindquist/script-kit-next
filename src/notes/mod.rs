@@ -82,7 +82,4 @@ pub fn agent_chat_thread_source(ui_thread_id: &str) -> String {
 }
 
 pub use mcp_mutations::apply_mcp_notes_mutation_on_main_thread;
-pub use open::{
-    open_note, register_open_note_hook, save_note_with_content, save_note_with_content_and_source,
-    NoteTarget,
-};
+pub use open::{open_note, register_open_note_hook, save_note_with_content, NoteTarget};

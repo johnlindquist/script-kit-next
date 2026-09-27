@@ -579,9 +579,9 @@ impl ScriptListApp {
         let query = initial_query.unwrap_or_default().trim().to_string();
 
         if query.is_empty() {
-            self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+            self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
         } else {
-            self.open_tab_ai_chat_with_entry_intent(Some(query), cx);
+            self.open_chat_about_current_view(Some(query), cx);
         }
     }
 
@@ -602,7 +602,7 @@ impl ScriptListApp {
         // Route through the current harness/Agent Chat entry path, but suppress the
         // launcher's focused fallback chip so recipe-driven generation uses
         // only the generated prompt as context.
-        self.open_tab_ai_chat_with_entry_intent_suppressing_focused_part(Some(query), cx);
+        self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::sending(query), cx);
     }
 
     /// Generate a Script Kit script from a natural-language prompt using the built-in AI backend.

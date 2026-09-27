@@ -637,8 +637,8 @@ mod tab_ai_agent_doc_contract_tests {
     fn ai_mod_docs_reflect_agent_chat_primary_path() {
         for needle in [
             "//! AI surfaces and shared contracts.",
-            "//! - User-facing AI chat surface: Agent Chat",
-            "//! - Entry points should route to `open_tab_ai_agent_chat_with_entry_intent(...)` when they need the canonical chat UI",
+            "//! - The chat is a view under the main window's input (`crate::one_window`)",
+            "`ScriptListApp::one_window_open_chat(ChatEntry, cx)`",
         ] {
             assert!(
                 AI_MOD_SOURCE.contains(needle),
@@ -709,10 +709,14 @@ mod asset_destination_tests {
     fn setup_creates_skills_under_scriptkit_plugin() {
         super::tests::with_sk_path(|kit_root| {
             let result = super::ensure_kit_setup();
-            assert_eq!(result.kit_path, kit_root, "setup must stay inside the fixture root");
+            assert_eq!(
+                result.kit_path, kit_root,
+                "setup must stay inside the fixture root"
+            );
             let skills = kit_root.join("plugins/scriptkit/skills");
             assert_eq!(
-                std::fs::read_to_string(skills.join("README.md")).expect("installed skills library"),
+                std::fs::read_to_string(skills.join("README.md"))
+                    .expect("installed skills library"),
                 super::EMBEDDED_SKILLS_README
             );
             assert_eq!(
@@ -720,7 +724,10 @@ mod asset_destination_tests {
                     .expect("installed update-config skill"),
                 super::EMBEDDED_SKILL_UPDATE_CONFIG
             );
-            assert!(!kit_root.join("kit/skills").exists(), "skills must not be nested under kit/");
+            assert!(
+                !kit_root.join("kit/skills").exists(),
+                "skills must not be nested under kit/"
+            );
         });
     }
 }

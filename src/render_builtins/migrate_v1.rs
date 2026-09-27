@@ -508,7 +508,10 @@ impl ScriptListApp {
             receipts,
             source
         );
-        self.ask_agent_chat_suppressing_focused_part(prompt, cx);
+        self.one_window_open_chat(
+            crate::one_window::chat_entry::ChatEntry::sending(prompt),
+            cx,
+        );
     }
 
     fn render_migrate_v1(

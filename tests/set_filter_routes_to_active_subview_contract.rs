@@ -159,7 +159,7 @@ fn write_filter_to_current_subview_covers_all_shared_input_builtin_views() {
         router_section.contains("_ => false,"),
         "src/app_impl/filter_input_updates.rs `write_filter_to_current_subview` \
          must terminate with a `_ => false,` fallthrough arm so unhandled \
-         views (ScriptList, FileSearchView, AgentChatView, etc.) fall back \
+         views (ScriptList, FileSearchView, etc.) fall back \
          to the ScriptList-only path."
     );
 
@@ -174,7 +174,6 @@ fn write_filter_to_current_subview_covers_all_shared_input_builtin_views() {
         "AppView::SearchAiPresetsView",
         "AppView::FavoritesBrowseView",
         "AppView::CurrentAppCommandsView",
-        "AppView::AgentChatHistoryView",
         "AppView::BrowserHistoryView",
         "AppView::NotesBrowseView",
         "AppView::EmojiPickerView",
@@ -217,7 +216,7 @@ fn write_filter_to_current_subview_covers_all_shared_input_builtin_views() {
 fn write_filter_to_current_subview_returns_false_for_script_list_and_file_search() {
     // The fallthrough arm `_ => false` is load-bearing: it tells
     // `set_filter_text_immediate` that for `ScriptList` (and any future
-    // non-shared-input view like `AgentChatView` or `ScratchPadView`)
+    // non-shared-input view like `ScratchPadView`)
     // the ScriptList-only ranker + fallback-state work MUST still run.
     // Converting this to `_ => true` would silently disable the
     // script-list filter pipeline — every keystroke in the main menu

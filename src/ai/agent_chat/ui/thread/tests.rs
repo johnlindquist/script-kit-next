@@ -763,68 +763,6 @@ async fn rejected_queue_preparation_restores_frozen_context_and_provider_failure
 }
 
 #[gpui::test]
-fn queue_element_projection_exposes_frozen_context_and_retires_dispatched_controls(
-    cx: &mut gpui::TestAppContext,
-) {
-    let thread = cx.new(|_| test_thread(Vec::new(), true));
-    let original_id = thread.update(cx, |thread, _| {
-        thread.input.set_text("original queued question");
-        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::TextBlock {
-            label: "Frozen text".into(),
-            source: "fixture".into(),
-            text: "frozen body".into(),
-            mime_type: None,
-        });
-        thread.queue_current_composer("original queued question".into());
-        let id = thread.queued_messages[0].id.clone();
-        thread
-            .queued_messages
-            .push_back(AgentChatQueuedMessage::new(
-                "next question".into(),
-                Vec::new(),
-            ));
-        id
-    });
-    let view = cx.new(|cx| crate::ai::agent_chat::ui::AgentChatView::new(thread.clone(), cx));
-    let elements = cx.update(|app| {
-        crate::windows::automation_surface_collector::collect_agent_chat_conversation_elements(
-            &view, app,
-        )
-    });
-    let find_action = |operation: &str| {
-        elements
-            .iter()
-            .find(|element| {
-                element
-                    .semantic_id
-                    .strip_prefix("agent_chat_queue:")
-                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
-                    .is_some_and(|payload| {
-                        payload["operation"] == operation && payload["target"] == original_id
-                    })
-            })
-            .unwrap()
-    };
-    let inspect = find_action("inspect");
-    assert_eq!(inspect.selectable, Some(true));
-    assert!(inspect.value.as_deref().unwrap().contains("Frozen text"));
-    let old_remove = find_action("remove").semantic_id.clone();
-    thread.update(cx, |thread, cx| {
-        thread.queued_messages.pop_front();
-        assert!(!thread.remove_queued_message(&original_id, cx));
-        assert_eq!(thread.queued_messages[0].text, "next question");
-    });
-    let updated = cx.update(|app| {
-        crate::windows::automation_surface_collector::collect_agent_chat_conversation_elements(
-            &view, app,
-        )
-    });
-    assert!(!updated
-        .iter()
-        .any(|element| element.semantic_id == old_remove));
-}
-
-#[gpui::test]
 fn queued_identity_survives_dispatch_and_stale_clear_is_rejected(cx: &mut gpui::TestAppContext) {
     let entity = cx.new(|_| test_thread(Vec::new(), true));
     entity.update(cx, |thread, cx| {

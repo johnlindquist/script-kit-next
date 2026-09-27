@@ -245,77 +245,6 @@ fn build_tab_ai_user_prompt_mentions_clipboard_and_prior_automations() {
 // unintentional regressions in footer hints, placeholder copy, and
 // memory-hint rendering.
 
-/// The overlay source included once for all source-level assertions.
-const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
-const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
-
-#[test]
-fn tab_ai_overlay_uses_canonical_three_key_footer_contract() {
-    // Source uses \u{21B5} and \u{2318} escape sequences — match the raw text
-    assert!(
-        TAB_AI_SOURCE.contains(r#""\u{21B5} Send"#),
-        "tab ai chat must expose the Send hint in the footer"
-    );
-    assert!(
-        TAB_AI_SOURCE.contains(r#""\u{2318}K Actions"#),
-        "tab ai chat must expose the Actions hint in the footer"
-    );
-    assert!(
-        TAB_AI_SOURCE.contains(r#""Esc Back"#),
-        "tab ai chat must expose the Esc Back hint in the footer"
-    );
-}
-
-#[test]
-fn tab_ai_overlay_does_not_use_bespoke_esc_footer() {
-    assert!(
-        !TAB_AI_SOURCE.contains("\"Esc Cancel\""),
-        "tab ai overlay must not contain a bespoke Esc Cancel footer entry"
-    );
-}
-
-#[test]
-fn tab_ai_overlay_preserves_memory_hint_rendering() {
-    assert!(
-        TAB_AI_SOURCE.contains("Similar prior automation:"),
-        "visual cleanup must not silently remove memory-hint behavior"
-    );
-}
-
-#[test]
-fn tab_ai_overlay_idle_placeholder_matches_expected_copy() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains(r#"Ask anything\u{2026}"#)
-            || AGENT_CHAT_VIEW_SOURCE.contains("Ask anything…"),
-        "idle placeholder must contain 'Ask anything…'"
-    );
-}
-
-#[test]
-fn tab_ai_overlay_running_placeholder_matches_expected_copy() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains(r#"Follow up\u{2026}"#)
-            || AGENT_CHAT_VIEW_SOURCE.contains("Follow up…"),
-        "running placeholder must contain 'Follow up…'"
-    );
-}
-
-#[test]
-fn tab_ai_overlay_placeholders_use_main_menu_placeholder_theme_token() {
-    let placeholder_render = AGENT_CHAT_VIEW_SOURCE
-        .split(r#""Ask anything\u{2026}""#)
-        .next()
-        .and_then(|prefix| prefix.rsplit(".text_color(").next())
-        .unwrap_or("");
-
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("AppChromeColors::from_theme(&theme)")
-            && AGENT_CHAT_VIEW_SOURCE.contains("chrome.placeholder_text_rgba")
-            && placeholder_render.contains("placeholder_text"),
-        "Agent Chat placeholders must use AppChromeColors::placeholder_text_rgba, matching main menu placeholder opacity"
-    );
-}
-
 // ── Mandatory script verification contract regression tests ─────────
 //
 // These tests lock the canonical launchpad and new-script skill
@@ -325,7 +254,6 @@ fn tab_ai_overlay_placeholders_use_main_menu_placeholder_theme_token() {
 
 const LAUNCHPAD_SOURCE: &str = include_str!("../kit-init/examples/START_HERE.md");
 const SCRIPT_AUTHORING_SKILL_SOURCE: &str = include_str!("../kit-init/skills/new-script/SKILL.md");
-const HARNESS_MOD_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
 
 #[test]
 fn launchpad_requires_reading_script_authoring_skill() {
@@ -427,31 +355,6 @@ fn script_authoring_skill_calls_out_home_helper_path_safety() {
     assert!(
         !SCRIPT_AUTHORING_SKILL_SOURCE.contains("${env.HOME}"),
         "SKILL.md should not ship env.HOME path examples"
-    );
-}
-
-#[test]
-fn harness_submission_builder_appends_guidance_for_script_list_submit() {
-    // The harness submission builder must call the shared appendix builder
-    // with the ScriptList force path, ensuring every PTY submission for a
-    // ScriptList submit carries the verification contract.
-    let builder_fn_start = HARNESS_MOD_SOURCE
-        .find("pub fn build_tab_ai_harness_submission(")
-        .expect("build_tab_ai_harness_submission must exist");
-    let builder_body = &HARNESS_MOD_SOURCE[builder_fn_start..];
-    let next_fn = builder_body[1..]
-        .find("\npub ")
-        .or_else(|| builder_body[1..].find("\nfn "))
-        .unwrap_or(builder_body.len());
-    let builder_body = &builder_body[..next_fn];
-
-    assert!(
-        builder_body.contains("build_tab_ai_artifact_authoring_appendix_for_prompt"),
-        "PTY submission builder must call the shared appendix builder"
-    );
-    assert!(
-        builder_body.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"),
-        "PTY submission builder must log whether guidance references the new-script skill"
     );
 }
 

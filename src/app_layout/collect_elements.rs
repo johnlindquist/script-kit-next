@@ -223,75 +223,6 @@ impl ScriptListApp {
                 projection
             }
 
-            AppView::AgentChatView { entity } => {
-                let focused_text_elements = entity
-                    .read(cx)
-                    .collect_focused_text_mini_elements(limit, cx);
-                if entity.read(cx).shows_setup_card(cx) {
-                    // Initial and runtime setup both render the real setup card.
-                    let elements = crate::windows::automation_surface_collector::collect_agent_chat_conversation_elements(entity, cx);
-                    let total_count = elements.len();
-                    ElementCollectionOutcome::complete(
-                        "agentChat",
-                        elements.into_iter().take(limit).collect(),
-                        total_count,
-                    )
-                } else if !focused_text_elements.is_empty() {
-                    ElementCollectionOutcome::complete(
-                        "focusedTextMini",
-                        focused_text_elements.clone(),
-                        focused_text_elements.len(),
-                    )
-                } else {
-                    let state = entity.read(cx).collect_agent_chat_state_snapshot(cx);
-                    let mut elements = vec![
-                        protocol::ElementInfo::panel("agent_chat-chat"),
-                        protocol::ElementInfo::input(
-                            "agent_chat-composer",
-                            Some(state.input_text.as_str()),
-                            true,
-                        ),
-                        protocol::ElementInfo::list("agent_chat-messages", state.message_count),
-                    ];
-                    elements.extend(
-                        entity
-                            .read(cx)
-                            .conversation_semantic_chip_specs(cx)
-                            .iter()
-                            .flat_map(
-                                crate::windows::automation_surface_collector::collect_semantic_chip_elements,
-                            ),
-                    );
-                    elements.extend(
-                        crate::windows::automation_surface_collector::collect_conversation_command_elements(
-                            &entity.read(cx).conversation_command_bindings(cx),
-                        ),
-                    );
-                    elements.extend(
-                        crate::windows::automation_surface_collector::collect_agent_chat_conversation_elements(
-                            entity, cx,
-                        ),
-                    );
-                    if state.message_count == 0 {
-                        let snapshot =
-                            crate::components::agent_chat_empty_guidance_spec().semantic_snapshot();
-                        elements.extend(Self::info_state_elements(&snapshot));
-                    }
-                    // S12: the SHARED recovery card, reported with the same
-                    // `ai-recovery-*` ids the flow session surface reports, so
-                    // one probe can compare the two surfaces directly.
-                    if let Some(spec) = entity.read(cx).active_recovery_card_spec(cx) {
-                        elements.extend(Self::ai_recovery_elements(&spec));
-                    }
-                    let total_count = elements.len();
-                    ElementCollectionOutcome::complete(
-                        "agentChat",
-                        elements.into_iter().take(limit).collect(),
-                        total_count,
-                    )
-                }
-            }
-
             AppView::DayPage { entity } => {
                 let (elements, total_count) =
                     entity.read(cx).collect_day_page_elements(limit, self, cx);
@@ -490,24 +421,6 @@ impl ScriptListApp {
                         "browser-history-filter",
                         filter.clone(),
                         "browser-history",
-                        &rows,
-                        *selected_index,
-                        limit,
-                    ),
-                )
-            }
-
-            AppView::AgentChatHistoryView {
-                filter,
-                selected_index,
-            } => {
-                let rows = Self::agent_chat_history_visible_row_labels(filter);
-                ElementCollectionOutcome::complete_from(
-                    "agentChatHistory",
-                    self.collect_named_rows(
-                        "agent_chat-history-filter",
-                        filter.clone(),
-                        "agent_chat-history",
                         &rows,
                         *selected_index,
                         limit,

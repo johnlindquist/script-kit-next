@@ -13,11 +13,12 @@
 //! └── model.rs / storage.rs / providers.rs - Chat data + BYOK providers
 //! ```
 //!
-//! # Primary Agent Chat contract
+//! # The model's chat
 //!
-//! - User-facing AI chat surface: Agent Chat
-//! - Entry points should route to `open_tab_ai_agent_chat_with_entry_intent(...)` when they need the canonical chat UI
-//! - Compatibility-named `tab_ai_*` helpers and harness/context types still back Agent Chat plumbing
+//! - The chat is a view under the main window's input (`crate::one_window`); every entry
+//!   point opens it with `ScriptListApp::one_window_open_chat(ChatEntry, cx)`
+//! - `agent_chat::ui::thread` is the conversation it runs on; `tab_ai_*` helpers build the
+//!   context that goes with it
 
 // Re-exports intentionally cover the module's API surface.
 #![allow(unused_imports)]

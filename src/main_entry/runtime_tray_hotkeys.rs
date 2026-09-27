@@ -90,7 +90,7 @@
                         let _ = cx.update(|cx| {
                             app_entity_for_tray.update(cx, |view, cx| {
                                 view.mark_opened_directly("tray");
-                                view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                                view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
                             });
                         });
                     }
@@ -247,7 +247,7 @@
                 let _ = cx.update(|cx: &mut gpui::App| {
                     app_entity_for_ai_hotkey.update(cx, |view, cx| {
                         view.mark_opened_directly("shortcut");
-                        view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                        view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
                     });
                 });
             }
@@ -267,68 +267,16 @@
                 );
                 let _ = cx.update(|cx: &mut gpui::App| {
                     app_entity_for_inline_ai.update(cx, |view, cx| {
-                        view.dismiss_focused_text_agent_chat_before_recapture(cx);
+                        view.open_focused_text_in_chat("inline_ai_hotkey", None, cx);
                     });
-                    let capture_started = std::time::Instant::now();
-                    match crate::platform::accessibility::capture_focused_text_field(
-                        crate::platform::accessibility::CaptureFocusedTextOptions::default(),
-                    ) {
-                        Ok(snapshot) => {
-                            logging::log(
-                                "HOTKEY",
-                                &format!(
-                                    "Inline AI focused text captured before Agent Chat open (chars={}, elapsed_ms={})",
-                                    snapshot.metrics.chars,
-                                    capture_started.elapsed().as_millis()
-                                ),
-                            );
-                            tracing::info!(
-                                target: "script_kit::focused_text",
-                                event = "focused_text_capture_complete_before_agent_chat",
-                                source = "runtime_tray_hotkeys",
-                                session_id = %snapshot.session_id,
-                                app_name = %snapshot.app.name,
-                                chars = snapshot.metrics.chars,
-                                elapsed_ms = capture_started.elapsed().as_millis() as u64,
-                            );
-                            app_entity_for_inline_ai.update(cx, |view, cx| {
-                                view.open_focused_text_agent_chat_from_snapshot(
-                                    snapshot,
-                                    None,
-                                    "inline_ai_hotkey",
-                                    cx,
-                                );
-                            });
-                        }
-                        Err(error) => {
-                            logging::log(
-                                "HOTKEY",
-                                &format!("Failed to capture focused text for inline AI: {}", error),
-                            );
-                            tracing::warn!(
-                                target: "script_kit::focused_text",
-                                event = "focused_text_capture_failed",
-                                source = "runtime_tray_hotkeys",
-                                error = %error,
-                            );
-                            app_entity_for_inline_ai.update(cx, |view, cx| {
-                                view.open_focused_text_agent_chat_from_capture_failure(
-                                    error,
-                                    None,
-                                    "inline_ai_hotkey",
-                                    cx,
-                                );
-                            });
-                        }
-                    }
                 });
             }
             logging::log("HOTKEY", "Inline AI hotkey listener exiting (channel closed)");
         })
         .detach();
 
-        // Rewrite hotkey listener. Captures the focused field and immediately
-        // streams three rewrite variations in the mini UI (no typing needed).
+        // Rewrite hotkey listener: the focused field or selection goes to the chat with the
+        // default rewrite as its first turn.
         let app_entity_for_rewrite = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Rewrite hotkey listener started (event-driven)");
@@ -340,7 +288,11 @@
                 );
                 let _ = cx.update(|cx: &mut gpui::App| {
                     app_entity_for_rewrite.update(cx, |view, cx| {
-                        view.open_instant_rewrite_mini("rewrite_hotkey", cx);
+                        view.open_focused_text_in_chat(
+                            "rewrite_hotkey",
+                            Some(crate::ai::focused_text::DEFAULT_REWRITE_INSTRUCTION.to_string()),
+                            cx,
+                        );
                     });
                 });
             }
@@ -474,7 +426,7 @@
                     let _ = cx.update(move |cx: &mut gpui::App| {
                         app_entity_inner.update(cx, |view, cx| {
                             view.mark_opened_directly("deeplink");
-                            view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                            view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
                         });
                     });
                     continue;

@@ -39,15 +39,3 @@ fn root_unified_agent_chat_history_result_is_stable_and_non_bindable() {
     assert!(types.contains("SearchResult::AgentChatHistory(_) => None"));
     assert!(types.contains("SearchResult::AgentChatHistory(_) => \"Resume Conversation\""));
 }
-
-#[test]
-fn root_unified_agent_chat_history_enter_resumes_existing_helper() {
-    let selection = include_str!("../../src/app_impl/selection_fallback.rs");
-    let agent_chat_history = include_str!("../../src/render_builtins/agent_chat_history.rs");
-
-    assert!(selection.contains("SearchResult::AgentChatHistory(agent_chat_history_match)"));
-    assert!(selection.contains("self.resume_agent_chat_conversation_from_history("));
-    assert!(
-        agent_chat_history.contains("pub(crate) fn resume_agent_chat_conversation_from_history(")
-    );
-}

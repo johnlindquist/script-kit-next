@@ -5,9 +5,13 @@
 //!
 //! [`Effect::ViewKey`]: crate::window::Effect::ViewKey
 
-use crate::chat::Chat;
+use crate::asks::Asks;
+use crate::chat::{Chat, Tool, Turn};
 use crate::connect::{Connecting, Connections};
+use crate::models::Models;
+use crate::past_chats::{PastChat, PastChats};
 use crate::row::Row;
+use crate::stage::Subject;
 use crate::steps::{StepSpec, Steps};
 use crate::strip::{Strip, TaskState};
 use crate::window::Key;
@@ -71,6 +75,33 @@ pub enum WorkEvent {
     Background {
         task: String,
     },
+    /// Every way into the model's chat: words that go now (`send`) or wait in the input, and what
+    /// the chat is about, which waits in the line until the next turn takes it.
+    OpenChat {
+        text: String,
+        send: bool,
+        with: Vec<Subject>,
+    },
+    /// The tools the model ran for the latest turn.
+    ModelTools(Vec<Tool>),
+    /// The model asks before it does something, or stopped asking.
+    ModelAsks(Option<Asks>),
+    /// The account the model needs you to sign in to, or none.
+    ModelSignIn(Option<String>),
+    Models(Models),
+    OpenPastChats {
+        query: String,
+    },
+    /// The chats from before, newest first.
+    PastChats(Vec<PastChat>),
+    /// A chat from before is open again, with its turns.
+    ChatReopened {
+        id: String,
+        turns: Vec<Turn>,
+    },
+    PastChatGone {
+        id: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -119,6 +150,31 @@ pub enum WorkEffect {
     Reopened {
         id: String,
     },
+    /// Send this turn to the model with what waited in the line.
+    AskModelWith {
+        text: String,
+        with: Vec<Subject>,
+    },
+    /// Answer the model's question; `None` cancels it.
+    AnswerModel {
+        id: u64,
+        choice: Option<String>,
+    },
+    ModelSignIn {
+        approve: bool,
+    },
+    UseModel {
+        id: String,
+    },
+    ListPastChats,
+    ReopenChat {
+        id: String,
+    },
+    /// Copy, export or delete a chat from before.
+    PastChat {
+        id: String,
+        act: &'static str,
+    },
 }
 
 /// What the work views hold between events.
@@ -131,6 +187,7 @@ pub struct Work {
     pub(crate) strip: Strip,
     /// The task whose view is open.
     pub(crate) agent: Option<String>,
+    pub(crate) past: Option<PastChats>,
 }
 
 impl Work {

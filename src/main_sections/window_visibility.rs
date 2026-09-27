@@ -360,27 +360,6 @@ fn show_main_window_helper(
             );
             view.focused_input = FocusedInput::MainFilter;
             view.pending_focus = Some(FocusTarget::MainFilter);
-        } else if restore_after_focus_loss
-            && matches!(view.current_view, AppView::AgentChatView { .. })
-        {
-            // An implicit hide (Space change, focus loss) must not destroy a
-            // live Agent Chat session — bring it back exactly as it was and
-            // put the caret back in the composer.
-            logging::log(
-                "VISIBILITY",
-                "Restoring embedded Agent Chat exactly after focus-loss hide",
-            );
-            // The chat may have changed while hidden (a turn finished or
-            // failed); refresh the footer before the first visible frame so
-            // it never shows a stale Stop.
-            if let AppView::AgentChatView { entity } = &view.current_view {
-                let entity = entity.clone();
-                view.sync_embedded_agent_chat_observed_state(&entity, ctx);
-                // Changes that land while the window is still coming back
-                // (a reply finishing) are picked up by one more settled sync.
-                view.schedule_embedded_agent_chat_observed_state_sync(entity, ctx);
-            }
-            view.request_focus(FocusTarget::AgentChat, ctx);
         } else if !matches!(view.current_view, AppView::ScriptList) {
             logging::log(
                 "VISIBILITY",
@@ -661,15 +640,7 @@ fn show_main_window_helper(
                     None,
                 );
                 app_entity.update(cx, |view, ctx| {
-                    let agent_chat_focus_handle = match &view.current_view {
-                        AppView::AgentChatView { entity } => {
-                            Some(entity.read(ctx).focus_handle(ctx))
-                        }
-                        _ => None,
-                    };
-                    let focus_handle = agent_chat_focus_handle
-                        .clone()
-                        .unwrap_or_else(|| view.focus_handle(ctx));
+                    let focus_handle = view.focus_handle(ctx);
                     let _ = window.update(ctx, |_root, win, _cx| {
                         win.activate_window();
                         win.focus(&focus_handle, _cx);
@@ -679,10 +650,7 @@ fn show_main_window_helper(
                     // reset_to_script_list sets these too, but that runs BEFORE the
                     // window is shown — the render loop needs pending_focus set AFTER
                     // the window is key to actually move focus to the input element.
-                    if agent_chat_focus_handle.is_some() {
-                        view.focused_input = FocusedInput::None;
-                        view.pending_focus = Some(FocusTarget::AgentChat);
-                    } else if matches!(view.current_view, AppView::DayPage { .. }) {
+                    if matches!(view.current_view, AppView::DayPage { .. }) {
                         // Hold-from-closed shows the Day Page before this deferred
                         // restore runs — keep focus on the day-page editor instead
                         // of stomping it back to the launcher filter.
@@ -776,13 +744,6 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     sync_main_automation_window(current_main_automation_bounds(), false, false);
     let visibility_generation = crate::main_window_visibility_generation();
 
-    // 3. Check secondary windows BEFORE the update closure
-    let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
-    logging::log(
-        "VISIBILITY",
-        &format!("Secondary windows: agent_chat_open={}", agent_chat_open),
-    );
-
     // 4. Cancel prompts without resetting the visible route. The ScriptList reset
     // is deferred until after the native hide turn to avoid a visible stale-view
     // or main-menu frame while AppKit is still closing the panel.
@@ -797,15 +758,10 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // Hiding lets go of anything staged, like Esc would.
     crate::actions::close_actions_window(cx);
 
-    // 5. Hide only the main panel. `cx.hide()` app-hides all windows, so any
-    // false-negative secondary-window check can take Notes down with main.
-    let secondary_windows_open = agent_chat_open;
+    // 5. Hide only the main panel; `cx.hide()` would app-hide every window.
     logging::log(
         "VISIBILITY",
-        &format!(
-            "Using defer_hide_main_window() - main-only hide, secondary_windows_open={}",
-            secondary_windows_open
-        ),
+        "Using defer_hide_main_window() - main-only hide",
     );
     // Glass mode: play the Spotlight-style dematerialize (~120ms fade +
     // blur + slight growth), THEN run the normal hide flow — the native

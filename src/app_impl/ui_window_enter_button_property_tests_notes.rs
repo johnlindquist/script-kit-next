@@ -206,21 +206,33 @@ fn cmd_p_lists_notes_by_name_and_enter_opens_one() {
 
 #[test]
 fn cmd_enter_hands_the_note_to_the_model_under_the_same_input() {
-    let (top, windows) = in_launcher("note_to_model", 0, |cx| {
+    let (top, line, windows) = in_launcher("note_to_model", 0, |cx| {
         let id = seed_note("Pricing", &["- try 12 dollars"]);
         let (app, _) = launcher(cx, Jev::Off);
         open(&app, cx, NoteTarget::Note(id));
         key(&app, cx, Key::CmdEnter);
         wait(cx, 20);
-        let top = app.update(cx, |app, _| {
-            app.one_window.views().top().map(|v| v.name.clone())
+        let (top, line) = app.update(cx, |app, _| {
+            let line = app.one_window.slot_line(app.one_window_clock());
+            (
+                app.one_window.views().top().map(|v| v.name.clone()),
+                (line.label, line.title),
+            )
         });
-        (top, cx.update(|cx| cx.windows().len()))
+        (top, line, cx.update(|cx| cx.windows().len()))
     });
-    assert!(
-        top.as_deref()
-            .is_some_and(|name| crate::one_window::work::WORK_VIEWS.contains(&name)),
-        "the model's chat opens as a view: {top:?}"
+    assert_eq!(
+        top.as_deref(),
+        Some(sk_one_window::chat::VIEW),
+        "the model's chat opens as a view"
+    );
+    assert_eq!(
+        line,
+        (
+            sk_one_window::chat_with::ASKING_ABOUT.to_string(),
+            "Note · Pricing".to_string()
+        ),
+        "the note waits in the line above the input for the first question"
     );
     assert_eq!(windows, 1, "no window opens");
 }

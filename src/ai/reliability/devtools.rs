@@ -322,7 +322,6 @@ pub(crate) fn ai_reliability_fixture_snapshot(
 
 fn surface_for_kind(kind: AutomationWindowKind) -> &'static str {
     match kind {
-        AutomationWindowKind::AgentChatDetached => "agentChat",
         AutomationWindowKind::Main => "agentChat",
         AutomationWindowKind::SnapOverlay => "snapOverlay",
         AutomationWindowKind::ActionsDialog

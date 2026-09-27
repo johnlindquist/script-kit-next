@@ -85,21 +85,11 @@ pub(crate) fn registered_surface_ui_snapshot(
     cx: &gpui::App,
 ) -> anyhow::Result<protocol::UiStateSnapshot> {
     use crate::windows::automation_surface_collector as collector;
-    use crate::windows::automation_transaction_provider as provider;
     let target = registered_surface_target(resolved)?;
-    let generation = target
+    target
         .generation
         .ok_or_else(|| anyhow::anyhow!("registered_surface_generation_missing"))?;
     match target.kind {
-        protocol::AutomationWindowKind::AgentChatDetached => {
-            let entity = crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
-                &target.id, generation,
-            )
-            .ok_or_else(|| anyhow::anyhow!("chat_target_unavailable"))?;
-            Ok(provider::detached_agent_chat_ui_snapshot(
-                &target, &entity, cx,
-            ))
-        }
         protocol::AutomationWindowKind::ActionsDialog => {
             anyhow::bail!("actions_are_staged_in_place")
         }
@@ -113,17 +103,10 @@ pub(crate) fn registered_surface_ui_snapshot(
                 surface.focused_semantic_id,
                 surface.selected_semantic_id,
             );
-            let input_value = if target.id
-                == crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID
-            {
-                Some(crate::ai::agent_chat::ui::history_popup::get_history_popup_snapshot_for_generation(generation, cx)
-                    .ok_or_else(|| anyhow::anyhow!("history_target_unavailable"))?.query.to_string())
-            } else {
-                elements
-                    .iter()
-                    .find(|element| element.element_type == protocol::ElementType::Input)
-                    .and_then(|element| element.value.clone())
-            };
+            let input_value = elements
+                .iter()
+                .find(|element| element.element_type == protocol::ElementType::Input)
+                .and_then(|element| element.value.clone());
             let selected_value = selected_semantic_id.as_ref().and_then(|id| {
                 elements
                     .iter()
@@ -157,30 +140,6 @@ pub(crate) fn registered_surface_wait_satisfied(
     cx: &gpui::App,
 ) -> anyhow::Result<bool> {
     let target = registered_surface_target(resolved)?;
-    if is_agent_chat_wait_condition(condition) {
-        if target.kind != protocol::AutomationWindowKind::AgentChatDetached {
-            return Ok(false);
-        }
-        let entity = crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
-            &target.id,
-            target
-                .generation
-                .ok_or_else(|| anyhow::anyhow!("chat_generation_missing"))?,
-        )
-        .ok_or_else(|| anyhow::anyhow!("chat_target_unavailable"))?;
-        let view = entity.read(cx);
-        let protocol::WaitCondition::Detailed(condition) = condition else {
-            unreachable!()
-        };
-        return Ok(
-            protocol::transaction_executor::matches_agent_chat_wait_condition(
-                condition,
-                &view.collect_agent_chat_state_snapshot(cx),
-                || view.test_probe_snapshot(1, cx),
-            )
-            .unwrap_or(false),
-        );
-    }
     let snapshot = registered_surface_ui_snapshot(&target, cx)?;
     Ok(
         protocol::transaction_executor::matches_ui_wait_condition(&snapshot, condition)
@@ -200,8 +159,6 @@ pub(crate) fn apply_registered_surface_command(
     command: &protocol::BatchCommand,
     cx: &mut gpui::App,
 ) -> anyhow::Result<Option<String>> {
-    use crate::protocol::transaction_executor::TransactionStateProvider;
-    use crate::windows::automation_transaction_provider::DetachedAgentChatTransactionProvider;
     let target = registered_surface_target(resolved)?;
     if let protocol::BatchCommand::SelectBySemanticId {
         semantic_id,
@@ -214,102 +171,16 @@ pub(crate) fn apply_registered_surface_command(
             return Ok(Some(selected));
         }
     }
-    let generation = target
+    target
         .generation
         .ok_or_else(|| anyhow::anyhow!("registered_surface_generation_missing"))?;
     let kind = registered_batch_target_kind(&target);
-    let selected = match target.kind {
-        protocol::AutomationWindowKind::AgentChatDetached => {
-            let entity = crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
-                &target.id, generation,
-            )
-            .ok_or_else(|| anyhow::anyhow!("chat_target_unavailable"))?;
-            let mut provider = DetachedAgentChatTransactionProvider {
-                cx,
-                entity,
-                target: target.clone(),
-            };
-            match command {
-                protocol::BatchCommand::SetInput { text } => {
-                    provider.set_input(text)?;
-                    return Ok(None);
-                }
-                protocol::BatchCommand::SelectByValue { value, submit } => {
-                    provider.select_by_value(value, *submit)?
-                }
-                protocol::BatchCommand::SelectBySemanticId {
-                    semantic_id,
-                    submit,
-                } => provider.select_by_semantic_id(semantic_id, *submit)?,
-                _ => return Err(unsupported_batch_command_error(kind, command).into()),
-            }
-        }
+    match target.kind {
         protocol::AutomationWindowKind::ActionsDialog => {
             anyhow::bail!("actions_are_staged_in_place")
         }
-        protocol::AutomationWindowKind::Notes => {
-            return Err(unsupported_batch_command_error(kind, command).into());
-        }
-        protocol::AutomationWindowKind::PromptPopup => {
-            let subtype = resolve_prompt_popup_subtype(&target)?;
-            revalidate_prompt_popup_target(&target, subtype)?;
-            match command {
-                protocol::BatchCommand::SetInput { text } if subtype == PromptPopupSubtype::AgentChatHistory => {
-                    crate::ai::agent_chat::ui::history_popup::batch_set_history_popup_input(generation, text, cx)?;
-                    return Ok(None);
-                }
-                protocol::BatchCommand::SelectByValue { value, submit } => match subtype {
-                    PromptPopupSubtype::AgentChatHistory => crate::ai::agent_chat::ui::history_popup::batch_select_history_popup_by_value(generation, value, *submit, cx)?,
-                },
-                protocol::BatchCommand::SelectBySemanticId { semantic_id, submit } => match subtype {
-                    PromptPopupSubtype::AgentChatHistory => crate::ai::agent_chat::ui::history_popup::batch_select_history_popup_by_semantic_id(generation, semantic_id, *submit, cx)?,
-                },
-                protocol::BatchCommand::SetThemeControl { control, value } => {
-                    // A popup may operate only on its registered parent, never an
-                    // arbitrary launcher (and never create or focus one).
-                    let parent = target.parent_window_id.as_ref().zip(target.parent_window_generation)
-                        .and_then(|(id, generation)| crate::windows::get_runtime_window_handle_for_generation(id, generation))
-                        .ok_or_else(|| anyhow::anyhow!("setThemeControl requires ThemeChooserView"))?;
-                    let root = parent.read(cx, |root: gpui::Entity<crate::Root>, _| root)?;
-                    let app = root.read(cx).view().clone().downcast::<ScriptListApp>()
-                        .map_err(|_| anyhow::anyhow!("setThemeControl requires ThemeChooserView"))?;
-                    return app.update(cx, |app, cx| {
-                        anyhow::ensure!(matches!(app.current_view, AppView::ThemeChooserView { .. }), "setThemeControl requires ThemeChooserView");
-                        app.set_theme_chooser_control_from_devtools(control, value, cx).map(Some)
-                    });
-                }
-                _ => return Err(unsupported_batch_command_error(kind, command).into()),
-            }
-        }
-        _ => return Err(unsupported_batch_command_error(kind, command).into()),
-    };
-    if selected.is_some() {
-        return Ok(selected);
+        _ => Err(unsupported_batch_command_error(kind, command).into()),
     }
-    let error = match command {
-        protocol::BatchCommand::SelectByValue { value, .. }
-            if kind == AutomationBatchTargetKind::AgentChatDetached =>
-        {
-            protocol::TransactionError::selection_not_found(format!(
-                "selectByValue could not find '{value}' in detached Agent Chat picker"
-            ))
-        }
-        protocol::BatchCommand::SelectBySemanticId { semantic_id, .. }
-            if kind == AutomationBatchTargetKind::AgentChatDetached =>
-        {
-            protocol::TransactionError::selection_not_found(format!(
-                "selectBySemanticId could not find '{semantic_id}' in detached Agent Chat picker"
-            ))
-        }
-        protocol::BatchCommand::SelectByValue { value, .. } => {
-            protocol::TransactionError::selection_not_found(value)
-        }
-        protocol::BatchCommand::SelectBySemanticId { semantic_id, .. } => {
-            protocol::TransactionError::element_not_found(semantic_id)
-        }
-        _ => unreachable!(),
-    };
-    Err(error.into())
 }
 
 pub(crate) fn registered_surface_state_result(
@@ -370,31 +241,6 @@ impl ScriptListApp {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
-        if semantic_id.starts_with("agent_chat_queue:") {
-            let AppView::AgentChatView { entity } = &self.current_view else {
-                anyhow::bail!("queue_target_not_agent_chat");
-            };
-            let entity = entity.clone();
-            anyhow::ensure!(
-                entity
-                    .read(cx)
-                    .ai_recovery_actions(cx)
-                    .iter()
-                    .any(|action| action.id == semantic_id),
-                "queue_action_stale"
-            );
-            if submit {
-                anyhow::ensure!(
-                    entity.update(cx, |view, cx| view.execute_queue_action(
-                        semantic_id,
-                        window,
-                        cx
-                    )),
-                    "queue_action_rejected"
-                );
-            }
-            return Ok(semantic_id.to_string());
-        }
         if matches!(self.current_view, AppView::ScriptList)
             && self.spine_projection_owns_main_list()
         {

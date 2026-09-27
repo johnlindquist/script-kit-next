@@ -81,22 +81,6 @@ mod tests {
     }
 
     #[test]
-    fn input_horizontal_metrics_share_header_and_search_insets() {
-        let def = crate::designs::MainMenuThemeVariant::default().def();
-        let metrics = super::main_view_input_horizontal_metrics(def, 480.0);
-        assert_eq!(metrics.shell_x, def.shell.header_padding_x);
-        assert_eq!(
-            metrics.shell_width,
-            480.0 - def.shell.header_padding_x * 2.0
-        );
-        assert_eq!(metrics.text_inset_left, def.search.text_inset_x);
-        assert_eq!(metrics.text_inset_right, def.search.text_inset_x * 0.5);
-        assert_eq!(
-            metrics.text_width_after_trailing(24.0),
-            metrics.shell_width - metrics.text_inset_left - metrics.text_inset_right - 24.0
-        );
-    }
-    #[test]
     fn input_shell_accepts_taller_surface_height_without_shrinking_theme_default() {
         assert_eq!(resolved_main_view_input_height(26.0, None), 26.0);
         assert_eq!(resolved_main_view_input_height(26.0, Some(152.0)), 152.0);

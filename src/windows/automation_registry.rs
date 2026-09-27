@@ -55,7 +55,6 @@ fn kind_rank(kind: AutomationWindowKind) -> u8 {
     match kind {
         AutomationWindowKind::Main => 0,
         AutomationWindowKind::Notes => 1,
-        AutomationWindowKind::AgentChatDetached => 4,
         AutomationWindowKind::ActionsDialog => 7,
         AutomationWindowKind::PromptPopup => 8,
         AutomationWindowKind::SnapOverlay => 10,
@@ -722,9 +721,9 @@ pub(crate) mod tests {
         main.focused = true;
         upsert_automation_window(main.clone());
 
-        let mut notes = make_info(&p, "notes", AutomationWindowKind::Notes);
-        notes.focused = false;
-        upsert_automation_window(notes.clone());
+        let mut snap = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
+        snap.focused = false;
+        upsert_automation_window(snap.clone());
 
         // Resolve Main target
         let target_main = AutomationWindowTarget::Main;
@@ -745,7 +744,7 @@ pub(crate) mod tests {
 
         // Cleanup
         remove_automation_window(&format!("{p}:main"));
-        remove_automation_window(&format!("{p}:notes"));
+        remove_automation_window(&format!("{p}:snap"));
     }
 
     #[test]
@@ -753,35 +752,35 @@ pub(crate) mod tests {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
-        let mut agent_chat0 = make_info(&p, "agent_chat0", AutomationWindowKind::AgentChatDetached);
+        let mut agent_chat0 = make_info(&p, "agent_chat0", AutomationWindowKind::SnapOverlay);
         agent_chat0.title = Some("Agent Chat Thread 0".into());
         upsert_automation_window(agent_chat0);
 
-        let mut agent_chat1 = make_info(&p, "agent_chat1", AutomationWindowKind::AgentChatDetached);
+        let mut agent_chat1 = make_info(&p, "agent_chat1", AutomationWindowKind::SnapOverlay);
         agent_chat1.title = Some("Agent Chat Thread 1".into());
         upsert_automation_window(agent_chat1);
 
         // Kind without index → first
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::SnapOverlay,
             index: None,
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve kind index 0");
-        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::SnapOverlay);
 
         // Kind with index 1 → second
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::SnapOverlay,
             index: Some(1),
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve kind index 1");
-        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::SnapOverlay);
         // The two should have different IDs
         assert_ne!(
             resolve_automation_window(Some(&AutomationWindowTarget::Kind {
-                kind: AutomationWindowKind::AgentChatDetached,
+                kind: AutomationWindowKind::SnapOverlay,
                 index: Some(0),
             }))
             .expect("idx 0")
@@ -791,7 +790,7 @@ pub(crate) mod tests {
 
         // Kind with out-of-range index → error
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::SnapOverlay,
             index: Some(99),
         };
         assert!(resolve_automation_window(Some(&target)).is_err());
@@ -806,28 +805,28 @@ pub(crate) mod tests {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
-        let info = make_info(&p, "notes", AutomationWindowKind::Notes);
+        let info = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
         upsert_automation_window(info.clone());
 
         // Verify it exists
         let target = AutomationWindowTarget::Id {
-            id: format!("{p}:notes"),
+            id: format!("{p}:snap"),
         };
         assert!(resolve_automation_window(Some(&target)).is_ok());
 
         // Unregister
-        let removed = remove_automation_window(&format!("{p}:notes"));
+        let removed = remove_automation_window(&format!("{p}:snap"));
         assert!(removed.is_some());
         assert_eq!(
             removed.as_ref().expect("removed").kind,
-            AutomationWindowKind::Notes
+            AutomationWindowKind::SnapOverlay
         );
 
         // Now resolution fails
         assert!(resolve_automation_window(Some(&target)).is_err());
 
         // Double-remove is harmless
-        assert!(remove_automation_window(&format!("{p}:notes")).is_none());
+        assert!(remove_automation_window(&format!("{p}:snap")).is_none());
     }
 
     // -- Focus tracking ----------------------------------------------------
@@ -841,14 +840,14 @@ pub(crate) mod tests {
         main.focused = true;
         upsert_automation_window(main);
 
-        let notes = make_info(&p, "notes", AutomationWindowKind::Notes);
-        upsert_automation_window(notes);
+        let snap = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
+        upsert_automation_window(snap);
 
-        // Shift focus to notes
-        assert!(set_automation_focus(&format!("{p}:notes")));
+        // Shift focus to the snap overlay
+        assert!(set_automation_focus(&format!("{p}:snap")));
         assert_eq!(
             focused_automation_window_id().as_deref(),
-            Some(format!("{p}:notes").as_str())
+            Some(format!("{p}:snap").as_str())
         );
 
         // Main should now be unfocused
@@ -856,19 +855,19 @@ pub(crate) mod tests {
             .expect("main still registered");
         assert!(!main_resolved.focused);
 
-        // Notes should be focused
-        let notes_resolved = resolve_automation_window(Some(&AutomationWindowTarget::Id {
-            id: format!("{p}:notes"),
+        // The snap overlay should be focused
+        let snap_resolved = resolve_automation_window(Some(&AutomationWindowTarget::Id {
+            id: format!("{p}:snap"),
         }))
-        .expect("notes still registered");
-        assert!(notes_resolved.focused);
+        .expect("snap overlay still registered");
+        assert!(snap_resolved.focused);
 
         // Focus on unknown ID returns false
         assert!(!set_automation_focus("nonexistent-window"));
 
         // Cleanup
         remove_automation_window(&format!("{p}:main"));
-        remove_automation_window(&format!("{p}:notes"));
+        remove_automation_window(&format!("{p}:snap"));
     }
 
     // -- Visibility --------------------------------------------------------
@@ -878,7 +877,7 @@ pub(crate) mod tests {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
-        let info = make_info(&p, "ai", AutomationWindowKind::AgentChatDetached);
+        let info = make_info(&p, "ai", AutomationWindowKind::SnapOverlay);
         upsert_automation_window(info);
 
         set_automation_visibility(&format!("{p}:ai"), false);
@@ -908,7 +907,7 @@ pub(crate) mod tests {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
-        let mut info = make_info(&p, "agent_chat", AutomationWindowKind::AgentChatDetached);
+        let mut info = make_info(&p, "agent_chat", AutomationWindowKind::SnapOverlay);
         info.title = Some(format!("{p} Script Kit Agent Chat"));
         upsert_automation_window(info);
 
@@ -917,7 +916,7 @@ pub(crate) mod tests {
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should match title substring");
-        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::SnapOverlay);
 
         // Non-matching title
         let target = AutomationWindowTarget::TitleContains {
@@ -973,15 +972,15 @@ pub(crate) mod tests {
         let p = test_prefix();
 
         upsert_automation_window(make_info(&p, "main", AutomationWindowKind::Main));
-        upsert_automation_window(make_info(&p, "notes", AutomationWindowKind::Notes));
-        upsert_automation_window(make_info(&p, "ai", AutomationWindowKind::AgentChatDetached));
+        upsert_automation_window(make_info(&p, "snap", AutomationWindowKind::SnapOverlay));
+        upsert_automation_window(make_info(&p, "ai", AutomationWindowKind::SnapOverlay));
 
         let all = list_automation_windows();
         let our_windows: Vec<_> = all.iter().filter(|w| w.id.starts_with(&p)).collect();
         assert_eq!(our_windows.len(), 3);
 
         remove_automation_window(&format!("{p}:main"));
-        remove_automation_window(&format!("{p}:notes"));
+        remove_automation_window(&format!("{p}:snap"));
         remove_automation_window(&format!("{p}:ai"));
     }
 
@@ -1011,10 +1010,10 @@ pub(crate) mod tests {
 
     // -- Cross-window targeting acceptance tests -------------------------
 
-    /// Proves that targeting a Notes window by kind resolves to distinct
+    /// Proves that targeting the snap overlay by kind resolves to distinct
     /// semantic surface and ID, not the main window.
     #[test]
-    fn targeted_get_elements_routes_notes_window() {
+    fn targeted_get_elements_routes_the_snap_overlay() {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
@@ -1023,20 +1022,20 @@ pub(crate) mod tests {
         main.focused = true;
         upsert_automation_window(main);
 
-        let mut notes = make_info(&p, "notes", AutomationWindowKind::Notes);
-        notes.semantic_surface = Some("notes".into());
-        notes.title = Some("Script Kit Notes".into());
-        upsert_automation_window(notes);
+        let mut snap = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
+        snap.semantic_surface = Some("snapOverlay".into());
+        snap.title = Some("Snap Overlay".into());
+        upsert_automation_window(snap);
 
-        // Resolve with Kind target → should get Notes, not Main
+        // Resolve with Kind target → should get the snap overlay, not Main
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::Notes,
+            kind: AutomationWindowKind::SnapOverlay,
             index: None,
         };
         let resolved =
-            resolve_automation_window(Some(&target)).expect("should resolve Notes window");
-        assert_eq!(resolved.kind, AutomationWindowKind::Notes);
-        assert_eq!(resolved.semantic_surface.as_deref(), Some("notes"));
+            resolve_automation_window(Some(&target)).expect("should resolve the snap overlay");
+        assert_eq!(resolved.kind, AutomationWindowKind::SnapOverlay);
+        assert_eq!(resolved.semantic_surface.as_deref(), Some("snapOverlay"));
         assert_ne!(
             resolved.id,
             format!("{p}:main"),
@@ -1049,13 +1048,13 @@ pub(crate) mod tests {
         assert_eq!(focused.semantic_surface.as_deref(), Some("scriptList"));
 
         remove_automation_window(&format!("{p}:main"));
-        remove_automation_window(&format!("{p}:notes"));
+        remove_automation_window(&format!("{p}:snap"));
     }
 
     /// Proves that targeting a detached Agent Chat window resolves to a distinct
     /// window with its own ID and kind, suitable for screenshot routing.
     #[test]
-    fn targeted_capture_screenshot_routes_detached_agent_chat() {
+    fn targeted_capture_screenshot_routes_a_detached_window() {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
@@ -1064,11 +1063,8 @@ pub(crate) mod tests {
         main.focused = false;
         upsert_automation_window(main);
 
-        let mut agent_chat = make_info(
-            &p,
-            "agent_chat-thread-1",
-            AutomationWindowKind::AgentChatDetached,
-        );
+        let mut agent_chat =
+            make_info(&p, "agent_chat-thread-1", AutomationWindowKind::SnapOverlay);
         agent_chat.title = Some("Script Kit Agent Chat".into());
         agent_chat.focused = true;
         agent_chat.semantic_surface = Some("agentChatChat".into());
@@ -1076,12 +1072,12 @@ pub(crate) mod tests {
 
         // Target by kind → Agent Chat
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::SnapOverlay,
             index: Some(0),
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve detached Agent Chat");
-        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::SnapOverlay);
         assert_eq!(resolved.title.as_deref(), Some("Script Kit Agent Chat"));
         // The screenshot function would use this title to find the OS window
         assert_ne!(
@@ -1096,14 +1092,14 @@ pub(crate) mod tests {
         };
         let resolved_by_id =
             resolve_automation_window(Some(&target_id)).expect("should resolve by ID");
-        assert_eq!(resolved_by_id.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved_by_id.kind, AutomationWindowKind::SnapOverlay);
 
         remove_automation_window(&format!("{p}:main"));
         remove_automation_window(&format!("{p}:agent_chat-thread-1"));
     }
 
     /// Proves that waitFor/batch resolution uses the same resolver as
-    /// standalone queries — a Notes or Agent Chat target resolves consistently.
+    /// standalone queries — a non-main target resolves consistently.
     #[test]
     fn targeted_wait_for_uses_resolved_window_state() {
         let _registry_guard = registry_guard();
@@ -1114,14 +1110,14 @@ pub(crate) mod tests {
         main.semantic_surface = Some("scriptList".into());
         upsert_automation_window(main);
 
-        let mut notes = make_info(&p, "notes", AutomationWindowKind::Notes);
-        notes.semantic_surface = Some("notes".into());
-        upsert_automation_window(notes);
+        let mut snap = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
+        snap.semantic_surface = Some("snapOverlay".into());
+        upsert_automation_window(snap);
 
         // The same resolve_automation_window used by getElements should
         // also be used by waitFor and batch — prove consistency.
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::Notes,
+            kind: AutomationWindowKind::SnapOverlay,
             index: None,
         };
 
@@ -1135,9 +1131,10 @@ pub(crate) mod tests {
         assert_eq!(standalone.kind, batch_path.kind);
         assert_eq!(standalone.semantic_surface, batch_path.semantic_surface);
 
-        // Targeting a non-existent kind fails with an error, not a silent fallback
+        // Targeting a kind with no window (there is no Notes window) fails with an error, not a
+        // silent fallback
         let missing = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::SnapOverlay,
+            kind: AutomationWindowKind::Notes,
             index: None,
         };
         let err = resolve_automation_window(Some(&missing));
@@ -1147,7 +1144,7 @@ pub(crate) mod tests {
         );
 
         remove_automation_window(&format!("{p}:main"));
-        remove_automation_window(&format!("{p}:notes"));
+        remove_automation_window(&format!("{p}:snap"));
     }
 
     // -- Deterministic ordering -------------------------------------------
@@ -1228,17 +1225,17 @@ pub(crate) mod tests {
         let p = test_prefix();
 
         // Insert in reverse kind-rank order
+        upsert_automation_window(make_info(&p, "snap", AutomationWindowKind::SnapOverlay));
         upsert_automation_window(make_info(&p, "popup", AutomationWindowKind::PromptPopup));
-        upsert_automation_window(make_info(&p, "notes", AutomationWindowKind::Notes));
         upsert_automation_window(make_info(&p, "main", AutomationWindowKind::Main));
 
         let list1 = list_automation_windows();
         let ours1: Vec<_> = list1.iter().filter(|w| w.id.starts_with(&p)).collect();
 
-        // Main (rank 0) < Notes (rank 1) < PromptPopup (rank 6)
+        // Main (rank 0) < PromptPopup (rank 8) < SnapOverlay (rank 10)
         assert_eq!(ours1[0].kind, AutomationWindowKind::Main);
-        assert_eq!(ours1[1].kind, AutomationWindowKind::Notes);
-        assert_eq!(ours1[2].kind, AutomationWindowKind::PromptPopup);
+        assert_eq!(ours1[1].kind, AutomationWindowKind::PromptPopup);
+        assert_eq!(ours1[2].kind, AutomationWindowKind::SnapOverlay);
 
         // Second call produces identical order
         let list2 = list_automation_windows();
@@ -1249,22 +1246,22 @@ pub(crate) mod tests {
         );
 
         remove_automation_window(&format!("{p}:main"));
-        remove_automation_window(&format!("{p}:notes"));
         remove_automation_window(&format!("{p}:popup"));
+        remove_automation_window(&format!("{p}:snap"));
     }
 
     #[test]
     fn registry_assigns_monotonic_lifetimes_and_preserves_metadata_updates() {
         let _registry_guard = registry_guard();
         let p = test_prefix();
-        let id = format!("{p}:notes");
+        let id = format!("{p}:snap");
 
-        upsert_automation_window(make_info(&p, "notes", AutomationWindowKind::Notes));
+        upsert_automation_window(make_info(&p, "snap", AutomationWindowKind::SnapOverlay));
         let first = automation_window_by_id(&id)
             .and_then(|info| info.generation)
             .expect("new lifetime receives a generation");
 
-        let mut update = make_info(&p, "notes", AutomationWindowKind::Notes);
+        let mut update = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
         update.visible = false;
         upsert_automation_window(update);
         assert_eq!(
@@ -1274,7 +1271,7 @@ pub(crate) mod tests {
         );
 
         remove_automation_window(&id);
-        upsert_automation_window(make_info(&p, "notes", AutomationWindowKind::Notes));
+        upsert_automation_window(make_info(&p, "snap", AutomationWindowKind::SnapOverlay));
         let reopened = automation_window_by_id(&id)
             .and_then(|info| info.generation)
             .expect("reopened lifetime receives a generation");
@@ -1437,43 +1434,6 @@ pub(crate) mod tests {
             resolve_automation_window(Some(&AutomationWindowTarget::Id { id: popup_id })).is_err(),
             "popup must not be in registry after failed registration"
         );
-    }
-
-    #[test]
-    fn register_attached_popup_resolves_non_main_parent() {
-        let _registry_guard = registry_guard();
-        let p = test_prefix();
-
-        let mut agent_chat = make_info(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
-        agent_chat.focused = true;
-        upsert_automation_window(agent_chat);
-
-        let popup_id = format!("{p}:agent_chat-actions");
-        register_attached_popup(
-            popup_id.clone(),
-            AutomationWindowKind::ActionsDialog,
-            Some("Actions".into()),
-            Some("actionsDialog".into()),
-            None,
-            Some(&format!("{p}:agent_chat-1")),
-        )
-        .expect("should register with Agent Chat parent");
-
-        let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Id {
-            id: popup_id.clone(),
-        }))
-        .expect("should resolve");
-        assert_eq!(
-            resolved.parent_window_id.as_deref(),
-            Some(format!("{p}:agent_chat-1").as_str())
-        );
-        assert_eq!(
-            resolved.parent_kind,
-            Some(AutomationWindowKind::AgentChatDetached)
-        );
-
-        remove_automation_window(&popup_id);
-        remove_automation_window(&format!("{p}:agent_chat-1"));
     }
 
     #[test]

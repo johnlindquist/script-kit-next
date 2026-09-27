@@ -463,19 +463,6 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open a deterministic detached Agent Chat placeholder window for visual/layout proof.
-    ///
-    /// This fixture does not start an agent, acquire provider credentials, submit
-    /// prompts, or mutate chat history. It only opens the detached window shell.
-    OpenAgentChatDetachedFixture {
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Open the detached Agent Chat history popup against fixture-owned history.
-    OpenAgentChatHistoryPopupFixture {
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
     /// Open an ordinary script-owned ChatPrompt without spawning a script process.
     /// This is the deterministic agent-facing equivalent of the SDK `chat()` message.
     OpenChatPromptFixture {
@@ -492,37 +479,6 @@ pub enum ExternalCommand {
     OpenAi,
     /// Open the Mini Agent Chat window (for testing)
     OpenMiniAi,
-    /// Open the Agent Chat window with mock data (for visual testing)
-    /// This inserts sample conversations to test the UI layout
-    OpenAiWithMockData,
-    /// Open the Mini Agent Chat window with mock data (for visual testing)
-    OpenMiniAiWithMockData,
-    /// Open focused-text mini Agent Chat with fixture focused text and deterministic output.
-    OpenFocusedTextAgentChatWithMockData {
-        #[serde(default)]
-        text: Option<String>,
-        #[serde(default)]
-        instruction: Option<String>,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Capture the currently focused external field and open focused-text mini Agent Chat
-    /// with deterministic mock output. Gated by SCRIPT_KIT_FOCUSED_TEXT_LIVE_FIXTURE=1.
-    OpenFocusedTextAgentChatFromFocusedFieldWithMockData {
-        #[serde(default)]
-        instruction: Option<String>,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Open focused-text mini Agent Chat with fixture focused text and real goose submission.
-    OpenFocusedTextAgentChatWithPiData {
-        #[serde(default)]
-        text: Option<String>,
-        #[serde(default)]
-        instruction: Option<String>,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
     /// Show the AI command bar (Cmd+K menu) for testing the refactored ActionsDialog
     ShowAiCommandBar,
     /// Simulate a key press in the AI window (for testing command bar navigation)
@@ -568,45 +524,6 @@ pub enum ExternalCommand {
         text: String,
         #[serde(default)]
         submit: bool,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Set the focused-text mini scope input text.
-    SetAgentChatScopeInput {
-        text: String,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Select a focused-text variation by index (0, 1, or 2).
-    SelectAgentChatVariation {
-        index: usize,
-        #[serde(default)]
-        edit: bool,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Get focused-text variation snapshots.
-    GetAgentChatVariations {
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Send an Escape key through the Agent Chat view's progressive handler.
-    AgentChatEscape {
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Install a no-token Agent Chat transcript fixture for devtools proof.
-    ///
-    /// phase accepts "awaitingFirstAssistantText", "assistantText", "idle", or "error".
-    /// This mutates the active Agent Chat thread only; it never submits to an agent.
-    SetAgentChatTestFixture {
-        phase: String,
-        #[serde(default, rename = "userText")]
-        user_text: Option<String>,
-        #[serde(default, rename = "assistantText")]
-        assistant_text: Option<String>,
-        #[serde(default, rename = "messageCount")]
-        message_count: Option<usize>,
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
@@ -704,21 +621,9 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Invoke the Agent Chat composer's `paste_text_from_clipboard` handler directly
-    /// on the active `AppView::AgentChatView`, bypassing the OS Cmd+V heuristic
-    /// (which routes pastes to the frontmost app — during automation runs
-    /// that's the invoking terminal, not the Agent Chat composer).
-    ///
-    /// Pairs with the Pass #31 source-level invariants pinned in
-    /// `tests/agent_chat_composer_paste_text_contract.rs`: this command is the
-    /// substrate that lets live verification actually exercise the pinned
-    /// paste-receiver shape (arboard read → CRLF normalize → `prepare_pasted_text`
-    /// → `thread.input.insert_str`) against the current system clipboard.
-    ///
-    /// Returns a `Err("Agent Chat view is not active")` via the structured
-    /// tracing channel when no `AgentChatView` is active; `Err("clipboard is
-    /// empty or text fetch failed")` when `paste_text_from_clipboard` returns
-    /// false (empty clipboard, non-text clipboard, or arboard init failure).
+    /// Put the clipboard's text in the chat's input under the main window's input, bypassing
+    /// the OS Cmd+V route (which pastes into the frontmost app during automation runs).
+    /// Fails with "clipboard is empty or text fetch failed" when there is no text.
     PasteClipboardIntoAgentChat {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
@@ -793,7 +698,6 @@ impl ExternalCommand {
                 | Self::SetFilter { .. }
                 | Self::SetMenuSyntaxFormField { .. }
                 | Self::GetAiWindowState { .. }
-                | Self::GetAgentChatVariations { .. }
                 | Self::GetConfigFingerprint { .. }
         )
     }
@@ -847,11 +751,6 @@ impl ExternalCommand {
             | Self::SetAiSearch { request_id, .. }
             | Self::SetAiInput { request_id, .. }
             | Self::SetAgentChatInput { request_id, .. }
-            | Self::SetAgentChatScopeInput { request_id, .. }
-            | Self::SelectAgentChatVariation { request_id, .. }
-            | Self::GetAgentChatVariations { request_id, .. }
-            | Self::AgentChatEscape { request_id, .. }
-            | Self::SetAgentChatTestFixture { request_id, .. }
             | Self::SetAgentChatTranscriptScroll { request_id, .. }
             | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
@@ -861,12 +760,8 @@ impl ExternalCommand {
             | Self::InjectClipboardCaptureFixture { request_id, .. }
             | Self::PushDictationResult { request_id, .. }
             | Self::GetConfigFingerprint { request_id, .. }
-            | Self::OpenFocusedTextAgentChatWithMockData { request_id, .. }
-            | Self::OpenFocusedTextAgentChatWithPiData { request_id, .. }
             | Self::OpenCreationFeedback { request_id, .. }
             | Self::OpenConfirmPrompt { request_id, .. }
-            | Self::OpenAgentChatDetachedFixture { request_id, .. }
-            | Self::OpenAgentChatHistoryPopupFixture { request_id, .. }
             | Self::OpenChatPromptFixture { request_id, .. }
             | Self::ClosePromptPopupNatively { request_id, .. }
             | Self::PasteClipboardIntoAgentChat { request_id, .. } => {
@@ -890,32 +785,16 @@ impl ExternalCommand {
             Self::OpenAbout => "openAbout",
             Self::OpenCreationFeedback { .. } => "openCreationFeedback",
             Self::OpenConfirmPrompt { .. } => "openConfirmPrompt",
-            Self::OpenAgentChatDetachedFixture { .. } => "openAgentChatDetachedFixture",
-            Self::OpenAgentChatHistoryPopupFixture { .. } => "openAgentChatHistoryPopupFixture",
             Self::OpenChatPromptFixture { .. } => "openChatPromptFixture",
             Self::ClosePromptPopupNatively { .. } => "closePromptPopupNatively",
             Self::OpenAi => "openAi",
             Self::OpenMiniAi => "openMiniAi",
-            Self::OpenAiWithMockData => "openAiWithMockData",
-            Self::OpenMiniAiWithMockData => "openMiniAiWithMockData",
-            Self::OpenFocusedTextAgentChatWithMockData { .. } => {
-                "openFocusedTextAgentChatWithMockData"
-            }
-            Self::OpenFocusedTextAgentChatFromFocusedFieldWithMockData { .. } => {
-                "openFocusedTextAgentChatFromFocusedFieldWithMockData"
-            }
-            Self::OpenFocusedTextAgentChatWithPiData { .. } => "openFocusedTextAgentChatWithPiData",
             Self::ShowAiCommandBar => "showAiCommandBar",
             Self::SimulateAiKey { .. } => "simulateAiKey",
             Self::CaptureWindow { .. } => "captureWindow",
             Self::SetAiSearch { .. } => "setAiSearch",
             Self::SetAiInput { .. } => "setAiInput",
             Self::SetAgentChatInput { .. } => "setAgentChatInput",
-            Self::SetAgentChatScopeInput { .. } => "setAgentChatScopeInput",
-            Self::SelectAgentChatVariation { .. } => "selectAgentChatVariation",
-            Self::GetAgentChatVariations { .. } => "getAgentChatVariations",
-            Self::AgentChatEscape { .. } => "agent_chatEscape",
-            Self::SetAgentChatTestFixture { .. } => "setAgentChatTestFixture",
             Self::SetAgentChatTranscriptScroll { .. } => "setAgentChatTranscriptScroll",
             Self::GetAiWindowState { .. } => "getAiWindowState",
             Self::ShowGrid { .. } => "showGrid",
@@ -949,28 +828,16 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "openAbout",
     "openCreationFeedback",
     "openConfirmPrompt",
-    "openAgentChatDetachedFixture",
-    "openAgentChatHistoryPopupFixture",
     "openChatPromptFixture",
     "closePromptPopupNatively",
     "openAi",
     "openMiniAi",
-    "openAiWithMockData",
-    "openMiniAiWithMockData",
-    "openFocusedTextAgentChatWithMockData",
-    "openFocusedTextAgentChatFromFocusedFieldWithMockData",
-    "openFocusedTextAgentChatWithPiData",
     "showAiCommandBar",
     "simulateAiKey",
     "captureWindow",
     "setAiSearch",
     "setAiInput",
     "setAgentChatInput",
-    "setAgentChatScopeInput",
-    "selectAgentChatVariation",
-    "getAgentChatVariations",
-    "agent_chatEscape",
-    "setAgentChatTestFixture",
     "setAgentChatTranscriptScroll",
     "getAiWindowState",
     "showGrid",

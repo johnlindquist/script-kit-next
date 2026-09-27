@@ -2530,29 +2530,6 @@ fn silent_audio_path_never_attempts_paste_or_prompt_delivery() {
 }
 
 #[test]
-fn agent_chat_dictation_delivery_suppresses_focused_launcher_context() {
-    let src = std::fs::read_to_string("src/app_impl/agent_handoff/agent_chat_entry.rs")
-        .expect("read Agent Chat entry request owner");
-    let request = compact_delta_contract(extract_delta_contract_section(
-        &src,
-        "pub(crate) fn dictation_send(",
-        "pub(crate) fn explicit_send(",
-    ));
-    assert!(
-        request.contains(
-            "ifui_variant==crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::QuickAi{AgentChatContextPolicy::NoContext}else{AgentChatContextPolicy::SuppressFocused}"
-        ),
-        "Dictation must suppress focused launcher context, and Quick AI must admit no context"
-    );
-    assert!(
-        request.contains(
-            "origin:AgentChatEntryOrigin::Dictation,target,intent,ui_variant,context_policy,"
-        ),
-        "the entry request must retain the supplied frozen thread target and context policy"
-    );
-}
-
-#[test]
 fn orchestrator_focus_main_commands_queue_app_focus_after_reveal() {
     let bridge_src = std::fs::read_to_string("src/app_impl/window_orchestrator_bridge.rs")
         .expect("read window_orchestrator_bridge.rs");
@@ -3275,72 +3252,6 @@ fn dictation_destination_includes_internal_surfaces() {
 }
 
 #[test]
-fn resolve_dictation_target_exists_in_builtin_execution() {
-    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    assert!(
-        src.contains("fn resolve_dictation_target("),
-        "builtin_execution.rs must define resolve_dictation_target"
-    );
-
-    // Must check an open note and the AI window before falling back to prompt or external.
-    // Use the exact signature to skip resolve_dictation_target_with_override.
-    let resolver_start = src
-        .find("fn resolve_dictation_target(&self) ->")
-        .expect("resolver must exist");
-    let resolver_src = &src[resolver_start..resolver_start + 1400.min(src.len() - resolver_start)];
-
-    assert!(
-        resolver_src.contains("one_window_note_open()"),
-        "resolver must check for a note open under the input"
-    );
-    assert!(
-        resolver_src.contains("agent_chat_dictation_target_active()"),
-        "resolver must check Agent Chat availability"
-    );
-    assert!(
-        resolver_src.contains("can_accept_dictation_into_prompt()"),
-        "resolver must check prompt acceptance"
-    );
-    assert!(
-        resolver_src.contains("DictationTarget::ExternalApp"),
-        "resolver must fall back to ExternalApp"
-    );
-}
-
-#[test]
-fn resolve_dictation_target_checks_notes_before_ai() {
-    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    // Use the exact signature to skip resolve_dictation_target_with_override.
-    let resolver_start = src
-        .find("fn resolve_dictation_target(&self) ->")
-        .expect("resolver must exist");
-    let resolver_src = &src[resolver_start..resolver_start + 1400.min(src.len() - resolver_start)];
-
-    let notes_pos = resolver_src
-        .find("one_window_note_open()")
-        .expect("resolver must check for an open note");
-    let ai_pos = resolver_src
-        .find("agent_chat_dictation_target_active()")
-        .expect("resolver must check Agent Chat");
-    let prompt_pos = resolver_src
-        .find("can_accept_dictation_into_prompt()")
-        .expect("resolver must check prompt");
-
-    assert!(
-        notes_pos < ai_pos,
-        "notes must be checked before Agent Chat (notes_pos={notes_pos}, ai_pos={ai_pos})"
-    );
-    assert!(
-        ai_pos < prompt_pos,
-        "Agent Chat must be checked before prompt (ai_pos={ai_pos}, prompt_pos={prompt_pos})"
-    );
-}
-
-#[test]
 fn handle_dictation_transcript_accepts_target_parameter() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
@@ -3390,56 +3301,6 @@ fn a_notes_editor_target_adds_the_words_to_todays_note() {
         dictation_handler_source(&src)
             .contains("self.mutate_internal_dictation_request(&request, None, cx)"),
         "transcription delivery must call the shared mutation owner"
-    );
-}
-
-#[test]
-fn delivery_routes_ai_chat_transcript_to_agent_chat_composer() {
-    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    let mutation = extract_delta_contract_section(
-        &src,
-        "fn mutate_internal_dictation_request(",
-        "fn complete_internal_dictation_delivery(",
-    );
-    let legacy = extract_delta_contract_section(
-        mutation,
-        "crate::dictation::DictationTarget::AiChatComposer =>",
-        "crate::dictation::DictationTarget::TabAiHarness =>",
-    );
-    assert!(
-        legacy.contains("Err(\"Legacy AI Chat destination was not canonicalized\""),
-        "legacy AI Chat targets must be canonicalized before mutation, not rerouted here"
-    );
-    let agent_chat = extract_delta_contract_section(
-        mutation,
-        "crate::dictation::DictationTarget::TabAiHarness =>",
-        "crate::dictation::DictationTarget::DayPageToday =>",
-    );
-    // Rustfmt may split the call and add a trailing comma; keep checking its
-    // frozen destination arguments independently of that formatting.
-    let agent_chat = compact_delta_contract(agent_chat).replace(",)", ")");
-    for required in [
-        "with_frozen_dictation_destination",
-        "FrozenDictationDestination::AgentChat { policy }",
-        "FrozenAgentChatPolicy::ExistingThread",
-        "dispatch_dictation_to_frozen_agent_chat",
-        "outcome.source_consumed()",
-        "AgentChatEntryDispatch::Pending(ticket)",
-        "insert_owned_dictation_text(thread_id, token, request.transcript.text(), window, cx)",
-    ] {
-        assert!(
-            agent_chat.contains(&compact_delta_contract(required)),
-            "frozen Agent Chat contract missing {required}"
-        );
-    }
-    let handler = dictation_handler_source(&src);
-    assert!(
-        handler.contains("self.mutate_internal_dictation_request(&request, None, cx)")
-            && handler.contains("ticket.completion.recv().await")
-            && handler.contains("Ok(outcome) if outcome.source_consumed()"),
-        "pending Agent Chat delivery must not complete before the exact turn is accepted"
     );
 }
 

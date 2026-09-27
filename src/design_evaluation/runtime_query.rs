@@ -1,4 +1,3 @@
-use super::conversation_fixtures;
 use super::runtime::{Evaluator, Mounted, RootOwner};
 use crate::{
     protocol::{AutomationWindowTarget, CompletedFrameIdentity},
@@ -137,15 +136,6 @@ impl Evaluator {
                     .map(|gate| gate.observation())
                     .unwrap_or(Value::Null);
                 state
-            }
-            "getAgentChatState" => {
-                let view = self.agent_chat_owner(&mounted)?;
-                let cx = self.cx.app.borrow();
-                let state = view.read(&cx).collect_agent_chat_state_snapshot(&cx);
-                serde_json::to_value(crate::protocol::Message::agent_chat_state_result(
-                    request_id.into(),
-                    state,
-                ))?
             }
             "getElements" if !matches!(mounted.owner, RootOwner::Main(_)) => {
                 let limit = raw
@@ -843,7 +833,6 @@ impl Evaluator {
                     AppView::DayPage { entity } => {
                         Ok(entity.read(&cx).owned_dictation_observation(&cx))
                     }
-                    AppView::AgentChatView { entity } => agent_chat_observation(entity, &cx),
                     AppView::ChatPrompt { entity, .. } => {
                         let prompt = entity.read(&cx);
                         let Some(control) = self.sdk_controls.get(&mounted.info.id) else {
@@ -872,30 +861,10 @@ impl Evaluator {
                     _ => Ok(Value::Null),
                 }
             }
-            RootOwner::AgentChat(view) => agent_chat_observation(view, &cx),
             RootOwner::Secondary(fixture) => fixture.controls.observation(&cx),
             _ => Ok(Value::Null),
         }
     }
-}
-
-fn agent_chat_observation(
-    view: &gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-    cx: &gpui::App,
-) -> Result<Value> {
-    let view = view.read(cx);
-    let Some(thread) = view.thread() else {
-        return Ok(
-            json!({"family":"agentChat","state":view.collect_agent_chat_state_snapshot(cx)}),
-        );
-    };
-    let mut value = serde_json::to_value(conversation_fixtures::agent_chat_fixture_receipt(
-        &thread, cx,
-    )?)?;
-    value["family"] = json!("agentChat");
-    value["ownedDictation"] = serde_json::to_value(view.owned_dictation_observation(cx))?;
-    value["state"] = serde_json::to_value(view.collect_agent_chat_state_snapshot(cx))?;
-    Ok(value)
 }
 
 fn flow_observation(app: &crate::ScriptListApp, session_id: u64, cx: &gpui::App) -> Result<Value> {

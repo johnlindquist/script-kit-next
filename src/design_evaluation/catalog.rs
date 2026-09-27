@@ -46,15 +46,6 @@ fn descriptor(
 fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [&'static str]) {
     match id {
         "prompt.fields" => return ("fields-prompt", &["input:fields-*"]),
-        "agent-chat.focused-text-mini.populated" => {
-            return (
-                "focusedTextMini",
-                &["focused-text-mini-root", "focused-text-input"],
-            )
-        }
-        "agent-chat.initial-setup" | "agent-chat.runtime-setup" => {
-            return ("agentChat", &["agent-chat-setup-primary-action"])
-        }
         "main-overlay.alias" => return ("scriptList", &["alias-*"]),
         "main-overlay.tab-ai-save-offer" => return ("scriptList", &["tab-ai-save-offer"]),
         "main-overlay.root-dialog" => return ("scriptList", &["root-dialog:*"]),
@@ -146,22 +137,13 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
         Some("CurrentAppCommandsView") => {
             ("currentAppCommands", &["input:*", "list:menu-commands"])
         }
-        Some("AgentChatHistoryView") => {
-            ("agentChatHistory", &["input:*", "list:agent-chat-history"])
-        }
         Some("BrowserHistoryView") => ("browserHistory", &["input:*", "list:browser-history"]),
         Some("NotesBrowseView") => ("notesBrowse", &["input:notes-browse-filter"]),
         Some("DayPage") => ("dayPage", &["input:day-page-editor"]),
-        Some("AgentChatView") => ("agentChat", &["input:*"]),
         Some("FlowUxView") => ("flowDesk", &["input:flow-ux-filter", "flow-desk:state"]),
         Some("FlowSessionView") => ("flow-session", &["input:*"]),
         None => match id {
             "day-page.switcher" => ("actionsDialog", &["input:actions-search", "list:actions"]),
-            "agent-chat.detached.retryable-failure" => ("agentChatChat", &["input:*"]),
-            "agent-chat.popup.history" => (
-                "promptPopup",
-                &["panel:history-popup", "list:history-entries"],
-            ),
             "secondary.snap" => ("snapOverlay", &["panel:snap-overlay", "snap:target:*"]),
             _ => panic!("missing fixture semantic contract: {id}"),
         },
@@ -252,10 +234,6 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "CurrentAppCommandsView",
             "src/render_builtins/current_app_commands.rs",
         ),
-        "main.agent-chat-history" => (
-            "AgentChatHistoryView",
-            "src/render_builtins/agent_chat_history.rs",
-        ),
         "main.browser-history" => (
             "BrowserHistoryView",
             "src/render_builtins/browser_history.rs",
@@ -294,28 +272,12 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "day-page.today" | "day-page.shelf" | "day-page.fragment" => {
             ("DayPage", "src/day_page/render.rs")
         }
-        "agent-chat.standard.empty"
-        | "agent-chat.standard.populated"
-        | "agent-chat.user-bold.awaiting-first-text"
-        | "agent-chat.role-split.streaming"
-        | "agent-chat.bottom-dock.stopped"
-        | "agent-chat.dense-log.retryable-failure"
-        | "agent-chat.sidecar.permission-pending"
-        | "agent-chat.focused-text-mini.populated"
-        | "agent-chat.quick-ai.empty"
-        | "agent-chat.standard.queued"
-        | "agent-chat.standard.picker-open"
-        | "agent-chat.initial-setup"
-        | "agent-chat.runtime-setup" => ("AgentChatView", "src/ai/agent_chat/ui/view.rs"),
         "flow.desk.flash" | "flow.desk.dispatch" | "flow.desk.lens" => {
             ("FlowUxView", "src/render_builtins/flow_ux.rs")
         }
         "flow.session" => ("FlowSessionView", "src/flows/session.rs"),
         "sdk-chat.empty" | "sdk-chat.streaming" | "sdk-chat.retryable-failure" => {
             ("ChatPrompt", "src/prompts/chat")
-        }
-        "agent-chat.popup.slash" | "agent-chat.popup.profile" => {
-            ("AgentChatView", "src/ai/agent_chat/ui/view.rs")
         }
         _ => return secondary_descriptor(id),
     };
@@ -325,21 +287,14 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "prompt"
     } else if fixture_ids::DAY_PAGE_FIXTURE_IDS.contains(&id) {
         "dayPage"
-    } else if fixture_ids::AGENT_CHAT_FIXTURE_IDS.contains(&id) {
-        "agentChat"
     } else if fixture_ids::FLOW_FIXTURE_IDS.contains(&id) {
         "flow"
     } else if fixture_ids::SDK_CHAT_FIXTURE_IDS.contains(&id) {
         "sdkChat"
-    } else if fixture_ids::AGENT_CHAT_POPUP_FIXTURE_IDS.contains(&id) {
-        "agentChatPopup"
     } else {
         "main"
     };
     let mut fixture = main_descriptor(id, family, route, owner);
-    if matches!(id, "agent-chat.popup.slash" | "agent-chat.popup.profile") {
-        fixture.parent_fixture_id = Some("agent-chat.standard.populated".into());
-    }
     if family == "mainOverlay" {
         fixture.parent_fixture_id = Some("main.script-list".into());
     }
@@ -359,20 +314,6 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "src/components/staged_actions.rs",
             "src/main_sections/day_page_switcher.rs::open_day_switcher",
             Some("day-page.today"),
-        ),
-        "agent-chat.detached.retryable-failure" => (
-            "agentChat",
-            "agentChat",
-            "src/ai/agent_chat/ui/chat_window.rs",
-            "src/ai/agent_chat/ui/view.rs",
-            None,
-        ),
-        "agent-chat.popup.history" => (
-            "agentChatPopup",
-            "secondary",
-            "src/ai/agent_chat/ui/history_popup.rs",
-            "src/ai/agent_chat/ui/history_popup.rs::AgentChatHistoryPopupWindow",
-            Some("agent-chat.standard.populated"),
         ),
         "secondary.snap" => (
             "snap",

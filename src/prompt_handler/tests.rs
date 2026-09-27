@@ -343,19 +343,12 @@ mod prompt_handler_message_tests {
     }
 
     #[test]
-    fn test_build_script_error_agent_chat_prompt_includes_fix_and_verification_guidance() {
-        let prompt = build_script_error_agent_chat_prompt(
-            "/tmp/failing-script.ts",
-            "ReferenceError: foo is not defined",
-            Some(1),
-            &["Check the missing symbol".to_string()],
+    fn test_build_script_error_agent_chat_prompt_is_one_line_that_asks_for_a_fix() {
+        let prompt = build_script_error_agent_chat_prompt("/tmp/failing-script.ts");
+        assert_eq!(
+            prompt,
+            "Why did failing-script.ts fail? Fix it and check that it runs"
         );
-
-        assert!(prompt.contains("failing-script.ts"));
-        assert!(prompt.contains("fix it"));
-        assert!(prompt.contains("verify the fix"));
-        assert!(prompt.contains("Exit code: 1"));
-        assert!(prompt.contains("Check the missing symbol"));
     }
 
     #[test]

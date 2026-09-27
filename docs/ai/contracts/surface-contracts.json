@@ -724,30 +724,6 @@
       ]
     },
     {
-      "id": "main.agent-chat-history",
-      "family": "main",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatHistoryView",
-      "presentationOwner": "src/render_builtins/agent_chat_history.rs",
-      "expectedSemanticSurface": "agentChatHistory",
-      "requiredSemanticIds": [
-        "input:*",
-        "list:agent-chat-history"
-      ]
-    },
-    {
       "id": "main.browser-history",
       "family": "main",
       "root": "main",
@@ -1662,6 +1638,122 @@
       ]
     },
     {
+      "id": "notes.editor",
+      "family": "notes",
+      "root": "notes",
+      "owner": "src/notes/window/window_ops.rs",
+      "factoryOwners": [
+        "src/notes/window/window_ops.rs"
+      ],
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "presentationOwner": "src/notes/window/render.rs",
+      "expectedSemanticSurface": "notes",
+      "requiredSemanticIds": [
+        "input:notes-editor"
+      ]
+    },
+    {
+      "id": "notes.actions",
+      "family": "notesAuxiliary",
+      "root": "secondary",
+      "owner": "src/components/staged_actions.rs",
+      "factoryOwners": [
+        "src/components/staged_actions.rs"
+      ],
+      "parentFixtureId": "notes.editor",
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "presentationOwner": "src/notes/window/panels.rs::open_actions_panel",
+      "expectedSemanticSurface": "actionsDialog",
+      "requiredSemanticIds": [
+        "input:actions-search",
+        "list:actions"
+      ]
+    },
+    {
+      "id": "notes.recent-switcher",
+      "family": "notesAuxiliary",
+      "root": "secondary",
+      "owner": "src/components/staged_actions.rs",
+      "factoryOwners": [
+        "src/components/staged_actions.rs"
+      ],
+      "parentFixtureId": "notes.editor",
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "presentationOwner": "src/notes/window/panels.rs::open_browse_panel",
+      "expectedSemanticSurface": "actionsDialog",
+      "requiredSemanticIds": [
+        "input:actions-search",
+        "list:actions"
+      ]
+    },
+    {
+      "id": "notes.root-dialog",
+      "family": "notesAuxiliary",
+      "root": "notes",
+      "owner": "src/notes/window/window_ops.rs",
+      "factoryOwners": [
+        "src/notes/window/window_ops.rs"
+      ],
+      "parentFixtureId": "notes.editor",
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
+      "expectedSemanticSurface": "notes",
+      "requiredSemanticIds": [
+        "root-dialog:*"
+      ]
+    },
+    {
+      "id": "notes.root-notification",
+      "family": "notesAuxiliary",
+      "root": "notes",
+      "owner": "src/notes/window/window_ops.rs",
+      "factoryOwners": [
+        "src/notes/window/window_ops.rs"
+      ],
+      "parentFixtureId": "notes.editor",
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
+      "expectedSemanticSurface": "notes",
+      "requiredSemanticIds": [
+        "root-notification:*"
+      ]
+    },
+    {
       "id": "day-page.today",
       "family": "dayPage",
       "root": "main",
@@ -1752,328 +1844,6 @@
       "requiredSemanticIds": [
         "input:actions-search",
         "list:actions"
-      ]
-    },
-    {
-      "id": "agent-chat.standard.empty",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.standard.populated",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.user-bold.awaiting-first-text",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.role-split.streaming",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.bottom-dock.stopped",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.dense-log.retryable-failure",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.sidecar.permission-pending",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.focused-text-mini.populated",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "focusedTextMini",
-      "requiredSemanticIds": [
-        "focused-text-mini-root",
-        "focused-text-input"
-      ]
-    },
-    {
-      "id": "agent-chat.quick-ai.empty",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.standard.queued",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.standard.picker-open",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.initial-setup",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "agent-chat-setup-primary-action"
-      ]
-    },
-    {
-      "id": "agent-chat.runtime-setup",
-      "family": "agentChat",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "agent-chat-setup-primary-action"
-      ]
-    },
-    {
-      "id": "agent-chat.detached.retryable-failure",
-      "family": "agentChat",
-      "root": "agentChat",
-      "owner": "src/ai/agent_chat/ui/chat_window.rs",
-      "factoryOwners": [
-        "src/ai/agent_chat/ui/chat_window.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChatChat",
-      "requiredSemanticIds": [
-        "input:*"
       ]
     },
     {
@@ -2244,78 +2014,6 @@
       ]
     },
     {
-      "id": "agent-chat.popup.history",
-      "family": "agentChatPopup",
-      "root": "secondary",
-      "owner": "src/ai/agent_chat/ui/history_popup.rs",
-      "factoryOwners": [
-        "src/ai/agent_chat/ui/history_popup.rs"
-      ],
-      "parentFixtureId": "agent-chat.standard.populated",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/ai/agent_chat/ui/history_popup.rs::AgentChatHistoryPopupWindow",
-      "expectedSemanticSurface": "promptPopup",
-      "requiredSemanticIds": [
-        "panel:history-popup",
-        "list:history-entries"
-      ]
-    },
-    {
-      "id": "agent-chat.popup.slash",
-      "family": "agentChatPopup",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "parentFixtureId": "agent-chat.standard.populated",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
-      "id": "agent-chat.popup.profile",
-      "family": "agentChatPopup",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "parentFixtureId": "agent-chat.standard.populated",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "AgentChatView",
-      "presentationOwner": "src/ai/agent_chat/ui/view.rs",
-      "expectedSemanticSurface": "agentChat",
-      "requiredSemanticIds": [
-        "input:*"
-      ]
-    },
-    {
       "id": "secondary.snap",
       "family": "snap",
       "root": "secondary",
@@ -2361,12 +2059,15 @@
       "presentationOwners": [
         "src/app_impl/agent_handoff/mod.rs::open_tab_ai_save_offer",
         "src/app_impl/alias_input.rs::show_alias_input",
+        "src/app_impl/lifecycle_reset.rs::flush_pending_toasts",
         "src/components/braille_loading.rs::constellation_loading_layer",
         "src/debug_grid/mod.rs::render_grid_overlay",
         "src/effects.rs::background_effect_layer",
+        "src/main_sections/render_impl.rs::WarningBanner",
         "src/render_script_list",
         "src/render_script_list/mod.rs::log_panel",
-        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer"
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -2885,17 +2586,6 @@
       "proofBoundary": "owned-production-runtime"
     },
     {
-      "appViewVariant": "AgentChatHistoryView",
-      "surfaceKind": "AgentChatHistory",
-      "fixtureIds": [
-        "main.agent-chat-history"
-      ],
-      "presentationOwners": [
-        "src/render_builtins/agent_chat_history.rs"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
       "appViewVariant": "BrowserHistoryView",
       "surfaceKind": "AttachmentPortalBrowser",
       "fixtureIds": [
@@ -2903,15 +2593,6 @@
       ],
       "presentationOwners": [
         "src/render_builtins/browser_history.rs"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "appViewVariant": "DictationHistoryView",
-      "surfaceKind": "AttachmentPortalBrowser",
-      "fixtureIds": [],
-      "presentationOwners": [
-        "src/render_builtins/dictation_history.rs"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -2931,31 +2612,6 @@
       "proofBoundary": "owned-production-runtime"
     },
     {
-      "appViewVariant": "AgentChatView",
-      "surfaceKind": "AgentChat",
-      "fixtureIds": [
-        "agent-chat.bottom-dock.stopped",
-        "agent-chat.dense-log.retryable-failure",
-        "agent-chat.focused-text-mini.populated",
-        "agent-chat.initial-setup",
-        "agent-chat.popup.profile",
-        "agent-chat.popup.slash",
-        "agent-chat.quick-ai.empty",
-        "agent-chat.role-split.streaming",
-        "agent-chat.runtime-setup",
-        "agent-chat.sidecar.permission-pending",
-        "agent-chat.standard.empty",
-        "agent-chat.standard.picker-open",
-        "agent-chat.standard.populated",
-        "agent-chat.standard.queued",
-        "agent-chat.user-bold.awaiting-first-text"
-      ],
-      "presentationOwners": [
-        "src/ai/agent_chat/ui/view.rs"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
       "appViewVariant": "DayPage",
       "surfaceKind": "DayPage",
       "fixtureIds": [
@@ -2971,28 +2627,19 @@
   ],
   "secondaryFactories": [
     {
-      "rootOwner": "AgentChatView",
+      "rootOwner": "NotesApp",
       "factorySources": [
-        "src/ai/agent_chat/ui/chat_window.rs"
+        "src/notes/window/window_ops.rs"
       ],
       "fixtureIds": [
-        "agent-chat.detached.retryable-failure"
+        "notes.editor",
+        "notes.root-dialog",
+        "notes.root-notification"
       ],
       "presentationOwners": [
-        "src/ai/agent_chat/ui/view.rs"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "rootOwner": "AgentChatHistoryPopup",
-      "factorySources": [
-        "src/ai/agent_chat/ui/history_popup.rs"
-      ],
-      "fixtureIds": [
-        "agent-chat.popup.history"
-      ],
-      "presentationOwners": [
-        "src/ai/agent_chat/ui/history_popup.rs::AgentChatHistoryPopupWindow"
+        "src/notes/window/render.rs",
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -4153,37 +3800,6 @@
       "automationSemanticSurface": "scriptTemplateCatalog"
     },
     {
-      "surfaceKind": "AgentChatHistory",
-      "appViewVariants": [
-        "AgentChatHistoryView"
-      ],
-      "appViewFooters": [
-        {
-          "variant": "AgentChatHistoryView",
-          "nativeFooterSurface": "agent_chat_history",
-          "meaning": "routeLabelOnly"
-        }
-      ],
-      "vocabulary": {
-        "family": "AssistantWorkspace",
-        "inputOwnership": "LauncherFilter",
-        "previewRole": "RequiredSplitPreview"
-      },
-      "focusPolicy": "LauncherFilterFocus",
-      "keyboardPolicy": "LauncherListKeyboard",
-      "actionsPolicy": "HostRowActions",
-      "proofPolicy": "StateAndElementsProof",
-      "visualPolicy": "SplitPreviewVisual",
-      "dismissPolicy": {
-        "policy": "standard",
-        "windowBlur": "CloseMainWindow",
-        "backdropClick": "CloseMainWindow",
-        "escape": "CloseMainWindow",
-        "cmdW": "CloseMainWindow"
-      },
-      "automationSemanticSurface": "scriptList"
-    },
-    {
       "surfaceKind": "AttachmentPortalBrowser",
       "appViewVariants": [
         "BrowserHistoryView",
@@ -4225,37 +3841,6 @@
         "cmdW": "CloseMainWindow"
       },
       "automationSemanticSurface": "scriptList"
-    },
-    {
-      "surfaceKind": "AgentChat",
-      "appViewVariants": [
-        "AgentChatView"
-      ],
-      "appViewFooters": [
-        {
-          "variant": "AgentChatView",
-          "nativeFooterSurface": "agent_chat",
-          "meaning": "routeLabelOnly"
-        }
-      ],
-      "vocabulary": {
-        "family": "AssistantWorkspace",
-        "inputOwnership": "ChildView",
-        "previewRole": "ContentPane"
-      },
-      "focusPolicy": "ChildViewFocus",
-      "keyboardPolicy": "ChildViewKeyboard",
-      "actionsPolicy": "ChildViewActions",
-      "proofPolicy": "ChildViewStateProof",
-      "visualPolicy": "ContentPaneVisual",
-      "dismissPolicy": {
-        "policy": "explicit",
-        "windowBlur": "Ignore",
-        "backdropClick": "Ignore",
-        "escape": "LetViewHandle",
-        "cmdW": "CloseMainWindow"
-      },
-      "automationSemanticSurface": "agentChatChat"
     },
     {
       "surfaceKind": "DayPage",

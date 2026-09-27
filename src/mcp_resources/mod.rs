@@ -4542,8 +4542,6 @@ fn stdin_verb_variant_hint(verb: &str) -> &'static str {
         "openAbout" => "OpenAbout",
         "openAi" => "OpenAi",
         "openMiniAi" => "OpenMiniAi",
-        "openAiWithMockData" => "OpenAiWithMockData",
-        "openMiniAiWithMockData" => "OpenMiniAiWithMockData",
         "showAiCommandBar" => "ShowAiCommandBar",
         "simulateAiKey" => "SimulateAiKey",
         "captureWindow" => "CaptureWindow",

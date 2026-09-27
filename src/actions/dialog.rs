@@ -759,23 +759,6 @@ pub enum ActionsDialogEscapeOutcome {
     CloseDialog,
 }
 
-#[derive(Clone, Copy)]
-pub struct AgentChatActionsDialogContext<'a> {
-    pub(crate) available_models: &'a [crate::ai::agent_chat::ui::config::AgentChatModelEntry],
-    pub(crate) selected_model_id: Option<&'a str>,
-    pub(crate) focused_text: bool,
-    pub(crate) focused_text_expanded: bool,
-    /// Count of session "Allow always" grants; >0 adds the review action.
-    pub(crate) standing_approval_count: usize,
-    /// Retained background threads, surfaced as a "Threads" switcher section.
-    pub(crate) thread_summaries: &'a [crate::ai::agent_chat::ui::AgentChatThreadSummary],
-    /// Rewindable user messages (fork checkpoint) for "Rewind & Edit".
-    pub(crate) fork_points: &'a [crate::ai::agent_chat::ui::AgentChatForkPoint],
-    /// Live capability facts used to build executable conversation commands.
-    pub(crate) command_facts:
-        crate::components::conversation_actions::AgentChatConversationCommandFacts,
-}
-
 /// Immutable parent/subject identity captured when an ActionsDialog opens.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1258,17 +1241,6 @@ impl ActionsDialog {
         design_variant: DesignVariant,
     ) -> Self {
         Self::with_script_and_design(focus_handle, on_select, None, theme, design_variant)
-    }
-
-    pub(crate) fn agent_chat_dialog_config() -> ActionsDialogConfig {
-        ActionsDialogConfig {
-            search_position: SearchPosition::Top,
-            section_style: SectionStyle::Headers,
-            anchor: AnchorPosition::Top,
-            show_icons: true,
-            show_context_header: false,
-            ..ActionsDialogConfig::default()
-        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2106,110 +2078,6 @@ impl ActionsDialog {
         } else {
             "Esc Close"
         }
-    }
-
-    // ── Agent Chat chat constructor ─────────────────────────────────────────────
-
-    /// Create an ActionsDialog pre-configured for Agent Chat Chat with route-based
-    /// drill-down entries for agent and model changes.
-    /// Accepts an explicit host so that detached Agent Chat can filter unsupported actions.
-    pub(crate) fn with_agent_chat_for_host(
-        focus_handle: FocusHandle,
-        on_select: ActionCallback,
-        context: AgentChatActionsDialogContext<'_>,
-        theme: Arc<theme::Theme>,
-        host: super::builders::AgentChatActionsDialogHost,
-    ) -> Self {
-        let root_route = if context.focused_text {
-            super::builders::get_focused_text_agent_chat_root_route(context.focused_text_expanded)
-        } else {
-            super::builders::get_agent_chat_root_route_for_host(
-                context.available_models,
-                context.selected_model_id,
-                context.standing_approval_count,
-                context.thread_summaries,
-                context.fork_points,
-                context.command_facts,
-                host,
-            )
-        };
-        let config = Self::agent_chat_dialog_config();
-
-        let mut dialog = Self::from_actions_with_context(
-            focus_handle,
-            on_select,
-            root_route.actions.clone(),
-            None,
-            None,
-            theme,
-            DesignVariant::Default,
-            root_route.context_title.clone(),
-            config,
-        );
-
-        dialog.set_root_route(root_route);
-        dialog.register_drill_down_route(
-            super::builders::AGENT_CHAT_CHANGE_PROFILE_ACTION_ID,
-            super::builders::get_agent_chat_profile_picker_route_for_host(host),
-        );
-        dialog.register_drill_down_route(
-            super::builders::AGENT_CHAT_CHANGE_MODEL_ACTION_ID,
-            super::builders::get_agent_chat_model_picker_route_for_host(
-                context.available_models,
-                context.selected_model_id,
-                host,
-            ),
-        );
-        dialog.register_drill_down_route(
-            super::builders::AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID,
-            crate::actions::get_agent_chat_receipt_history_route(),
-        );
-        if !context.fork_points.is_empty() {
-            dialog.register_drill_down_route(
-                super::builders::AGENT_CHAT_REWIND_ACTION_ID,
-                super::builders::get_agent_chat_fork_picker_route_for_host(
-                    context.fork_points,
-                    host,
-                ),
-            );
-        }
-        if matches!(
-            host,
-            super::builders::AgentChatActionsDialogHost::Detached
-                | super::builders::AgentChatActionsDialogHost::Notes
-        ) {
-            dialog.register_drill_down_route(
-                "agent_chat_show_history",
-                crate::actions::get_agent_chat_history_route(),
-            );
-        }
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "agent_chat_actions_menu_routes_registered",
-            host = ?host,
-            has_models = !context.available_models.is_empty(),
-            model_count = context.available_models.len(),
-            "Registered Agent Chat Actions Menu drill-down routes"
-        );
-
-        dialog
-    }
-
-    /// Create an ActionsDialog pre-configured for Agent Chat Chat (shared host).
-    pub(crate) fn with_agent_chat(
-        focus_handle: FocusHandle,
-        on_select: ActionCallback,
-        context: AgentChatActionsDialogContext<'_>,
-        theme: Arc<theme::Theme>,
-    ) -> Self {
-        Self::with_agent_chat_for_host(
-            focus_handle,
-            on_select,
-            context,
-            theme,
-            super::builders::AgentChatActionsDialogHost::Shared,
-        )
     }
 
     /// Create ActionsDialog with custom configuration and actions

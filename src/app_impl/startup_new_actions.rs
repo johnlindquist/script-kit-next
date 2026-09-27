@@ -4,7 +4,6 @@
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
-                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
 
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
@@ -62,17 +61,6 @@
                     return;
                 }
 
-                // Skip keystrokes from secondary windows — interceptors are
-                // GLOBAL and fire for ALL windows.  Secondary windows own
-                // their own Cmd+K/Escape/Enter handling.
-                if is_detached_agent_chat {
-                    tracing::debug!(
-                        target: "script_kit::keyboard",
-                        event = "actions_interceptor_skipped_secondary_window",
-                        is_detached_agent_chat,
-                    );
-                    return;
-                }
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
@@ -145,29 +133,9 @@
                         }
 
                         if has_cmd && key.eq_ignore_ascii_case("w") && !has_shift {
-                            if let AppView::AgentChatView { entity } = &this.current_view {
-                                let entity = entity.clone();
-                                entity.update(cx, |chat, cx| {
-                                    let _ = chat.request_conversation_dismiss(
-                                        crate::components::conversation_actions::ConversationDismissTrigger::CommandW,
-                                        window,
-                                        cx,
-                                    );
-                                });
-                                cx.stop_propagation();
-                                return;
-                            }
                         }
 
                         if crate::ui_foundation::is_key_escape(key) && !has_cmd && !has_shift {
-                            if let AppView::AgentChatView { entity } = &this.current_view {
-                                let entity = entity.clone();
-                                entity.update(cx, |chat, cx| {
-                                    chat.handle_conversation_escape(window, cx);
-                                });
-                                cx.stop_propagation();
-                                return;
-                            }
                         }
 
                         // Handle Cmd+I to toggle info panel in ScriptList

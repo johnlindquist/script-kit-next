@@ -443,7 +443,10 @@ impl ScriptListApp {
                      3. What should the handler do when it executes? (e.g. append to a local JSONL file, call a webhook/API, run a shell command, etc.)"
                 );
                 self.menu_syntax_trigger_picker_state = Default::default();
-                self.open_tab_ai_agent_chat_with_entry_intent_preserving_return(Some(prompt), cx);
+                self.one_window_open_chat(
+                    crate::one_window::chat_entry::ChatEntry::sending(prompt),
+                    cx,
+                );
                 cx.notify();
             }
         }

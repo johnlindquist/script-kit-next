@@ -17,7 +17,6 @@ mod tests;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SurfaceId {
     Main,
-    DetachedAiChat,
 }
 
 // ---------------------------------------------------------------------------
@@ -54,7 +53,6 @@ pub enum FocusToken {
     PromptInput,
     ChatComposer,
     TermInput,
-    DetachedAiComposer,
     None,
 }
 
@@ -67,22 +65,12 @@ pub struct MainSurfaceState {
 }
 
 // ---------------------------------------------------------------------------
-// Auxiliary surfaces
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct AuxSurfaceState {
-    pub visible: bool,
-}
-
-// ---------------------------------------------------------------------------
 // Top-level orchestrator state
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrchestratorState {
     pub main: MainSurfaceState,
-    pub detached_ai: AuxSurfaceState,
     pub key_surface: Option<SurfaceId>,
 }
 
@@ -95,7 +83,6 @@ impl Default for OrchestratorState {
                 return_focus: FocusToken::MainFilter,
                 actions_open: false,
             },
-            detached_ai: AuxSurfaceState::default(),
             key_surface: Some(SurfaceId::Main),
         }
     }
@@ -114,7 +101,6 @@ impl OrchestratorState {
 pub fn current_return_focus(state: &OrchestratorState) -> FocusToken {
     match state.key_surface {
         Some(SurfaceId::Main) => state.main.return_focus,
-        Some(SurfaceId::DetachedAiChat) => FocusToken::DetachedAiComposer,
         None => FocusToken::None,
     }
 }
@@ -133,9 +119,6 @@ pub enum WindowEvent {
 
     OpenActions,
     CloseActions,
-
-    OpenDetachedAiChat,
-    CloseDetachedAiChat,
 
     SurfaceClosedBySystem(SurfaceId),
 
@@ -163,10 +146,6 @@ pub enum WindowCommand {
     CloseActions,
 
     FocusSurface(SurfaceId),
-
-    // Detached AI
-    OpenDetachedAiChatWindow,
-    CloseDetachedAiChatWindow,
 }
 
 // ---------------------------------------------------------------------------
@@ -248,27 +227,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
         }
 
         // ---------------------------------------------------------------
-        // Detached Agent Chat Chat
-        // ---------------------------------------------------------------
-        WindowEvent::OpenDetachedAiChat => {
-            next.detached_ai.visible = true;
-            next.key_surface = Some(SurfaceId::DetachedAiChat);
-            cmds.push(WindowCommand::OpenDetachedAiChatWindow);
-            cmds.push(WindowCommand::FocusSurface(SurfaceId::DetachedAiChat));
-        }
-
-        WindowEvent::CloseDetachedAiChat => {
-            next.detached_ai.visible = false;
-            cmds.push(WindowCommand::CloseDetachedAiChatWindow);
-            if next.key_surface == Some(SurfaceId::DetachedAiChat) {
-                next.key_surface = next_visible_surface(&next);
-                if let Some(sid) = next.key_surface {
-                    cmds.push(WindowCommand::FocusSurface(sid));
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------
         // System close (user hit native close button, etc.)
         // ---------------------------------------------------------------
         WindowEvent::SurfaceClosedBySystem(surface) => match surface {
@@ -280,12 +238,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
                     next.main.actions_open = false;
                 }
                 if next.key_surface == Some(SurfaceId::Main) {
-                    next.key_surface = next_visible_surface(&next);
-                }
-            }
-            SurfaceId::DetachedAiChat => {
-                next.detached_ai.visible = false;
-                if next.key_surface == Some(SurfaceId::DetachedAiChat) {
                     next.key_surface = next_visible_surface(&next);
                 }
             }
@@ -310,13 +262,10 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Pick the next visible surface for key focus (priority: Main > DetachedAi).
+/// Pick the next visible surface for key focus (only Main).
 fn next_visible_surface(state: &OrchestratorState) -> Option<SurfaceId> {
     if state.main.visibility == MainVisibility::Visible {
         return Some(SurfaceId::Main);
-    }
-    if state.detached_ai.visible {
-        return Some(SurfaceId::DetachedAiChat);
     }
     None
 }

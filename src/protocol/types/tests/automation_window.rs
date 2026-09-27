@@ -57,12 +57,12 @@ fn automation_window_target_instance_requires_generation() {
 
 #[test]
 fn automation_window_target_round_trip_kind() {
-    let json = r#"{"type":"kind","kind":"agentChatDetached","index":0}"#;
+    let json = r#"{"type":"kind","kind":"notes","index":0}"#;
     let parsed: AutomationWindowTarget =
         serde_json::from_str(json).expect("target should deserialize");
     match &parsed {
         AutomationWindowTarget::Kind { kind, index } => {
-            assert_eq!(*kind, AutomationWindowKind::AgentChatDetached);
+            assert_eq!(*kind, AutomationWindowKind::Notes);
             assert_eq!(*index, Some(0));
         }
         other => panic!("Expected Kind, got: {:?}", other),
@@ -378,7 +378,7 @@ fn simulate_gpui_event_request_round_trip() {
     let json = r#"{
         "type": "simulateGpuiEvent",
         "requestId": "gpui-1",
-        "target": {"type": "kind", "kind": "agentChatDetached"},
+        "target": {"type": "kind", "kind": "notes"},
         "event": {"type": "keyDown", "key": "k", "modifiers": ["cmd"]}
     }"#;
     let msg: crate::protocol::Message =
@@ -440,8 +440,8 @@ fn automation_window_list_result_round_trip() {
                 generation: None,
             },
             AutomationWindowInfo {
-                id: "agentChatDetached:thread-1".into(),
-                kind: AutomationWindowKind::AgentChatDetached,
+                id: "notes:thread-1".into(),
+                kind: AutomationWindowKind::Notes,
                 title: Some("Script Kit Agent Chat".into()),
                 focused: true,
                 visible: true,
@@ -454,7 +454,7 @@ fn automation_window_list_result_round_trip() {
                 generation: None,
             },
         ],
-        Some("agentChatDetached:thread-1".into()),
+        Some("notes:thread-1".into()),
     );
     let json = serde_json::to_string(&msg).expect("serialize");
     assert!(json.contains("automationWindowListResult"));
@@ -467,10 +467,7 @@ fn automation_window_list_result_round_trip() {
             ..
         } => {
             assert_eq!(windows.len(), 2);
-            assert_eq!(
-                focused_window_id.as_deref(),
-                Some("agentChatDetached:thread-1")
-            );
+            assert_eq!(focused_window_id.as_deref(), Some("notes:thread-1"));
         }
         other => panic!("Expected AutomationWindowListResult, got: {:?}", other),
     }
@@ -606,7 +603,7 @@ fn get_elements_with_target_parses() {
 
 #[test]
 fn capture_screenshot_with_target_parses() {
-    let json = r#"{"type":"captureScreenshot","requestId":"shot-agent_chat","target":{"type":"kind","kind":"agentChatDetached","index":0},"hiDpi":true}"#;
+    let json = r#"{"type":"captureScreenshot","requestId":"shot-agent_chat","target":{"type":"kind","kind":"notes","index":0},"hiDpi":true}"#;
     let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse");
     match msg {
         crate::protocol::Message::CaptureScreenshot {
@@ -627,7 +624,7 @@ fn inspect_automation_window_request_round_trip_and_request_id() {
     let json = r#"{
         "type":"inspectAutomationWindow",
         "requestId":"inspect-1",
-        "target":{"type":"kind","kind":"agentChatDetached","index":0},
+        "target":{"type":"kind","kind":"notes","index":0},
         "hiDpi":true,
         "probes":[{"x":24,"y":24},{"x":320,"y":180}]
     }"#;
@@ -645,7 +642,7 @@ fn inspect_automation_window_request_round_trip_and_request_id() {
             assert_eq!(probes.len(), 2);
             match target.expect("target should be present") {
                 AutomationWindowTarget::Kind { kind, index } => {
-                    assert_eq!(kind, AutomationWindowKind::AgentChatDetached);
+                    assert_eq!(kind, AutomationWindowKind::Notes);
                     assert_eq!(index, Some(0));
                 }
                 other => panic!("Expected Kind target, got: {:?}", other),
@@ -661,8 +658,8 @@ fn automation_inspect_result_round_trip_and_request_id() {
         "inspect-1".into(),
         crate::protocol::AutomationInspectSnapshot {
             schema_version: crate::protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
-            window_id: "agentChatDetached:thread-1".into(),
-            window_kind: "AgentChatDetached".into(),
+            window_id: "notes:thread-1".into(),
+            window_kind: "Notes".into(),
             surface_kind: None,
             app_view_variant: None,
             native_footer_surface: None,
@@ -704,7 +701,7 @@ fn automation_inspect_result_round_trip_and_request_id() {
             snapshot,
         } => {
             assert_eq!(request_id, "inspect-1");
-            assert_eq!(snapshot.window_id, "agentChatDetached:thread-1");
+            assert_eq!(snapshot.window_id, "notes:thread-1");
             assert_eq!(snapshot.screenshot_width, Some(1440));
             assert_eq!(snapshot.pixel_probes.len(), 1);
         }

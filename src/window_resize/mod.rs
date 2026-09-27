@@ -351,21 +351,6 @@ const FOCUSED_TEXT_MINI_RESULT_HEIGHT: f32 = 150.0;
 const FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT: f32 = FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + 320.0;
 const FOCUSED_TEXT_MINI_RESIZE_ANIMATE: bool = true;
 
-pub(crate) fn focused_text_mini_input_height() -> f32 {
-    FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
-}
-
-pub(crate) fn focused_text_mini_result_height() -> f32 {
-    FOCUSED_TEXT_MINI_RESULT_HEIGHT
-}
-
-pub(crate) fn focused_text_mini_preview_height() -> f32 {
-    (FOCUSED_TEXT_MINI_RESULT_HEIGHT - FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT).max(0.0)
-}
-
-pub(crate) fn focused_text_mini_inner_height(window_height: f32) -> f32 {
-    (window_height - layout::WINDOW_BORDER_Y).max(0.0)
-}
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct FrameGeometry {
     x: f64,
@@ -1549,44 +1534,6 @@ mod resize_tests {
     #[test]
     fn test_main_window_width_constant() {
         assert_eq!(MAIN_WINDOW_WIDTH, 750.0);
-    }
-
-    #[test]
-    fn focused_text_mini_scope_row_is_included_in_every_phase_height() {
-        let height = |item_count| f32::from(height_for_view(ViewType::FocusedTextMini, item_count));
-
-        assert_eq!(
-            height(0),
-            FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT + layout::WINDOW_BORDER_Y
-        );
-        assert_eq!(
-            height(1),
-            FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT * 2.0 + layout::WINDOW_BORDER_Y
-        );
-        assert_eq!(
-            height(2),
-            FOCUSED_TEXT_MINI_RESULT_HEIGHT + layout::WINDOW_BORDER_Y
-        );
-        assert_eq!(
-            height(3),
-            FOCUSED_TEXT_MINI_RESULT_HEIGHT
-                + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
-                + layout::WINDOW_BORDER_Y
-        );
-        assert_eq!(
-            height(5),
-            FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT + layout::WINDOW_BORDER_Y
-        );
-        assert_eq!(
-            height(6),
-            FOCUSED_TEXT_MINI_VARIATIONS_HEIGHT
-                + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
-                + layout::WINDOW_BORDER_Y
-        );
-        assert_eq!(
-            focused_text_mini_inner_height(height(3)),
-            FOCUSED_TEXT_MINI_RESULT_HEIGHT + FOCUSED_TEXT_MINI_INPUT_ONLY_HEIGHT
-        );
     }
 
     #[test]

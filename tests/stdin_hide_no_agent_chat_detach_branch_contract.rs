@@ -44,100 +44,7 @@
 //! `"scriptList"`). This file pins the OTHER half: that Hide arms do NOT
 //! adopt the hotkey-path detach branch.
 
-const RUNTIME_STDIN_MATCH_CORE: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_core.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
-const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
-
-/// Extract the textual body of the `ExternalCommand::Hide` match arm from a
-/// dispatcher source file. We slice from the `ExternalCommand::Hide {` header
-/// up to the next `ExternalCommand::` head (which starts the following arm).
-/// This is a deliberately conservative body — it captures EVERY byte between
-/// the two markers, so any detach-related identifier living anywhere inside
-/// the Hide arm will be caught, not just ones near the top.
-fn hide_arm_body<'a>(src: &'a str, path: &str) -> &'a str {
-    let start_marker = "ExternalCommand::Hide { ref request_id }";
-    let start = src.find(start_marker).unwrap_or_else(|| {
-        panic!(
-            "{path}: could not locate `ExternalCommand::Hide {{` — the stdin \
-             dispatcher must contain a Hide arm for this contract to apply. \
-             If the Hide arm was removed or renamed, update this test; do \
-             not silently delete the contract."
-        )
-    });
-    // Find the next `ExternalCommand::` after the Hide arm head. The first
-    // occurrence AFTER `start + start_marker.len()` is the next arm.
-    let search_from = start + start_marker.len();
-    let next_offset_rel = src[search_from..]
-        .find("ExternalCommand::")
-        .unwrap_or_else(|| {
-            panic!(
-                "{path}: could not locate the next `ExternalCommand::` arm \
-                 after Hide — the dispatcher match block should have \
-                 additional arms (e.g. SetFilter, TriggerBuiltin). If Hide \
-                 is now the final arm, this helper needs to extend its \
-                 boundary search to a terminating `}}` brace instead."
-            )
-        });
-    let next_offset = search_from + next_offset_rel;
-    &src[start..next_offset]
-}
-
-const DETACH_SENTINELS: &[&str] = &[
-    // The detach call itself.
-    "open_chat_window_with_thread",
-    // The hotkey-path tracing event.
-    "hotkey_detach_agent_chat_requested",
-    "hotkey_detach_agent_chat_completed",
-    "hotkey_detach_agent_chat_aborted",
-    "hotkey_detach_agent_chat_failed",
-    // An AgentChatView-specific branch in the Hide arm. If a future refactor
-    // gates behavior on the current view being Agent Chat, the detach asymmetry
-    // has already leaked — flag it even before the actual detach call
-    // appears.
-    "AppView::AgentChatView",
-];
-
-fn assert_stdin_hide_arm_is_detach_free(src: &str, path: &str) {
-    let body = hide_arm_body(src, path);
-
-    assert!(
-        body.contains("platform::defer_hide_main_window(ctx);")
-            && body.contains("view.defer_reset_to_script_list_after_main_window_hidden("),
-        "{path} `ExternalCommand::Hide` arm must enqueue the native hide and \
-         then schedule a hidden ScriptList reset. A hide issued while in a \
-         subview (e.g. `FileSearchView` / `AgentChatView`) must not leak a \
-         stale subview tag across the next show, but it also must not render \
-         a visible ScriptList frame while the panel is closing."
-    );
-
-    assert!(
-        body.find("platform::defer_hide_main_window(ctx);")
-            < body.find("view.defer_reset_to_script_list_after_main_window_hidden("),
-        "{path} `ExternalCommand::Hide` arm must schedule its hidden reset \
-         after native hide is enqueued."
-    );
-
-    for sentinel in DETACH_SENTINELS {
-        assert!(
-            !body.contains(sentinel),
-            "{path} `ExternalCommand::Hide` arm contains detach-path \
-             sentinel `{sentinel}`. The stdin hide path is intentionally \
-             asymmetric with the hotkey-toggle detach path: a programmatic \
-             `{{\"type\":\"hide\"}}` request must HIDE the main window, not \
-             spawn a detached Agent Chat popup as a side effect. The hotkey-toggle \
-             detach lives in `src/main_entry/app_run_setup.rs` around the \
-             `hotkey_detach_agent_chat_requested` tracing event and is gated on the \
-             user pressing the global hotkey. If you need a stdin command \
-             that detaches Agent Chat, add a NEW explicit command (e.g. \
-             `ExternalCommand::DetachAgentChat`) rather than folding detach \
-             into `Hide` — the two user intents are different (\"toggle my \
-             launcher, keep my chat alive\" vs. \"make this window go \
-             away\") and must stay wired to two distinct commands."
-        );
-    }
-}
 
 #[test]
 fn hidden_hide_reset_helper_resets_view_and_rekeys_surface() {
@@ -154,22 +61,4 @@ fn hidden_hide_reset_helper_resets_view_and_rekeys_surface() {
         "hidden reset helper must own the post-hide ScriptList reset, \
          automation surface re-key, and hidden visibility update"
     );
-}
-
-#[test]
-fn runtime_stdin_match_core_hide_arm_has_no_detach_branch() {
-    assert_stdin_hide_arm_is_detach_free(
-        RUNTIME_STDIN_MATCH_CORE,
-        "src/main_entry/runtime_stdin_match_core.rs",
-    );
-}
-
-#[test]
-fn runtime_stdin_hide_arm_has_no_detach_branch() {
-    assert_stdin_hide_arm_is_detach_free(RUNTIME_STDIN, "src/main_entry/runtime_stdin.rs");
-}
-
-#[test]
-fn app_run_setup_hide_arm_has_no_detach_branch() {
-    assert_stdin_hide_arm_is_detach_free(APP_RUN_SETUP, "src/main_entry/app_run_setup.rs");
 }

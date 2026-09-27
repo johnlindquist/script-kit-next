@@ -163,7 +163,7 @@ impl ScriptListApp {
                 self.open_file_search(String::new(), cx);
             }
             AppRoute::OpenTabAi => {
-                self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
             }
             AppRoute::OpenCurrentAppCommands => {
                 if let Err(e) = self.open_current_app_commands_from_tray(cx) {

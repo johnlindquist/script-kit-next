@@ -122,18 +122,17 @@ pub use types::{
     LAUNCHER_SURFACE_CONTRACT_SCHEMA_VERSION, TRANSACTION_TRACE_SCHEMA_VERSION,
 };
 
-#[cfg(any(test, feature = "owned-ui-evaluation"))]
-pub use types::{
-    AgentChatFixtureCommand, DesignCommand, EvaluationLimits, FixtureControl, FixtureDescriptor,
-    FlowFixtureCommand, NativeSafetyProbe, NotesFixtureCommand, ObservedEffect,
-    OneWindowFixtureCommand, OneWindowTalkDestination, OwnedFileSearchPreviewCondition,
-    OwnedFileSearchStreamCondition, OwnedFrameCursor, OwnedResponseEncoding, OwnedRuntimeIdentity,
-    OwnedSearchProviderCondition, OwnedSearchQueryStamp, ScheduledFrameRequirement,
-    ScopedActionReceipt, SdkChatFixtureCommand, SdkCompletionChannel, SdkPromptCommand,
-    SdkPromptFixtureId, SearchFixtureCommand, ThemeFaultOperation, ThemeFixtureCommand,
-    OWNED_RESPONSE_CODEC,
-};
 pub use types::{
     CompletedFrameIdentity, LiveThemeEdit, ThemeInvalidation, ThemeInvalidationCause,
     MAX_LIVE_THEME_EDITS, OWNED_EVALUATION_LIMITS,
+};
+#[cfg(any(test, feature = "owned-ui-evaluation"))]
+pub use types::{
+    DesignCommand, EvaluationLimits, FixtureControl, FixtureDescriptor, FlowFixtureCommand,
+    NativeSafetyProbe, NotesFixtureCommand, ObservedEffect, OneWindowFixtureCommand,
+    OneWindowTalkDestination, OwnedFileSearchPreviewCondition, OwnedFileSearchStreamCondition,
+    OwnedFrameCursor, OwnedResponseEncoding, OwnedRuntimeIdentity, OwnedSearchProviderCondition,
+    OwnedSearchQueryStamp, ScheduledFrameRequirement, ScopedActionReceipt, SdkChatFixtureCommand,
+    SdkCompletionChannel, SdkPromptCommand, SdkPromptFixtureId, SearchFixtureCommand,
+    ThemeFaultOperation, ThemeFixtureCommand, OWNED_RESPONSE_CODEC,
 };

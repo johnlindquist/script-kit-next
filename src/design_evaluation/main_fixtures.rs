@@ -378,28 +378,6 @@ pub(crate) fn mount_main_fixture(
                 selected_index: 0,
             }
         }
-        "main.agent-chat-history" => {
-            use crate::ai::agent_chat::ui::history::{SavedConversation, SavedMessage};
-            crate::ai::agent_chat::ui::history::seed_owned_history(&[SavedConversation {
-                session_id: "owned-main-history".into(),
-                timestamp: "2026-08-28T12:00:00Z".into(),
-                custom_title: Some("Launch Review".into()),
-                messages: vec![
-                    SavedMessage {
-                        role: "user".into(),
-                        body: "Review the launch checklist".into(),
-                    },
-                    SavedMessage {
-                        role: "assistant".into(),
-                        body: "The release checklist has three items.".into(),
-                    },
-                ],
-            }])?;
-            AppView::AgentChatHistoryView {
-                filter: String::new(),
-                selected_index: 0,
-            }
-        }
         "main.browser-history" => {
             app.cached_browser_history = fixture_browser_history();
             AppView::BrowserHistoryView {
