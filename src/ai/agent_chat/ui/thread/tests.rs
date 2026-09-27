@@ -3200,6 +3200,109 @@ fn agent_history_resume_forces_full_reset_without_duplicate_rows() {
     assert_eq!(answers, vec!["first answer", "second answer"]);
 }
 
+fn saved(role: &str, body: &str) -> super::super::history::SavedMessage {
+    super::super::history::SavedMessage {
+        role: role.to_string(),
+        body: body.to_string(),
+    }
+}
+
+#[gpui::test]
+fn loading_a_saved_chat_starts_a_clean_transcript_with_nothing_pending(
+    cx: &mut gpui::TestAppContext,
+) {
+    let mut thread = test_thread(
+        vec![ContentBlock::Text(TextContent::new("stale context"))],
+        true,
+    );
+    thread.push_message(AgentChatThreadMessageRole::User, "old ask");
+    thread.push_message(AgentChatThreadMessageRole::Assistant, "old answer");
+    thread
+        .streaming_text_buffer
+        .push_chunk("unflushed tail".to_string());
+    thread.status = AgentChatThreadStatus::Streaming;
+    thread.stream_task = Some(gpui::Task::ready(()));
+    thread.stream_started_at = Some(std::time::Instant::now());
+    thread.active_plan_entries.push("old plan".to_string());
+    thread.tool_call_lookup.insert("old-call".to_string(), 0);
+    thread.active_mode_id = Some("code".to_string());
+    thread.available_commands.push("/old".to_string());
+    thread.usage_tokens = Some((10, 20));
+    thread.usage_cost_usd = Some(0.25);
+    thread.pending_ambient_context_enabled = true;
+    let generation_before = thread.transcript_generation;
+    let entity = cx.new(|_| thread);
+
+    entity.update(cx, |thread, cx| {
+        thread.load_saved_messages(
+            &[
+                saved("User", "saved ask"),
+                saved("Assistant", "saved answer"),
+                saved("Unknown", "saved note"),
+            ],
+            cx,
+        );
+    });
+
+    cx.read_entity(&entity, |thread, _cx| {
+        assert!(
+            thread.transcript_generation > generation_before,
+            "a reload must retire every stream event from the replaced transcript"
+        );
+        let rows: Vec<_> = thread
+            .messages
+            .iter()
+            .map(|message| (message.id, message.role, message.body.as_ref()))
+            .collect();
+        assert_eq!(
+            rows,
+            vec![
+                (1, AgentChatThreadMessageRole::User, "saved ask"),
+                (2, AgentChatThreadMessageRole::Assistant, "saved answer"),
+                (3, AgentChatThreadMessageRole::System, "saved note"),
+            ],
+            "the saved chat replaces the old rows and numbers them from 1"
+        );
+        assert_eq!(thread.status, AgentChatThreadStatus::Idle);
+        assert!(thread.stream_task.is_none());
+        assert!(thread.stream_started_at.is_none());
+        assert!(thread.pending_permission.is_none());
+        assert!(thread.active_plan_entries.is_empty());
+        assert!(thread.active_tool_calls.is_empty());
+        assert!(thread.tool_call_lookup.is_empty());
+        assert!(thread.active_mode_id.is_none());
+        assert!(thread.available_commands.is_empty());
+        assert!(thread.usage_tokens.is_none());
+        assert!(thread.usage_cost_usd.is_none());
+        assert!(
+            thread.pending_context_blocks.is_empty()
+                && thread.pending_context_items.is_empty()
+                && !thread.pending_context_consumed
+                && !thread.pending_ambient_context_enabled,
+            "context staged for the old chat must not ride along into the loaded one"
+        );
+    });
+}
+
+#[gpui::test]
+fn a_quick_question_never_loads_a_saved_chat(cx: &mut gpui::TestAppContext) {
+    let mut thread = test_thread(Vec::new(), false);
+    thread.session_policy = AgentChatSessionPolicy::QuickAi;
+    thread.push_message(AgentChatThreadMessageRole::User, "quick ask");
+    let generation_before = thread.transcript_generation;
+    let entity = cx.new(|_| thread);
+
+    entity.update(cx, |thread, cx| {
+        thread.load_saved_messages(&[saved("User", "retained ask")], cx);
+    });
+
+    cx.read_entity(&entity, |thread, _cx| {
+        assert_eq!(thread.transcript_generation, generation_before);
+        assert_eq!(thread.messages.len(), 1);
+        assert_eq!(thread.messages[0].body.as_ref(), "quick ask");
+    });
+}
+
 #[test]
 fn agent_fork_forces_full_reset_without_stale_append() {
     let mut thread = test_thread(Vec::new(), false);

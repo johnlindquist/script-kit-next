@@ -3,15 +3,11 @@
 
 use std::fs;
 
-/// `builtin_execution.rs` `include!`s its utility action states from a sibling file.
-fn builtin_execution_with_utility_actions() -> String {
-    let mut content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
-    content.push_str(
-        &fs::read_to_string("src/app_execute/builtin_execution_utility_actions.rs")
-            .expect("Failed to read builtin execution utility actions"),
-    );
-    content
+/// What the utility actions say is unit-tested in
+/// `utility_builtin_actions::utility_builtin_action_tests`; these read only the executors.
+fn builtin_execution_source() -> String {
+    fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler")
 }
 
 /// Verify that the action handler files have the expected dispatch structure.
@@ -1390,17 +1386,8 @@ fn permission_assistant_builtin_uses_named_action_states() {
 
 #[test]
 fn utility_open_builtin_uses_named_action_states() {
-    let content = builtin_execution_with_utility_actions();
+    let content = builtin_execution_source();
 
-    assert!(
-        content.contains("enum UtilityOpenBuiltinAction")
-            && content.contains("MainWindow")
-            && content.contains("ScratchPad")
-            && content.contains("QuickTerminal")
-            && content.contains("ClaudeCode")
-            && content.contains("ProcessManager"),
-        "safe utility open built-ins should be routed through named action states"
-    );
     assert!(
         content.contains("UtilityCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_utility_open_builtin(")
@@ -1739,13 +1726,8 @@ fn permission_command_builtin_uses_named_action_states() {
 
 #[test]
 fn utility_process_builtin_uses_named_action_states() {
-    let content = builtin_execution_with_utility_actions();
+    let content = builtin_execution_source();
 
-    assert!(
-        content.contains("enum UtilityProcessBuiltinAction")
-            && content.contains("StopAllProcesses"),
-        "Utility process built-ins should be routed through named action states"
-    );
     assert!(
         content.contains("UtilityCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_utility_process_builtin(")
@@ -1756,10 +1738,8 @@ fn utility_process_builtin_uses_named_action_states() {
     );
     assert!(
         content.contains("PROCESS_MANAGER.active_count()")
-            && content.contains("PROCESS_MANAGER.kill_all_processes()")
-            && content.contains("Stopped {process_count} running script process(es).")
-            && content.contains("stop_all_processes"),
-        "Stop All Processes should preserve its guarded count check, destructive kill path, and success detail"
+            && content.contains("PROCESS_MANAGER.kill_all_processes()"),
+        "Stop All Processes should preserve its guarded count check and destructive kill path"
     );
 }
 
@@ -1788,17 +1768,8 @@ fn process_manager_terminate_selected_uses_named_action_state() {
 
 #[test]
 fn utility_command_dispatch_uses_named_wrapper_state() {
-    let content = builtin_execution_with_utility_actions();
+    let content = builtin_execution_source();
 
-    assert!(
-        content.contains("enum UtilityCommandBuiltinAction")
-            && content.contains("Open(UtilityOpenBuiltinAction)")
-            && content.contains("Process(UtilityProcessBuiltinAction)")
-            && content.contains("Recipe(UtilityRecipeBuiltinAction)")
-            && content.contains("DoInCurrentApp(UtilityDoInCurrentAppBuiltinAction)")
-            && content.contains("CurrentAppCommands(UtilityCurrentAppCommandsBuiltinAction)"),
-        "Utility command dispatch should use a named wrapper state over existing leaf actions"
-    );
     assert!(
         content
             .contains("let utility_action = UtilityCommandBuiltinAction::from_command(*cmd_type)")
@@ -1814,12 +1785,10 @@ fn utility_command_dispatch_uses_named_wrapper_state() {
 
 #[test]
 fn utility_turn_this_into_command_builtin_uses_named_action_states() {
-    let content = builtin_execution_with_utility_actions();
+    let content = builtin_execution_source();
 
     assert!(
-        content.contains("TurnThisIntoCommand")
-            && content.contains("UtilityRecipeBuiltinAction::from_command(command)")
-            && content.contains("fn execute_utility_turn_this_into_command_builtin("),
+        content.contains("fn execute_utility_turn_this_into_command_builtin("),
         "Turn This Into a Command should share named utility recipe action routing"
     );
     assert!(
@@ -1834,30 +1803,24 @@ fn utility_turn_this_into_command_builtin_uses_named_action_states() {
     );
     assert!(
         content.contains("build_current_app_command_recipe")
-            && content.contains("format!(\"Automation recipe copied: {suggested_script_name}\")")
-            && content.contains("format!(\"Failed to serialize current app command recipe: {error}\")")
-            && content.contains("spawn_generate_script_from_recipe_after_hide")
-            && content.contains("turn_this_into_command_capture_failed"),
-        "Turn This Into a Command should preserve recipe copy, HUD, deferred generation, and capture failure copy"
+            && content.contains("spawn_generate_script_from_recipe_after_hide"),
+        "Turn This Into a Command should preserve recipe capture and deferred generation"
     );
 }
 
 #[test]
 fn utility_do_in_current_app_builtin_uses_named_action_states() {
-    let content = builtin_execution_with_utility_actions();
+    let content = builtin_execution_source();
 
     assert!(
-        content.contains("enum UtilityDoInCurrentAppBuiltinAction")
-            && content.contains("UtilityDoInCurrentAppBuiltinAction::from_command(command)")
-            && content.contains("fn execute_utility_do_in_current_app_builtin("),
+        content.contains("fn execute_utility_do_in_current_app_builtin("),
         "Do in Current App should route through a named utility action state"
     );
     assert!(
         content.contains("action.open_palette_success_detail()")
             && content.contains("action.generate_script_success_detail()")
             && content.contains("action.capture_failure_detail()")
-            && content.contains("action.capture_failure_message(&e)")
-            && content.contains("format!(\"Failed to load frontmost app menu bar: {error}\")"),
+            && content.contains("action.capture_failure_message(&e)"),
         "Do in Current App branch outcomes should use named state details"
     );
     assert!(
@@ -1872,12 +1835,10 @@ fn utility_do_in_current_app_builtin_uses_named_action_states() {
 
 #[test]
 fn utility_current_app_commands_builtin_uses_named_action_states() {
-    let content = builtin_execution_with_utility_actions();
+    let content = builtin_execution_source();
 
     assert!(
-        content.contains("enum UtilityCurrentAppCommandsBuiltinAction")
-            && content.contains("UtilityCurrentAppCommandsBuiltinAction::from_command(command)")
-            && content.contains("fn execute_utility_current_app_commands_builtin("),
+        content.contains("fn execute_utility_current_app_commands_builtin("),
         "Current App Commands should route through a named utility action state"
     );
     assert!(
@@ -1886,10 +1847,7 @@ fn utility_current_app_commands_builtin_uses_named_action_states() {
             && content.contains("action.capture_failure_message(&e)")
             && content.contains(
                 "UtilityCurrentAppCommandsBuiltinAction::Open.refresh_failure_message(&error)"
-            )
-            && content.contains("open_current_app_commands")
-            && content.contains("current_app_commands_capture_failed")
-            && content.contains("format!(\"Failed to refresh current app commands: {error}\")"),
+            ),
         "Current App Commands outcomes should use named state details"
     );
     assert!(
@@ -2476,24 +2434,13 @@ fn script_ranking_handler_uses_named_action_states() {
 fn deferred_agent_chat_handoff_uses_named_failure_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
-    let deferred = fs::read_to_string("src/app_actions/handle_action/deferred_agent_chat.rs")
-        .expect("Failed to read deferred Agent Chat action state");
 
+    // The per-action failure words are unit-tested in
+    // `deferred_agent_chat_action::deferred_agent_chat_action_tests`.
     assert!(
-        content.contains("include!(\"deferred_agent_chat.rs\");")
-            && deferred.contains("enum DeferredAgentChatAction")
-            && deferred.contains("fn name(&self) -> &'static str")
-            && deferred.contains("fn failure_message(&self, error: impl std::fmt::Display)")
-            && content.contains("let failure = action.failure_message(\"\");")
+        content.contains("let failure = action.failure_message(\"\");")
             && content.contains("self.notice_failed(format!(\"{failure}{error}\"), cx);"),
         "deferred Agent Chat handoff failure feedback should derive from the named deferred action state"
-    );
-    assert!(
-        deferred.contains("Couldn't open the chat: {error}")
-            && deferred.contains("Couldn't attach the image: {error}")
-            && deferred.contains("Couldn't attach the file: {error}")
-            && deferred.contains("Couldn't apply the AI preset: {error}"),
-        "deferred Agent Chat handoff state should preserve action-specific failure copy"
     );
     // The legacy AI window module is deleted, so any reference to its entry
     // points now fails compilation — the compiler enforces the absence.

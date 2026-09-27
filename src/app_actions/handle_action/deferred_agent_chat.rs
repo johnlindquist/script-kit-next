@@ -1,44 +1,6 @@
-/// What an action hands the model's chat: words that go now or wait in the input, and an image
-/// or file that waits in the line above it.
-enum DeferredAgentChatAction {
-    OpenOnly,
-    SetInput {
-        text: String,
-        submit: bool,
-    },
-    SetInputWithImage {
-        text: String,
-        image_base64: String,
-        submit: bool,
-    },
-    AddAttachment {
-        path: String,
-    },
-    ApplyPreset {
-        preset_id: String,
-    },
-}
+include!("deferred_agent_chat_action.rs");
 
 impl DeferredAgentChatAction {
-    fn name(&self) -> &'static str {
-        match self {
-            Self::OpenOnly => "open_only",
-            Self::SetInput { .. } => "set_input",
-            Self::SetInputWithImage { .. } => "set_input_with_image",
-            Self::AddAttachment { .. } => "add_attachment",
-            Self::ApplyPreset { .. } => "apply_preset",
-        }
-    }
-
-    fn failure_message(&self, error: impl std::fmt::Display) -> String {
-        match self {
-            Self::OpenOnly | Self::SetInput { .. } => format!("Couldn't open the chat: {error}"),
-            Self::SetInputWithImage { .. } => format!("Couldn't attach the image: {error}"),
-            Self::AddAttachment { .. } => format!("Couldn't attach the file: {error}"),
-            Self::ApplyPreset { .. } => format!("Couldn't apply the AI preset: {error}"),
-        }
-    }
-
     fn words(text: String, submit: bool) -> crate::one_window::chat_entry::ChatEntry {
         use crate::one_window::chat_entry::ChatEntry;
         if submit && !text.trim().is_empty() {

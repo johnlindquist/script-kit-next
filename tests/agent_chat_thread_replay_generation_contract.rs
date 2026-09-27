@@ -1,8 +1,6 @@
 //! Source-level contract for Agent Chat replay generation guards.
 
 const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
-const AGENT_CHAT_THREAD_PERSISTENCE_SOURCE: &str =
-    include_str!("../src/ai/agent_chat/ui/thread/persistence.rs");
 
 fn fn_body(source: &str, signature: &str, next_signature: &str) -> String {
     let start = source.find(signature).expect("signature should exist");
@@ -48,44 +46,4 @@ fn bind_stream_captures_and_checks_generation_before_apply_event() {
         capture < compare && compare < apply,
         "stream generation capture/check must happen before apply_event"
     );
-}
-
-#[test]
-fn load_saved_messages_bumps_generation_and_clears_transient_state() {
-    let body = fn_body(
-        AGENT_CHAT_THREAD_PERSISTENCE_SOURCE,
-        "pub(crate) fn load_saved_messages(",
-        "\n    }\n",
-    );
-    let clear_context = fn_body(
-        AGENT_CHAT_THREAD_PERSISTENCE_SOURCE,
-        "fn clear_context_for_saved_messages(",
-        "\n    }\n",
-    );
-    assert!(
-        body.contains("self.clear_context_for_saved_messages();")
-            && clear_context.contains("self.clear_all_pending_context(\"load_saved_messages\");"),
-        "load_saved_messages must clear all pending context"
-    );
-    for needle in [
-        "self.bump_transcript_generation(\"load_saved_messages\");",
-        "self.stream_task = None;",
-        "self.stream_started_at = None;",
-        "self.pending_permission = None;",
-        "self.status = AgentChatThreadStatus::Idle;",
-        "self.active_plan_entries.clear();",
-        "self.active_tool_calls.clear();",
-        "self.tool_call_lookup.clear();",
-        "self.active_mode_id = None;",
-        "self.available_commands.clear();",
-        "self.usage_tokens = None;",
-        "self.usage_cost_usd = None;",
-        "self.next_message_id = 1;",
-        "self.messages.clear();",
-    ] {
-        assert!(
-            body.contains(needle),
-            "load_saved_messages must contain {needle}"
-        );
-    }
 }
