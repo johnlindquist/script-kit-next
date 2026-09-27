@@ -435,9 +435,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
 
                             ExternalCommand::OpenNotes => {
-                                logging::log("STDIN", "Opening notes window via stdin command");
-                                if let Err(e) = notes::open_notes_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open notes window: {}", e));
+                                logging::log("STDIN", "Opening today's note via stdin command");
+                                if let Err(e) = notes::open_note(ctx, notes::NoteTarget::Today) {
+                                    logging::log("STDIN", &format!("Failed to open notes: {}", e));
                                 }
                             }
                             ExternalCommand::OpenAbout => {
