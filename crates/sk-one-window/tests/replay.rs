@@ -4,7 +4,7 @@
 //! the comparison is per kind of output, in order, after dropping consecutive repeats. What the
 //! window shows (the line above the input, the first header, what ↵ says, the list) is compared as
 //! each page turn left it; what happened (what ran, ignored Enters, held messages) is compared
-//! event by event. Heights are reported, not held.
+//! event by event. Heights are compared as the window showed them each turn.
 
 use std::path::{Path, PathBuf};
 
@@ -48,6 +48,10 @@ struct Player {
     listed: bool,
     outcomes: Vec<Outcome>,
     turns: Vec<Turn>,
+    /// The last height the page measured, and whether this turn changed the view or measured.
+    px: Option<f32>,
+    turn_view: bool,
+    turn_content: bool,
 }
 
 /// A page turn the replay observed: one started by an input, or by one of the reducer's timers.
@@ -69,6 +73,9 @@ impl Player {
             listed: false,
             outcomes: Vec::new(),
             turns: Vec::new(),
+            px: None,
+            turn_view: false,
+            turn_content: false,
         }
     }
 
@@ -85,6 +92,14 @@ impl Player {
     }
 
     fn close_turn(&mut self) {
+        // The host measures after every change; the recorder only writes a height that changed.
+        if let (Some(t), Some(px), true, false) =
+            (self.turn, self.px, self.turn_view, self.turn_content)
+        {
+            self.feed(t, Event::Content { px });
+        }
+        self.turn_view = false;
+        self.turn_content = false;
         if let Some(t) = self.turn.take() {
             let outcomes = std::mem::take(&mut self.outcomes);
             self.obs.observe(t, &self.win, &outcomes);
@@ -121,6 +136,11 @@ impl Player {
         if matches!(line.ev, Ev::Names { .. }) {
             self.listed = true;
         }
+        let (view, px) = match &line.ev {
+            Ev::View { .. } => (true, None),
+            Ev::Content { px } => (false, Some(*px)),
+            _ => (false, None),
+        };
         if starts_turn {
             self.ticks_before(line.t);
             self.close_turn();
@@ -130,6 +150,11 @@ impl Player {
                 at: line.t,
                 tick: false,
             });
+        }
+        self.turn_view |= view;
+        if px.is_some() {
+            self.px = px;
+            self.turn_content = true;
         }
         let t = self.turn.unwrap_or(line.t);
         for e in events_of(line, self.turn_run.as_ref(), &self.win) {
@@ -309,6 +334,35 @@ fn settled(expected: &[(OutLine, usize)], k: &str) -> Vec<String> {
     seq(keep.map(|(_, (l, _))| l), k)
 }
 
+/// Heights as the window showed them: the last decision of each turn, since nothing paints between
+/// decisions made in the same turn (a key's hold and the grow its longer list asks for paint once, as
+/// the grow), without grows to the height it already had.
+fn heights<'a, G: PartialEq>(lines: impl Iterator<Item = (&'a OutLine, G)>) -> Vec<String> {
+    let mut shown: Vec<(G, &str, f32)> = Vec::new();
+    for (l, group) in lines {
+        let Out::Height { px, mode } = &l.out else {
+            continue;
+        };
+        if shown.last().is_some_and(|(g, ..)| *g == group) {
+            shown.pop();
+        }
+        shown.push((group, mode, *px));
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut at: Option<f32> = None;
+    for (_, mode, px) in shown {
+        let still = at.is_some_and(|was| (was - px).abs() < 2.0);
+        at = Some(px);
+        if mode == "grow" && still {
+            continue;
+        }
+        if out.last().map(String::as_str) != Some(mode) {
+            out.push(mode.to_string());
+        }
+    }
+    out
+}
+
 /// Differences these traces can't settle, and why. Each one must still differ: once a trace
 /// records what's missing, its line comes off this list.
 const KNOWN: &[(&str, &str, &str)] = &[
@@ -363,6 +417,51 @@ const KNOWN: &[(&str, &str, &str)] = &[
         "slot",
         "dictation records what it typed or set (win.record) and no input records it",
     ),
+    (
+        "s02-before-you-type",
+        "height",
+        "the page's window follows a shorter strip or list through CSS auto height without \
+         calling resize(), so that instant shrink leaves no line; the reducer animates it",
+    ),
+    (
+        "s05-no-menus",
+        "height",
+        "the page's window follows a shorter strip or list through CSS auto height without \
+         calling resize(), so that instant shrink leaves no line; the reducer animates it",
+    ),
+    (
+        "s08-answers",
+        "height",
+        "the page clears the input when it goes home, its input listener counts that as typing, \
+         and it holds 300 ms before shrinking to the list that arrives; the reducer shrinks at \
+         once",
+    ),
+    (
+        "s09-model",
+        "height",
+        "the page clears the input when it goes home, its input listener counts that as typing, \
+         and it holds 300 ms before shrinking to the list that arrives; the reducer shrinks at \
+         once",
+    ),
+    (
+        "s12-take-it-back",
+        "height",
+        "the page's window follows a shorter strip or list through CSS auto height without \
+         calling resize(), so that instant shrink leaves no line; the reducer animates it",
+    ),
+    (
+        "s13-history",
+        "height",
+        "the page clears the input when it goes home, its input listener counts that as typing, \
+         and it holds 300 ms before shrinking to the list that arrives; the reducer shrinks at \
+         once",
+    ),
+    (
+        "s19-fast-hands",
+        "height",
+        "the page's window follows a shorter strip or list through CSS auto height without \
+         calling resize(), so that instant shrink leaves no line; the reducer animates it",
+    ),
 ];
 
 #[test]
@@ -372,18 +471,23 @@ fn golden_traces_replay() {
         eprintln!("no traces in fixtures/traces yet");
         return;
     }
-    let strict = ["slot", "header", "run", "ignored", "held", "enter", "list"];
-    // The page's height lines are incomplete (grows through CSS leave no line, and govern() holds
-    // at a min-height its layout engine measured), so heights are only reported.
-    let report = ["height"];
+    let strict = [
+        "slot", "header", "run", "ignored", "held", "enter", "list", "height",
+    ];
     let mut failures = Vec::new();
     let mut known_seen = Vec::new();
     for path in &files {
         let name = path.file_stem().unwrap().to_string_lossy().to_string();
         let r = replay(path);
-        for k in strict.iter().chain(report.iter()) {
-            let want = settled(&r.expected, k);
-            let got = seq(r.got.iter(), k);
+        for k in &strict {
+            let (want, got) = if *k == "height" {
+                (
+                    heights(r.expected.iter().map(|(l, turn)| (l, *turn))),
+                    heights(r.got.iter().map(|l| (l, l.t))),
+                )
+            } else {
+                (settled(&r.expected, k), seq(r.got.iter(), k))
+            };
             if want != got {
                 let first = want
                     .iter()
@@ -395,9 +499,7 @@ fn golden_traces_replay() {
                     want.get(first..(first + 4).min(want.len())).unwrap_or(&[]),
                     got.get(first..(first + 4).min(got.len())).unwrap_or(&[]),
                 );
-                if !strict.contains(k) {
-                    eprintln!("(report) {msg}");
-                } else if let Some(known) = KNOWN.iter().find(|(t, kk, _)| *t == name && kk == k) {
+                if let Some(known) = KNOWN.iter().find(|(t, kk, _)| *t == name && kk == k) {
                     eprintln!("(known: {}) {msg}", known.2);
                     known_seen.push(known);
                 } else {

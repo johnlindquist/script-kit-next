@@ -1,4 +1,4 @@
-{"meta":{"chapter":"s17-dictation","speed":3,"mode":"demo","recordedAt":"2026-09-27T00:08:48.629Z","ok":true,"attempts":1,"durationMs":27525,"url":"/lab/s17-dictation.html?record=1&speed=3"}}
+{"meta":{"chapter":"s17-dictation","speed":3,"mode":"demo","recordedAt":"2026-09-27T02:48:21.992Z","ok":true,"attempts":1,"durationMs":27520,"url":"/lab/s17-dictation.html?record=1&speed=3"}}
 {"t":0,"ev":"init","holdMs":8000,"focused":{"kind":"window","label":"Front window","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","icon":"window"},"history":[],"text":"","ctx":"mail","connected":[]}
 {"t":0,"ev":"content","px":356}
 {"t":0,"out":"height","mode":"grow","px":356,"initial":true}
@@ -9,202 +9,202 @@
 {"t":1,"ev":"names","text":"","rows":[{"key":"suggested:mail","title":"Mail","pinned":true,"head":"Suggested","enterLabel":"Open Mail"},{"key":"suggested:slack","title":"Slack","pinned":true,"head":null,"enterLabel":"Open Slack"},{"key":"suggested:notes","title":"Notes","pinned":true,"head":null,"enterLabel":"Open Notes"}]}
 {"t":1,"ev":"dismiss","app":"Mail"}
 {"t":182,"ev":"view","op":"home","from":null}
-{"t":4196,"ev":"key","key":"Fn"}
+{"t":4197,"ev":"key","key":"Fn"}
 {"t":4197,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:1:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
 {"t":4200,"ev":"content","px":355,"via":"open"}
-{"t":4200,"out":"enter","id":"voice:1:listening","label":"Waits for Jev","armed":false}
-{"t":4200,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
-{"t":4380,"ev":"text","text":"Hi"}
+{"t":4201,"out":"enter","id":"voice:1:listening","label":"Waits for Jev","armed":false}
+{"t":4201,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
+{"t":4381,"ev":"text","text":"Hi"}
 {"t":4493,"ev":"text","text":"Hi Sarah,"}
 {"t":4698,"ev":"text","text":"Hi Sarah, thanks"}
-{"t":4825,"ev":"text","text":"Hi Sarah, thanks for"}
-{"t":4940,"ev":"text","text":"Hi Sarah, thanks for checking"}
-{"t":4961,"ev":"line","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","icon":"type","hints":[["esc","drop"]]}
-{"t":4961,"ev":"viewEnter","id":"voice:1:type","label":"Type it into Mail","onTop":true}
-{"t":4961,"out":"enter","id":"voice:1:type","label":"Type it into Mail","armed":true}
-{"t":4961,"out":"slot","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","dimmed":true}
-{"t":4961,"out":"header","words":"Listening","view":"voice","head":"Sounds like you're writing to Sarah"}
-{"t":5081,"ev":"text","text":"Hi Sarah, thanks for checking in."}
-{"t":5276,"ev":"text","text":"Hi Sarah, thanks for checking in. The"}
-{"t":5395,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated"}
-{"t":5541,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline"}
-{"t":5676,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is"}
-{"t":5797,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached,"}
-{"t":5961,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and"}
-{"t":6098,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll"}
-{"t":6225,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have"}
-{"t":6340,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the"}
-{"t":6482,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots"}
-{"t":6612,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots to"}
-{"t":6729,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots to marketing"}
-{"t":6875,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots to marketing by"}
-{"t":7010,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots to marketing by Friday."}
-{"t":7011,"out":"text","text":"… is attached, and I'll have the screenshots to marketing by Friday.","by":"page","silent":true}
-{"t":7596,"ev":"key","key":"Enter"}
-{"t":7596,"ev":"dismiss","app":"Mail"}
-{"t":7779,"ev":"view","op":"home","from":"voice"}
-{"t":7779,"ev":"line","clear":true,"via":"home"}
-{"t":7780,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":true}
-{"t":7780,"ev":"content","px":356,"via":"home"}
-{"t":7781,"out":"slot","kind":"recent","label":"Last","title":"Typed 20 words into Mail","sub":"just now","dimmed":true}
-{"t":7781,"out":"header","words":"Suggested"}
-{"t":7781,"out":"text","text":"","by":"page","silent":true}
-{"t":8747,"ev":"key","key":"Fn"}
-{"t":8747,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:2:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
-{"t":8748,"ev":"content","px":355,"via":"open"}
-{"t":8748,"out":"enter","id":"voice:2:listening","label":"Waits for Jev","armed":false}
-{"t":8748,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
-{"t":8895,"ev":"text","text":"remind"}
-{"t":9005,"ev":"text","text":"remind me"}
-{"t":9145,"ev":"text","text":"remind me to"}
-{"t":9270,"ev":"text","text":"remind me to send"}
-{"t":9384,"ev":"text","text":"remind me to send Sarah"}
-{"t":9384,"ev":"viewEnter","id":"voice:2:ask","label":"Do it as a request","onTop":true}
-{"t":9384,"out":"enter","id":"voice:2:ask","label":"Do it as a request","armed":true}
-{"t":9384,"out":"header","words":"Listening","view":"voice","head":"Sounds like a request"}
-{"t":9526,"ev":"text","text":"remind me to send Sarah the"}
-{"t":9656,"ev":"text","text":"remind me to send Sarah the deck"}
-{"t":9775,"ev":"text","text":"remind me to send Sarah the deck on"}
-{"t":9920,"ev":"text","text":"remind me to send Sarah the deck on Friday"}
-{"t":10056,"ev":"text","text":"remind me to send Sarah the deck on Friday at"}
-{"t":10178,"ev":"text","text":"remind me to send Sarah the deck on Friday at ten"}
-{"t":10345,"ev":"viewEnter","id":"voice:2:ask","label":"Remind me to send Sarah the deck at ten on Friday","onTop":true}
-{"t":10345,"out":"enter","id":"voice:2:ask","label":"Remind me to send Sarah the deck at ten on Friday","armed":false}
-{"t":10713,"ev":"key","key":"Enter"}
-{"t":10713,"ev":"view","op":"home","from":"voice"}
-{"t":10715,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":false}
-{"t":10715,"ev":"content","px":356,"via":"home"}
-{"t":10715,"out":"slot","kind":"recent","label":"Last","title":"Remind me to send Sarah the deck at ten on Friday","sub":"just now","dimmed":true}
-{"t":10715,"out":"header","words":"Suggested"}
-{"t":10715,"out":"text","text":"","by":"page","silent":true}
-{"t":10715,"out":"toast","text":"Added · Remind me to send Sarah the deck at ten on Friday"}
-{"t":11595,"ev":"key","key":"Fn"}
-{"t":11595,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:3:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
-{"t":11596,"ev":"content","px":355,"via":"open"}
-{"t":11596,"out":"enter","id":"voice:3:listening","label":"Waits for Jev","armed":false}
-{"t":11596,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
-{"t":11697,"ev":"text","text":"Can"}
-{"t":11808,"ev":"text","text":"Can you"}
-{"t":11945,"ev":"text","text":"Can you move"}
-{"t":12071,"ev":"text","text":"Can you move the"}
-{"t":12186,"ev":"text","text":"Can you move the review"}
-{"t":12210,"ev":"viewEnter","id":"voice:3:ask","label":"Do it as a request","onTop":true}
-{"t":12210,"out":"enter","id":"voice:3:ask","label":"Do it as a request","armed":true}
-{"t":12210,"out":"header","words":"Listening","view":"voice","head":"Sounds like a request"}
-{"t":12328,"ev":"text","text":"Can you move the review to"}
-{"t":12459,"ev":"text","text":"Can you move the review to Tuesday?"}
-{"t":12636,"ev":"text","text":"Can you move the review to Tuesday? Marketing"}
-{"t":12780,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs"}
-{"t":12914,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one"}
-{"t":13035,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more"}
-{"t":13145,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day"}
-{"t":13282,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for"}
-{"t":13409,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the"}
-{"t":13523,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots,"}
-{"t":13641,"ev":"line","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","icon":"type","hints":[["esc","drop"]]}
-{"t":13642,"ev":"viewEnter","id":"voice:3:type","label":"Type it into Mail","onTop":true}
-{"t":13642,"out":"enter","id":"voice:3:type","label":"Type it into Mail","armed":true}
-{"t":13642,"out":"slot","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","dimmed":true}
-{"t":13642,"out":"header","words":"Listening","view":"voice","head":"Sounds like you're writing to Sarah"}
-{"t":13642,"out":"text","text":"… to Tuesday? Marketing needs one more day for the screenshots,","by":"page","silent":true}
-{"t":13736,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots, sorry"}
-{"t":13865,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots, sorry for"}
-{"t":13983,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots, sorry for the"}
-{"t":14128,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots, sorry for the shuffle."}
-{"t":14129,"out":"text","text":"… needs one more day for the screenshots, sorry for the shuffle.","by":"page","silent":true}
-{"t":14683,"ev":"key","key":"Enter"}
-{"t":14684,"ev":"dismiss","app":"Mail"}
-{"t":14865,"ev":"view","op":"home","from":"voice"}
-{"t":14865,"ev":"line","clear":true,"via":"home"}
-{"t":14866,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":true}
-{"t":14867,"ev":"content","px":356,"via":"home"}
-{"t":14867,"out":"slot","kind":"recent","label":"Last","title":"Typed 19 words into Mail","sub":"just now","dimmed":true}
-{"t":14867,"out":"header","words":"Suggested"}
-{"t":14867,"out":"text","text":"","by":"page","silent":true}
-{"t":15295,"ev":"key","key":"Fn"}
-{"t":15295,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:4:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
-{"t":15296,"ev":"content","px":355,"via":"open"}
-{"t":15296,"out":"enter","id":"voice:4:listening","label":"Waits for Jev","armed":false}
-{"t":15296,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
-{"t":15412,"ev":"text","text":"Remind"}
-{"t":15523,"ev":"text","text":"Remind marketing"}
-{"t":15661,"ev":"text","text":"Remind marketing the"}
-{"t":15788,"ev":"text","text":"Remind marketing the screenshots"}
-{"t":15896,"ev":"viewEnter","id":"voice:4:ask","label":"Do it as a request","onTop":true}
-{"t":15896,"out":"enter","id":"voice:4:ask","label":"Do it as a request","armed":true}
-{"t":15896,"out":"header","words":"Listening","view":"voice","head":"Sounds like a request"}
-{"t":15903,"ev":"text","text":"Remind marketing the screenshots land"}
-{"t":16046,"ev":"text","text":"Remind marketing the screenshots land Friday,"}
-{"t":16240,"ev":"text","text":"Remind marketing the screenshots land Friday, so"}
-{"t":16358,"ev":"text","text":"Remind marketing the screenshots land Friday, so they"}
-{"t":16383,"ev":"key","key":"Cmd1"}
-{"t":16384,"ev":"line","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","icon":"type","hints":[["esc","drop"]],"via":"key:Cmd1"}
-{"t":16384,"ev":"viewEnter","id":"voice:4:type","label":"Type it into Mail","onTop":true,"via":"key:Cmd1"}
-{"t":16384,"out":"enter","id":"voice:4:type","label":"Type it into Mail","armed":false}
-{"t":16384,"out":"slot","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","dimmed":true}
-{"t":16384,"out":"header","words":"Listening","view":"voice","head":"You picked typing · Jev won't switch it"}
-{"t":16504,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can"}
-{"t":16639,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan"}
-{"t":16762,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the"}
-{"t":16872,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the launch"}
-{"t":17011,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the launch post"}
-{"t":17137,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the launch post around"}
-{"t":17251,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the launch post around it."}
-{"t":17253,"out":"text","text":"… land Friday, so they can plan the launch post around it.","by":"page","silent":true}
-{"t":17858,"ev":"key","key":"Enter"}
-{"t":17858,"ev":"dismiss","app":"Mail"}
-{"t":18040,"ev":"view","op":"home","from":"voice"}
-{"t":18040,"ev":"line","clear":true,"via":"home"}
-{"t":18041,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":true}
-{"t":18042,"ev":"content","px":356,"via":"home"}
-{"t":18042,"out":"slot","kind":"recent","label":"Last","title":"Typed 15 words into Mail","sub":"just now","dimmed":true}
-{"t":18042,"out":"header","words":"Suggested"}
-{"t":18042,"out":"text","text":"","by":"page","silent":true}
-{"t":18428,"ev":"key","key":"Fn"}
-{"t":18428,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:5:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
-{"t":18430,"ev":"content","px":355,"via":"open"}
-{"t":18430,"out":"enter","id":"voice:5:listening","label":"Waits for Jev","armed":true}
-{"t":18430,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
-{"t":18548,"ev":"text","text":"Find"}
-{"t":18658,"ev":"text","text":"Find a"}
-{"t":18794,"ev":"text","text":"Find a time"}
-{"t":18921,"ev":"text","text":"Find a time for"}
-{"t":19034,"ev":"text","text":"Find a time for the"}
-{"t":19057,"ev":"viewEnter","id":"voice:5:ask","label":"Do it as a request","onTop":true}
-{"t":19057,"out":"enter","id":"voice:5:ask","label":"Do it as a request","armed":true}
-{"t":19058,"out":"header","words":"Listening","view":"voice","head":"Sounds like a request"}
-{"t":19176,"ev":"text","text":"Find a time for the review"}
-{"t":19305,"ev":"text","text":"Find a time for the review next"}
-{"t":19424,"ev":"text","text":"Find a time for the review next week?"}
-{"t":19642,"ev":"text","text":"Find a time for the review next week? Friday"}
-{"t":19777,"ev":"text","text":"Find a time for the review next week? Friday works"}
-{"t":19898,"ev":"text","text":"Find a time for the review next week? Friday works best"}
-{"t":20009,"ev":"text","text":"Find a time for the review next week? Friday works best for"}
-{"t":20146,"ev":"text","text":"Find a time for the review next week? Friday works best for me."}
-{"t":20639,"ev":"key","key":"Enter"}
-{"t":20640,"ev":"viewEnter","id":"voice:5:pick","label":"Pick one · ⌘1 or ⌘2","onTop":true}
-{"t":20640,"out":"enter","id":"voice:5:pick","label":"Pick one · ⌘1 or ⌘2","armed":false}
-{"t":20640,"out":"header","words":"Listening","view":"voice","head":"Too close to call · pick one"}
-{"t":21445,"ev":"key","key":"Escape"}
-{"t":21445,"ev":"dismiss","app":"Mail","via":"key:Escape"}
-{"t":21627,"ev":"view","op":"home","from":"voice"}
-{"t":21628,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":true}
-{"t":21629,"ev":"content","px":356,"via":"home"}
-{"t":21630,"out":"header","words":"Suggested"}
-{"t":21630,"out":"text","text":"","by":"page","silent":true}
-{"t":21979,"ev":"summon"}
-{"t":21979,"ev":"view","op":"home","from":null,"via":"summon"}
-{"t":23078,"ev":"key","key":"ArrowUp"}
-{"t":23079,"ev":"view","op":"home","from":null,"via":"key:ArrowUp"}
-{"t":23079,"out":"enter","id":"act:Take the words back out","label":"Take the words back out","armed":false}
-{"t":23080,"ev":"names","text":"","rows":[{"key":"act:Take the words back out","title":"Take the words back out","pinned":true,"head":"Say what to do with it, or pick one","enterLabel":"Take the words back out"},{"key":"act:Rewrite it with the model","title":"Rewrite it with the model","pinned":true,"head":null,"enterLabel":"Rewrite it with the model"},{"key":"act:Send it to Sarah as a message instead","title":"Send it to Sarah as a message instead","pinned":true,"head":null,"enterLabel":"Send it to Sarah as a message instead"}],"via":"render"}
-{"t":23081,"out":"slot","kind":"staged","label":"Last","title":"Typed 15 words into Mail","sub":"Can be undone","dimmed":false}
-{"t":23081,"out":"header","words":"Say what to do with it, or pick one"}
-{"t":23081,"out":"list","rows":[{"key":"act:Take the words back out","title":"Take the words back out"},{"key":"act:Rewrite it with the model","title":"Rewrite it with the model"},{"key":"act:Send it to Sarah as a message instead","title":"Send it to Sarah as a message instead"}],"sel":0}
-{"t":24082,"ev":"key","key":"Escape"}
-{"t":24083,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":false}
-{"t":24083,"ev":"view","op":"home","from":null,"via":"key:Escape"}
-{"t":24084,"ev":"names","text":"","rows":[{"key":"suggested:mail","title":"Mail","pinned":true,"head":"Suggested","enterLabel":"Open Mail"},{"key":"suggested:slack","title":"Slack","pinned":true,"head":null,"enterLabel":"Open Slack"},{"key":"suggested:notes","title":"Notes","pinned":true,"head":null,"enterLabel":"Open Notes"}],"via":"render"}
-{"t":24084,"out":"slot","kind":"recent","label":"Last","title":"Typed 15 words into Mail","sub":"just now","dimmed":true}
-{"t":24084,"out":"header","words":"Suggested"}
-{"t":24084,"out":"list","rows":[{"key":"suggested:mail","title":"Mail"},{"key":"suggested:slack","title":"Slack"},{"key":"suggested:notes","title":"Notes"}],"sel":0}
+{"t":4823,"ev":"text","text":"Hi Sarah, thanks for"}
+{"t":4937,"ev":"text","text":"Hi Sarah, thanks for checking"}
+{"t":4957,"ev":"line","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","icon":"type","hints":[["esc","drop"]]}
+{"t":4958,"ev":"viewEnter","id":"voice:1:type","label":"Type it into Mail","onTop":true}
+{"t":4958,"out":"enter","id":"voice:1:type","label":"Type it into Mail","armed":true}
+{"t":4958,"out":"slot","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","dimmed":true}
+{"t":4958,"out":"header","words":"Listening","view":"voice","head":"Sounds like you're writing to Sarah"}
+{"t":5079,"ev":"text","text":"Hi Sarah, thanks for checking in."}
+{"t":5273,"ev":"text","text":"Hi Sarah, thanks for checking in. The"}
+{"t":5391,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated"}
+{"t":5535,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline"}
+{"t":5669,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is"}
+{"t":5791,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached,"}
+{"t":5955,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and"}
+{"t":6093,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll"}
+{"t":6219,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have"}
+{"t":6332,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the"}
+{"t":6473,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots"}
+{"t":6603,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots to"}
+{"t":6721,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots to marketing"}
+{"t":6866,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots to marketing by"}
+{"t":6999,"ev":"text","text":"Hi Sarah, thanks for checking in. The updated timeline is attached, and I'll have the screenshots to marketing by Friday."}
+{"t":7000,"out":"text","text":"… is attached, and I'll have the screenshots to marketing by Friday.","by":"page","silent":true}
+{"t":7583,"ev":"key","key":"Enter"}
+{"t":7584,"ev":"dismiss","app":"Mail"}
+{"t":7765,"ev":"view","op":"home","from":"voice"}
+{"t":7765,"ev":"line","clear":true,"via":"home"}
+{"t":7765,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":true}
+{"t":7766,"ev":"content","px":356,"via":"home"}
+{"t":7766,"out":"slot","kind":"recent","label":"Last","title":"Typed 20 words into Mail","sub":"just now","dimmed":true}
+{"t":7766,"out":"header","words":"Suggested"}
+{"t":7766,"out":"text","text":"","by":"page","silent":true}
+{"t":8730,"ev":"key","key":"Fn"}
+{"t":8730,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:2:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
+{"t":8731,"ev":"content","px":355,"via":"open"}
+{"t":8731,"out":"enter","id":"voice:2:listening","label":"Waits for Jev","armed":false}
+{"t":8731,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
+{"t":8880,"ev":"text","text":"remind"}
+{"t":8989,"ev":"text","text":"remind me"}
+{"t":9127,"ev":"text","text":"remind me to"}
+{"t":9252,"ev":"text","text":"remind me to send"}
+{"t":9365,"ev":"text","text":"remind me to send Sarah"}
+{"t":9366,"ev":"viewEnter","id":"voice:2:ask","label":"Do it as a request","onTop":true}
+{"t":9366,"out":"enter","id":"voice:2:ask","label":"Do it as a request","armed":true}
+{"t":9366,"out":"header","words":"Listening","view":"voice","head":"Sounds like a request"}
+{"t":9507,"ev":"text","text":"remind me to send Sarah the"}
+{"t":9637,"ev":"text","text":"remind me to send Sarah the deck"}
+{"t":9755,"ev":"text","text":"remind me to send Sarah the deck on"}
+{"t":9899,"ev":"text","text":"remind me to send Sarah the deck on Friday"}
+{"t":10032,"ev":"text","text":"remind me to send Sarah the deck on Friday at"}
+{"t":10154,"ev":"text","text":"remind me to send Sarah the deck on Friday at ten"}
+{"t":10320,"ev":"viewEnter","id":"voice:2:ask","label":"Remind me to send Sarah the deck at ten on Friday","onTop":true}
+{"t":10320,"out":"enter","id":"voice:2:ask","label":"Remind me to send Sarah the deck at ten on Friday","armed":false}
+{"t":10688,"ev":"key","key":"Enter"}
+{"t":10688,"ev":"view","op":"home","from":"voice"}
+{"t":10690,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":false}
+{"t":10690,"ev":"content","px":356,"via":"home"}
+{"t":10691,"out":"slot","kind":"recent","label":"Last","title":"Remind me to send Sarah the deck at ten on Friday","sub":"just now","dimmed":true}
+{"t":10691,"out":"header","words":"Suggested"}
+{"t":10691,"out":"text","text":"","by":"page","silent":true}
+{"t":10691,"out":"toast","text":"Added · Remind me to send Sarah the deck at ten on Friday"}
+{"t":11563,"ev":"key","key":"Fn"}
+{"t":11563,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:3:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
+{"t":11564,"ev":"content","px":355,"via":"open"}
+{"t":11564,"out":"enter","id":"voice:3:listening","label":"Waits for Jev","armed":false}
+{"t":11564,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
+{"t":11665,"ev":"text","text":"Can"}
+{"t":11774,"ev":"text","text":"Can you"}
+{"t":11911,"ev":"text","text":"Can you move"}
+{"t":12036,"ev":"text","text":"Can you move the"}
+{"t":12150,"ev":"text","text":"Can you move the review"}
+{"t":12173,"ev":"viewEnter","id":"voice:3:ask","label":"Do it as a request","onTop":true}
+{"t":12174,"out":"enter","id":"voice:3:ask","label":"Do it as a request","armed":true}
+{"t":12174,"out":"header","words":"Listening","view":"voice","head":"Sounds like a request"}
+{"t":12292,"ev":"text","text":"Can you move the review to"}
+{"t":12422,"ev":"text","text":"Can you move the review to Tuesday?"}
+{"t":12597,"ev":"text","text":"Can you move the review to Tuesday? Marketing"}
+{"t":12742,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs"}
+{"t":12876,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one"}
+{"t":12996,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more"}
+{"t":13107,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day"}
+{"t":13245,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for"}
+{"t":13371,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the"}
+{"t":13484,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots,"}
+{"t":13601,"ev":"line","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","icon":"type","hints":[["esc","drop"]]}
+{"t":13601,"ev":"viewEnter","id":"voice:3:type","label":"Type it into Mail","onTop":true}
+{"t":13601,"out":"enter","id":"voice:3:type","label":"Type it into Mail","armed":true}
+{"t":13601,"out":"slot","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","dimmed":true}
+{"t":13601,"out":"header","words":"Listening","view":"voice","head":"Sounds like you're writing to Sarah"}
+{"t":13601,"out":"text","text":"… to Tuesday? Marketing needs one more day for the screenshots,","by":"page","silent":true}
+{"t":13696,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots, sorry"}
+{"t":13826,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots, sorry for"}
+{"t":13943,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots, sorry for the"}
+{"t":14089,"ev":"text","text":"Can you move the review to Tuesday? Marketing needs one more day for the screenshots, sorry for the shuffle."}
+{"t":14090,"out":"text","text":"… needs one more day for the screenshots, sorry for the shuffle.","by":"page","silent":true}
+{"t":14646,"ev":"key","key":"Enter"}
+{"t":14646,"ev":"dismiss","app":"Mail"}
+{"t":14828,"ev":"view","op":"home","from":"voice"}
+{"t":14828,"ev":"line","clear":true,"via":"home"}
+{"t":14829,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":true}
+{"t":14829,"ev":"content","px":356,"via":"home"}
+{"t":14830,"out":"slot","kind":"recent","label":"Last","title":"Typed 19 words into Mail","sub":"just now","dimmed":true}
+{"t":14830,"out":"header","words":"Suggested"}
+{"t":14830,"out":"text","text":"","by":"page","silent":true}
+{"t":15246,"ev":"key","key":"Fn"}
+{"t":15246,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:4:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
+{"t":15248,"ev":"content","px":355,"via":"open"}
+{"t":15248,"out":"enter","id":"voice:4:listening","label":"Waits for Jev","armed":false}
+{"t":15248,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
+{"t":15365,"ev":"text","text":"Remind"}
+{"t":15475,"ev":"text","text":"Remind marketing"}
+{"t":15613,"ev":"text","text":"Remind marketing the"}
+{"t":15738,"ev":"text","text":"Remind marketing the screenshots"}
+{"t":15852,"ev":"text","text":"Remind marketing the screenshots land"}
+{"t":15855,"ev":"viewEnter","id":"voice:4:ask","label":"Do it as a request","onTop":true}
+{"t":15855,"out":"enter","id":"voice:4:ask","label":"Do it as a request","armed":true}
+{"t":15855,"out":"header","words":"Listening","view":"voice","head":"Sounds like a request"}
+{"t":15994,"ev":"text","text":"Remind marketing the screenshots land Friday,"}
+{"t":16187,"ev":"text","text":"Remind marketing the screenshots land Friday, so"}
+{"t":16305,"ev":"text","text":"Remind marketing the screenshots land Friday, so they"}
+{"t":16331,"ev":"key","key":"Cmd1"}
+{"t":16332,"ev":"line","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","icon":"type","hints":[["esc","drop"]],"via":"key:Cmd1"}
+{"t":16332,"ev":"viewEnter","id":"voice:4:type","label":"Type it into Mail","onTop":true,"via":"key:Cmd1"}
+{"t":16332,"out":"enter","id":"voice:4:type","label":"Type it into Mail","armed":false}
+{"t":16332,"out":"slot","kind":"voice","label":"Typing into","title":"Mail","sub":"Reply to Sarah · Re: Q4 launch timeline","dimmed":true}
+{"t":16332,"out":"header","words":"Listening","view":"voice","head":"You picked typing · Jev won't switch it"}
+{"t":16450,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can"}
+{"t":16585,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan"}
+{"t":16707,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the"}
+{"t":16816,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the launch"}
+{"t":16953,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the launch post"}
+{"t":17078,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the launch post around"}
+{"t":17192,"ev":"text","text":"Remind marketing the screenshots land Friday, so they can plan the launch post around it."}
+{"t":17193,"out":"text","text":"… land Friday, so they can plan the launch post around it.","by":"page","silent":true}
+{"t":17795,"ev":"key","key":"Enter"}
+{"t":17796,"ev":"dismiss","app":"Mail"}
+{"t":17977,"ev":"view","op":"home","from":"voice"}
+{"t":17977,"ev":"line","clear":true,"via":"home"}
+{"t":17978,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":true}
+{"t":17979,"ev":"content","px":356,"via":"home"}
+{"t":17979,"out":"slot","kind":"recent","label":"Last","title":"Typed 15 words into Mail","sub":"just now","dimmed":true}
+{"t":17979,"out":"header","words":"Suggested"}
+{"t":17979,"out":"text","text":"","by":"page","silent":true}
+{"t":18364,"ev":"key","key":"Fn"}
+{"t":18364,"ev":"view","op":"open","name":"voice","via":"key:Fn","enter":{"id":"voice:5:listening","label":"Waits for Jev"},"label":"Listening","takesInput":true}
+{"t":18366,"ev":"content","px":355,"via":"open"}
+{"t":18366,"out":"enter","id":"voice:5:listening","label":"Waits for Jev","armed":true}
+{"t":18366,"out":"header","words":"Listening","view":"voice","head":"Listening…"}
+{"t":18481,"ev":"text","text":"Find"}
+{"t":18591,"ev":"text","text":"Find a"}
+{"t":18729,"ev":"text","text":"Find a time"}
+{"t":18854,"ev":"text","text":"Find a time for"}
+{"t":18968,"ev":"text","text":"Find a time for the"}
+{"t":18992,"ev":"viewEnter","id":"voice:5:ask","label":"Do it as a request","onTop":true}
+{"t":18993,"out":"enter","id":"voice:5:ask","label":"Do it as a request","armed":true}
+{"t":18993,"out":"header","words":"Listening","view":"voice","head":"Sounds like a request"}
+{"t":19110,"ev":"text","text":"Find a time for the review"}
+{"t":19240,"ev":"text","text":"Find a time for the review next"}
+{"t":19357,"ev":"text","text":"Find a time for the review next week?"}
+{"t":19574,"ev":"text","text":"Find a time for the review next week? Friday"}
+{"t":19708,"ev":"text","text":"Find a time for the review next week? Friday works"}
+{"t":19830,"ev":"text","text":"Find a time for the review next week? Friday works best"}
+{"t":19940,"ev":"text","text":"Find a time for the review next week? Friday works best for"}
+{"t":20077,"ev":"text","text":"Find a time for the review next week? Friday works best for me."}
+{"t":20566,"ev":"key","key":"Enter"}
+{"t":20567,"ev":"viewEnter","id":"voice:5:pick","label":"Pick one · ⌘1 or ⌘2","onTop":true}
+{"t":20567,"out":"enter","id":"voice:5:pick","label":"Pick one · ⌘1 or ⌘2","armed":false}
+{"t":20567,"out":"header","words":"Listening","view":"voice","head":"Too close to call · pick one"}
+{"t":21380,"ev":"key","key":"Escape"}
+{"t":21380,"ev":"dismiss","app":"Mail","via":"key:Escape"}
+{"t":21561,"ev":"view","op":"home","from":"voice"}
+{"t":21562,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":true}
+{"t":21563,"ev":"content","px":356,"via":"home"}
+{"t":21564,"out":"header","words":"Suggested"}
+{"t":21564,"out":"text","text":"","by":"page","silent":true}
+{"t":21914,"ev":"summon"}
+{"t":21914,"ev":"view","op":"home","from":null,"via":"summon"}
+{"t":23012,"ev":"key","key":"ArrowUp"}
+{"t":23012,"ev":"view","op":"home","from":null,"via":"key:ArrowUp"}
+{"t":23013,"out":"enter","id":"act:Take the words back out","label":"Take the words back out","armed":false}
+{"t":23014,"ev":"names","text":"","rows":[{"key":"act:Take the words back out","title":"Take the words back out","pinned":true,"head":"Say what to do with it, or pick one","enterLabel":"Take the words back out"},{"key":"act:Rewrite it with the model","title":"Rewrite it with the model","pinned":true,"head":null,"enterLabel":"Rewrite it with the model"},{"key":"act:Send it to Sarah as a message instead","title":"Send it to Sarah as a message instead","pinned":true,"head":null,"enterLabel":"Send it to Sarah as a message instead"}],"via":"render"}
+{"t":23015,"out":"slot","kind":"staged","label":"Last","title":"Typed 15 words into Mail","sub":"Can be undone","dimmed":false}
+{"t":23015,"out":"header","words":"Say what to do with it, or pick one"}
+{"t":23015,"out":"list","rows":[{"key":"act:Take the words back out","title":"Take the words back out"},{"key":"act:Rewrite it with the model","title":"Rewrite it with the model"},{"key":"act:Send it to Sarah as a message instead","title":"Send it to Sarah as a message instead"}],"sel":0}
+{"t":24017,"ev":"key","key":"Escape"}
+{"t":24017,"out":"enter","id":"suggested:mail","label":"Open Mail","armed":false}
+{"t":24017,"ev":"view","op":"home","from":null,"via":"key:Escape"}
+{"t":24018,"ev":"names","text":"","rows":[{"key":"suggested:mail","title":"Mail","pinned":true,"head":"Suggested","enterLabel":"Open Mail"},{"key":"suggested:slack","title":"Slack","pinned":true,"head":null,"enterLabel":"Open Slack"},{"key":"suggested:notes","title":"Notes","pinned":true,"head":null,"enterLabel":"Open Notes"}],"via":"render"}
+{"t":24019,"out":"slot","kind":"recent","label":"Last","title":"Typed 15 words into Mail","sub":"just now","dimmed":true}
+{"t":24019,"out":"header","words":"Suggested"}
+{"t":24019,"out":"list","rows":[{"key":"suggested:mail","title":"Mail"},{"key":"suggested:slack","title":"Slack"},{"key":"suggested:notes","title":"Notes"}],"sel":0}

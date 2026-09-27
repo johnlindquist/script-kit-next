@@ -3475,7 +3475,7 @@ impl ScriptListApp {
                     animation["nativeLifecycle"] =
                         crate::platform::main_glass_entry_lifecycle_receipt();
                     *main_window_animation = Some(animation);
-                    *one_window = Some(self.one_window_automation_snapshot());
+                    *one_window = Some(self.one_window_automation_snapshot(cx));
                 }
 
                 tracing::info!(

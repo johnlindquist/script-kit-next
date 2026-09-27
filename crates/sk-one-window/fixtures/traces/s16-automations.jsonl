@@ -1,4 +1,4 @@
-{"meta":{"chapter":"s16-automations","speed":3,"mode":"demo","recordedAt":"2026-09-27T00:08:21.099Z","ok":true,"attempts":1,"durationMs":17494,"url":"/lab/s16-automations.html?record=1&speed=3"}}
+{"meta":{"chapter":"s16-automations","speed":3,"mode":"demo","recordedAt":"2026-09-27T02:47:54.464Z","ok":true,"attempts":1,"durationMs":17428,"url":"/lab/s16-automations.html?record=1&speed=3"}}
 {"t":0,"ev":"init","holdMs":8000,"focused":{"kind":"selection","label":"Selected","title":"“The footer Enter button kept the old row's label for …”","sub":"in Google Chrome","icon":"type"},"history":[],"text":"","ctx":"chrome","connected":["slack"]}
 {"t":0,"ev":"content","px":512}
 {"t":0,"out":"height","mode":"grow","px":512,"initial":true}
@@ -7,331 +7,338 @@
 {"t":1,"out":"header","words":"Suggested"}
 {"t":1,"out":"list","rows":[{"key":"suggested:slack","title":"Slack"},{"key":"suggested:linear","title":"Linear"},{"key":"suggested:chrome","title":"Google Chrome"},{"key":"suggested:automations","title":"Automations"},{"key":"suggested:clipboard","title":"Clipboard History"},{"key":"suggested:notes","title":"Notes"}],"sel":0}
 {"t":1,"ev":"names","text":"","rows":[{"key":"suggested:slack","title":"Slack","pinned":true,"head":"Suggested","enterLabel":"Open Slack"},{"key":"suggested:linear","title":"Linear","pinned":true,"head":null,"enterLabel":"Open Linear"},{"key":"suggested:chrome","title":"Google Chrome","pinned":true,"head":null,"enterLabel":"Open Google Chrome"},{"key":"suggested:automations","title":"Automations","pinned":true,"head":null,"enterLabel":"Open Automations"},{"key":"suggested:clipboard","title":"Clipboard History","pinned":true,"head":null,"enterLabel":"Open Clipboard History"},{"key":"suggested:notes","title":"Notes","pinned":true,"head":null,"enterLabel":"Open Notes"}]}
-{"t":3226,"ev":"text","text":"e"}
-{"t":3228,"out":"enter","id":"Google Chrome menu: Window › Extensions","label":"Extensions","armed":false}
-{"t":3229,"ev":"names","text":"e","rows":[{"key":"Google Chrome menu: Window › Extensions","title":"Extensions","enterLabel":"Extensions","score":102.5,"head":null,"fallback":false},{"key":"Google Chrome menu: Edit › Emoji & Symbols","title":"Emoji & Symbols","enterLabel":"Emoji & Symbols","score":102.25,"head":null,"fallback":false},{"key":"Google Chrome menu: View › Enter Full Screen","title":"Enter Full Screen","enterLabel":"Enter Full Screen","score":102.15,"head":null,"fallback":false}],"via":"text"}
-{"t":3230,"out":"header","words":"Matches"}
-{"t":3230,"out":"list","rows":[{"key":"Google Chrome menu: Window › Extensions","title":"Extensions"},{"key":"Google Chrome menu: Edit › Emoji & Symbols","title":"Emoji & Symbols"},{"key":"Google Chrome menu: View › Enter Full Screen","title":"Enter Full Screen"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
-{"t":3249,"ev":"text","text":"ev"}
-{"t":3250,"out":"enter","id":"open Karabiner-EventViewer (app)","label":"Karabiner-EventViewer","armed":false}
-{"t":3250,"ev":"names","text":"ev","rows":[{"key":"open Karabiner-EventViewer (app)","title":"Karabiner-EventViewer","enterLabel":"Karabiner-EventViewer","score":80.95,"head":null,"fallback":false},{"key":"schedule … (Calendar event)","title":"Calendar event","enterLabel":"Calendar event","score":79.3,"head":null,"fallback":false},{"key":"Create Calendar Event (Script Kit script)","title":"Create Calendar Event","enterLabel":"Create Calendar Event","score":78.95,"head":null,"fallback":false}],"via":"text"}
-{"t":3251,"out":"list","rows":[{"key":"open Karabiner-EventViewer (app)","title":"Karabiner-EventViewer"},{"key":"schedule … (Calendar event)","title":"Calendar event"},{"key":"Create Calendar Event (Script Kit script)","title":"Create Calendar Event"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
-{"t":3278,"ev":"text","text":"eve"}
-{"t":3279,"ev":"names","text":"eve","rows":[{"key":"open Karabiner-EventViewer (app)","title":"Karabiner-EventViewer","enterLabel":"Karabiner-EventViewer","score":80.95,"head":null,"fallback":false},{"key":"schedule … (Calendar event)","title":"Calendar event","enterLabel":"Calendar event","score":79.3,"head":null,"fallback":false},{"key":"Create Calendar Event (Script Kit script)","title":"Create Calendar Event","enterLabel":"Create Calendar Event","score":78.95,"head":null,"fallback":false}],"via":"text"}
-{"t":3303,"ev":"text","text":"ever"}
-{"t":3304,"out":"enter","id":"slot0","label":"Runs what Jev understands","armed":false}
-{"t":3304,"ev":"names","text":"ever","rows":[{"key":"Google Chrome menu: View › Developer › View Source","title":"Developer › View Source","enterLabel":"Developer › View Source","score":26.85,"head":null,"fallback":false},{"key":"Google Chrome menu: View › Developer › Developer Tools","title":"Developer › Developer Tools","enterLabel":"Developer › Developer Tools","score":26.65,"head":null,"fallback":false},{"key":"Google Chrome menu: View › Developer › JavaScript Console","title":"Developer › JavaScript Console","enterLabel":"Developer › JavaScript Console","score":26.5,"head":null,"fallback":false}],"via":"text"}
-{"t":3307,"out":"height","mode":"hold","px":551,"by":"govern","list":354,"floor":393}
-{"t":3307,"out":"header","words":"Jev","note":"⌘1–3"}
-{"t":3307,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"Google Chrome menu: View › Developer › View Source","title":"Developer › View Source"},{"key":"Google Chrome menu: View › Developer › Developer Tools","title":"Developer › Developer Tools"},{"key":"Google Chrome menu: View › Developer › JavaScript Console","title":"Developer › JavaScript Console"}],"sel":0}
-{"t":3331,"ev":"text","text":"every"}
-{"t":3332,"ev":"names","text":"every","rows":[{"key":"Add Quick Access Overlay (Script Kit scriptlet)","title":"Add Quick Access Overlay","enterLabel":"Add Quick Access Overlay","score":23.8,"head":null,"fallback":false},{"key":"Open Privacy & Security Settings (Script Kit builtin)","title":"Open Privacy & Security Settings","enterLabel":"Open Privacy & Security Settings","score":23.4,"head":null,"fallback":false}],"via":"text"}
-{"t":3332,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"Add Quick Access Overlay (Script Kit scriptlet)","title":"Add Quick Access Overlay"},{"key":"Open Privacy & Security Settings (Script Kit builtin)","title":"Open Privacy & Security Settings"}],"sel":0}
-{"t":3349,"ev":"text","text":"every "}
-{"t":3350,"ev":"names","text":"every ","rows":[{"key":"Add Quick Access Overlay (Script Kit scriptlet)","title":"Add Quick Access Overlay","enterLabel":"Add Quick Access Overlay","score":23.8,"head":null,"fallback":false},{"key":"Open Privacy & Security Settings (Script Kit builtin)","title":"Open Privacy & Security Settings","enterLabel":"Open Privacy & Security Settings","score":23.4,"head":null,"fallback":false}],"via":"text"}
-{"t":3382,"ev":"text","text":"every w"}
-{"t":3382,"ev":"names","text":"every w","rows":[{"key":"fallback-google:every w","title":"Search Google for “every w”","enterLabel":"Search Google for “every w”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every w","title":"Ask AI “every w”","enterLabel":"Ask AI “every w”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3383,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every w","title":"Search Google for “every w”"},{"key":"fallback-ai:every w","title":"Ask AI “every w”"}],"sel":0}
-{"t":3405,"ev":"text","text":"every we"}
-{"t":3406,"ev":"names","text":"every we","rows":[{"key":"fallback-google:every we","title":"Search Google for “every we”","enterLabel":"Search Google for “every we”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every we","title":"Ask AI “every we”","enterLabel":"Ask AI “every we”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3406,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every we","title":"Search Google for “every we”"},{"key":"fallback-ai:every we","title":"Ask AI “every we”"}],"sel":0}
-{"t":3423,"ev":"text","text":"every wee"}
-{"t":3424,"ev":"names","text":"every wee","rows":[{"key":"fallback-google:every wee","title":"Search Google for “every wee”","enterLabel":"Search Google for “every wee”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every wee","title":"Ask AI “every wee”","enterLabel":"Ask AI “every wee”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3425,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every wee","title":"Search Google for “every wee”"},{"key":"fallback-ai:every wee","title":"Ask AI “every wee”"}],"sel":0}
-{"t":3441,"ev":"text","text":"every week"}
-{"t":3442,"ev":"names","text":"every week","rows":[{"key":"fallback-google:every week","title":"Search Google for “every week”","enterLabel":"Search Google for “every week”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every week","title":"Ask AI “every week”","enterLabel":"Ask AI “every week”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3442,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every week","title":"Search Google for “every week”"},{"key":"fallback-ai:every week","title":"Ask AI “every week”"}],"sel":0}
-{"t":3468,"ev":"text","text":"every weekd"}
-{"t":3469,"ev":"names","text":"every weekd","rows":[{"key":"fallback-google:every weekd","title":"Search Google for “every weekd”","enterLabel":"Search Google for “every weekd”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekd","title":"Ask AI “every weekd”","enterLabel":"Ask AI “every weekd”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3470,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekd","title":"Search Google for “every weekd”"},{"key":"fallback-ai:every weekd","title":"Ask AI “every weekd”"}],"sel":0}
-{"t":3497,"ev":"text","text":"every weekda"}
-{"t":3498,"ev":"names","text":"every weekda","rows":[{"key":"fallback-google:every weekda","title":"Search Google for “every weekda”","enterLabel":"Search Google for “every weekda”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekda","title":"Ask AI “every weekda”","enterLabel":"Ask AI “every weekda”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3498,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekda","title":"Search Google for “every weekda”"},{"key":"fallback-ai:every weekda","title":"Ask AI “every weekda”"}],"sel":0}
-{"t":3519,"ev":"text","text":"every weekday"}
-{"t":3520,"ev":"names","text":"every weekday","rows":[{"key":"fallback-google:every weekday","title":"Search Google for “every weekday”","enterLabel":"Search Google for “every weekday”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday","title":"Ask AI “every weekday”","enterLabel":"Ask AI “every weekday”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3521,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday","title":"Search Google for “every weekday”"},{"key":"fallback-ai:every weekday","title":"Ask AI “every weekday”"}],"sel":0}
-{"t":3541,"ev":"text","text":"every weekday "}
-{"t":3542,"ev":"names","text":"every weekday ","rows":[{"key":"fallback-google:every weekday ","title":"Search Google for “every weekday ”","enterLabel":"Search Google for “every weekday ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday ","title":"Ask AI “every weekday ”","enterLabel":"Ask AI “every weekday ”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3543,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday ","title":"Search Google for “every weekday ”"},{"key":"fallback-ai:every weekday ","title":"Ask AI “every weekday ”"}],"sel":0}
-{"t":3570,"ev":"text","text":"every weekday a"}
-{"t":3571,"ev":"names","text":"every weekday a","rows":[{"key":"fallback-google:every weekday a","title":"Search Google for “every weekday a”","enterLabel":"Search Google for “every weekday a”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday a","title":"Ask AI “every weekday a”","enterLabel":"Ask AI “every weekday a”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3572,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday a","title":"Search Google for “every weekday a”"},{"key":"fallback-ai:every weekday a","title":"Ask AI “every weekday a”"}],"sel":0}
-{"t":3595,"ev":"text","text":"every weekday at"}
-{"t":3596,"ev":"names","text":"every weekday at","rows":[{"key":"fallback-google:every weekday at","title":"Search Google for “every weekday at”","enterLabel":"Search Google for “every weekday at”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at","title":"Ask AI “every weekday at”","enterLabel":"Ask AI “every weekday at”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3597,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at","title":"Search Google for “every weekday at”"},{"key":"fallback-ai:every weekday at","title":"Ask AI “every weekday at”"}],"sel":0}
-{"t":3620,"ev":"text","text":"every weekday at "}
-{"t":3621,"ev":"names","text":"every weekday at ","rows":[{"key":"fallback-google:every weekday at ","title":"Search Google for “every weekday at ”","enterLabel":"Search Google for “every weekday at ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at ","title":"Ask AI “every weekday at ”","enterLabel":"Ask AI “every weekday at ”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3622,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at ","title":"Search Google for “every weekday at ”"},{"key":"fallback-ai:every weekday at ","title":"Ask AI “every weekday at ”"}],"sel":0}
-{"t":3651,"ev":"text","text":"every weekday at 9"}
-{"t":3652,"ev":"names","text":"every weekday at 9","rows":[{"key":"fallback-google:every weekday at 9","title":"Search Google for “every weekday at 9”","enterLabel":"Search Google for “every weekday at 9”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9","title":"Ask AI “every weekday at 9”","enterLabel":"Ask AI “every weekday at 9”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3653,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9","title":"Search Google for “every weekday at 9”"},{"key":"fallback-ai:every weekday at 9","title":"Ask AI “every weekday at 9”"}],"sel":0}
-{"t":3672,"ev":"text","text":"every weekday at 9 "}
-{"t":3673,"ev":"names","text":"every weekday at 9 ","rows":[{"key":"fallback-google:every weekday at 9 ","title":"Search Google for “every weekday at 9 ”","enterLabel":"Search Google for “every weekday at 9 ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9 ","title":"Ask AI “every weekday at 9 ”","enterLabel":"Ask AI “every weekday at 9 ”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3674,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9 ","title":"Search Google for “every weekday at 9 ”"},{"key":"fallback-ai:every weekday at 9 ","title":"Ask AI “every weekday at 9 ”"}],"sel":0}
-{"t":3701,"ev":"text","text":"every weekday at 9 o"}
-{"t":3702,"ev":"names","text":"every weekday at 9 o","rows":[{"key":"fallback-google:every weekday at 9 o","title":"Search Google for “every weekday at 9 o”","enterLabel":"Search Google for “every weekday at 9 o”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9 o","title":"Ask AI “every weekday at 9 o”","enterLabel":"Ask AI “every weekday at 9 o”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3703,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9 o","title":"Search Google for “every weekday at 9 o”"},{"key":"fallback-ai:every weekday at 9 o","title":"Ask AI “every weekday at 9 o”"}],"sel":0}
-{"t":3729,"ev":"text","text":"every weekday at 9 op"}
-{"t":3729,"ev":"names","text":"every weekday at 9 op","rows":[{"key":"fallback-google:every weekday at 9 op","title":"Search Google for “every weekday at 9 op”","enterLabel":"Search Google for “every weekday at 9 op”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9 op","title":"Ask AI “every weekday at 9 op”","enterLabel":"Ask AI “every weekday at 9 op”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3730,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9 op","title":"Search Google for “every weekday at 9 op”"},{"key":"fallback-ai:every weekday at 9 op","title":"Ask AI “every weekday at 9 op”"}],"sel":0}
-{"t":3751,"ev":"text","text":"every weekday at 9 ope"}
-{"t":3752,"ev":"names","text":"every weekday at 9 ope","rows":[{"key":"fallback-google:every weekday at 9 ope","title":"Search Google for “every weekday at 9 ope”","enterLabel":"Search Google for “every weekday at 9 ope”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9 ope","title":"Ask AI “every weekday at 9 ope”","enterLabel":"Ask AI “every weekday at 9 ope”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":3753,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9 ope","title":"Search Google for “every weekday at 9 ope”"},{"key":"fallback-ai:every weekday at 9 ope","title":"Ask AI “every weekday at 9 ope”"}],"sel":0}
-{"t":3773,"ev":"text","text":"every weekday at 9 open"}
-{"t":3774,"out":"enter","id":"automate","label":"Set it up to run on its own","armed":false}
-{"t":3774,"ev":"names","text":"every weekday at 9 open","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3775,"out":"header","words":"Matches"}
-{"t":3775,"out":"list","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
-{"t":3792,"ev":"text","text":"every weekday at 9 open "}
-{"t":3792,"ev":"names","text":"every weekday at 9 open ","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3825,"ev":"text","text":"every weekday at 9 open l"}
-{"t":3825,"ev":"names","text":"every weekday at 9 open l","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3851,"ev":"text","text":"every weekday at 9 open li"}
-{"t":3851,"ev":"names","text":"every weekday at 9 open li","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3871,"ev":"text","text":"every weekday at 9 open lin"}
-{"t":3871,"ev":"names","text":"every weekday at 9 open lin","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3890,"ev":"text","text":"every weekday at 9 open line"}
-{"t":3891,"ev":"names","text":"every weekday at 9 open line","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3918,"ev":"text","text":"every weekday at 9 open linea"}
-{"t":3919,"ev":"names","text":"every weekday at 9 open linea","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3935,"ev":"text","text":"every weekday at 9 open linear"}
-{"t":3935,"ev":"names","text":"every weekday at 9 open linear","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3957,"ev":"text","text":"every weekday at 9 open linear "}
-{"t":3957,"ev":"names","text":"every weekday at 9 open linear ","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":3985,"ev":"text","text":"every weekday at 9 open linear a"}
-{"t":3985,"ev":"names","text":"every weekday at 9 open linear a","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4002,"ev":"text","text":"every weekday at 9 open linear an"}
-{"t":4002,"ev":"names","text":"every weekday at 9 open linear an","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4019,"ev":"text","text":"every weekday at 9 open linear and"}
-{"t":4019,"ev":"names","text":"every weekday at 9 open linear and","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4044,"ev":"text","text":"every weekday at 9 open linear and "}
-{"t":4044,"ev":"names","text":"every weekday at 9 open linear and ","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4076,"ev":"text","text":"every weekday at 9 open linear and o"}
-{"t":4077,"ev":"names","text":"every weekday at 9 open linear and o","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4094,"ev":"text","text":"every weekday at 9 open linear and op"}
-{"t":4095,"ev":"names","text":"every weekday at 9 open linear and op","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4118,"ev":"text","text":"every weekday at 9 open linear and ope"}
-{"t":4118,"ev":"names","text":"every weekday at 9 open linear and ope","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4146,"ev":"text","text":"every weekday at 9 open linear and open"}
-{"t":4146,"ev":"names","text":"every weekday at 9 open linear and open","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4167,"ev":"text","text":"every weekday at 9 open linear and open "}
-{"t":4167,"ev":"names","text":"every weekday at 9 open linear and open ","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4198,"ev":"text","text":"every weekday at 9 open linear and open s"}
-{"t":4198,"ev":"names","text":"every weekday at 9 open linear and open s","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4218,"ev":"text","text":"every weekday at 9 open linear and open sl"}
-{"t":4219,"ev":"names","text":"every weekday at 9 open linear and open sl","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4238,"ev":"text","text":"every weekday at 9 open linear and open sla"}
-{"t":4238,"ev":"names","text":"every weekday at 9 open linear and open sla","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4261,"ev":"text","text":"every weekday at 9 open linear and open slac"}
-{"t":4262,"ev":"names","text":"every weekday at 9 open linear and open slac","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4285,"ev":"text","text":"every weekday at 9 open linear and open slack"}
-{"t":4286,"ev":"names","text":"every weekday at 9 open linear and open slack","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":4506,"ev":"jev","text":"every weekday at 9 open linear and open slack","rows":[{"key":"jev:run on a schedule: Linear","title":"Run Linear every weekday at 9","icon":"schedule","p":0.14,"fill":"run Linear every weekday at 9","target":"Linear","verb":"schedule","kind":"automate","source":"recent"},{"key":"jev:run on a schedule: Append Daily Note","title":"Run Append Daily Note every weekday at 9","icon":"schedule","p":0.09999999999999999,"fill":"run Append Daily Note every weekday at 9","target":"Append Daily Note","verb":"schedule","kind":"automate","source":"recent"},{"key":"jev:save what I just did as a script","title":"Save that as a script","icon":"script","p":0.08,"fill":"save that as a script","target":"last","kind":"automate"},{"key":"jev:open Slack (app)","title":"Open Slack","icon":"app","p":0.05,"fill":"open Slack","target":"Slack","kind":"run"},{"key":"jev:open Ghostty (app)","title":"Open Ghostty","icon":"app","p":0.05,"fill":"open Ghostty","target":"Ghostty","kind":"run"},{"key":"jev:add a line to the note: Launcher ideas","title":"Add to Launcher ideas","icon":"append","p":0.03,"fill":"add to Launcher ideas","target":"Launcher ideas","verb":"append","kind":"capture","source":"notes"},{"key":"jev:Google Chrome menu: Tab › Duplicate Tab","title":"Duplicate Tab","icon":"menu","p":0.02,"fill":"Duplicate Tab","target":"Google Chrome","kind":"app_command"},{"key":"jev:add a keyboard shortcut to: Append Daily Note","title":"Add a shortcut to Append Daily Note","icon":"shortcut","p":0.02,"fill":"add a shortcut to Append Daily Note","target":"Append Daily Note","verb":"shortcut","kind":"automate","source":"recent"},{"key":"jev:Google Chrome menu: View › Always Show Full URLs","title":"Always Show Full URLs","icon":"menu","p":0.02,"fill":"Always Show Full URLs","target":"Google Chrome","kind":"app_command"},{"key":"jev:open Mail (app)","title":"Open Mail","icon":"app","p":0.02,"fill":"open Mail","target":"Mail","kind":"run"},{"key":"jev:Open Accessibility Assistant (Script Kit builtin)","title":"Open Accessibility Assistant","icon":"builtin","p":0.02,"fill":"Open Accessibility Assistant","target":"Open Accessibility Assistant","kind":"run"},{"key":"jev:do again: Tiled Google Chrome to the left half and Ghostty to the right half","title":"Do that again","icon":"again","p":0.02,"fill":"do that again","target":"last","kind":"run"},{"key":"jev:open the script for editing: Append Daily Note","title":"Edit Append Daily Note","icon":"edit","p":0.02,"fill":"edit Append Daily Note","target":"Append Daily Note","verb":"edit","kind":"automate","source":"recent"},{"key":"jev:do again: Chrome left, Ghostty right","title":"Chrome left, Ghostty right","icon":"again","p":0.02,"fill":"Chrome left, Ghostty right","target":"Chrome left, Ghostty right","verb":"again","kind":"run","source":"recent"}],"ms":145}
-{"t":4507,"out":"list","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9"},{"key":"jev:run on a schedule: Linear","title":"Run Linear every weekday at 9","jev":true},{"key":"jev:run on a schedule: Append Daily Note","title":"Run Append Daily Note every weekday at 9","jev":true},{"key":"jev:save what I just did as a script","title":"Save that as a script","jev":true}],"sel":0}
-{"t":4811,"ev":"content","px":447}
-{"t":4813,"out":"height","mode":"shrink","px":447,"from":551}
-{"t":4909,"ev":"key","key":"Enter"}
-{"t":4910,"out":"run","key":"automate","title":"Run it on its own · every weekday at 9","how":"match"}
-{"t":4910,"ev":"view","op":"open","name":"automation","row":"automate","via":"key:Enter","enter":{"id":"automation","label":"Turn it on"},"label":"Automation","takesInput":false}
-{"t":4912,"ev":"content","px":301,"via":"open"}
-{"t":4912,"out":"height","mode":"hold","px":490,"to":301,"waitMs":300}
-{"t":4912,"out":"enter","id":"automation","label":"Turn it on","armed":false}
-{"t":4913,"out":"header","words":"Automation","view":"automation"}
-{"t":5116,"ev":"content","px":456}
-{"t":5213,"out":"height","mode":"shrink","px":456,"from":490}
-{"t":6188,"ev":"key","key":"Enter"}
-{"t":6188,"ev":"done","title":"Turned on · every weekday at 9 open linear and open slack","icon":"again","risk":"undo","stay":false,"via":"key:Enter"}
-{"t":6189,"ev":"view","op":"home","from":"automation","via":"done"}
-{"t":6190,"out":"enter","id":"automate","label":"Set it up to run on its own","armed":true}
-{"t":6190,"ev":"content","px":447,"via":"home"}
-{"t":6190,"out":"height","mode":"shrink","px":447,"from":456}
-{"t":6191,"out":"text","text":"","by":"page"}
-{"t":6191,"out":"enter","id":"suggested:slack","label":"Open Slack","armed":true}
-{"t":6191,"ev":"names","text":"","rows":[{"key":"suggested:slack","title":"Slack","pinned":true,"head":"Suggested","enterLabel":"Open Slack"},{"key":"suggested:linear","title":"Linear","pinned":true,"head":null,"enterLabel":"Open Linear"},{"key":"suggested:chrome","title":"Google Chrome","pinned":true,"head":null,"enterLabel":"Open Google Chrome"},{"key":"suggested:automations","title":"Automations","pinned":true,"head":null,"enterLabel":"Open Automations"},{"key":"suggested:clipboard","title":"Clipboard History","pinned":true,"head":null,"enterLabel":"Open Clipboard History"},{"key":"suggested:notes","title":"Notes","pinned":true,"head":null,"enterLabel":"Open Notes"}],"via":"home"}
-{"t":6191,"ev":"content","px":512}
-{"t":6192,"out":"height","mode":"grow","px":512,"from":456}
-{"t":6192,"out":"slot","kind":"recent","label":"Last","title":"Turned on · every weekday at 9 open linear and open slack","sub":"just now","dimmed":true}
-{"t":6192,"out":"header","words":"Suggested"}
-{"t":6192,"out":"list","rows":[{"key":"suggested:slack","title":"Slack"},{"key":"suggested:linear","title":"Linear"},{"key":"suggested:chrome","title":"Google Chrome"},{"key":"suggested:automations","title":"Automations"},{"key":"suggested:clipboard","title":"Clipboard History"},{"key":"suggested:notes","title":"Notes"}],"sel":0}
-{"t":6192,"out":"toast","text":"Automation on"}
-{"t":6725,"ev":"text","text":"l"}
-{"t":6726,"out":"enter","id":"open Linear (app)","label":"Linear","armed":false}
-{"t":6726,"ev":"names","text":"l","rows":[{"key":"open Linear (app)","title":"Linear","enterLabel":"Linear","score":109.7,"head":null,"fallback":false},{"key":"open Logseq (app)","title":"Logseq","enterLabel":"Logseq","score":101.7,"head":null,"fallback":false},{"key":"open Loopback (app)","title":"Loopback","enterLabel":"Loopback","score":101.6,"head":null,"fallback":false}],"via":"text"}
-{"t":6727,"out":"header","words":"Matches"}
-{"t":6727,"out":"list","rows":[{"key":"open Linear (app)","title":"Linear"},{"key":"open Logseq (app)","title":"Logseq"},{"key":"open Loopback (app)","title":"Loopback"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
-{"t":6746,"ev":"text","text":"li"}
-{"t":6747,"ev":"names","text":"li","rows":[{"key":"open Linear (app)","title":"Linear","enterLabel":"Linear","score":109.7,"head":null,"fallback":false},{"key":"LinkedIn (Script Kit scriptlet)","title":"LinkedIn","enterLabel":"LinkedIn","score":99.6,"head":null,"fallback":false},{"key":"List Logins (Script Kit scriptlet)","title":"List Logins","enterLabel":"List Logins","score":99.45,"head":null,"fallback":false}],"via":"text"}
-{"t":6748,"out":"list","rows":[{"key":"open Linear (app)","title":"Linear"},{"key":"LinkedIn (Script Kit scriptlet)","title":"LinkedIn"},{"key":"List Logins (Script Kit scriptlet)","title":"List Logins"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
-{"t":6765,"ev":"text","text":"lis"}
-{"t":6766,"out":"enter","id":"List Logins (Script Kit scriptlet)","label":"List Logins","armed":false}
-{"t":6766,"ev":"names","text":"lis","rows":[{"key":"List Logins (Script Kit scriptlet)","title":"List Logins","enterLabel":"List Logins","score":99.45,"head":null,"fallback":false},{"key":"List Vaults (Script Kit scriptlet)","title":"List Vaults","enterLabel":"List Vaults","score":99.45,"head":null,"fallback":false},{"key":"List SSH Keys (Script Kit scriptlet)","title":"List SSH Keys","enterLabel":"List SSH Keys","score":99.35,"head":null,"fallback":false}],"via":"text"}
-{"t":6767,"out":"list","rows":[{"key":"List Logins (Script Kit scriptlet)","title":"List Logins"},{"key":"List Vaults (Script Kit scriptlet)","title":"List Vaults"},{"key":"List SSH Keys (Script Kit scriptlet)","title":"List SSH Keys"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
-{"t":6791,"ev":"text","text":"list"}
-{"t":6792,"ev":"names","text":"list","rows":[{"key":"List Logins (Script Kit scriptlet)","title":"List Logins","enterLabel":"List Logins","score":99.45,"head":null,"fallback":false},{"key":"List Vaults (Script Kit scriptlet)","title":"List Vaults","enterLabel":"List Vaults","score":99.45,"head":null,"fallback":false},{"key":"List SSH Keys (Script Kit scriptlet)","title":"List SSH Keys","enterLabel":"List SSH Keys","score":99.35,"head":null,"fallback":false}],"via":"text"}
-{"t":6816,"ev":"text","text":"list "}
-{"t":6817,"ev":"names","text":"list ","rows":[{"key":"List Logins (Script Kit scriptlet)","title":"List Logins","enterLabel":"List Logins","score":99.45,"head":null,"fallback":false},{"key":"List Vaults (Script Kit scriptlet)","title":"List Vaults","enterLabel":"List Vaults","score":99.45,"head":null,"fallback":false},{"key":"List SSH Keys (Script Kit scriptlet)","title":"List SSH Keys","enterLabel":"List SSH Keys","score":99.35,"head":null,"fallback":false}],"via":"text"}
-{"t":6845,"ev":"text","text":"list m"}
-{"t":6845,"out":"enter","id":"slot0","label":"Runs what Jev understands","armed":false}
-{"t":6845,"ev":"names","text":"list m","rows":[{"key":"fallback-google:list m","title":"Search Google for “list m”","enterLabel":"Search Google for “list m”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list m","title":"Ask AI “list m”","enterLabel":"Ask AI “list m”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":6846,"out":"height","mode":"hold","px":551,"by":"govern","list":302,"floor":393}
-{"t":6846,"out":"header","words":"Jev","note":"⌘1–3"}
-{"t":6846,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list m","title":"Search Google for “list m”"},{"key":"fallback-ai:list m","title":"Ask AI “list m”"}],"sel":0}
-{"t":6873,"ev":"text","text":"list my"}
-{"t":6874,"ev":"names","text":"list my","rows":[{"key":"fallback-google:list my","title":"Search Google for “list my”","enterLabel":"Search Google for “list my”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my","title":"Ask AI “list my”","enterLabel":"Ask AI “list my”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":6874,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my","title":"Search Google for “list my”"},{"key":"fallback-ai:list my","title":"Ask AI “list my”"}],"sel":0}
-{"t":6896,"ev":"text","text":"list my "}
-{"t":6897,"ev":"names","text":"list my ","rows":[{"key":"fallback-google:list my ","title":"Search Google for “list my ”","enterLabel":"Search Google for “list my ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my ","title":"Ask AI “list my ”","enterLabel":"Ask AI “list my ”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":6898,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my ","title":"Search Google for “list my ”"},{"key":"fallback-ai:list my ","title":"Ask AI “list my ”"}],"sel":0}
-{"t":6920,"ev":"text","text":"list my a"}
-{"t":6921,"ev":"names","text":"list my a","rows":[{"key":"fallback-google:list my a","title":"Search Google for “list my a”","enterLabel":"Search Google for “list my a”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my a","title":"Ask AI “list my a”","enterLabel":"Ask AI “list my a”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":6921,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my a","title":"Search Google for “list my a”"},{"key":"fallback-ai:list my a","title":"Ask AI “list my a”"}],"sel":0}
-{"t":6940,"ev":"text","text":"list my au"}
-{"t":6941,"ev":"names","text":"list my au","rows":[{"key":"fallback-google:list my au","title":"Search Google for “list my au”","enterLabel":"Search Google for “list my au”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my au","title":"Ask AI “list my au”","enterLabel":"Ask AI “list my au”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":6941,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my au","title":"Search Google for “list my au”"},{"key":"fallback-ai:list my au","title":"Ask AI “list my au”"}],"sel":0}
-{"t":6968,"ev":"text","text":"list my aut"}
-{"t":6968,"ev":"names","text":"list my aut","rows":[{"key":"fallback-google:list my aut","title":"Search Google for “list my aut”","enterLabel":"Search Google for “list my aut”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my aut","title":"Ask AI “list my aut”","enterLabel":"Ask AI “list my aut”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":6969,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my aut","title":"Search Google for “list my aut”"},{"key":"fallback-ai:list my aut","title":"Ask AI “list my aut”"}],"sel":0}
-{"t":6991,"ev":"text","text":"list my auto"}
-{"t":6991,"ev":"names","text":"list my auto","rows":[{"key":"fallback-google:list my auto","title":"Search Google for “list my auto”","enterLabel":"Search Google for “list my auto”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my auto","title":"Ask AI “list my auto”","enterLabel":"Ask AI “list my auto”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":6992,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my auto","title":"Search Google for “list my auto”"},{"key":"fallback-ai:list my auto","title":"Ask AI “list my auto”"}],"sel":0}
-{"t":7013,"ev":"text","text":"list my autom"}
-{"t":7014,"ev":"names","text":"list my autom","rows":[{"key":"fallback-google:list my autom","title":"Search Google for “list my autom”","enterLabel":"Search Google for “list my autom”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my autom","title":"Ask AI “list my autom”","enterLabel":"Ask AI “list my autom”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":7015,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my autom","title":"Search Google for “list my autom”"},{"key":"fallback-ai:list my autom","title":"Ask AI “list my autom”"}],"sel":0}
-{"t":7033,"ev":"text","text":"list my automa"}
-{"t":7034,"ev":"names","text":"list my automa","rows":[{"key":"fallback-google:list my automa","title":"Search Google for “list my automa”","enterLabel":"Search Google for “list my automa”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my automa","title":"Ask AI “list my automa”","enterLabel":"Ask AI “list my automa”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":7035,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my automa","title":"Search Google for “list my automa”"},{"key":"fallback-ai:list my automa","title":"Ask AI “list my automa”"}],"sel":0}
-{"t":7055,"ev":"text","text":"list my automat"}
-{"t":7056,"ev":"names","text":"list my automat","rows":[{"key":"fallback-google:list my automat","title":"Search Google for “list my automat”","enterLabel":"Search Google for “list my automat”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my automat","title":"Ask AI “list my automat”","enterLabel":"Ask AI “list my automat”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":7056,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my automat","title":"Search Google for “list my automat”"},{"key":"fallback-ai:list my automat","title":"Ask AI “list my automat”"}],"sel":0}
-{"t":7074,"ev":"text","text":"list my automati"}
-{"t":7074,"ev":"names","text":"list my automati","rows":[{"key":"fallback-google:list my automati","title":"Search Google for “list my automati”","enterLabel":"Search Google for “list my automati”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my automati","title":"Ask AI “list my automati”","enterLabel":"Ask AI “list my automati”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":7075,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my automati","title":"Search Google for “list my automati”"},{"key":"fallback-ai:list my automati","title":"Ask AI “list my automati”"}],"sel":0}
-{"t":7091,"ev":"text","text":"list my automatio"}
-{"t":7091,"ev":"names","text":"list my automatio","rows":[{"key":"fallback-google:list my automatio","title":"Search Google for “list my automatio”","enterLabel":"Search Google for “list my automatio”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my automatio","title":"Ask AI “list my automatio”","enterLabel":"Ask AI “list my automatio”","score":null,"head":null,"fallback":true}],"via":"text"}
-{"t":7092,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my automatio","title":"Search Google for “list my automatio”"},{"key":"fallback-ai:list my automatio","title":"Ask AI “list my automatio”"}],"sel":0}
-{"t":7116,"ev":"text","text":"list my automation"}
-{"t":7116,"out":"enter","id":"automations","label":"Open Automations","armed":false}
-{"t":7117,"ev":"names","text":"list my automation","rows":[{"key":"automations","title":"Automations","enterLabel":"Open Automations","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":7117,"out":"header","words":"Matches"}
-{"t":7117,"out":"list","rows":[{"key":"automations","title":"Automations"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
-{"t":7141,"ev":"text","text":"list my automations"}
-{"t":7142,"ev":"names","text":"list my automations","rows":[{"key":"automations","title":"Automations","enterLabel":"Open Automations","score":100,"head":null,"fallback":false}],"via":"text"}
-{"t":7387,"ev":"jev","text":"list my automations","rows":[{"key":"jev:List All Items (Script Kit scriptlet)","title":"List All Items","icon":"builtin","p":0.24000000000000002,"fill":"List All Items","target":"List All Items","kind":"run"},{"key":"jev:answer: You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","title":"You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","icon":"answer","p":0.11,"fill":"You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","target":"You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","verb":"answer","kind":"recall","source":"recent"},{"key":"jev:List Logins (Script Kit scriptlet)","title":"List Logins","icon":"builtin","p":0.03,"fill":"List Logins","target":"List Logins","kind":"run"},{"key":"jev:answer: You've run Linear 41 times; last 20 minutes ago","title":"You've run Linear 41 times; last 20 minutes ago","icon":"answer","p":0.02,"fill":"You've run Linear 41 times; last 20 minutes ago","target":"You've run Linear 41 times; last 20 minutes ago","verb":"answer","kind":"recall","source":"recent"},{"key":"jev:Script Kit Tips (Script Kit builtin)","title":"Script Kit Tips","icon":"builtin","p":0.02,"fill":"Script Kit Tips","target":"Script Kit Tips","kind":"run"},{"key":"jev:open the script for editing: Append Daily Note","title":"Edit Append Daily Note","icon":"edit","p":0.02,"fill":"edit Append Daily Note","target":"Append Daily Note","verb":"edit","kind":"automate","source":"recent"},{"key":"jev:answer: Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","title":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","icon":"answer","p":0.02,"fill":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","target":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","verb":"answer","kind":"recall","source":"notes"},{"key":"jev:List Items by Tag (Script Kit scriptlet)","title":"List Items by Tag","icon":"builtin","p":0.02,"fill":"List Items by Tag","target":"List Items by Tag","kind":"run"},{"key":"jev:run on a schedule: Append Daily Note","title":"Run Append Daily Note weekdays around 9:05","icon":"schedule","p":0.02,"fill":"run Append Daily Note weekdays around 9:05","target":"Append Daily Note","verb":"schedule","kind":"automate","source":"recent"},{"key":"jev:tell them I'm running late: Q4 launch review","title":"Tell Marketing I'm running late","icon":"message","p":0.01,"fill":"tell Marketing I'm running late","target":"Q4 launch review","verb":"message","kind":"capture","source":"calendar"},{"key":"jev:what did I say about … (Dictation history)","title":"What did I say about “list my automations”","icon":"recall","p":0.01,"fill":"what did I say about “list my automations”","kind":"recall"},{"key":"jev:tell them I'm running late: Lunch with Sarah","title":"Tell Sarah I'm running late","icon":"message","p":0.01,"fill":"tell Sarah I'm running late","target":"Lunch with Sarah","verb":"message","kind":"capture","source":"calendar"},{"key":"jev:tell them I'm running late: Standup","title":"Tell Standup I'm running late","icon":"message","p":0.01,"fill":"tell Standup I'm running late","target":"Standup","verb":"message","kind":"capture","source":"calendar"},{"key":"jev:undo what I just did: Turned on · every weekday at 9 open linear and open slack","title":"Undo that","icon":"undo","p":0.01,"fill":"undo that","target":"Turned on · every weekday at 9 open linear and open slack","verb":"undo","kind":"run","source":"last"}],"ms":170}
-{"t":7389,"out":"list","rows":[{"key":"automations","title":"Automations"},{"key":"jev:List All Items (Script Kit scriptlet)","title":"List All Items","jev":true},{"key":"jev:answer: You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","title":"You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","jev":true},{"key":"jev:List Logins (Script Kit scriptlet)","title":"List Logins","jev":true}],"sel":0}
-{"t":7692,"ev":"content","px":447}
-{"t":7692,"out":"height","mode":"shrink","px":447,"from":551}
-{"t":7724,"ev":"key","key":"Enter"}
-{"t":7724,"out":"run","key":"automations","title":"Automations","how":"match"}
-{"t":7724,"ev":"view","op":"open","name":"list","via":"key:Enter","enter":{"id":"list:new-3","label":"Turn it off"},"label":"Automations","takesInput":true}
-{"t":7726,"ev":"content","px":463,"via":"open"}
-{"t":7726,"out":"height","mode":"hold","px":546,"to":463,"waitMs":300}
-{"t":7726,"out":"enter","id":"list:new-3","label":"Turn it off","armed":false}
-{"t":7727,"out":"header","words":"Automations","view":"list","head":"Runs on its own"}
-{"t":7727,"out":"text","text":"","by":"page","silent":true}
-{"t":8029,"out":"height","mode":"shrink","px":463,"from":546}
-{"t":8929,"ev":"text","text":"t"}
-{"t":8929,"ev":"viewEnter","id":"list-say:say","label":"Do what I said","onTop":true,"via":"text"}
-{"t":8929,"out":"enter","id":"list-say:say","label":"Do what I said","armed":false}
-{"t":8947,"ev":"text","text":"tu"}
-{"t":8970,"ev":"text","text":"tur"}
-{"t":8996,"ev":"text","text":"turn"}
-{"t":9022,"ev":"text","text":"turn "}
-{"t":9049,"ev":"text","text":"turn o"}
-{"t":9069,"ev":"text","text":"turn of"}
-{"t":9092,"ev":"text","text":"turn off"}
-{"t":9119,"ev":"text","text":"turn off "}
-{"t":9149,"ev":"text","text":"turn off t"}
-{"t":9170,"ev":"text","text":"turn off th"}
-{"t":9197,"ev":"text","text":"turn off the"}
-{"t":9223,"ev":"text","text":"turn off the "}
-{"t":9250,"ev":"text","text":"turn off the g"}
-{"t":9276,"ev":"text","text":"turn off the gi"}
-{"t":9295,"ev":"text","text":"turn off the git"}
-{"t":9315,"ev":"text","text":"turn off the gith"}
-{"t":9342,"ev":"text","text":"turn off the githu"}
-{"t":9367,"ev":"text","text":"turn off the github"}
-{"t":9386,"ev":"text","text":"turn off the github "}
-{"t":9409,"ev":"text","text":"turn off the github o"}
-{"t":9428,"ev":"text","text":"turn off the github on"}
-{"t":9454,"ev":"text","text":"turn off the github one"}
-{"t":9690,"ev":"key","key":"Enter"}
-{"t":9691,"ev":"viewEnter","id":"list:new-3","label":"Turn it off","onTop":true,"via":"key:Enter"}
-{"t":9691,"out":"enter","id":"list:new-3","label":"Turn it off","armed":false}
-{"t":9691,"ev":"viewEnter","id":"list-say:reading","label":"Jev is reading…","onTop":true,"via":"key:Enter"}
-{"t":9691,"out":"enter","id":"list-say:reading","label":"Jev is reading…","armed":false}
-{"t":9816,"ev":"viewEnter","id":"list:gh-review","label":"Turn it back on","onTop":true}
-{"t":9816,"out":"enter","id":"list:gh-review","label":"Turn it back on","armed":true}
-{"t":9817,"out":"slot","kind":"recent","label":"Last","title":"Turned off · When you copy a GitHub link","sub":"just now","dimmed":true}
-{"t":9817,"out":"text","text":"","by":"page","silent":true}
-{"t":10751,"ev":"text","text":"t"}
-{"t":10751,"ev":"viewEnter","id":"list-say:say","label":"Do what I said","onTop":true,"via":"text"}
-{"t":10751,"out":"enter","id":"list-say:say","label":"Do what I said","armed":false}
-{"t":10775,"ev":"text","text":"tu"}
-{"t":10794,"ev":"text","text":"tur"}
-{"t":10814,"ev":"text","text":"turn"}
-{"t":10839,"ev":"text","text":"turn "}
-{"t":10867,"ev":"text","text":"turn t"}
-{"t":10886,"ev":"text","text":"turn th"}
-{"t":10906,"ev":"text","text":"turn the"}
-{"t":10924,"ev":"text","text":"turn the "}
-{"t":10959,"ev":"text","text":"turn the g"}
-{"t":10979,"ev":"text","text":"turn the gi"}
-{"t":11002,"ev":"text","text":"turn the git"}
-{"t":11025,"ev":"text","text":"turn the gith"}
-{"t":11046,"ev":"text","text":"turn the githu"}
-{"t":11066,"ev":"text","text":"turn the github"}
-{"t":11087,"ev":"text","text":"turn the github "}
-{"t":11113,"ev":"text","text":"turn the github o"}
-{"t":11132,"ev":"text","text":"turn the github on"}
-{"t":11152,"ev":"text","text":"turn the github one"}
-{"t":11174,"ev":"text","text":"turn the github one "}
-{"t":11207,"ev":"text","text":"turn the github one b"}
-{"t":11233,"ev":"text","text":"turn the github one ba"}
-{"t":11257,"ev":"text","text":"turn the github one bac"}
-{"t":11276,"ev":"text","text":"turn the github one back"}
-{"t":11299,"ev":"text","text":"turn the github one back "}
-{"t":11329,"ev":"text","text":"turn the github one back o"}
-{"t":11346,"ev":"text","text":"turn the github one back on"}
-{"t":11581,"ev":"key","key":"Enter"}
-{"t":11582,"ev":"viewEnter","id":"list:gh-review","label":"Turn it back on","onTop":true,"via":"key:Enter"}
-{"t":11582,"out":"enter","id":"list:gh-review","label":"Turn it back on","armed":false}
-{"t":11582,"ev":"viewEnter","id":"list-say:reading","label":"Jev is reading…","onTop":true,"via":"key:Enter"}
-{"t":11582,"out":"enter","id":"list-say:reading","label":"Jev is reading…","armed":false}
-{"t":11737,"ev":"viewEnter","id":"list:gh-review","label":"Turn it off","onTop":true}
-{"t":11737,"out":"enter","id":"list:gh-review","label":"Turn it off","armed":true}
-{"t":11737,"out":"slot","kind":"recent","label":"Last","title":"Turned back on · When you copy a GitHub link","sub":"just now","dimmed":true}
-{"t":11737,"out":"text","text":"","by":"page","silent":true}
-{"t":12538,"ev":"text","text":"m"}
-{"t":12538,"ev":"viewEnter","id":"list-say:say","label":"Do what I said","onTop":true,"via":"text"}
-{"t":12538,"out":"enter","id":"list-say:say","label":"Do what I said","armed":false}
-{"t":12564,"ev":"text","text":"ma"}
-{"t":12590,"ev":"text","text":"mak"}
-{"t":12613,"ev":"text","text":"make"}
-{"t":12639,"ev":"text","text":"make "}
-{"t":12661,"ev":"text","text":"make t"}
-{"t":12685,"ev":"text","text":"make th"}
-{"t":12707,"ev":"text","text":"make the"}
-{"t":12734,"ev":"text","text":"make the "}
-{"t":12767,"ev":"text","text":"make the f"}
-{"t":12785,"ev":"text","text":"make the fr"}
-{"t":12804,"ev":"text","text":"make the fri"}
-{"t":12831,"ev":"text","text":"make the frid"}
-{"t":12857,"ev":"text","text":"make the frida"}
-{"t":12885,"ev":"text","text":"make the friday"}
-{"t":12913,"ev":"text","text":"make the friday "}
-{"t":12934,"ev":"text","text":"make the friday o"}
-{"t":12960,"ev":"text","text":"make the friday on"}
-{"t":12979,"ev":"text","text":"make the friday one"}
-{"t":13005,"ev":"text","text":"make the friday one "}
-{"t":13030,"ev":"text","text":"make the friday one 3"}
-{"t":13057,"ev":"text","text":"make the friday one 3p"}
-{"t":13083,"ev":"text","text":"make the friday one 3pm"}
-{"t":13318,"ev":"key","key":"Enter"}
-{"t":13319,"ev":"viewEnter","id":"list:gh-review","label":"Turn it off","onTop":true,"via":"key:Enter"}
-{"t":13319,"out":"enter","id":"list:gh-review","label":"Turn it off","armed":false}
-{"t":13319,"ev":"viewEnter","id":"list-say:reading","label":"Jev is reading…","onTop":true,"via":"key:Enter"}
-{"t":13319,"out":"enter","id":"list-say:reading","label":"Jev is reading…","armed":false}
-{"t":13436,"ev":"viewEnter","id":"list:friday-summary","label":"Turn it off","onTop":true}
-{"t":13436,"out":"enter","id":"list:friday-summary","label":"Turn it off","armed":true}
-{"t":13436,"out":"slot","kind":"recent","label":"Last","title":"Every Friday 4 PM → 3 PM","sub":"just now","dimmed":true}
-{"t":13436,"out":"text","text":"","by":"page","silent":true}
+{"t":3223,"ev":"text","text":"e"}
+{"t":3225,"out":"enter","id":"Google Chrome menu: Window › Extensions","label":"Extensions","armed":false}
+{"t":3225,"ev":"names","text":"e","rows":[{"key":"Google Chrome menu: Window › Extensions","title":"Extensions","enterLabel":"Extensions","score":102.5,"head":null,"fallback":false},{"key":"Google Chrome menu: Edit › Emoji & Symbols","title":"Emoji & Symbols","enterLabel":"Emoji & Symbols","score":102.25,"head":null,"fallback":false},{"key":"Google Chrome menu: View › Enter Full Screen","title":"Enter Full Screen","enterLabel":"Enter Full Screen","score":102.15,"head":null,"fallback":false}],"via":"text"}
+{"t":3228,"ev":"content","px":551,"via":"govern"}
+{"t":3228,"out":"height","mode":"grow","px":551,"by":"govern"}
+{"t":3228,"out":"header","words":"Matches"}
+{"t":3228,"out":"list","rows":[{"key":"Google Chrome menu: Window › Extensions","title":"Extensions"},{"key":"Google Chrome menu: Edit › Emoji & Symbols","title":"Emoji & Symbols"},{"key":"Google Chrome menu: View › Enter Full Screen","title":"Enter Full Screen"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":3244,"ev":"text","text":"ev"}
+{"t":3244,"out":"enter","id":"open Karabiner-EventViewer (app)","label":"Karabiner-EventViewer","armed":false}
+{"t":3245,"ev":"names","text":"ev","rows":[{"key":"open Karabiner-EventViewer (app)","title":"Karabiner-EventViewer","enterLabel":"Karabiner-EventViewer","score":80.95,"head":null,"fallback":false},{"key":"schedule … (Calendar event)","title":"Calendar event","enterLabel":"Calendar event","score":79.3,"head":null,"fallback":false},{"key":"Create Calendar Event (Script Kit script)","title":"Create Calendar Event","enterLabel":"Create Calendar Event","score":78.95,"head":null,"fallback":false}],"via":"text"}
+{"t":3245,"out":"list","rows":[{"key":"open Karabiner-EventViewer (app)","title":"Karabiner-EventViewer"},{"key":"schedule … (Calendar event)","title":"Calendar event"},{"key":"Create Calendar Event (Script Kit script)","title":"Create Calendar Event"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":3271,"ev":"text","text":"eve"}
+{"t":3272,"ev":"names","text":"eve","rows":[{"key":"open Karabiner-EventViewer (app)","title":"Karabiner-EventViewer","enterLabel":"Karabiner-EventViewer","score":80.95,"head":null,"fallback":false},{"key":"schedule … (Calendar event)","title":"Calendar event","enterLabel":"Calendar event","score":79.3,"head":null,"fallback":false},{"key":"Create Calendar Event (Script Kit script)","title":"Create Calendar Event","enterLabel":"Create Calendar Event","score":78.95,"head":null,"fallback":false}],"via":"text"}
+{"t":3295,"ev":"text","text":"ever"}
+{"t":3296,"out":"enter","id":"slot0","label":"Runs what Jev understands","armed":false}
+{"t":3296,"ev":"names","text":"ever","rows":[{"key":"Google Chrome menu: View › Developer › View Source","title":"Developer › View Source","enterLabel":"Developer › View Source","score":26.85,"head":null,"fallback":false},{"key":"Google Chrome menu: View › Developer › Developer Tools","title":"Developer › Developer Tools","enterLabel":"Developer › Developer Tools","score":26.65,"head":null,"fallback":false},{"key":"Google Chrome menu: View › Developer › JavaScript Console","title":"Developer › JavaScript Console","enterLabel":"Developer › JavaScript Console","score":26.5,"head":null,"fallback":false}],"via":"text"}
+{"t":3297,"ev":"content","px":512,"via":"govern"}
+{"t":3297,"out":"height","mode":"hold","px":551,"by":"govern","list":354,"floor":393}
+{"t":3297,"out":"header","words":"Jev","note":"⌘1–3"}
+{"t":3297,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"Google Chrome menu: View › Developer › View Source","title":"Developer › View Source"},{"key":"Google Chrome menu: View › Developer › Developer Tools","title":"Developer › Developer Tools"},{"key":"Google Chrome menu: View › Developer › JavaScript Console","title":"Developer › JavaScript Console"}],"sel":0}
+{"t":3322,"ev":"text","text":"every"}
+{"t":3323,"ev":"names","text":"every","rows":[{"key":"Add Quick Access Overlay (Script Kit scriptlet)","title":"Add Quick Access Overlay","enterLabel":"Add Quick Access Overlay","score":23.8,"head":null,"fallback":false},{"key":"Open Privacy & Security Settings (Script Kit builtin)","title":"Open Privacy & Security Settings","enterLabel":"Open Privacy & Security Settings","score":23.4,"head":null,"fallback":false}],"via":"text"}
+{"t":3324,"ev":"content","px":460,"via":"govern"}
+{"t":3324,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"Add Quick Access Overlay (Script Kit scriptlet)","title":"Add Quick Access Overlay"},{"key":"Open Privacy & Security Settings (Script Kit builtin)","title":"Open Privacy & Security Settings"}],"sel":0}
+{"t":3341,"ev":"text","text":"every "}
+{"t":3341,"ev":"names","text":"every ","rows":[{"key":"Add Quick Access Overlay (Script Kit scriptlet)","title":"Add Quick Access Overlay","enterLabel":"Add Quick Access Overlay","score":23.8,"head":null,"fallback":false},{"key":"Open Privacy & Security Settings (Script Kit builtin)","title":"Open Privacy & Security Settings","enterLabel":"Open Privacy & Security Settings","score":23.4,"head":null,"fallback":false}],"via":"text"}
+{"t":3374,"ev":"text","text":"every w"}
+{"t":3375,"ev":"names","text":"every w","rows":[{"key":"fallback-google:every w","title":"Search Google for “every w”","enterLabel":"Search Google for “every w”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every w","title":"Ask AI “every w”","enterLabel":"Ask AI “every w”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3376,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every w","title":"Search Google for “every w”"},{"key":"fallback-ai:every w","title":"Ask AI “every w”"}],"sel":0}
+{"t":3395,"ev":"text","text":"every we"}
+{"t":3396,"ev":"names","text":"every we","rows":[{"key":"fallback-google:every we","title":"Search Google for “every we”","enterLabel":"Search Google for “every we”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every we","title":"Ask AI “every we”","enterLabel":"Ask AI “every we”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3396,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every we","title":"Search Google for “every we”"},{"key":"fallback-ai:every we","title":"Ask AI “every we”"}],"sel":0}
+{"t":3413,"ev":"text","text":"every wee"}
+{"t":3413,"ev":"names","text":"every wee","rows":[{"key":"fallback-google:every wee","title":"Search Google for “every wee”","enterLabel":"Search Google for “every wee”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every wee","title":"Ask AI “every wee”","enterLabel":"Ask AI “every wee”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3414,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every wee","title":"Search Google for “every wee”"},{"key":"fallback-ai:every wee","title":"Ask AI “every wee”"}],"sel":0}
+{"t":3431,"ev":"text","text":"every week"}
+{"t":3431,"ev":"names","text":"every week","rows":[{"key":"fallback-google:every week","title":"Search Google for “every week”","enterLabel":"Search Google for “every week”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every week","title":"Ask AI “every week”","enterLabel":"Ask AI “every week”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3432,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every week","title":"Search Google for “every week”"},{"key":"fallback-ai:every week","title":"Ask AI “every week”"}],"sel":0}
+{"t":3457,"ev":"text","text":"every weekd"}
+{"t":3458,"ev":"names","text":"every weekd","rows":[{"key":"fallback-google:every weekd","title":"Search Google for “every weekd”","enterLabel":"Search Google for “every weekd”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekd","title":"Ask AI “every weekd”","enterLabel":"Ask AI “every weekd”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3458,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekd","title":"Search Google for “every weekd”"},{"key":"fallback-ai:every weekd","title":"Ask AI “every weekd”"}],"sel":0}
+{"t":3484,"ev":"text","text":"every weekda"}
+{"t":3484,"ev":"names","text":"every weekda","rows":[{"key":"fallback-google:every weekda","title":"Search Google for “every weekda”","enterLabel":"Search Google for “every weekda”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekda","title":"Ask AI “every weekda”","enterLabel":"Ask AI “every weekda”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3485,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekda","title":"Search Google for “every weekda”"},{"key":"fallback-ai:every weekda","title":"Ask AI “every weekda”"}],"sel":0}
+{"t":3507,"ev":"text","text":"every weekday"}
+{"t":3508,"ev":"names","text":"every weekday","rows":[{"key":"fallback-google:every weekday","title":"Search Google for “every weekday”","enterLabel":"Search Google for “every weekday”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday","title":"Ask AI “every weekday”","enterLabel":"Ask AI “every weekday”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3508,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday","title":"Search Google for “every weekday”"},{"key":"fallback-ai:every weekday","title":"Ask AI “every weekday”"}],"sel":0}
+{"t":3529,"ev":"text","text":"every weekday "}
+{"t":3529,"ev":"names","text":"every weekday ","rows":[{"key":"fallback-google:every weekday ","title":"Search Google for “every weekday ”","enterLabel":"Search Google for “every weekday ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday ","title":"Ask AI “every weekday ”","enterLabel":"Ask AI “every weekday ”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3530,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday ","title":"Search Google for “every weekday ”"},{"key":"fallback-ai:every weekday ","title":"Ask AI “every weekday ”"}],"sel":0}
+{"t":3558,"ev":"text","text":"every weekday a"}
+{"t":3558,"ev":"names","text":"every weekday a","rows":[{"key":"fallback-google:every weekday a","title":"Search Google for “every weekday a”","enterLabel":"Search Google for “every weekday a”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday a","title":"Ask AI “every weekday a”","enterLabel":"Ask AI “every weekday a”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3559,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday a","title":"Search Google for “every weekday a”"},{"key":"fallback-ai:every weekday a","title":"Ask AI “every weekday a”"}],"sel":0}
+{"t":3581,"ev":"text","text":"every weekday at"}
+{"t":3581,"ev":"names","text":"every weekday at","rows":[{"key":"fallback-google:every weekday at","title":"Search Google for “every weekday at”","enterLabel":"Search Google for “every weekday at”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at","title":"Ask AI “every weekday at”","enterLabel":"Ask AI “every weekday at”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3582,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at","title":"Search Google for “every weekday at”"},{"key":"fallback-ai:every weekday at","title":"Ask AI “every weekday at”"}],"sel":0}
+{"t":3606,"ev":"text","text":"every weekday at "}
+{"t":3606,"ev":"names","text":"every weekday at ","rows":[{"key":"fallback-google:every weekday at ","title":"Search Google for “every weekday at ”","enterLabel":"Search Google for “every weekday at ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at ","title":"Ask AI “every weekday at ”","enterLabel":"Ask AI “every weekday at ”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3607,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at ","title":"Search Google for “every weekday at ”"},{"key":"fallback-ai:every weekday at ","title":"Ask AI “every weekday at ”"}],"sel":0}
+{"t":3637,"ev":"text","text":"every weekday at 9"}
+{"t":3638,"ev":"names","text":"every weekday at 9","rows":[{"key":"fallback-google:every weekday at 9","title":"Search Google for “every weekday at 9”","enterLabel":"Search Google for “every weekday at 9”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9","title":"Ask AI “every weekday at 9”","enterLabel":"Ask AI “every weekday at 9”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3639,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9","title":"Search Google for “every weekday at 9”"},{"key":"fallback-ai:every weekday at 9","title":"Ask AI “every weekday at 9”"}],"sel":0}
+{"t":3658,"ev":"text","text":"every weekday at 9 "}
+{"t":3659,"ev":"names","text":"every weekday at 9 ","rows":[{"key":"fallback-google:every weekday at 9 ","title":"Search Google for “every weekday at 9 ”","enterLabel":"Search Google for “every weekday at 9 ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9 ","title":"Ask AI “every weekday at 9 ”","enterLabel":"Ask AI “every weekday at 9 ”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3659,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9 ","title":"Search Google for “every weekday at 9 ”"},{"key":"fallback-ai:every weekday at 9 ","title":"Ask AI “every weekday at 9 ”"}],"sel":0}
+{"t":3685,"ev":"text","text":"every weekday at 9 o"}
+{"t":3686,"ev":"names","text":"every weekday at 9 o","rows":[{"key":"fallback-google:every weekday at 9 o","title":"Search Google for “every weekday at 9 o”","enterLabel":"Search Google for “every weekday at 9 o”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9 o","title":"Ask AI “every weekday at 9 o”","enterLabel":"Ask AI “every weekday at 9 o”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3686,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9 o","title":"Search Google for “every weekday at 9 o”"},{"key":"fallback-ai:every weekday at 9 o","title":"Ask AI “every weekday at 9 o”"}],"sel":0}
+{"t":3711,"ev":"text","text":"every weekday at 9 op"}
+{"t":3711,"ev":"names","text":"every weekday at 9 op","rows":[{"key":"fallback-google:every weekday at 9 op","title":"Search Google for “every weekday at 9 op”","enterLabel":"Search Google for “every weekday at 9 op”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9 op","title":"Ask AI “every weekday at 9 op”","enterLabel":"Ask AI “every weekday at 9 op”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3712,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9 op","title":"Search Google for “every weekday at 9 op”"},{"key":"fallback-ai:every weekday at 9 op","title":"Ask AI “every weekday at 9 op”"}],"sel":0}
+{"t":3732,"ev":"text","text":"every weekday at 9 ope"}
+{"t":3732,"ev":"names","text":"every weekday at 9 ope","rows":[{"key":"fallback-google:every weekday at 9 ope","title":"Search Google for “every weekday at 9 ope”","enterLabel":"Search Google for “every weekday at 9 ope”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:every weekday at 9 ope","title":"Ask AI “every weekday at 9 ope”","enterLabel":"Ask AI “every weekday at 9 ope”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":3733,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:every weekday at 9 ope","title":"Search Google for “every weekday at 9 ope”"},{"key":"fallback-ai:every weekday at 9 ope","title":"Ask AI “every weekday at 9 ope”"}],"sel":0}
+{"t":3753,"ev":"text","text":"every weekday at 9 open"}
+{"t":3753,"out":"enter","id":"automate","label":"Set it up to run on its own","armed":false}
+{"t":3753,"ev":"names","text":"every weekday at 9 open","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3754,"ev":"content","px":447,"via":"govern"}
+{"t":3754,"out":"header","words":"Matches"}
+{"t":3754,"out":"list","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":3770,"ev":"text","text":"every weekday at 9 open "}
+{"t":3771,"ev":"names","text":"every weekday at 9 open ","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3802,"ev":"text","text":"every weekday at 9 open l"}
+{"t":3803,"ev":"names","text":"every weekday at 9 open l","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3828,"ev":"text","text":"every weekday at 9 open li"}
+{"t":3829,"ev":"names","text":"every weekday at 9 open li","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3848,"ev":"text","text":"every weekday at 9 open lin"}
+{"t":3849,"ev":"names","text":"every weekday at 9 open lin","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3866,"ev":"text","text":"every weekday at 9 open line"}
+{"t":3866,"ev":"names","text":"every weekday at 9 open line","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3893,"ev":"text","text":"every weekday at 9 open linea"}
+{"t":3894,"ev":"names","text":"every weekday at 9 open linea","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3911,"ev":"text","text":"every weekday at 9 open linear"}
+{"t":3911,"ev":"names","text":"every weekday at 9 open linear","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3932,"ev":"text","text":"every weekday at 9 open linear "}
+{"t":3932,"ev":"names","text":"every weekday at 9 open linear ","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3959,"ev":"text","text":"every weekday at 9 open linear a"}
+{"t":3960,"ev":"names","text":"every weekday at 9 open linear a","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3978,"ev":"text","text":"every weekday at 9 open linear an"}
+{"t":3978,"ev":"names","text":"every weekday at 9 open linear an","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":3995,"ev":"text","text":"every weekday at 9 open linear and"}
+{"t":3996,"ev":"names","text":"every weekday at 9 open linear and","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4019,"ev":"text","text":"every weekday at 9 open linear and "}
+{"t":4019,"ev":"names","text":"every weekday at 9 open linear and ","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4050,"ev":"text","text":"every weekday at 9 open linear and o"}
+{"t":4051,"ev":"names","text":"every weekday at 9 open linear and o","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4067,"ev":"text","text":"every weekday at 9 open linear and op"}
+{"t":4067,"ev":"names","text":"every weekday at 9 open linear and op","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4090,"ev":"text","text":"every weekday at 9 open linear and ope"}
+{"t":4091,"ev":"names","text":"every weekday at 9 open linear and ope","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4116,"ev":"text","text":"every weekday at 9 open linear and open"}
+{"t":4117,"ev":"names","text":"every weekday at 9 open linear and open","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4136,"ev":"text","text":"every weekday at 9 open linear and open "}
+{"t":4136,"ev":"names","text":"every weekday at 9 open linear and open ","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4164,"ev":"text","text":"every weekday at 9 open linear and open s"}
+{"t":4165,"ev":"names","text":"every weekday at 9 open linear and open s","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4185,"ev":"text","text":"every weekday at 9 open linear and open sl"}
+{"t":4186,"ev":"names","text":"every weekday at 9 open linear and open sl","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4205,"ev":"text","text":"every weekday at 9 open linear and open sla"}
+{"t":4205,"ev":"names","text":"every weekday at 9 open linear and open sla","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4226,"ev":"text","text":"every weekday at 9 open linear and open slac"}
+{"t":4227,"ev":"names","text":"every weekday at 9 open linear and open slac","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4250,"ev":"text","text":"every weekday at 9 open linear and open slack"}
+{"t":4251,"ev":"names","text":"every weekday at 9 open linear and open slack","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9","enterLabel":"Set it up to run on its own","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":4469,"ev":"jev","text":"every weekday at 9 open linear and open slack","rows":[{"key":"jev:run on a schedule: Linear","title":"Run Linear every weekday at 9","icon":"schedule","p":0.14,"fill":"run Linear every weekday at 9","target":"Linear","verb":"schedule","kind":"automate","source":"recent"},{"key":"jev:run on a schedule: Append Daily Note","title":"Run Append Daily Note every weekday at 9","icon":"schedule","p":0.09999999999999999,"fill":"run Append Daily Note every weekday at 9","target":"Append Daily Note","verb":"schedule","kind":"automate","source":"recent"},{"key":"jev:save what I just did as a script","title":"Save that as a script","icon":"script","p":0.08,"fill":"save that as a script","target":"last","kind":"automate"},{"key":"jev:open Slack (app)","title":"Open Slack","icon":"app","p":0.05,"fill":"open Slack","target":"Slack","kind":"run"},{"key":"jev:open Ghostty (app)","title":"Open Ghostty","icon":"app","p":0.05,"fill":"open Ghostty","target":"Ghostty","kind":"run"},{"key":"jev:add a line to the note: Launcher ideas","title":"Add to Launcher ideas","icon":"append","p":0.03,"fill":"add to Launcher ideas","target":"Launcher ideas","verb":"append","kind":"capture","source":"notes"},{"key":"jev:Google Chrome menu: Tab › Duplicate Tab","title":"Duplicate Tab","icon":"menu","p":0.02,"fill":"Duplicate Tab","target":"Google Chrome","kind":"app_command"},{"key":"jev:add a keyboard shortcut to: Append Daily Note","title":"Add a shortcut to Append Daily Note","icon":"shortcut","p":0.02,"fill":"add a shortcut to Append Daily Note","target":"Append Daily Note","verb":"shortcut","kind":"automate","source":"recent"},{"key":"jev:Google Chrome menu: View › Always Show Full URLs","title":"Always Show Full URLs","icon":"menu","p":0.02,"fill":"Always Show Full URLs","target":"Google Chrome","kind":"app_command"},{"key":"jev:open Mail (app)","title":"Open Mail","icon":"app","p":0.02,"fill":"open Mail","target":"Mail","kind":"run"},{"key":"jev:Open Accessibility Assistant (Script Kit builtin)","title":"Open Accessibility Assistant","icon":"builtin","p":0.02,"fill":"Open Accessibility Assistant","target":"Open Accessibility Assistant","kind":"run"},{"key":"jev:do again: Tiled Google Chrome to the left half and Ghostty to the right half","title":"Do that again","icon":"again","p":0.02,"fill":"do that again","target":"last","kind":"run"},{"key":"jev:open the script for editing: Append Daily Note","title":"Edit Append Daily Note","icon":"edit","p":0.02,"fill":"edit Append Daily Note","target":"Append Daily Note","verb":"edit","kind":"automate","source":"recent"},{"key":"jev:do again: Chrome left, Ghostty right","title":"Chrome left, Ghostty right","icon":"again","p":0.02,"fill":"Chrome left, Ghostty right","target":"Chrome left, Ghostty right","verb":"again","kind":"run","source":"recent"}],"ms":145}
+{"t":4470,"out":"list","rows":[{"key":"automate","title":"Run it on its own · every weekday at 9"},{"key":"jev:run on a schedule: Linear","title":"Run Linear every weekday at 9","jev":true},{"key":"jev:run on a schedule: Append Daily Note","title":"Run Append Daily Note every weekday at 9","jev":true},{"key":"jev:save what I just did as a script","title":"Save that as a script","jev":true}],"sel":0}
+{"t":4774,"out":"height","mode":"shrink","px":447,"from":551}
+{"t":4871,"ev":"key","key":"Enter"}
+{"t":4872,"out":"run","key":"automate","title":"Run it on its own · every weekday at 9","how":"match"}
+{"t":4872,"ev":"view","op":"open","name":"automation","row":"automate","via":"key:Enter","enter":{"id":"automation","label":"Turn it on"},"label":"Automation","takesInput":false}
+{"t":4873,"ev":"content","px":301,"via":"open"}
+{"t":4874,"out":"height","mode":"hold","px":491,"to":301,"waitMs":300}
+{"t":4874,"out":"enter","id":"automation","label":"Turn it on","armed":false}
+{"t":4874,"out":"header","words":"Automation","view":"automation"}
+{"t":5075,"ev":"content","px":456}
+{"t":5175,"out":"height","mode":"shrink","px":456,"from":491}
+{"t":6146,"ev":"key","key":"Enter"}
+{"t":6146,"ev":"done","title":"Turned on · every weekday at 9 open linear and open slack","icon":"again","risk":"undo","stay":false,"via":"key:Enter"}
+{"t":6146,"ev":"view","op":"home","from":"automation","via":"done"}
+{"t":6147,"out":"enter","id":"automate","label":"Set it up to run on its own","armed":true}
+{"t":6148,"ev":"content","px":447,"via":"home"}
+{"t":6148,"out":"height","mode":"shrink","px":447,"from":456}
+{"t":6148,"out":"text","text":"","by":"page"}
+{"t":6148,"out":"enter","id":"suggested:slack","label":"Open Slack","armed":true}
+{"t":6148,"ev":"names","text":"","rows":[{"key":"suggested:slack","title":"Slack","pinned":true,"head":"Suggested","enterLabel":"Open Slack"},{"key":"suggested:linear","title":"Linear","pinned":true,"head":null,"enterLabel":"Open Linear"},{"key":"suggested:chrome","title":"Google Chrome","pinned":true,"head":null,"enterLabel":"Open Google Chrome"},{"key":"suggested:automations","title":"Automations","pinned":true,"head":null,"enterLabel":"Open Automations"},{"key":"suggested:clipboard","title":"Clipboard History","pinned":true,"head":null,"enterLabel":"Open Clipboard History"},{"key":"suggested:notes","title":"Notes","pinned":true,"head":null,"enterLabel":"Open Notes"}],"via":"home"}
+{"t":6149,"ev":"content","px":512,"via":"govern"}
+{"t":6149,"out":"height","mode":"grow","px":512,"from":456}
+{"t":6149,"out":"slot","kind":"recent","label":"Last","title":"Turned on · every weekday at 9 open linear and open slack","sub":"just now","dimmed":true}
+{"t":6149,"out":"header","words":"Suggested"}
+{"t":6149,"out":"list","rows":[{"key":"suggested:slack","title":"Slack"},{"key":"suggested:linear","title":"Linear"},{"key":"suggested:chrome","title":"Google Chrome"},{"key":"suggested:automations","title":"Automations"},{"key":"suggested:clipboard","title":"Clipboard History"},{"key":"suggested:notes","title":"Notes"}],"sel":0}
+{"t":6149,"out":"toast","text":"Automation on"}
+{"t":6682,"ev":"text","text":"l"}
+{"t":6682,"out":"enter","id":"open Linear (app)","label":"Linear","armed":false}
+{"t":6682,"ev":"names","text":"l","rows":[{"key":"open Linear (app)","title":"Linear","enterLabel":"Linear","score":109.7,"head":null,"fallback":false},{"key":"open Logseq (app)","title":"Logseq","enterLabel":"Logseq","score":101.7,"head":null,"fallback":false},{"key":"open Loopback (app)","title":"Loopback","enterLabel":"Loopback","score":101.6,"head":null,"fallback":false}],"via":"text"}
+{"t":6683,"ev":"content","px":551,"via":"govern"}
+{"t":6683,"out":"height","mode":"grow","px":551,"by":"govern"}
+{"t":6683,"out":"header","words":"Matches"}
+{"t":6683,"out":"list","rows":[{"key":"open Linear (app)","title":"Linear"},{"key":"open Logseq (app)","title":"Logseq"},{"key":"open Loopback (app)","title":"Loopback"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":6701,"ev":"text","text":"li"}
+{"t":6702,"ev":"names","text":"li","rows":[{"key":"open Linear (app)","title":"Linear","enterLabel":"Linear","score":109.7,"head":null,"fallback":false},{"key":"LinkedIn (Script Kit scriptlet)","title":"LinkedIn","enterLabel":"LinkedIn","score":99.6,"head":null,"fallback":false},{"key":"List Logins (Script Kit scriptlet)","title":"List Logins","enterLabel":"List Logins","score":99.45,"head":null,"fallback":false}],"via":"text"}
+{"t":6702,"out":"list","rows":[{"key":"open Linear (app)","title":"Linear"},{"key":"LinkedIn (Script Kit scriptlet)","title":"LinkedIn"},{"key":"List Logins (Script Kit scriptlet)","title":"List Logins"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":6720,"ev":"text","text":"lis"}
+{"t":6720,"out":"enter","id":"List Logins (Script Kit scriptlet)","label":"List Logins","armed":false}
+{"t":6720,"ev":"names","text":"lis","rows":[{"key":"List Logins (Script Kit scriptlet)","title":"List Logins","enterLabel":"List Logins","score":99.45,"head":null,"fallback":false},{"key":"List Vaults (Script Kit scriptlet)","title":"List Vaults","enterLabel":"List Vaults","score":99.45,"head":null,"fallback":false},{"key":"List SSH Keys (Script Kit scriptlet)","title":"List SSH Keys","enterLabel":"List SSH Keys","score":99.35,"head":null,"fallback":false}],"via":"text"}
+{"t":6721,"out":"list","rows":[{"key":"List Logins (Script Kit scriptlet)","title":"List Logins"},{"key":"List Vaults (Script Kit scriptlet)","title":"List Vaults"},{"key":"List SSH Keys (Script Kit scriptlet)","title":"List SSH Keys"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":6745,"ev":"text","text":"list"}
+{"t":6746,"ev":"names","text":"list","rows":[{"key":"List Logins (Script Kit scriptlet)","title":"List Logins","enterLabel":"List Logins","score":99.45,"head":null,"fallback":false},{"key":"List Vaults (Script Kit scriptlet)","title":"List Vaults","enterLabel":"List Vaults","score":99.45,"head":null,"fallback":false},{"key":"List SSH Keys (Script Kit scriptlet)","title":"List SSH Keys","enterLabel":"List SSH Keys","score":99.35,"head":null,"fallback":false}],"via":"text"}
+{"t":6769,"ev":"text","text":"list "}
+{"t":6769,"ev":"names","text":"list ","rows":[{"key":"List Logins (Script Kit scriptlet)","title":"List Logins","enterLabel":"List Logins","score":99.45,"head":null,"fallback":false},{"key":"List Vaults (Script Kit scriptlet)","title":"List Vaults","enterLabel":"List Vaults","score":99.45,"head":null,"fallback":false},{"key":"List SSH Keys (Script Kit scriptlet)","title":"List SSH Keys","enterLabel":"List SSH Keys","score":99.35,"head":null,"fallback":false}],"via":"text"}
+{"t":6796,"ev":"text","text":"list m"}
+{"t":6796,"out":"enter","id":"slot0","label":"Runs what Jev understands","armed":false}
+{"t":6796,"ev":"names","text":"list m","rows":[{"key":"fallback-google:list m","title":"Search Google for “list m”","enterLabel":"Search Google for “list m”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list m","title":"Ask AI “list m”","enterLabel":"Ask AI “list m”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6797,"ev":"content","px":460,"via":"govern"}
+{"t":6797,"out":"height","mode":"hold","px":551,"by":"govern","list":302,"floor":393}
+{"t":6797,"out":"header","words":"Jev","note":"⌘1–3"}
+{"t":6797,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list m","title":"Search Google for “list m”"},{"key":"fallback-ai:list m","title":"Ask AI “list m”"}],"sel":0}
+{"t":6824,"ev":"text","text":"list my"}
+{"t":6825,"ev":"names","text":"list my","rows":[{"key":"fallback-google:list my","title":"Search Google for “list my”","enterLabel":"Search Google for “list my”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my","title":"Ask AI “list my”","enterLabel":"Ask AI “list my”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6826,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my","title":"Search Google for “list my”"},{"key":"fallback-ai:list my","title":"Ask AI “list my”"}],"sel":0}
+{"t":6847,"ev":"text","text":"list my "}
+{"t":6847,"ev":"names","text":"list my ","rows":[{"key":"fallback-google:list my ","title":"Search Google for “list my ”","enterLabel":"Search Google for “list my ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my ","title":"Ask AI “list my ”","enterLabel":"Ask AI “list my ”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6848,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my ","title":"Search Google for “list my ”"},{"key":"fallback-ai:list my ","title":"Ask AI “list my ”"}],"sel":0}
+{"t":6871,"ev":"text","text":"list my a"}
+{"t":6872,"ev":"names","text":"list my a","rows":[{"key":"fallback-google:list my a","title":"Search Google for “list my a”","enterLabel":"Search Google for “list my a”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my a","title":"Ask AI “list my a”","enterLabel":"Ask AI “list my a”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6872,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my a","title":"Search Google for “list my a”"},{"key":"fallback-ai:list my a","title":"Ask AI “list my a”"}],"sel":0}
+{"t":6891,"ev":"text","text":"list my au"}
+{"t":6891,"ev":"names","text":"list my au","rows":[{"key":"fallback-google:list my au","title":"Search Google for “list my au”","enterLabel":"Search Google for “list my au”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my au","title":"Ask AI “list my au”","enterLabel":"Ask AI “list my au”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6892,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my au","title":"Search Google for “list my au”"},{"key":"fallback-ai:list my au","title":"Ask AI “list my au”"}],"sel":0}
+{"t":6917,"ev":"text","text":"list my aut"}
+{"t":6917,"ev":"names","text":"list my aut","rows":[{"key":"fallback-google:list my aut","title":"Search Google for “list my aut”","enterLabel":"Search Google for “list my aut”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my aut","title":"Ask AI “list my aut”","enterLabel":"Ask AI “list my aut”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6918,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my aut","title":"Search Google for “list my aut”"},{"key":"fallback-ai:list my aut","title":"Ask AI “list my aut”"}],"sel":0}
+{"t":6939,"ev":"text","text":"list my auto"}
+{"t":6940,"ev":"names","text":"list my auto","rows":[{"key":"fallback-google:list my auto","title":"Search Google for “list my auto”","enterLabel":"Search Google for “list my auto”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my auto","title":"Ask AI “list my auto”","enterLabel":"Ask AI “list my auto”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6941,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my auto","title":"Search Google for “list my auto”"},{"key":"fallback-ai:list my auto","title":"Ask AI “list my auto”"}],"sel":0}
+{"t":6961,"ev":"text","text":"list my autom"}
+{"t":6962,"ev":"names","text":"list my autom","rows":[{"key":"fallback-google:list my autom","title":"Search Google for “list my autom”","enterLabel":"Search Google for “list my autom”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my autom","title":"Ask AI “list my autom”","enterLabel":"Ask AI “list my autom”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6962,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my autom","title":"Search Google for “list my autom”"},{"key":"fallback-ai:list my autom","title":"Ask AI “list my autom”"}],"sel":0}
+{"t":6980,"ev":"text","text":"list my automa"}
+{"t":6980,"ev":"names","text":"list my automa","rows":[{"key":"fallback-google:list my automa","title":"Search Google for “list my automa”","enterLabel":"Search Google for “list my automa”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my automa","title":"Ask AI “list my automa”","enterLabel":"Ask AI “list my automa”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":6981,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my automa","title":"Search Google for “list my automa”"},{"key":"fallback-ai:list my automa","title":"Ask AI “list my automa”"}],"sel":0}
+{"t":7002,"ev":"text","text":"list my automat"}
+{"t":7003,"ev":"names","text":"list my automat","rows":[{"key":"fallback-google:list my automat","title":"Search Google for “list my automat”","enterLabel":"Search Google for “list my automat”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my automat","title":"Ask AI “list my automat”","enterLabel":"Ask AI “list my automat”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":7003,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my automat","title":"Search Google for “list my automat”"},{"key":"fallback-ai:list my automat","title":"Ask AI “list my automat”"}],"sel":0}
+{"t":7020,"ev":"text","text":"list my automati"}
+{"t":7021,"ev":"names","text":"list my automati","rows":[{"key":"fallback-google:list my automati","title":"Search Google for “list my automati”","enterLabel":"Search Google for “list my automati”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my automati","title":"Ask AI “list my automati”","enterLabel":"Ask AI “list my automati”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":7022,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my automati","title":"Search Google for “list my automati”"},{"key":"fallback-ai:list my automati","title":"Ask AI “list my automati”"}],"sel":0}
+{"t":7037,"ev":"text","text":"list my automatio"}
+{"t":7038,"ev":"names","text":"list my automatio","rows":[{"key":"fallback-google:list my automatio","title":"Search Google for “list my automatio”","enterLabel":"Search Google for “list my automatio”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:list my automatio","title":"Ask AI “list my automatio”","enterLabel":"Ask AI “list my automatio”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":7039,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:list my automatio","title":"Search Google for “list my automatio”"},{"key":"fallback-ai:list my automatio","title":"Ask AI “list my automatio”"}],"sel":0}
+{"t":7062,"ev":"text","text":"list my automation"}
+{"t":7062,"out":"enter","id":"automations","label":"Open Automations","armed":false}
+{"t":7062,"ev":"names","text":"list my automation","rows":[{"key":"automations","title":"Automations","enterLabel":"Open Automations","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":7063,"ev":"content","px":447,"via":"govern"}
+{"t":7063,"out":"header","words":"Matches"}
+{"t":7063,"out":"list","rows":[{"key":"automations","title":"Automations"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":7086,"ev":"text","text":"list my automations"}
+{"t":7087,"ev":"names","text":"list my automations","rows":[{"key":"automations","title":"Automations","enterLabel":"Open Automations","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":7330,"ev":"jev","text":"list my automations","rows":[{"key":"jev:List All Items (Script Kit scriptlet)","title":"List All Items","icon":"builtin","p":0.24000000000000002,"fill":"List All Items","target":"List All Items","kind":"run"},{"key":"jev:answer: You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","title":"You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","icon":"answer","p":0.11,"fill":"You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","target":"You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","verb":"answer","kind":"recall","source":"recent"},{"key":"jev:List Logins (Script Kit scriptlet)","title":"List Logins","icon":"builtin","p":0.03,"fill":"List Logins","target":"List Logins","kind":"run"},{"key":"jev:answer: You've run Linear 41 times; last 20 minutes ago","title":"You've run Linear 41 times; last 20 minutes ago","icon":"answer","p":0.02,"fill":"You've run Linear 41 times; last 20 minutes ago","target":"You've run Linear 41 times; last 20 minutes ago","verb":"answer","kind":"recall","source":"recent"},{"key":"jev:Script Kit Tips (Script Kit builtin)","title":"Script Kit Tips","icon":"builtin","p":0.02,"fill":"Script Kit Tips","target":"Script Kit Tips","kind":"run"},{"key":"jev:open the script for editing: Append Daily Note","title":"Edit Append Daily Note","icon":"edit","p":0.02,"fill":"edit Append Daily Note","target":"Append Daily Note","verb":"edit","kind":"automate","source":"recent"},{"key":"jev:answer: Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","title":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","icon":"answer","p":0.02,"fill":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","target":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","verb":"answer","kind":"recall","source":"notes"},{"key":"jev:List Items by Tag (Script Kit scriptlet)","title":"List Items by Tag","icon":"builtin","p":0.02,"fill":"List Items by Tag","target":"List Items by Tag","kind":"run"},{"key":"jev:run on a schedule: Append Daily Note","title":"Run Append Daily Note weekdays around 9:05","icon":"schedule","p":0.02,"fill":"run Append Daily Note weekdays around 9:05","target":"Append Daily Note","verb":"schedule","kind":"automate","source":"recent"},{"key":"jev:tell them I'm running late: Q4 launch review","title":"Tell Marketing I'm running late","icon":"message","p":0.01,"fill":"tell Marketing I'm running late","target":"Q4 launch review","verb":"message","kind":"capture","source":"calendar"},{"key":"jev:what did I say about … (Dictation history)","title":"What did I say about “list my automations”","icon":"recall","p":0.01,"fill":"what did I say about “list my automations”","kind":"recall"},{"key":"jev:tell them I'm running late: Lunch with Sarah","title":"Tell Sarah I'm running late","icon":"message","p":0.01,"fill":"tell Sarah I'm running late","target":"Lunch with Sarah","verb":"message","kind":"capture","source":"calendar"},{"key":"jev:tell them I'm running late: Standup","title":"Tell Standup I'm running late","icon":"message","p":0.01,"fill":"tell Standup I'm running late","target":"Standup","verb":"message","kind":"capture","source":"calendar"},{"key":"jev:undo what I just did: Turned on · every weekday at 9 open linear and open slack","title":"Undo that","icon":"undo","p":0.01,"fill":"undo that","target":"Turned on · every weekday at 9 open linear and open slack","verb":"undo","kind":"run","source":"last"}],"ms":170}
+{"t":7332,"out":"list","rows":[{"key":"automations","title":"Automations"},{"key":"jev:List All Items (Script Kit scriptlet)","title":"List All Items","jev":true},{"key":"jev:answer: You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","title":"You've run Append Daily Note 23 times, usually weekdays around 9:05; last yesterday 9:04 AM","jev":true},{"key":"jev:List Logins (Script Kit scriptlet)","title":"List Logins","jev":true}],"sel":0}
+{"t":7634,"out":"height","mode":"shrink","px":447,"from":551}
+{"t":7666,"ev":"key","key":"Enter"}
+{"t":7667,"out":"run","key":"automations","title":"Automations","how":"match"}
+{"t":7667,"ev":"view","op":"open","name":"list","via":"key:Enter","enter":{"id":"list:new-3","label":"Turn it off"},"label":"Automations","takesInput":true}
+{"t":7668,"ev":"content","px":463,"via":"open"}
+{"t":7669,"out":"height","mode":"hold","px":546,"to":463,"waitMs":300}
+{"t":7669,"out":"enter","id":"list:new-3","label":"Turn it off","armed":false}
+{"t":7669,"out":"header","words":"Automations","view":"list","head":"Runs on its own"}
+{"t":7669,"out":"text","text":"","by":"page","silent":true}
+{"t":7970,"out":"height","mode":"shrink","px":463,"from":546}
+{"t":8870,"ev":"text","text":"t"}
+{"t":8870,"ev":"viewEnter","id":"list-say:say","label":"Do what I said","onTop":true,"via":"text"}
+{"t":8870,"out":"enter","id":"list-say:say","label":"Do what I said","armed":false}
+{"t":8888,"ev":"text","text":"tu"}
+{"t":8911,"ev":"text","text":"tur"}
+{"t":8936,"ev":"text","text":"turn"}
+{"t":8961,"ev":"text","text":"turn "}
+{"t":8988,"ev":"text","text":"turn o"}
+{"t":9009,"ev":"text","text":"turn of"}
+{"t":9032,"ev":"text","text":"turn off"}
+{"t":9058,"ev":"text","text":"turn off "}
+{"t":9086,"ev":"text","text":"turn off t"}
+{"t":9108,"ev":"text","text":"turn off th"}
+{"t":9132,"ev":"text","text":"turn off the"}
+{"t":9159,"ev":"text","text":"turn off the "}
+{"t":9184,"ev":"text","text":"turn off the g"}
+{"t":9209,"ev":"text","text":"turn off the gi"}
+{"t":9227,"ev":"text","text":"turn off the git"}
+{"t":9246,"ev":"text","text":"turn off the gith"}
+{"t":9273,"ev":"text","text":"turn off the githu"}
+{"t":9297,"ev":"text","text":"turn off the github"}
+{"t":9315,"ev":"text","text":"turn off the github "}
+{"t":9337,"ev":"text","text":"turn off the github o"}
+{"t":9356,"ev":"text","text":"turn off the github on"}
+{"t":9382,"ev":"text","text":"turn off the github one"}
+{"t":9616,"ev":"key","key":"Enter"}
+{"t":9617,"ev":"viewEnter","id":"list:new-3","label":"Turn it off","onTop":true,"via":"key:Enter"}
+{"t":9617,"out":"enter","id":"list:new-3","label":"Turn it off","armed":false}
+{"t":9617,"ev":"viewEnter","id":"list-say:reading","label":"Jev is reading…","onTop":true,"via":"key:Enter"}
+{"t":9617,"out":"enter","id":"list-say:reading","label":"Jev is reading…","armed":false}
+{"t":9741,"ev":"viewEnter","id":"list:gh-review","label":"Turn it back on","onTop":true}
+{"t":9741,"out":"enter","id":"list:gh-review","label":"Turn it back on","armed":true}
+{"t":9741,"out":"slot","kind":"recent","label":"Last","title":"Turned off · When you copy a GitHub link","sub":"just now","dimmed":true}
+{"t":9741,"out":"text","text":"","by":"page","silent":true}
+{"t":10675,"ev":"text","text":"t"}
+{"t":10675,"ev":"viewEnter","id":"list-say:say","label":"Do what I said","onTop":true,"via":"text"}
+{"t":10675,"out":"enter","id":"list-say:say","label":"Do what I said","armed":false}
+{"t":10700,"ev":"text","text":"tu"}
+{"t":10718,"ev":"text","text":"tur"}
+{"t":10738,"ev":"text","text":"turn"}
+{"t":10763,"ev":"text","text":"turn "}
+{"t":10789,"ev":"text","text":"turn t"}
+{"t":10810,"ev":"text","text":"turn th"}
+{"t":10831,"ev":"text","text":"turn the"}
+{"t":10848,"ev":"text","text":"turn the "}
+{"t":10882,"ev":"text","text":"turn the g"}
+{"t":10899,"ev":"text","text":"turn the gi"}
+{"t":10922,"ev":"text","text":"turn the git"}
+{"t":10946,"ev":"text","text":"turn the gith"}
+{"t":10967,"ev":"text","text":"turn the githu"}
+{"t":10987,"ev":"text","text":"turn the github"}
+{"t":11010,"ev":"text","text":"turn the github "}
+{"t":11036,"ev":"text","text":"turn the github o"}
+{"t":11053,"ev":"text","text":"turn the github on"}
+{"t":11074,"ev":"text","text":"turn the github one"}
+{"t":11095,"ev":"text","text":"turn the github one "}
+{"t":11127,"ev":"text","text":"turn the github one b"}
+{"t":11153,"ev":"text","text":"turn the github one ba"}
+{"t":11177,"ev":"text","text":"turn the github one bac"}
+{"t":11197,"ev":"text","text":"turn the github one back"}
+{"t":11220,"ev":"text","text":"turn the github one back "}
+{"t":11250,"ev":"text","text":"turn the github one back o"}
+{"t":11267,"ev":"text","text":"turn the github one back on"}
+{"t":11502,"ev":"key","key":"Enter"}
+{"t":11503,"ev":"viewEnter","id":"list:gh-review","label":"Turn it back on","onTop":true,"via":"key:Enter"}
+{"t":11503,"out":"enter","id":"list:gh-review","label":"Turn it back on","armed":false}
+{"t":11503,"ev":"viewEnter","id":"list-say:reading","label":"Jev is reading…","onTop":true,"via":"key:Enter"}
+{"t":11503,"out":"enter","id":"list-say:reading","label":"Jev is reading…","armed":false}
+{"t":11658,"ev":"viewEnter","id":"list:gh-review","label":"Turn it off","onTop":true}
+{"t":11658,"out":"enter","id":"list:gh-review","label":"Turn it off","armed":true}
+{"t":11658,"out":"slot","kind":"recent","label":"Last","title":"Turned back on · When you copy a GitHub link","sub":"just now","dimmed":true}
+{"t":11658,"out":"text","text":"","by":"page","silent":true}
+{"t":12459,"ev":"text","text":"m"}
+{"t":12459,"ev":"viewEnter","id":"list-say:say","label":"Do what I said","onTop":true,"via":"text"}
+{"t":12459,"out":"enter","id":"list-say:say","label":"Do what I said","armed":false}
+{"t":12483,"ev":"text","text":"ma"}
+{"t":12508,"ev":"text","text":"mak"}
+{"t":12530,"ev":"text","text":"make"}
+{"t":12556,"ev":"text","text":"make "}
+{"t":12579,"ev":"text","text":"make t"}
+{"t":12604,"ev":"text","text":"make th"}
+{"t":12626,"ev":"text","text":"make the"}
+{"t":12653,"ev":"text","text":"make the "}
+{"t":12687,"ev":"text","text":"make the f"}
+{"t":12706,"ev":"text","text":"make the fr"}
+{"t":12726,"ev":"text","text":"make the fri"}
+{"t":12751,"ev":"text","text":"make the frid"}
+{"t":12776,"ev":"text","text":"make the frida"}
+{"t":12803,"ev":"text","text":"make the friday"}
+{"t":12830,"ev":"text","text":"make the friday "}
+{"t":12852,"ev":"text","text":"make the friday o"}
+{"t":12878,"ev":"text","text":"make the friday on"}
+{"t":12897,"ev":"text","text":"make the friday one"}
+{"t":12924,"ev":"text","text":"make the friday one "}
+{"t":12947,"ev":"text","text":"make the friday one 3"}
+{"t":12974,"ev":"text","text":"make the friday one 3p"}
+{"t":12999,"ev":"text","text":"make the friday one 3pm"}
+{"t":13234,"ev":"key","key":"Enter"}
+{"t":13235,"ev":"viewEnter","id":"list:gh-review","label":"Turn it off","onTop":true,"via":"key:Enter"}
+{"t":13235,"out":"enter","id":"list:gh-review","label":"Turn it off","armed":false}
+{"t":13235,"ev":"viewEnter","id":"list-say:reading","label":"Jev is reading…","onTop":true,"via":"key:Enter"}
+{"t":13235,"out":"enter","id":"list-say:reading","label":"Jev is reading…","armed":false}
+{"t":13351,"ev":"viewEnter","id":"list:friday-summary","label":"Turn it off","onTop":true}
+{"t":13351,"out":"enter","id":"list:friday-summary","label":"Turn it off","armed":true}
+{"t":13351,"out":"slot","kind":"recent","label":"Last","title":"Every Friday 4 PM → 3 PM","sub":"just now","dimmed":true}
+{"t":13351,"out":"text","text":"","by":"page","silent":true}

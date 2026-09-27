@@ -56,6 +56,8 @@ pub struct HeightGovernor {
     anim: Option<(f32, Ms)>,
     hold_until: Option<Ms>,
     typed_at: Option<Ms>,
+    /// When it last grew.
+    grew_at: Option<Ms>,
     natural: f32,
     started: bool,
 }
@@ -82,6 +84,11 @@ impl HeightGovernor {
 
     pub fn natural(&self) -> f32 {
         self.natural
+    }
+
+    /// When the last typing key arrived.
+    pub fn typed_at(&self) -> Option<Ms> {
+        self.typed_at
     }
 
     fn flying(&self, now: Ms) -> bool {
@@ -120,9 +127,30 @@ impl HeightGovernor {
         let hold = match cause {
             ContentCause::ViewOpened => VIEW_HOLD_MS,
             ContentCause::Home => 0,
-            ContentCause::List | ContentCause::Other => typing_left,
+            ContentCause::List => return self.govern(now),
+            ContentCause::Other => typing_left,
         };
         self.resize(now, hold)
+    }
+
+    /// The list drew again at the same height: an arrow, Enter, Jev's rows arriving or
+    /// settling. While the window is held above the list, a redraw soon after a key starts the
+    /// pause over and a redraw after the pause lets it shrink now, so it never shrinks within
+    /// [`SHRINK_HOLD_MS`] of the rows changing under a typing hand.
+    pub fn redrawn(&mut self, now: Ms) -> Option<HeightDecision> {
+        if self.hold_until.is_none() || self.flying(now) {
+            return None;
+        }
+        self.govern(now)
+    }
+
+    fn govern(&mut self, now: Ms) -> Option<HeightDecision> {
+        if self.typing(now) {
+            self.resize(now, SHRINK_HOLD_MS)
+        } else {
+            self.hold_until = None;
+            self.resize(now, 0)
+        }
     }
 
     /// A printable key (typing, not Enter/Esc/arrows/shortcuts).
@@ -164,8 +192,8 @@ impl HeightGovernor {
     fn resize(&mut self, now: Ms, hold: u64) -> Option<HeightDecision> {
         let from = self.displayed(now);
         let to = self.natural;
-        let flying = self.flying(now);
-        if (from - to).abs() < 2.0 && !flying {
+        let pinned = self.flying(now) || self.hold_until.is_some();
+        if (from - to).abs() < 2.0 && !pinned {
             self.anim = None;
             self.target = from;
             return None;
@@ -174,6 +202,7 @@ impl HeightGovernor {
             self.anim = None;
             self.hold_until = None;
             self.target = to;
+            self.grew_at = Some(now);
             return Some(HeightDecision {
                 mode: HeightMode::Grow,
                 px: to,
@@ -196,6 +225,18 @@ impl HeightGovernor {
                 px: from,
                 from,
                 until: Some(now + wait),
+                anim_ms: 0,
+            });
+        }
+        if self.grew_at == Some(now) {
+            // Nothing has painted the taller height yet; animating down from it would pump.
+            self.anim = None;
+            self.target = to;
+            return Some(HeightDecision {
+                mode: HeightMode::Grow,
+                px: to,
+                from,
+                until: None,
                 anim_ms: 0,
             });
         }
@@ -284,6 +325,69 @@ mod tests {
         let d = g.content(2_100, 500.0, ContentCause::Other).unwrap();
         assert_eq!(d.mode, HeightMode::Grow);
         assert!(g.tick(2_300).is_none(), "the hold is gone after a grow");
+    }
+
+    #[test]
+    fn a_redraw_soon_after_a_key_starts_the_pause_over() {
+        let mut g = gov(420.0);
+        g.typed(100);
+        g.content(100, 300.0, ContentCause::List);
+        let d = g.redrawn(350).unwrap();
+        assert_eq!(d.mode, HeightMode::Hold);
+        assert_eq!(d.until, Some(350 + SHRINK_HOLD_MS));
+        assert!(g.tick(400).is_none(), "the old pause no longer ends it");
+        assert_eq!(g.tick(650).unwrap().mode, HeightMode::Shrink);
+    }
+
+    #[test]
+    fn a_redraw_after_the_pause_shrinks_now() {
+        let mut g = gov(420.0);
+        g.typed(100);
+        g.content(100, 300.0, ContentCause::List);
+        g.redrawn(350);
+        let d = g.redrawn(420).unwrap();
+        assert_eq!(d.mode, HeightMode::Shrink);
+        assert_eq!(d.px, 300.0);
+    }
+
+    #[test]
+    fn a_redraw_leaves_a_settled_or_shrinking_window_alone() {
+        let mut g = gov(420.0);
+        assert!(g.redrawn(50).is_none());
+        g.content(1_000, 300.0, ContentCause::List);
+        assert!(
+            g.redrawn(1_100).is_none(),
+            "a shrink in flight keeps its curve"
+        );
+    }
+
+    #[test]
+    fn rows_arriving_while_typing_hold_from_when_they_arrive() {
+        let mut g = gov(420.0);
+        g.typed(100);
+        let d = g.content(250, 300.0, ContentCause::List).unwrap();
+        assert_eq!(d.until, Some(250 + SHRINK_HOLD_MS));
+    }
+
+    #[test]
+    fn a_held_window_grows_for_a_list_even_a_pixel_taller() {
+        let mut g = gov(420.0);
+        g.typed(100);
+        g.content(100, 300.0, ContentCause::List);
+        let d = g.content(150, 421.0, ContentCause::List).unwrap();
+        assert_eq!(d.mode, HeightMode::Grow);
+        assert_eq!(d.px, 421.0);
+        assert!(g.tick(400).is_none(), "a grow ends the hold");
+    }
+
+    #[test]
+    fn a_shrink_in_the_moment_it_grew_is_set_at_once() {
+        let mut g = gov(394.0);
+        g.content(1_000, 551.0, ContentCause::Home);
+        let d = g.content(1_000, 512.0, ContentCause::List).unwrap();
+        assert_eq!(d.mode, HeightMode::Grow);
+        assert_eq!(d.px, 512.0);
+        assert_eq!(g.displayed(1_001), 512.0);
     }
 
     #[test]

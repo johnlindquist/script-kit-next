@@ -15,7 +15,9 @@ mod time;
 mod views;
 
 use crate::Ms;
-use crate::contract::{DISMISS_SETTLE_MS, ENTER_GUARD_MS, JEV_DEBOUNCE_MS, MAX_MATCHES, words};
+use crate::contract::{
+    DISMISS_SETTLE_MS, ENTER_GUARD_MS, JEV_DEBOUNCE_MS, MAX_MATCHES, ROW_ARM_MS, words,
+};
 use crate::enter::{EnterGuard, EnterTarget};
 use crate::height::{ContentCause, HeightDecision, HeightGovernor};
 use crate::hold::{Held, HeldChange, HeldState, Holds};
@@ -181,6 +183,17 @@ pub enum Event {
 }
 
 impl Event {
+    /// Whether handling it draws the list again at the height it had.
+    fn redraws_list(&self) -> bool {
+        matches!(
+            self,
+            Event::Key(Key::Up | Key::Down | Key::Enter | Key::CmdDigit(_))
+                | Event::Select(_)
+                | Event::Jev { .. }
+                | Event::JevDown { .. }
+        )
+    }
+
     fn is_user(&self) -> bool {
         matches!(
             self,
@@ -306,6 +319,8 @@ pub struct OneWindow {
     /// Why the next natural height changed, and when it was set.
     cause: Option<(ContentCause, Ms)>,
     jev_due: Option<(Ms, String)>,
+    /// When rows Jev just gave stop arming and the list draws again.
+    redraws: Vec<Ms>,
     dismiss: Option<PendingDismiss>,
     away: bool,
     steps: Option<(String, Vec<String>)>,
@@ -346,6 +361,7 @@ impl OneWindow {
             user_at: None,
             cause: None,
             jev_due: None,
+            redraws: Vec::new(),
             dismiss: None,
             away: false,
             steps: None,
@@ -414,7 +430,11 @@ impl OneWindow {
             self.user_at = Some(now);
         }
         self.tick(now, &mut fx);
+        let redraws = ev.redraws_list();
         let consumed = self.apply(now, ev, &mut fx);
+        if consumed && redraws {
+            self.list_redrawn(now, &mut fx);
+        }
         self.sync_pause(now, &mut fx);
         self.sync_staged(now);
         if self.line_from_view && !self.in_view() {
@@ -464,6 +484,7 @@ impl OneWindow {
                 }
                 let rows = crate::list::fresh_readings(rows, &self.list.names);
                 self.list.jev.assign(now, &text, rows);
+                self.redraws.push(now + ROW_ARM_MS);
                 self.list.move_sel(0);
                 if let Some(i) = self.list.held.take() {
                     self.list.asking = false;

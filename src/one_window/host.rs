@@ -131,6 +131,21 @@ impl ScriptListApp {
         self.one_window_host.now
     }
 
+    /// The reducer's clock read now, without feeding it an event.
+    fn one_window_peek_now(&self, cx: &Context<Self>) -> Ms {
+        self.one_window_host
+            .epoch
+            .map_or(self.one_window_host.now, |epoch| {
+                let since = cx
+                    .background_executor()
+                    .now()
+                    .saturating_duration_since(epoch);
+                u64::try_from(since.as_millis())
+                    .unwrap_or(u64::MAX)
+                    .max(self.one_window_host.now)
+            })
+    }
+
     /// Whether the reducer owns the list for these words. Launcher syntax, the calculator,
     /// attachment portals and pickers keep their own lists.
     pub(crate) fn one_window_owns(&self, text: &str) -> bool {
@@ -660,9 +675,17 @@ impl ScriptListApp {
         });
     }
 
-    /// The window the main list draws in, where its height is applied.
-    pub(crate) fn one_window_rendered_in(&mut self, window: &gpui::Window) {
-        self.one_window_host.window = Some(window.window_handle());
+    /// The window the main list draws in, where its height is applied. A height the reducer
+    /// placed before the window first drew is applied now, or the first key would snap to it.
+    pub(crate) fn one_window_rendered_in(&mut self, window: &gpui::Window, cx: &mut Context<Self>) {
+        let handle = window.window_handle();
+        if self.one_window_host.window == Some(handle) {
+            return;
+        }
+        self.one_window_host.window = Some(handle);
+        if let Some(height) = self.one_window_host.height {
+            self.one_window_set_height(height, cx);
+        }
     }
 
     // ------------------------------------------------------------------ Jev
@@ -847,8 +870,9 @@ impl ScriptListApp {
     }
 
     /// The reducer's state as `getState` reports it.
-    pub(crate) fn one_window_automation_snapshot(&self) -> serde_json::Value {
+    pub(crate) fn one_window_automation_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
         let list = self.one_window.list();
+        let now = self.one_window_peek_now(cx);
         serde_json::json!({
             "owned": self.one_window_owns_list(),
             "text": self.one_window.text(),
@@ -866,6 +890,7 @@ impl ScriptListApp {
                 .collect::<Vec<_>>(),
             "jevSettled": list.jev.settled_for(&list.text),
             "heightPx": self.one_window_host.height,
+            "sinceTypedMs": self.one_window.height().typed_at().map(|at| now.saturating_sub(at)),
             "lastRun": self.one_window_last_run().map(|row| serde_json::json!({
                 "key": row.key,
                 "title": row.title,

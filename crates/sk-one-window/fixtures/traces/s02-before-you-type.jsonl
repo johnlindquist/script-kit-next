@@ -1,4 +1,4 @@
-{"meta":{"chapter":"s02-before-you-type","speed":3,"mode":"demo","recordedAt":"2026-09-27T00:01:49.293Z","ok":true,"attempts":1,"durationMs":16518,"url":"/lab/s02-before-you-type.html?record=1&speed=3"}}
+{"meta":{"chapter":"s02-before-you-type","speed":3,"mode":"demo","recordedAt":"2026-09-27T02:41:22.144Z","ok":true,"attempts":1,"durationMs":16483,"url":"/lab/s02-before-you-type.html?record=1&speed=3"}}
 {"t":0,"ev":"init","holdMs":8000,"focused":{"kind":"selection","label":"Selected","title":"“The footer Enter button kept the old row's label for …”","sub":"in Google Chrome","icon":"type"},"history":[{"title":"Linear","icon":"app","risk":"none","state":"done"},{"title":"Added to Today · ask about the beta date","icon":"append","risk":"undo","state":"done"}],"text":"","ctx":"chrome","connected":[]}
 {"t":0,"ev":"content","px":252}
 {"t":0,"out":"height","mode":"grow","px":252,"initial":true}
@@ -7,90 +7,94 @@
 {"t":2,"out":"header","words":"Before you type"}
 {"t":2,"out":"list","rows":[{"key":"brief:reading","title":"Reading what's next…"}],"sel":0}
 {"t":2,"ev":"names","text":"","rows":[{"key":"brief:reading","title":"Reading what's next…","pinned":true,"head":"Before you type","enterLabel":"Reading what's next…"}]}
-{"t":173,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline","pinned":true,"head":null,"enterLabel":"Fill in “send Sarah the Q4 timeline”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:Append Daily Note","title":"Append Daily Note","pinned":true,"head":null,"enterLabel":"Fill in “Append Daily Note”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"},{"key":"brief:reply to Mom","title":"Reply to Mom","pinned":true,"head":null,"enterLabel":"Fill in “reply to Mom”"}],"via":"render"}
-{"t":173,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":true}
-{"t":174,"out":"header","words":"Before Standup · in 18 min"}
-{"t":174,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:Append Daily Note","title":"Append Daily Note"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"},{"key":"brief:reply to Mom","title":"Reply to Mom"}],"sel":0}
+{"t":170,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline","pinned":true,"head":null,"enterLabel":"Fill in “send Sarah the Q4 timeline”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:Append Daily Note","title":"Append Daily Note","pinned":true,"head":null,"enterLabel":"Fill in “Append Daily Note”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"},{"key":"brief:reply to Mom","title":"Reply to Mom","pinned":true,"head":null,"enterLabel":"Fill in “reply to Mom”"}],"via":"render"}
+{"t":170,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":true}
+{"t":172,"ev":"content","px":542,"via":"govern"}
+{"t":172,"out":"height","mode":"grow","px":542,"by":"govern"}
+{"t":172,"out":"header","words":"Before Standup · in 18 min"}
+{"t":172,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:Append Daily Note","title":"Append Daily Note"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"},{"key":"brief:reply to Mom","title":"Reply to Mom"}],"sel":0}
 {"t":5895,"ev":"key","key":"ArrowDown"}
-{"t":5896,"out":"enter","id":"brief:send Sarah the Q4 timeline","label":"Fill in “send Sarah the Q4 timeline”","armed":false}
-{"t":5898,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:Append Daily Note","title":"Append Daily Note"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"},{"key":"brief:reply to Mom","title":"Reply to Mom"}],"sel":1}
+{"t":5895,"out":"enter","id":"brief:send Sarah the Q4 timeline","label":"Fill in “send Sarah the Q4 timeline”","armed":false}
+{"t":5897,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:Append Daily Note","title":"Append Daily Note"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"},{"key":"brief:reply to Mom","title":"Reply to Mom"}],"sel":1}
 {"t":6415,"ev":"key","key":"Enter"}
-{"t":6416,"out":"run","key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline","how":"match"}
-{"t":6416,"ev":"view","op":"home","from":null,"text":"send Sarah the Q4 timeline","via":"key:Enter"}
-{"t":6421,"ev":"content","px":542,"via":"home"}
-{"t":6421,"out":"text","text":"send Sarah the Q4 timeline","by":"page"}
-{"t":6423,"out":"enter","id":"slot0","label":"Runs what Jev understands","armed":false}
-{"t":6423,"ev":"names","text":"send Sarah the Q4 timeline","rows":[{"key":"fallback-google:send Sarah the Q4 timeline","title":"Search Google for “send Sarah the Q4 timeline”","enterLabel":"Search Google for “send Sarah the Q4 timeline”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:send Sarah the Q4 timeline","title":"Ask AI “send Sarah the Q4 timeline”","enterLabel":"Ask AI “send Sarah the Q4 timeline”","score":null,"head":null,"fallback":true}],"via":"home"}
-{"t":6425,"out":"header","words":"Jev","note":"⌘1–3"}
-{"t":6425,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:send Sarah the Q4 timeline","title":"Search Google for “send Sarah the Q4 timeline”"},{"key":"fallback-ai:send Sarah the Q4 timeline","title":"Ask AI “send Sarah the Q4 timeline”"}],"sel":0}
-{"t":6637,"ev":"jev","text":"send Sarah the Q4 timeline","rows":[{"key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","icon":"reply","p":0.71,"fill":"reply to Sarah","target":"Sarah","verb":"reply","kind":"ask","source":"inbox"},{"key":"jev:message … (Message)","title":"Message “send Sarah the Q4 timeline”","icon":"capture","p":0.23,"fill":"message “send Sarah the Q4 timeline”","kind":"capture"},{"key":"jev:answer: Sarah asked: “can u send the updated timeline by thurs?”","title":"Sarah asked: “can u send the updated timeline by thurs?”","icon":"answer","p":0.03,"fill":"Sarah asked: “can u send the updated timeline by thurs?”","target":"Sarah asked: “can u send the updated timeline by thurs?”","verb":"answer","kind":"recall","source":"inbox"},{"key":"jev:answer: Q4 launch timeline: Beta Oct 14 · Screenshots to marketing Oct 2 · Launch Nov 4","title":"Q4 launch timeline: Beta Oct 14 · Screenshots to marketing Oct 2 · Launch Nov 4","icon":"answer","p":0.01,"fill":"Q4 launch timeline: Beta Oct 14 · Screenshots to marketing Oct 2 · Launch Nov 4","target":"Q4 launch timeline: Beta Oct 14 · Screenshots to marketing Oct 2 · Launch Nov 4","verb":"answer","kind":"recall","source":"notes"}],"ms":136}
-{"t":6638,"out":"enter","id":"slot0","label":"Reply to Sarah","armed":false}
-{"t":6640,"out":"list","rows":[{"key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","jev":true},{"key":"jev:message … (Message)","title":"Message “send Sarah the Q4 timeline”","jev":true},{"key":"jev:answer: Sarah asked: “can u send the updated timeline by thurs?”","title":"Sarah asked: “can u send the updated timeline by thurs?”","jev":true},{"key":"fallback-google:send Sarah the Q4 timeline","title":"Search Google for “send Sarah the Q4 timeline”"},{"key":"fallback-ai:send Sarah the Q4 timeline","title":"Ask AI “send Sarah the Q4 timeline”"}],"sel":0}
-{"t":7575,"ev":"key","key":"Enter"}
-{"t":7575,"out":"run","key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","how":"slot"}
-{"t":7576,"ev":"view","op":"open","name":"form","row":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","via":"key:Enter","enter":{"id":"form","label":"Reading…"},"label":"Message","takesInput":true}
-{"t":7579,"ev":"content","px":418,"via":"open"}
-{"t":7581,"out":"height","mode":"hold","px":460,"to":418,"waitMs":300}
-{"t":7581,"out":"enter","id":"form","label":"Reading…","armed":false}
-{"t":7582,"out":"header","words":"Message","view":"form"}
-{"t":7732,"ev":"viewEnter","id":"form:say","label":"Say what to tell Sarah","onTop":true}
-{"t":7732,"out":"enter","id":"form:say","label":"Say what to tell Sarah","armed":true}
-{"t":7735,"ev":"content","px":416}
-{"t":7884,"out":"height","mode":"shrink","px":416,"from":460}
-{"t":8614,"ev":"text","text":"send Sarah the Q4 timeline,"}
-{"t":8637,"ev":"text","text":"send Sarah the Q4 timeline, "}
-{"t":8676,"ev":"text","text":"send Sarah the Q4 timeline, b"}
-{"t":8704,"ev":"text","text":"send Sarah the Q4 timeline, be"}
-{"t":8733,"ev":"text","text":"send Sarah the Q4 timeline, bet"}
-{"t":8754,"ev":"text","text":"send Sarah the Q4 timeline, beta"}
-{"t":8783,"ev":"text","text":"send Sarah the Q4 timeline, beta "}
-{"t":8813,"ev":"text","text":"send Sarah the Q4 timeline, beta i"}
-{"t":8832,"ev":"text","text":"send Sarah the Q4 timeline, beta is"}
-{"t":8851,"ev":"text","text":"send Sarah the Q4 timeline, beta is "}
-{"t":8890,"ev":"text","text":"send Sarah the Q4 timeline, beta is o"}
-{"t":8921,"ev":"text","text":"send Sarah the Q4 timeline, beta is oc"}
-{"t":8948,"ev":"text","text":"send Sarah the Q4 timeline, beta is oct"}
-{"t":8972,"ev":"text","text":"send Sarah the Q4 timeline, beta is oct "}
-{"t":9004,"ev":"text","text":"send Sarah the Q4 timeline, beta is oct 1"}
-{"t":9031,"ev":"text","text":"send Sarah the Q4 timeline, beta is oct 14"}
-{"t":9405,"ev":"viewEnter","id":"form","label":"Send","onTop":true}
-{"t":9405,"out":"enter","id":"form","label":"Send","armed":true}
-{"t":9408,"ev":"content","px":444}
-{"t":9408,"out":"height","mode":"grow","px":444,"from":416}
-{"t":10377,"ev":"key","key":"Enter"}
-{"t":10378,"ev":"done","title":"To Sarah: “Q4 timeline, beta is oct 14”","icon":"message","risk":"hold","stay":false,"form":"message","via":"key:Enter"}
-{"t":10378,"ev":"hold","label":"To Sarah: “Q4 timeline, beta is oct 14”","via":"done"}
-{"t":10378,"out":"held","label":"To Sarah: “Q4 timeline, beta is oct 14”","op":"start"}
-{"t":10379,"ev":"view","op":"home","from":"form","via":"done"}
-{"t":10381,"out":"enter","id":"slot0","label":"Reply to Sarah","armed":true}
-{"t":10382,"ev":"content","px":460,"via":"home"}
-{"t":10382,"out":"height","mode":"grow","px":460,"from":444}
-{"t":10382,"out":"text","text":"","by":"page"}
-{"t":10382,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":true}
-{"t":10382,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:Append Daily Note","title":"Append Daily Note","pinned":true,"head":null,"enterLabel":"Fill in “Append Daily Note”"},{"key":"brief:open SK-431","title":"Open SK-431","pinned":true,"head":null,"enterLabel":"Fill in “open SK-431”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"},{"key":"brief:reply to Mom","title":"Reply to Mom","pinned":true,"head":null,"enterLabel":"Fill in “reply to Mom”"}],"via":"home"}
-{"t":10383,"out":"slot","kind":"holding","label":"Sending in 8s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
-{"t":10383,"out":"header","words":"Before Standup · in 18 min"}
-{"t":10383,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:Append Daily Note","title":"Append Daily Note"},{"key":"brief:open SK-431","title":"Open SK-431"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"},{"key":"brief:reply to Mom","title":"Reply to Mom"}],"sel":0}
-{"t":10383,"out":"toast","text":"Sending in 8s · To Sarah: “Q4 timeline, beta is oct 14”"}
-{"t":11184,"ev":"key","key":"ArrowUp"}
-{"t":11184,"ev":"view","op":"home","from":null,"via":"key:ArrowUp"}
-{"t":11185,"out":"enter","id":"act:Don't send it","label":"Don't send it","armed":false}
-{"t":11186,"ev":"content","px":356,"via":"home"}
-{"t":11186,"out":"height","mode":"shrink","px":356,"from":542}
-{"t":11186,"ev":"names","text":"","rows":[{"key":"act:Don't send it","title":"Don't send it","pinned":true,"head":"Say what to do with it, or pick one","enterLabel":"Don't send it"},{"key":"act:Send it now","title":"Send it now","pinned":true,"head":null,"enterLabel":"Send it now"},{"key":"act:Share it","title":"Share it","pinned":true,"head":null,"enterLabel":"Share it"}],"via":"render"}
-{"t":11187,"out":"slot","kind":"staged","label":"Sending","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"Waits before it goes","dimmed":false}
-{"t":11187,"out":"header","words":"Say what to do with it, or pick one"}
-{"t":11187,"out":"list","rows":[{"key":"act:Don't send it","title":"Don't send it"},{"key":"act:Send it now","title":"Send it now"},{"key":"act:Share it","title":"Share it"}],"sel":0}
-{"t":12121,"ev":"key","key":"Escape"}
-{"t":12122,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":false}
-{"t":12122,"ev":"view","op":"home","from":null,"via":"key:Escape"}
-{"t":12123,"ev":"content","px":542,"via":"home"}
-{"t":12123,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:Append Daily Note","title":"Append Daily Note","pinned":true,"head":null,"enterLabel":"Fill in “Append Daily Note”"},{"key":"brief:open SK-431","title":"Open SK-431","pinned":true,"head":null,"enterLabel":"Fill in “open SK-431”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"},{"key":"brief:reply to Mom","title":"Reply to Mom","pinned":true,"head":null,"enterLabel":"Fill in “reply to Mom”"}],"via":"render"}
-{"t":12123,"out":"slot","kind":"holding","label":"Sending in 7s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
-{"t":12123,"out":"header","words":"Before Standup · in 18 min"}
-{"t":12123,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:Append Daily Note","title":"Append Daily Note"},{"key":"brief:open SK-431","title":"Open SK-431"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"},{"key":"brief:reply to Mom","title":"Reply to Mom"}],"sel":0}
-{"t":12380,"out":"slot","kind":"holding","label":"Sending in 6s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
-{"t":13380,"out":"slot","kind":"holding","label":"Sending in 5s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
-{"t":14380,"out":"slot","kind":"holding","label":"Sending in 4s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
-{"t":15380,"out":"slot","kind":"holding","label":"Sending in 3s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
-{"t":16381,"out":"slot","kind":"holding","label":"Sending in 2s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
+{"t":6415,"out":"run","key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline","how":"match"}
+{"t":6415,"ev":"view","op":"home","from":null,"text":"send Sarah the Q4 timeline","via":"key:Enter"}
+{"t":6418,"out":"text","text":"send Sarah the Q4 timeline","by":"page"}
+{"t":6418,"out":"enter","id":"slot0","label":"Runs what Jev understands","armed":false}
+{"t":6418,"ev":"names","text":"send Sarah the Q4 timeline","rows":[{"key":"fallback-google:send Sarah the Q4 timeline","title":"Search Google for “send Sarah the Q4 timeline”","enterLabel":"Search Google for “send Sarah the Q4 timeline”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:send Sarah the Q4 timeline","title":"Ask AI “send Sarah the Q4 timeline”","enterLabel":"Ask AI “send Sarah the Q4 timeline”","score":null,"head":null,"fallback":true}],"via":"home"}
+{"t":6419,"ev":"content","px":460,"via":"govern"}
+{"t":6419,"out":"header","words":"Jev","note":"⌘1–3"}
+{"t":6419,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:send Sarah the Q4 timeline","title":"Search Google for “send Sarah the Q4 timeline”"},{"key":"fallback-ai:send Sarah the Q4 timeline","title":"Ask AI “send Sarah the Q4 timeline”"}],"sel":0}
+{"t":6629,"ev":"jev","text":"send Sarah the Q4 timeline","rows":[{"key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","icon":"reply","p":0.71,"fill":"reply to Sarah","target":"Sarah","verb":"reply","kind":"ask","source":"inbox"},{"key":"jev:message … (Message)","title":"Message “send Sarah the Q4 timeline”","icon":"capture","p":0.23,"fill":"message “send Sarah the Q4 timeline”","kind":"capture"},{"key":"jev:answer: Sarah asked: “can u send the updated timeline by thurs?”","title":"Sarah asked: “can u send the updated timeline by thurs?”","icon":"answer","p":0.03,"fill":"Sarah asked: “can u send the updated timeline by thurs?”","target":"Sarah asked: “can u send the updated timeline by thurs?”","verb":"answer","kind":"recall","source":"inbox"},{"key":"jev:answer: Q4 launch timeline: Beta Oct 14 · Screenshots to marketing Oct 2 · Launch Nov 4","title":"Q4 launch timeline: Beta Oct 14 · Screenshots to marketing Oct 2 · Launch Nov 4","icon":"answer","p":0.01,"fill":"Q4 launch timeline: Beta Oct 14 · Screenshots to marketing Oct 2 · Launch Nov 4","target":"Q4 launch timeline: Beta Oct 14 · Screenshots to marketing Oct 2 · Launch Nov 4","verb":"answer","kind":"recall","source":"notes"}],"ms":136}
+{"t":6630,"out":"enter","id":"slot0","label":"Reply to Sarah","armed":false}
+{"t":6631,"out":"list","rows":[{"key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","jev":true},{"key":"jev:message … (Message)","title":"Message “send Sarah the Q4 timeline”","jev":true},{"key":"jev:answer: Sarah asked: “can u send the updated timeline by thurs?”","title":"Sarah asked: “can u send the updated timeline by thurs?”","jev":true},{"key":"fallback-google:send Sarah the Q4 timeline","title":"Search Google for “send Sarah the Q4 timeline”"},{"key":"fallback-ai:send Sarah the Q4 timeline","title":"Ask AI “send Sarah the Q4 timeline”"}],"sel":0}
+{"t":7566,"ev":"key","key":"Enter"}
+{"t":7566,"out":"run","key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","how":"slot"}
+{"t":7566,"ev":"view","op":"open","name":"form","row":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","via":"key:Enter","enter":{"id":"form","label":"Reading…"},"label":"Message","takesInput":true}
+{"t":7568,"ev":"content","px":418,"via":"open"}
+{"t":7569,"out":"height","mode":"hold","px":460,"to":418,"waitMs":300}
+{"t":7569,"out":"enter","id":"form","label":"Reading…","armed":false}
+{"t":7569,"out":"header","words":"Message","view":"form"}
+{"t":7718,"ev":"viewEnter","id":"form:say","label":"Say what to tell Sarah","onTop":true}
+{"t":7718,"out":"enter","id":"form:say","label":"Say what to tell Sarah","armed":true}
+{"t":7720,"ev":"content","px":416}
+{"t":7870,"out":"height","mode":"shrink","px":416,"from":460}
+{"t":8600,"ev":"text","text":"send Sarah the Q4 timeline,"}
+{"t":8622,"ev":"text","text":"send Sarah the Q4 timeline, "}
+{"t":8661,"ev":"text","text":"send Sarah the Q4 timeline, b"}
+{"t":8687,"ev":"text","text":"send Sarah the Q4 timeline, be"}
+{"t":8717,"ev":"text","text":"send Sarah the Q4 timeline, bet"}
+{"t":8736,"ev":"text","text":"send Sarah the Q4 timeline, beta"}
+{"t":8765,"ev":"text","text":"send Sarah the Q4 timeline, beta "}
+{"t":8795,"ev":"text","text":"send Sarah the Q4 timeline, beta i"}
+{"t":8815,"ev":"text","text":"send Sarah the Q4 timeline, beta is"}
+{"t":8834,"ev":"text","text":"send Sarah the Q4 timeline, beta is "}
+{"t":8874,"ev":"text","text":"send Sarah the Q4 timeline, beta is o"}
+{"t":8905,"ev":"text","text":"send Sarah the Q4 timeline, beta is oc"}
+{"t":8931,"ev":"text","text":"send Sarah the Q4 timeline, beta is oct"}
+{"t":8955,"ev":"text","text":"send Sarah the Q4 timeline, beta is oct "}
+{"t":8988,"ev":"text","text":"send Sarah the Q4 timeline, beta is oct 1"}
+{"t":9015,"ev":"text","text":"send Sarah the Q4 timeline, beta is oct 14"}
+{"t":9387,"ev":"viewEnter","id":"form","label":"Send","onTop":true}
+{"t":9387,"out":"enter","id":"form","label":"Send","armed":true}
+{"t":9390,"ev":"content","px":444}
+{"t":9390,"out":"height","mode":"grow","px":444,"from":416}
+{"t":10362,"ev":"key","key":"Enter"}
+{"t":10363,"ev":"done","title":"To Sarah: “Q4 timeline, beta is oct 14”","icon":"message","risk":"hold","stay":false,"form":"message","via":"key:Enter"}
+{"t":10363,"ev":"hold","label":"To Sarah: “Q4 timeline, beta is oct 14”","via":"done"}
+{"t":10363,"out":"held","label":"To Sarah: “Q4 timeline, beta is oct 14”","op":"start"}
+{"t":10364,"ev":"view","op":"home","from":"form","via":"done"}
+{"t":10366,"out":"enter","id":"slot0","label":"Reply to Sarah","armed":true}
+{"t":10367,"ev":"content","px":460,"via":"home"}
+{"t":10367,"out":"height","mode":"grow","px":460,"from":444}
+{"t":10367,"out":"text","text":"","by":"page"}
+{"t":10367,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":true}
+{"t":10368,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:Append Daily Note","title":"Append Daily Note","pinned":true,"head":null,"enterLabel":"Fill in “Append Daily Note”"},{"key":"brief:open SK-431","title":"Open SK-431","pinned":true,"head":null,"enterLabel":"Fill in “open SK-431”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"},{"key":"brief:reply to Mom","title":"Reply to Mom","pinned":true,"head":null,"enterLabel":"Fill in “reply to Mom”"}],"via":"home"}
+{"t":10369,"ev":"content","px":542,"via":"govern"}
+{"t":10369,"out":"height","mode":"grow","px":542,"by":"govern"}
+{"t":10369,"out":"slot","kind":"holding","label":"Sending in 8s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
+{"t":10369,"out":"header","words":"Before Standup · in 18 min"}
+{"t":10369,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:Append Daily Note","title":"Append Daily Note"},{"key":"brief:open SK-431","title":"Open SK-431"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"},{"key":"brief:reply to Mom","title":"Reply to Mom"}],"sel":0}
+{"t":10369,"out":"toast","text":"Sending in 8s · To Sarah: “Q4 timeline, beta is oct 14”"}
+{"t":11170,"ev":"key","key":"ArrowUp"}
+{"t":11171,"ev":"view","op":"home","from":null,"via":"key:ArrowUp"}
+{"t":11171,"out":"enter","id":"act:Don't send it","label":"Don't send it","armed":false}
+{"t":11172,"ev":"content","px":356,"via":"home"}
+{"t":11172,"out":"height","mode":"shrink","px":356,"from":542}
+{"t":11172,"ev":"names","text":"","rows":[{"key":"act:Don't send it","title":"Don't send it","pinned":true,"head":"Say what to do with it, or pick one","enterLabel":"Don't send it"},{"key":"act:Send it now","title":"Send it now","pinned":true,"head":null,"enterLabel":"Send it now"},{"key":"act:Share it","title":"Share it","pinned":true,"head":null,"enterLabel":"Share it"}],"via":"render"}
+{"t":11173,"out":"slot","kind":"staged","label":"Sending","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"Waits before it goes","dimmed":false}
+{"t":11173,"out":"header","words":"Say what to do with it, or pick one"}
+{"t":11173,"out":"list","rows":[{"key":"act:Don't send it","title":"Don't send it"},{"key":"act:Send it now","title":"Send it now"},{"key":"act:Share it","title":"Share it"}],"sel":0}
+{"t":12107,"ev":"key","key":"Escape"}
+{"t":12107,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":false}
+{"t":12107,"ev":"view","op":"home","from":null,"via":"key:Escape"}
+{"t":12109,"ev":"content","px":542,"via":"home"}
+{"t":12109,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:Append Daily Note","title":"Append Daily Note","pinned":true,"head":null,"enterLabel":"Fill in “Append Daily Note”"},{"key":"brief:open SK-431","title":"Open SK-431","pinned":true,"head":null,"enterLabel":"Fill in “open SK-431”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"},{"key":"brief:reply to Mom","title":"Reply to Mom","pinned":true,"head":null,"enterLabel":"Fill in “reply to Mom”"}],"via":"render"}
+{"t":12110,"out":"height","mode":"grow","px":542,"by":"govern"}
+{"t":12110,"out":"slot","kind":"holding","label":"Sending in 7s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
+{"t":12110,"out":"header","words":"Before Standup · in 18 min"}
+{"t":12110,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:Append Daily Note","title":"Append Daily Note"},{"key":"brief:open SK-431","title":"Open SK-431"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"},{"key":"brief:reply to Mom","title":"Reply to Mom"}],"sel":0}
+{"t":12364,"out":"slot","kind":"holding","label":"Sending in 6s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
+{"t":13365,"out":"slot","kind":"holding","label":"Sending in 5s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
+{"t":14365,"out":"slot","kind":"holding","label":"Sending in 4s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
+{"t":15365,"out":"slot","kind":"holding","label":"Sending in 3s","title":"To Sarah: “Q4 timeline, beta is oct 14”","sub":"","dimmed":false}
