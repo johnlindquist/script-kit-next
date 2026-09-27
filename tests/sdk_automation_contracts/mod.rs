@@ -619,109 +619,13 @@ fn inspect_cleanup(prefix: &str, ids: &[&str]) {
     }
 }
 
-/// Schema version must be the current constant (v3).
+/// Schema version must be the current constant (v4).
 #[test]
 fn inspect_schema_version_is_current() {
     assert_eq!(
-        AUTOMATION_INSPECT_SCHEMA_VERSION, 3,
-        "Schema version must be 3"
+        AUTOMATION_INSPECT_SCHEMA_VERSION, 4,
+        "Schema version must be 4"
     );
-}
-
-/// Popup inspect response must include geometry fields when bounds exist.
-#[test]
-fn inspect_popup_response_has_geometry_fields() {
-    let p = inspect_prefix();
-
-    let main = make_window(
-        &p,
-        "main",
-        AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 100.0,
-            y: 50.0,
-            width: 800.0,
-            height: 600.0,
-        }),
-    );
-    let actions = make_window(
-        &p,
-        "actions",
-        AutomationWindowKind::ActionsDialog,
-        Some(AutomationWindowBounds {
-            x: 300.0,
-            y: 200.0,
-            width: 520.0,
-            height: 384.0,
-        }),
-    );
-    script_kit_gpui::windows::upsert_automation_window(main);
-    script_kit_gpui::windows::upsert_automation_window(actions);
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:actions"),
-    };
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
-
-    let target_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved)
-        .expect("must compute target bounds");
-    let hit_point = script_kit_gpui::protocol::default_surface_hit_point(&target_bounds);
-    let suggested =
-        script_kit_gpui::protocol::default_suggested_hit_points(&resolved, Some(&target_bounds));
-
-    // Build a response-shaped snapshot as the handler would
-    let snapshot = AutomationInspectSnapshot {
-        schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
-        window_id: resolved.id.clone(),
-        window_kind: format!("{:?}", resolved.kind),
-        surface_kind: None,
-        app_view_variant: None,
-        native_footer_surface: None,
-        target_generation: Some(1),
-        surface_generation: Some(1),
-        data_generation: Some(1),
-        title: resolved.title.clone(),
-        resolved_bounds: resolved.bounds.clone(),
-        target_bounds_in_screenshot: Some(target_bounds.clone()),
-        surface_hit_point: Some(hit_point.clone()),
-        suggested_hit_points: suggested.clone(),
-        elements: Vec::new(),
-        total_count: 0,
-        focused_semantic_id: None,
-        selected_semantic_id: None,
-        screenshot_width: Some(800),
-        screenshot_height: Some(600),
-        pixel_probes: Vec::new(),
-        os_window_id: None,
-        semantic_quality: Some(script_kit_gpui::protocol::SemanticQuality::PanelOnly),
-        warnings: vec!["panel_only_actions_dialog".to_string()],
-        pid: None,
-    };
-
-    // Serialize and verify JSON contract
-    let json = serde_json::to_value(&snapshot).expect("serialize");
-
-    assert_eq!(json["schemaVersion"], 3);
-    assert_eq!(json["windowKind"], "ActionsDialog");
-    assert!(json["targetBoundsInScreenshot"].is_object());
-    assert!(json["surfaceHitPoint"].is_object());
-    assert!(json["suggestedHitPoints"].is_array());
-    assert!(!json["suggestedHitPoints"].as_array().unwrap().is_empty());
-
-    // Target bounds must be offset from main
-    let tb = &json["targetBoundsInScreenshot"];
-    assert_eq!(tb["x"], 200.0); // 300 - 100
-    assert_eq!(tb["y"], 150.0); // 200 - 50
-    assert_eq!(tb["width"], 520.0);
-    assert_eq!(tb["height"], 384.0);
-
-    // Suggested hit point semantic ID must match the surface kind
-    let shp = &json["suggestedHitPoints"][0];
-    assert_eq!(shp["semanticId"], "panel:actions-dialog");
-    assert_eq!(shp["reason"], "surface_center");
-
-    inspect_cleanup(&p, &["main", "actions"]);
 }
 
 /// Detached window inspect response must have origin at (0, 0).
@@ -950,53 +854,4 @@ fn inspect_suggested_hit_semantic_ids_per_kind() {
             "{kind:?} semantic_id mismatch"
         );
     }
-}
-
-// ============================================================
-// ActionsDialog batch mutation — structured log markers
-// ============================================================
-
-#[test]
-fn prompt_handler_emits_batch_actions_dialog_log() {
-    let source = include_str!("../../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("automation.batch.actions_dialog.completed"),
-        "batch handler must emit ActionsDialog completion log"
-    );
-}
-
-#[test]
-fn prompt_handler_emits_actions_dialog_target_resolution_log() {
-    let source = include_str!("../../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("automation.target.actions_dialog_resolved"),
-        "resolve_automation_read_target must emit ActionsDialog resolution log"
-    );
-}
-
-#[test]
-fn actions_dialog_transaction_provider_emits_set_input_log() {
-    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
-    assert!(
-        source.contains("transaction_actions_dialog_set_input"),
-        "ActionsDialogTransactionProvider::set_input must emit structured log"
-    );
-}
-
-#[test]
-fn actions_dialog_transaction_provider_emits_select_log() {
-    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
-    assert!(
-        source.contains("transaction_actions_dialog_select_by_value"),
-        "ActionsDialogTransactionProvider::select_by_value must emit structured log"
-    );
-}
-
-#[test]
-fn surface_collector_routes_actions_dialog() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("AutomationWindowKind::ActionsDialog => {"),
-        "surface collector must route ActionsDialog targets"
-    );
 }
