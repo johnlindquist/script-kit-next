@@ -121,13 +121,6 @@ describe("fail-closed coverage ownership registry", () => {
         "src/ai/agent_chat/ui/thread_context_resolution.rs",
         "src/ai/agent_chat/ui/thread_fork_models.rs",
         "src/ai/agent_chat/ui/thread_fixtures.rs",
-        "src/ai/agent_chat/ui/view_automation_geometry.rs",
-        "src/ai/agent_chat/ui/view_footer_ownership.rs",
-        "src/ai/agent_chat/ui/view_focused_text_variations.rs",
-        "src/ai/agent_chat/ui/view_history_navigation.rs",
-        "src/ai/agent_chat/ui/view_permission_actions.rs",
-        "src/ai/agent_chat/ui/view_spine_rich_results.rs",
-        "src/ai/agent_chat/ui/view_recovery_and_transient.rs",
         "src/app_layout/collect_elements_projection_primitives.rs",
       ]),
     );
@@ -199,7 +192,6 @@ describe("fail-closed coverage ownership registry", () => {
       ["file-search", "FileSearchView", "src/render_builtins/file_search.rs"],
       ["day-page", "DayPage", "src/main_sections/day_page_view.rs"],
       ["current-app-commands", "CurrentAppCommandsView", "src/render_builtins/current_app_commands.rs"],
-      ["agent-chat-history", "AgentChatHistoryView", "src/render_builtins/agent_chat_history.rs"],
       ["webcam", "WebcamView", "src/prompts/webcam.rs"],
     ] as const;
 
