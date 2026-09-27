@@ -3,71 +3,14 @@
 //! These are source-level contract tests that verify the launch path and setup
 //! surfaces no longer rely on Claude-specific copy or loaders.
 
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
-const AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
-const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
-const AGENT_CHAT_SETUP_CARD_SOURCE: &str =
-    include_str!("../src/ai/agent_chat/ui/components/setup_card.rs");
 const AGENT_CHAT_CONFIG_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/config.rs");
 const CONFIG_TYPES_SOURCE: &str = include_str!("../src/config/types.rs");
-const SETUP_MOD_SOURCE: &str = include_str!("../src/setup/mod.rs");
 const RELEASE_WORKFLOW_SOURCE: &str = include_str!("../.github/workflows/release.yml");
 const VERIFY_MACOS_BUNDLE_SOURCE: &str = include_str!("../scripts/verify-macos-bundle.sh");
 
 // ── Launch path uses catalog, not Claude-only loader ───────────────────
 
-#[test]
-fn agent_handoff_uses_pi_agent_chat_launch_not_legacy_catalog_loader() {
-    assert!(
-        AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_agent_chat_view_from_launch"),
-        "agent_handoff must route Agent Chat through Pi warm launch"
-    );
-    assert!(
-        !AGENT_CHAT_LAUNCH_SOURCE.contains("load_agent_chat_agent_catalog_entries"),
-        "agent_handoff must not use the legacy Agent Chat catalog runtime launch"
-    );
-}
-
 // ── AgentChatView supports setup constructor ─────────────────────────────
-
-#[test]
-fn agent_chat_view_supports_setup_constructor() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("fn new_setup"),
-        "AgentChatView must have a new_setup constructor"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("AgentChatSession::Setup"),
-        "AgentChatView must support Setup session state"
-    );
-}
-
-#[test]
-fn agent_chat_setup_mode_blocks_script_list_picker_handoff_before_live_thread() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_picker_trigger_ignored_setup_mode\""),
-        "launcher-triggered @ and / picker handoffs must be ignored in setup mode"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_set_input_ignored_setup_mode\""),
-        "setup-mode Agent Chat input mutation must not call live_thread"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE
-            .contains("event = \"agent_chat_composer_picker_cleared_setup_mode\""),
-        "setup-mode mention refresh must clear picker state without reading live_thread"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE
-            .contains("event = \"agent_chat_setup_mode_key_propagated_without_live_thread\""),
-        "unhandled setup-mode keys must return before live-thread keyboard logic"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("event = \"agent_chat_escape_cancel_ignored_setup_mode\""),
-        "host-level Escape cancellation must not read live_thread in setup mode"
-    );
-}
 
 // (Removed: legacy Agent Chat-client auth-capability tests — they referenced a
 // `CLIENT_SOURCE` include of the deleted Agent Chat client. The Agent Chat backend/client
@@ -104,31 +47,6 @@ fn agent_chat_profile_config_keeps_legacy_ai_keys() {
             "Agent Chat profile config must expose Pi extension `{needed}`"
         );
     }
-}
-
-#[test]
-fn tab_runtime_routes_pi_profiles_without_removing_agent_chat_entrypoint() {
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("open_tab_ai_agent_chat_with_entry_intent"),
-        "Tab Agent Chat should keep the current Agent Chat entry point"
-    );
-    assert!(
-        (AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_launch_with_cwd_override")
-            || AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_effective_profile"))
-            && (AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_focused_text_launch")
-                || AGENT_CHAT_LAUNCH_SOURCE.contains("AgentChatLaunch::from_profile"))
-            && AGENT_CHAT_LAUNCH_SOURCE.contains("open_tab_ai_agent_chat_view_from_launch"),
-        "Tab Agent Chat launch must route selected Pi profiles through the Pi launch helper"
-    );
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("dismiss_active_agent_chat_warm_lease"),
-        "Pi-backed Agent Chat dismissal must reset and rewarm a fresh session"
-    );
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("closing_warm_agent_chat")
-            && TAB_AI_MODE_SOURCE.contains("self.embedded_agent_chat = None;"),
-        "Pi-backed Agent Chat dismissal must clear the reusable embedded chat cache"
-    );
 }
 
 // (Removed: legacy per-agent preference load/persist tests — the Agent Chat backend
@@ -284,26 +202,6 @@ fn codex_setup_normalizes_stale_absolute_adapter_paths() {
     );
 }
 
-#[test]
-fn first_run_agent_chat_catalog_seed_includes_codex_adapter() {
-    assert!(
-        SETUP_MOD_SOURCE.contains(r#""id": "codex-agent_chat""#),
-        "fresh installs must seed codex-agent_chat into agent_chat/agents.json"
-    );
-    assert!(
-        SETUP_MOD_SOURCE.contains(r#""command": "codex-agent_chat""#),
-        "fresh installs must seed Codex as a direct Agent Chat adapter command"
-    );
-    assert!(
-        SETUP_MOD_SOURCE.contains(r#""args": []"#),
-        "fresh installs must not route Codex through npx package args"
-    );
-    assert!(
-        !SETUP_MOD_SOURCE.contains(r#""@zed-industries/codex-agent_chat""#),
-        "fresh installs must not seed a runtime npx Codex package fallback"
-    );
-}
-
 // ── Catalog builder emits per-entry structured logs ──────────────────
 
 #[test]
@@ -364,23 +262,7 @@ fn setup_state_has_runtime_constructor() {
 
 // ── View renders runtime setup state ─────────────────────────────────
 
-#[test]
-fn agent_chat_view_renders_runtime_setup_state() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("thread_ref.setup_state()"),
-        "AgentChatView render must check thread setup_state for runtime recovery"
-    );
-}
-
 // ── Launch requirements threaded into thread init ────────────────────
-
-#[test]
-fn agent_handoff_threads_launch_requirements_into_agent_chat_thread_init() {
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("launch_requirements: requirements"),
-        "agent_handoff must pass launch requirements into AgentChatThreadInit"
-    );
-}
 
 #[test]
 fn agent_chat_thread_init_carries_launch_requirements() {
@@ -463,43 +345,7 @@ fn from_resolution_has_capability_gap_message_helper() {
 
 // ── Picker surfaces auth + capability labels ──────────────────────
 
-#[test]
-fn picker_row_includes_auth_label() {
-    assert!(
-        AGENT_CHAT_SETUP_CARD_SOURCE.contains("setup_agent_auth_label"),
-        "picker must render auth state labels"
-    );
-}
-
-#[test]
-fn picker_row_includes_capability_label() {
-    assert!(
-        AGENT_CHAT_SETUP_CARD_SOURCE.contains("setup_agent_capability_label"),
-        "picker must render capability compatibility labels"
-    );
-}
-
-#[test]
-fn picker_log_includes_compatible_count() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("compatible_count"),
-        "picker opened log must include compatible_count"
-    );
-}
-
 // ── Setup picker confirmation updates live thread ───────────────────
-
-#[test]
-fn setup_picker_confirm_updates_live_thread_selected_agent() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("replace_selected_agent"),
-        "setup picker confirmation must update the live thread selected agent"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("agent_chat_setup_agent_confirmed_for_runtime_recovery"),
-        "setup picker confirmation must emit a structured log"
-    );
-}
 
 // (Removed: legacy Agent Chat agent-preference persistence tests — the per-agent
 // preference load/persist flow was deleted when the Agent Chat backend was removed.

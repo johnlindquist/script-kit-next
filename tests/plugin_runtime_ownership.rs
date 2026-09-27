@@ -328,28 +328,3 @@ fn scriptlet_loader_uses_discover_plugins() {
 }
 
 // ── Agent Chat skill enumeration uses discover_plugin_skills ──────────────
-
-const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
-
-#[test]
-fn agent_chat_view_uses_discover_plugin_skills_for_slash_commands() {
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("crate::plugins::discover_plugins()"),
-        "Agent Chat view must use discover_plugins() for skill enumeration"
-    );
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("crate::plugins::discover_plugin_skills("),
-        "Agent Chat view must use discover_plugin_skills() for skill enumeration"
-    );
-}
-
-#[test]
-fn agent_chat_view_does_not_manually_scan_kit_container_for_skills() {
-    // The old pattern manually scanned plugins/*/skills/ — this is now
-    // replaced by discover_plugin_skills() which routes through the
-    // canonical plugin index.
-    assert!(
-        !AGENT_CHAT_VIEW_SOURCE.contains("kit_container"),
-        "Agent Chat view must not use manual kit_container scanning for skills"
-    );
-}

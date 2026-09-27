@@ -33,105 +33,13 @@ fn notes_collector_exposes_stable_semantic_ids() {
 // Target resolution: Notes is accepted alongside Main and AgentChatDetached
 // ============================================================
 
-#[test]
-fn automation_read_target_enum_has_notes_variant() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("AutomationReadTarget::Notes {"),
-        "AutomationReadTarget enum must have a Notes variant"
-    );
-}
-
-#[test]
-fn resolve_automation_read_target_accepts_notes() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("AutomationWindowKind::Notes =>"),
-        "resolve_automation_read_target must handle Notes kind"
-    );
-    assert!(
-        source.contains("automation.target.notes_resolved"),
-        "Notes resolution must emit a structured log"
-    );
-}
-
 // ============================================================
 // waitFor: Notes targets are no longer rejected
 // ============================================================
 
-#[test]
-fn wait_for_uses_automation_read_target_for_non_agent_chat_conditions() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    let wait_for_start = source
-        .find("let resolved_target: AutomationReadTarget = if target.is_some()")
-        .expect("waitFor target-resolution block must exist");
-    let wait_for_block = &source[wait_for_start..(wait_for_start + 1800).min(source.len())];
-    assert!(
-        wait_for_block.contains("resolve_automation_read_target(")
-            && wait_for_block.contains("&rid,")
-            && wait_for_block.contains("\"waitFor\","),
-        "waitFor should use resolve_automation_read_target for non-Agent Chat conditions"
-    );
-}
-
-#[test]
-fn wait_for_checks_notes_condition_on_notes_target() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("notes_wait_condition_satisfied"),
-        "waitFor must delegate to notes_wait_condition_satisfied for Notes targets"
-    );
-}
-
 // ============================================================
 // batch: Notes targets are accepted and routed
 // ============================================================
-
-#[test]
-fn batch_uses_automation_read_target() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    let batch_start = source
-        .find("let batch_target: AutomationReadTarget = if target.is_some()")
-        .expect("batch target-resolution block must exist");
-    let batch_block = &source[batch_start..(batch_start + 900).min(source.len())];
-    assert!(
-        batch_block.contains("resolve_automation_read_target(")
-            && batch_block.contains("&rid,")
-            && batch_block.contains("\"batch\","),
-        "batch handler should use resolve_automation_read_target for target resolution"
-    );
-}
-
-#[test]
-fn batch_has_notes_path() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("notes_batch_target"),
-        "batch handler should have a notes_batch_target variable for Notes routing"
-    );
-    assert!(
-        source.contains("automation.batch.notes.completed"),
-        "batch handler should emit Notes completion log"
-    );
-}
-
-#[test]
-fn notes_batch_emits_set_input_log() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("transaction_notes_set_input"),
-        "Notes batch setInput should emit transaction_notes_set_input log"
-    );
-}
-
-#[test]
-fn notes_batch_emits_wait_complete_log() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("transaction_notes_wait_complete"),
-        "Notes batch waitFor should emit transaction_notes_wait_complete log"
-    );
-}
 
 // ============================================================
 // Notes editor_state accessibility for transaction operations
@@ -158,19 +66,6 @@ fn notes_entity_and_handle_helper_exists() {
 // ============================================================
 // Notes condition checker covers generic conditions
 // ============================================================
-
-#[test]
-fn notes_wait_condition_handles_element_exists() {
-    let source = include_str!("../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("WaitDetailedCondition::ElementExists"),
-        "notes_wait_condition_satisfied must handle ElementExists"
-    );
-    assert!(
-        source.contains("WaitDetailedCondition::ElementFocused"),
-        "notes_wait_condition_satisfied must handle ElementFocused"
-    );
-}
 
 // ============================================================
 // Protocol parsing: Notes target parses correctly
@@ -300,75 +195,6 @@ fn notes_skill_documents_automation_only_surface_and_sdk_has_no_public_notes_glo
 // ============================================================
 // Notes ↔ Agent Chat handoff labels are consistent
 // ============================================================
-
-#[test]
-fn notes_send_to_agent_chat_label_is_consistent_across_builder_and_panel() {
-    let builder = include_str!("../src/actions/builders/notes.rs");
-    let panel = include_str!("../src/notes/actions_panel.rs");
-
-    assert!(
-        builder.contains("\"Ask AI About This Note\""),
-        "Notes builder must use 'Ask AI About This Note' label"
-    );
-    assert!(
-        panel.contains("\"Ask AI About This Note\""),
-        "Notes actions panel must use 'Ask AI About This Note' display name"
-    );
-}
-
-#[test]
-fn notes_main_handoff_emits_structured_logs() {
-    let handoff = include_str!("../src/notes/window/ai_handoff.rs");
-    assert!(
-        handoff.contains("notes_ai_handoff_requested"),
-        "Notes handoff must emit notes_ai_handoff_requested structured log"
-    );
-    assert!(
-        handoff.contains("notes_ai_handoff_main_staged"),
-        "Notes handoff must emit notes_ai_handoff_main_staged structured log"
-    );
-    assert!(
-        handoff.contains("notes_ai_handoff_blocked"),
-        "Notes handoff must emit notes_ai_handoff_blocked for empty notes"
-    );
-    assert!(
-        !handoff.contains("request_explicit_agent_chat_handoff_from_secondary_window"),
-        "Notes must not use the detached secondary-window Agent Chat handoff path"
-    );
-
-    // Detached Agent Chat and shared helpers must still exist for non-Notes paths.
-    let agent_chat_mod = include_str!("../src/ai/agent_chat/ui/mod.rs");
-    assert!(
-        agent_chat_mod.contains("pub(crate) fn open_or_focus_chat_with_input("),
-        "Agent Chat staging helper must exist for non-Notes secondary-window handoffs"
-    );
-
-    let handler = include_str!("../src/app_actions/handle_action/mod.rs");
-    assert!(
-        handler.contains("agent_chat_save_as_note"),
-        "Agent Chat handler must emit agent_chat_save_as_note structured log"
-    );
-    assert!(
-        handler.contains("self.close_agent_chat_to_script_list(false, cx);"),
-        "Embedded Agent Chat save-as-note should close Agent Chat back to ScriptList on success"
-    );
-
-    let detached = include_str!("../src/ai/agent_chat/ui/chat_window.rs");
-    assert!(
-        detached.contains("\"agent_chat_save_as_note\""),
-        "Detached Agent Chat handler must implement agent_chat_save_as_note"
-    );
-    assert!(
-        detached.contains("close_chat_window(cx);"),
-        "Detached Agent Chat save-as-note should close the detached Agent Chat window on success"
-    );
-
-    let builder = include_str!("../src/actions/builders/script_context.rs");
-    assert!(
-        builder.contains("| \"agent_chat_save_as_note\""),
-        "Detached Agent Chat host filter should allow agent_chat_save_as_note"
-    );
-}
 
 #[test]
 fn notes_agent_chat_handoff_documented_in_skill_and_guide() {

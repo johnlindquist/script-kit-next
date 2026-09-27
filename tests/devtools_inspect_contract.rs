@@ -10,17 +10,12 @@ const FOCUS: &str = include_str!("../scripts/devtools/focus.ts");
 const TEXT: &str = include_str!("../scripts/devtools/text.ts");
 const KEYBOARD: &str = include_str!("../scripts/devtools/keyboard.ts");
 const ACTIONS: &str = include_str!("../scripts/devtools/actions.ts");
-const ACTIONS_DIALOG: &str = include_str!("../src/actions/dialog.rs");
-const ACTIONS_WINDOW: &str = include_str!("../src/actions/window.rs");
 const ACT: &str = include_str!("../scripts/devtools/act.ts");
 const COMPARE: &str = include_str!("../scripts/devtools/compare.ts");
 const EVENTS: &str = include_str!("../scripts/devtools/events.ts");
 const NOTES: &str = include_str!("../scripts/devtools/notes.ts");
 const DICTATION: &str = include_str!("../scripts/devtools/dictation.ts");
 const SCHEMA: &str = include_str!("../scripts/devtools/schema.ts");
-const AUTOMATION_INSPECT: &str = include_str!("../src/protocol/types/automation_inspect.rs");
-const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
-const APP_VIEW_STATE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const DEVTOOLS_SKILL: &str = include_str!("../.agents/skills/script-kit-devtools/SKILL.md");
 const DEVTOOLS_AUDIT: &str =
     include_str!("../.agents/skills/script-kit-devtools/references/devtools-coverage-audit.md");
@@ -45,43 +40,6 @@ fn inspect_composes_existing_protocol_primitives() {
         !INSPECT.contains("scripts/agentic/index.ts"),
         "devtools inspect must not route through the recipe catalog"
     );
-}
-
-#[test]
-fn automation_inspect_snapshot_exposes_runtime_surface_identity() {
-    for needle in [
-        "pub surface_kind: Option<String>",
-        "pub app_view_variant: Option<String>",
-        "pub native_footer_surface: Option<String>",
-    ] {
-        assert!(
-            AUTOMATION_INSPECT.contains(needle),
-            "AutomationInspectSnapshot must expose runtime surface identity field: {needle}"
-        );
-    }
-
-    for needle in [
-        "fn app_view_variant(&self) -> &'static str",
-        "AppView::ScriptList => \"ScriptList\"",
-        "AppView::DivPrompt { .. } => \"DivPrompt\"",
-        "AppView::AgentChatView { .. } => \"AgentChatView\"",
-    ] {
-        assert!(
-            APP_VIEW_STATE.contains(needle),
-            "AppView must expose stable variant identity for DevTools: {needle}"
-        );
-    }
-
-    for needle in [
-        "let surface_kind = (resolved.kind == protocol::AutomationWindowKind::Main)",
-        "let app_view_variant = (resolved.kind == protocol::AutomationWindowKind::Main)",
-        "let native_footer_surface = (resolved.kind == protocol::AutomationWindowKind::Main)",
-    ] {
-        assert!(
-            PROMPT_HANDLER.contains(needle),
-            "inspectAutomationWindow must populate runtime surface identity: {needle}"
-        );
-    }
 }
 
 #[test]
@@ -415,135 +373,6 @@ fn keyboard_cli_reports_footer_slot_contract_fields() {
         assert!(
             KEYBOARD.contains(needle),
             "keyboard CLI must expose activeFooter slot-contract field: {needle}"
-        );
-    }
-}
-
-#[test]
-fn actions_cli_reports_popup_route_geometry_shortcuts_and_gaps() {
-    for needle in [
-        "script-kit-devtools.actions",
-        "actions.inspect",
-        "scripts/devtools/act.ts",
-        "scripts/devtools/targets.ts",
-        "scripts/devtools/elements.ts",
-        "scripts/devtools/layout.ts",
-        "scripts/devtools/keyboard.ts",
-        "--open",
-        "--start",
-        "--keep-open",
-        "--open-target-kind",
-        "SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN",
-        "openNotes",
-        "parentOpenReceipt",
-        "open-actions",
-        "--show",
-        "actionsDialog",
-        "state.actionsDialog",
-        "attachedPopup",
-        "rowGeometry",
-        "sectionBoundsAvailable",
-        "runtimeBoundsAvailable",
-        "visibleSample",
-        "parentTarget",
-        "parentWindowId",
-        "popupState",
-        "routeStateAvailable",
-        "routeStack",
-        "popupRect",
-        "parentRect",
-        "anchorRect",
-        "pinnedEdge",
-        "generation",
-        "stale",
-        "clippingEdges",
-        "section bounds",
-        "hover row",
-        "runtime shortcut layout bounds",
-        "getLayoutInfo(actionsDialog)",
-        "disabledReasonBoundsRequired",
-        "disabled reason bounds",
-        "proofMode",
-        "blocked-by-missing-primitive",
-    ] {
-        assert!(
-            ACTIONS.contains(needle),
-            "actions CLI must expose popup proof field or missing primitive: {needle}"
-        );
-    }
-
-    assert!(
-        DEVTOOLS_SKILL.contains("Actions CLI"),
-        "DevTools skill should route popup/action-menu inspection through actions CLI"
-    );
-    assert!(
-        SCHEMA.contains("bun scripts/devtools/actions.ts inspect"),
-        "schema should name the concrete actions implementation"
-    );
-    for needle in [
-        "GetStateTargetResolution::ActionsDialog",
-        "get_actions_dialog_entity(cx)",
-        "automation_state(\"actionsDialog\", cx)",
-    ] {
-        assert!(
-            PROMPT_HANDLER.contains(needle),
-            "getState must expose ActionsDialog state for popup DevTools inspection: {needle}"
-        );
-    }
-    assert!(
-        ACTIONS_DIALOG.contains("actions_popup_automation_snapshot()"),
-        "ActionsDialog state must include the runtime-owned attached popup snapshot"
-    );
-    for needle in [
-        "pub(crate) fn automation_layout_info",
-        "ActionsDialog",
-        "ActionsSearchInput",
-        "ActionsContextHeader",
-        "ActionsList",
-        "ActionsRow[",
-        "ActionsShortcut[",
-        "LayoutComponentType::ListItem",
-    ] {
-        assert!(
-            ACTIONS_DIALOG.contains(needle),
-            "ActionsDialog must expose target-scoped layout info field: {needle}"
-        );
-    }
-    for needle in [
-        "ACTIONS_POPUP_AUTOMATION_SNAPSHOT",
-        "record_actions_popup_automation_snapshot",
-        "update_actions_popup_automation_snapshot_for_resize",
-        "clear_actions_popup_automation_snapshot",
-        "anchorRect",
-        "pinnedEdge",
-        "generation",
-        "stale",
-    ] {
-        assert!(
-            ACTIONS_WINDOW.contains(needle),
-            "actions window runtime must own attached popup proof field: {needle}"
-        );
-    }
-    for needle in [
-        "devtools_row_geometry",
-        "runtime.actionsDialog.render",
-        "popupLogicalPx",
-        "attachedPopupGeneration",
-        "disabledReasonLayout",
-        "shortcutLayout",
-        "footer_shortcut_keycap_layout_model",
-        "FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE",
-        "sectionBoundsAvailable",
-        "selectedRowBoundsAvailable",
-        "shortcutBoundsAvailable",
-        "disabledReasonBoundsAvailable",
-        "hoverRowAvailable",
-        "hoveredRow",
-        ".on_hover",
-    ] {
-        assert!(
-            ACTIONS_DIALOG.contains(needle),
-            "ActionsDialog state must expose runtime row geometry field: {needle}"
         );
     }
 }

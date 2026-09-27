@@ -771,53 +771,6 @@ fn inspect_detached_response_has_origin_bounds() {
     inspect_cleanup(&p, &["notes"]);
 }
 
-/// AgentChatDetached inspect response must use the correct semantic ID.
-#[test]
-fn inspect_agent_chat_detached_suggested_hit_uses_correct_semantic_id() {
-    let p = inspect_prefix();
-
-    let agent_chat = make_window(
-        &p,
-        "agent_chat",
-        AutomationWindowKind::AgentChatDetached,
-        Some(AutomationWindowBounds {
-            x: 200.0,
-            y: 100.0,
-            width: 480.0,
-            height: 440.0,
-        }),
-    );
-    script_kit_gpui::windows::upsert_automation_window(agent_chat);
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:agent_chat"),
-    };
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
-
-    let target_bounds =
-        script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved).expect("must compute");
-    let suggested =
-        script_kit_gpui::protocol::default_suggested_hit_points(&resolved, Some(&target_bounds));
-
-    assert_eq!(suggested.len(), 1);
-    assert_eq!(suggested[0].semantic_id, "input:agent_chat-composer");
-    assert_eq!(suggested[0].reason, "surface_center");
-    // Center of (0, 0, 480, 440) = (240, 220)
-    assert!(
-        (suggested[0].x - 240.0).abs() < f64::EPSILON,
-        "Hit x should be 240, got {}",
-        suggested[0].x
-    );
-    assert!(
-        (suggested[0].y - 220.0).abs() < f64::EPSILON,
-        "Hit y should be 220, got {}",
-        suggested[0].y
-    );
-
-    inspect_cleanup(&p, &["agent_chat"]);
-}
-
 /// Missing bounds must produce empty suggested hit points (fail closed).
 #[test]
 fn inspect_no_bounds_produces_no_suggested_hits() {
@@ -955,10 +908,6 @@ fn inspect_suggested_hit_semantic_ids_per_kind() {
         (AutomationWindowKind::ActionsDialog, "panel:actions-dialog"),
         (AutomationWindowKind::PromptPopup, "panel:prompt-popup"),
         (AutomationWindowKind::Notes, "input:notes-editor"),
-        (
-            AutomationWindowKind::AgentChatDetached,
-            "input:agent_chat-composer",
-        ),
         (AutomationWindowKind::Main, "panel:window"),
     ];
 

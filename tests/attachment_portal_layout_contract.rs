@@ -6,7 +6,7 @@ fn attachment_portal_layout_uses_shared_chrome_and_dedicated_split_content() {
         .expect("build_layout_info source should be readable");
 
     for needle in [
-        "resolved_main_view_header_input_policy",
+        "main_view_header_input_policy()",
         "main_view_header_metrics(menu_def, input_height)",
         "MainViewHeader",
         "MainViewContextZone",

@@ -81,63 +81,6 @@ fn standard_footer_no_longer_owns_global_left_chips() {
 }
 
 #[test]
-fn agent_chat_footer_buttons_remain_snapshot_owned() {
-    // The frozen Agent Chat footer snapshot contract stays the source of Agent Chat's own
-    // buttons; the global chips wrap it from outside, not inside.
-    let src = read("src/app_impl/ui_window.rs");
-    let body = fn_body(&src, "fn agent_chat_footer_buttons(");
-    assert!(
-        body.contains("self.agent_chat_footer_snapshot"),
-        "Agent Chat footer buttons must still come from the snapshot"
-    );
-    assert!(
-        !body.contains("FooterAction::Cwd"),
-        "Agent Chat footer buttons must not embed the global Cwd chip"
-    );
-    assert!(
-        !body.contains("FooterAction::AgentModel"),
-        "Agent Chat footer buttons must not embed the global Agent·Model chip"
-    );
-}
-
-#[test]
-fn agent_chat_enrichment_suppresses_visual_cwd_when_real_chips_exist() {
-    let src = read("src/app_impl/ui_window.rs");
-    let body = fn_body(&src, "fn enrich_footer_config_with_agent_chat_info(");
-    assert!(
-        body.contains("config.left_info = None"),
-        "enrichment must drop the left-info rail because shared context chips live in the header"
-    );
-    // The visual-only cwd_chip injection that caused the flash/overlap is gone.
-    assert!(
-        !body.contains("cwd_chip: self.global_footer_cwd_chip()"),
-        "enrichment must not inject a visual-only cwd_chip"
-    );
-    assert!(
-        !body.contains("left_info.cwd_chip = self.global_footer_cwd_chip()"),
-        "enrichment must not inject a visual-only cwd_chip"
-    );
-}
-
-#[test]
-fn agent_chat_context_chips_do_not_use_footer_status_dot_lane() {
-    // Cwd + Agent·Model now live in the shared main-view header, not in native
-    // footer buttons. Agent Chat enrichment must keep suppressing the old visual-only
-    // left_info rail and must not reintroduce a footer status-dot lane for them.
-    let ui = read("src/app_impl/ui_window.rs");
-
-    let enrich = fn_body(&ui, "fn enrich_footer_config_with_agent_chat_info(");
-    assert!(
-        enrich.contains("config.left_info = None"),
-        "shared context chips must still suppress the old left-info rail"
-    );
-    assert!(
-        !ui.contains("agent_chat_footer_dot_status") && !ui.contains(".leading_dot("),
-        "ui_window.rs must not thread Agent Chat status through footer context chips"
-    );
-}
-
-#[test]
 fn native_footer_left_pins_cwd_and_agent_model() {
     // The native AppKit footer must keep recognizing Cwd + AgentModel as
     // left-pinned, otherwise prepended chips would render on the right.

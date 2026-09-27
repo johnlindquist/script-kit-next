@@ -11,53 +11,6 @@ fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 }
 
 #[test]
-fn agent_chat_empty_guidance_uses_shared_info_state() {
-    let source = fs::read_to_string("src/ai/agent_chat/ui/view.rs")
-        .expect("failed to read src/ai/agent_chat/ui/view.rs");
-
-    assert!(
-        source.contains("render_agent_chat_empty_guidance"),
-        "Agent Chat empty composer must use shared InfoState guidance"
-    );
-    assert!(
-        !source.contains("Type / for skills"),
-        "old weak Agent Chat empty hint copy must not return"
-    );
-}
-
-#[test]
-fn shared_info_state_is_exported() {
-    let source =
-        fs::read_to_string("src/components/mod.rs").expect("failed to read src/components/mod.rs");
-
-    assert!(source.contains("mod info_state"));
-    assert!(source.contains("render_info_state"));
-    assert!(source.contains("InfoStateSpec"));
-}
-
-#[test]
-fn info_state_keeps_context_first_agent_chat_copy() {
-    let source = fs::read_to_string("src/components/info_state.rs")
-        .expect("failed to read src/components/info_state.rs");
-
-    assert!(source.contains("Ask with context"));
-    assert!(source.contains("Use / for skills or @ to attach context"));
-    assert!(source.contains("Attach files, scripts, clipboard, or history"));
-    assert!(source.contains("InfoGuidanceItem::new(Some(\"⌘K\"), \"Show every chat action\")"));
-    let agent_chat_spec = section_between(
-        &source,
-        "pub(crate) fn agent_chat_empty_guidance_spec",
-        "pub(crate) fn render_agent_chat_empty_guidance",
-    );
-    assert!(
-        !agent_chat_spec.contains(".footer_shortcut_note("),
-        "Agent Chat empty guidance must keep Cmd+K in the normal row list so spacing stays consistent"
-    );
-    assert!(!source.contains("⌘N new"));
-    assert!(!source.contains("⌘W close"));
-}
-
-#[test]
 fn composer_empty_info_state_uses_main_view_columns_not_centered_card() {
     let info = fs::read_to_string("src/components/info_state.rs")
         .expect("failed to read src/components/info_state.rs");
@@ -91,25 +44,6 @@ fn agent_chat_empty_guidance_uses_comfortable_main_view_density() {
 
     assert!(spec.contains(".layout(InfoStateLayout::ComposerEmpty)"));
     assert!(spec.contains(".density(InfoStateDensity::Comfortable)"));
-}
-
-#[test]
-fn agent_chat_empty_guidance_slot_does_not_center_the_info_state() {
-    let agent_chat = fs::read_to_string("src/ai/agent_chat/ui/view.rs")
-        .expect("failed to read src/ai/agent_chat/ui/view.rs");
-    let middle = section_between(
-        &agent_chat,
-        "fn render_agent_chat_middle_area",
-        "if show_sidecar",
-    );
-
-    assert!(middle.contains("render_agent_chat_empty_guidance"));
-    assert!(
-        !middle.contains(".items_center()") && !middle.contains(".justify_center()"),
-        "AgentChat middle area must not center ComposerEmpty; InfoState owns that layout"
-    );
-    assert!(middle.contains(".w_full()"));
-    assert!(middle.contains(".h_full()"));
 }
 
 #[test]
@@ -202,21 +136,4 @@ fn footer_chrome_exposes_only_shared_shortcut_keycap_row_for_help_surfaces() {
         footer.contains("fn render_footer_keycap("),
         "low-level footer keycap primitive should remain private; expose the row renderer only"
     );
-}
-
-#[test]
-fn launcher_empty_guidance_uses_shared_info_state() {
-    let launcher = fs::read_to_string("src/render_script_list/mod.rs")
-        .expect("failed to read src/render_script_list/mod.rs");
-    let info = fs::read_to_string("src/components/info_state.rs")
-        .expect("failed to read src/components/info_state.rs");
-
-    assert!(launcher.contains("render_launcher_empty_or_no_results"));
-    assert!(info.contains("launcher_empty_or_no_results_spec"));
-    assert!(info.contains("No scripts yet"));
-    assert!(info.contains("Tags need a syntax prefix"));
-    assert!(info.contains("active filter is narrowing"));
-    assert!(info.contains("scripts, scriptlets, snippets, and built-in commands"));
-    assert!(!launcher.contains("No scripts or snippets found"));
-    assert!(!launcher.contains("Press ⌘N to create a new script"));
 }

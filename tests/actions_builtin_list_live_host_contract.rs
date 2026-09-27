@@ -51,8 +51,8 @@ fn builtin_list_explicit_host_toggle_does_not_open_generic_actions() {
         .expect("toggle_actions_for_host must handle BuiltinList explicitly");
     let toggle_body = &ACTIONS_DIALOG[toggle_start..];
     let toggle_end = toggle_body
-        .find("ActionsDialogHost::AgentChatDetached")
-        .expect("BuiltinList branch should end before AgentChatDetached branch");
+        .find("\n    }\n")
+        .expect("BuiltinList is the last branch of toggle_actions_for_host");
     let builtin_list_branch = &toggle_body[..toggle_end];
 
     assert!(

@@ -315,15 +315,6 @@ fn builtin_execution_content() -> String {
 }
 
 #[test]
-fn ai_open_and_new_conversation_use_deferred_helper() {
-    let content = builtin_execution_content();
-    assert!(
-        content.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx);"),
-        "Expected OpenAi/MiniAi/NewConversation/ClearConversation to route to Agent Chat"
-    );
-}
-
-#[test]
 fn ai_clear_conversation_uses_deferred_helper() {
     let content = builtin_execution_content();
     assert!(

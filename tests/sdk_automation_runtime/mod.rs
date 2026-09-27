@@ -718,24 +718,6 @@ fn transaction_error_matches_sdk_ts_interface() {
 // ============================================================
 
 #[test]
-fn detached_agent_chat_transaction_provider_emits_set_input_log() {
-    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
-    assert!(
-        source.contains("transaction_detached_agent_chat_set_input"),
-        "DetachedAgentChatTransactionProvider::set_input must emit structured log"
-    );
-}
-
-#[test]
-fn detached_agent_chat_transaction_provider_emits_select_log() {
-    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
-    assert!(
-        source.contains("transaction_detached_agent_chat_select_by_value"),
-        "DetachedAgentChatTransactionProvider::select_by_value must emit structured log"
-    );
-}
-
-#[test]
 fn surface_collector_emits_snapshot_log_with_kind() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
@@ -762,14 +744,11 @@ fn surface_collector_emits_snapshot_log_with_kind() {
 /// repo's Source Audit Test Policy this is the pruning rule applied: rewrite
 /// structurally rather than patch the string again.
 #[test]
-fn surface_collector_routes_notes_and_agent_chat_detached() {
+fn surface_collector_routes_notes() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     let normalised = source.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    for (kind, collector) in [
-        ("Notes", "collect_notes_snapshot"),
-        ("AgentChatDetached", "collect_agent_chat_detached_snapshot"),
-    ] {
+    for (kind, collector) in [("Notes", "collect_notes_snapshot")] {
         let head = format!("AutomationWindowKind::{kind} =>");
         let start = normalised
             .find(&head)
@@ -805,15 +784,6 @@ fn prompt_handler_emits_elements_result_log() {
     assert!(
         source.contains("target = ?target"),
         "getElements log must include target field for cross-window tracing"
-    );
-}
-
-#[test]
-fn prompt_handler_emits_batch_detached_agent_chat_log() {
-    let source = include_str!("../../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("automation.batch.detached_agent_chat.completed"),
-        "batch handler must emit detached Agent Chat completion log"
     );
 }
 

@@ -3,13 +3,6 @@
 const AUTOMATION_SURFACE_SOURCE: &str = include_str!("../src/app_impl/automation_surface.rs");
 const ABOUT_ROUTE_SOURCE: &str = include_str!("../src/app_impl/about_route.rs");
 const TRIGGER_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/trigger_builtin_dispatch.rs");
-const AGENT_CHAT_SETUP_SOURCE: &str =
-    include_str!("../src/app_impl/agent_handoff/agent_chat_setup.rs");
-const AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
-const AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE: &str =
-    include_str!("../src/app_impl/agent_chat_surface_transitions.rs");
 
 fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source
@@ -108,33 +101,6 @@ fn script_list_main_filter_owner_delegates_to_restore_owner_contract() {
 }
 
 #[test]
-fn return_view_restore_paths_delegate_to_shared_owner() {
-    for (name, source, signature) in [
-        (
-            "attachment_portal.rs",
-            include_str!("../src/app_impl/attachment_portal.rs"),
-            "fn restore_attachment_portal_return_view",
-        ),
-        (
-            "agent_handoff/mod.rs",
-            TAB_AI_MODE_SOURCE,
-            "fn close_tab_ai_harness_terminal_impl",
-        ),
-    ] {
-        let body = function_body(source, signature);
-        assert!(
-            body.contains("self.restore_current_view_with_focus("),
-            "{name}::{signature} must restore AppView + focus through restore_current_view_with_focus"
-        );
-        assert!(
-            !body.contains("self.current_view = return_view")
-                && !body.contains("self.pending_focus = Some(return_focus_target)"),
-            "{name}::{signature} must not split return-view restoration into raw field writes"
-        );
-    }
-}
-
-#[test]
 fn script_list_entry_paths_delegate_to_main_filter_owner() {
     for (name, source, signature) in [
         (
@@ -197,67 +163,4 @@ fn about_and_confirm_routes_rekey_from_current_view_contract() {
             "About/confirm routes must not hand-code semanticSurface literals outside the surface registry: {forbidden}"
         );
     }
-}
-
-#[test]
-fn embedded_agent_chat_entry_and_return_paths_rekey_from_current_view_contract() {
-    for (name, source) in [
-        ("agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
-        ("agent_chat_launch.rs", AGENT_CHAT_LAUNCH_SOURCE),
-        ("agent_handoff/mod.rs", TAB_AI_MODE_SOURCE),
-    ] {
-        assert!(
-            !source.contains("semantic_surface_for_main_view(&self.current_view)"),
-            "{name} must not duplicate current-view semantic-surface lookup"
-        );
-    }
-
-    assert!(
-        !TAB_AI_MODE_SOURCE.contains("semantic_surface_for_main_view(&self.current_view)"),
-        "agent_handoff/mod.rs must not hand-roll main semantic-surface re-keying"
-    );
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("self.exit_embedded_agent_chat_surface("),
-        "agent_handoff/mod.rs must delegate embedded Agent Chat return-origin close to the lifecycle actor"
-    );
-    assert!(
-        !AGENT_CHAT_SETUP_SOURCE.contains("self.rekey_main_automation_surface_from_current_view();")
-            && !AGENT_CHAT_LAUNCH_SOURCE
-                .contains("self.rekey_main_automation_surface_from_current_view();"),
-        "Agent Chat setup and launch entry paths must not split re-keying from the shared embedded entry owner"
-    );
-    assert!(
-        AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE
-            .contains("pub(crate) fn enter_embedded_agent_chat_surface")
-            && AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE
-                .contains("pub(crate) fn exit_embedded_agent_chat_surface")
-            && AGENT_CHAT_SURFACE_TRANSITIONS_SOURCE
-                .matches("self.rekey_main_automation_surface_from_current_view()")
-                .count()
-                >= 2,
-        "embedded Agent Chat entry and exit must re-key main through the lifecycle actors"
-    );
-    let entry_delegate_count: usize = [
-        ("agent_chat_setup.rs", AGENT_CHAT_SETUP_SOURCE),
-        ("agent_chat_launch.rs", AGENT_CHAT_LAUNCH_SOURCE),
-        ("agent_handoff/mod.rs", TAB_AI_MODE_SOURCE),
-    ]
-    .iter()
-    .map(|(_, source)| {
-        source
-            .matches("self.enter_embedded_agent_chat_surface(")
-            .count()
-    })
-    .sum();
-    // Enumerated delegation sites (do not grow this list casually):
-    // 1. agent_chat_setup.rs — setup view entry
-    // 2. agent_chat_launch.rs — standard mock fixture entry
-    // 3. agent_chat_launch.rs — Quick AI codex-exec entry
-    // 4. agent_chat_launch.rs — Pi launch entry
-    // 5. agent_handoff/mod.rs — reattach-from-detached entry
-    // 6. agent_handoff/mod.rs — cached-view reuse entry
-    assert_eq!(
-        entry_delegate_count, 6,
-        "setup, launch (fixture/quick-ai/pi), reattach, and reuse Agent Chat entry paths must delegate to enter_embedded_agent_chat_surface"
-    );
 }

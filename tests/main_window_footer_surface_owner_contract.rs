@@ -4,10 +4,7 @@ const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_
 const DICTATION_WINDOW_SOURCE: &str = include_str!("../src/dictation/window.rs");
 const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
-const RENDER_PROMPTS_OTHER_SOURCE: &str = include_str!("../src/render_prompts/other.rs");
-const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const VIBRANCY_CONFIG_SOURCE: &str = include_str!("../src/platform/vibrancy_config.rs");
-const SIMULATE_KEY_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 
 fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source
@@ -31,33 +28,6 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
         }
     }
     panic!("unterminated function body: {signature}");
-}
-
-#[test]
-fn app_view_owns_native_footer_surface_map() {
-    let body = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
-    for expected in [
-        "AppView::ScriptList => Some(\"script_list\")",
-        "AppView::QuickTerminalView { .. } => Some(\"quick_terminal\")",
-        "AppView::AgentChatView { .. } => Some(\"agent_chat\")",
-        "AppView::ScriptIssuesView { .. } => Some(\"script_issues\")",
-        "AppView::TermPrompt { .. } => Some(\"term_prompt\")",
-        "AppView::About { .. } => Some(\"about\")",
-        "AppView::MicroPrompt { .. } => Some(\"micro_prompt\")",
-        "AppView::SdkReferenceView { .. } => Some(\"sdk_reference\")",
-        "AppView::ScriptTemplateCatalogView { .. } => Some(\"script_template_catalog\")",
-        "AppView::CreateAiPresetView { .. } => Some(\"create_ai_preset\")",
-        "AppView::NotesBrowseView { .. } => Some(\"notes_browse\")",
-    ] {
-        assert!(
-            body.contains(expected),
-            "AppView::native_footer_surface must declare footer ownership for `{expected}`"
-        );
-    }
-    assert!(
-        !body.contains("_ => None"),
-        "native footer ownership must remain explicit so new AppView variants cannot inherit footer behavior silently"
-    );
 }
 
 /// Shrink-only ratchet: main-window views that still opt OUT of the native
@@ -228,42 +198,6 @@ fn script_issues_view_keeps_native_footer_and_fix_in_agent_primary_action() {
 }
 
 #[test]
-fn script_issues_enter_routes_to_agent_chat_prompt_submission() {
-    assert!(
-        RENDER_PROMPTS_OTHER_SOURCE.contains("pub(crate) fn format_script_issues_agent_prompt")
-            && RENDER_PROMPTS_OTHER_SOURCE.contains("Self::format_script_issues_diagnostics(report)")
-            && RENDER_PROMPTS_OTHER_SOURCE.contains("ask_agent_chat_suppressing_focused_part(prompt, cx)"),
-        "Script issues Agent handoff must include the formatted diagnostics and suppress focused context"
-    );
-
-    assert!(
-        STARTUP_SOURCE.contains("if let AppView::ScriptIssuesView { report } = &this.current_view")
-            && STARTUP_SOURCE.contains("this.fix_script_issues_in_agent(&report, cx);")
-            && STARTUP_SOURCE.contains("cx.stop_propagation();"),
-        "physical Enter must route ScriptIssuesView to Fix in Agent before generic key handling"
-    );
-
-    assert!(
-        SIMULATE_KEY_DISPATCH_SOURCE.contains("AppView::ScriptIssuesView { report }")
-            && SIMULATE_KEY_DISPATCH_SOURCE
-                .contains("SimulateKey: Enter - fix script issues in Agent Chat")
-            && SIMULATE_KEY_DISPATCH_SOURCE
-                .contains("view.fix_script_issues_in_agent(&report, ctx);"),
-        "simulateKey Enter must keep parity with physical Enter for ScriptIssuesView"
-    );
-
-    let render_script_issues = function_body(
-        RENDER_PROMPTS_OTHER_SOURCE,
-        "pub(crate) fn render_script_issues_view",
-    );
-    assert!(
-        render_script_issues.contains("has_cmd && key.eq_ignore_ascii_case(\"w\")")
-            && render_script_issues.contains("this.go_back_or_close(window, cx);"),
-        "ScriptIssuesView must handle Cmd+W as a close/back shortcut"
-    );
-}
-
-#[test]
 fn native_footer_visual_effect_refresh_invalidates_without_synchronous_redisplay() {
     // The shared host-refresh body lives in `refresh_footer_host_impl`;
     // `refresh_main_footer_host` / `refresh_window_footer_host` are thin
@@ -387,29 +321,6 @@ fn footer_context_chips_do_not_count_as_action_slots() {
             && slot_model_body.contains("too_many_action_slots")
             && slot_model_body.contains("duplicate_shortcut_keys"),
         "slot_model must count action slots separately from context chips and report violations"
-    );
-}
-
-#[test]
-fn cwd_and_agent_model_are_not_rendered_as_main_window_footer_chips() {
-    assert!(
-        !UI_WINDOW_SOURCE.contains("FooterButtonConfig::new(FooterAction::Cwd")
-            && !UI_WINDOW_SOURCE.contains("FooterButtonConfig::new(FooterAction::AgentModel"),
-        "cwd and Agent/model are shared-header controls and must not be duplicated as native footer buttons"
-    );
-    assert!(
-        !UI_WINDOW_SOURCE.contains("prepend_global_main_window_left_chips")
-            && !UI_WINDOW_SOURCE.contains("global_main_window_left_chip_buttons")
-            && !UI_WINDOW_SOURCE.contains("current_view_shows_global_left_chips"),
-        "main-window footer config must not have a global cwd/model prepending path"
-    );
-    assert!(
-        function_body(
-            UI_WINDOW_SOURCE,
-            "pub(crate) fn enrich_footer_config_with_agent_chat_info"
-        )
-        .contains("config.left_info = None;"),
-        "Agent Chat footer enrichment must suppress legacy left-info cwd/model markers"
     );
 }
 

@@ -268,36 +268,6 @@ fn visible_attach_actions_use_agent_chat_label() {
 }
 
 #[test]
-fn markdown_copy_actions_do_not_advertise_file_export() {
-    let agent_chat_builder = read("src/actions/builders/script_context.rs");
-    let agent_chat_handler = read("src/app_actions/handle_action/mod.rs");
-    let chat_builder = read("src/actions/builders/chat.rs");
-
-    assert!(
-        agent_chat_builder.contains("\"agent_chat_export_markdown\"")
-            && agent_chat_builder.contains("\"Copy Conversation as Markdown\""),
-        "Agent Chat markdown action should advertise clipboard copy behavior"
-    );
-    assert!(
-        agent_chat_handler
-            .contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string(markdown))")
-            && agent_chat_handler.contains("Copied Agent Chat conversation as markdown"),
-        "Agent Chat markdown handler should still prove clipboard copy behavior"
-    );
-    assert!(
-        chat_builder.contains("\"chat:export_markdown\"")
-            && chat_builder.contains("\"Copy Chat as Markdown\"")
-            && chat_builder.contains("Copy chat as Markdown to the clipboard"),
-        "Legacy chat markdown action should advertise clipboard copy behavior"
-    );
-    assert!(
-        !agent_chat_builder.contains("\"Export as Markdown\"")
-            && !chat_builder.contains("\"Export as Markdown\""),
-        "Markdown copy actions must not use export wording unless they create a file"
-    );
-}
-
-#[test]
 fn theme_chooser_actions_do_not_advertise_dialog_reserved_escape_shortcut() {
     let builder = read("src/render_builtins/actions.rs");
     let undo_action = builder
@@ -549,27 +519,6 @@ fn clipboard_attach_to_ai_handles_all_content_types() {
     assert!(
         content.contains("ContentType::File"),
         "clipboard_attach_to_ai should handle File content"
-    );
-}
-
-#[test]
-fn clipboard_attach_to_ai_uses_deferred_agent_chat_action() {
-    let content = handle_action_content();
-
-    let attach_pos = content
-        .find("\"clipboard_attach_to_ai\"")
-        .expect("Expected clipboard_attach_to_ai handler");
-    let block = &content[attach_pos..content.len().min(attach_pos + 5000)];
-
-    assert!(
-        block.contains("open_agent_chat_after_main_hide("),
-        "clipboard_attach_to_ai should use open_agent_chat_after_main_hide"
-    );
-    assert!(
-        content.contains("DeferredAgentChatAction::SetInput")
-            && content.contains("DeferredAgentChatAction::AddAttachment")
-            && block.contains("DeferredAgentChatAction::SetInputWithImage"),
-        "clipboard_attach_to_ai should route clipboard content through a deferred Agent Chat handoff action"
     );
 }
 

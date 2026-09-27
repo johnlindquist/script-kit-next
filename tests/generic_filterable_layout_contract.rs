@@ -35,7 +35,7 @@ fn generic_filterable_list_uses_liquid_glass_panel_radius() {
 #[test]
 fn generic_filterable_layout_uses_shared_chrome_and_dedicated_content_nodes() {
     for needle in [
-        "resolved_main_view_header_input_policy",
+        "main_view_header_input_policy()",
         "main_view_header_metrics(menu_def, input_height)",
         "MainViewHeader",
         "MainViewContextZone",
