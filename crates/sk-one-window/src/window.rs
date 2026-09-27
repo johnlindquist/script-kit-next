@@ -13,6 +13,7 @@ mod tests;
 mod text;
 mod time;
 mod views;
+mod work;
 
 use crate::Ms;
 use crate::contract::{DISMISS_SETTLE_MS, ENTER_GUARD_MS, JEV_DEBOUNCE_MS, MAX_MATCHES, words};
@@ -178,6 +179,8 @@ pub enum Event {
     /// Shows a line above the input until cleared; one a view set also goes when no view is open.
     Line(Option<SlotLine>),
     Tick,
+    /// Something happened to the model's chat, the steps, a service or an agent.
+    Work(crate::work::WorkEvent),
 }
 
 impl Event {
@@ -249,6 +252,8 @@ pub enum Effect {
     Show,
     EnterIgnored,
     SetInput(String),
+    /// Work for the host: ask the model, read or run steps, sign in, start or park an agent.
+    Work(crate::work::WorkEffect),
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -312,6 +317,7 @@ pub struct OneWindow {
     picked: Option<(Row, RunHow)>,
     wake: Option<Ms>,
     now: Ms,
+    work: crate::work::Work,
 }
 
 impl Default for OneWindow {
@@ -352,6 +358,7 @@ impl OneWindow {
             picked: None,
             wake: None,
             now: 0,
+            work: crate::work::Work::default(),
         }
     }
 
@@ -462,7 +469,7 @@ impl OneWindow {
                 if text != self.text {
                     return false;
                 }
-                let rows = crate::list::fresh_readings(rows, &self.list.names);
+                let rows = crate::list::fresh_readings(self.with_needs(rows), &self.list.names);
                 self.list.jev.assign(now, &text, rows);
                 self.list.move_sel(0);
                 if let Some(i) = self.list.held.take() {
@@ -642,6 +649,7 @@ impl OneWindow {
                 true
             }
             Event::Tick => true,
+            Event::Work(ev) => self.on_work(now, ev, fx),
         }
     }
 }

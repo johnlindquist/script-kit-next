@@ -425,7 +425,7 @@ impl ListState {
                         EnterTarget::new(id, label)
                     }
                     Some(row) if self.asking => EnterTarget::new(id, words::ask_again(&row.title)),
-                    Some(row) => EnterTarget::new(id, row.title.clone()),
+                    Some(row) => EnterTarget::new(id, row.enter_words()),
                 }
             }
             item => {
