@@ -126,6 +126,7 @@ mod alpha_byte_tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings, clippy::mistyped_literal_suffixes)]
     fn pack_rgb_alpha_preserves_channel_order() {
         assert_eq!(
             pack_rgb_alpha(0xEF4444, AlphaByte::authored(0x32)),
