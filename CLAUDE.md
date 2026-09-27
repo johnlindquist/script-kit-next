@@ -269,8 +269,9 @@ Dictation, detached chat, history, actions and footer-overlay windows are all go
 and the only other window the app ever opens is the snap overlay drawn while snapping a window to a
 screen edge. Automation targets are the main window or a view's surface id inside it; a test that
 needs "a second window" to prove targeting has nothing real to target. `clippy.toml` refuses
-`gpui::App::open_window` / `gpui::AsyncApp::open_window`; the main window and the snap overlay are
-the only `#[allow(clippy::disallowed_methods)]` call sites, and a new one is a design change, not a fix.
+`gpui::App::open_window` / `gpui::AsyncApp::open_window`; in the app, the main window and the snap overlay are
+the only `#[allow(clippy::disallowed_methods)]` call sites (the standalone `liquid_glass_demo` binary has the
+third), and a new one is a design change, not a fix.
 
 - Every action declares its risk instead of asking. Irreversible (quit, shut down, empty the
   Trash, clear history, permanent deletes, anything in `DEFAULT_CONFIRMATION_COMMANDS`) waits
