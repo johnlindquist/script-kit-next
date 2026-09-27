@@ -612,7 +612,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 5397,
+      "line": 5357,
       "owner": "handle_prompt_message_with_window",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -636,7 +636,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 5720,
+      "line": 5680,
       "owner": "handle_prompt_message_with_window",
       "receiver": "self",
       "operation": "transitionHelper",
