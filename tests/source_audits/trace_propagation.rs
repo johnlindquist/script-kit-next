@@ -265,15 +265,11 @@ fn handle_system_action_result_logs_trace_id_on_error() {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// confirm_with_modal removed — callers call confirm_with_parent_dialog directly
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Async paths use intermediate status, not terminal completion
 // ---------------------------------------------------------------------------
 
 #[test]
-fn execute_builtin_with_query_emits_awaiting_confirmation_not_success() {
+fn execute_builtin_with_query_holds_instead_of_completing() {
     let content = read("src/app_execute/builtin_execution.rs");
 
     let confirm_check = content
@@ -281,10 +277,11 @@ fn execute_builtin_with_query_emits_awaiting_confirmation_not_success() {
         .expect("Expected requires_confirmation gate");
     let after_check = &content[confirm_check..content.len().min(confirm_check + 4000)];
 
-    // The deferred path must emit awaiting_confirmation, not success
+    // The held path records that it waits; the run happens when the hold's wait runs out.
     assert!(
-        after_check.contains(r#"status = "awaiting_confirmation""#),
-        "Confirmation path must emit awaiting_confirmation status, not terminal completion"
+        after_check.contains("self.one_window_hold(")
+            && after_check.contains(r#""held_before_it_runs""#),
+        "a built-in that used to ask first must wait in the line, not complete at once"
     );
 }
 

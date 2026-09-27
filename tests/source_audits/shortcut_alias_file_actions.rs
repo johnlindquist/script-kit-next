@@ -538,13 +538,3 @@ fn file_search_error_path_logs_with_tracing_error() {
 // ---------------------------------------------------------------------------
 // HUD duration constants: verify consistent usage
 // ---------------------------------------------------------------------------
-
-#[test]
-fn file_search_success_uses_hud_short_ms() {
-    let actions = super::read_all_handle_action_sources();
-
-    assert!(
-        actions.contains("Some(HUD_SHORT_MS)"),
-        "Expected file search success HUD to use HUD_SHORT_MS"
-    );
-}

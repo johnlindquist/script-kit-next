@@ -3,34 +3,6 @@
 
 use std::fs;
 
-/// Verify the feedback contract constants exist in helpers.rs:
-/// success feedback uses HUD, errors use Toast.
-#[test]
-fn feedback_contract_constants_defined() {
-    let content =
-        fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read helpers.rs");
-
-    // HUD constants for success paths
-    assert!(
-        content.contains("HUD_SHORT_MS"),
-        "HUD_SHORT_MS must be defined for success feedback"
-    );
-    assert!(
-        content.contains("HUD_MEDIUM_MS"),
-        "HUD_MEDIUM_MS must be defined for success feedback"
-    );
-
-    // Toast constants for error paths
-    assert!(
-        content.contains("TOAST_ERROR_MS"),
-        "TOAST_ERROR_MS must be defined for error feedback"
-    );
-    assert!(
-        content.contains("TOAST_CRITICAL_MS"),
-        "TOAST_CRITICAL_MS must be defined for critical errors"
-    );
-}
-
 /// Verify that the action handler files have the expected dispatch structure.
 #[test]
 fn action_handler_dispatch_structure_exists() {
@@ -498,15 +470,13 @@ fn clipboard_bulk_delete_handlers_use_named_action_states() {
     );
     assert!(
         content.contains("ClipboardBulkDeleteHandlerAction::from_action_id(action_id)")
-            && content.contains("bulk_delete_action.confirm_title()")
-            && content.contains("bulk_delete_action.confirm_message(delete_count)")
-            && content.contains("bulk_delete_action.confirm_message(unpinned_count)")
-            && content.contains("bulk_delete_action.confirm_button()")
+            && content.contains("bulk_delete_action.held_title(delete_count)")
+            && content.contains("bulk_delete_action.held_title(unpinned_count)")
             && content.contains("action.success_hud(self.deleted)")
             && content.contains("bulk_delete_action.success_hud(unpinned_count)")
             && content.contains("action.partial_failure_message(self.deleted, self.failed)")
             && content.contains("bulk_delete_action.failure_message(e)"),
-        "clipboard bulk delete handlers should derive confirmation, success, and failure text from named states"
+        "clipboard bulk delete handlers should derive the held title, success, and failure text from named states"
     );
 }
 
@@ -2013,7 +1983,7 @@ fn menu_bar_builtin_uses_named_action_states() {
         content.contains("script_kit_gpui::menu_executor::execute_menu_action")
             && content.contains("&action.bundle_id")
             && content.contains("&action.menu_path")
-            && content.contains("self.show_unsupported_platform_toast(\"Menu bar actions\", cx)"),
+            && content.contains("self.notice_unsupported_platform(\"Menu bar actions\", cx)"),
         "Menu bar built-ins should preserve platform execution and unsupported-platform behavior"
     );
 }

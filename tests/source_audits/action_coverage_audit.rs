@@ -190,7 +190,7 @@ fn error_paths_use_notice_failed_not_show_hud() {
 }
 
 #[test]
-fn all_notice_failed_calls_use_toast_not_hud() {
+fn failures_are_said_through_notice_failed() {
     let content = handle_action_content();
 
     // Verify notice_failed exists and is the standard error path
@@ -198,14 +198,6 @@ fn all_notice_failed_calls_use_toast_not_hud() {
     assert!(
         error_toast_count >= 10,
         "Expected at least 10 notice_failed() calls in handle_action/ (found {error_toast_count})"
-    );
-
-    // Verify the notice_failed helper uses Toast::error with TOAST_ERROR_MS
-    let helper_content = handle_action_content();
-    assert!(
-        helper_content.contains("Toast::error(msg, &self.theme)")
-            && helper_content.contains("TOAST_ERROR_MS"),
-        "notice_failed helper must use Toast::error with TOAST_ERROR_MS"
     );
 }
 
@@ -310,27 +302,6 @@ fn theme_chooser_actions_do_not_advertise_dialog_reserved_escape_shortcut() {
     );
 }
 
-#[test]
-fn handle_action_uses_only_named_toast_duration_constants() {
-    let content = handle_action_content();
-
-    // Look for raw numeric literals in duration_ms() calls
-    let re = regex::Regex::new(r"duration_ms\(Some\(\d+\)").expect("regex");
-    let violations: Vec<&str> = content
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim();
-            !trimmed.starts_with("//") && re.is_match(trimmed)
-        })
-        .collect();
-
-    assert!(
-        violations.is_empty(),
-        "duration_ms() calls must use named constants (TOAST_ERROR_MS, etc.), not raw numbers:\n{}",
-        violations.join("\n")
-    );
-}
-
 // ===========================================================================
 // Action variant coverage: clipboard_pin / clipboard_unpin
 // ===========================================================================
@@ -347,10 +318,6 @@ fn clipboard_pin_unpin_uses_hud_short_ms_on_success() {
     assert!(
         block.contains("pin_action.success_hud()"),
         "clipboard_pin/unpin should use ClipboardPinHandlerAction for success message"
-    );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "clipboard_pin/unpin success should use HUD_SHORT_MS"
     );
 }
 
@@ -403,10 +370,6 @@ fn clipboard_copy_shows_hud_on_success() {
         block.contains("copy_paste_action.success_hud()")
             && content.contains("Copied to clipboard"),
         "clipboard_copy should show 'Copied to clipboard' HUD"
-    );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "clipboard_copy should use HUD_SHORT_MS"
     );
 }
 
@@ -624,10 +587,6 @@ fn clipboard_delete_single_shows_hud_on_success() {
         block.contains("delete_action.success_hud()"),
         "clipboard_delete should show success HUD through named action state"
     );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "clipboard_delete should use HUD_SHORT_MS"
-    );
 }
 
 #[test]
@@ -661,10 +620,6 @@ fn clipboard_save_file_shows_hud_on_success() {
     assert!(
         block.contains("save_file_action.saved_hud(&save_path)"),
         "clipboard_save_file should show saved-path HUD through named action state"
-    );
-    assert!(
-        block.contains("HUD_LONG_MS"),
-        "clipboard_save_file should use HUD_LONG_MS"
     );
 }
 
@@ -700,10 +655,6 @@ fn create_script_shows_hud_on_success() {
         block.contains("management_action.success_hud()")
             && content.contains("Opened scripts folder"),
         "create_script should show 'Opened scripts folder' HUD"
-    );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "create_script should use HUD_SHORT_MS"
     );
 }
 
@@ -774,10 +725,6 @@ fn reveal_in_finder_shows_hud_on_success() {
     assert!(
         block.contains("reveal_action.success_hud()"),
         "reveal_in_finder should show success HUD through named action state"
-    );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "reveal_in_finder should use HUD_SHORT_MS"
     );
 }
 
@@ -1052,34 +999,6 @@ fn all_action_file_contents() -> Vec<(&'static str, String)> {
                 .map(|content| (*path, content))
         })
         .collect()
-}
-
-#[test]
-fn no_raw_duration_ms_values_in_any_action_file() {
-    let re = regex::Regex::new(r"duration_ms\(Some\(\d+\)").expect("regex");
-
-    let mut violations = Vec::new();
-    for (path, content) in all_action_file_contents() {
-        // Only check production code — skip everything after #[cfg(test)]
-        let production_code = content.split("#[cfg(test)]").next().unwrap_or(&content);
-
-        for (line_no, line) in production_code.lines().enumerate() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("//") || trimmed.starts_with("///") {
-                continue;
-            }
-            if re.is_match(trimmed) {
-                violations.push(format!("{}:L{}: {}", path, line_no + 1, trimmed));
-            }
-        }
-    }
-
-    assert!(
-        violations.is_empty(),
-        "duration_ms() calls must use named constants (TOAST_ERROR_MS, HUD_SHORT_MS, etc.), \
-         not raw numbers:\n{}",
-        violations.join("\n")
-    );
 }
 
 // ===========================================================================

@@ -8,7 +8,6 @@ const CHAT_STATE_SOURCE: &str = include_str!("../src/prompts/chat/state.rs");
 const CHAT_RENDER_CORE_SOURCE: &str = include_str!("../src/prompts/chat/render_core.rs");
 const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
 const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
-const MAIN_RENDER_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const LIST_ITEM_SOURCE: &str = include_str!("../src/list_item/mod.rs");
 const FILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
 const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");

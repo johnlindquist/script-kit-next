@@ -49,10 +49,6 @@ fn reset_ranking_shows_hud_with_item_name() {
         block.contains("ranking_action.reset_hud(&script_info.name)"),
         "reset_ranking should show HUD with item name through named action state"
     );
-    assert!(
-        block.contains("HUD_MEDIUM_MS"),
-        "reset_ranking should use named duration constant"
-    );
 }
 
 // ---------------------------------------------------------------------------

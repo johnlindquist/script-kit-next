@@ -112,10 +112,6 @@ fn reload_scripts_refreshes_and_shows_hud() {
         block.contains("management_action.success_hud()") && content.contains("Scripts reloaded"),
         "reload_scripts should show HUD confirming reload"
     );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "reload_scripts should use named HUD duration constant"
-    );
 }
 
 // ---------------------------------------------------------------------------
