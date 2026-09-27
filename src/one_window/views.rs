@@ -175,6 +175,7 @@ impl ScriptListApp {
             return Vec::new();
         };
         let before = view.enter();
+        let mut caret_words = None;
         let finished = match view {
             HostedView::Form(form) => match form.key(&key) {
                 FormKey::Submit(done) => Some(Ok(done)),
@@ -184,8 +185,7 @@ impl ScriptListApp {
                         .and_then(|i| form.fields.get(i))
                         .map(|f| f.value.clone())
                         .unwrap_or_default();
-                    self.one_window_host.view_text = Some(value.clone());
-                    self.one_window_set_input(value, cx);
+                    caret_words = Some(value);
                     None
                 }
                 FormKey::Unused => None,
@@ -223,6 +223,11 @@ impl ScriptListApp {
             HostedView::Answer(_) | HostedView::Note(_) => None,
         };
         let mut events = Vec::new();
+        if let Some(words) = caret_words {
+            self.one_window_host.view_text = Some(words.clone());
+            self.one_window_set_input(words.clone(), cx);
+            events.push(Event::Text(words));
+        }
         match finished {
             Some(Ok(done)) => {
                 if let Some(HostedView::Form(form)) = &self.one_window_host.view {

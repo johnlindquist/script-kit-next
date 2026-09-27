@@ -168,6 +168,15 @@ fn tab_moves_the_caret_through_the_form_and_the_input_follows_it() {
             carets.push(caret(&app, cx));
         }
         let input = app.update(cx, |app, _| app.filter_text.clone());
+        let what = match hosted(&app, cx) {
+            Some(HostedView::Form(form)) => form.field(SlotName::What).cloned(),
+            _ => None,
+        };
+        assert_eq!(
+            what.and_then(|f| f.from),
+            Some(Source::Staged(SubjectKind::Clipboard)),
+            "Tab onto a field keeps where its value came from"
+        );
         (carets, input)
     });
     assert_eq!(
