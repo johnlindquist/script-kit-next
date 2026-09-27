@@ -170,10 +170,9 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             "notes.editor" => ("notes", &["input:notes-editor"]),
             "notes.root-dialog" => ("notes", &["root-dialog:*"]),
             "notes.root-notification" => ("notes", &["root-notification:*"]),
-            "notes.actions"
-            | "notes.recent-switcher"
-            | "day-page.switcher"
-            | "secondary.actions" => ("actionsDialog", &["input:actions-search", "list:actions"]),
+            "notes.actions" | "notes.recent-switcher" | "day-page.switcher" => {
+                ("actionsDialog", &["input:actions-search", "list:actions"])
+            }
             "agent-chat.detached.retryable-failure" => ("agentChatChat", &["input:*"]),
             "agent-chat.popup.history" => (
                 "promptPopup",
@@ -206,7 +205,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             "secondary.hud" => ("hud", &["panel:hud"]),
             "secondary.hud-action" => ("hud", &["panel:hud", "hud:primary-action"]),
             "secondary.snap" => ("snapOverlay", &["panel:snap-overlay", "snap:target:*"]),
-            "secondary.footer" => ("footerOverlay", &["footer-action:*"]),
             "secondary.shortcut-recorder" => ("shortcutRecorder", &["shortcut-key-display"]),
             id if fixture_ids::DICTATION_FIXTURE_IDS.contains(&id) => (
                 "dictation",
@@ -428,21 +426,21 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "notes.actions" => (
             "notesAuxiliary",
             "secondary",
-            "src/actions/window.rs",
+            "src/components/staged_actions.rs",
             "src/notes/window/panels.rs::open_actions_panel",
             Some("notes.editor"),
         ),
         "notes.recent-switcher" => (
             "notesAuxiliary",
             "secondary",
-            "src/actions/window.rs",
+            "src/components/staged_actions.rs",
             "src/notes/window/panels.rs::open_browse_panel",
             Some("notes.editor"),
         ),
         "day-page.switcher" => (
             "dayPageAuxiliary",
             "secondary",
-            "src/actions/window.rs",
+            "src/components/staged_actions.rs",
             "src/main_sections/day_page_switcher.rs::open_day_switcher",
             Some("day-page.today"),
         ),
@@ -493,13 +491,6 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "src/dictation/microphone_popup_window.rs::DictationMicrophonePopupWindow",
             Some("dictation.recording"),
         ),
-        "secondary.actions" => (
-            "actions",
-            "secondary",
-            "src/actions/window.rs",
-            "src/actions/dialog.rs",
-            Some("main.script-list"),
-        ),
         "secondary.confirm" | "secondary.confirm-three-button" => (
             "confirm",
             "secondary",
@@ -520,13 +511,6 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "src/window_control/snap_overlay.rs",
             "src/window_control/snap_overlay.rs::SnapOverlayView",
             None,
-        ),
-        "secondary.footer" => (
-            "footer",
-            "secondary",
-            "src/footer_popup.rs",
-            "src/footer_popup.rs::GpuiFooterOverlay",
-            Some("main.script-list"),
         ),
         "secondary.shortcut-recorder" => (
             "shortcutRecorder",

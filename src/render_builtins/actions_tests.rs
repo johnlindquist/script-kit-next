@@ -65,14 +65,6 @@ mod on_close_reentrancy_tests {
             clipboard_fn.contains("show_context_header: false"),
             "clipboard actions should hide the context header"
         );
-        assert!(
-            clipboard_fn.contains("crate::actions::WindowPosition::TopCenter"),
-            "clipboard actions should open in the top-center mini-menu position"
-        );
-        assert!(
-            !clipboard_fn.contains("crate::actions::WindowPosition::BottomRight"),
-            "clipboard actions should not open in the bottom-right position"
-        );
     }
 }
 

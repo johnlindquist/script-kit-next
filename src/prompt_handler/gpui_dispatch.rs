@@ -46,18 +46,6 @@ fn live_gpui_target_identity_from_main(
                 app.theme_revision_seen,
                 app.current_view.app_view_variant().to_owned(),
             )
-        } else if info.kind == protocol::AutomationWindowKind::PromptPopup
-            && info.semantic_surface.as_deref() == Some("footerOverlay")
-        {
-            let state = crate::footer_popup::footer_runtime_state(&info.id, generation)
-                .context("footer_owner_missing")?;
-            (
-                state.binding.host_generation,
-                state.semantic_revision,
-                state.presentation_revision,
-                state.applied_theme_revision,
-                "GpuiFooterOverlay".into(),
-            )
         } else if info.id == "shortcut-recorder-popup" {
             let state = crate::shortcut_recorder::shortcut_fixture_observation(
                 &info.id,

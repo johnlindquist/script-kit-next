@@ -1991,7 +1991,7 @@ fn day_page_footer_buttons_for_preview(
     return_label: &'static str,
 ) -> Vec<FooterButtonConfig> {
     let footer_disabled = crate::confirm::is_confirm_window_open();
-    let actions_open = app.show_actions_popup || crate::actions::is_actions_window_open();
+    let actions_open = app.show_actions_popup;
     let enabled = !footer_disabled;
 
     // While a kit:// resource preview replaces the editor, the footer owns the

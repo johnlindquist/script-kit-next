@@ -91,45 +91,6 @@ mod close_actions_popup_regression_tests {
     }
 
     #[test]
-    fn test_close_actions_popup_defers_focus_apply_from_actions_window() {
-        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
-            .expect("Failed to read src/app_impl/actions_dialog.rs");
-        let close_fn_start = source
-            .find("pub(crate) fn close_actions_popup")
-            .expect("close_actions_popup function not found");
-        let close_fn = &source[close_fn_start..];
-
-        let detect_pos = close_fn
-            .find("let closing_from_actions_window = crate::actions::is_actions_window(window);")
-            .expect("close_actions_popup must detect actions-window-originated closes");
-        let activate_pos = close_fn
-            .find("crate::platform::activate_main_window();")
-            .expect("actions-window-originated close must activate the main window");
-        let host_restore_pos = close_fn
-            .find("self.request_focus_restore_for_actions_host(host);")
-            .expect("host focus restore request missing");
-        // The first `if closing_from_actions_window` is the early main-window
-        // activation guard; the deferred-apply branch is the one after the
-        // host focus restore, so search from there.
-        let deferred_branch_pos = close_fn[host_restore_pos..]
-            .find("if closing_from_actions_window")
-            .map(|pos| host_restore_pos + pos)
-            .expect("actions-window-originated close must skip child-window focus apply");
-        let apply_pending_pos = close_fn
-            .find("self.apply_pending_focus(window, cx)")
-            .expect("non-actions-window close path must still apply focus immediately");
-
-        assert!(
-            detect_pos < activate_pos && activate_pos < host_restore_pos,
-            "close_actions_popup should activate the main window before queuing host focus restore"
-        );
-        assert!(
-            host_restore_pos < deferred_branch_pos && deferred_branch_pos < apply_pending_pos,
-            "actions-window closes must defer focus application instead of focusing the popup window"
-        );
-    }
-
-    #[test]
     fn day_page_command_bar_keys_are_not_swallowed_by_missing_shared_dialog() {
         let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
             .expect("Failed to read src/app_impl/actions_dialog.rs");
@@ -403,36 +364,6 @@ mod actions_dialog_wiring_regression_tests {
     }
 
     #[test]
-    fn route_key_to_actions_dialog_notifies_after_arrow_navigation() {
-        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
-            .expect("Failed to read src/app_impl/actions_dialog.rs");
-
-        let route_start = source
-            .find("pub(crate) fn route_key_to_actions_dialog")
-            .expect("route_key_to_actions_dialog not found");
-        let route_fn = &source[route_start..];
-
-        let up_start = route_fn
-            .find("if is_key_up(key)")
-            .expect("up branch missing");
-        let down_start = route_fn
-            .find("if is_key_down(key)")
-            .expect("down branch missing");
-        let jump_start = route_fn
-            .find("let is_home = key.eq_ignore_ascii_case(\"home\")")
-            .expect("jump-key section missing");
-
-        assert!(
-            route_fn[up_start..down_start].contains("crate::actions::notify_actions_window(cx);"),
-            "up branch must notify the actions window"
-        );
-        assert!(
-            route_fn[down_start..jump_start].contains("crate::actions::notify_actions_window(cx);"),
-            "down branch must notify the actions window"
-        );
-    }
-
-    #[test]
     fn route_key_to_actions_dialog_handles_cmd_k_close() {
         let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
             .expect("Failed to read src/app_impl/actions_dialog.rs");
@@ -441,18 +372,6 @@ mod actions_dialog_wiring_regression_tests {
             source.contains("key.eq_ignore_ascii_case(\"k\")")
                 && source.contains("self.close_actions_popup(host, window, cx);"),
             "shared actions router should close the popup on Cmd+K"
-        );
-    }
-
-    #[test]
-    fn route_key_to_actions_dialog_keeps_detached_window_routable() {
-        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
-            .expect("Failed to read src/app_impl/actions_dialog.rs");
-
-        assert!(
-            source
-                .contains("!self.show_actions_popup && !crate::actions::is_actions_window_open()"),
-            "shared actions router must keep routing keys while the detached actions window is open"
         );
     }
 

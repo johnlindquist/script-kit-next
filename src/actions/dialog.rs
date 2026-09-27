@@ -981,7 +981,7 @@ impl ActionsDialog {
             };
         let root_indices: Vec<usize> = (0..root_actions.len()).collect();
         let section_header_count = if self.config.section_style == SectionStyle::Headers {
-            super::window::count_section_headers(&root_actions, &root_indices)
+            count_section_headers(&root_actions, &root_indices)
         } else {
             0
         };
@@ -2300,12 +2300,6 @@ impl ActionsDialog {
     fn devtools_row_geometry(&self, cx: &gpui::App) -> serde_json::Value {
         let mut style = actions_dialog_default_style();
         style.row_height = self.effective_row_height();
-        let attached_popup_generation = crate::actions::actions_popup_automation_snapshot()
-            .and_then(|snapshot| {
-                snapshot
-                    .get("generation")
-                    .and_then(serde_json::Value::as_u64)
-            });
         let show_search = self.search_is_visible();
         let popup_theme = crate::designs::current_actions_popup_theme();
         let search_height = if show_search {
@@ -2338,7 +2332,7 @@ impl ActionsDialog {
 
         let content_height =
             raw_content_height.max(self.min_scroll_content_height(style.row_height));
-        let dynamic_shell_height = super::window::actions_window_dynamic_height(
+        let dynamic_shell_height = actions_dialog_shell_height(
             action_count,
             section_count,
             !show_search,
@@ -2572,8 +2566,7 @@ impl ActionsDialog {
             "schemaVersion": 1,
             "available": true,
             "source": "runtime.actionsDialog.render",
-            "generation": attached_popup_generation.unwrap_or(0),
-            "attachedPopupGeneration": attached_popup_generation,
+            "generation": 0,
             "stale": false,
             "measurementSource": "runtime.actionsDialog.render",
             "coordinateSpace": "popupLogicalPx",
@@ -3126,9 +3119,6 @@ impl ActionsDialog {
             },
         });
 
-        if let Some(attached_popup) = crate::actions::actions_popup_automation_snapshot() {
-            state["attachedPopup"] = attached_popup;
-        }
         if let Some(host_context) = self.host_context() {
             state["hostContext"] =
                 serde_json::to_value(host_context).unwrap_or(serde_json::Value::Null);
@@ -3448,6 +3438,16 @@ impl ActionsDialog {
         );
         self.theme = theme;
         self.presentation_revision = self.presentation_revision.saturating_add(1);
+    }
+
+    /// Staged in the main window: typing filters these actions from the main input's place, so
+    /// the search is always shown, and the main window keeps focus.
+    #[allow(dead_code, reason = "the binary's ScriptListApp stages")]
+    pub(crate) fn stage_in_place(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.config.search_position = SearchPosition::Top;
+        self.hide_search = false;
+        self.skip_track_focus = true;
+        self.ensure_search_input(window, cx);
     }
 
     /// Install the entity-backed Actions search input once a host window exists.
@@ -4004,6 +4004,88 @@ fn should_submit_actions_dialog_row_click(was_mouse_armed: bool, click_count: us
 // the current (override-applied) definitions. Both MUST route through these
 // functions — duplicating the arithmetic or the alpha packing is how the HTML
 // mockups drift from what production paints.
+
+/// How many section headers the dialog groups `filtered_indices` under: one per run of a
+/// non-empty section, so unsectioned rows don't break a run.
+pub(super) fn count_section_headers(actions: &[Action], filtered_indices: &[usize]) -> usize {
+    let mut count = 0;
+    let mut prev_section: Option<&str> = None;
+    for action in filtered_indices.iter().filter_map(|&idx| actions.get(idx)) {
+        if let Some(section) = action.section.as_deref() {
+            if prev_section != Some(section) {
+                count += 1;
+                prev_section = Some(section);
+            }
+        }
+    }
+    count
+}
+
+/// The dialog's shell height under the current actions theme.
+fn actions_dialog_shell_height(
+    num_actions: usize,
+    section_header_count: usize,
+    hide_search: bool,
+    has_header: bool,
+    show_footer: bool,
+    max_height: f32,
+    row_height: f32,
+) -> f32 {
+    resolved_actions_popup_height(
+        &crate::designs::current_actions_popup_theme(),
+        (num_actions, section_header_count),
+        hide_search,
+        has_header,
+        show_footer,
+        max_height,
+        row_height,
+    )
+}
+
+/// Pure actions-dialog shell height over an explicit token definition. The design-contract
+/// exporter passes `base_actions_popup_theme()` so checked-in artifacts always match the base
+/// token definition.
+pub(crate) fn resolved_actions_popup_height(
+    tokens: &crate::designs::ActionsPopupThemeDef,
+    row_counts: (usize, usize),
+    hide_search: bool,
+    has_header: bool,
+    show_footer: bool,
+    max_height: f32,
+    row_height: f32,
+) -> f32 {
+    let (num_actions, section_header_count) = row_counts;
+    const POPUP_FOOTER_HEIGHT: f32 = 32.0;
+    let search_box_height = if hide_search {
+        0.0
+    } else {
+        tokens.search.height
+    };
+    let header_height = if has_header {
+        tokens.context_header.height
+    } else {
+        0.0
+    };
+    let footer_height = if show_footer {
+        POPUP_FOOTER_HEIGHT
+    } else {
+        0.0
+    };
+    let section_headers_height = section_header_count as f32 * tokens.list.section_header_height;
+    let min_items_height = if num_actions == 0 {
+        tokens.list.empty_row_height
+    } else {
+        0.0
+    };
+    let list_padding_height = tokens.list.padding_top + tokens.list.padding_bottom;
+    let max_height = max_height.min(tokens.shell.max_height);
+    let items_height = ((num_actions as f32 * row_height + section_headers_height)
+        .max(min_items_height)
+        + list_padding_height)
+        .min(max_height - search_box_height - header_height - footer_height);
+    let border_height = tokens.shell.border_height;
+    items_height + search_box_height + header_height + footer_height + border_height
+}
 
 /// The exact `ListItemMetricsOverride` mutation the action-row render closure
 /// applies on top of the main-menu metrics: action titles use the popup title
@@ -4927,11 +5009,10 @@ impl Render for ActionsDialog {
             }
         }
 
-        // Shell height comes from the same formula that sizes the popup
-        // NSWindow (`compute_popup_height` in window.rs), so the rendered
-        // interior can never drift from the window bounds. Action dialogs are
-        // footerless by contract (`config.show_footer` is forced off).
-        let dynamic_height = super::window::actions_window_dynamic_height(
+        // Shell height comes from the one shell formula
+        // (`resolved_actions_popup_height`). Action dialogs are footerless by
+        // contract (`config.show_footer` is forced off).
+        let dynamic_height = actions_dialog_shell_height(
             action_item_count,
             section_header_count,
             !show_search,

@@ -857,7 +857,7 @@ pub(crate) fn activate_chat_window(cx: &mut App) {
 /// detached context, positioned relative to the detached chat window.
 /// After selection, the detached chat re-gains focus.
 pub fn toggle_detached_actions(cx: &mut App) {
-    use crate::actions::{self, ActionsDialog, WindowPosition};
+    use crate::actions::{self, ActionsDialog};
 
     let actions_window_open_before = actions::is_actions_window_open();
 
@@ -1062,94 +1062,20 @@ pub fn toggle_detached_actions(cx: &mut App) {
         }));
     });
 
-    let parent_automation_id = crate::windows::list_automation_windows()
-        .into_iter()
-        .find(|info| {
-            crate::windows::get_runtime_window_handle(&info.id) == Some(parent_window_handle)
-        })
-        .map(|info| info.id);
-    let host_policy = parent_window_handle
-        .update(cx, |_, window, _| {
-            if window.is_owned_hidden() {
-                crate::runtime_policy::WindowHostPolicy::OwnedHidden
-            } else {
-                crate::runtime_policy::WindowHostPolicy::Interactive
-            }
-        })
-        .unwrap_or(crate::runtime_policy::WindowHostPolicy::Interactive);
-    let actions_handle = match actions::open_actions_window(
-        cx,
-        actions::ActionsWindowPlacement {
-            parent_window_handle,
-            main_bounds: bounds,
-            display_id,
-        },
+    // ⌘K acts in the main window; a detached chat has no actions popup to open.
+    let _ = (
         dialog,
-        WindowPosition::TopRight,
-        parent_automation_id.as_deref(),
-        host_policy,
-    ) {
-        Ok(handle) => handle,
-        Err(e) => {
-            tracing::warn!(target: "script_kit::keyboard", %e, "detached_actions_open_failed");
-            return;
-        }
-    };
-
-    let _ = actions_handle.update(cx, |_root, window, _cx| {
-        if !window.is_owned_hidden() {
-            window.activate_window();
-        }
-    });
-
-    tracing::info!(
-        target: "script_kit::keyboard",
-        event = "detached_actions_toggle_result",
-        route_owner = "detached_chat",
-        restored_chat_focus = false,
-        actions_window_open_before,
-        actions_window_open_after = crate::actions::is_actions_window_open(),
-        has_view_entity = view_weak.is_some(),
+        bounds,
+        display_id,
+        parent_window_handle,
+        action_rx,
+        view_weak,
     );
-
-    // Spawn a one-shot task that receives the selected action_id from the
-    // channel, dispatches it to the AgentChatView entity, and re-focuses the chat.
-    if let Some(entity_weak) = view_weak {
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            if let Ok(action_id) = action_rx.recv().await {
-                if action_id == "__cancel__" {
-                    return;
-                }
-                tracing::info!(
-                    event = "detached_action_dispatch",
-                    action = %action_id,
-                );
-                cx.update(|cx| {
-                    let handled = dispatch_detached_action_checked(&entity_weak, &action_id, cx);
-                    // A parent-bound destructive confirmation owns focus until
-                    // the user resolves it; reactivating its parent cancels it.
-                    if handled
-                        && !matches!(
-                            action_id.as_str(),
-                            "agent_chat_close" | "agent_chat_clear_history"
-                        )
-                    {
-                        activate_chat_window(cx);
-                    }
-                    tracing::info!(
-                        event = "detached_action_dispatch_completed",
-                        action = %action_id,
-                        handled,
-                    );
-                });
-            }
-        })
-        .detach();
-    }
+    tracing::info!(target: "script_kit::keyboard", event = "detached_actions_unavailable");
 }
 
 fn open_detached_history_actions(cx: &mut App) -> bool {
-    use crate::actions::{self, ActionsDialog, WindowPosition};
+    use crate::actions::{self, ActionsDialog};
 
     if actions::is_actions_window_open() {
         actions::close_actions_window(cx);
@@ -1234,69 +1160,17 @@ fn open_detached_history_actions(cx: &mut App) -> bool {
         }));
     });
 
-    let parent_automation_id = crate::windows::list_automation_windows()
-        .into_iter()
-        .find(|info| {
-            crate::windows::get_runtime_window_handle(&info.id) == Some(parent_window_handle)
-        })
-        .map(|info| info.id);
-    let host_policy = parent_window_handle
-        .update(cx, |_, window, _| {
-            if window.is_owned_hidden() {
-                crate::runtime_policy::WindowHostPolicy::OwnedHidden
-            } else {
-                crate::runtime_policy::WindowHostPolicy::Interactive
-            }
-        })
-        .unwrap_or(crate::runtime_policy::WindowHostPolicy::Interactive);
-    let actions_handle = match actions::open_actions_window(
-        cx,
-        actions::ActionsWindowPlacement {
-            parent_window_handle,
-            main_bounds: bounds,
-            display_id,
-        },
+    // ⌘K acts in the main window; a detached chat has no actions popup to open.
+    let _ = (
         dialog,
-        WindowPosition::TopRight,
-        parent_automation_id.as_deref(),
-        host_policy,
-    ) {
-        Ok(handle) => handle,
-        Err(e) => {
-            tracing::warn!(target: "script_kit::keyboard", %e, "detached_history_actions_open_failed");
-            return false;
-        }
-    };
-
-    let _ = actions_handle.update(cx, |_root, window, _cx| {
-        if !window.is_owned_hidden() {
-            window.activate_window();
-        }
-    });
-
-    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-        if let Ok(action_id) = action_rx.recv().await {
-            cx.update(|cx| {
-                let handled = dispatch_detached_action_checked(&entity_weak, &action_id, cx);
-                if handled && action_id != "agent_chat_clear_history" {
-                    activate_chat_window(cx);
-                }
-                tracing::info!(
-                    event = "detached_history_action_dispatch_completed",
-                    action = %action_id,
-                    handled,
-                );
-            });
-        }
-    })
-    .detach();
-
-    tracing::info!(
-        target: "script_kit::keyboard",
-        event = "detached_history_actions_opened",
-        actions_window_open_after = crate::actions::is_actions_window_open(),
+        bounds,
+        display_id,
+        parent_window_handle,
+        action_rx,
+        entity_weak,
     );
-    true
+    tracing::info!(target: "script_kit::keyboard", event = "detached_actions_unavailable");
+    false
 }
 
 /// Checked wrapper around `dispatch_detached_action` that logs when the

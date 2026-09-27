@@ -148,7 +148,6 @@ pub(crate) const DICTATION_FIXTURE_IDS: &[&str] = &[
 ];
 
 pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &[
-    "secondary.actions",
     "secondary.confirm",
     "secondary.confirm-three-button",
     "secondary.hud",
@@ -171,10 +170,5 @@ pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
         .chain(AGENT_CHAT_POPUP_FIXTURE_IDS.iter().copied())
         .chain(DICTATION_FIXTURE_IDS.iter().copied())
         .chain(SECONDARY_FIXTURE_IDS.iter().copied())
-        .chain(
-            crate::footer_popup::OWNED_FOOTER_FIXTURE_IDS
-                .iter()
-                .copied(),
-        )
         .chain(SHORTCUT_FIXTURE_IDS.iter().copied())
 }

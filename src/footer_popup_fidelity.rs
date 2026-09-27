@@ -53,20 +53,6 @@ unsafe fn log_glass_effect_view_properties_once(glass_class: &objc::runtime::Cla
     });
 }
 
-struct GpuiFooterOverlaySlot {
-    handle: WindowHandle<GpuiFooterOverlay>,
-    parent_window_handle: AnyWindowHandle,
-    info: crate::protocol::AutomationWindowInfo,
-    presentation_revision: u64,
-    applied_theme_revision: u64,
-}
-
-/// Stable automation-registry identity for the GPUI footer overlay window so
-/// DevTools primitives (captureWindow, inspectAutomationWindow) can target it.
-const GPUI_FOOTER_OVERLAY_AUTOMATION_ID: &str = "footer-overlay";
-const GPUI_FOOTER_OVERLAY_FIDELITY_TARGET_ID: &str = "gpui-footer-overlay";
-const GPUI_FOOTER_OVERLAY_WINDOW_TITLE: &str = "Script Kit Footer Overlay";
-
 fn automation_bounds_from_gpui(bounds: Bounds<Pixels>) -> crate::protocol::AutomationWindowBounds {
     crate::protocol::AutomationWindowBounds {
         x: f32::from(bounds.origin.x) as f64,
@@ -108,19 +94,6 @@ fn appkit_fidelity_inventory_blocker(
     let unique_ids: BTreeSet<_> = nodes.iter().map(|node| node.id.as_str()).collect();
     (unique_ids.len() != nodes.len())
         .then_some(crate::protocol::FidelityCaptureStatus::DuplicateIdentifiers)
-}
-
-fn clear_footer_overlay_fidelity_snapshot(parent: AnyWindowHandle) {
-    if let Some(host) = FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&parent.window_id()) { host.fidelity = None; }
-}
-
-fn store_footer_overlay_fidelity_snapshot(parent: AnyWindowHandle, snapshot: crate::protocol::FidelityPaintTargetSnapshot) {
-    if let Some(host) = FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&parent.window_id()) { host.fidelity = Some(snapshot); }
-}
-
-pub(crate) fn main_footer_overlay_fidelity_snapshot() -> Option<crate::protocol::FidelityPaintTargetSnapshot> {
-    let handle = main_footer_handle()?;
-    FOOTER_HOSTS.lock().ok()?.get(&handle.window_id())?.fidelity.clone()
 }
 
 #[cfg(target_os = "macos")]

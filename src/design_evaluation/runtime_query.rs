@@ -154,20 +154,7 @@ impl Evaluator {
                     .unwrap_or(200)
                     .min(500) as usize;
                 let cx = self.cx.app.borrow();
-                if matches!(mounted.owner, RootOwner::Footer) {
-                    let mut elements = crate::footer_popup::footer_fixture_elements(
-                        &mounted.info.id,
-                        mounted
-                            .info
-                            .generation
-                            .context("footer_generation_missing")?,
-                        &cx,
-                    )?;
-                    let total = elements.len();
-                    elements.truncate(limit);
-                    json!({"type":"elementsResult","requestId":request_id,"elements":elements,"totalCount":total,
-                        "window":mounted.info,"semanticQuality":"full","projectionQuality":"complete"})
-                } else if matches!(mounted.owner, RootOwner::ShortcutRecorder) {
+                if matches!(mounted.owner, RootOwner::ShortcutRecorder) {
                     let mut elements = crate::shortcut_recorder::shortcut_fixture_elements(
                         &mounted.info.id,
                         mounted
@@ -206,20 +193,6 @@ impl Evaluator {
                         .info
                         .generation
                         .context("recorder_generation_missing")?,
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                serde_json::to_value(crate::protocol::Message::layout_info_result(
-                    request_id.into(),
-                    info,
-                ))?
-            }
-            "getLayoutInfo" if matches!(mounted.owner, RootOwner::Footer) => {
-                let info = crate::footer_popup::footer_fixture_layout(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("footer_generation_missing")?,
                     &mut self.cx.app.borrow_mut(),
                 )?;
                 serde_json::to_value(crate::protocol::Message::layout_info_result(
@@ -972,21 +945,6 @@ impl Evaluator {
                 )
             }
             RootOwner::Secondary(fixture) => fixture.controls.observation(&cx),
-            RootOwner::Footer => {
-                let state = crate::footer_popup::footer_runtime_state(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("footer_generation_missing")?,
-                )
-                .context("footer_owner_missing")?;
-                Ok(
-                    json!({"family":"footer","owner":state.binding.window_id,"completedActionCount":state.completed_action_count,
-                    "semanticRevision":state.semantic_revision,"presentationRevision":state.presentation_revision,
-                    "appliedThemeRevision":state.applied_theme_revision,"heldAction":format!("{:?}",state.held_action)}),
-                )
-            }
             RootOwner::ShortcutRecorder => {
                 Ok(crate::shortcut_recorder::shortcut_fixture_observation(
                     &mounted.info.id,

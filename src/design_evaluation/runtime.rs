@@ -39,7 +39,6 @@ pub(super) enum RootOwner {
     AgentChat(Entity<crate::ai::agent_chat::ui::AgentChatView>),
     Dictation(Entity<crate::dictation::DictationOverlay>),
     Secondary(Rc<secondary_fixtures::MountedSecondaryFixture>),
-    Footer,
     ShortcutRecorder,
     ConversationPopup,
     RegisteredChild,
@@ -324,7 +323,6 @@ impl Evaluator {
                     crate::windows::get_runtime_window_handle_for_generation(&id, generation)
                         .context("runtime_handle_missing")?;
                 let owner = match info.semantic_surface.as_deref() {
-                    Some("footerOverlay") => RootOwner::Footer,
                     Some("shortcutRecorder") => RootOwner::ShortcutRecorder,
                     _ => RootOwner::RegisteredChild,
                 };
@@ -1525,11 +1523,6 @@ impl Evaluator {
             crate::footer_popup::retire_footer_owner(mounted.handle, &mut app);
             match &mounted.owner {
                 RootOwner::Secondary(fixture) => fixture.close(&mut app)?,
-                RootOwner::Footer => crate::footer_popup::close_owned_footer_fixture(
-                    &mounted.info.id,
-                    generation,
-                    &mut app,
-                )?,
                 RootOwner::ShortcutRecorder => {
                     main_fixtures::close_shortcut_fixture(&mounted.info.id, generation, &mut app)?
                 }

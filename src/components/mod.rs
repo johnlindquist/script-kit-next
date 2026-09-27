@@ -66,6 +66,8 @@ pub(crate) mod resource_preview;
 pub mod scrollbar;
 pub mod section_divider;
 pub mod shortcut_recorder;
+#[allow(dead_code, reason = "the binary's ScriptListApp and Day Page draw it")]
+pub(crate) mod staged_actions;
 pub mod text_input;
 pub mod toast;
 pub mod unified_list_item;

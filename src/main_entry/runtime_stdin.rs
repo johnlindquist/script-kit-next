@@ -286,17 +286,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // Pass #19 automation re-key fix without rendering a
                                 // visible ScriptList frame while AppKit is still
                                 // closing the panel.
-                                // Full teardown for actions-dialog
-                                // (`id: "actions-dialog"`). Pass #29 fix
-                                // (`cmd-k-on-unfocused-clipboard-pops-overlay-not-actions`):
-                                // upgraded from bare `remove_automation_window` to full
-                                // `close_actions_window`. Pass #23's bare registry op
-                                // left the `ACTIONS_WINDOW` static holding a stale handle;
-                                // a later `simulateKey cmd+k` on an unfocused window read
-                                // `is_actions_window_open()=true` and took the CLOSE branch,
-                                // popping whichever overlay was on top instead of opening
-                                // the actions dialog. `close_actions_window` clears the
-                                // static AND the registry; idempotent.
+                                // Hiding lets go of anything staged, like Esc would.
                                 crate::actions::close_actions_window(ctx);
                                 // Sibling teardown for confirm-popup
                                 // (`id: "confirm-popup"`, PromptPopup kind).

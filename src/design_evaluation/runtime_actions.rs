@@ -690,33 +690,6 @@ impl Evaluator {
                         timeout.saturating_sub(started.elapsed()),
                     );
                 }
-                if matches!(mounted.owner, RootOwner::Footer) {
-                    let crate::protocol::BatchCommand::SelectBySemanticId {
-                        semantic_id,
-                        submit,
-                    } = command
-                    else {
-                        anyhow::bail!("footer_requires_semantic_selection");
-                    };
-                    let ticket = crate::footer_popup::footer_fixture_select(
-                        &mounted.info.id,
-                        generation,
-                        semantic_id,
-                        *submit,
-                        &mut self.cx.app.borrow_mut(),
-                    )?
-                    .context("footer_action_not_found")?;
-                    loop {
-                        if ticket.poll()? {
-                            return Ok(Some(semantic_id.clone()));
-                        }
-                        ensure!(
-                            started.elapsed() < timeout,
-                            "footer_action_completion_timeout"
-                        );
-                        self.tick(true)?;
-                    }
-                }
                 if matches!(mounted.owner, RootOwner::ShortcutRecorder) {
                     let crate::protocol::BatchCommand::SelectBySemanticId {
                         semantic_id,
@@ -837,10 +810,7 @@ impl Evaluator {
         let observation = if after.is_none()
             && matches!(
                 mounted.owner,
-                RootOwner::Main(_)
-                    | RootOwner::Notes(_)
-                    | RootOwner::ShortcutRecorder
-                    | RootOwner::Footer
+                RootOwner::Main(_) | RootOwner::Notes(_) | RootOwner::ShortcutRecorder
             ) {
             Value::Null
         } else {
@@ -1034,15 +1004,6 @@ impl Evaluator {
         self.tick(true)?;
         let mut cx = self.cx.app.borrow_mut();
         let (info, owner) = match family {
-            "footer" => (
-                crate::footer_popup::mount_owned_footer_fixture(
-                    fixture_id,
-                    &parent.info,
-                    parent.handle,
-                    &mut cx,
-                )?,
-                RootOwner::Footer,
-            ),
             "shortcutRecorder" => {
                 let main: Entity<ScriptListApp> =
                     self.main.clone().context("shortcut_main_owner_missing")?;

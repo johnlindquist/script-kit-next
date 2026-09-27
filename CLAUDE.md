@@ -142,7 +142,7 @@ the Actions menu, Notes, and every other window. The contract:
   stays alpha `0.0` via `GLASS_HIDDEN_PARK_ALPHA`; zero-alpha parking of a
   visible window is a contract violation (runtime tripwire
   `glass_hidden_park_on_visible_window`);
-- Actions and confirm modals settle on the untinted popup material
+- Confirm modals settle on the untinted popup material
   (`NativeGlassSurfaceRole::PopupBackdrop`) over the already-tinted main
   glass; every other window uses the window material;
 - Notes reveals its body with the fade (reveal delay `0ms`) and unlocks native

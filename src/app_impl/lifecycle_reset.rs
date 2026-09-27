@@ -361,7 +361,7 @@ impl ScriptListApp {
 
         // Close child windows FIRST if open (they are children of main window)
         // Actions window
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.clear_actions_popup_state();
             cx.spawn(async move |_this, cx| {
                 cx.update(move |cx| {

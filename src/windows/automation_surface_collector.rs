@@ -252,43 +252,6 @@ fn prompt_popup_semantic_cache() -> &'static Mutex<HashMap<String, PromptPopupEl
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn actions_dialog_semantic_cache() -> &'static Mutex<HashMap<String, PromptPopupElementSnapshot>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, PromptPopupElementSnapshot>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-#[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
-pub(crate) fn upsert_actions_dialog_snapshot(
-    window_id: &str,
-    dialog_entity: &gpui::Entity<crate::actions::ActionsDialog>,
-    cx: &gpui::App,
-) {
-    let Some(generation) =
-        crate::windows::automation_window_by_id(window_id).and_then(|info| info.generation)
-    else {
-        return;
-    };
-    let snapshot = collect_actions_dialog_elements(dialog_entity, 1000, cx);
-    if let Ok(mut cache) = actions_dialog_semantic_cache().lock() {
-        cache.insert(
-            window_id.to_string(),
-            PromptPopupElementSnapshot {
-                generation: Some(generation),
-                elements: snapshot.elements,
-                focused_semantic_id: snapshot.focused_semantic_id,
-                selected_semantic_id: snapshot.selected_semantic_id,
-            },
-        );
-    }
-}
-
-#[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
-pub(crate) fn remove_actions_dialog_snapshot(window_id: &str) {
-    if let Ok(mut cache) = actions_dialog_semantic_cache().lock() {
-        cache.remove(window_id);
-    }
-}
-
 #[allow(dead_code)] // Binary dictation overlay uses this; lib-only builds do not.
 pub(crate) fn upsert_dictation_microphone_prompt_popup_snapshot(
     window_id: &str,
@@ -750,14 +713,6 @@ fn exact_root<T: 'static>(
         .ok()
 }
 
-pub(crate) fn exact_actions_dialog_entity(
-    resolved: &AutomationWindowInfo,
-    cx: &gpui::App,
-) -> Option<gpui::Entity<crate::actions::ActionsDialog>> {
-    let root = exact_root::<crate::actions::ActionsWindow>(resolved, cx)?;
-    Some(root.read(cx).dialog.clone())
-}
-
 /// Append the same frame-coherent measured nodes used by Main, without Main ownership.
 pub fn append_window_paint_measurements(layout: &mut protocol::LayoutInfo, window: &gpui::Window) {
     let mut measurements: Vec<_> = window.debug_bounds_entries().iter().collect();
@@ -900,20 +855,7 @@ fn collect_registered_surface_layout_inner(
             .ok_or_else(|| anyhow::anyhow!("chat_layout_owner_missing"))?;
             entity.read(cx).automation_layout_info(&target, cx)
         }
-        AutomationWindowKind::ActionsDialog => {
-            let entity = exact_actions_dialog_entity(&target, cx)
-                .ok_or_else(|| anyhow::anyhow!("actions_layout_owner_missing"))?;
-            let dialog = entity.read(cx);
-            required.extend([
-                "actions-window-root".into(),
-                "actions-dialog-root".into(),
-                "actions-list-viewport".into(),
-            ]);
-            if dialog.search_is_visible() {
-                required.push("actions-search".into());
-            }
-            dialog.automation_layout_info(&target, cx)
-        }
+        AutomationWindowKind::ActionsDialog => anyhow::bail!("actions_are_staged_in_place"),
         AutomationWindowKind::Dictation => {
             anyhow::ensure!(
                 crate::dictation::get_dictation_overlay_state_for_instance(generation, cx)
@@ -1069,13 +1011,7 @@ pub fn surface_revision_facts(
         AutomationWindowKind::Dictation => {
             crate::dictation::dictation_overlay_revision_facts(generation, window, cx)
         }
-        AutomationWindowKind::ActionsDialog => read_window_root(
-            handle.downcast::<crate::actions::ActionsWindow>()?,
-            window,
-            cx,
-            |root, cx| root.dialog.read(cx).revision_facts(),
-        )
-        .ok(),
+        AutomationWindowKind::ActionsDialog => None,
         AutomationWindowKind::Hud => read_window_root(
             handle.downcast::<crate::hud_manager::HudView>()?,
             window,
@@ -1154,13 +1090,7 @@ pub fn close_owned_registered_surface(
             );
             crate::dictation::close_dictation_overlay(cx)?;
         }
-        AutomationWindowKind::ActionsDialog => {
-            anyhow::ensure!(
-                exact_actions_dialog_entity(&resolved, cx).is_some(),
-                "actions_target_stale"
-            );
-            crate::actions::close_actions_window(cx);
-        }
+        AutomationWindowKind::ActionsDialog => anyhow::bail!("actions_are_staged_in_place"),
         AutomationWindowKind::Hud => {
             crate::hud_manager::dismiss_owned_hud_instance(&resolved.id, generation, cx)?
         }
@@ -1205,7 +1135,7 @@ pub fn collect_surface_snapshot(
         AutomationWindowKind::AgentChatDetached => {
             collect_agent_chat_detached_snapshot(resolved, cx)?
         }
-        AutomationWindowKind::ActionsDialog => collect_actions_dialog_snapshot(resolved, cx)?,
+        AutomationWindowKind::ActionsDialog => return None,
         AutomationWindowKind::PromptPopup => collect_exact_prompt_popup_snapshot(resolved, cx)?,
         AutomationWindowKind::Dictation => collect_dictation_snapshot(resolved, cx)?,
         AutomationWindowKind::Hud => collect_hud_snapshot(resolved, cx)?,
@@ -1614,159 +1544,6 @@ pub(crate) fn collect_agent_chat_detached_elements(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Actions dialog collector
-// ---------------------------------------------------------------------------
-
-/// Collect semantic elements from the live ActionsDialog entity.
-///
-/// Returns `None` when the exact Actions root no longer exists.
-fn collect_actions_dialog_snapshot(
-    resolved: &AutomationWindowInfo,
-    cx: &gpui::App,
-) -> Option<SurfaceElementSnapshot> {
-    let entity = exact_actions_dialog_entity(resolved, cx)?;
-    Some(collect_actions_dialog_elements(&entity, usize::MAX, cx))
-}
-
-#[cfg(test)]
-fn collect_cached_actions_dialog_snapshot(
-    window_id: &str,
-    generation: u64,
-) -> Option<SurfaceElementSnapshot> {
-    let cached = actions_dialog_semantic_cache()
-        .lock()
-        .ok()
-        .and_then(|cache| {
-            cache
-                .get(window_id)
-                .filter(|snapshot| snapshot.generation == Some(generation))
-                .cloned()
-        })?;
-    Some(SurfaceElementSnapshot {
-        total_count: cached.elements.len(),
-        elements: cached.elements,
-        focused_semantic_id: cached.focused_semantic_id,
-        selected_semantic_id: cached.selected_semantic_id,
-        warnings: Vec::new(),
-        quality: SnapshotQuality::Full,
-    })
-}
-
-/// Collect semantic elements from a live ActionsDialog entity.
-///
-/// Shared by the surface snapshot path (`getElements`) and the
-/// [`ActionsDialogTransactionProvider`](super::automation_transaction_provider::ActionsDialogTransactionProvider)
-/// so both see the same semantic model.
-pub(crate) fn collect_actions_dialog_elements(
-    dialog_entity: &gpui::Entity<crate::actions::ActionsDialog>,
-    limit: usize,
-    cx: &gpui::App,
-) -> SurfaceElementSnapshot {
-    let dialog = dialog_entity.read(cx);
-
-    let mut elements = Vec::new();
-
-    // Search input
-    let search_focused = !dialog.hide_search;
-    elements.push(element(
-        "input:actions-search",
-        ElementType::Input,
-        None,
-        Some(dialog.search_text.clone()),
-        None,
-        Some(search_focused),
-        None,
-    ));
-
-    // List of filtered actions
-    let action_count = dialog.filtered_actions.len();
-    elements.push(element(
-        "list:actions",
-        ElementType::List,
-        Some(format!("{action_count} actions")),
-        None,
-        None,
-        None,
-        None,
-    ));
-
-    // Individual action choices. Use grouped visual indexes so semantic ids
-    // match rowGeometry, which also includes section headers.
-    let mut selected_semantic_id = None;
-
-    for (visual_index, grouped_item) in dialog.grouped_items.iter().enumerate() {
-        match grouped_item {
-            crate::actions::GroupedActionItem::SectionHeader(label) => {
-                elements.push(element(
-                    &format!("section:{visual_index}"),
-                    ElementType::Panel,
-                    Some(label.clone()),
-                    None,
-                    Some(dialog.selected_index == Some(visual_index)),
-                    None,
-                    Some(visual_index),
-                ));
-            }
-            crate::actions::GroupedActionItem::Item(filter_idx) => {
-                let Some(&action_idx) = dialog.filtered_actions.get(*filter_idx) else {
-                    continue;
-                };
-                let Some(action) = dialog.actions.get(action_idx) else {
-                    continue;
-                };
-                let is_selected = dialog.selected_index == Some(visual_index);
-                let semantic_id = format!("choice:{visual_index}:{}", action.id);
-
-                if is_selected {
-                    selected_semantic_id = Some(semantic_id.clone());
-                }
-
-                elements.push(element(
-                    &semantic_id,
-                    ElementType::Choice,
-                    Some(action.title.clone()),
-                    Some(action.id.clone()),
-                    Some(is_selected),
-                    None,
-                    Some(visual_index),
-                ));
-                if let Some(reason) = action.disabled_reason() {
-                    elements.push(element(
-                        &format!("disabled-reason:{}", action.id),
-                        ElementType::Panel,
-                        Some(reason.to_string()),
-                        None,
-                        None,
-                        None,
-                        Some(visual_index),
-                    ));
-                }
-            }
-        }
-    }
-
-    let focused_semantic_id = if search_focused {
-        Some("input:actions-search".to_string())
-    } else {
-        selected_semantic_id.clone()
-    };
-
-    let total_count = elements.len();
-    if elements.len() > limit {
-        elements.truncate(limit);
-    }
-
-    SurfaceElementSnapshot {
-        total_count,
-        elements,
-        focused_semantic_id,
-        selected_semantic_id,
-        warnings: Vec::new(),
-        quality: SnapshotQuality::Full,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1870,26 +1647,5 @@ mod tests {
             .lock()
             .unwrap()
             .contains_key(id));
-    }
-
-    #[test]
-    fn actions_cache_never_answers_for_a_different_lifetime() {
-        let id = "test:actions-cache-exact-lifetime";
-        super::actions_dialog_semantic_cache()
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner())
-            .insert(
-                id.into(),
-                PromptPopupElementSnapshot {
-                    generation: Some(9),
-                    elements: Vec::new(),
-                    focused_semantic_id: None,
-                    selected_semantic_id: None,
-                },
-            );
-        assert!(super::collect_cached_actions_dialog_snapshot(id, 8).is_none());
-        assert!(super::collect_cached_actions_dialog_snapshot(id, 9).is_some());
-        super::remove_actions_dialog_snapshot(id);
-        assert!(super::collect_cached_actions_dialog_snapshot(id, 9).is_none());
     }
 }

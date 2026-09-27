@@ -586,15 +586,6 @@ fn agent_chat_actions_window_close_path_restores_agent_chat_host_focus() {
         toggle_actions.contains("self.close_actions_popup(host, window, cx);"),
         "toggle_actions must close with the derived Agent Chat/MainList host"
     );
-    assert!(
-        toggle_actions.contains("Some(host_label)"),
-        "toggle_actions should emit the derived host label for popup events"
-    );
-    assert!(
-        toggle_actions.contains("Self::make_actions_window_on_close_callback(")
-            && ACTIONS_TOGGLE_SOURCE.contains("app.request_focus_restore_for_actions_host(host);"),
-        "actions window close callback must restore focus for the Agent Chat host"
-    );
 }
 
 #[test]

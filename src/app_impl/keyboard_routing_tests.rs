@@ -166,25 +166,6 @@ mod tests {
         );
     }
 
-    /// Verify that notify_actions_window is called after navigation.
-    ///
-    /// This ensures the separate actions window re-renders after state changes.
-    #[test]
-    fn test_actions_navigation_triggers_window_notify() {
-        let content = read_app_impl_sources();
-
-        // When we route arrow keys to actions dialog, we should notify the window
-        let notify_count = content.matches("notify_actions_window").count();
-
-        // Should be called at least twice (once for ScriptList, once for FileSearchView)
-        assert!(
-            notify_count >= 2,
-            "notify_actions_window should be called after routing arrow keys to actions dialog. \
-             Found {} occurrences, expected at least 2.",
-            notify_count
-        );
-    }
-
     /// Verify main input focus closes actions popup through shared close path.
     ///
     /// This prevents focus overlay state from desynchronizing.

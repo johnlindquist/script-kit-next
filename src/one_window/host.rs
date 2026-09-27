@@ -49,6 +49,8 @@ pub(crate) struct OneWindowHost {
     last_run: Option<Row>,
     /// What was highlighted when ⌘K staged something.
     pub(super) staged_from: Option<super::staging::StagedFrom>,
+    /// What a view staged with ⌘K, while its actions are listed in its place.
+    pub(super) view_stage: Option<super::view_staging::ViewStage>,
 }
 
 /// What the reducer did with one event.

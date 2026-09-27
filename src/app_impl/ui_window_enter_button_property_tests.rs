@@ -920,3 +920,6 @@ fn without_a_sentence_cmd_enter_stays_agent() {
 
 #[path = "ui_window_enter_button_property_tests_one_window.rs"]
 mod one_window;
+
+#[path = "ui_window_enter_button_property_tests_staging.rs"]
+mod staging;

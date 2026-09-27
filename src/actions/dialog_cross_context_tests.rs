@@ -16,7 +16,7 @@ use super::builders::*;
 use super::command_bar::CommandBarConfig;
 use super::dialog::{GroupedActionItem, build_grouped_items_static, coerce_action_selection};
 use super::types::*;
-use super::window::{WindowPosition, count_section_headers};
+use super::dialog::count_section_headers;
 use crate::clipboard_history::ContentType;
 use crate::file_search::{FileInfo, FileType};
 use crate::prompts::PathInfo;
@@ -1169,22 +1169,7 @@ fn coerce_last_item_is_header_searches_backwards() {
     assert_eq!(coerce_action_selection(&rows, 2), Some(1));
 }
 
-// ============================================================================
-// WindowPosition default and variants
-// ============================================================================
 
-#[test]
-fn window_position_default_is_bottom_right() {
-    let pos = WindowPosition::default();
-    assert_eq!(pos, WindowPosition::BottomRight);
-}
-
-#[test]
-fn window_position_all_variants_distinct() {
-    assert_ne!(WindowPosition::BottomRight, WindowPosition::TopRight);
-    assert_ne!(WindowPosition::TopRight, WindowPosition::TopCenter);
-    assert_ne!(WindowPosition::BottomRight, WindowPosition::TopCenter);
-}
 
 // ============================================================================
 // ProtocolAction constructor variants

@@ -548,7 +548,7 @@ export const coverageProfiles: CoverageProfile[] = [
     name: "Actions dialog and attached action menus",
     status: "partial",
     domains: ["targets", "elements", "layout", "input", "screenshots", "accessibility"],
-    sourceFiles: ["src/actions/window.rs", "src/actions/command_bar.rs", "src/actions/types/action_model.rs"],
+    sourceFiles: ["src/one_window/view_staging.rs", "src/components/staged_actions.rs", "src/actions/command_bar.rs", "src/actions/types/action_model.rs"],
     features: ["route stack", "sections", "filter input", "shortcut hints", "disabled reasons", "anchor placement", "resize"],
     shortcuts: ["Cmd+K", "Escape", "Enter", "Backspace", "ArrowUp", "ArrowDown"],
     supportedNow: [

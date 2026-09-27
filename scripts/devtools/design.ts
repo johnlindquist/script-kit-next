@@ -23,7 +23,6 @@ import { fixtureEvidenceIssues, type FixtureBinding } from "./lib/fixture-contra
 import { runSdkJourney } from "./sdk-journey.ts";
 import { runConversationAcceptance, CONVERSATION_FIXTURE_IDS } from "./conversation-journey.ts";
 import { runNotesAcceptance, NOTES_ACCEPTANCE_FIXTURES } from "./notes-acceptance.ts";
-import { runFooterOwnershipJourney, FOOTER_JOURNEY_ID } from "./footer-journey.ts";
 import { runSearchJourney, type SearchRecipeOptions } from "../agentic/launcher-search-recipes.ts";
 import { retainSearchShardEvidence, searchShardArtifactSpecs } from "../agentic/launcher-search-receipt.ts";
 import { SEARCH_CASES, SEARCH_PROVIDERS, SEARCH_FIXTURE_ID, searchContractSpec, searchScheduleComparisonGroup } from "../agentic/launcher-search-contract.ts";
@@ -55,7 +54,7 @@ export const CORE_FIXTURES: Record<CoreJourneyId, readonly string[]> = {
   "launcher-ranking-provider": [SEARCH_FIXTURE_ID],
   "choice-prompt-completion": ["prompt.arg", "prompt.mini", "prompt.select"],
   "editable-prompt-validation": ["prompt.form", "prompt.fields", "prompt.editor", "prompt.template"],
-  "actions-popup-activation": ["main.script-list", "secondary.actions", "secondary.confirm", "dictation.recording", "dictation.microphone-picker", "secondary.footer", "secondary.shortcut-recorder"],
+  "actions-popup-activation": ["main.script-list", "secondary.confirm", "dictation.recording", "dictation.microphone-picker", "secondary.shortcut-recorder"],
   "notes-day-roundtrip": [...NOTES_ACCEPTANCE_FIXTURES],
   "conversation-recovery-stop": [...CONVERSATION_FIXTURE_IDS],
   "dictation-delivery-refusal": ["main.script-list", "dictation.recording", "agent-chat.standard.populated", "agent-chat.popup.history", "day-page.today"],
@@ -476,20 +475,14 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
         break;
       }
       case "actions-popup-activation": {
-        const parent = await mount("main.script-list"); const target = await mount("secondary.actions", parent);
-        await input(target, ""); await key(target, "down");
-        const selected = nodes(await active.query(target, "elements")).find(node => node.selected && node.activatable !== false);
-        assertStory(receipt, "selected_production_action", !!selected);
-        const result = await active.act(target, { type: "select", semanticId: String(selected!.semanticId ?? selected!.id), submit: true }); receipt.effects.push(result);
-        assertStory(receipt, "actual_action_sink_delivery", (result.actionReceipt ?? result.results?.[0]?.actionReceipt)?.effect?.kind === "submissionDelivered");
-        await active.inspect(parent); assertStory(receipt, "same_parent_survives_activation", true);
+        const parent = await mount("main.script-list");
         const windowLifetimes = async () => {
           const diagnosis = await active.diagnose();
           if (diagnosis.operation !== "diagnose" || diagnosis.ok !== true) throw new EvaluationContractError("owned_diagnosis_required");
           return diagnosis.targets.map(value => `${value.windowId}:${value.windowGeneration}`).sort();
         };
         let disabledTargetsExercised = 0;
-        for (const fixture of ["secondary.confirm", "dictation.microphone-picker", "secondary.shortcut-recorder", "secondary.footer"]) {
+        for (const fixture of ["secondary.confirm", "dictation.microphone-picker", "secondary.shortcut-recorder"]) {
           const host = fixture === "dictation.microphone-picker" ? await mount("dictation.recording") : parent;
           const child = await mount(fixture, host);
           const deferred = await active.probeSafety(child, "deferredDispatch"); receipt.effects.push(deferred);
@@ -497,7 +490,7 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
           const controls = nodes(await active.query(child, "elements"));
           const semanticId = fixture === "secondary.confirm" ? "button:0:confirm"
             : fixture === "dictation.microphone-picker" ? "choice:1:dictation-mic-row-1"
-            : fixture === "secondary.shortcut-recorder" ? "shortcut-cancel-button" : "footer-action:actions";
+            : "shortcut-cancel-button";
           assertStory(receipt, `${fixture}:production_control_present`, controls.some(node => node.semanticId === semanticId && !node.actionDisabled));
           const before = await active.inspect(child); const windows = await windowLifetimes();
           const parentBefore = (await active.inspect(host)).fixtureObservation;
@@ -1060,9 +1053,6 @@ export async function runDesign(argv: string[]): Promise<void> {
     } else if (command === "run" && arg("--scenario") === "sdk-prompt-roundtrip") {
       const journey = await runSdkJourney(reference, claim); observation = { journeys: [journey], assertions: journey.assertions }; cleanups.push(journey.cleanup);
       if (!journey.pass) throw new EvaluationContractError(journey.error ?? "sdk_journey_failed");
-    } else if (command === "run" && arg("--scenario") === FOOTER_JOURNEY_ID) {
-      const journey = await runFooterOwnershipJourney(reference, claim); observation = { journeys: [journey], assertions: journey.assertions }; cleanups.push(journey.cleanup);
-      if (!journey.pass) throw new EvaluationContractError(journey.error ?? "footer_journey_failed");
     } else if (command === "run" && arg("--scenario") === "production-family-matrix") {
       const catalogue = await discoverFixtures(reference, claim); cleanups.push(catalogue.cleanup);
       if (!catalogue.fixtures.length) throw new EvaluationContractError("empty_production_fixture_catalog");

@@ -25,7 +25,7 @@ mod from_dialog_builtin_action_validation_tests {
         build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
     };
     use super::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
-    use super::window::count_section_headers;
+    use super::dialog::count_section_headers;
     use crate::clipboard_history::ContentType;
     use crate::designs::icon_variations::IconName;
     use crate::file_search::{FileInfo, FileType};
@@ -1357,7 +1357,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
     };
     use super::types::{Action, ActionCategory, ScriptInfo, SearchPosition, SectionStyle};
-    use super::window::count_section_headers;
+    use super::dialog::count_section_headers;
     use crate::clipboard_history::ContentType;
     use crate::designs::icon_variations::IconName;
     use crate::file_search::{FileInfo, FileType};
