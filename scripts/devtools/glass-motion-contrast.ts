@@ -726,13 +726,11 @@ async function main() {
     [
       "main-exit",
       "main-entry",
-      "notes-entry",
-      "notes-close-before-settle-reopen",
     ],
   );
   const rapidComplete = exactSet(
     Object.keys(rapidToggle?.receipt?.phases ?? {}),
-    ["actions", "notes"],
+    ["actions"],
   );
   const evidenceComplete = mode === "all"
     ? mainVisualMatrixComplete
@@ -889,8 +887,6 @@ async function main() {
       lifecycle: [
         "main-exit",
         "main-entry",
-        "notes-entry",
-        "notes-close-before-settle-reopen",
       ],
     },
     executedScenarios: {

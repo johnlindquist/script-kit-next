@@ -208,8 +208,6 @@ describe("scenario profiles", () => {
     expect(names).toEqual([
       "main-exit",
       "main-entry",
-      "notes-entry",
-      "notes-close-before-settle-reopen",
     ]);
     expect(names).toEqual([...LEGACY_FULL_SCENARIO_ORDER]);
     expect(new Set(names).size).toBe(names.length);
@@ -224,9 +222,9 @@ describe("scenario profiles", () => {
     ]);
   });
 
-  test("extended keeps the legacy four as an exact prefix", () => {
+  test("extended keeps the legacy scenarios as an exact prefix", () => {
     const names = resolveScenarioNames("extended");
-    expect(names.slice(0, 4)).toEqual([...LEGACY_FULL_SCENARIO_ORDER]);
+    expect(names.slice(0, LEGACY_FULL_SCENARIO_ORDER.length)).toEqual([...LEGACY_FULL_SCENARIO_ORDER]);
   });
 
   test("unknown profile fails closed", () => {
@@ -244,8 +242,6 @@ describe("scenario profiles", () => {
     expect(SCENARIO_CAPTURE_DURATIONS_MS).toEqual({
       "main-exit": 400,
       "main-entry": 700,
-      "notes-entry": 800,
-      "notes-close-before-settle-reopen": 950,
     });
   });
 
