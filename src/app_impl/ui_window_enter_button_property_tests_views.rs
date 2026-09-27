@@ -4,7 +4,7 @@
 
 use sk_one_window::answer::{Answer, Fact, Shape};
 use sk_one_window::contract::ENTER_GUARD_MS;
-use sk_one_window::form::{FieldState, SlotName, Source};
+use sk_one_window::form::{FieldState, SlotName, Source, Verb};
 use sk_one_window::{Key, SubjectKind};
 
 use super::{in_launcher, key, launcher, type_into_launcher, wait, Jev};
@@ -115,6 +115,33 @@ fn a_copied_link_sent_to_someone_asks_who_and_then_waits_in_the_line() {
     assert_eq!(named, format!("Send “{LINK}” to Sarah"));
     assert_eq!(held, 1, "the message waits in the line before it goes");
     assert!(closed, "the form closes back to the list");
+}
+
+#[test]
+fn enter_runs_the_action_highlighted_after_pasting_again() {
+    let opened = in_launcher("paste_again_enter", 0, |cx| {
+        let (app, _) = launcher(cx, Jev::Off);
+        copy(cx, "84");
+        paste(&app, cx);
+        wait(cx, 20);
+        for _ in 0..3 {
+            key(&app, cx, Key::Down);
+        }
+        key(&app, cx, Key::Enter);
+        wait(cx, ENTER_GUARD_MS);
+        assert!(matches!(hosted(&app, cx), Some(HostedView::Answer(_))));
+        key(&app, cx, Key::Escape);
+        wait(cx, ENTER_GUARD_MS);
+        paste(&app, cx);
+        wait(cx, 20);
+        key(&app, cx, Key::Enter);
+        wait(cx, 20);
+        hosted(&app, cx)
+    });
+    assert!(
+        matches!(&opened, Some(HostedView::Form(form)) if form.verb == Verb::Message),
+        "Enter after pasting again runs the first action, not the last paste's: {opened:?}"
+    );
 }
 
 #[test]

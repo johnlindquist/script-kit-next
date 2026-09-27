@@ -277,7 +277,7 @@ impl ScriptListApp {
 
     /// The highlight moved by pointer, agent or a publication: the reducer's follows.
     pub(crate) fn one_window_follow_host_selection(&mut self, cx: &mut Context<Self>) {
-        if !self.one_window_owns_list() {
+        if !self.one_window_owns_list() || self.one_window_view_height().is_some() {
             return;
         }
         let Some(position) = self.one_window_host_position() else {
@@ -289,6 +289,9 @@ impl ScriptListApp {
     }
 
     fn one_window_show_selection(&mut self, cx: &mut Context<Self>) {
+        if self.one_window_view_height().is_some() {
+            return;
+        }
         let position = self.one_window.list().sel;
         let Some(grouped_index) = self
             .main_menu_committed_rows()
