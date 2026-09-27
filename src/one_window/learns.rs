@@ -521,10 +521,7 @@ pub(crate) fn offered_rows(text: &str, saved: &[String], has_last: bool) -> Vec<
         );
     }
     if let Some(rest) = t.strip_prefix("give ") {
-        let name = rest
-            .trim_end_matches(" a shortcut")
-            .trim_end_matches(" shortcut")
-            .trim();
+        let name = shortcut_subject(rest);
         if !name.is_empty() {
             if let Some(script) = saved
                 .iter()
@@ -544,6 +541,22 @@ pub(crate) fn offered_rows(text: &str, saved: &[String], has_last: bool) -> Vec<
         }
     }
     rows
+}
+
+/// The name in "give <name> a shortcut", also while " a shortcut" is half typed: the row must not
+/// drop out at "give launch alpha a" and come back, or it can't own Enter again.
+fn shortcut_subject(rest: &str) -> &str {
+    const TAILS: [&str; 2] = [" a shortcut", " shortcut"];
+    let cut = (1..=rest.len())
+        .filter(|&n| rest.is_char_boundary(rest.len() - n))
+        .filter(|&n| {
+            TAILS
+                .iter()
+                .any(|tail| tail.starts_with(&rest[rest.len() - n..]))
+        })
+        .max()
+        .unwrap_or(0);
+    rest[..rest.len() - cut].trim()
 }
 
 #[cfg(test)]
@@ -582,6 +595,24 @@ mod tests {
             false,
         );
         assert_eq!(rows[0].key, "shortcut-for:Tell Sarah + Post in #launcher");
+    }
+
+    #[test]
+    fn the_shortcut_row_stays_offered_while_the_sentence_is_typed() {
+        let saved = ["Launch Alpha".to_string(), "Launch Beta".to_string()];
+        let sentence = "give launch alpha a shortcut";
+        for end in "give l".len()..=sentence.len() {
+            let typed = &sentence[..end];
+            let keys: Vec<String> = offered_rows(typed, &saved, false)
+                .into_iter()
+                .map(|r| r.key)
+                .collect();
+            assert_eq!(keys, ["shortcut-for:Launch Alpha"], "typed {typed:?}");
+        }
+        assert_eq!(
+            offered_rows("give launch beta a", &saved, false)[0].key,
+            "shortcut-for:Launch Beta"
+        );
     }
 
     #[test]

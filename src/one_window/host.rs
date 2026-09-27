@@ -292,10 +292,10 @@ impl ScriptListApp {
         self.one_window_follow_host_selection(cx);
         let before = self.one_window_jev_token();
         let handled = self.one_window_handle(Event::Key(key), cx);
-        self.one_window_show_selection(cx);
         if self.one_window_jev_token() != before {
             self.one_window_republish("one_window_key", cx);
         }
+        self.one_window_show_selection(cx);
         handled
     }
 
@@ -647,13 +647,17 @@ impl ScriptListApp {
         }
     }
 
-    /// After every publication: the reducer follows the highlight and hears how tall the list
+    /// After every publication: the reducer follows the highlight, or the highlight takes the
+    /// reducer's row when the new rows left it on none, and the reducer hears how tall the list
     /// wants the window.
     pub(crate) fn one_window_published(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.current_view, AppView::ScriptList) {
             return;
         }
         self.one_window_follow_host_selection(cx);
+        if self.one_window_owns_list() && self.one_window_host_position().is_none() {
+            self.one_window_show_selection(cx);
+        }
         let px = self.one_window_natural_height();
         self.one_window_handle(Event::Content { px }, cx);
         self.one_window_follow_own_selection(cx);
