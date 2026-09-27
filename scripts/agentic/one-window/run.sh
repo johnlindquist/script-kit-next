@@ -9,6 +9,7 @@
 #                     word's color under exactly its text, the text keeps its own color, and no other
 #                     bar shows; chapters/<name>.marks.json is the spec for what each sentence is marked
 #   stress-report.py  per run: anchor, first row, header, pump, fidelity, rug, layout shift
+#   marks-video.py    per run: <out>/<name>/run.mp4 and run.gif, every step in order (not a grade)
 # chapters/<name>.args holds extra one-window-frames.ts options (e.g. --fixture prompt.arg);
 # chapters/<name>.expect.json and stress/<name>.expect.json hold what each step showed when its frames were
 # last reviewed (header, ↵, view): a step that shows something else fails. Every run writes
@@ -64,6 +65,10 @@ capture() { # name steps extra-args-file -> frames in $out/name
   [ -f "$args" ] && read -r -a extra <"$args"
   bun scripts/agentic/one-window-frames.ts run --artifact "$ref" --out "$dir/frames" --steps "$steps" \
     ${extra[@]+"${extra[@]}"} >"$dir/frames-run.log" 2>&1
+  local code=$?
+  python3 "$here/marks-video.py" "$dir/frames" "$dir/run" >"$dir/run-video.log" 2>&1 \
+    || echo "$1: no playback video, see $dir/run-video.log"
+  return "$code"
 }
 for steps in "$here"/chapters/*.json; do
   case "$steps" in *.expect.json|*.marks.json) continue ;; esac
