@@ -109,8 +109,6 @@ export const SAFE_TASK_SPECS: readonly SafeTaskSpec[] = [
       "src/components/mod.rs",
       "src/ai/agent_chat/ui/components/transcript.rs",
       "src/ai/agent_chat/ui/view.rs",
-      "src/ai/agent_chat/ui/chat_window.rs",
-      "src/ai/agent_chat/ui/history_popup.rs",
       "src/ai/agent_chat/ui/popup_automation.rs",
       "src/prompts/chat/render_turns.rs",
       "src/design_contract/mod.rs",
