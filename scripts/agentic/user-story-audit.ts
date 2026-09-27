@@ -37,7 +37,6 @@ const ALREADY_EXERCISED_THIS_THREAD = new Set([
   "long-text-wrap-resize-surface-stress",
   "div-container-scroll-overflow-stress",
   "main-menu-dynamic-choice-resize-stress",
-  "notes-window-resize-stress",
   "actions-command-discoverability-noop-stress",
 ]);
 

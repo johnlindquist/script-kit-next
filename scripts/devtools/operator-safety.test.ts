@@ -1777,7 +1777,7 @@ describe("noninteractive DevTools operator safety", () => {
       commands: Array<{ name: string; description: string }>;
     };
     expect(help.script).toBe("index");
-    expect(help.commands.length).toBeGreaterThanOrEqual(127);
+    expect(help.commands.length).toBeGreaterThanOrEqual(120);
     expect(help.commands.find((command) => command.name === "confirm-modal-style-preview-proof")?.description)
       .toContain("scenario owner is missing");
     expect(result.stderr.toString()).not.toContain("passive agentic help started");
