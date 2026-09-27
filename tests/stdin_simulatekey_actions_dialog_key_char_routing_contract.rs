@@ -2,21 +2,11 @@
 //! routing alphanumeric keystrokes into an open ActionsDialog's filter.
 //!
 //! Collapsed in Run 13 into a single unified helper at `src/app_impl/simulate_key_dispatch.rs`.
-//! This test verifies that the live dispatcher sites delegate to the helper,
+//! This test verifies that the live dispatcher site delegates to the helper,
 //! and that the helper retains the canonical key_char derivation block.
 
 const SIMULATE_KEY_HELPER_SRC: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 const APP_RUN_SETUP_SRC: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const SIMULATE_KEY_DISPATCHER_SRC: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
-
-#[test]
-fn runtime_stdin_match_simulate_key_derives_key_char_from_single_char() {
-    assert!(
-        SIMULATE_KEY_DISPATCHER_SRC.contains("view.dispatch_simulate_key("),
-        "src/main_entry/runtime_stdin_match_simulate_key.rs MUST delegate to view.dispatch_simulate_key"
-    );
-}
 
 #[test]
 fn app_run_setup_derives_key_char_from_single_char() {

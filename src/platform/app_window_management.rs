@@ -127,7 +127,9 @@ pub fn configure_as_accessory_app() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn set_regular_app_mode() {
-    if !native_effect_allowed(crate::runtime_policy::ExternalEffect::NativeVisibility) { return; }
+    if !native_effect_allowed(crate::runtime_policy::ExternalEffect::NativeVisibility) {
+        return;
+    }
     if require_main_thread("set_regular_app_mode") {
         return;
     }
@@ -163,7 +165,9 @@ pub fn set_regular_app_mode() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn set_accessory_app_mode() {
-    if !native_effect_allowed(crate::runtime_policy::ExternalEffect::NativeVisibility) { return; }
+    if !native_effect_allowed(crate::runtime_policy::ExternalEffect::NativeVisibility) {
+        return;
+    }
     if require_main_thread("set_accessory_app_mode") {
         return;
     }
@@ -203,7 +207,9 @@ pub fn set_accessory_app_mode() {
 /// No-op on non-macOS platforms.
 #[cfg(target_os = "macos")]
 pub fn send_ai_window_to_back() {
-    if !native_effect_allowed(crate::runtime_policy::ExternalEffect::NativeVisibility) { return; }
+    if !native_effect_allowed(crate::runtime_policy::ExternalEffect::NativeVisibility) {
+        return;
+    }
     if require_main_thread("send_ai_window_to_back") {
         return;
     }
@@ -428,11 +434,10 @@ pub fn configure_as_floating_panel() {
 /// window is not registered yet. The atomic could flip to `true` without any
 /// configuration actually happening, defeating the one-shot guard.
 ///
-/// This helper replaces the six duplicated
-/// `PANEL_CONFIGURED.load`/`configure_*`/`PANEL_CONFIGURED.store` blocks across
-/// `src/main_sections/window_visibility.rs`, `src/main_entry/app_run_setup.rs`,
-/// `src/main_entry/runtime_stdin_match_core.rs`, and
-/// `src/main_entry/runtime_stdin.rs`. The atomic is stored only when the
+/// This helper replaces the duplicated
+/// `PANEL_CONFIGURED.load`/`configure_*`/`PANEL_CONFIGURED.store` blocks in
+/// `src/main_sections/window_visibility.rs` and
+/// `src/main_entry/app_run_setup.rs`. The atomic is stored only when the
 /// post-configure invariant report is clean.
 ///
 /// Returns `true` when the panel is (now or already was) configured and
@@ -485,10 +490,7 @@ pub fn ensure_main_panel_configured(context: &'static str) -> bool {
 
     #[cfg(target_os = "macos")]
     {
-        let report = assert_main_panel_invariants(
-            context,
-            PanelInvariantPhase::AfterConfigure,
-        );
+        let report = assert_main_panel_invariants(context, PanelInvariantPhase::AfterConfigure);
         if report.ok() {
             crate::PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
             true

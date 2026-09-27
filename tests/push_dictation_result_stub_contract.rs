@@ -8,9 +8,6 @@ const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
 const BUILTIN_EXECUTION: &str = include_str!("../src/app_execute/builtin_execution.rs");
 const DICTATION_RUNTIME: &str = include_str!("../src/dictation/runtime.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
-const RUNTIME_STDIN_MATCH_TAIL: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_tail.rs");
 
 fn push_arm<'a>(source: &'a str, name: &str) -> &'a str {
     let arm_start = source
@@ -48,14 +45,7 @@ fn push_dictation_result_is_wired_into_request_id_and_command_type() {
 
 #[test]
 fn push_dictation_result_routes_through_real_delivery_helper() {
-    for (name, source) in [
-        ("src/main_entry/app_run_setup.rs", APP_RUN_SETUP),
-        ("src/main_entry/runtime_stdin.rs", RUNTIME_STDIN),
-        (
-            "src/main_entry/runtime_stdin_match_tail.rs",
-            RUNTIME_STDIN_MATCH_TAIL,
-        ),
-    ] {
+    for (name, source) in [("src/main_entry/app_run_setup.rs", APP_RUN_SETUP)] {
         let arm = push_arm(source, name);
         assert!(
             arm.contains("view.deliver_stdin_dictation_result(")
@@ -147,14 +137,7 @@ fn wrong_target_refusal_receipt_is_redacted_for_devtools() {
 
 #[test]
 fn push_dictation_result_does_not_log_transcript_contents() {
-    for (name, source) in [
-        ("src/main_entry/app_run_setup.rs", APP_RUN_SETUP),
-        ("src/main_entry/runtime_stdin.rs", RUNTIME_STDIN),
-        (
-            "src/main_entry/runtime_stdin_match_tail.rs",
-            RUNTIME_STDIN_MATCH_TAIL,
-        ),
-    ] {
+    for (name, source) in [("src/main_entry/app_run_setup.rs", APP_RUN_SETUP)] {
         let arm = push_arm(source, name);
         assert!(
             arm.contains("transcript_len = resolution.transcript.as_ref().map_or(0, String::len)")

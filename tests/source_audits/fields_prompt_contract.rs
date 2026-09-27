@@ -10,7 +10,7 @@ const FORM_PROMPT_PATH: &str = "src/form_prompt.rs";
 const PROMPT_HANDLER_PATH: &str = "src/prompt_handler/mod.rs";
 const PROMPT_MESSAGE_ROUTE_PATH: &str = "src/prompt_handler/message_route.rs";
 const COLLECT_ELEMENTS_PATH: &str = "src/app_layout/collect_elements.rs";
-const STDIN_SIMULATE_KEY_PATH: &str = "src/main_entry/runtime_stdin_match_simulate_key.rs";
+const STDIN_SIMULATE_KEY_PATH: &str = "src/main_entry/app_run_setup.rs";
 const SIMULATE_KEY_DISPATCH_PATH: &str = "src/app_impl/simulate_key_dispatch.rs";
 
 #[test]

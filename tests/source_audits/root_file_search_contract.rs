@@ -1020,9 +1020,8 @@ mod tests {
 
         let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
             .expect("read src/app_impl/simulate_key_dispatch.rs");
-        let runtime_stdin =
-            fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
-                .expect("read src/main_entry/runtime_stdin_match_simulate_key.rs");
+        let runtime_stdin = fs::read_to_string("src/main_entry/app_run_setup.rs")
+            .expect("read src/main_entry/app_run_setup.rs");
         assert!(
             simulate_key_source.contains("try_execute_root_file_action_shortcut"),
             "central simulateKey dispatcher should offer direct root-file shortcuts"
@@ -1109,9 +1108,8 @@ mod tests {
     fn root_directory_tab_navigation_has_no_plain_tab_agent_chat_routing() {
         let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
             .expect("read src/app_impl/simulate_key_dispatch.rs");
-        let runtime_stdin =
-            fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
-                .expect("read src/main_entry/runtime_stdin_match_simulate_key.rs");
+        let runtime_stdin = fs::read_to_string("src/main_entry/app_run_setup.rs")
+            .expect("read src/main_entry/app_run_setup.rs");
         assert!(
             simulate_key_source.contains("try_navigate_root_file_directory_with_tab"),
             "central simulateKey dispatcher should route root file directory Tab"

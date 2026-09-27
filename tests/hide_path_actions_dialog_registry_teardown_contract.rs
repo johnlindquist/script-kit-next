@@ -76,14 +76,6 @@ const HIDE_SITES: &[(&str, &str)] = &[
         include_str!("../src/main_sections/window_visibility.rs"),
     ),
     (
-        "runtime_stdin",
-        include_str!("../src/main_entry/runtime_stdin.rs"),
-    ),
-    (
-        "runtime_stdin_match_core",
-        include_str!("../src/main_entry/runtime_stdin_match_core.rs"),
-    ),
-    (
         "app_run_setup",
         include_str!("../src/main_entry/app_run_setup.rs"),
     ),

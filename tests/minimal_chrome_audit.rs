@@ -1081,7 +1081,6 @@ fn kit_store_footer_uses_single_native_slot_owner() {
     let ui_window = include_str!("../src/app_impl/ui_window.rs");
     let app_view_state = include_str!("../src/main_sections/app_view_state.rs");
     let app_run_setup = include_str!("../src/main_entry/app_run_setup.rs");
-    let runtime_stdin = include_str!("../src/main_entry/runtime_stdin.rs");
 
     assert!(
         !source.contains("PromptFooter::new("),
@@ -1121,9 +1120,7 @@ fn kit_store_footer_uses_single_native_slot_owner() {
         "Kit Store native footer dispatch should call the same selected-row operations as keyboard activation"
     );
     assert!(
-        app_run_setup.contains("view.sync_main_footer_popup(window, ctx);\n                    ctx.notify();")
-            && runtime_stdin
-                .contains("view.sync_main_footer_popup(window, ctx);\n                    ctx.notify();"),
+        app_run_setup.contains("view.sync_main_footer_popup(window, ctx);\n                    ctx.notify();"),
         "stdin-driven view transitions should immediately refresh the native footer before notifying"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"kit_store\",\"single_footer_owner\":true,\"status\":\"pass\"}}");

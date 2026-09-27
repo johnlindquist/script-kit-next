@@ -7,20 +7,12 @@
 //! This test verifies that the live dispatcher sites delegate to the helper,
 //! and that the helper retains the generic Cmd+K fallback.
 
-const CANONICAL_SIMULATEKEY: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const ACTIONS_DIALOG: &str = include_str!("../src/app_impl/actions_dialog.rs");
 const ACTIONS_TOGGLE: &str = include_str!("../src/app_impl/actions_toggle.rs");
 const SIMULATE_KEY_HELPER: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 
-const DISPATCHERS: &[(&str, &str)] = &[
-    (
-        "src/main_entry/runtime_stdin_match_simulate_key.rs",
-        CANONICAL_SIMULATEKEY,
-    ),
-    ("src/main_entry/app_run_setup.rs", APP_RUN_SETUP),
-];
+const DISPATCHERS: &[(&str, &str)] = &[("src/main_entry/app_run_setup.rs", APP_RUN_SETUP)];
 
 const FALLBACK_LOG_LINE: &str = "SimulateKey: Cmd+K - generic actions toggle (fallback for view=";
 const UNHANDLED_VIEW_EVENT: &str = "event = \"simulateKey_unhandled_view\"";

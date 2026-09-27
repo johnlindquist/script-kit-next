@@ -21,7 +21,6 @@ fn clipboard_sediment_has_no_post_copy_ui_path() {
     let clipboard_mod = read_source("src/clipboard_history/mod.rs");
     let config_types = read_source("src/config/types.rs");
     let config_loader = read_source("src/config/loader.rs");
-    let preflight = read_source("src/main_entry/preflight.rs");
     let app_run_setup = read_source("src/main_entry/app_run_setup.rs");
     let config_cli = read_source("scripts/config-cli.ts");
     let config_schema = read_source("scripts/config-schema.ts");
@@ -30,7 +29,6 @@ fn clipboard_sediment_has_no_post_copy_ui_path() {
         ("clipboard module", clipboard_mod.as_str()),
         ("config types", config_types.as_str()),
         ("config loader", config_loader.as_str()),
-        ("preflight", preflight.as_str()),
         ("app run setup", app_run_setup.as_str()),
         ("config CLI", config_cli.as_str()),
         ("config schema", config_schema.as_str()),

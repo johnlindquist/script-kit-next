@@ -12,7 +12,7 @@
 //! The contract pins four surfaces because any one of them drifting
 //! would silently break automation: (a) the variant's serde shape,
 //! (b) `request_id()` / `command_type()` wiring to the exact string
-//! `"getConfigFingerprint"`, (c) all three dispatcher files include
+//! `"getConfigFingerprint"`, (c) the stdin dispatcher includes
 //! the arm and emit `config_fingerprint_result` with the right fields,
 //! (d) the `ConfigFingerprintReceipt` struct preserves the
 //! serialization shape automation keys on (`path`, `len`, `modifiedMs`
@@ -21,9 +21,6 @@
 
 const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
-const RUNTIME_STDIN_MATCH_TAIL: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_tail.rs");
 const CONFIG_LOADER: &str = include_str!("../src/config/loader.rs");
 const CONFIG_MOD: &str = include_str!("../src/config/mod.rs");
 
@@ -66,26 +63,14 @@ fn get_config_fingerprint_is_wired_into_request_id_and_command_type() {
 }
 
 #[test]
-fn all_three_dispatchers_handle_get_config_fingerprint() {
-    // Triple-embedded stdin dispatcher pattern: runtime_stdin.rs,
-    // app_run_setup.rs, and the snippet mirror runtime_stdin_match_tail.rs
-    // must all include the handler arm. A missing arm silently drops
-    // the command from whichever code path the missing file owns.
-    for (name, source) in [
-        ("src/main_entry/app_run_setup.rs", APP_RUN_SETUP),
-        ("src/main_entry/runtime_stdin.rs", RUNTIME_STDIN),
-        (
-            "src/main_entry/runtime_stdin_match_tail.rs",
-            RUNTIME_STDIN_MATCH_TAIL,
-        ),
-    ] {
+fn stdin_dispatcher_handles_get_config_fingerprint() {
+    // A missing arm silently drops the command from the stdin path.
+    for (name, source) in [("src/main_entry/app_run_setup.rs", APP_RUN_SETUP)] {
         assert!(
             source.contains("ExternalCommand::GetConfigFingerprint { ref request_id }"),
             "{} must contain an `ExternalCommand::GetConfigFingerprint \
-             {{ ref request_id }}` arm. The triple-embedded stdin \
-             dispatcher pattern means ALL three files must match — \
-             otherwise the command is silently dropped from whichever \
-             code path the missing file owns.",
+             {{ ref request_id }}` arm, otherwise the command is silently \
+             dropped from the stdin path.",
             name
         );
         assert!(

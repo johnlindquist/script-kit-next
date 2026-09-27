@@ -6,19 +6,9 @@
 //! preserves the existing automation `semanticSurface`.
 
 const DISPATCH: &str = include_str!("../src/app_impl/trigger_builtin_dispatch.rs");
-const RUNTIME_STDIN_MATCH_CORE: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_core.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 
-const DISPATCHERS: &[(&str, &str)] = &[
-    (
-        RUNTIME_STDIN_MATCH_CORE,
-        "src/main_entry/runtime_stdin_match_core.rs",
-    ),
-    (RUNTIME_STDIN, "src/main_entry/runtime_stdin.rs"),
-    (APP_RUN_SETUP, "src/main_entry/app_run_setup.rs"),
-];
+const DISPATCHERS: &[(&str, &str)] = &[(APP_RUN_SETUP, "src/main_entry/app_run_setup.rs")];
 
 fn body_of<'a>(source: &'a str, fn_name: &str) -> &'a str {
     let start = source

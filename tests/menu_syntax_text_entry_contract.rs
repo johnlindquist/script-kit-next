@@ -466,12 +466,8 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
         .expect("Failed to read src/app_impl/startup.rs");
     let startup_new_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
-    let simulate_key = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
-        .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
-    let app_run_setup = fs::read_to_string("src/main_entry/app_run_setup.rs")
-        .expect("Failed to read src/main_entry/app_run_setup.rs");
-    let runtime_stdin = fs::read_to_string("src/main_entry/runtime_stdin.rs")
-        .expect("Failed to read src/main_entry/runtime_stdin.rs");
+    let simulate_key = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
+        .expect("Failed to read src/app_impl/simulate_key_dispatch.rs");
 
     assert!(
         trigger_picker.contains("fn should_show_has_field_completion(")
@@ -503,18 +499,16 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
             && startup_new_tab.contains("menu_syntax_trigger_picker_owns_main_keyboard()"),
         "physical Enter startup paths must route to menu-syntax trigger Accept before ordinary launcher Enter"
     );
-    for source in [&simulate_key, &app_run_setup, &runtime_stdin] {
-        let accept = source
-            .find("SimulateKey: Enter - accept menu-syntax picker")
-            .expect("simulateKey Enter must log picker acceptance");
-        let execute = source
-            .find("SimulateKey: Enter - execute selected")
-            .expect("simulateKey Enter must retain ordinary execution fallback");
-        assert!(
-            accept < execute,
-            "protocol simulateKey Enter must accept menu-syntax picker before ordinary launcher execution"
-        );
-    }
+    let accept = simulate_key
+        .find("\"SimulateKey: Enter - accept menu-syntax picker\"")
+        .expect("simulateKey Enter must log picker acceptance");
+    let execute = simulate_key
+        .find("\"SimulateKey: Enter - execute selected\"")
+        .expect("simulateKey Enter must retain ordinary execution fallback");
+    assert!(
+        accept < execute,
+        "protocol simulateKey Enter must accept menu-syntax picker before ordinary launcher execution"
+    );
 }
 
 #[test]

@@ -383,11 +383,8 @@ fn stdin_can_edit_menu_syntax_form_fields_for_runtime_proof() {
         "stdin automation needs a direct form-field edit command for state-first runtime proof"
     );
 
-    for path in [
-        "src/main_entry/runtime_stdin.rs",
-        "src/main_entry/runtime_stdin_match_core.rs",
-        "src/main_entry/app_run_setup.rs",
-    ] {
+    {
+        let path = "src/main_entry/app_run_setup.rs";
         let source = read(path);
         assert!(
             source.contains("ExternalCommand::SetMenuSyntaxFormField")
@@ -448,8 +445,7 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
     }
 
     for path in [
-        "src/main_entry/runtime_stdin.rs",
-        "src/main_entry/runtime_stdin_match_simulate_key.rs",
+        "src/app_impl/simulate_key_dispatch.rs",
         "src/main_entry/app_run_setup.rs",
     ] {
         let source = read(path);

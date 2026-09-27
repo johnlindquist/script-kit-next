@@ -9,18 +9,10 @@
 //! and that the helper retains the no-op shape for printable chars on
 //! non-actions views.
 
-const CANONICAL_SIMULATEKEY: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const SIMULATE_KEY_HELPER: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 
-const DISPATCHERS: &[(&str, &str)] = &[
-    (
-        "src/main_entry/runtime_stdin_match_simulate_key.rs",
-        CANONICAL_SIMULATEKEY,
-    ),
-    ("src/main_entry/app_run_setup.rs", APP_RUN_SETUP),
-];
+const DISPATCHERS: &[(&str, &str)] = &[("src/main_entry/app_run_setup.rs", APP_RUN_SETUP)];
 
 const EMOJI_UNHANDLED: &str = "SimulateKey: Unhandled key '{}' in EmojiPicker";
 const CLIPBOARD_UNHANDLED: &str = "SimulateKey: Unhandled key '{}' in ClipboardHistoryView";
@@ -54,13 +46,7 @@ fn both_dispatchers_keep_clipboard_history_unhandled_log_shape() {
 #[test]
 fn dispatchers_do_not_route_simulatekey_chars_into_view_filter() {
     // Neither the helper nor the dispatchers should call filter-mutation APIs within simulateKey
-    for (name, source) in &[
-        ("src/app_impl/simulate_key_dispatch.rs", SIMULATE_KEY_HELPER),
-        (
-            "src/main_entry/runtime_stdin_match_simulate_key.rs",
-            CANONICAL_SIMULATEKEY,
-        ),
-    ] {
+    for (name, source) in &[("src/app_impl/simulate_key_dispatch.rs", SIMULATE_KEY_HELPER)] {
         for forbidden in [
             "set_filter_text_immediate",
             "write_filter_to_current_subview",

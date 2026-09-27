@@ -1,8 +1,6 @@
 //! Shared stdin `triggerBuiltin` dispatcher.
 //!
-//! Collapses the three previously-duplicated match arms (app_run_setup.rs
-//! and the two orphan `runtime_stdin*.rs` audit targets) into one
-//! compiler-enforced exhaustive dispatch keyed by the canonical
+//! One compiler-enforced exhaustive dispatch keyed by the canonical
 //! [`TriggerBuiltin`] enum.
 //!
 //! All unknown-name bookkeeping lives here — the `PROTOCOL_STATS`
