@@ -220,14 +220,16 @@ fn composition_14_relative_offset_carries_confidence_0_9() {
 #[test]
 fn composition_15_range_inherits_confidence_from_start_resolved_path() {
     // Range output is built FROM the start_resolved struct, so its
-    // confidence reflects how the start half was resolved (chrono_english
-    // path = 0.9). Pin: range confidence == start-half confidence.
+    // confidence reflects how the start half was resolved. Pin: range
+    // confidence == start-half confidence.
     let clock = clock_at("2026-04-23T08:00:00");
     let r = expect_resolved("9-10am", &clock);
+    let start = expect_resolved("9am", &clock);
     assert!(
-        (r.confidence - 0.9).abs() < f32::EPSILON,
-        "range confidence inherits from start-half resolution; got {}",
-        r.confidence
+        (r.confidence - start.confidence).abs() < f32::EPSILON,
+        "range confidence inherits from start-half resolution; got {} for the range and {} for the start",
+        r.confidence,
+        start.confidence
     );
 }
 
