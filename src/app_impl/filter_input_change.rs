@@ -45,9 +45,7 @@ impl ScriptListApp {
                 self.open_quick_terminal(None, cx);
             }
             ScriptListSpecialEntry::ActionsHelp => {
-                if self.has_actions() {
-                    self.toggle_actions(cx, window);
-                }
+                self.one_window_stage(cx);
             }
             ScriptListSpecialEntry::DayPage => {
                 // A bare space is a launch trigger, not content: clear it before

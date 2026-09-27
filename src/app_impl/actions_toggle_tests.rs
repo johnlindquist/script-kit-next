@@ -10,8 +10,6 @@ mod on_close_reentrancy_tests {
     /// this enumeration replaced them (see Source Audit Test Policy).
     const POPUP_WINDOW_TOGGLE_FNS: &[&str] = &[
         "fn toggle_actions(",
-        "fn toggle_root_file_actions(",
-        "fn toggle_root_unified_result_actions(",
         "fn toggle_webcam_actions(",
         "fn toggle_terminal_commands(",
         "fn toggle_chat_actions(",

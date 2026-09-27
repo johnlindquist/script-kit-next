@@ -2,4 +2,6 @@
 //! connect it to `ScriptListApp`.
 
 pub(crate) mod host;
+pub(crate) mod marks;
 pub(crate) mod slot_line;
+pub(crate) mod staging;

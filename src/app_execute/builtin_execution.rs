@@ -2595,6 +2595,10 @@ impl ScriptListApp {
                 self.start_flow_create_session(cx);
                 Self::builtin_success(dctx, "flow_ux::create")
             }
+            builtins::BuiltInFeature::StagedAction(id) => {
+                self.one_window_run_action(id.clone(), cx);
+                Self::builtin_success(dctx, "one_window::staged_action")
+            }
 
             // NOTE: Window Actions removed - now handled by window-management extension
             // SDK tileWindow() still works via protocol messages in execute_script.rs

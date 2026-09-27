@@ -281,6 +281,10 @@ impl MainMenuContentDigest {
                 self.text(preset.id());
             }
             BuiltInFeature::NewFlow => self.text("NewFlow"),
+            BuiltInFeature::StagedAction(id) => {
+                self.text("StagedAction");
+                self.text(id);
+            }
             BuiltInFeature::AiChatVariant(value) => {
                 self.text("AiChatVariant");
                 self.number(*value as u64);
