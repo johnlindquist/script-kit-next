@@ -7,26 +7,46 @@ fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &rest[..end_ix]
 }
 
+fn position(body: &str, needle: &str, what: &str) -> usize {
+    body.find(needle)
+        .unwrap_or_else(|| panic!("{what} missing: `{needle}`"))
+}
+
 #[test]
-fn immediate_script_list_reconciliation_defers_preflight_to_final_state_callers() {
+fn script_list_reconciliation_rebuilds_preflight_and_ghost_from_the_published_state() {
     let reconcile_body = section_between(
         FILTER_INPUT_UPDATES,
         "pub(crate) fn reconcile_script_list_after_filter_change(",
-        "pub(crate) fn queue_filter_compute(",
+        "pub(crate) fn commit_main_menu_results_refresh(",
+    );
+    assert!(
+        reconcile_body.contains("self.finish_main_menu_publication(reason, None, cx);"),
+        "reconciliation must publish through finish_main_menu_publication"
     );
 
-    assert!(
-        reconcile_body.contains("\"filter_immediate\"")
-            && reconcile_body.contains("\"set_filter_text_immediate\""),
-        "reconciliation must defer preflight for both immediate filter paths whose callers rebuild after final state"
+    let publication_body = section_between(
+        FILTER_INPUT_UPDATES,
+        "fn finish_main_menu_publication(",
+        "fn apply_filter_compute_now(",
+    );
+    let invalidate_ix = position(
+        publication_body,
+        "self.invalidate_main_window_preflight();",
+        "preflight invalidation",
+    );
+    let rebuild_ix = position(
+        publication_body,
+        "self.rebuild_main_window_preflight_if_needed();",
+        "preflight rebuild",
+    );
+    let ghost_ix = position(
+        publication_body,
+        "self.refresh_ghost_with_input(cx);",
+        "ghost refresh",
     );
     assert!(
-        !reconcile_body.contains("if reason != \"filter_immediate\""),
-        "reconciliation must not only special-case filter_immediate; set_filter_text_immediate also owns the final preflight rebuild"
-    );
-    assert!(
-        reconcile_body.contains("self.refresh_ghost_with_input(cx);"),
-        "ghost refresh must stay in reconciliation even when preflight is deferred"
+        invalidate_ix < rebuild_ix && rebuild_ix < ghost_ix,
+        "publication must invalidate, then rebuild preflight, then refresh the ghost from the published rows"
     );
 }
 
@@ -34,7 +54,7 @@ fn immediate_script_list_reconciliation_defers_preflight_to_final_state_callers(
 fn set_filter_text_immediate_rebuilds_preflight_once_after_fallback_updates() {
     let body = section_between(
         FILTER_INPUT_UPDATES,
-        "pub(crate) fn set_filter_text_immediate(",
+        "pub(crate) fn set_filter_text_and_cursor_immediate(",
         "pub(crate) fn handle_script_list_printable_simulate_key(",
     );
 
@@ -45,18 +65,24 @@ fn set_filter_text_immediate_rebuilds_preflight_once_after_fallback_updates() {
         "set_filter_text_immediate should own exactly one final preflight rebuild"
     );
 
-    let reconcile_ix = body
-        .find("self.reconcile_script_list_after_filter_change(\"set_filter_text_immediate\", cx);")
-        .expect("set_filter_text_immediate reconciliation call missing");
-    let fallback_ix = body
-        .find("self.main_menu_fallback_state.replace_items(fallbacks);")
-        .expect("fallback replacement block missing");
-    let rebuild_ix = body
-        .find("self.rebuild_main_window_preflight_if_needed();")
-        .expect("final preflight rebuild missing");
+    let fallback_ix = position(
+        body,
+        "self.main_menu_fallback_state.clear();",
+        "fallback update",
+    );
+    let commit_ix = position(
+        body,
+        "self.apply_filter_compute_now(text.clone(), cx);",
+        "query commit",
+    );
+    let rebuild_ix = position(
+        body,
+        "self.rebuild_main_window_preflight_if_needed();",
+        "final preflight rebuild",
+    );
 
     assert!(
-        reconcile_ix < fallback_ix && fallback_ix < rebuild_ix,
-        "final preflight rebuild must stay after reconciliation and fallback updates"
+        fallback_ix < commit_ix && commit_ix < rebuild_ix,
+        "final preflight rebuild must stay after fallback updates and the query commit"
     );
 }
