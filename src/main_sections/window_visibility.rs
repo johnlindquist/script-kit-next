@@ -797,18 +797,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         }
         was_mini
     });
-    // Full teardown for actions-dialog (`id: "actions-dialog"`).
-    // Pass #29 fix (`cmd-k-on-unfocused-clipboard-pops-overlay-not-actions`):
-    // upgraded from bare `remove_automation_window("actions-dialog")` to
-    // full `close_actions_window`. The bare registry op (Pass #23) left
-    // the `ACTIONS_WINDOW` static `Mutex<Option<WindowHandle>>` holding a
-    // stale handle after hide; a later `simulateKey cmd+k` on an unfocused
-    // window read `is_actions_window_open()=true` and took the CLOSE
-    // branch, popping whichever overlay was top (e.g. ClipboardHistoryView)
-    // instead of opening an actions dialog that was never there.
-    // `close_actions_window` clears BOTH the static AND the registry via
-    // its first line (`remove_automation_window("actions-dialog")`), so
-    // it is strictly stronger than the pre-#29 call. Idempotent.
+    // Hiding lets go of anything staged, like Esc would.
     crate::actions::close_actions_window(cx);
 
     // 5. Hide only the main panel. `cx.hide()` app-hides all windows, so any

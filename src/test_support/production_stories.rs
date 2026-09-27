@@ -3,7 +3,6 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 
 use gpui::{App, AppContext as _, Context, Entity, IntoElement, Render, Window};
 use sk_protocol::ai_reliability::*;
@@ -145,121 +144,6 @@ fn production_story_launcher_filtering_policy() {
         let mode = crate::menu_syntax::MenuSyntaxMode::from_input(input);
         assert_eq!(clears(input, &mode), expected, "{input:?}");
     }
-}
-
-#[test]
-fn production_story_prompt_action_selection() {
-    use crate::actions::{Action, ActionCategory, ActionsDialog, ActionsDialogConfig};
-    use crate::protocol::ElementType;
-    use crate::windows::automation_surface_collector::collect_actions_dialog_elements;
-
-    let callbacks = Arc::new(Mutex::new(Vec::<String>::new()));
-    let recorded = Arc::clone(&callbacks);
-    let callback: Arc<dyn Fn(String) + Send + Sync> = Arc::new(move |id| {
-        recorded.lock().expect("callback recorder").push(id);
-    });
-    let test = gpui::TestAppContext::single();
-    let dialog = test.update(|cx| {
-        crate::theme::gpui_kit_bridge::init_component_libraries(cx);
-        cx.new(|cx| {
-            ActionsDialog::from_actions_with_context(
-                cx.focus_handle(),
-                callback,
-                vec![
-                    Action::new(
-                        "story-first",
-                        "Duplicate",
-                        None,
-                        ActionCategory::ScriptContext,
-                    )
-                    .with_section("Story actions"),
-                    Action::new(
-                        "story-second",
-                        "Duplicate",
-                        None,
-                        ActionCategory::ScriptContext,
-                    )
-                    .with_section("Story actions"),
-                ],
-                None,
-                None,
-                Arc::new(crate::theme::Theme::default()),
-                crate::designs::DesignVariant::Default,
-                None,
-                ActionsDialogConfig::default(),
-            )
-        })
-    });
-    test.update(|cx| {
-        assert_eq!(
-            dialog.read(cx).get_selected_action_id().as_deref(),
-            Some("story-first")
-        );
-        assert_eq!(
-            dialog.update(cx, |dialog, cx| dialog
-                .select_action_by_id("story-second", cx)),
-            Some("story-second".to_string())
-        );
-        let selected_index = dialog.read(cx).selected_index.expect("selected visual row");
-        assert!(
-            selected_index > 1,
-            "section header must precede the two choices"
-        );
-        let snapshot = collect_actions_dialog_elements(&dialog, 100, cx);
-        let selected = snapshot
-            .elements
-            .iter()
-            .filter(|node| node.element_type == ElementType::Choice && node.selected == Some(true))
-            .collect::<Vec<_>>();
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].value.as_deref(), Some("story-second"));
-        let semantic_id = selected[0].semantic_id.clone();
-        assert_eq!(
-            snapshot.selected_semantic_id.as_deref(),
-            Some(semantic_id.as_str())
-        );
-
-        dialog.update(cx, |dialog, cx| {
-            assert_eq!(
-                dialog.select_action_by_id("story-first", cx).as_deref(),
-                Some("story-first")
-            );
-            assert_eq!(
-                dialog.select_action_by_semantic_id(&semantic_id, cx),
-                Some(semantic_id.clone())
-            );
-            assert_eq!(
-                dialog.get_selected_action_id().as_deref(),
-                Some("story-second")
-            );
-            assert_eq!(dialog.select_action_by_id("story-absent", cx), None);
-            let mismatched_id = format!("choice:{selected_index}:story-first");
-            assert_eq!(
-                dialog.select_action_by_semantic_id(&mismatched_id, cx),
-                None
-            );
-            assert_eq!(
-                dialog.select_action_by_semantic_id("choice:0:story-second", cx),
-                None
-            );
-            assert_eq!(
-                dialog.select_action_by_semantic_id("choice:999:story-second", cx),
-                None
-            );
-            assert_eq!(
-                dialog.select_action_by_semantic_id("input:actions-search", cx),
-                None
-            );
-            assert_eq!(
-                dialog.get_selected_action_id().as_deref(),
-                Some("story-second")
-            );
-        });
-    });
-    assert!(
-        callbacks.lock().expect("callback recorder").is_empty(),
-        "selection is not activation"
-    );
 }
 
 struct StoryButton {

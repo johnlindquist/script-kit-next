@@ -15,6 +15,7 @@ pub(crate) mod shortcut_view;
 pub(crate) mod slot_line;
 pub(crate) mod staging;
 pub(crate) mod talk_host;
+pub(crate) mod view_staging;
 pub(crate) mod views;
 pub(crate) mod voice_lists;
 pub(crate) mod work;

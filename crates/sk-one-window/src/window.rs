@@ -16,6 +16,7 @@ mod talking;
 mod tests;
 mod text;
 mod time;
+mod view_stage;
 mod views;
 mod work;
 
@@ -197,6 +198,13 @@ pub enum Event {
     Stage(Subject),
     /// ⌘V with this text on the clipboard.
     Paste(String),
+    /// ⌘K in a view: what it has focused, and the actions it lists for it.
+    StageView {
+        subject: Subject,
+        rows: Vec<Row>,
+    },
+    /// The view stopped acting on what it staged.
+    LetGo,
 }
 
 impl Event {
@@ -725,6 +733,11 @@ impl OneWindow {
                 true
             }
             Event::Paste(text) => self.on_paste(now, text, fx),
+            Event::StageView { subject, rows } => {
+                self.stage_from_view(subject, rows);
+                true
+            }
+            Event::LetGo => self.let_go(),
         }
     }
 }

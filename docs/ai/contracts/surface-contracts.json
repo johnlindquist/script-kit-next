@@ -1711,9 +1711,9 @@
       "id": "notes.actions",
       "family": "notesAuxiliary",
       "root": "secondary",
-      "owner": "src/actions/window.rs",
+      "owner": "src/components/staged_actions.rs",
       "factoryOwners": [
-        "src/actions/window.rs"
+        "src/components/staged_actions.rs"
       ],
       "parentFixtureId": "notes.editor",
       "proofBoundary": "owned-production-runtime",
@@ -1735,9 +1735,9 @@
       "id": "notes.recent-switcher",
       "family": "notesAuxiliary",
       "root": "secondary",
-      "owner": "src/actions/window.rs",
+      "owner": "src/components/staged_actions.rs",
       "factoryOwners": [
-        "src/actions/window.rs"
+        "src/components/staged_actions.rs"
       ],
       "parentFixtureId": "notes.editor",
       "proofBoundary": "owned-production-runtime",
@@ -1874,9 +1874,9 @@
       "id": "day-page.switcher",
       "family": "dayPageAuxiliary",
       "root": "secondary",
-      "owner": "src/actions/window.rs",
+      "owner": "src/components/staged_actions.rs",
       "factoryOwners": [
-        "src/actions/window.rs"
+        "src/components/staged_actions.rs"
       ],
       "parentFixtureId": "day-page.today",
       "proofBoundary": "owned-production-runtime",
@@ -2618,30 +2618,6 @@
       ]
     },
     {
-      "id": "secondary.actions",
-      "family": "actions",
-      "root": "secondary",
-      "owner": "src/actions/window.rs",
-      "factoryOwners": [
-        "src/actions/window.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/actions/dialog.rs",
-      "expectedSemanticSurface": "actionsDialog",
-      "requiredSemanticIds": [
-        "input:actions-search",
-        "list:actions"
-      ]
-    },
-    {
       "id": "secondary.snap",
       "family": "snap",
       "root": "secondary",
@@ -2662,29 +2638,6 @@
       "requiredSemanticIds": [
         "panel:snap-overlay",
         "snap:target:*"
-      ]
-    },
-    {
-      "id": "secondary.footer",
-      "family": "footer",
-      "root": "secondary",
-      "owner": "src/footer_popup.rs",
-      "factoryOwners": [
-        "src/footer_popup.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/footer_popup.rs::GpuiFooterOverlay",
-      "expectedSemanticSurface": "footerOverlay",
-      "requiredSemanticIds": [
-        "footer-action:*"
       ]
     },
     {
@@ -3348,25 +3301,6 @@
   ],
   "secondaryFactories": [
     {
-      "rootOwner": "ActionsWindow",
-      "factorySources": [
-        "src/actions/window.rs"
-      ],
-      "fixtureIds": [
-        "day-page.switcher",
-        "notes.actions",
-        "notes.recent-switcher",
-        "secondary.actions"
-      ],
-      "presentationOwners": [
-        "src/actions/dialog.rs",
-        "src/main_sections/day_page_switcher.rs::open_day_switcher",
-        "src/notes/window/panels.rs::open_actions_panel",
-        "src/notes/window/panels.rs::open_browse_panel"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
       "rootOwner": "NotesApp",
       "factorySources": [
         "src/notes/window/window_ops.rs"
@@ -3437,19 +3371,6 @@
       ],
       "presentationOwners": [
         "src/dictation/microphone_popup_window.rs::DictationMicrophonePopupWindow"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "rootOwner": "GpuiFooterOverlay",
-      "factorySources": [
-        "src/footer_popup.rs"
-      ],
-      "fixtureIds": [
-        "secondary.footer"
-      ],
-      "presentationOwners": [
-        "src/footer_popup.rs::GpuiFooterOverlay"
       ],
       "proofBoundary": "owned-production-runtime"
     },

@@ -265,9 +265,7 @@ use list_item::{
 };
 // strip_html_tags removed - DivPrompt now renders HTML properly
 
-use actions::{
-    close_actions_window, is_actions_window_open, open_actions_window, ActionsDialog, ScriptInfo,
-};
+use actions::{close_actions_window, ActionsDialog, ScriptInfo};
 use panel::{CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, CURSOR_WIDTH, HEADER_PADDING_X, HEADER_PADDING_Y};
 use parking_lot::Mutex as ParkingMutex;
 use protocol::{Choice, Message, ProtocolAction};

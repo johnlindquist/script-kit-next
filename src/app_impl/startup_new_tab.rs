@@ -16,14 +16,12 @@
                 // their own Tab/Cmd+Enter handling.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_detached_agent_chat || is_actions {
+                if is_notes || is_detached_agent_chat {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
                         is_notes,
                         is_detached_agent_chat,
-                        is_actions,
                     );
                     return;
                 }
@@ -267,9 +265,7 @@
                                     // Preserve the prior swallow when another popup
                                     // already owns keyboard input — don't open the
                                     // picker underneath the Actions dialog.
-                                    if this.show_actions_popup
-                                        || crate::actions::is_actions_window_open()
-                                    {
+                                    if this.show_actions_popup {
                                         return;
                                     }
                                     tracing::info!(

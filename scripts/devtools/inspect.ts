@@ -452,7 +452,7 @@ function likelyOwners(surface: string | undefined, targetKind: string, missing: 
   }
   if (normalizedSurface.includes("actions") || targetKind === "actionsdialog") {
     owners.add("src/actions/dialog.rs");
-    owners.add("src/actions/window.rs");
+    owners.add("src/one_window/view_staging.rs");
     owners.add("scripts/devtools/actions.ts");
   }
   if (normalizedSurface.includes("dictation")) {

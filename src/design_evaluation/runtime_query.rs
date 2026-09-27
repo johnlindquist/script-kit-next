@@ -154,51 +154,22 @@ impl Evaluator {
                     .unwrap_or(200)
                     .min(500) as usize;
                 let cx = self.cx.app.borrow();
-                if matches!(mounted.owner, RootOwner::Footer) {
-                    let mut elements = crate::footer_popup::footer_fixture_elements(
-                        &mounted.info.id,
-                        mounted
-                            .info
-                            .generation
-                            .context("footer_generation_missing")?,
+                let snapshot =
+                    crate::windows::automation_surface_collector::collect_surface_snapshot(
+                        &mounted.info,
+                        limit,
                         &cx,
-                    )?;
-                    let total = elements.len();
-                    elements.truncate(limit);
-                    json!({"type":"elementsResult","requestId":request_id,"elements":elements,"totalCount":total,
-                        "window":mounted.info,"semanticQuality":"full","projectionQuality":"complete"})
-                } else {
-                    let snapshot =
-                        crate::windows::automation_surface_collector::collect_surface_snapshot(
-                            &mounted.info,
-                            limit,
-                            &cx,
-                        )
-                        .context("surface_owner_missing")?;
-                    ensure!(
-                        snapshot.quality
-                            == crate::windows::automation_surface_collector::SnapshotQuality::Full,
-                        "surface_projection_incomplete"
-                    );
-                    json!({"type":"elementsResult","requestId":request_id,"elements":snapshot.elements,
-                        "totalCount":snapshot.total_count,"focusedSemanticId":snapshot.focused_semantic_id,
-                        "selectedSemanticId":snapshot.selected_semantic_id,"warnings":snapshot.warnings,
-                        "window":mounted.info,"semanticQuality":"full","projectionQuality":snapshot.quality.projection_quality()})
-                }
-            }
-            "getLayoutInfo" if matches!(mounted.owner, RootOwner::Footer) => {
-                let info = crate::footer_popup::footer_fixture_layout(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("footer_generation_missing")?,
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                serde_json::to_value(crate::protocol::Message::layout_info_result(
-                    request_id.into(),
-                    info,
-                ))?
+                    )
+                    .context("surface_owner_missing")?;
+                ensure!(
+                    snapshot.quality
+                        == crate::windows::automation_surface_collector::SnapshotQuality::Full,
+                    "surface_projection_incomplete"
+                );
+                json!({"type":"elementsResult","requestId":request_id,"elements":snapshot.elements,
+                    "totalCount":snapshot.total_count,"focusedSemanticId":snapshot.focused_semantic_id,
+                    "selectedSemanticId":snapshot.selected_semantic_id,"warnings":snapshot.warnings,
+                    "window":mounted.info,"semanticQuality":"full","projectionQuality":snapshot.quality.projection_quality()})
             }
             "getLayoutInfo" if !matches!(mounted.owner, RootOwner::Main(_)) => {
                 let info = match mode {
@@ -945,21 +916,6 @@ impl Evaluator {
                 )
             }
             RootOwner::Secondary(fixture) => fixture.controls.observation(&cx),
-            RootOwner::Footer => {
-                let state = crate::footer_popup::footer_runtime_state(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("footer_generation_missing")?,
-                )
-                .context("footer_owner_missing")?;
-                Ok(
-                    json!({"family":"footer","owner":state.binding.window_id,"completedActionCount":state.completed_action_count,
-                    "semanticRevision":state.semantic_revision,"presentationRevision":state.presentation_revision,
-                    "appliedThemeRevision":state.applied_theme_revision,"heldAction":format!("{:?}",state.held_action)}),
-                )
-            }
             _ => Ok(Value::Null),
         }
     }

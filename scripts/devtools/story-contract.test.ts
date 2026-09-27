@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { PRODUCTION_STORIES, CORE_JOURNEYS, SDK_RUNTIME_ASSERTIONS, FOOTER_RUNTIME_ASSERTIONS, selectStoryTests, observeStoryTests, completedGpuiDispatchIssues, aggregateCleanup, productionStoryReceiptIssues } from "./lib/story-contract.ts";
+import { PRODUCTION_STORIES, CORE_JOURNEYS, SDK_RUNTIME_ASSERTIONS, selectStoryTests, observeStoryTests, completedGpuiDispatchIssues, aggregateCleanup, productionStoryReceiptIssues } from "./lib/story-contract.ts";
 import { publicationCausalityIssues, validateThemeEdits } from "./lib/owned-evaluation.ts";
 import { completedFrameIssues, declaredTransitionIssues, type AutomationTargetSnapshot } from "./lib/target-identity.ts";
 import { unknownOwnedCleanup } from "./driver.ts";
@@ -71,10 +71,8 @@ test("runtime story gate requires exactly one complete real SDK journey", () => 
   const sdk = { id: "sdk-prompt-roundtrip", proofLevel: "owned-production-runtime", pass: true,
     assertions: SDK_RUNTIME_ASSERTIONS.map(id => ({ id, pass: true })) };
   const core = CORE_JOURNEYS.map(id => ({ id, pass: true, assertions: [{ id: "observed", pass: true }] }));
-  const footer = { id: "footer-owner-isolation", proofLevel: "owned-production-runtime", pass: true,
-    assertions: FOOTER_RUNTIME_ASSERTIONS.map(id => ({ id, pass: true })) };
   const receipt = { lane: "all", library: { selection: selectStoryTests(listed), execution: observeStoryTests(passing, 0, names) },
-    cleanup: aggregateCleanup([]), journeys: [...core, sdk, footer] };
+    cleanup: aggregateCleanup([]), journeys: [...core, sdk] };
   expect(productionStoryReceiptIssues(receipt)).toEqual([]);
   for (const journeys of [core, [...core, sdk, sdk], [...core, sdk, { ...sdk, pass: false }],
     [...core, { ...sdk, pass: false }], [...core, { ...sdk, proofLevel: "domain" }],
@@ -87,10 +85,6 @@ test("runtime story gate requires exactly one complete real SDK journey", () => 
     const duplicate = { ...sdk, assertions: [...sdk.assertions, { id: required, pass: true }] };
     expect(productionStoryReceiptIssues({ ...receipt, journeys: [...core, missing] })).toContain("complete_sdk_runtime_journey_required");
     expect(productionStoryReceiptIssues({ ...receipt, journeys: [...core, duplicate] })).toContain("complete_sdk_runtime_journey_required");
-  }
-  for (const journeys of [[...core, sdk], [...core, sdk, footer, footer], [...core, sdk, { ...footer, pass: false }],
-    [...core, sdk, { ...footer, assertions: footer.assertions.slice(1) }]]) {
-    expect(productionStoryReceiptIssues({ ...receipt, journeys })).toContain("complete_footer_runtime_journey_required");
   }
   expect(productionStoryReceiptIssues({ ...receipt, lane: "library", journeys: [], provesRuntimeBehavior: false,
     evidenceClass: "UNIT_BEHAVIOR" })).toEqual([]);

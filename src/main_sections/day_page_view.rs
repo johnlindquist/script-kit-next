@@ -1868,7 +1868,7 @@ fn day_page_footer_buttons_for_preview(
     availability: Option<DayPageKitPreviewActionAvailability>,
     return_label: &'static str,
 ) -> Vec<FooterButtonConfig> {
-    let actions_open = app.show_actions_popup || crate::actions::is_actions_window_open();
+    let actions_open = app.show_actions_popup;
 
     // While a kit:// resource preview replaces the editor, the footer owns the
     // preview's actions — same anatomy as other main-window surfaces: primary

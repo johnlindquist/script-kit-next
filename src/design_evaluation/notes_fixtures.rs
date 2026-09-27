@@ -139,24 +139,6 @@ fn require_fixture_parent(
     Ok(generation)
 }
 
-fn mounted_command_bar_target(
-    parent: &crate::protocol::AutomationWindowInfo,
-    dialog: Entity<crate::actions::ActionsDialog>,
-    cx: &App,
-) -> Result<crate::protocol::AutomationWindowInfo> {
-    crate::windows::list_automation_windows()
-        .into_iter()
-        .find(|child| {
-            child.parent_window_id.as_deref() == Some(parent.id.as_str())
-                && child.parent_window_generation == parent.generation
-                && crate::windows::automation_surface_collector::exact_actions_dialog_entity(
-                    child, cx,
-                )
-                .is_some_and(|actual| actual.entity_id() == dialog.entity_id())
-        })
-        .context("fixture_command_bar_not_registered")
-}
-
 fn require_notes_fixture_parent(
     entity: &Entity<crate::notes::NotesApp>,
     parent: &crate::protocol::AutomationWindowInfo,
@@ -175,8 +157,8 @@ fn require_notes_fixture_parent(
     Ok(())
 }
 
-/// Called only after the exact hidden Notes Root is registered and bound.
-/// Detached bars return their real registered child, not the parent descriptor.
+/// Called only after the exact hidden Notes Root is registered and bound. Command bars are
+/// drawn in their host, so every presentation's target is the Notes window itself.
 pub(crate) fn mount_notes_fixture_presentation(
     fixture_id: &str,
     entity: &Entity<crate::notes::NotesApp>,
@@ -191,7 +173,7 @@ pub(crate) fn mount_notes_fixture_presentation(
         "unknown_notes_auxiliary_fixture"
     );
     require_notes_fixture_parent(entity, parent, parent_handle, cx)?;
-    let dialog = parent_handle.update(cx, |_, window, cx| -> Result<_> {
+    parent_handle.update(cx, |_, window, cx| -> Result<_> {
         match fixture_id {
             "notes.actions" => {
                 entity.update(cx, |notes, cx| notes.open_actions_panel(window, cx));
@@ -244,10 +226,7 @@ pub(crate) fn mount_notes_fixture_presentation(
             _ => unreachable!("closed fixture identifier checked above"),
         }
     })??;
-    match dialog {
-        Some(dialog) => mounted_command_bar_target(parent, dialog, cx),
-        None => Ok(parent.clone()),
-    }
+    Ok(parent.clone())
 }
 
 pub(crate) fn observe_notes_fixture_presentation(
@@ -336,11 +315,9 @@ pub(crate) fn mount_day_page_fixture_presentation(
     parent_handle.update(cx, |_, window, cx| {
         entity.update(cx, |day, cx| day.open_day_switcher(window, cx))
     })?;
-    let dialog = entity
-        .read(cx)
-        .note_switcher
-        .dialog()
-        .cloned()
-        .context("day_fixture_switcher_not_open")?;
-    mounted_command_bar_target(parent, dialog, cx)
+    anyhow::ensure!(
+        entity.read(cx).note_switcher.dialog().is_some(),
+        "day_fixture_switcher_not_open"
+    );
+    Ok(parent.clone())
 }

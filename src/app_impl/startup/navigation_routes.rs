@@ -41,18 +41,11 @@ impl ScriptListApp {
                     return;
                 }
 
-                let is_actions = crate::actions::is_actions_window(window);
                 if is_secondary_surface_window(window) {
                     return;
                 }
 
-                // Actions popups hosted by secondary windows are not the main
-                // launcher's to close.
-                if is_actions && !crate::actions::is_actions_window_open_for_main() {
-                    return;
-                }
-
-                if !crate::windows::accepts_main_window_input(window) && !is_actions {
+                if !crate::windows::accepts_main_window_input(window) {
                     return;
                 }
 
@@ -70,7 +63,6 @@ impl ScriptListApp {
     fn route_day_page_note_switcher_key(
         &mut self,
         key: &str,
-        key_char: Option<&str>,
         modifiers: &gpui::Modifiers,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -80,10 +72,6 @@ impl ScriptListApp {
         };
         if !entity.read(cx).is_day_switcher_open() {
             return false;
-        }
-
-        if crate::actions::route_key_to_detached_actions_window(key, key_char, modifiers, cx) {
-            return true;
         }
 
         let entity = entity.clone();
@@ -187,11 +175,10 @@ impl ScriptListApp {
             target: "script_kit::keyboard",
             event = "top_level_cmd_w_close_main_window",
             current_view = %self.app_view_name(),
-            actions_open = crate::actions::is_actions_window_open(),
             show_actions_popup = self.show_actions_popup,
         );
 
-        if crate::actions::is_actions_window_open() || self.show_actions_popup {
+        if self.show_actions_popup {
             self.close_actions_popup_for_current_view(window, cx);
             return;
         }

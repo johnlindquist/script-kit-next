@@ -15,15 +15,13 @@
                 // windows receive their own navigation key events.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                let skip_secondary = is_notes || is_detached_agent_chat || is_actions;
+                let skip_secondary = is_notes || is_detached_agent_chat;
                 if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "arrow_interceptor_skipped_secondary_window",
                         is_notes,
                         is_detached_agent_chat,
-                        is_actions,
                         skip_secondary,
                         detached_agent_chat_explicit_skip = is_detached_agent_chat,
                     );
@@ -55,7 +53,6 @@
                                     } else if is_down {
                                         dialog.update(cx, |d, cx| d.move_down(cx));
                                     }
-                                    crate::actions::notify_actions_window(cx);
                                 }
                                 cx.stop_propagation();
                                 return;
@@ -187,7 +184,6 @@
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
-                                            crate::actions::notify_actions_window(cx);
                                         }
                                         cx.stop_propagation();
                                         return;
@@ -697,7 +693,6 @@
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
-                                            crate::actions::notify_actions_window(cx);
                                         }
                                         cx.stop_propagation();
                                         return;
@@ -809,15 +804,13 @@
                 // Skip processing if this keystroke is from a secondary window.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                let skip_secondary = is_notes || is_detached_agent_chat || is_actions;
+                let skip_secondary = is_notes || is_detached_agent_chat;
                 if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "home_end_interceptor_skipped_secondary_window",
                         is_notes,
                         is_detached_agent_chat,
-                        is_actions,
                         skip_secondary,
                         detached_agent_chat_explicit_skip = is_detached_agent_chat,
                     );

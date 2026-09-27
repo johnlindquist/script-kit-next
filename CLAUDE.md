@@ -142,9 +142,9 @@ the Actions menu, Notes, and every other window. The contract:
   stays alpha `0.0` via `GLASS_HIDDEN_PARK_ALPHA`; zero-alpha parking of a
   visible window is a contract violation (runtime tripwire
   `glass_hidden_park_on_visible_window`);
-- the Actions menu settles on the untinted popup material
-  (`NativeGlassSurfaceRole::PopupBackdrop`) over the already-tinted main
-  glass (confirm modals are retired); every other window uses the window material;
+- every window uses the window material; the untinted popup material
+  (`NativeGlassSurfaceRole::PopupBackdrop`) has no window left, since ⌘K acts
+  in place and confirm modals are retired;
 - Notes reveals its body with the fade (reveal delay `0ms`) and unlocks native
   resizing at `configured_at + settle_duration_ms`;
 - glass material: stability tint floor `0.35` and capsule veil `0.0`

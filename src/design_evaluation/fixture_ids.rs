@@ -142,7 +142,7 @@ pub(crate) const DICTATION_FIXTURE_IDS: &[&str] = &[
     "dictation.microphone-picker",
 ];
 
-pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &["secondary.actions", "secondary.snap"];
+pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &["secondary.snap"];
 
 pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
     main_fixture_ids()
@@ -159,9 +159,4 @@ pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
         .chain(AGENT_CHAT_POPUP_FIXTURE_IDS.iter().copied())
         .chain(DICTATION_FIXTURE_IDS.iter().copied())
         .chain(SECONDARY_FIXTURE_IDS.iter().copied())
-        .chain(
-            crate::footer_popup::OWNED_FOOTER_FIXTURE_IDS
-                .iter()
-                .copied(),
-        )
 }

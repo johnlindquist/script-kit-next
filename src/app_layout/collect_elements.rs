@@ -193,6 +193,10 @@ impl ScriptListApp {
         include_headers: bool,
         cx: &Context<Self>,
     ) -> ElementCollectionOutcome {
+        if let Some(mut staged) = self.one_window_view_stage_elements(limit, include_headers, cx) {
+            self.append_footer_elements(&mut staged, limit);
+            return staged;
+        }
         let mut outcome = match &self.current_view {
             AppView::ScriptList => {
                 let context = vec![self.main_view_slot_line_element()];

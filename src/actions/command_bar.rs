@@ -33,9 +33,6 @@ use super::dialog::{
     selectable_index_at_or_before, GroupedActionItem,
 };
 use super::types::{Action, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle};
-use super::window::{
-    close_actions_window, is_actions_window_open, notify_actions_window, open_actions_window,
-};
 use super::ActionsDialog;
 use crate::logging;
 use crate::theme;
@@ -69,25 +66,6 @@ enum CommandBarKeyIntent {
         select: bool,
     },
     TypeChar(char),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CommandBarOpenFeedbackAction {
-    OpenWindow,
-}
-
-impl CommandBarOpenFeedbackAction {
-    fn success_log(self, position: super::window::WindowPosition) -> String {
-        match self {
-            Self::OpenWindow => format!("Command bar opened at {position:?}"),
-        }
-    }
-
-    fn failure_log(self, error: impl std::fmt::Display) -> String {
-        match self {
-            Self::OpenWindow => format!("Failed to open command bar: {error}"),
-        }
-    }
 }
 
 #[inline]
@@ -728,35 +706,14 @@ impl CommandBar {
         self.dialog = None;
     }
 
-    /// Reconcile the in-memory `is_open` flag against the actual detached
-    /// actions window. If the window was dismissed externally (focus loss,
-    /// click outside, system close) without routing through `close()`, the
-    /// boolean would otherwise stick true and swallow every keystroke at the
-    /// keyboard-routing layer. Returns true when stale state was cleared.
-    #[inline]
-    fn reset_open_state_if_window_gone(&mut self) -> bool {
-        if self.is_open && !is_actions_window_open() {
-            self.reset_open_state();
-            logging::log(
-                "COMMAND_BAR",
-                "Reset stale open state because the actions window is no longer open",
-            );
-            return true;
-        }
+    /// Hosts reconcile before consuming keys on `is_open()`. The bar is drawn in its host, so
+    /// nothing can dismiss it behind the host's back and there is never stale state to clear.
+    pub fn reconcile_open_state(&mut self) -> bool {
         false
     }
 
-    /// Public reconciliation entry used by host windows (e.g. Notes keyboard
-    /// handler) before they consume keystrokes based on `is_open()`.
-    pub fn reconcile_open_state(&mut self) -> bool {
-        self.reset_open_state_if_window_gone()
-    }
-
-    /// Mark the command bar closed without re-entering the detached window's
-    /// close path. Hosts call this from the dialog's `on_close` callback —
-    /// the popup window is already tearing itself down (Escape/Cmd+K while
-    /// the popup was the key window, focus loss), so only the in-memory
-    /// state needs to drop. Returns true when the bar was open.
+    /// Mark the command bar closed from the dialog's `on_close` callback, when the host already
+    /// handled the close. Returns true when the bar was open.
     pub fn mark_closed_externally(&mut self) -> bool {
         if !self.is_open {
             return false;
@@ -838,15 +795,12 @@ impl CommandBar {
                 cx.notify();
             });
 
-            if self.is_open {
-                notify_actions_window(cx);
-            }
+            if self.is_open {}
         }
     }
 
     /// Toggle open/close state (for Cmd+K binding)
     pub fn toggle<V: 'static>(&mut self, window: &mut Window, cx: &mut Context<V>) {
-        self.reset_open_state_if_window_gone();
         if self.is_open {
             self.close(cx);
         } else {
@@ -854,43 +808,22 @@ impl CommandBar {
         }
     }
 
-    /// Open the command bar at the default position (bottom-right)
+    /// Open the command bar: its host lists the actions in place under its own input.
     pub fn open<V: 'static>(&mut self, window: &mut Window, cx: &mut Context<V>) {
-        self.open_at_position(window, cx, super::window::WindowPosition::BottomRight);
-    }
-
-    /// Open the command bar at top-center (Raycast-style, for Notes window)
-    pub fn open_centered<V: 'static>(&mut self, window: &mut Window, cx: &mut Context<V>) {
-        self.open_at_position(window, cx, super::window::WindowPosition::TopCenter);
-    }
-
-    /// Open the command bar at a specific position
-    pub fn open_at_position<V: 'static>(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<V>,
-        position: super::window::WindowPosition,
-    ) {
         if let Err(error) = self.host_policy.validate() {
             tracing::warn!(%error, "CommandBar host policy refused");
             return;
         }
-        self.reset_open_state_if_window_gone();
         if self.is_open {
             return;
         }
 
-        // Create callback for dialog
         let on_select: Arc<dyn Fn(String) + Send + Sync> = Arc::new(|_| {
             // Action handling is done via execute_selected_action()
         });
-
-        // Create the dialog entity
         let theme = self.theme.clone();
         let actions = self.actions.clone();
         let config = self.config.dialog_config.clone();
-
-        // Log what actions we're creating the dialog with
         logging::log(
             "COMMAND_BAR",
             &format!(
@@ -899,57 +832,23 @@ impl CommandBar {
                 actions.iter().take(5).map(|a| a.title.as_str()).join(", ")
             ),
         );
-
         let dialog = cx.new(|cx| {
             let mut d =
                 ActionsDialog::with_config(cx.focus_handle(), on_select, actions, theme, config);
-            // Tell dialog to skip track_focus - ActionsWindow handles focus instead
-            // This ensures keyboard events go to ActionsWindow's on_key_down handler
+            // The host owns focus and routes keys to the bar.
             d.set_skip_track_focus(true);
             d
         });
-
-        // Get window bounds and display for positioning
-        let bounds = window.bounds();
-        let display_id = window.display(cx).map(|d| d.id());
-
-        // Store dialog and mark as open
-        self.dialog = Some(dialog.clone());
+        dialog.update(cx, |d, cx| d.ensure_search_input(window, cx));
+        self.dialog = Some(dialog);
         self.is_open = true;
-
-        // Open the vibrancy window at the specified position
-        let parent_automation_id = crate::windows::list_automation_windows()
-            .into_iter()
-            .find(|info| {
-                info.generation.is_some_and(|generation| {
-                    crate::windows::get_runtime_window_handle_for_generation(&info.id, generation)
-                        == Some(window.window_handle())
-                })
-            })
-            .map(|info| info.id);
-        let open_feedback = CommandBarOpenFeedbackAction::OpenWindow;
-        match open_actions_window(
-            cx,
-            super::ActionsWindowPlacement {
-                parent_window_handle: window.window_handle(),
-                main_bounds: bounds,
-                display_id,
-            },
-            dialog,
-            position,
-            parent_automation_id.as_deref(),
-            self.host_policy,
-        ) {
-            Ok(_) => {
-                logging::log("COMMAND_BAR", &open_feedback.success_log(position));
-            }
-            Err(e) => {
-                logging::log("COMMAND_BAR", &open_feedback.failure_log(e));
-                self.reset_open_state();
-            }
-        }
-
+        logging::log("COMMAND_BAR", "Command bar opened in place");
         cx.notify();
+    }
+
+    /// Open the command bar; the Notes and Dictation hosts ask for it by this name.
+    pub fn open_centered<V: 'static>(&mut self, window: &mut Window, cx: &mut Context<V>) {
+        self.open(window, cx);
     }
 
     /// Close the command bar
@@ -958,31 +857,24 @@ impl CommandBar {
             return;
         }
 
-        close_actions_window(cx);
         self.reset_open_state();
         logging::log("COMMAND_BAR", "Command bar closed");
         cx.notify();
     }
 
     /// Close the command bar (App context version)
-    pub fn close_app(&mut self, cx: &mut App) {
+    pub fn close_app(&mut self, _cx: &mut App) {
         if !self.is_open {
             return;
         }
 
-        close_actions_window(cx);
         self.reset_open_state();
         logging::log("COMMAND_BAR", "Command bar closed");
     }
 
     /// Check if the command bar is open.
-    ///
-    /// Returns true only when both the local flag is set AND the detached
-    /// actions window is still open. This guards against external dismissals
-    /// (focus loss, click outside) that would otherwise leave `is_open` stuck
-    /// true and make the keyboard router consume every keystroke.
     pub fn is_open(&self) -> bool {
-        self.is_open && is_actions_window_open()
+        self.is_open
     }
 
     /// Get the currently selected action ID
@@ -1047,7 +939,6 @@ impl CommandBar {
                     d.move_search_cursor_left(select, window, cx);
                 }
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1057,7 +948,6 @@ impl CommandBar {
             dialog.update(cx, |d, cx| {
                 d.insert_search_text(ch.to_string(), window, cx);
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1067,7 +957,6 @@ impl CommandBar {
             dialog.update(cx, |d, cx| {
                 d.backspace_search_input(window, cx);
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1077,7 +966,6 @@ impl CommandBar {
             dialog.update(cx, |d, cx| {
                 d.delete_search_input(window, cx);
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1087,7 +975,6 @@ impl CommandBar {
             dialog.update(cx, |d, cx| {
                 d.delete_previous_search_word(window, cx);
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1097,7 +984,6 @@ impl CommandBar {
             dialog.update(cx, |d, cx| {
                 d.delete_next_search_word(window, cx);
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1107,7 +993,6 @@ impl CommandBar {
             dialog.update(cx, |d, cx| {
                 d.paste_search_input(window, cx);
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1115,7 +1000,6 @@ impl CommandBar {
     pub fn select_prev(&mut self, cx: &mut App) {
         if let Some(dialog) = &self.dialog {
             dialog.update(cx, |d, cx| d.move_up(cx));
-            notify_actions_window(cx);
         }
     }
 
@@ -1123,7 +1007,6 @@ impl CommandBar {
     pub fn select_next(&mut self, cx: &mut App) {
         if let Some(dialog) = &self.dialog {
             dialog.update(cx, |d, cx| d.move_down(cx));
-            notify_actions_window(cx);
         }
     }
 
@@ -1137,7 +1020,6 @@ impl CommandBar {
                     cx.notify();
                 }
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1151,7 +1033,6 @@ impl CommandBar {
                     cx.notify();
                 }
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1176,7 +1057,6 @@ impl CommandBar {
                     cx.notify();
                 }
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1202,7 +1082,6 @@ impl CommandBar {
                     cx.notify();
                 }
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1212,7 +1091,6 @@ impl CommandBar {
             dialog.update(cx, |d, _cx| {
                 d.set_cursor_visible(visible);
             });
-            notify_actions_window(cx);
         }
     }
 
@@ -1437,12 +1315,6 @@ pub trait CommandBarHost {
             None => false,
         }
     }
-}
-
-/// Check if any command bar window is currently open (global check)
-#[allow(dead_code)] // Public API - global check function for future integrations
-pub fn is_command_bar_open() -> bool {
-    is_actions_window_open()
 }
 
 #[cfg(test)]

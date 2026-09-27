@@ -12,12 +12,6 @@ impl ScriptListApp {
             let main =
                 crate::fidelity_capture::paint_target_snapshot(window, "main", "mainWindow", None);
             let appkit = crate::footer_popup::collect_main_footer_appkit_fidelity_snapshot(window);
-            let overlay = crate::footer_popup::main_footer_overlay_fidelity_snapshot();
-            let overlay_status = if overlay.is_some() {
-                protocol::FidelityCaptureStatus::Captured
-            } else {
-                protocol::FidelityCaptureStatus::MissingOverlay
-            };
             layout.fidelity = Some(protocol::FidelityLayoutSnapshot {
                 capture_target: "agent-chat".to_string(),
                 frame_generation: main.frame_generation,
@@ -25,8 +19,8 @@ impl ScriptListApp {
                 unscoped: main.unscoped,
                 appkit_status: appkit.status,
                 appkit: appkit.snapshot,
-                overlay_status,
-                overlays: overlay.into_iter().collect(),
+                overlay_status: protocol::FidelityCaptureStatus::NotRequested,
+                overlays: Vec::new(),
             });
         }
     }

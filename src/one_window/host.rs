@@ -56,6 +56,8 @@ pub(crate) struct OneWindowHost {
     pub(super) acting_on: Option<sk_one_window::Subject>,
     /// The height last reported for what's drawn in place of the list, while something is.
     pub(super) view_px: Option<f32>,
+    /// What a view staged with ⌘K, while its actions are listed in its place.
+    pub(super) view_stage: Option<super::view_staging::ViewStage>,
 }
 
 /// What the reducer did with one event.

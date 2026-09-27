@@ -12,13 +12,10 @@ pub use super::command_bar::{
     CommandBar, CommandBarActionCallback, CommandBarConfig, CommandBarHost,
 };
 pub use super::dialog::ActionsDialog;
+pub use super::in_place::{close_actions_window, is_actions_window_open};
 pub use super::types::{
     Action, ActionCallback, ActionCategory, ActionsDialogConfig, AnchorPosition, CloseCallback,
     ScriptInfo, SearchPosition, SectionStyle,
-};
-pub use super::window::{
-    close_actions_window, is_actions_window, is_actions_window_open, notify_actions_window,
-    open_actions_window, WindowPosition,
 };
 
 #[cfg(test)]
@@ -51,7 +48,6 @@ mod tests {
         assert_type_available::<ScriptInfo>();
         assert_type_available::<SearchPosition>();
         assert_type_available::<SectionStyle>();
-        assert_type_available::<WindowPosition>();
         let _ = Option::<&dyn CommandBarHost>::None;
     }
 }

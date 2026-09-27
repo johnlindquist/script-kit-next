@@ -3296,12 +3296,8 @@ impl ScriptListApp {
                 let active_list_scroll = main_list_scroll
                     .clone()
                     .or_else(|| self.active_builtin_list_scroll_receipt(cx));
-                let actions_dialog =
-                    if self.show_actions_popup || crate::actions::is_actions_window_open() {
-                        self.actions_dialog
-                        .clone()
-                        .or_else(|| crate::actions::get_actions_dialog_entity(cx))
-                        .map(|dialog| {
+                let actions_dialog = if self.show_actions_popup {
+                    self.actions_dialog.clone().map(|dialog| {
                         let dialog = dialog.read(cx);
                         let visible_actions = dialog
                             .filtered_actions
@@ -3344,9 +3340,9 @@ impl ScriptListApp {
                             "shortcutParity": shortcut_parity,
                         })
                     })
-                    } else {
-                        None
-                    };
+                } else {
+                    None
+                };
                 let drop_state = match &self.current_view {
                     AppView::DropPrompt { entity, .. } => {
                         let drop_prompt = entity.read(cx);
@@ -4177,22 +4173,7 @@ impl ScriptListApp {
                 if target.is_some() {
                     match crate::windows::resolve_automation_window(target.as_ref()) {
                         Ok(resolved) if resolved.kind != protocol::AutomationWindowKind::Main => {
-                            let layout = if resolved.semantic_surface.as_deref()
-                                == Some("footerOverlay")
-                            {
-                                resolved
-                                    .generation
-                                    .ok_or_else(|| anyhow::anyhow!("footer_generation_missing"))
-                                    .and_then(|generation| {
-                                        crate::footer_popup::footer_fixture_layout(
-                                            &resolved.id,
-                                            generation,
-                                            cx,
-                                        )
-                                    })
-                            } else {
-                                crate::windows::automation_surface_collector::collect_registered_surface_layout(&resolved, cx)
-                            };
+                            let layout = crate::windows::automation_surface_collector::collect_registered_surface_layout(&resolved, cx);
                             let layout = layout.unwrap_or_else(|error| {
                                 tracing::warn!(request_id = %request_id, error = %error, "getLayoutInfo: target layout unavailable");
                                 protocol::LayoutInfo::default()
@@ -5805,7 +5786,10 @@ impl ScriptListApp {
                             detail,
                             vec![
                                 (confirm_text.unwrap_or_else(|| "OK".into()), answer(true)),
-                                (cancel_text.unwrap_or_else(|| "Cancel".into()), answer(false)),
+                                (
+                                    cancel_text.unwrap_or_else(|| "Cancel".into()),
+                                    answer(false),
+                                ),
                             ],
                             Some(answer(false)),
                             cx,
@@ -6831,7 +6815,6 @@ impl ScriptListApp {
             crate::footer_popup::footer_runtime_state(&target.id, generation)
         });
         let host = state.as_ref().map(|state| state.host).unwrap_or_default();
-        let popup_open = self.show_actions_popup || self.actions_dialog.is_some();
         let config = state.map(|state| state.config);
         let slot_model = config.as_ref().map(|cfg| cfg.slot_model());
         let native_buttons: Vec<_> = config
@@ -6877,9 +6860,7 @@ impl ScriptListApp {
                 | AppView::ScriptTemplateCatalogView { .. }
         );
         let content_owned = matches!(self.current_view, AppView::About { .. });
-        let owner = if popup_open {
-            "popup"
-        } else if agent_chat_footer_hidden {
+        let owner = if agent_chat_footer_hidden {
             "none"
         } else if native_ready {
             "native"
@@ -6952,7 +6933,7 @@ impl ScriptListApp {
             requested_surface: host.requested_surface.map(str::to_string),
             active_surface: host.installed_surface.map(str::to_string),
             native_footer_host_installed: native_ready,
-            gpui_fallback_visible: crate::footer_popup::main_footer_gpui_overlay_visible(),
+            gpui_fallback_visible: !native_ready,
             over_content_preview: native_ready
                 && target.kind == crate::protocol::AutomationWindowKind::Main
                 && crate::footer_popup::main_list_scrolls_under_footer(),

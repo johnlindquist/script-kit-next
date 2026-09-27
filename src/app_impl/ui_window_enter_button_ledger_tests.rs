@@ -184,7 +184,13 @@ fn a_change_happens_at_once_and_cmd_z_takes_it_back() {
         key(&app, cx, Key::CmdZ);
         wait(cx, 20);
         let undone = line(&app, cx);
-        (before, offered, changed, undone, app.update(cx, |app, _| app.background_effect))
+        (
+            before,
+            offered,
+            changed,
+            undone,
+            app.update(cx, |app, _| app.background_effect),
+        )
     });
     assert_ne!(changed, before, "the change happened at once");
     assert!(

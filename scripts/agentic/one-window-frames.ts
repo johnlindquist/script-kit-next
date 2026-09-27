@@ -25,7 +25,8 @@ const MAX_WAIT_MS = 10_000;
 
 // ---------------------------------------------------------------- steps
 
-export interface Step { name: string; type?: string; append?: string; key?: string; waitMs?: number }
+/** `click` names a painted node (its debug selector); the step clicks its center with an owned GPUI mouse event. */
+export interface Step { name: string; type?: string; append?: string; key?: string; click?: string; waitMs?: number }
 const MODIFIERS = new Set(["cmd", "ctrl", "alt", "shift"]);
 const NAMED_KEYS = new Set(["escape", "enter", "down", "up", "left", "right", "tab", "backspace", "space", "home", "end", "pageup", "pagedown"]);
 
@@ -44,22 +45,25 @@ export function parseSteps(value: unknown): Step[] {
   return value.map((raw, index) => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new EvaluationContractError("invalid_step", [String(index)]);
     const step = raw as Record<string, unknown>;
-    const unknown = Object.keys(step).filter(key => !["name", "type", "append", "key", "waitMs"].includes(key));
+    const unknown = Object.keys(step).filter(key => !["name", "type", "append", "key", "click", "waitMs"].includes(key));
     if (unknown.length) throw new EvaluationContractError("unknown_step_field", unknown);
     if (typeof step.name !== "string" || !/^[a-z0-9][a-z0-9-]{0,47}$/.test(step.name) || names.has(step.name))
       throw new EvaluationContractError("invalid_or_duplicate_step_name", [String(step.name)]);
     names.add(step.name);
-    if ([step.type, step.append, step.key].filter(value => value !== undefined).length > 1)
+    if ([step.type, step.append, step.key, step.click].filter(value => value !== undefined).length > 1)
       throw new EvaluationContractError("step_has_type_and_key", [step.name]);
     for (const text of [step.type, step.append])
       if (text !== undefined && (typeof text !== "string" || !text.length || text.length > 256 || /[\n\r\t]/.test(text)))
         throw new EvaluationContractError("invalid_step_type_text", [step.name]);
     if (step.key !== undefined) { if (typeof step.key !== "string") throw new EvaluationContractError("invalid_key_spec", [step.name]); parseKeySpec(step.key); }
+    if (step.click !== undefined && (typeof step.click !== "string" || !step.click.length || step.click.length > 128))
+      throw new EvaluationContractError("invalid_click_target", [step.name]);
     if (step.waitMs !== undefined && (!Number.isSafeInteger(step.waitMs) || (step.waitMs as number) < 0 || (step.waitMs as number) > MAX_WAIT_MS))
       throw new EvaluationContractError("invalid_wait_ms", [step.name]);
     return { name: step.name, ...(step.type !== undefined ? { type: step.type as string } : {}),
       ...(step.append !== undefined ? { append: step.append as string } : {}),
-      ...(step.key !== undefined ? { key: step.key as string } : {}), ...(step.waitMs !== undefined ? { waitMs: step.waitMs as number } : {}) };
+      ...(step.key !== undefined ? { key: step.key as string } : {}), ...(step.click !== undefined ? { click: step.click as string } : {}),
+      ...(step.waitMs !== undefined ? { waitMs: step.waitMs as number } : {}) };
   });
 }
 
@@ -434,6 +438,13 @@ async function actWithRetry(client: OwnedEvaluationClient, target: AutomationIns
     }
   }
 }
+/** An owned mouse click at the center of the painted node `name` in the frame the main window shows now. */
+async function clickAction(client: OwnedEvaluationClient, main: AutomationInstance, name: string): Promise<OwnedAction> {
+  const probe = await client.captureFrame(main, false);
+  const node = paintNodes(probe.layout).find(candidate => candidate.name === name && isVisible(candidate));
+  if (!node) throw new EvaluationContractError("click_target_not_painted", [name]);
+  return { type: "gpuiEvent", frame: probe.frame, event: { type: "mouseClick", button: "left", x: node.bounds.x + node.bounds.w / 2, y: node.bounds.y + node.bounds.h / 2 } };
+}
 const instanceKey = (target: AutomationInstance | AutomationTargetSnapshot) =>
   "windowId" in target ? `${target.windowId}:${target.windowGeneration}` : `${target.id}:${target.generation}`;
 
@@ -450,17 +461,17 @@ function writeCaptureFiles(out: string, stem: string, capture: OwnedFrameCapture
 
 async function runRuntime(options: {
   runtime: number; plan: RuntimePlan; steps: Step[]; reference: ArtifactReference; claim: ReturnType<typeof claimOutput>;
-  out: string; records: StepRecord[]; frames: { label: string; image: RgbaImage }[];
+  out: string; records: StepRecord[]; frames: { label: string; image: RgbaImage }[]; fixture: string; nativeGlass: NativeGlass;
 }): Promise<OwnedCleanup> {
-  const { runtime, plan, steps, reference, claim, out, records, frames } = options;
+  const { runtime, plan, steps, reference, claim, out, records, frames, fixture, nativeGlass } = options;
   let client: OwnedEvaluationClient | undefined;
   let lifecycleCleanup: OwnedCleanup | undefined;
   let images = 0;
   try {
-    client = await OwnedEvaluationClient.launch(REPOSITORY_ROOT, reference, claim, [MAIN_FIXTURE_ID]);
+    client = await OwnedEvaluationClient.launch(REPOSITORY_ROOT, reference, claim, [fixture], undefined, { nativeGlass });
     const catalog = await client.discover();
-    if (!catalog.fixtures.some(fixture => fixture.id === MAIN_FIXTURE_ID)) throw new EvaluationContractError("main_fixture_unavailable");
-    const main = await client.mount(MAIN_FIXTURE_ID);
+    if (!catalog.fixtures.some(entry => entry.id === fixture)) throw new EvaluationContractError("main_fixture_unavailable", [fixture]);
+    const main = await client.mount(fixture);
     await client.frame(main);
     const openPopups: AutomationInstance[] = [];
     const last = plan.capture.at(-1)!;
@@ -469,7 +480,7 @@ async function runRuntime(options: {
       const record: StepRecord = { index, name: step.name, step, runtime, captured: false, effects: [], dispatchTarget: "none", naturalFrame: null, popups: [], files: [] };
       const beforeTargets = new Set((await client.diagnose()).targets.map(instanceKey));
       const dispatchTo = openPopups.at(-1) ?? main;
-      const actions = actionsForStep(step);
+      const actions = step.click !== undefined ? [await clickAction(client, main, step.click)] : actionsForStep(step);
       let firstBefore: number | undefined; let lastEffect: string | undefined;
       for (const action of actions) {
         const { response, retries } = await actWithRetry(client, dispatchTo, action);
@@ -545,11 +556,15 @@ async function runRuntime(options: {
     logWriterClosed: true, ownedWindowsClosed: null, referencesFinalized: false, closed: false, survivors: [], failureCodes: ["runtime_not_launched"] };
 }
 
+type NativeGlass = "platform-default" | "disabled";
 export async function runFrames(argv: string[]): Promise<number> {
   const arg = (name: string) => { const index = argv.indexOf(name); return index < 0 ? undefined : argv[index + 1]; };
+  const fixture = arg("--fixture") ?? MAIN_FIXTURE_ID;
+  const nativeGlass = (arg("--native-glass") ?? "platform-default") as NativeGlass;
+  if (!["platform-default", "disabled"].includes(nativeGlass)) throw new EvaluationContractError("invalid_native_glass", [nativeGlass]);
   if (argv[0] !== "run" || argv.includes("--help") || argv.includes("-h") || !arg("--artifact") || !arg("--out") || !arg("--steps")) {
-    console.log("one-window-frames run --artifact <app.reference.json> --out <new-or-empty-dir> --steps <steps.json>\n" +
-      "steps: [{name, type?: text, key?: 'cmd-k'|'escape'|'down'..., waitMs?}]. type replaces the filter (cmd-a + one GPUI key per char),\n" +
+    console.log("one-window-frames run --artifact <app.reference.json> --out <new-or-empty-dir> --steps <steps.json> [--fixture <id>] [--native-glass disabled]\n" +
+      "steps: [{name, type?: text, append?: text, key?: 'cmd-k'|'escape'|'down'..., click?: <painted node>, waitMs?}]. type replaces the filter (cmd-a + one GPUI key per char),\n" +
       `default waitMs ${DEFAULT_TYPE_WAIT_MS} for type steps, 0 otherwise. Owned evaluator only: hidden windows, GPU readback, no OS input.`);
     return argv[0] === "run" ? 2 : 0;
   }
@@ -567,7 +582,7 @@ export async function runFrames(argv: string[]): Promise<number> {
   const records: StepRecord[] = []; const frames: { label: string; image: RgbaImage }[] = []; const cleanups: OwnedCleanup[] = [];
   const plans = planRuntimes(steps.length);
   for (const [runtime, plan] of plans.entries()) {
-    cleanups.push(await runRuntime({ runtime, plan, steps, reference, claim, out, records, frames }));
+    cleanups.push(await runRuntime({ runtime, plan, steps, reference, claim, out, records, frames, fixture, nativeGlass }));
     if (records.some(record => record.error)) break;
   }
   let cleanup = aggregateCleanup(cleanups);
@@ -580,14 +595,14 @@ export async function runFrames(argv: string[]): Promise<number> {
     const record = captured.find(r => r.index === index);
     return { index, name: step.name, measurement: record?.measurement ?? null, ...(record ? {} : { error: errors.find(e => e.index === index)?.error ?? "not_captured" }) };
   }));
-  writeFileSync(join(out, "summary.json"), JSON.stringify({ schemaVersion: 1, fixture: MAIN_FIXTURE_ID, background: "#1c1d22",
+  writeFileSync(join(out, "summary.json"), JSON.stringify({ schemaVersion: 1, fixture, nativeGlass, background: "#1c1d22",
     units: "window points; PNGs are device pixels (scale in each step)", capsulesNote: "native AppKit footer capsules are outside GPUI readback",
     steps: summary }, null, 1));
   if (frames.length) writeFileSync(join(out, "contact.png"), encodePngRgba(contactSheet(frames)));
   const pass = !errors.length && !missing.length && cleanup.closed;
   const receipt = {
     schemaVersion: 1, tool: "one-window-frames", command: "run", classification: pass ? "ok" : !cleanup.closed ? "invalid-cleanup" : "failed",
-    startedAt, durationMs: Math.round(performance.now() - started), artifactReference: referencePath, fixture: MAIN_FIXTURE_ID,
+    startedAt, durationMs: Math.round(performance.now() - started), artifactReference: referencePath, fixture, nativeGlass,
     proofLevel: "owned-production-runtime", evidence: "GPUI render readback of hidden owned windows; owned GPUI key events",
     nativeExclusions: ["WindowServer composition", "AppKit glass material", "native footer capsules", "native focus", "OS IME", "global input"],
     out, evaluatorClaim: claim.root, runtimes: plans.map((plan, runtime) => ({ runtime, replayedSteps: plan.replay, capturedSteps: plan.capture.map(i => steps[i]!.name), cleanupClosed: cleanups[runtime]?.closed ?? null })),

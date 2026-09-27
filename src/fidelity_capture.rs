@@ -19,6 +19,10 @@ pub(crate) fn layout_bounds(bounds: gpui::Bounds<gpui::Pixels>) -> LayoutBounds 
 /// Convert one completed GPUI window frame into a finite paint-target
 /// snapshot. The caller owns target identity; geometry and primitive evidence
 /// always come from the supplied window's rendered frame.
+#[allow(
+    dead_code,
+    reason = "the binary's main window captures its own paint targets"
+)]
 pub(crate) fn paint_target_snapshot(
     window: &gpui::Window,
     target_id: impl Into<String>,
