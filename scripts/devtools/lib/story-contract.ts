@@ -15,7 +15,7 @@ export const PRODUCTION_STORIES = [
   { id: "pi-reply-identity", testLeaf: "production_story_pi_reply_identity", level: "domain" },
 ] as const;
 export const CORE_JOURNEYS = [
-  "launcher-ranking-provider", "choice-prompt-completion", "editable-prompt-validation", "actions-popup-activation",
+  "launcher-ranking-provider", "choice-prompt-completion", "editable-prompt-validation", "actions-in-place-activation",
   "conversation-recovery-stop", "theme-publication-revert", "close-reopen-stale",
 ] as const;
 export type CoreJourneyId = typeof CORE_JOURNEYS[number];

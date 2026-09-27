@@ -996,7 +996,6 @@ async function main() {
     AttachmentPortalBrowser: ["attachment-portal"],
     SdkReference: ["sdk-reference"],
     ScriptTemplateCatalog: ["script-template", "script-template-catalog"],
-    NotesWindow: ["notes"],
   };
 
   const surfaceContracts = asArray(inventory.auditSurfaceContracts ?? inventory.surfaceContracts).map((entry) => asObject(entry));

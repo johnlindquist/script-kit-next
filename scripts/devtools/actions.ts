@@ -246,47 +246,6 @@ export async function maybeStartSession(
   return requireSuccessfulSessionAction(args.session, "start", started);
 }
 
-async function maybeOpenParentTarget(args: Args) {
-  const normalizedOpenKind =
-    typeof args.openTarget?.kind === "string" ? args.openTarget.kind.toLowerCase() : "";
-  if (!args.open || normalizedOpenKind !== "notes") return null;
-  const receipt = await run([
-    "bash",
-    "scripts/agentic/session.sh",
-    "send",
-    args.session,
-    JSON.stringify({ type: "openNotes", requestId: requestId("open-notes-parent") }),
-    "--await-parse",
-    "--timeout",
-    String(args.timeoutMs),
-  ], "parent.open.notes");
-  // Settle on the real observable instead of a fixed sleep: poll strict
-  // target resolution until the Notes window is addressable (normally the
-  // first attempt).
-  await waitForNotesParentTarget(args);
-  return receipt;
-}
-
-async function waitForNotesParentTarget(args: Args): Promise<void> {
-  const deadline = Date.now() + Math.min(args.timeoutMs, 5000);
-  while (Date.now() < deadline) {
-    const receipt = await run([
-      "bun",
-      "scripts/devtools/targets.ts",
-      "inspect",
-      "--session",
-      args.session,
-      "--target-kind",
-      "notes",
-      "--strict",
-    ], "targets.inspect.notes-parent");
-    if (receipt.classification === "ok") {
-      return;
-    }
-    await Bun.sleep(25);
-  }
-}
-
 function responseOf(envelope: JsonObject): JsonObject {
   return (envelope.response as JsonObject | undefined) ?? envelope;
 }
@@ -1855,7 +1814,6 @@ async function main() {
   const args = parseArgs(Bun.argv.slice(2));
   const forwarded = inspectForwarded(args);
   const startReceipt = await maybeStartSession(args);
-  const parentOpenReceipt = await maybeOpenParentTarget(args);
   const openReceipt = await maybeOpenActions(args);
   const targetReadiness = args.open
     ? await waitForActionsDialogTarget(args, forwarded)
@@ -1978,7 +1936,6 @@ async function main() {
     transaction: targetReceipt.transaction,
     parentTarget: parent,
     startReceipt: diagnostic(startReceipt),
-    parentOpenReceipt: diagnostic(parentOpenReceipt),
     openReceipt: diagnostic(openReceipt),
     targetReadiness,
     popupState: {
@@ -2074,7 +2031,7 @@ async function main() {
       openTarget: args.openTarget ?? null,
     },
     warnings: [
-      missing.length > 0 ? "Actions popup inspection is fail-closed until anchor/section/shortcut geometry is first-class." : "",
+      missing.length > 0 ? "Actions inspection is fail-closed until anchor/section/shortcut geometry is first-class." : "",
       clipping.available && (clipping.top || clipping.right || clipping.bottom || clipping.left) ? "popup rect clips outside parent rect" : "",
     ].filter(Boolean),
     errors: diagnostic(

@@ -775,8 +775,6 @@ export function resolveContractHost(contractKind: string): string {
 const hostToTargetIdentity: Record<string, { windowKind: string; hostKind: string; parentRequired: boolean }> = {
   MainWindow: { windowKind: "Main", hostKind: "mainWindow", parentRequired: false },
   ActionsDialog: { windowKind: "ActionsDialog", hostKind: "attachedPopup", parentRequired: true },
-  PromptPopup: { windowKind: "PromptPopup", hostKind: "attachedPopup", parentRequired: true },
-  NotesWindow: { windowKind: "Notes", hostKind: "detachedWindow", parentRequired: false },
 };
 
 export function expectedTargetIdentity(
@@ -922,10 +920,7 @@ export function bindingSupported(binding: Pick<CoverageBinding, "evidenceGrade" 
 }
 
 export function fixtureFamilyForMapping(family: string, hostKind: string): string {
-  if (hostKind === "ActionsDialog" || hostKind === "PromptPopup") return "attached-popup-dialog";
-  if (hostKind === "NotesWindow" || hostKind === "DictationWindow" || hostKind === "AgentChatDetached") {
-    return "native-secondary-window";
-  }
+  if (hostKind === "ActionsDialog") return "attached-popup-dialog";
   const fixtureFamily = sourceFamilyToFixtureFamily[family as keyof typeof sourceFamilyToFixtureFamily];
   if (!fixtureFamily) throw new Error(`unknown source family: ${family}`);
   return fixtureFamily;
@@ -1544,10 +1539,10 @@ export function buildOracleBatches(contracts: SurfaceContract[], features: Featu
       name: "Launcher, main menu, source filters, actions, shortcuts, aliases",
       priority: 2,
       outsideInPhase: "surface-shell",
-      priorityRationale: "Main window shell, launcher container, action popup container, and footer chrome define the default app layout.",
-      owners: ["main-menu-search-selection", "actions-popups", "keyboard-focus-routing"],
+      priorityRationale: "Main window shell, launcher container, the actions staged in the line above the input, and footer chrome define the default app layout.",
+      owners: ["main-menu-search-selection", "actions", "keyboard-focus-routing"],
       surfaceKinds: keepKinds(["ScriptList", "ActionsDialog", "ConfirmPrompt"]),
-      featureIds: featureIds(features, ["main-menu-search-selection", "actions-popups", "keyboard-focus-routing"], [
+      featureIds: featureIds(features, ["main-menu-search-selection", "actions", "keyboard-focus-routing"], [
         "main menu",
         "source filter",
         "shortcut",
@@ -1556,7 +1551,7 @@ export function buildOracleBatches(contracts: SurfaceContract[], features: Featu
       requiredDevToolsPrimitives: ["devtools.targets.watch", "devtools.act", "devtools.measure.layout", "devtools.measure.text"],
       questionsForOracle: [
         "Which target-scoped action and shortcut receipts make main-menu bugs reproducible without recipes?",
-        "How should actions popups expose route stack, anchor rects, disabled reasons, and clipping metrics?",
+        "How should the Cmd+K actions staged in the line expose route stack, disabled reasons, and clipping metrics?",
       ],
     },
     {
@@ -1655,13 +1650,13 @@ export function buildOracleBatches(contracts: SurfaceContract[], features: Featu
       name: "Notes, notes-hosted Agent Chat, dictation, media, history, target delivery",
       priority: 7,
       outsideInPhase: "content-controls",
-      priorityRationale: "Notes and Dictation have practical window proof; remaining work is embedded Agent Chat, media state, history, and delivery details.",
-      owners: ["notes-window", "dictation-media", "agent_chat-chat-core"],
+      priorityRationale: "Notes and Dictation open as views under the main input; remaining work is embedded Agent Chat, media state, history, and delivery details.",
+      owners: ["notes", "dictation-media", "agent_chat-chat-core"],
       surfaceKinds: keepKinds(["AgentChat", "AgentChatHistory", "ClipboardHistory"]),
-      featureIds: featureIds(features, ["notes-window", "dictation-media", "agent_chat-chat-core"], ["notes", "dictation", "media"]),
-      requiredDevToolsPrimitives: ["devtools.notes.inspect", "devtools.media.inspect", "devtools.measure.selection", "devtools.delivery.trace"],
+      featureIds: featureIds(features, ["notes", "dictation-media", "agent_chat-chat-core"], ["notes", "dictation", "media"]),
+      requiredDevToolsPrimitives: ["devtools.media.inspect", "devtools.measure.selection", "devtools.delivery.trace"],
       questionsForOracle: [
-        "Which passive media, target-delivery, editor-selection, and notes-resize receipts unlock reliable Dictation and Notes bug proof?",
+        "Which passive media, target-delivery, and editor-selection receipts unlock reliable Dictation and Notes bug proof?",
         "How should the tools separate visible Notes UI state, embedded Agent Chat state, and background storage state?",
       ],
     },

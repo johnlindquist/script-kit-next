@@ -53,7 +53,7 @@ export const CORE_FIXTURES: Record<CoreJourneyId, readonly string[]> = {
   "launcher-ranking-provider": [SEARCH_FIXTURE_ID],
   "choice-prompt-completion": ["prompt.arg", "prompt.mini", "prompt.select"],
   "editable-prompt-validation": ["prompt.form", "prompt.fields", "prompt.editor", "prompt.template"],
-  "actions-popup-activation": ["main.script-list"],
+  "actions-in-place-activation": ["main.script-list"],
   "conversation-recovery-stop": [...CONVERSATION_FIXTURE_IDS],
   "theme-publication-revert": ["main.script-list", "main.theme-chooser"],
   "close-reopen-stale": ["main.script-list"],
@@ -471,7 +471,7 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
         }
         break;
       }
-      case "actions-popup-activation": {
+      case "actions-in-place-activation": {
         await mount("main.script-list");
         const diagnosis = await active.diagnose();
         if (diagnosis.operation !== "diagnose" || diagnosis.ok !== true) throw new EvaluationContractError("owned_diagnosis_required");
