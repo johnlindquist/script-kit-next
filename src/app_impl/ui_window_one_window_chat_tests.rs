@@ -323,6 +323,79 @@ fn a_past_chat_row_opens_that_chat_again_with_its_turns() {
     assert_eq!(words, vec!["plan the launch", "Tuesday, with a demo."]);
 }
 
+/// Deleting a past chat can't be taken back, so it waits in the line and ⌘Z on the window
+/// stops it before anything is removed.
+#[test]
+fn deleting_a_past_chat_waits_in_the_line_and_cmd_z_stops_it() {
+    let (label, waiting, stopped, kept) = in_temp_kit(|_| {
+        let conversation = crate::ai::agent_chat::ui::history::SavedConversation {
+            session_id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            custom_title: None,
+            messages: vec![
+                crate::ai::agent_chat::ui::history::SavedMessage {
+                    role: "User".into(),
+                    body: "plan the launch".into(),
+                },
+                crate::ai::agent_chat::ui::history::SavedMessage {
+                    role: "Assistant".into(),
+                    body: "Tuesday, with a demo.".into(),
+                },
+            ],
+        };
+        let entry = crate::ai::agent_chat::ui::history::build_history_entry(&conversation)
+            .expect("a history entry");
+        crate::ai::agent_chat::ui::history::save_completed_conversation(&conversation, &entry)
+            .expect("save the past chat");
+        let id = conversation.session_id.clone();
+        let (label, waiting, stopped) = in_launcher("past_chat_held_delete", 0, |cx| {
+            let (app, window) = launcher(cx, Jev::Off);
+            app.update(cx, |app, cx| {
+                app.one_window_open_past_chats(String::new(), cx)
+            });
+            wait(cx, ENTER_GUARD_MS);
+            key(&app, cx, Key::CmdK);
+            wait(cx, ENTER_GUARD_MS);
+            for _ in 0..3 {
+                key(&app, cx, Key::Down);
+            }
+            let label = enter_label(&app, cx);
+            key(&app, cx, Key::Enter);
+            wait(cx, 20);
+            let line = |app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext| {
+                app.update(cx, |app, _| {
+                    app.one_window.slot_line(app.one_window_clock())
+                })
+            };
+            let waiting = line(&app, cx);
+            // Through the window, so the line's ⌘Z interceptor claims it before the input's undo.
+            cx.dispatch_keystroke(window, gpui::Keystroke::parse("cmd-z").expect("cmd-z"));
+            wait(cx, 20);
+            let stopped = line(&app, cx);
+            wait(cx, 9_000);
+            (label, waiting, stopped)
+        });
+        let kept = crate::ai::agent_chat::ui::history::conversation_exists(&id);
+        (label, waiting, stopped, kept)
+    });
+    assert_eq!(label, "Delete it · “plan the launch”");
+    assert_eq!(
+        waiting.kind,
+        sk_one_window::SlotKind::Holding,
+        "{waiting:?}"
+    );
+    assert_eq!(
+        waiting.label,
+        sk_one_window::contract::ledger_words::runs_in(8)
+    );
+    assert_eq!(waiting.title, "Delete “plan the launch”");
+    assert_eq!(
+        stopped.title,
+        sk_one_window::contract::ledger_words::stopped(&waiting.title, true)
+    );
+    assert!(kept, "the chat is still saved after ⌘Z and the wait");
+}
+
 #[test]
 fn the_models_question_is_a_row_answered_with_enter() {
     let (asked, label, answered, reply) = in_launcher("chat_permission_row", 0, |cx| {

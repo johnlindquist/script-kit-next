@@ -178,17 +178,24 @@ impl ScriptListApp {
                 }
             }
             DELETE => {
-                if let Err(error) = history::delete_conversation(&id) {
-                    tracing::warn!(target: "script_kit::one_window", event = "past_chat_delete_failed", error = %error);
-                    return;
-                }
-                self.one_window_handle(Event::Work(WorkEvent::PastChatGone { id }), cx);
-                Done {
-                    icon: "trash".into(),
-                    title: format!("Deleted “{title}”"),
-                    stay: true,
-                    ..Done::default()
-                }
+                self.one_window_hold(
+                    "trash",
+                    format!("Delete “{title}”"),
+                    Box::new(move |this, cx| {
+                        if let Err(error) = history::delete_conversation(&id) {
+                            tracing::warn!(target: "script_kit::one_window", event = "past_chat_delete_failed", error = %error);
+                            this.one_window_notice(
+                                crate::line_notice::FAILED,
+                                "Couldn't delete that chat",
+                                cx,
+                            );
+                            return;
+                        }
+                        this.one_window_handle(Event::Work(WorkEvent::PastChatGone { id }), cx);
+                    }),
+                    cx,
+                );
+                return;
             }
             _ => return,
         };
