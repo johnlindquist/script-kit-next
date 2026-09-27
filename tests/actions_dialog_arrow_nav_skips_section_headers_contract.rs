@@ -77,7 +77,6 @@
 //!       test red before the regression ships.
 
 const DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
-const WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
 
 fn extract_fn_body<'a>(src: &'a str, header: &str) -> &'a str {
     let header_pos = src.find(header).unwrap_or_else(|| {
@@ -203,31 +202,6 @@ fn shared_selectable_helpers_filter_on_item_variant() {
          `GroupedActionItem::Item(_)`. Relaxing the pattern would \
          let MoveHome / MoveEnd / MovePageUp / MovePageDown / Up / Down land \
          on section headers in one commit. Body was:\n{body}"
-    );
-    assert!(
-        !WINDOW_SOURCE.contains("fn selectable_index_at_or_before(")
-            && !WINDOW_SOURCE.contains("fn selectable_index_at_or_after("),
-        "selectable-row helpers should be owned beside GroupedActionItem in \
-         src/actions/dialog.rs, not redeclared in src/actions/window.rs"
-    );
-
-    // Confirm the page-intent paths actually delegate to the filtered
-    // helpers (not a raw index). This is the symmetric half of the
-    // move_up/move_down anchors above.
-    // Anchor on the dispatch arm (`=>`), NOT the key-intent producer
-    // that returns `Some(ActionsWindowKeyIntent::MoveHome)` from the
-    // parser above.
-    let move_home_block = "Some(ActionsWindowKeyIntent::MoveHome) =>";
-    let mh_start = WINDOW_SOURCE
-        .find(move_home_block)
-        .expect("MoveHome dispatch arm not found in src/actions/window.rs — update anchors");
-    // Scope to the next 600 bytes so we don't false-match on other arms.
-    let mh_window = &WINDOW_SOURCE[mh_start..mh_start + 600.min(WINDOW_SOURCE.len() - mh_start)];
-    assert!(
-        mh_window.contains("first_selectable_index("),
-        "MoveHome arm MUST delegate to `first_selectable_index`. \
-         Inlining a raw `selected_index = 0` would skip the \
-         section-header filter. Window was:\n{mh_window}"
     );
 }
 

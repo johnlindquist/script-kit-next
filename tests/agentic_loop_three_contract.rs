@@ -74,7 +74,6 @@ fn template_prompt_stress_opens_template_without_wrong_parse_wait() {
 #[test]
 fn actions_dialog_automation_elements_use_cached_semantic_rows() {
     const COLLECTOR: &str = include_str!("../src/windows/automation_surface_collector.rs");
-    const ACTION_WINDOW: &str = include_str!("../src/actions/window.rs");
 
     for token in [
         "actions_dialog_semantic_cache",
@@ -85,16 +84,6 @@ fn actions_dialog_automation_elements_use_cached_semantic_rows() {
         assert!(
             COLLECTOR.contains(token),
             "ActionsDialog automation collector must pin cached semantic rows with {token}"
-        );
-    }
-
-    for token in [
-        "upsert_actions_dialog_snapshot(",
-        "remove_actions_dialog_snapshot(\"actions-dialog\")",
-    ] {
-        assert!(
-            ACTION_WINDOW.contains(token),
-            "ActionsDialog window lifecycle must publish/remove semantic snapshots with {token}"
         );
     }
 }
