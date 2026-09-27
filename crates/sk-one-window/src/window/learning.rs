@@ -30,6 +30,13 @@ impl OneWindow {
         self.lessons.learn(now, said, row);
     }
 
+    /// "Share my last action" with nothing staged shares the last thing that ran.
+    pub(super) fn share_last(&self, row: &Row) -> Option<u64> {
+        (row.act == RowAct::Share && self.staged.is_none())
+            .then(|| self.ledger.last().map(|e| e.id))
+            .flatten()
+    }
+
     /// Between queries, what was learned in the last one becomes a match.
     pub(super) fn settle_lessons(&mut self, fx: &mut Vec<Effect>) {
         if self.text.trim().is_empty() && self.lessons.between_queries() {

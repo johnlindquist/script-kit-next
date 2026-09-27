@@ -143,7 +143,11 @@ impl OneWindow {
 
     pub(super) fn run(&mut self, now: Ms, row: Row, how: RunHow, fx: &mut Vec<Effect>) {
         self.picked = Some((row.clone(), how));
-        let staged_entry = self.staged.as_ref().and_then(|s| s.subject.entry);
+        let staged_entry = self
+            .staged
+            .as_ref()
+            .and_then(|s| s.subject.entry)
+            .or_else(|| self.share_last(&row));
         let from_staged = self
             .staged
             .as_ref()

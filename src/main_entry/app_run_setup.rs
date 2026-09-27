@@ -1550,6 +1550,11 @@ app.run(move |cx: &mut App| {
                                     continue;
                                 }
 
+                                if crate::one_window::automations::is_off(&path) {
+                                    logging::log("SCHEDULER", &format!("Skipping stopped automation: {}", path.display()));
+                                    continue;
+                                }
+
                                 logging::log("SCHEDULER", &format!("Executing scheduled script: {}", path.display()));
 
                                 // Execute the script using the existing executor infrastructure
@@ -3493,7 +3498,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
                             ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name, .. } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
-                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), window, ctx);
+                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
                             }
                             ExternalCommand::SetAgentChatScopeInput { ref text, ref request_id } => {
                                 let request_id_value = request_id.clone();

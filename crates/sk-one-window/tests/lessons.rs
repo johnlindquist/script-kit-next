@@ -67,6 +67,33 @@ fn a_row_that_opened_something_teaches_nothing() {
     assert!(win.learned_rows("clear my").is_empty());
 }
 
+#[test]
+fn share_my_last_action_offers_copy_link_send_in_the_list() {
+    let mut win = OneWindow::default();
+    win.handle(
+        0,
+        Event::Done(sk_one_window::Done {
+            icon: "steps".into(),
+            title: "Did 2 steps".into(),
+            ..sk_one_window::Done::default()
+        }),
+    );
+    win.handle(1_000, Event::Text("share my last action".into()));
+    let share =
+        Row::new("act:share-last", "Share my last action").with_act(sk_one_window::RowAct::Share);
+    win.handle(1_000, Event::Names(vec![share]));
+    let out = win.handle(1_100, Event::Key(Key::Enter));
+    assert!(
+        !out.effects.iter().any(|f| matches!(f, Effect::Run { .. })),
+        "no popup, no host run"
+    );
+    let staged = win.staged().expect("the last run is staged");
+    assert_eq!(staged.head, sk_one_window::contract::words::SHARE_HOW);
+    let titles: Vec<&str> = staged.rows.iter().map(|r| r.title.as_str()).collect();
+    assert_eq!(titles.len(), 3, "copy, link, send: {titles:?}");
+    assert_eq!(win.slot_line(1_100).label, "Sharing");
+}
+
 /// The page learned each sentence that ran and listed it as a learned name the next time its
 /// start was typed. Replaying the trace through the reducer, every learned row the page listed
 /// is the reducer's learned row for the same words.

@@ -212,6 +212,9 @@ pub const LEARNED_MIN_CHARS: usize = 2;
 pub const LEARNED_SCORE_FLOOR: u8 = 70;
 /// Sentences kept as lessons.
 pub const MAX_LESSONS: usize = 200;
+/// A learned row's strength once two words of its sentence are typed: above a name that only
+/// starts with the words or matches them at word boundaries.
+pub const LEARNED_SENTENCE_SCORE: u8 = 96;
 
 /// Words the voice view shows.
 pub mod talk_words {

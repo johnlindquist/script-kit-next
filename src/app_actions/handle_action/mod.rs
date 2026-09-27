@@ -2380,7 +2380,7 @@ impl ScriptListApp {
 
         // Dispatch through handler chain, collecting the final outcome.
         let (handler, outcome) = {
-            let o = self.handle_shortcut_alias_action(&action_id_stripped, &dctx, window, cx);
+            let o = self.handle_shortcut_alias_action(&action_id_stripped, &dctx, cx);
             if o.was_handled() {
                 ("shortcut_alias", o)
             } else {

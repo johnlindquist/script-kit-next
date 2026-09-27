@@ -378,6 +378,7 @@ pub(crate) fn root_unified_action_subject_from_result(
         | SearchResult::Agent(_)
         | SearchResult::Fallback(_)
         | SearchResult::Intent(_)
+        | SearchResult::OneWindow(_)
         | SearchResult::SpineProjection(_) => None,
     }
 }

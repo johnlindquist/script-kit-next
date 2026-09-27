@@ -79,12 +79,12 @@ impl OneWindow {
 
     /// Words heard, whether the host sent them or they were typed into the voice view.
     pub(super) fn talk_heard(&mut self, now: Ms, text: String, fx: &mut Vec<Effect>) {
-        let Some(talk) = self.talk.as_mut().filter(|t| t.phase == Phase::Talking) else {
+        let Some(talk) = self.talk.as_mut().filter(|t| t.phase != Phase::Asking) else {
             return;
         };
         self.text = text.clone();
-        if let Some(words) = talk.hear(&text) {
-            fx.push(Effect::TalkAsk { words, last: false });
+        if let Some((words, last)) = talk.hear(&text) {
+            fx.push(Effect::TalkAsk { words, last });
         }
         self.talk_sync(now);
         self.talk_decide(now, fx);

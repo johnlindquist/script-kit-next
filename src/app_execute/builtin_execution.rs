@@ -5154,9 +5154,9 @@ impl ScriptListApp {
                 },
                 cx,
             );
-            self.start_dictation_overlay_session(cx);
+            self.one_window_talk_began(true, cx);
         } else {
-            self.start_dictation_overlay_session(cx);
+            self.one_window_talk_began(true, cx);
             self.dispatch_window_event(
                 crate::window_orchestrator::WindowEvent::StartDictation {
                     target: orch_target,
@@ -5243,7 +5243,17 @@ impl ScriptListApp {
         );
     }
 
-    fn request_active_dictation_stop(
+    /// Starts listening the way the voice key does, with the words going to the main window's
+    /// voice view.
+    pub(crate) fn start_dictation_session(&mut self, cx: &mut Context<Self>) {
+        let action = DictationBuiltinAction::FrontmostApp;
+        if self.prepare_dictation_builtin_start(action, None, cx) == DictationStartPreflight::Ready {
+            let target = self.dictation_start_target(action);
+            self.start_ready_dictation_builtin_action(action, target, None, cx);
+        }
+    }
+
+    pub(crate) fn request_active_dictation_stop(
         &mut self,
         reason: crate::dictation::DictationStopReason,
         dictation_target: crate::dictation::DictationTarget,
@@ -6270,6 +6280,10 @@ impl ScriptListApp {
                             String::new()
                         }
                     });
+                if self.one_window_talking() {
+                    self.one_window_talk_final(transcript, cx);
+                    return;
+                }
                 // Show the recognized text while it is being delivered so the
                 // user gets confirmation of what was heard.
                 let _ = crate::dictation::update_dictation_overlay(

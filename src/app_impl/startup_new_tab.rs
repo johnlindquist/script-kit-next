@@ -17,15 +17,13 @@
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                let is_shortcut_recorder = super::shortcut_recorder::is_shortcut_recorder_window(window);
-                if is_notes || is_detached_agent_chat || is_actions || is_shortcut_recorder {
+                if is_notes || is_detached_agent_chat || is_actions {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
                         is_notes,
                         is_detached_agent_chat,
                         is_actions,
-                        is_shortcut_recorder,
                     );
                     return;
                 }

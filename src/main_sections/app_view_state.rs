@@ -1874,10 +1874,7 @@ enum FileSearchThumbnailPreviewState {
     Unavailable { path: String, message: String },
 }
 
-/// State for the inline shortcut recorder overlay.
-///
-/// When this is Some, the ShortcutRecorder modal is displayed.
-/// Used for configuring keyboard shortcuts without opening an external editor.
+/// The command whose shortcut the main window's "Press the keys for …" view records.
 #[derive(Debug, Clone)]
 struct ShortcutRecorderState {
     /// The unique command identifier (e.g., "scriptlet/my-script", "builtin/clipboard-history")

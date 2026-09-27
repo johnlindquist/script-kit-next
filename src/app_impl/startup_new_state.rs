@@ -269,7 +269,6 @@
             // Shortcut recorder state - starts as None (no recorder showing)
             shortcut_recorder_state: None,
             // Shortcut recorder entity - persisted to maintain focus
-            shortcut_recorder_entity: None,
             // Alias input state - starts as None (no alias input showing)
             alias_input_state: None,
             // Alias input entity - persisted to maintain focus

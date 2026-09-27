@@ -1871,11 +1871,8 @@ pub(crate) struct ScriptListApp {
     last_scrolled_window: Option<usize>,
     // Menu bar integration: Now handled by frontmost_app_tracker module
     // which pre-fetches menu items in background when apps activate
-    /// Shortcut recorder state - when Some, shows the inline recorder overlay
+    /// The command whose shortcut the main window is recording, while its view is open.
     shortcut_recorder_state: Option<ShortcutRecorderState>,
-    /// The shortcut recorder entity (persisted to maintain focus)
-    shortcut_recorder_entity:
-        Option<Entity<crate::components::shortcut_recorder::ShortcutRecorder>>,
     /// Alias editor state - when Some, its modal is open
     alias_input_state: Option<AliasInputState>,
     /// Most recent Tab AI execution waiting for success/failure accounting.

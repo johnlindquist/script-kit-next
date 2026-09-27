@@ -8,7 +8,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Ms;
-use crate::contract::{LEARNED_MIN_CHARS, LEARNED_SCORE_FLOOR, MAX_LESSONS};
+use crate::contract::{
+    LEARNED_MIN_CHARS, LEARNED_SCORE_FLOOR, LEARNED_SENTENCE_SCORE, MAX_LESSONS,
+};
 use crate::row::{Row, RowAct};
 
 /// A sentence and the row it ran.
@@ -100,12 +102,14 @@ impl Lessons {
     }
 
     /// Learned rows for the typed words: every lesson whose sentence starts with them, word by
-    /// word, scored by how much of the sentence is typed.
+    /// word, scored by how much of the sentence is typed, and above a name once two of its words
+    /// are.
     pub fn rows(&self, text: &str) -> Vec<Row> {
         let typed = text.trim_start().to_lowercase();
         if typed.trim().chars().count() < LEARNED_MIN_CHARS {
             return Vec::new();
         }
+        let sentence = typed.split_whitespace().count() >= 2;
         let mut rows: Vec<Row> = self
             .learned
             .iter()
@@ -113,8 +117,12 @@ impl Lessons {
                 let said = lesson.said.to_lowercase();
                 starts_word_by_word(&said, &typed).then(|| {
                     let share = typed.trim().chars().count() as f32 / said.chars().count() as f32;
-                    let score = LEARNED_SCORE_FLOOR as f32
-                        + (100 - LEARNED_SCORE_FLOOR) as f32 * share.min(1.0);
+                    let floor = if sentence {
+                        LEARNED_SENTENCE_SCORE
+                    } else {
+                        LEARNED_SCORE_FLOOR
+                    };
+                    let score = floor as f32 + (100 - floor) as f32 * share.min(1.0);
                     let mut row = lesson.row.clone();
                     row.key = lesson.key();
                     row.learned = true;
@@ -219,6 +227,11 @@ mod tests {
     fn more_of_the_sentence_scores_higher() {
         let l = taught("put the pr on my second screen");
         assert!(l.rows("put t")[0].score > l.rows("pu")[0].score);
+        assert!(
+            l.rows("put t")[0].score >= LEARNED_SENTENCE_SCORE,
+            "two words of a learned sentence outrank a name that starts with them"
+        );
+        assert!(l.rows("put")[0].score < LEARNED_SENTENCE_SCORE);
     }
 
     #[test]

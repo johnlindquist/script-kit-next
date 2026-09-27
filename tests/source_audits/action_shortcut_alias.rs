@@ -119,17 +119,6 @@ fn remove_shortcut_checks_live_unregister_result() {
 }
 
 #[test]
-fn shortcut_assignment_wires_live_conflict_checker() {
-    let recorder = super::read_source("src/app_impl/shortcut_recorder.rs");
-
-    assert!(
-        recorder.contains(".with_conflict_checker(")
-            && recorder.contains("shortcut_conflict_for_recording("),
-        "shortcut recorder entry paths should wire the live hotkey route conflict checker"
-    );
-}
-
-#[test]
 fn shortcut_save_rechecks_live_conflict_before_config_write() {
     let recorder = super::read_source("src/app_impl/shortcut_recorder.rs");
     let save_pos = recorder
@@ -148,39 +137,6 @@ fn shortcut_save_rechecks_live_conflict_before_config_write() {
         "shortcut saves should re-check live conflicts before mutating config.ts"
     );
 }
-
-#[test]
-fn shortcut_recorder_close_rekeys_main_filter_after_native_popup_close() {
-    let recorder = super::read_source("src/app_impl/shortcut_recorder.rs");
-    let close_pos = recorder
-        .find("pub fn close_shortcut_recorder")
-        .expect("close_shortcut_recorder not found");
-    let block = &recorder[close_pos..recorder.len().min(close_pos + 2000)];
-    let close_window_pos = block
-        .find("close_shortcut_recorder_instance(generation, cx)")
-        .expect("close_shortcut_recorder should close the native recorder window");
-    let show_main_pos = block
-        .find("crate::platform::show_main_window_without_activation();")
-        .expect("close_shortcut_recorder should re-key the main panel after native popup close");
-    let pending_focus_pos = block
-        .find("app.pending_focus = Some(FocusTarget::MainFilter);")
-        .expect(
-            "close_shortcut_recorder should request main-filter focus after native popup close",
-        );
-
-    assert!(
-        close_window_pos < show_main_pos && show_main_pos < pending_focus_pos,
-        "shortcut recorder close should remove the key popup, re-key the main panel, then restore main-filter focus"
-    );
-    assert!(
-        block.contains("app.focused_input = FocusedInput::MainFilter;"),
-        "shortcut recorder close should keep focused_input aligned with the restored main filter"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// remove_shortcut — error path
-// ---------------------------------------------------------------------------
 
 #[test]
 fn remove_shortcut_shows_error_on_persistence_failure() {

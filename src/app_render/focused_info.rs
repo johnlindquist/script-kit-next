@@ -1106,6 +1106,10 @@ fn render_focused_info_for_result(
             let _ = match_indices;
             let _ = shortcut_display;
         }
+        scripts::SearchResult::OneWindow(_) => {
+            let _ = match_indices;
+            let _ = shortcut_display;
+        }
         scripts::SearchResult::SpineProjection(_) => {
             // Spine projection rows have no focused info panel
             let _ = match_indices;
@@ -1317,7 +1321,7 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Fallback(_) => None, // Fallbacks don't track frecency
                     scripts::SearchResult::ScriptIssue(_) => None, // Diagnostic row doesn't track frecency
-                    scripts::SearchResult::Intent(_) => None,
+                    scripts::SearchResult::Intent(_) | scripts::SearchResult::OneWindow(_) => None,
                     scripts::SearchResult::SpineProjection(_) => None, // Spine projections don't track frecency
                 };
 
@@ -1552,6 +1556,12 @@ impl ScriptListApp {
                         "intent".to_string(),
                         false,
                         m.verb,
+                    )),
+                    scripts::SearchResult::OneWindow(m) => Some(ScriptInfo::with_action_verb(
+                        &m.row.title,
+                        "one-window".to_string(),
+                        false,
+                        "Run",
                     )),
                     scripts::SearchResult::SpineProjection(_) => None, // Spine projections have no info panel
                     scripts::SearchResult::Flow(m) => Some(ScriptInfo::with_action_verb(

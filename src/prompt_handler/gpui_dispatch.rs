@@ -58,22 +58,6 @@ fn live_gpui_target_identity_from_main(
                 state.applied_theme_revision,
                 "GpuiFooterOverlay".into(),
             )
-        } else if info.id == "shortcut-recorder-popup" {
-            let state = crate::shortcut_recorder::shortcut_fixture_observation(
-                &info.id,
-                generation,
-                Some(window),
-                cx,
-            )?;
-            (
-                1,
-                state.data_revision,
-                state.presentation_revision,
-                state
-                    .applied_theme_revision
-                    .context("shortcut_not_painted")?,
-                "ShortcutRecorderPopupWindow".into(),
-            )
         } else {
             let (surface, data, presentation, theme) =
                 crate::windows::automation_surface_collector::surface_revision_facts(

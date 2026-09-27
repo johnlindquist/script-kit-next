@@ -4232,17 +4232,6 @@ impl ScriptListApp {
                                             cx,
                                         )
                                     })
-                            } else if resolved.id == "shortcut-recorder-popup" {
-                                resolved
-                                    .generation
-                                    .ok_or_else(|| anyhow::anyhow!("shortcut_generation_missing"))
-                                    .and_then(|generation| {
-                                        crate::shortcut_recorder::shortcut_fixture_layout(
-                                            &resolved.id,
-                                            generation,
-                                            cx,
-                                        )
-                                    })
                             } else {
                                 crate::windows::automation_surface_collector::collect_registered_surface_layout(&resolved, cx)
                             };

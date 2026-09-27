@@ -143,11 +143,22 @@ impl Talk {
         self.locked.or(self.reading)
     }
 
-    /// New words heard. Returns the words Jev should read now: the fourth word, and each clause
-    /// end after it.
-    pub fn hear(&mut self, text: &str) -> Option<String> {
-        if self.phase != Phase::Talking {
-            return None;
+    /// New words heard. Returns the words Jev should read now, and whether they are the final
+    /// words: while talking, the fourth word and each clause end after it; after letting go, the
+    /// transcription catching up replaces the final words.
+    pub fn hear(&mut self, text: &str) -> Option<(String, bool)> {
+        match self.phase {
+            Phase::Asking => return None,
+            Phase::Releasing => {
+                if text.trim() == self.heard.trim() {
+                    return None;
+                }
+                self.heard = text.to_string();
+                self.last = None;
+                self.unread = false;
+                return Some((text.to_string(), true));
+            }
+            Phase::Talking => {}
         }
         self.heard = text.to_string();
         let n = word_count(text);
@@ -155,7 +166,7 @@ impl Talk {
             && !text.ends_with(char::is_whitespace);
         (n == TALK_FIRST_READ_WORDS && !text.ends_with(char::is_whitespace)
             || n > TALK_FIRST_READ_WORDS && clause_end)
-            .then(|| text.to_string())
+            .then(|| (text.to_string(), false))
     }
 
     /// Jev answered. An answer for words older than the last one applied, or for words that were
@@ -295,7 +306,11 @@ impl Talk {
             talk_words::type_into(&self.app),
         )
         .with_icon("type")
-        .with_sub(format!("{} · {}", talk_words::AT_YOUR_CURSOR, self.field));
+        .with_sub(if self.field.is_empty() {
+            talk_words::AT_YOUR_CURSOR.to_string()
+        } else {
+            format!("{} · {}", talk_words::AT_YOUR_CURSOR, self.field)
+        });
         typing.p = p(Reading::Type);
         let mut asking = Row::new(format!("talk:{}", Reading::Ask.id()), self.ask_title())
             .with_icon("ask")
@@ -369,7 +384,8 @@ mod tests {
                 assert_eq!(t.hear(&heard), None, "a space asks nothing");
             }
             heard.push_str(word);
-            if let Some(words) = t.hear(&heard) {
+            if let Some((words, last)) = t.hear(&heard) {
+                assert!(!last);
                 asked.push(words);
             }
         }
@@ -457,6 +473,24 @@ mod tests {
             Some(Decision::AskOnce),
             "Jev disagrees with the highlight"
         );
+    }
+
+    #[test]
+    fn words_that_arrive_after_letting_go_are_the_final_words() {
+        let mut t = talk();
+        t.hear("Hi Sarah thanks for");
+        t.answered(answer("Hi Sarah thanks for", 0.9), None);
+        assert_eq!(t.release(), None, "Jev read these words already");
+        assert!(t.last.is_some());
+        let caught_up = "Hi Sarah thanks for checking in";
+        assert_eq!(t.hear(caught_up), Some((caught_up.to_string(), true)));
+        assert_eq!(
+            t.decision(),
+            None,
+            "waits for Jev to read what was really said"
+        );
+        t.answered(answer(caught_up, 0.9), None);
+        assert_eq!(t.decision(), Some(Decision::Act(Reading::Type)));
     }
 
     #[test]

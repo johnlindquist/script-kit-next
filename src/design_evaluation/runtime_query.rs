@@ -167,19 +167,6 @@ impl Evaluator {
                     elements.truncate(limit);
                     json!({"type":"elementsResult","requestId":request_id,"elements":elements,"totalCount":total,
                         "window":mounted.info,"semanticQuality":"full","projectionQuality":"complete"})
-                } else if matches!(mounted.owner, RootOwner::ShortcutRecorder) {
-                    let mut elements = crate::shortcut_recorder::shortcut_fixture_elements(
-                        &mounted.info.id,
-                        mounted
-                            .info
-                            .generation
-                            .context("recorder_generation_missing")?,
-                        &cx,
-                    )?;
-                    let total = elements.len();
-                    elements.truncate(limit);
-                    json!({"type":"elementsResult","requestId":request_id,"elements":elements,"totalCount":total,
-                        "window":mounted.info,"semanticQuality":"full","projectionQuality":"complete"})
                 } else {
                     let snapshot =
                         crate::windows::automation_surface_collector::collect_surface_snapshot(
@@ -198,20 +185,6 @@ impl Evaluator {
                         "selectedSemanticId":snapshot.selected_semantic_id,"warnings":snapshot.warnings,
                         "window":mounted.info,"semanticQuality":"full","projectionQuality":snapshot.quality.projection_quality()})
                 }
-            }
-            "getLayoutInfo" if matches!(mounted.owner, RootOwner::ShortcutRecorder) => {
-                let info = crate::shortcut_recorder::shortcut_fixture_layout(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("recorder_generation_missing")?,
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                serde_json::to_value(crate::protocol::Message::layout_info_result(
-                    request_id.into(),
-                    info,
-                ))?
             }
             "getLayoutInfo" if matches!(mounted.owner, RootOwner::Footer) => {
                 let info = crate::footer_popup::footer_fixture_layout(
@@ -986,18 +959,6 @@ impl Evaluator {
                     "semanticRevision":state.semantic_revision,"presentationRevision":state.presentation_revision,
                     "appliedThemeRevision":state.applied_theme_revision,"heldAction":format!("{:?}",state.held_action)}),
                 )
-            }
-            RootOwner::ShortcutRecorder => {
-                Ok(crate::shortcut_recorder::shortcut_fixture_observation(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("recorder_generation_missing")?,
-                    None,
-                    &cx,
-                )?
-                .value)
             }
             _ => Ok(Value::Null),
         }

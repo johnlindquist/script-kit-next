@@ -46,7 +46,7 @@ pub(crate) fn result_type_order(r: &SearchResult) -> i32 {
         SearchResult::Fallback(_) => 17, // Fallbacks always last
         // Script issues are pinned separately via grouping; if encountered in
         // sort, treat like a high-priority header (above built-ins).
-        SearchResult::ScriptIssue(_) | SearchResult::Intent(_) => -1,
+        SearchResult::ScriptIssue(_) | SearchResult::Intent(_) | SearchResult::OneWindow(_) => -1,
         // Spine projections sort after fallbacks
         SearchResult::SpineProjection(_) => 18,
     }
