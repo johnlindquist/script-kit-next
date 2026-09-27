@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   actionsForStep, compositeOver, contactSheet, cornerRadiusGuess, decodePngRgba, encodePngRgba, frameStem, leftEdgeBar,
-  MAIN_FRAMES_PER_RUNTIME, measureFrame, modeColor, parseKeySpec, parseSteps, planRuntimes, stepWaitMs, summarize, type RgbaImage,
+  MAIN_FRAMES_PER_RUNTIME, actionsForStep, measureFrame, modeColor, parseKeySpec, parseSteps, planRuntimes, stepWaitMs, summarize, type RgbaImage,
 } from "./one-window-frames.ts";
 
 function solid(width: number, height: number, rgba: [number, number, number, number]): RgbaImage {
@@ -53,6 +53,10 @@ describe("steps", () => {
     expect(() => parseSteps([{ name: "a", append: "x", type: "y" }])).toThrow();
     expect(() => parseSteps([{ name: "a", append: "x", key: "down" }])).toThrow();
     expect(() => parseSteps([{ name: "a", append: "" }])).toThrow();
+    expect(parseSteps([{ name: "a", click: "footer-action:actions" }])[0]).toEqual({ name: "a", click: "footer-action:actions" });
+    expect(actionsForStep({ name: "a", click: "footer-action:actions" })).toEqual([]);
+    expect(() => parseSteps([{ name: "a", click: "x", key: "down" }])).toThrow();
+    expect(() => parseSteps([{ name: "a", click: "" }])).toThrow();
     expect(stepWaitMs({ name: "a", append: "x" })).toBe(300);
   });
   test("wait defaults: type steps settle, key steps do not, explicit zero wins", () => {
