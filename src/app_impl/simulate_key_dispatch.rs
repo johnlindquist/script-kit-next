@@ -4,6 +4,13 @@ use crate::protocol::AutomationWindowTarget;
 use crate::stdin_commands::KeyModifier;
 use gpui::{Context, ScrollStrategy, Window};
 
+#[path = "simulate_key_routes.rs"]
+mod simulate_key_routes;
+use simulate_key_routes::{
+    arg_prompt_key, template_prompt_key, ArgPromptKey, ScriptListEnterOwner, SimulatedModifiers,
+    TemplatePromptKey, SCRIPT_LIST_ENTER_OWNERS,
+};
+
 pub(crate) struct SimulatedKeyInput<'a> {
     pub key: &'a str,
     pub modifiers: &'a [KeyModifier],
@@ -491,44 +498,34 @@ impl ScriptListApp {
                                 view.main_menu_arrow_key_with_history(false, window, ctx);
                             }
                             "enter" => {
-                                if view.menu_syntax_object_selector_owns_main_keyboard()
-                                    && view.apply_menu_syntax_object_selector_intent(
-                                        crate::menu_syntax::InlinePickerKeyIntent::Accept,
-                                        window,
-                                        ctx,
-                                    )
-                                {
-                                    logging::log(
-                                        "STDIN",
-                                        "SimulateKey: Enter - accept menu-syntax object selector",
-                                    );
-                                    return DispatchOutcome::success();
-                                }
-                                if view.menu_syntax_trigger_picker_owns_main_keyboard()
-                                    && view.apply_menu_syntax_trigger_picker_intent(
-                                        crate::menu_syntax::InlinePickerKeyIntent::Accept,
-                                        window,
-                                        ctx,
-                                    )
-                                {
-                                    logging::log(
-                                        "STDIN",
-                                        "SimulateKey: Enter - accept menu-syntax picker",
-                                    );
-                                    return DispatchOutcome::success();
-                                }
-                                if view.try_handle_spine_enter(window, ctx) {
-                                    logging::log("STDIN", "SimulateKey: Enter - spine consumed");
-                                    return DispatchOutcome::success();
-                                }
-                                if view.should_consume_menu_syntax_filter_accept_enter(
-                                    "simulate_key_enter",
-                                ) {
-                                    logging::log(
-                                        "STDIN",
-                                        "SimulateKey: Enter - accepted menu-syntax filter hint consumed",
-                                    );
-                                    return DispatchOutcome::success();
+                                for owner in SCRIPT_LIST_ENTER_OWNERS {
+                                    let taken = match owner {
+                                        ScriptListEnterOwner::ObjectSelector => view
+                                            .menu_syntax_object_selector_owns_main_keyboard()
+                                            && view.apply_menu_syntax_object_selector_intent(
+                                                crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                                window,
+                                                ctx,
+                                            ),
+                                        ScriptListEnterOwner::TriggerPicker => view
+                                            .menu_syntax_trigger_picker_owns_main_keyboard()
+                                            && view.apply_menu_syntax_trigger_picker_intent(
+                                                crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                                window,
+                                                ctx,
+                                            ),
+                                        ScriptListEnterOwner::Spine => {
+                                            view.try_handle_spine_enter(window, ctx)
+                                        }
+                                        ScriptListEnterOwner::FilterAcceptHint => view
+                                            .should_consume_menu_syntax_filter_accept_enter(
+                                                "simulate_key_enter",
+                                            ),
+                                    };
+                                    if taken {
+                                        logging::log("STDIN", owner.receipt());
+                                        return DispatchOutcome::success();
+                                    }
                                 }
                                 logging::log("STDIN", "SimulateKey: Enter - execute selected");
                                 return match view.execute_selected(ctx) {
@@ -1048,8 +1045,8 @@ impl ScriptListApp {
                     // Sessionless Mini prompts have no script to consume a
                     // submit/cancel and advance the view. Mirror Path/Div's
                     // OF-5 direct-reset contract after Enter or Escape.
-                    let direct_reset =
-                        sessionless_mini && matches!(key_lower.as_str(), "enter" | "escape");
+                    let arg_key = arg_prompt_key(&key_lower);
+                    let direct_reset = sessionless_mini && arg_key.finishes_prompt();
 
                     // Check for Cmd+K to toggle actions popup
                     if has_cmd && key_lower == "k" {
@@ -1111,8 +1108,8 @@ impl ScriptListApp {
                     } else {
                         // Normal arg prompt key handling
                         let prompt_id = id.clone();
-                        match key_lower.as_str() {
-                            "up" | "arrowup" => {
+                        match arg_key {
+                            ArgPromptKey::Up => {
                                 if view.arg_selected_index > 0 {
                                     view.set_arg_selected_index(view.arg_selected_index - 1);
                                     view.arg_list_scroll_handle.scroll_to_item(
@@ -1128,7 +1125,7 @@ impl ScriptListApp {
                                     );
                                 }
                             }
-                            "down" | "arrowdown" => {
+                            ArgPromptKey::Down => {
                                 let filtered = view.filtered_arg_choices();
                                 if view.arg_selected_index < filtered.len().saturating_sub(1) {
                                     view.set_arg_selected_index(view.arg_selected_index + 1);
@@ -1145,19 +1142,19 @@ impl ScriptListApp {
                                     );
                                 }
                             }
-                            "enter" => {
+                            ArgPromptKey::SubmitSelection => {
                                 logging::log(
                                     "STDIN",
                                     "SimulateKey: Enter - submit mini prompt selection",
                                 );
                                 view.submit_arg_prompt_from_current_state(&prompt_id, ctx);
                             }
-                            "escape" => {
+                            ArgPromptKey::Cancel => {
                                 logging::log("STDIN", "SimulateKey: Escape - cancel script");
                                 view.submit_prompt_response(prompt_id, None, ctx);
                                 view.cancel_script_execution(ctx);
                             }
-                            _ => {
+                            ArgPromptKey::Unhandled => {
                                 logging::log(
                                     "STDIN",
                                     &format!(
@@ -1362,85 +1359,82 @@ impl ScriptListApp {
                     );
                     let entity_clone = entity.clone();
                     let prompt_id_clone = id.clone();
+                    let template_key = template_prompt_key(
+                        &key_lower,
+                        SimulatedModifiers {
+                            cmd: has_cmd,
+                            shift: has_shift,
+                            alt: _has_alt,
+                            ctrl: _has_ctrl,
+                        },
+                    );
 
-                    if has_cmd && !has_shift && !_has_alt && !_has_ctrl && key_lower == "k" {
-                        logging::log("STDIN", "SimulateKey: Cmd+K - toggle template actions");
-                        view.dispatch_actions_toggle_for_current_view(
-                            window,
-                            ctx,
-                            "stdin_simulate_key_template_prompt",
-                        );
-                    } else {
-                        match key_lower.as_str() {
-                            "enter" | "return" if !has_shift && !has_cmd => {
-                                logging::log("STDIN", "SimulateKey: Enter - submit TemplatePrompt");
-                                entity_clone.update(ctx, |prompt, cx| {
-                                    prompt.submit(cx);
-                                });
-                            }
-                            "escape" | "esc" if !has_cmd => {
-                                logging::log(
-                                    "STDIN",
-                                    "SimulateKey: Escape - cancel TemplatePrompt",
-                                );
-                                view.submit_prompt_response(prompt_id_clone.clone(), None, ctx);
-                                view.cancel_script_execution(ctx);
-                            }
-                            "tab" if !has_cmd && !has_shift => {
-                                logging::log(
-                                    "STDIN",
-                                    "SimulateKey: Tab - next TemplatePrompt field",
-                                );
-                                entity_clone.update(ctx, |prompt, cx| {
-                                    prompt.next_input(cx);
-                                });
-                            }
-                            "tab" if !has_cmd && has_shift => {
-                                logging::log(
-                                    "STDIN",
-                                    "SimulateKey: Shift+Tab - previous TemplatePrompt field",
-                                );
-                                entity_clone.update(ctx, |prompt, cx| {
-                                    prompt.prev_input(cx);
-                                });
-                            }
-                            "backspace" if !has_cmd && !_has_alt && !_has_ctrl => {
-                                logging::log(
-                                    "STDIN",
-                                    "SimulateKey: Backspace - edit TemplatePrompt field",
-                                );
-                                entity_clone.update(ctx, |prompt, cx| {
-                                    prompt.handle_backspace(cx);
-                                });
-                            }
-                            _ if !has_cmd
-                                && !has_shift
-                                && !_has_alt
-                                && !_has_ctrl
-                                && key_lower.chars().count() == 1 =>
-                            {
-                                if let Some(ch) = key_lower.chars().next() {
-                                    logging::log(
-                                        "STDIN",
-                                        &format!(
-                                            "SimulateKey: Char '{}' - edit TemplatePrompt field",
-                                            ch
-                                        ),
-                                    );
-                                    entity_clone.update(ctx, |prompt, cx| {
-                                        prompt.handle_text(&key_lower, cx);
-                                    });
-                                }
-                            }
-                            _ => {
+                    match template_key {
+                        TemplatePromptKey::ToggleActions => {
+                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle template actions");
+                            view.dispatch_actions_toggle_for_current_view(
+                                window,
+                                ctx,
+                                "stdin_simulate_key_template_prompt",
+                            );
+                        }
+                        TemplatePromptKey::Submit => {
+                            logging::log("STDIN", "SimulateKey: Enter - submit TemplatePrompt");
+                            entity_clone.update(ctx, |prompt, cx| {
+                                prompt.submit(cx);
+                            });
+                        }
+                        TemplatePromptKey::Cancel => {
+                            logging::log("STDIN", "SimulateKey: Escape - cancel TemplatePrompt");
+                            view.submit_prompt_response(prompt_id_clone.clone(), None, ctx);
+                            view.cancel_script_execution(ctx);
+                        }
+                        TemplatePromptKey::NextField => {
+                            logging::log("STDIN", "SimulateKey: Tab - next TemplatePrompt field");
+                            entity_clone.update(ctx, |prompt, cx| {
+                                prompt.next_input(cx);
+                            });
+                        }
+                        TemplatePromptKey::PreviousField => {
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Shift+Tab - previous TemplatePrompt field",
+                            );
+                            entity_clone.update(ctx, |prompt, cx| {
+                                prompt.prev_input(cx);
+                            });
+                        }
+                        TemplatePromptKey::Backspace => {
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Backspace - edit TemplatePrompt field",
+                            );
+                            entity_clone.update(ctx, |prompt, cx| {
+                                prompt.handle_backspace(cx);
+                            });
+                        }
+                        TemplatePromptKey::Type => {
+                            if let Some(ch) = key_lower.chars().next() {
                                 logging::log(
                                     "STDIN",
                                     &format!(
-                                        "SimulateKey: Unhandled key '{}' in TemplatePrompt",
-                                        key_lower
+                                        "SimulateKey: Char '{}' - edit TemplatePrompt field",
+                                        ch
                                     ),
                                 );
+                                entity_clone.update(ctx, |prompt, cx| {
+                                    prompt.handle_text(&key_lower, cx);
+                                });
                             }
+                        }
+                        TemplatePromptKey::Unhandled => {
+                            logging::log(
+                                "STDIN",
+                                &format!(
+                                    "SimulateKey: Unhandled key '{}' in TemplatePrompt",
+                                    key_lower
+                                ),
+                            );
                         }
                     }
                 }

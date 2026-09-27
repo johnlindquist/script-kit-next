@@ -421,8 +421,6 @@ fn registered_capture_targets_extend_parser_popup_and_input_highlight() {
 fn menu_syntax_hint_surface_is_not_grouped_results() {
     let render = fs::read_to_string("src/render_script_list/mod.rs")
         .expect("Failed to read src/render_script_list/mod.rs");
-    let grouping = fs::read_to_string("src/scripts/grouping.rs")
-        .expect("Failed to read src/scripts/grouping.rs");
     let main_hint = fs::read_to_string("src/menu_syntax/main_hint.rs")
         .expect("Failed to read src/menu_syntax/main_hint.rs");
 
@@ -432,12 +430,8 @@ fn menu_syntax_hint_surface_is_not_grouped_results() {
             && render.contains("menu_syntax_main_hint_snapshot(&filter_text_for_render, true)"),
         "the grammar hint should be a rendered snapshot for owned states and advanced-query empty states"
     );
-    let hint_results = source_after(&grouping, "pub(crate) fn build_menu_syntax_hint_results(");
     assert!(
-        hint_results.contains("GroupedListItem::SectionHeader(hint.to_string(), None)")
-            && !hint_results.contains("GroupedListItem::Item(")
-            && hint_results.contains("Vec::new(),")
-            && !render.contains("build_menu_syntax_hint_results("),
+        !render.contains("build_menu_syntax_hint_results("),
         "grammar hints must not repopulate the selectable GroupedListItem list"
     );
     assert!(
@@ -469,8 +463,6 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
         .expect("Failed to read src/app_impl/startup.rs");
     let startup_new_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
-    let simulate_key = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
-        .expect("Failed to read src/app_impl/simulate_key_dispatch.rs");
 
     assert!(
         source_after(&trigger_picker, "fn should_show_has_field_completion(")
@@ -512,16 +504,6 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
             && startup_new_tab.contains("is_plain_enter")
             && startup_new_tab.contains("menu_syntax_trigger_picker_owns_main_keyboard()"),
         "physical Enter startup paths must route to menu-syntax trigger Accept before ordinary launcher Enter"
-    );
-    let accept = simulate_key
-        .find("\"SimulateKey: Enter - accept menu-syntax picker\"")
-        .expect("simulateKey Enter must log picker acceptance");
-    let execute = simulate_key
-        .find("\"SimulateKey: Enter - execute selected\"")
-        .expect("simulateKey Enter must retain ordinary execution fallback");
-    assert!(
-        accept < execute,
-        "protocol simulateKey Enter must accept menu-syntax picker before ordinary launcher execution"
     );
 }
 

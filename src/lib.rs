@@ -196,6 +196,19 @@ pub mod routes;
 #[path = "app_impl/menu_syntax_trigger_picker.rs"]
 pub mod menu_syntax_trigger_picker;
 
+// Main-list rows for the trigger picker and the `@` object selector. Same
+// `#[path]` re-export pattern as `path_action`: the binary's grouped cache
+// builds the rows with it and its tests run under `cargo test --lib`.
+#[path = "app_impl/menu_syntax_main_list_rows.rs"]
+pub mod menu_syntax_main_list_rows;
+
+// What a protocol `simulateKey` means on the main list and on arg, mini and
+// template prompts. Same `#[path]` re-export pattern as `path_action`: the
+// binary's `dispatch_simulate_key` matches on it and its tests run under
+// `cargo test --lib`.
+#[path = "app_impl/simulate_key_routes.rs"]
+pub mod simulate_key_routes;
+
 // Pure adapter that bridges `menu_syntax::current_actions` (pure spec) into
 // the Cmd+K actions-dialog (live UI). Same `#[path]` re-export pattern as
 // `path_action` / `routes` / `menu_syntax_trigger_picker` so unit tests for

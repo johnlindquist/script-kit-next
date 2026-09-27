@@ -73,45 +73,9 @@ fn prepend_inline_calculator_group(
     (merged_grouped_items, flat_results)
 }
 
-fn build_menu_syntax_trigger_picker_main_list_results(
-    snapshot: &crate::menu_syntax::TriggerPickerSnapshot,
-) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
-    let section = snapshot.mode.main_list_section();
-    let mut grouped_items = Vec::with_capacity(snapshot.rows.len() + 1);
-    let mut flat_results = Vec::with_capacity(snapshot.rows.len());
-    grouped_items.push(GroupedListItem::SectionHeader(
-        section.0.to_string(),
-        Some(section.1.to_string()),
-    ));
-
-    for row in &snapshot.rows {
-        let flat_index = flat_results.len();
-        flat_results.push(scripts::SearchResult::SpineProjection(
-            crate::menu_syntax_trigger_picker::trigger_picker_row_to_main_list_row(row),
-        ));
-        grouped_items.push(GroupedListItem::Item(flat_index));
-    }
-
-    (grouped_items, flat_results)
-}
-
-fn build_menu_syntax_object_selector_main_list_results(
-    snapshot: &crate::menu_syntax::ObjectSelectorSnapshot,
-) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
-    let mut grouped_items = Vec::with_capacity(snapshot.rows.len() + 1);
-    let mut flat_results = Vec::with_capacity(snapshot.rows.len());
-    grouped_items.push(GroupedListItem::SectionHeader(
-        "Objects".to_string(),
-        Some("at-sign".to_string()),
-    ));
-
-    for row in &snapshot.rows {
-        let flat_index = flat_results.len();
-        flat_results.push(scripts::SearchResult::SpineProjection(
-            crate::menu_syntax::object_selector_row_to_main_list_row(row),
-        ));
-        grouped_items.push(GroupedListItem::Item(flat_index));
-    }
-
-    (grouped_items, flat_results)
-}
+#[path = "menu_syntax_main_list_rows.rs"]
+mod menu_syntax_main_list_rows;
+use menu_syntax_main_list_rows::{
+    build_menu_syntax_object_selector_main_list_results,
+    build_menu_syntax_trigger_picker_main_list_results,
+};
