@@ -993,11 +993,10 @@ async function main() {
     ThemeChooser: ["theme", "choose-theme", "theme-chooser", "themechooser"],
     FileSearchMini: ["file-search-mini", "file-search-owned"],
     FileSearchFull: ["file-search-full"],
-    AttachmentPortalBrowser: ["attachment-portal", "dictation-history"],
+    AttachmentPortalBrowser: ["attachment-portal"],
     SdkReference: ["sdk-reference"],
     ScriptTemplateCatalog: ["script-template", "script-template-catalog"],
     NotesWindow: ["notes"],
-    Dictation: ["dictation"],
   };
 
   const surfaceContracts = asArray(inventory.auditSurfaceContracts ?? inventory.surfaceContracts).map((entry) => asObject(entry));
@@ -1047,10 +1046,6 @@ async function main() {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-feedback-guideline-layout.json`,
         `${RECEIPT_ROOT}/window-priority-feedback-layout-after.json`,
-      ]);
-    } else if (surfaceKind === "Dictation") {
-      await attachVisualAudit(evidence, [
-        `${RECEIPT_ROOT}/window-priority-dictation-layout-after.json`,
       ]);
     } else if (surfaceKind === "AgentChat") {
       await attachVisualAudit(evidence, [
@@ -1206,7 +1201,6 @@ async function main() {
 
   const practicalTargets = await Promise.all([
     { id: "notes", terms: ["notes"] },
-    { id: "dictation", terms: ["dictation"] },
     { id: "agent_chat-detached", terms: ["agent_chat-detached"] },
     { id: "inline-agent", terms: ["inline-agent"] },
     { id: "notes-agent_chat", terms: ["notes-agent_chat"] },
@@ -1225,29 +1219,15 @@ async function main() {
         `${RECEIPT_ROOT}/notes-agent_chat-next-actions-open-inspect.json`,
         `${RECEIPT_ROOT}/notes-agent_chat-actions-open-inspect.json`,
       ]);
-    } else if (target.id === "dictation") {
-      await attachVisualAudit(evidence, [
-        `${RECEIPT_ROOT}/window-priority-dictation-layout-after.json`,
-      ]);
     } else if (target.id === "agent_chat-detached") {
       await attachVisualAudit(evidence, [
         `${RECEIPT_ROOT}/window-priority-agent_chat-detached-layout-after.json`,
       ]);
     }
-    const dictationMedia = target.id === "dictation"
-      ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-post-delivery-media.json`)
-      : null;
-    const dictationDelivery = target.id === "dictation"
-      ? await readJsonIfExists(`${RECEIPT_ROOT}/dictation-next-deliver-fixture.json`)
-      : null;
     const baseStatus = classify(evidence);
     const tiers = proofTiers(evidence);
-    const proofStatus = target.id === "dictation" && evidence.visualAudit && evidence.layoutReceipts.length > 0
+    const proofStatus = target.id === "agent_chat-detached" && evidence.visualAudit && evidence.layoutReceipts.length > 0
       ? "numeric-window-proof-screenshot-blocked"
-      : target.id === "agent_chat-detached" && evidence.visualAudit && evidence.layoutReceipts.length > 0
-        ? "numeric-window-proof-screenshot-blocked"
-      : target.id === "dictation" && dictationMedia
-        ? "media-proof-missing-visual"
       : target.id === "inline-agent" && evidence.visualAudit && evidence.layoutReceipts.length > 0
         ? "numeric-proof-missing-visual-capture"
         : target.id === "notes-agent_chat" && evidence.visualAudit && evidence.inspectReceipts.length > 0
@@ -1267,24 +1247,9 @@ async function main() {
         imageDiff: evidence.imageDiffReceipts.length > 0,
         imageDiffProof: tiers.imageDiffProof,
         visualAudit: evidence.visualAudit != null,
-        mediaProof: dictationMedia != null,
-        syntheticDelivery: dictationDelivery != null,
       },
       proofTiers: tiers,
       osCapture: osCaptureFromEvidence(evidence, tiers),
-      mediaProof: dictationMedia
-        ? {
-          status: dictationMedia.status ?? null,
-          missingRuntimePrimitives: dictationMedia.missingRuntimePrimitives ?? [],
-        }
-        : null,
-      syntheticDelivery: dictationDelivery
-        ? {
-          classification: dictationDelivery.classification ?? null,
-          target: dictationDelivery.target ?? null,
-          delivery: dictationDelivery.delivery ?? null,
-        }
-        : null,
       evidence,
     };
   }));

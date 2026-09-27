@@ -814,7 +814,6 @@ fn is_detached_window(kind: crate::protocol::AutomationWindowKind) -> bool {
     matches!(
         kind,
         crate::protocol::AutomationWindowKind::AgentChatDetached
-            | crate::protocol::AutomationWindowKind::Dictation
             | crate::protocol::AutomationWindowKind::Notes
     )
 }

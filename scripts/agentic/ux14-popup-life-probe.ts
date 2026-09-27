@@ -20,11 +20,8 @@ function arg(name: string, fallback?: string): string | undefined {
 }
 
 const binary = resolve(arg("--binary", process.env.SCRIPT_KIT_GPUI_BINARY) ?? "");
-const family = arg("--family", "dictation-microphone")!;
-const defaultReceipt = family === "agent-history"
-  ? ".artifacts/ux14-popup-life/runtime-agent-history.json"
-  : ".artifacts/ux14-popup-life/runtime-dictation-microphone.json";
-const out = resolve(arg("--out", defaultReceipt)!);
+const family = arg("--family", "agent-history")!;
+const out = resolve(arg("--out", ".artifacts/ux14-popup-life/runtime-agent-history.json")!);
 const verifyPath = arg("--verify");
 
 if (verifyPath) {
@@ -38,7 +35,7 @@ if (verifyPath) {
 }
 
 if (!binary || !existsSync(binary)) throw new Error(`Missing binary: ${binary}`);
-if (!new Set(["agent-history", "dictation-microphone"]).has(family)) {
+if (family !== "agent-history") {
   throw new Error(`Unsupported UX-014 family: ${family}`);
 }
 mkdirSync(dirname(out), { recursive: true });
@@ -236,103 +233,6 @@ async function runAgentHistoryScenario(driver: Driver, steps: Json[]): Promise<v
   });
 }
 
-async function runDictationScenario(driver: Driver, steps: Json[]): Promise<void> {
-  const configPath = join(driver.sessionDir, "home", ".scriptkit", "config.ts");
-  const configBefore = existsSync(configPath) ? readFileSync(configPath) : null;
-
-  driver.send({ type: "openDictationOverlayFixture" });
-  const parent = await waitForWindow(driver, "dictation", true);
-  if (!parent || parent.kind !== "dictation") throw new Error("Dictation fixture target missing");
-  steps.push({ step: "parent-open", parent });
-
-  driver.send({ type: "openDictationMicrophonePopupFixture" });
-  const first = await waitForWindow(driver, "dictation-microphone-popup", true);
-  if (!first?.generation) throw new Error("First popup did not publish a generation");
-  if (first.parentWindowId !== "dictation" || first.parentKind !== "dictation") {
-    throw new Error(`Wrong popup parent: ${JSON.stringify(first)}`);
-  }
-  const firstTarget = { type: "instance", id: first.id, generation: first.generation };
-  const firstElements = await driver.getElements({ target: firstTarget });
-  const semanticIds = (firstElements.elements ?? []).map((element: Json) => element.semanticId);
-  if (!semanticIds.includes("panel:dictation-microphone-popup")) {
-    throw new Error(`Missing exact popup semantics: ${JSON.stringify(semanticIds)}`);
-  }
-  steps.push({ step: "first-open", target: firstTarget, semanticIds });
-
-  const shotPath = join(dirname(out), "dictation-microphone-popup.png");
-  const screenshot = await driver.captureScreenshot({ target: firstTarget, savePath: shotPath, timeoutMs: 10_000 });
-  if (screenshot.error || !screenshot.width || !screenshot.height) {
-    throw new Error(`Strict popup screenshot failed: ${JSON.stringify(screenshot)}`);
-  }
-  steps.push({ step: "strict-screenshot", path: shotPath, width: screenshot.width, height: screenshot.height });
-
-  const localEscape = await driver.simulateGpuiKeyDown("escape", { target: { type: "id", id: "dictation" } });
-  await waitForWindow(driver, first.id, false);
-  await requireFocusedWindow(driver, "dictation");
-  steps.push({ step: "parent-escape-one-layer", dispatch: localEscape, parentRemained: true, parentFocused: true });
-
-  await Bun.sleep(180);
-  driver.send({ type: "openDictationMicrophonePopupFixture" });
-  const second = await waitForWindow(driver, first.id, true);
-  if (!second?.generation || second.generation <= first.generation) {
-    throw new Error(`Reopen generation did not advance: ${JSON.stringify({ first, second })}`);
-  }
-  const secondTarget = { type: "instance", id: second.id, generation: second.generation };
-  steps.push({ step: "fresh-reopen", firstGeneration: first.generation, secondGeneration: second.generation });
-
-  const staleResponse = await driver.getElements({ target: firstTarget });
-  if (!staleTargetWasRejected(staleResponse)) {
-    throw new Error(`Stale first-generation target resolved after reopen: ${JSON.stringify(staleResponse)}`);
-  }
-  steps.push({ step: "stale-instance-refused", staleRejected: true, warnings: staleResponse.warnings });
-
-  const outsideClick = await driver.simulateGpuiClick(20, 20, { target: { type: "id", id: "dictation" } });
-  await waitForWindow(driver, second.id, false);
-  await requireFocusedWindow(driver, "dictation");
-  steps.push({ step: "parent-click-outside-focus-return", dispatch: outsideClick, overlayRemained: true, parentFocused: true });
-
-  await Bun.sleep(180);
-  driver.send({ type: "openDictationMicrophonePopupFixture" });
-  const third = await waitForWindow(driver, first.id, true);
-  if (!third?.generation) throw new Error("Third popup generation missing");
-  const thirdTarget = { type: "instance", id: third.id, generation: third.generation };
-  driver.send({ type: "closePromptPopupNatively", target: thirdTarget });
-  await waitForWindow(driver, third.id, false);
-  await requireFocusedWindow(driver, "dictation");
-  const nativeStale = await driver.getElements({ target: thirdTarget });
-  if (!staleTargetWasRejected(nativeStale)) {
-    throw new Error(`Native-closed Dictation target remained live: ${JSON.stringify(nativeStale)}`);
-  }
-  steps.push({ step: "native-close-reconciled-focus-return", target: thirdTarget, overlayRemained: true, parentFocused: true, warnings: nativeStale.warnings });
-
-  await Bun.sleep(180);
-  driver.send({ type: "openDictationMicrophonePopupFixture" });
-  const fourth = await waitForWindow(driver, first.id, true);
-  if (!fourth?.generation || fourth.generation <= third.generation) {
-    throw new Error(`Fourth popup generation did not advance: ${JSON.stringify({ third, fourth })}`);
-  }
-  const fourthTarget = { type: "instance", id: fourth.id, generation: fourth.generation };
-  const rows = await driver.getElements({ target: fourthTarget });
-  const alternate = (rows.elements ?? []).find((element: Json) => element.semanticId === "choice:1:dictation-mic-row-1");
-  if (!alternate) throw new Error("Fixture alternate microphone row missing");
-  const selected = await driver.request(
-    {
-      type: "batch",
-      target: fourthTarget,
-      commands: [{ type: "selectBySemanticId", semanticId: alternate.semanticId }],
-      options: { stopOnError: true, timeout: 5000 },
-    },
-    { expect: "batchResult", timeoutMs: 7000 },
-  );
-  if (selected.success !== true) throw new Error(`Exact Dictation batch failed: ${JSON.stringify(selected)}`);
-  await waitForWindow(driver, fourth.id, false);
-  const configAfter = existsSync(configPath) ? readFileSync(configPath) : null;
-  if (!Buffer.from(configBefore ?? []).equals(Buffer.from(configAfter ?? []))) {
-    throw new Error("Fixture microphone selection changed sandbox config bytes");
-  }
-  steps.push({ step: "fixture-selection-no-persistence", selected, configUnchanged: true });
-}
-
 const receipt: Json = { schemaVersion: 1, family, binary, clipboardTouched: false, steps: [] };
 const steps = receipt.steps as Json[];
 let driver: Driver | null = null;
@@ -350,11 +250,7 @@ try {
   driverPid = driver.pid;
   await driver.waitForSettle();
 
-  if (family === "agent-history") {
-    await runAgentHistoryScenario(driver, steps);
-  } else {
-    await runDictationScenario(driver, steps);
-  }
+  await runAgentHistoryScenario(driver, steps);
   receipt.ok = true;
 } catch (error) {
   receipt.ok = false;

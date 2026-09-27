@@ -292,20 +292,6 @@ fn has_selected_emoji_entry(app: &ScriptListApp) -> bool {
         .is_some()
 }
 
-fn has_selected_dictation_history_entry(app: &ScriptListApp) -> bool {
-    let AppView::DictationHistoryView {
-        filter,
-        selected_index,
-        visible_limit,
-    } = &app.current_view
-    else {
-        return false;
-    };
-
-    app.dictation_history_current_or_previous_page(filter, *visible_limit)
-        .is_some_and(|page| page.rows.get(*selected_index).is_some())
-}
-
 impl ScriptListApp {
     fn copy_selected_sdk_reference_markdown(&mut self, cx: &mut Context<Self>) -> bool {
         let selected = match &self.current_view {

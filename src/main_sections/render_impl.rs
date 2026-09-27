@@ -249,7 +249,6 @@ impl Render for ScriptListApp {
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
                 && !ai::agent_chat::ui::chat_window::is_chat_window_open()
-                && !crate::dictation::is_dictation_overlay_open()
                 && !crate::dictation::is_dictation_recording()
                 && self.tab_ai_save_offer_state.is_none()
                 && self.shortcut_recorder_state.is_none()
@@ -314,7 +313,6 @@ impl Render for ScriptListApp {
                 | AppView::FavoritesBrowseView { .. }
                 | AppView::AgentChatHistoryView { .. }
                 | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::TipsView { .. }
                 | AppView::MiniPrompt { .. }
@@ -717,13 +715,6 @@ impl Render for ScriptListApp {
                 selected_index,
             } => self
                 .render_browser_history(filter, selected_index, cx)
-                .into_any_element(),
-            AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                visible_limit,
-            } => self
-                .render_dictation_history(filter, selected_index, visible_limit, cx)
                 .into_any_element(),
             AppView::NotesBrowseView { search } => self
                 .render_notes_browse_portal(search, cx)

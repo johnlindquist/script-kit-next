@@ -18,7 +18,7 @@ pub(crate) struct StagedFrom {
     row: Option<String>,
 }
 
-fn action_row(action: &crate::actions::Action) -> Row {
+pub(super) fn action_row(action: &crate::actions::Action) -> Row {
     let row = Row::new(format!("{ACTION_KEY}{}", action.id), action.title.clone())
         .with_enter_label(action.title.clone());
     match action.description.as_deref().filter(|d| !d.is_empty()) {
@@ -44,6 +44,9 @@ impl ScriptListApp {
 
     /// The staged subject's actions, as rows. A row the list still highlights is the subject.
     pub(super) fn one_window_actions_for(&mut self, subject: &Subject) -> Event {
+        if let Some(actions) = self.one_window_history_actions(subject) {
+            return actions;
+        }
         self.pending_root_unified_actions_subject = None;
         self.pending_root_file_actions_file = None;
         let result = subject

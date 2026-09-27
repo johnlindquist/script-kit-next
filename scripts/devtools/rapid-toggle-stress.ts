@@ -2,8 +2,8 @@
 /**
  * Visible, fail-closed stress proof for animation-heavy window toggles.
  *
- * The probe exercises the real GPUI dispatch path for Cmd+K, the Notes
- * toggle command, and the Dictation builtin. Each phase posts input as fast
+ * The probe exercises the real GPUI dispatch path for Cmd+K and the Notes
+ * toggle command. Each phase posts input as fast
  * as the app can acknowledge it, watches for duplicate automation windows,
  * proves a deliberate recovery action, and rejects fresh ERROR/crash logs.
  */
@@ -203,12 +203,12 @@ const outPath = resolve(
 if (!binary || !existsSync(binary)) {
   throw new Error(`binary missing: ${binary || "<unset>"}`);
 }
-// C08: backward-compatible probe profiles. `full` is the existing
-// Actions + Notes + Dictation behavior; `pf011` (the PF-011 aggregator
-// profile) runs Actions + Notes only and REQUIRES the named theme fixture
-// and prepared helper manifests instead of interpreting Swift source.
+// C08: backward-compatible probe profiles. `full` runs Actions + Notes;
+// `pf011` (the PF-011 aggregator profile) runs the same phases and REQUIRES
+// the named theme fixture and prepared helper manifests instead of
+// interpreting Swift source.
 const RAPID_TOGGLE_PROFILES: Record<string, string[]> = {
-  full: ["actions", "notes", "dictation"],
+  full: ["actions", "notes"],
   pf011: ["actions", "notes"],
 };
 const profile = arg("--profile", "full") ?? "full";
@@ -756,230 +756,6 @@ try {
       ),
   );
 
-  // C08: the pf011 profile supports the PF-011 aggregator with Actions +
-  // Notes only; Dictation remains part of the default full profile.
-  let dictationPass = true;
-  if (profile === "full") {
-  await announceTestStatus(
-    "MWND-15C · Dictation hammer",
-    "12 real start/stop requests, then four exit-ticket cancellation cycles",
-  );
-  const dictationBefore = await driver.getState({ timeoutMs: 5_000 });
-  const dictationBaseline = dictationBefore?.dictation
-    ?? dictationBefore?.dictationState
-    ?? dictationBefore?.dictation_state
-    ?? null;
-  const baselineGeneration = Number(dictationBaseline?.generation ?? 0);
-  const baselineRecordingStateGeneration = Number(
-    dictationBaseline?.recordingStateGeneration ?? 0,
-  );
-  const dictationErrorBaseline = ((await driver.getLogs({
-    limit: 500,
-    level: "error",
-  }))?.entries ?? []).length;
-  let maxDictationWindows = 0;
-  let maxNativeDictationWindows = 0;
-  const dictationSamples: Json[] = [];
-  for (let index = 0; index < 12; index += 1) {
-    driver.send({
-      type: "triggerBuiltin",
-      builtinId: "builtin/dictation",
-      requestId: `mwnd15-dictation-${index}`,
-    });
-    await Bun.sleep(35);
-    const windows = await driver.listAutomationWindows({ timeoutMs: 5_000 });
-    const count = countKind(windows, "dictation");
-    maxDictationWindows = Math.max(maxDictationWindows, count);
-    const native = driver.pid
-      ? await nativeWindowInventory(driver.pid, "Script Kit Dictation", mainWindowId)
-      : { ids: [], error: "driver PID unavailable" };
-    maxNativeDictationWindows = Math.max(maxNativeDictationWindows, native.ids.length);
-    const state = await driver.getState({ timeoutMs: 5_000 });
-    const dictation = state?.dictation ?? state?.dictationState ?? state?.dictation_state ?? null;
-    dictationSamples.push({
-      index,
-      count,
-      nativeWindowIds: native.ids,
-      nativeWindowCount: native.ids.length,
-      nativeWindowError: native.error,
-      nativeTopology: native.topology,
-      generation: dictation?.generation ?? null,
-      recordingStateGeneration: dictation?.recordingStateGeneration ?? null,
-      isRecording: dictation?.isRecording ?? null,
-      phase: dictation?.phase ?? null,
-      captureActive: dictation?.cleanup?.captureActive ?? null,
-      captureStopInProgress: dictation?.cleanup?.captureStopInProgress ?? null,
-      windowLifecycle: dictation?.windowLifecycle ?? null,
-    });
-  }
-
-  let dictationState: Json = null;
-  const dictationSettleStarted = performance.now();
-  while (performance.now() - dictationSettleStarted < 8_000) {
-    const state = await driver.getState({ timeoutMs: 5_000 });
-    dictationState = state?.dictation ?? state?.dictationState ?? state?.dictation_state ?? null;
-    const captureActive = dictationState?.cleanup?.captureActive === true;
-    const stopInProgress = dictationState?.cleanup?.captureStopInProgress === true;
-    if (!captureActive && !stopInProgress && dictationState?.isRecording !== true) break;
-    await Bun.sleep(50);
-  }
-  const dictationSettleMs = performance.now() - dictationSettleStarted;
-  const dictationCloseStarted = performance.now();
-  const dictationClosed = await waitForKindCount(driver, "dictation", 0, 2_000);
-  const dictationCloseMs = performance.now() - dictationCloseStarted;
-  const dictationErrors = boundedErrors(
-    await driver.getLogs({ limit: 500, level: "error" }),
-    dictationErrorBaseline,
-  );
-  const dictationCleanup = {
-    isRecording: dictationState?.isRecording ?? null,
-    phase: dictationState?.phase ?? null,
-    generation: dictationState?.generation ?? null,
-    recordingStateGeneration: dictationState?.recordingStateGeneration ?? null,
-    captureActive: dictationState?.cleanup?.captureActive ?? null,
-    captureStopInProgress: dictationState?.cleanup?.captureStopInProgress ?? null,
-    safety: dictationState?.safety ?? null,
-  };
-  const exercisedRealToggle = dictationSamples.some((sample) =>
-    sample.count > 0
-    || sample.isRecording === true
-    || sample.captureActive === true
-    || Number(sample.generation ?? 0) > baselineGeneration
-    || Number(sample.recordingStateGeneration ?? 0) > baselineRecordingStateGeneration
-  );
-  const realToggleNativeDictationWindowIds = [
-    ...new Set(
-      dictationSamples.flatMap((sample) =>
-        (sample?.nativeWindowIds ?? []) as number[]
-      ),
-    ),
-  ];
-
-  driver.send({
-    type: "openDictationOverlayFixture",
-    requestId: "mwnd15-dictation-fixture-open",
-  });
-  const fixtureOpened = await waitForKindCount(driver, "dictation", 1, 2_000);
-  const fixtureInitialNative = driver.pid
-    ? await nativeWindowInventory(driver.pid, "Script Kit Dictation", mainWindowId)
-    : { ids: [], error: "driver PID unavailable" };
-  const fixturePinnedWindowId = fixtureInitialNative.ids.length === 1
-    ? fixtureInitialNative.ids[0]
-    : null;
-  const fixtureCycles: Json[] = [];
-  for (let index = 0; index < 4; index += 1) {
-    const confirmDispatch = await driver.simulateGpuiKeyDown("escape", {
-      target: { type: "id", id: "dictation" },
-      timeoutMs: 5_000,
-    });
-    await Bun.sleep(15);
-    const discardDispatch = await driver.simulateGpuiKeyDown("backspace", {
-      target: { type: "id", id: "dictation" },
-      timeoutMs: 5_000,
-    });
-    await Bun.sleep(15);
-    const duringExitState = await driver.getState({ timeoutMs: 5_000 });
-    const duringExit = duringExitState?.dictation?.windowLifecycle ?? null;
-    driver.send({
-      type: "openDictationOverlayFixture",
-      requestId: `mwnd15-dictation-fixture-reopen-${index}`,
-    });
-    const reopened = await waitForKindCount(driver, "dictation", 1, 2_000);
-    await Bun.sleep(30);
-    const afterReopenState = await driver.getState({ timeoutMs: 5_000 });
-    const afterReopen = afterReopenState?.dictation?.windowLifecycle ?? null;
-    const native = driver.pid
-      ? await nativeWindowInventory(driver.pid, "Script Kit Dictation", mainWindowId)
-      : { ids: [], error: "driver PID unavailable" };
-    fixtureCycles.push({
-      index,
-      confirmDispatch,
-      discardDispatch,
-      duringExit,
-      reopened,
-      afterReopen,
-      nativeWindowIds: native.ids,
-      nativeWindowError: native.error,
-      nativeTopology: native.topology,
-    });
-  }
-  const fixturePass = fixtureOpened.pass
-    && fixturePinnedWindowId != null
-    && fixtureCycles.every((cycle) =>
-      cycle?.confirmDispatch?.success === true
-      && cycle?.discardDispatch?.success === true
-      && cycle?.duringExit?.phase === "Exiting"
-      && cycle?.duringExit?.handleRegistered === true
-      && cycle?.duringExit?.automationRegistered === true
-      && cycle?.duringExit?.hasExitTicket === true
-      && typeof cycle?.duringExit?.exitGeneration === "number"
-      && cycle?.reopened?.pass === true
-      && cycle?.afterReopen?.phase === "Open"
-      && cycle?.afterReopen?.hasExitTicket === false
-      && Array.isArray(cycle?.nativeWindowIds)
-      && cycle.nativeWindowIds.length === 1
-      && cycle.nativeWindowIds[0] === fixturePinnedWindowId
-      && cycle?.nativeTopology?.pass === true
-    );
-  await driver.simulateGpuiKeyDown("escape", {
-    target: { type: "id", id: "dictation" },
-    timeoutMs: 5_000,
-  });
-  await Bun.sleep(15);
-  await driver.simulateGpuiKeyDown("backspace", {
-    target: { type: "id", id: "dictation" },
-    timeoutMs: 5_000,
-  });
-  const fixtureClosed = await waitForKindCount(driver, "dictation", 0, 2_000);
-
-  dictationPass = maxDictationWindows <= 1
-    && maxNativeDictationWindows <= 1
-    && dictationSamples.every((sample) => sample?.nativeTopology?.pass === true)
-    && exercisedRealToggle
-    && dictationCleanup.isRecording === false
-    && dictationCleanup.captureActive === false
-    && dictationCleanup.captureStopInProgress === false
-    && dictationSettleMs <= 8_000
-    && dictationClosed.pass
-    && dictationCloseMs <= 2_000
-    && fixturePass
-    && fixtureClosed.pass
-    && dictationErrors.length === 0;
-  receipt.phases.dictation = {
-    pass: dictationPass,
-    pulses: dictationSamples.length,
-    samples: dictationSamples,
-    baselineGeneration,
-    baselineRecordingStateGeneration,
-    exercisedRealToggle,
-    maxDictationWindows,
-    maxNativeDictationWindows,
-    realToggleNativeWindowIds: realToggleNativeDictationWindowIds,
-    finalWindowCount: dictationClosed.count,
-    settleMs: Number(dictationSettleMs.toFixed(2)),
-    closeMs: Number(dictationCloseMs.toFixed(2)),
-    cleanup: dictationCleanup,
-    transcriptContentCaptured: false,
-    fixtureExitCancellation: {
-      pass: fixturePass,
-      opened: fixtureOpened,
-      pinnedNativeWindowId: fixturePinnedWindowId,
-      cycles: fixtureCycles,
-      closed: fixtureClosed,
-      noMicrophoneCapture: true,
-    },
-    errors: dictationErrors,
-  };
-  (receipt.executedPhaseNames as string[]).push("dictation");
-  (receipt.observerErrors as string[]).push(
-    ...dictationSamples
-      .filter((sample: Json) => sample?.nativeWindowError != null)
-      .map((sample: Json) =>
-        `dictation pulse ${sample?.index}: native window query failed: ${sample?.nativeWindowError}`
-      ),
-  );
-  }
-
   const finalInputStarted = performance.now();
   driver.send({ type: "show" });
   await waitForKindCount(driver, "main", 1, 2_000);
@@ -1000,7 +776,6 @@ try {
   receipt.driverStats = driver.stats;
   receipt.pass = actionsPass
     && notesPass
-    && dictationPass
     && receipt.requiredPhaseNames.every((name: string) =>
       (receipt.executedPhaseNames as string[]).includes(name)
     )

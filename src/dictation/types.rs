@@ -130,13 +130,13 @@ pub enum DictationTarget {
     /// frontmost external app via simulated paste.
     ExternalApp,
     /// Append the transcript to today's Day Page as a timestamped capture.
-    /// Never resolved implicitly — chosen via overlay chip, config, or an
-    /// explicit delivery label.
+    /// Never resolved implicitly — chosen via config or an explicit delivery
+    /// label.
     DayPageToday,
     /// Treat the transcript as a question for the AI window: fire-and-show
     /// the answer, or stage it in the composer, per `dictation.quickAi`.
-    /// Never resolved implicitly — chosen via overlay chip, config, or an
-    /// explicit delivery label.
+    /// Never resolved implicitly — chosen via config or an explicit delivery
+    /// label.
     QuickAiQuestion,
 }
 
@@ -759,7 +759,7 @@ impl DictationTarget {
         self.descriptor().stable_id
     }
 
-    /// Short, stable label for the overlay destination badge.
+    /// Short, stable label for the destination in logs and receipts.
     pub fn overlay_label(self) -> &'static str {
         self.descriptor().badge_label
     }
@@ -842,4 +842,13 @@ pub enum DictationModelStatus {
     Extracting,
     /// Download or extraction failed.
     DownloadFailed(String),
+}
+
+/// What a recording session has heard so far, for the voice view.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DictationLiveState {
+    pub phase: DictationSessionPhase,
+    pub elapsed: Duration,
+    pub transcript: String,
+    pub target: DictationTarget,
 }

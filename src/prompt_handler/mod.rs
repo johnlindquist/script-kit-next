@@ -105,7 +105,6 @@ enum AgentChatReadTarget {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PromptPopupSubtype {
     AgentChatHistory,
-    DictationMicrophone,
 }
 
 fn resolve_prompt_popup_subtype(
@@ -114,9 +113,6 @@ fn resolve_prompt_popup_subtype(
     let subtype = match resolved.id.as_str() {
         crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => {
             PromptPopupSubtype::AgentChatHistory
-        }
-        crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
-            PromptPopupSubtype::DictationMicrophone
         }
         other => {
             return Err(crate::protocol::TransactionError::action_failed(format!(
@@ -129,10 +125,6 @@ fn resolve_prompt_popup_subtype(
         PromptPopupSubtype::AgentChatHistory => {
             resolved.generation.is_some()
                 && crate::ai::agent_chat::ui::history_popup::is_history_popup_window_open()
-        }
-        PromptPopupSubtype::DictationMicrophone => {
-            resolved.generation.is_some()
-                && crate::dictation::is_dictation_microphone_popup_window_open()
         }
     };
     if !is_open {
@@ -277,7 +269,6 @@ fn registered_batch_target_kind(
             AutomationBatchTargetKind::AgentChatDetached
         }
         protocol::AutomationWindowKind::Notes => AutomationBatchTargetKind::Notes,
-        protocol::AutomationWindowKind::Dictation => AutomationBatchTargetKind::Dictation,
         protocol::AutomationWindowKind::ActionsDialog => AutomationBatchTargetKind::ActionsDialog,
         _ => AutomationBatchTargetKind::PromptPopup,
     }
@@ -2421,31 +2412,6 @@ impl ScriptListApp {
                             filter.clone(),
                             self.cached_browser_history.len(),
                             filtered_entries.len(),
-                            *selected_index as i32,
-                            selected_value,
-                        )
-                    }
-                    AppView::DictationHistoryView {
-                        filter,
-                        selected_index,
-                        visible_limit,
-                    } => {
-                        let (dataset_count, visible_count) = self
-                            .dictation_history_dataset_and_visible_counts(filter, *visible_limit);
-                        let selected_value = self
-                            .dictation_history_selected_visible_row(
-                                filter,
-                                *selected_index,
-                                *visible_limit,
-                            )
-                            .map(|entry| entry.preview);
-                        (
-                            "dictationHistory".to_string(),
-                            None,
-                            None,
-                            filter.clone(),
-                            dataset_count,
-                            visible_count,
                             *selected_index as i32,
                             selected_value,
                         )
@@ -7260,18 +7226,6 @@ impl ScriptListApp {
         submit: bool,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
-        if semantic_id == "button:dictation-history-load-more" {
-            let AppView::DictationHistoryView { visible_limit, .. } = &mut self.current_view else {
-                anyhow::bail!("Dictation History Load More is not visible");
-            };
-            if submit {
-                *visible_limit =
-                    visible_limit.saturating_add(crate::dictation::DICTATION_HISTORY_PAGE_SIZE);
-                cx.notify();
-            }
-            return Ok(semantic_id.to_string());
-        }
-
         if semantic_id == "footer:native:close"
             && matches!(self.current_view, AppView::QuickTerminalView { .. })
         {

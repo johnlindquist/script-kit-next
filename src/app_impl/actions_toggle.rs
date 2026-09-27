@@ -245,7 +245,6 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
     match host {
         ActionsDialogHost::MainList => "MainList",
         ActionsDialogHost::ClipboardHistory => "ClipboardHistory",
-        ActionsDialogHost::DictationHistory => "DictationHistory",
         ActionsDialogHost::Favorites => "Favorites",
         ActionsDialogHost::ThemeChooser => "ThemeChooser",
         ActionsDialogHost::EmojiPicker => "EmojiPicker",
@@ -444,27 +443,6 @@ impl ScriptListApp {
                 "Ignored shared actions toggle because clipboard history has no selected entry"
             );
             // The footer advertises ⌘K — a dead press must explain itself.
-            if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
-                self.one_window_notice(crate::line_notice::INFO, reason.to_string(), cx);
-            }
-            return false;
-        }
-
-        if matches!(&self.current_view, AppView::DictationHistoryView { .. }) {
-            if let Some(entry) = self.selected_dictation_history_entry() {
-                self.toggle_dictation_history_actions(entry, window, cx);
-                return true;
-            }
-            if self.show_actions_popup {
-                self.toggle_actions(cx, window);
-                return true;
-            }
-            tracing::info!(
-                target: "script_kit::actions",
-                event = "actions_toggle_dispatch_ignored_no_dictation_selection",
-                trigger = trigger,
-                "Ignored shared actions toggle because dictation history has no selected entry"
-            );
             if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
                 self.one_window_notice(crate::line_notice::INFO, reason.to_string(), cx);
             }

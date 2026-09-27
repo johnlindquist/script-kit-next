@@ -540,8 +540,6 @@ impl ScriptListApp {
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),
-            dictation_history_scroll_handle: ScrollHandle::new(),
-            dictation_history_previous_page: None,
             notes_browse_scroll_handle: ScrollHandle::new(),
             tracked_builtin_list_states: std::collections::HashMap::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
@@ -1826,36 +1824,6 @@ impl ScriptListApp {
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.browser_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    }
-                                    cx.stop_propagation();
-                                }
-                                AppView::DictationHistoryView {
-                                    selected_index,
-                                    filter,
-                                    visible_limit,
-                                } => {
-                                    let retained_len = this
-                                        .dictation_history_previous_page
-                                        .as_ref()
-                                        .map(|page| page.rows.len())
-                                        .unwrap_or(0);
-                                    let filtered_len = crate::dictation::search_history_page(
-                                        filter,
-                                        0,
-                                        *visible_limit,
-                                    )
-                                    .map(|page| page.rows.len())
-                                    .unwrap_or(retained_len);
-                                    if is_up && *selected_index > 0 {
-                                        *selected_index -= 1;
-                                        this.dictation_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    } else if is_down && *selected_index + 1 < filtered_len {
-                                        *selected_index += 1;
-                                        this.dictation_history_scroll_handle
                                             .scroll_to_item(*selected_index);
                                         cx.notify();
                                     }

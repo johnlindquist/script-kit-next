@@ -6,7 +6,6 @@ const ARG_HELPERS: &str = include_str!("../src/render_prompts/arg/helpers.rs");
 const SETTINGS: &str = include_str!("../src/render_builtins/settings.rs");
 const SETUP_MODEL: &str = include_str!("../src/dictation/setup.rs");
 const CONFIG_TYPES: &str = include_str!("../src/config/types.rs");
-const DICTATION_WINDOW: &str = include_str!("../src/dictation/window.rs");
 const DEVICE: &str = include_str!("../src/dictation/device.rs");
 const INFO_PLIST_EXT: &str = include_str!("../assets/Info.plist.ext");
 const STDIN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
@@ -210,9 +209,5 @@ fn dictation_hotkey_default_is_owned_by_config_not_overlay_ui() {
     assert!(
         KIT_SDK.contains("@default { modifiers: [\"meta\", \"shift\"], key: \"Semicolon\" }"),
         "SDK Config docs must expose the dictationHotkey default"
-    );
-    assert!(
-        !DICTATION_WINDOW.contains("key: \"Semicolon\".to_string()"),
-        "overlay UI must read the dictation keycap from config instead of hard-coding the default"
     );
 }

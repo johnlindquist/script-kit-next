@@ -273,7 +273,6 @@ impl ScriptListApp {
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
             AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
-            AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
             AppView::AgentChatView { .. } => "AgentChatView",
             AppView::DayPage { .. } => "DayPage",

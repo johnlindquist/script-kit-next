@@ -2,8 +2,8 @@
 //!
 //! All functions in this module must be called from the GPUI foreground executor
 //! (i.e., inside `cx.spawn()` or on the main thread). Commands are executed in
-//! order because ordering matters for correctness (e.g., conceal main BEFORE
-//! opening the dictation overlay).
+//! order because ordering matters for correctness (e.g., save bounds BEFORE
+//! concealing main).
 
 use super::{SurfaceId, WindowCommand};
 
@@ -38,9 +38,6 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
         WindowCommand::ConcealMain => {
             // Synchronous — the executor already runs inside cx.update()
             // on the main thread, so we can call orderOut: directly.
-            // Using the deferred variant would delay the hide by one tick,
-            // causing the overlay to open while the main window is still
-            // visible (and macOS may push the overlay behind other apps).
             crate::set_main_window_visible(false);
             crate::platform::conceal_main_window();
         }
@@ -127,12 +124,6 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
                         "FocusSurface(DetachedAiChat) — chat window self-manages key status"
                     );
                 }
-                SurfaceId::DictationOverlay => {
-                    tracing::debug!(
-                        category = "ORCHESTRATOR",
-                        "FocusSurface(DictationOverlay) — overlay self-manages key status"
-                    );
-                }
                 SurfaceId::Main => {
                     crate::set_main_window_visible(true);
                     crate::platform::ensure_main_panel_configured(
@@ -155,73 +146,5 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
         WindowCommand::CloseDetachedAiChatWindow => {
             crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
         }
-
-        // -----------------------------------------------------------------
-        // Dictation overlay
-        // -----------------------------------------------------------------
-        WindowCommand::OpenDictationOverlay { phase: _ } => {
-            // During migration: the dictation session opens the overlay directly
-            // via start_dictation_overlay_session(). This command is a state
-            // signal only — the overlay is already open by the time it runs.
-            tracing::debug!(
-                category = "ORCHESTRATOR",
-                "OpenDictationOverlay — overlay managed by dictation session"
-            );
-        }
-
-        WindowCommand::UpdateDictationOverlay { phase: _ } => {
-            // The overlay state update requires the full DictationOverlayState
-            // (bars, elapsed, transcript), not just the phase. The dictation
-            // session manager pushes state directly via update_dictation_overlay().
-            tracing::debug!(
-                category = "ORCHESTRATOR",
-                "UpdateDictationOverlay — state pushed by dictation session"
-            );
-        }
-
-        WindowCommand::CloseDictationOverlay => {
-            // During migration: the dictation session manages overlay close
-            // with its own delay scheduling (schedule_dictation_overlay_close).
-            // This command is a state signal only — do not close immediately.
-            tracing::debug!(
-                category = "ORCHESTRATOR",
-                "CloseDictationOverlay — overlay close managed by dictation session"
-            );
-        }
     }
-}
-
-/// Convert from the dictation module's `DictationTarget` to the orchestrator's
-/// `DictationTarget`.  The two types are structurally identical but live in
-/// different modules to keep the orchestrator free of dictation-module dependencies.
-#[allow(
-    dead_code,
-    reason = "the separately compiled application binary owns built-in dictation target execution"
-)]
-pub(crate) fn to_orchestrator_target(
-    target: &crate::dictation::DictationTarget,
-) -> super::DictationTarget {
-    let mapped = match target {
-        crate::dictation::DictationTarget::MainWindowFilter => {
-            super::DictationTarget::MainWindowFilter
-        }
-        crate::dictation::DictationTarget::MainWindowPrompt => {
-            super::DictationTarget::MainWindowPrompt
-        }
-        crate::dictation::DictationTarget::NotesEditor => super::DictationTarget::NotesEditor,
-        crate::dictation::DictationTarget::AiChatComposer => super::DictationTarget::AiChatComposer,
-        crate::dictation::DictationTarget::TabAiHarness => super::DictationTarget::TabAiHarness,
-        crate::dictation::DictationTarget::ExternalApp => super::DictationTarget::ExternalApp,
-        crate::dictation::DictationTarget::DayPageToday => super::DictationTarget::DayPageToday,
-        crate::dictation::DictationTarget::QuickAiQuestion => {
-            super::DictationTarget::QuickAiQuestion
-        }
-    };
-    tracing::info!(
-        category = "ORCHESTRATOR",
-        source_target = ?target,
-        mapped_target = ?mapped,
-        "Mapped dictation target for orchestrator"
-    );
-    mapped
 }

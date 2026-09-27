@@ -879,42 +879,6 @@ impl Evaluator {
                 &cx,
             ),
             RootOwner::AgentChat(view) => agent_chat_observation(view, &cx),
-            RootOwner::Dictation(view) => {
-                let state = view.read(&cx).fixture_state();
-                let (microphone_selection_count, selected_microphone_semantic_id) =
-                    view.read(&cx).microphone_selection();
-                let phase = match &state.phase {
-                    crate::dictation::DictationSessionPhase::Idle => "idle",
-                    crate::dictation::DictationSessionPhase::Recording => "recording",
-                    crate::dictation::DictationSessionPhase::Confirming => "confirming",
-                    crate::dictation::DictationSessionPhase::Transcribing => "transcribing",
-                    crate::dictation::DictationSessionPhase::Delivering => "delivering",
-                    crate::dictation::DictationSessionPhase::Finished => "finished",
-                    crate::dictation::DictationSessionPhase::Failed(_) => "failed",
-                };
-                let outcome = match &state.phase {
-                    crate::dictation::DictationSessionPhase::Finished => Some("delivered"),
-                    crate::dictation::DictationSessionPhase::Failed(failure)
-                        if failure.failure.failure.code
-                            == sk_protocol::ai_reliability::AiFailureCode::DestinationStale =>
-                    {
-                        Some("staleTarget")
-                    }
-                    crate::dictation::DictationSessionPhase::Failed(_) => Some("refused"),
-                    _ => None,
-                };
-                let outcome = self
-                    .dictation_controls
-                    .contains_key(&mounted.info.id)
-                    .then_some(outcome)
-                    .flatten();
-                Ok(
-                    json!({"family":"dictation","phase":phase,"transcript":state.transcript.as_ref(),
-                    "microphoneSelectionCount":microphone_selection_count,"selectedMicrophoneSemanticId":selected_microphone_semantic_id,
-                    "generation":self.dictation_controls.get(&mounted.info.id).map(|control|control.generation()),
-                    "deliveryOutcome":outcome,"destinationLocked":!matches!(state.phase,crate::dictation::DictationSessionPhase::Recording|crate::dictation::DictationSessionPhase::Confirming)}),
-                )
-            }
             RootOwner::Secondary(fixture) => fixture.controls.observation(&cx),
             _ => Ok(Value::Null),
         }

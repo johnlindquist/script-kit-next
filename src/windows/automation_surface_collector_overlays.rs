@@ -81,111 +81,6 @@ fn collect_footer_snapshot(resolved: &AutomationWindowInfo) -> Option<SurfaceEle
     })
 }
 
-fn collect_dictation_snapshot(
-    resolved: &AutomationWindowInfo,
-    cx: &gpui::App,
-) -> Option<SurfaceElementSnapshot> {
-    let state =
-        crate::dictation::get_dictation_overlay_state_for_instance(resolved.generation?, cx)?;
-    let phase = format!("{:?}", state.phase);
-    let destination = crate::dictation::destination_selector_spec(state.target);
-
-    let mut panel = element(
-        "panel:dictation-overlay",
-        ElementType::Panel,
-        resolved
-            .title
-            .clone()
-            .or_else(|| Some("Dictation".to_string())),
-        None,
-        None,
-        Some(resolved.focused),
-        None,
-    );
-    panel.kind = Some("overlay".to_string());
-    panel.status_kind = Some(phase.clone());
-
-    let mut signal = element(
-        "panel:dictation-signal-band",
-        ElementType::Panel,
-        Some(phase),
-        None,
-        None,
-        None,
-        None,
-    );
-    signal.kind = Some("signal".to_string());
-
-    let mut target_badge = collect_semantic_chip_element(&destination);
-    target_badge.selectable = Some(false);
-    target_badge.selected = Some(true);
-    target_badge.kind = Some("destination-indicator".to_string());
-
-    let interactive = matches!(
-        state.phase,
-        crate::dictation::DictationSessionPhase::Recording
-            | crate::dictation::DictationSessionPhase::Confirming
-    );
-    let mut elements = vec![panel, signal, target_badge];
-    for descriptor in crate::dictation::DictationTarget::quick_chip_descriptors() {
-        let Some(label) = descriptor.quick_chip_label else {
-            tracing::warn!(
-                target: "script_kit::automation",
-                destination = descriptor.stable_id,
-                "skipping_dictation_destination_without_quick_chip_label"
-            );
-            continue;
-        };
-        let mut spec = crate::components::main_view_chrome::SemanticChipSpec::destination_selector(
-            format!("dictation-destination:{}", descriptor.stable_id),
-            label,
-        );
-        if !interactive {
-            spec.enabled = false;
-            spec.disabled_reason = Some("Destination is locked while Dictation processes".into());
-        }
-        let mut chip = collect_semantic_chip_element(&spec);
-        chip.selected = Some(descriptor.target == state.target);
-        chip.source = Some("DictationTargetDescriptor".to_string());
-        elements.push(chip);
-    }
-    if interactive {
-        if let Some(actions) =
-            crate::dictation::dictation_recording_actions_for_instance(resolved.generation?, cx)
-        {
-            for action in actions.into_iter().filter(|action| {
-                matches!(
-                    action.id.as_str(),
-                    "dictation_microphone" | "dictation_jump_latest"
-                )
-            }) {
-                let mut button = ElementInfo::button(elements.len(), &action.title);
-                button.semantic_id = action.id.clone();
-                button.source = Some(action.id);
-                button.value = action.description;
-                button.selectable = Some(true);
-                elements.push(button);
-            }
-        }
-    }
-    if let crate::dictation::DictationSessionPhase::Failed(failure) = &state.phase {
-        let mut message = ElementInfo::panel("dictation.failure");
-        message.text = Some(failure.safe_message().to_string());
-        message.status_kind = Some("failed".to_string());
-        elements.push(message);
-    }
-    let total_count = elements.len();
-
-    Some(SurfaceElementSnapshot {
-        elements,
-        total_count,
-        focused_semantic_id: Some("panel:dictation-overlay".to_string()),
-        selected_semantic_id: None,
-        warnings: Vec::new(),
-        quality: SnapshotQuality::Full,
-    })
-}
-
 // ---------------------------------------------------------------------------
 // Prompt popup collector (composer picker, history popup)
 // ---------------------------------------------------------------------------
@@ -210,31 +105,8 @@ fn collect_exact_prompt_popup_snapshot(
             }
             collect_history_popup_snapshot(cx, generation)
         }
-        crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
-            collect_cached_prompt_popup_snapshot(&resolved.id, resolved.generation?)
-        }
         _ => None,
     }
-}
-
-fn collect_cached_prompt_popup_snapshot(
-    window_id: &str,
-    generation: u64,
-) -> Option<SurfaceElementSnapshot> {
-    let cached = prompt_popup_semantic_cache()
-        .lock()
-        .ok()?
-        .get(window_id)
-        .filter(|snapshot| snapshot.generation == Some(generation))
-        .cloned()?;
-    Some(SurfaceElementSnapshot {
-        total_count: cached.elements.len(),
-        elements: cached.elements,
-        focused_semantic_id: cached.focused_semantic_id,
-        selected_semantic_id: cached.selected_semantic_id,
-        warnings: Vec::new(),
-        quality: SnapshotQuality::Full,
-    })
 }
 
 fn collect_history_popup_snapshot(

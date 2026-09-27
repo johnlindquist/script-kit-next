@@ -1,7 +1,6 @@
 //! Inline dropdown selector component for form fields.
 
 mod component;
-mod render;
 mod row;
 #[cfg(test)]
 mod tests;
@@ -9,7 +8,7 @@ mod types;
 
 pub(crate) use component::{
     inline_dropdown_clamp_selected_index, inline_dropdown_visible_range,
-    inline_dropdown_visible_range_from_start, InlineDropdown,
+    inline_dropdown_visible_range_from_start,
 };
 pub(crate) use row::{
     render_compact_synopsis_strip, render_dense_monoline_picker_row,
@@ -19,4 +18,4 @@ pub(crate) use row::{
     CONTEXT_SELECTOR_ROW_HEIGHT, CONTEXT_SELECTOR_SYNOPSIS_HEIGHT, GHOST, HINT, MUTED_OP,
     SOFT_COMPACT_PICKER_ROW_HEIGHT,
 };
-pub(crate) use types::{InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis};
+pub(crate) use types::InlineDropdownColors;

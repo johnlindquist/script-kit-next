@@ -192,6 +192,61 @@ fn typed_words_in_the_voice_view_are_heard() {
     assert_eq!(win.talk().unwrap().heard, "one two three four");
 }
 
+#[test]
+fn talking_to_the_model_opens_its_chat_with_the_words() {
+    let mut win = OneWindow::default();
+    win.handle(
+        0,
+        Event::Talk(TalkEvent::StartTo {
+            dest: sk_one_window::Dest::Chat,
+        }),
+    );
+    assert_eq!(win.talk().unwrap().header(), talk_words::talking_to(true));
+    heard(&mut win, 500, "what changed in the launcher this week");
+    let out = win.handle(1_000, Event::Talk(TalkEvent::Release));
+    assert!(out.effects.iter().any(|fx| matches!(
+        fx,
+        Effect::Work(sk_one_window::work::WorkEffect::AskModel { text }) if text == "what changed in the launcher this week"
+    )));
+    assert!(win.talk().is_none());
+    assert!(
+        !out.effects
+            .iter()
+            .any(|fx| matches!(fx, Effect::Paste { .. }))
+    );
+}
+
+#[test]
+fn talking_to_todays_note_adds_the_words() {
+    let mut win = OneWindow::default();
+    win.handle(
+        0,
+        Event::Talk(TalkEvent::StartTo {
+            dest: sk_one_window::Dest::Note,
+        }),
+    );
+    heard(&mut win, 500, "pick up milk on the way home");
+    let out = win.handle(1_000, Event::Talk(TalkEvent::Release));
+    assert!(out.effects.contains(&Effect::AddToNote {
+        text: "pick up milk on the way home".into()
+    }));
+}
+
+#[test]
+fn a_row_a_view_lists_can_be_staged() {
+    let mut win = OneWindow::default();
+    let subject = sk_one_window::Subject {
+        kind: sk_one_window::SubjectKind::Thing,
+        label: "Acting on".into(),
+        title: "hi sarah thanks for checking in".into(),
+        row_key: Some("history:1".into()),
+        ..Default::default()
+    };
+    let out = win.handle(0, Event::Stage(subject.clone()));
+    assert!(out.effects.contains(&Effect::ActionsFor(subject)));
+    assert_eq!(win.slot_line(0).title, "hi sarah thanks for checking in");
+}
+
 trait IntoEvent {
     fn into_event(self) -> Event;
 }

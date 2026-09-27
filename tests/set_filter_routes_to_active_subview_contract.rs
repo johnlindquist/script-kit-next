@@ -176,7 +176,6 @@ fn write_filter_to_current_subview_covers_all_shared_input_builtin_views() {
         "AppView::CurrentAppCommandsView",
         "AppView::AgentChatHistoryView",
         "AppView::BrowserHistoryView",
-        "AppView::DictationHistoryView",
         "AppView::NotesBrowseView",
         "AppView::EmojiPickerView",
     ];

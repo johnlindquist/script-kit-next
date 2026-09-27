@@ -89,7 +89,7 @@ export function validateChildReceipt(
     }
   } else if (expectedScenario === "rapid-toggle") {
     if (
-      !["actions", "notes", "dictation"].every(
+      !["actions", "notes"].every(
         (name) => receipt.phases?.[name]?.pass === true,
       )
     ) {
@@ -114,7 +114,6 @@ export function validateChildReceipt(
       "main-entry",
       "notes-entry",
       "notes-close-before-settle-reopen",
-      "dictation-exit-reopen",
     ];
     errors.push(...validateUniqueScenarioSet(
       (receipt.scenarios ?? []).map((scenario: any) => scenario?.name),

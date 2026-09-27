@@ -8,7 +8,8 @@
   "expectedHost": "MainWindow",
   "memberBindingIds": [
     "ScriptList::ScriptList@MainWindow",
-    "alias:main"
+    "alias:main",
+    "alias:dictation-history"
   ],
   "memberReceiptPaths": [
     ".artifacts/consistency/PF-010/family-fixtures.json"

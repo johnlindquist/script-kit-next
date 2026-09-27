@@ -407,26 +407,6 @@ pub(crate) fn mount_main_fixture(
                 selected_index: 0,
             }
         }
-        "main.dictation-history" => {
-            let entries = (0..18)
-                .map(|index| crate::dictation::DictationHistoryEntry {
-                    version: 1,
-                    id: format!("owned-transcript-{index}"),
-                    timestamp: "2026-08-28T12:00:00Z".into(),
-                    transcript: format!("Release checklist item {index}: review the launch plan."),
-                    preview: format!("Release checklist item {index}"),
-                    target_id: "main".into(),
-                    target_label_snapshot: "Launcher".into(),
-                    audio_duration_ms: 2500,
-                })
-                .collect::<Vec<_>>();
-            crate::dictation::seed_owned_dictation_history(&entries)?;
-            AppView::DictationHistoryView {
-                filter: String::new(),
-                selected_index: 0,
-                visible_limit: 10,
-            }
-        }
         "main.notes-browse"
         | "main.notes-browse-no-match"
         | "main.notes-browse-loading"

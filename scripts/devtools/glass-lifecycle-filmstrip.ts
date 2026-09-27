@@ -1406,111 +1406,6 @@ try {
   await waitForWindowCount(driver, "notes", 0, 3_000);
   }
 
-  async function runDictationExitReopenScenario() {
-  await announceTestStatus(
-    "Lifecycle filmstrip · Dictation cancel/reopen",
-    "Fixture-only overlay; Escape starts fade, reopen cancels its ticket without microphone capture",
-  );
-  const dictation = startFilmstrip(
-    "dictation-exit-reopen",
-    { pid, title: "Script Kit Dictation" },
-  );
-  driver.send({
-    type: "openDictationOverlayFixture",
-    requestId: "glass-life-dictation-open",
-  });
-  const dictationReady = await awaitObserverReady(dictation);
-  const dictationID = Number(dictationReady.windowID);
-  await Bun.sleep(120);
-  const dictationBefore = (await driver.getState({ timeoutMs: 5_000 }))?.dictation;
-  const dictationConfirmDispatch = await driver.simulateGpuiKeyDown("escape", {
-    target: { type: "id", id: "dictation" },
-    timeoutMs: 5_000,
-  });
-  await Bun.sleep(25);
-  const dictationDiscardDispatch = await driver.simulateGpuiKeyDown("backspace", {
-    target: { type: "id", id: "dictation" },
-    timeoutMs: 5_000,
-  });
-  await Bun.sleep(25);
-  const dictationDuringExit = (await driver.getState({ timeoutMs: 5_000 }))?.dictation;
-  driver.send({
-    type: "openDictationOverlayFixture",
-    requestId: "glass-life-dictation-reopen",
-  });
-  await Bun.sleep(300);
-  const dictationAfter = (await driver.getState({ timeoutMs: 5_000 }))?.dictation;
-  const dictationNativeAfter = await nativeWindowIds(pid, "Script Kit Dictation");
-  const dictationCompleteAfter = await nativeWindowIds(pid);
-  const dictationFilmstrip = await finishFilmstrip(
-    dictation,
-    dictationID,
-    {
-      expectedExitFrame:
-        dictationDuringExit?.windowLifecycle?.nativeExit?.originalFrame,
-    },
-  );
-  const dictationActiveExitErrors = validateDetachedExitLifecycle(
-    dictationDuringExit?.windowLifecycle?.nativeExit,
-    dictationID,
-    "exiting",
-  );
-  const dictationCancelledExitErrors = validateDetachedExitLifecycle(
-    dictationAfter?.windowLifecycle?.nativeExit,
-    dictationID,
-    "cancelled",
-  );
-  const dictationTopology = classifyNativeInventory(
-    dictationCompleteAfter.completeWindows as any[],
-    pid,
-    mainWindowID,
-  );
-  const dictationStructural = dictationDuringExit?.windowLifecycle?.phase === "Exiting"
-    && dictationDuringExit?.windowLifecycle?.handleRegistered === true
-    && dictationDuringExit?.windowLifecycle?.automationRegistered === true
-    && typeof dictationDuringExit?.windowLifecycle?.exitGeneration === "number"
-    && dictationAfter?.windowLifecycle?.phase === "Open"
-    && dictationAfter?.windowLifecycle?.hasExitTicket === false
-    && dictationNativeAfter.ids.length === 1
-    && dictationNativeAfter.ids[0] === dictationID
-    && dictationCompleteAfter.completeWindowIds.includes(mainWindowID)
-    && dictationCompleteAfter.completeWindowIds.includes(dictationID)
-    && dictationTopology.pass
-    && dictationActiveExitErrors.length === 0
-    && dictationCancelledExitErrors.length === 0;
-  const dictationPass = dictationFilmstrip.pass && dictationStructural;
-  (receipt.scenarios as Json[]).push({
-    name: "dictation-exit-reopen",
-    exactWindowID: dictationID,
-    before: dictationBefore,
-    confirmDispatch: dictationConfirmDispatch,
-    discardDispatch: dictationDiscardDispatch,
-    duringExit: dictationDuringExit,
-    afterReopen: dictationAfter,
-    nativeWindowIdsAfterReopen: dictationNativeAfter.ids,
-    completeNativeInventoryAfterReopen: dictationCompleteAfter,
-    completeNativeTopologyAfterReopen: dictationTopology,
-    nativeExitValidation: {
-      activeErrors: dictationActiveExitErrors,
-      cancelledErrors: dictationCancelledExitErrors,
-    },
-    noMicrophoneCapture: true,
-    filmstrip: dictationFilmstrip,
-    structuralPass: dictationFilmstrip.capturePass && dictationStructural,
-    pass: dictationPass,
-  });
-  await driver.simulateGpuiKeyDown("escape", {
-    target: { type: "id", id: "dictation" },
-    timeoutMs: 5_000,
-  }).catch(() => null);
-  await Bun.sleep(25);
-  await driver.simulateGpuiKeyDown("backspace", {
-    target: { type: "id", id: "dictation" },
-    timeoutMs: 5_000,
-  }).catch(() => null);
-  await waitForWindowCount(driver, "dictation", 0, 3_000);
-  }
-
   // Dispatch the resolved profile in declared order. Timing intervals are
   // recorded per scenario and validated as monotone/non-overlapping so a
   // refactor can never silently interleave capture work.
@@ -1519,7 +1414,6 @@ try {
     "main-entry": runMainEntryScenario,
     "notes-entry": runNotesEntryScenario,
     "notes-close-before-settle-reopen": runNotesCloseBeforeSettleReopenScenario,
-    "dictation-exit-reopen": runDictationExitReopenScenario,
   };
   const captureStartedMs = performance.now();
   const scenarioIntervals: ScenarioTimingInterval[] = [];

@@ -112,7 +112,6 @@ const LIFECYCLE_SCENARIOS = [
   "main-entry",
   "notes-entry",
   "notes-close-before-settle-reopen",
-  "dictation-exit-reopen",
 ];
 
 function importableReceipt() {

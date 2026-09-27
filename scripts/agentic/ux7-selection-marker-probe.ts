@@ -294,38 +294,6 @@ try {
     return { state, markerCount: 0 };
   });
 
-  const compactNegative = await withDriver(binary, "ux7-compact-negative", async (driver) => {
-    await driver.request({ type: "show" }, { timeoutMs: 10_000 });
-    await driver.waitForSettle({ timeoutMs: 10_000 });
-    driver.send({ type: "openDictationOverlayFixture" });
-    await waitForWindow(driver, "dictation", true);
-    driver.send({ type: "openDictationMicrophonePopupFixture" });
-    const popup = await waitForWindow(driver, "dictation-microphone-popup", true);
-    assert(popup?.generation, "compact popup generation missing", popup);
-    const target = { type: "instance", id: popup.id, generation: popup.generation };
-    const elements = await driver.getElements({ target }, { timeoutMs: 10_000 });
-    const semanticIds = Array.isArray(elements.elements)
-      ? (elements.elements as Json[]).map((element) => element.semanticId)
-      : [];
-    assert(
-      semanticIds.includes("choice:0:dictation-mic-row-0") && semanticIds.includes("choice:1:dictation-mic-row-1"),
-      "compact microphone rows missing",
-      elements,
-    );
-    const layout = await driver.getLayoutInfo({ target }, { timeoutMs: 10_000 });
-    assert(
-      components(layout).every((component) => !String(component.name ?? "").includes("selection-marker")),
-      "compact row family received a launcher marker",
-      layout,
-    );
-    const shot = await screenshot(driver, target, "compact-no-selection-marker.png");
-    const closeDispatch = await driver.simulateGpuiKeyDown("escape", {
-      target: { type: "id", id: "dictation" },
-    });
-    await waitForWindow(driver, "dictation-microphone-popup", false);
-    return { target, semanticIds, markerCount: 0, closeDispatch, screenshot: shot };
-  });
-
   receipt = {
     classification: "RUNTIME-CONFIRMED",
     binary,
@@ -336,7 +304,6 @@ try {
     actions,
     builtin,
     unifiedNegative,
-    compactNegative,
   };
 } catch (error) {
   receipt.error = error instanceof Error ? { message: error.message, stack: error.stack } : String(error);

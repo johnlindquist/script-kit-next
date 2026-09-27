@@ -303,6 +303,10 @@ pub enum Effect {
     TalkEnded,
     /// Something new was learned; the host keeps it for the next session.
     Learned,
+    /// Add the words at the end of today's note.
+    AddToNote {
+        text: String,
+    },
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

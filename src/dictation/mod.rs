@@ -14,14 +14,11 @@ mod delivery;
 mod device;
 pub mod download;
 mod history;
-mod live_caption;
-mod microphone_popup_window;
 mod runtime;
 mod setup;
 mod transcription;
 mod types;
 mod visualizer;
-mod window;
 
 pub use capture::{start_capture, DictationCaptureHandle};
 pub use catalog::{
@@ -30,8 +27,7 @@ pub use catalog::{
 };
 pub use delivery::{
     capture_frozen_external_destination, dictation_mutation_error_outcome,
-    dictation_outcome_from_insertion_range, parse_dictation_target_label,
-    resolve_delivery_target_request, resolve_dictation_target_label,
+    parse_dictation_target_label, resolve_delivery_target_request, resolve_dictation_target_label,
     validate_frozen_external_destination, with_frozen_dictation_destination,
     DictationDeliveryTargetResolution, DictationDeliveryTargetSource,
     DictationTargetLabelResolution, DictationWrongTargetReason, DictationWrongTargetRefusalDraft,
@@ -42,21 +38,19 @@ pub use device::{
     list_input_devices, microphone_display_label, microphone_permission_status,
     request_microphone_permission, request_microphone_permission_nonblocking,
     resolve_selected_input_device, save_dictation_device_id, save_dictation_language,
-    save_dictation_last_target, save_dictation_model, DeviceResolution, DictationDeviceMenuItem,
+    save_dictation_model, DeviceResolution, DictationDeviceMenuItem,
     DictationDeviceSelectionAction, DICTATION_SYSTEM_DEFAULT_DEVICE_VALUE,
 };
 pub use history::{
-    apply_dictation_history_row_identities, build_history_entry, delete_history_entry,
-    delete_history_held_title, dictation_history_view_state, format_history_duration_ms,
-    format_history_timestamp, get_history_entry, hydrate_dictation_resource_from_history,
-    load_history, load_history_result, record_dictation_history,
-    root_dictation_history_query_is_eligible, search_history, search_history_page,
+    build_history_entry, delete_history_entry, delete_history_held_title,
+    format_history_duration_ms, format_history_timestamp, get_history_entry,
+    hydrate_dictation_resource_from_history, load_history, load_history_result,
+    record_dictation_history, root_dictation_history_query_is_eligible, search_history,
     search_root_dictation_history, search_root_dictation_history_cached,
     search_root_dictation_history_direct, seed_owned_dictation_history, DictationHistoryEntry,
-    DictationHistoryPage, DictationHistorySearchField, DictationHistorySearchHit,
-    DictationHistoryViewState, RootDictationHistorySearchHit, RootDictationHistorySectionOptions,
-    DICTATION_HISTORY_ENTRY_VERSION, DICTATION_HISTORY_LEGACY_UNKNOWN_TARGET_ID,
-    DICTATION_HISTORY_PAGE_SIZE,
+    DictationHistorySearchField, DictationHistorySearchHit, RootDictationHistorySearchHit,
+    RootDictationHistorySectionOptions, DICTATION_HISTORY_ENTRY_VERSION,
+    DICTATION_HISTORY_LEGACY_UNKNOWN_TARGET_ID,
 };
 pub(crate) use history::{
     discard_root_dictation_history_refresh, finish_root_dictation_history_refresh,
@@ -64,21 +58,6 @@ pub(crate) use history::{
     read_root_dictation_history_snapshot, reset_owned_root_dictation_history,
     root_dictation_history_cache_is_fresh, root_dictation_history_fresh_cache_status,
     try_begin_root_dictation_history_refresh, RootDictationHistorySnapshot,
-};
-// The batch_select_* automation hooks are consumed by the binary crate
-// (prompt_handler), which compiles this module separately — the library
-// build alone cannot see those uses.
-#[allow(unused_imports)]
-pub(crate) use microphone_popup_window::{
-    batch_select_dictation_microphone_popup_row_by_semantic_id,
-    batch_select_dictation_microphone_popup_row_by_value,
-    build_dictation_microphone_popup_snapshot, close_dictation_microphone_popup_window,
-    close_dictation_microphone_popup_window_for_owner_loss,
-    dictation_microphone_popup_revision_facts, dismiss_dictation_microphone_popup_from_parent,
-    is_dictation_microphone_popup_window_open, sync_dictation_microphone_popup_window,
-    DictationMicrophonePopupRequest, DictationMicrophonePopupSelectionMode,
-    DictationMicrophonePopupSnapshot, DictationPopupDismissOutcome,
-    DICTATION_MICROPHONE_POPUP_AUTOMATION_ID,
 };
 pub use runtime::{
     abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
@@ -92,17 +71,15 @@ pub use runtime::{
     pending_dictation_device_label, record_delivery_receipt, record_wrong_target_refusal,
     redacted_transcript_fingerprint, resolve_final_or_partial_transcript,
     set_dictation_session_selection, set_dictation_session_target, set_dictation_target_cycle,
-    set_overlay_phase, set_pending_dictation_device_label, snapshot_overlay_state,
-    toggle_dictation, transcribe_captured_audio, validate_owned_dictation_delivery_request,
-    BeginStopCapture, DictationFixtureControl, DictationStopJob, DictationStopReason,
+    set_pending_dictation_device_label, snapshot_live_state, toggle_dictation,
+    transcribe_captured_audio, BeginStopCapture, DictationStopJob, DictationStopReason,
     DictationTranscriptResolution,
 };
 pub(crate) use runtime::{
     clear_dictation_recovery_work, clear_dictation_return_origin, dictation_pipeline_failure_state,
     dictation_recovery_work, dictation_return_origin, preserve_dictation_recovery_work,
-    record_fixture_dictation_target_selection, replace_dictation_recovery_work,
-    replace_dictation_return_origin, retain_frozen_selection_for_delivery,
-    toggled_post_stop_restart, DictationRecoveryWork,
+    replace_dictation_recovery_work, replace_dictation_return_origin,
+    retain_frozen_selection_for_delivery, toggled_post_stop_restart, DictationRecoveryWork,
 };
 pub use setup::{
     build_dictation_setup_state, DictationHotkeyStatus, DictationMicrophonePermissionStatus,
@@ -119,32 +96,14 @@ pub use types::{
     DictationAutoSubmitPermission, DictationCaptureConfig, DictationCaptureEvent,
     DictationDeliveryFailureReason, DictationDeliveryOutcome, DictationDeliveryRequest,
     DictationDestination, DictationDeviceId, DictationDeviceInfo, DictationDeviceTransport,
-    DictationFailureRecoveryCapabilities, DictationFailureState, DictationModelStatus,
-    DictationMutationReceipt, DictationRecoveryAction, DictationRecoveryCapabilities,
-    DictationReturnOrigin, DictationSessionPhase, DictationSessionResult, DictationTarget,
-    DictationTargetDescriptor, DictationTargetPersistenceClass, DictationTargetSelection,
-    DictationToggleOutcome, DictationTranscriptPreservationReceipt, FrozenAgentChatPolicy,
-    FrozenDictationDestination, FrozenMainDictationOwner, ImmutableDictationTranscript,
-    RawAudioChunk, ALL_DICTATION_TARGETS,
+    DictationFailureRecoveryCapabilities, DictationFailureState, DictationLiveState,
+    DictationModelStatus, DictationMutationReceipt, DictationRecoveryAction,
+    DictationRecoveryCapabilities, DictationReturnOrigin, DictationSessionPhase,
+    DictationSessionResult, DictationTarget, DictationTargetDescriptor,
+    DictationTargetPersistenceClass, DictationTargetSelection, DictationToggleOutcome,
+    DictationTranscriptPreservationReceipt, FrozenAgentChatPolicy, FrozenDictationDestination,
+    FrozenMainDictationOwner, ImmutableDictationTranscript, RawAudioChunk, ALL_DICTATION_TARGETS,
 };
 pub use visualizer::{animate_bars, silent_bars};
-pub use window::{
-    automation_layout_info, begin_overlay_session, close_dictation_overlay,
-    is_dictation_overlay_open, open_dictation_overlay, overlay_generation,
-    reopen_last_dictation_overlay, set_overlay_abort_callback, set_overlay_recovery_callback,
-    set_overlay_retarget_callback, set_overlay_submit_callback, update_dictation_overlay,
-    DictationOverlay, DictationOverlayState,
-};
-pub(crate) use window::{
-    destination_selector_spec, dictation_overlay_fixture_mode, dictation_overlay_revision_facts,
-    dictation_window_lifecycle_receipt, get_dictation_overlay_state_for_instance,
-    last_dictation_overlay_state, open_dictation_microphone_popup_fixture,
-    open_dictation_overlay_with_policy, overlay_recovery_callback_installed,
-    set_dictation_overlay_fixture_mode,
-};
-pub(crate) use window::{
-    dictation_recording_actions_for_instance, execute_dictation_overlay_action_for_instance,
-};
-
 #[cfg(test)]
 mod tests;

@@ -46,7 +46,7 @@ Numbered names are stable identifiers — reuse them exactly when re-capturing; 
 - `18-rewrite-styles` — rewrite style picker over a TextEdit selection
 - `19-references` — Day Page with embedded kit:// clipboard references
 - `20-brain-inbox` — Brain Inbox resurfacing captures at the top of the launcher
-- `21-dictation` — dictation overlay with live waveform and mic controls
+- `21-dictation` — the main window's voice view with the heard words and its two rows
 - `22-shader-background` — launcher with the Aurora background shader over a clean desktop
 - `23-shader-background-alt` — launcher with the Starfield background shader over a clean desktop
 

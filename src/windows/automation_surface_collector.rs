@@ -19,12 +19,10 @@ fn paint_measurement_component_type(stable_id: &str) -> protocol::LayoutComponen
 
     if stable_id.starts_with("list-row:")
         || stable_id.contains("transcript-row-")
-        || stable_id.starts_with("dictation-history-row-")
         || stable_id.starts_with("chat-transcript-user-")
         || stable_id.starts_with("chat-transcript-response-")
         || stable_id.starts_with("actions-row:")
         || stable_id.starts_with("agent_chat-history-popup-row-")
-        || stable_id.starts_with("dictation-microphone-popup-row-")
     {
         return LayoutComponentType::ListItem;
     }
@@ -46,36 +44,24 @@ fn paint_measurement_component_type(stable_id: &str) -> protocol::LayoutComponen
         "agent-chat-transcript-viewport"
         | "chat-transcript-viewport"
         | "actions-list-viewport"
-        | "agent_chat-history-popup-list"
-        | "dictation-microphone-popup-list" => LayoutComponentType::List,
+        | "agent_chat-history-popup-list" => LayoutComponentType::List,
         "native-main-window-footer-spacer" | "snap-overlay-root" => LayoutComponentType::Panel,
         "main-view-header"
         | "notes-titlebar"
         | "actions-context-header"
-        | "agent_chat-history-popup-header"
-        | "dictation-header" => LayoutComponentType::Header,
+        | "agent_chat-history-popup-header" => LayoutComponentType::Header,
         "main-view-shell"
         | "main-view-context-zone"
         | "main-view-main"
         | "notes-window-root"
         | "actions-window-root"
-        | "actions-dialog-root"
-        | "dictation-overlay"
-        | "dictation-content" => LayoutComponentType::Container,
+        | "actions-dialog-root" => LayoutComponentType::Container,
         _ => LayoutComponentType::Other,
     }
 }
 
 #[cfg(test)]
 mod paint_measurement_component_type_tests {
-    #[test]
-    fn dictation_history_row_selectors_are_list_items() {
-        assert_eq!(
-            super::paint_measurement_component_type("dictation-history-row-entry-123"),
-            crate::protocol::LayoutComponentType::ListItem
-        );
-    }
-
     #[gpui::test]
     fn standalone_snap_layout_uses_actual_paint_and_rejects_replaced_generation(
         cx: &mut gpui::TestAppContext,
@@ -227,98 +213,6 @@ pub struct SurfaceElementSnapshot {
     pub warnings: Vec<String>,
     /// Semantic quality level of this snapshot.
     pub quality: SnapshotQuality,
-}
-
-#[derive(Clone, Debug, Default)]
-struct PromptPopupElementSnapshot {
-    generation: Option<u64>,
-    elements: Vec<ElementInfo>,
-    focused_semantic_id: Option<String>,
-    selected_semantic_id: Option<String>,
-}
-
-fn prompt_popup_semantic_cache() -> &'static Mutex<HashMap<String, PromptPopupElementSnapshot>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, PromptPopupElementSnapshot>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-#[allow(dead_code)] // Binary dictation overlay uses this; lib-only builds do not.
-pub(crate) fn upsert_dictation_microphone_prompt_popup_snapshot(
-    window_id: &str,
-    generation: u64,
-    snapshot: &crate::dictation::DictationMicrophonePopupSnapshot,
-) {
-    let mut elements = Vec::new();
-    elements.push(element(
-        "panel:dictation-microphone-popup",
-        ElementType::Panel,
-        Some("Dictation Microphones".to_string()),
-        None,
-        None,
-        None,
-        None,
-    ));
-    elements.push(element(
-        "list:dictation-microphones",
-        ElementType::List,
-        Some(format!("{} rows", snapshot.rows.len())),
-        None,
-        None,
-        None,
-        None,
-    ));
-
-    let mut selected_semantic_id = None;
-    for (idx, row) in snapshot.rows.iter().enumerate() {
-        let is_selected = snapshot.selected_row_id.as_deref() == Some(row.row_id.as_str());
-        if is_selected {
-            selected_semantic_id = Some(row.semantic_id.clone());
-        }
-
-        let mut info = element(
-            &row.semantic_id,
-            ElementType::Choice,
-            Some(row.title.clone()),
-            Some(row.row_id.clone()),
-            Some(is_selected),
-            None,
-            Some(idx),
-        );
-        info.role = Some(row.subtitle.clone());
-        info.kind = Some("DictationMicrophone".to_string());
-        info.selectable = Some(true);
-        elements.push(info);
-    }
-
-    let focused_semantic_id = selected_semantic_id.clone();
-    if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
-        cache.insert(
-            window_id.to_string(),
-            PromptPopupElementSnapshot {
-                generation: Some(generation),
-                elements,
-                focused_semantic_id,
-                selected_semantic_id,
-            },
-        );
-    }
-}
-
-#[allow(dead_code)] // Binary dictation overlay uses this; lib-only builds do not.
-pub(crate) fn remove_dictation_microphone_prompt_popup_snapshot_if_generation(
-    window_id: &str,
-    generation: u64,
-) -> bool {
-    if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
-        if cache
-            .get(window_id)
-            .is_some_and(|snapshot| snapshot.generation == Some(generation))
-        {
-            cache.remove(window_id);
-            return true;
-        }
-    }
-    false
 }
 
 impl SurfaceElementSnapshot {
@@ -846,15 +740,6 @@ fn collect_registered_surface_layout_inner(
             entity.read(cx).automation_layout_info(&target, cx)
         }
         AutomationWindowKind::ActionsDialog => anyhow::bail!("actions_are_staged_in_place"),
-        AutomationWindowKind::Dictation => {
-            anyhow::ensure!(
-                crate::dictation::get_dictation_overlay_state_for_instance(generation, cx)
-                    .is_some(),
-                "dictation_layout_owner_missing"
-            );
-            required.extend(["dictation-overlay".into(), "dictation-content".into()]);
-            crate::dictation::automation_layout_info(&target)
-        }
         AutomationWindowKind::SnapOverlay => {
             let entity = exact_root::<crate::window_control::SnapOverlayView>(&target, cx)
                 .ok_or_else(|| anyhow::anyhow!("snap_layout_owner_missing"))?;
@@ -878,10 +763,6 @@ fn collect_registered_surface_layout_inner(
                 crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => {
                     anyhow::ensure!(crate::ai::agent_chat::ui::history_popup::get_history_popup_snapshot_for_generation(generation, cx).is_some(), "history_layout_owner_missing");
                     required.extend(["agent_chat-history-popup", "agent_chat-history-popup-header", "agent_chat-history-popup-list"].into_iter().map(str::to_string));
-                }
-                crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
-                    anyhow::ensure!(crate::dictation::dictation_microphone_popup_revision_facts(generation, None, cx).is_some(), "microphone_layout_owner_missing");
-                    required.extend(["dictation-microphone-popup".into(), "dictation-microphone-popup-list".into()]);
                 }
                 _ => anyhow::bail!("surface_layout_owner_unknown"),
             }
@@ -980,9 +861,6 @@ pub fn surface_revision_facts(
             let revision = view.semantic_revision(cx);
             Some((revision, revision, theme, theme))
         }
-        AutomationWindowKind::Dictation => {
-            crate::dictation::dictation_overlay_revision_facts(generation, window, cx)
-        }
         AutomationWindowKind::ActionsDialog => None,
         AutomationWindowKind::SnapOverlay => read_window_root(
             handle.downcast::<crate::window_control::SnapOverlayView>()?,
@@ -1003,7 +881,6 @@ pub fn surface_revision_facts(
             }
             match resolved.id.as_str() {
                 crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => crate::ai::agent_chat::ui::history_popup::history_popup_revision_facts(generation, window, cx),
-                crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => crate::dictation::dictation_microphone_popup_revision_facts(generation, window, cx),
                 _ => None,
             }
         }
@@ -1046,14 +923,6 @@ pub fn close_owned_registered_surface(
             );
             crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
         }
-        AutomationWindowKind::Dictation => {
-            anyhow::ensure!(
-                crate::dictation::get_dictation_overlay_state_for_instance(generation, cx)
-                    .is_some(),
-                "dictation_target_stale"
-            );
-            crate::dictation::close_dictation_overlay(cx)?;
-        }
         AutomationWindowKind::ActionsDialog => anyhow::bail!("actions_are_staged_in_place"),
         AutomationWindowKind::SnapOverlay => {
             let handle = handle
@@ -1067,9 +936,6 @@ pub fn close_owned_registered_surface(
                 crate::ai::agent_chat::ui::history_popup::close_history_popup_window_for_owner_loss(
                     cx,
                 );
-            }
-            crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
-                crate::dictation::close_dictation_microphone_popup_window_for_owner_loss(cx)
             }
             _ => anyhow::bail!("surface_close_owner_unknown"),
         },
@@ -1097,7 +963,6 @@ pub fn collect_surface_snapshot(
         }
         AutomationWindowKind::ActionsDialog => return None,
         AutomationWindowKind::PromptPopup => collect_exact_prompt_popup_snapshot(resolved, cx)?,
-        AutomationWindowKind::Dictation => collect_dictation_snapshot(resolved, cx)?,
         AutomationWindowKind::SnapOverlay => collect_snap_snapshot(resolved, cx)?,
         _ => return None,
     };
@@ -1499,9 +1364,7 @@ pub(crate) fn collect_agent_chat_detached_elements(
 mod tests {
     use super::{
         collect_semantic_chip_element, collect_semantic_chip_elements,
-        project_agent_chat_conversation_elements, prompt_popup_semantic_cache,
-        remove_dictation_microphone_prompt_popup_snapshot_if_generation,
-        PromptPopupElementSnapshot,
+        project_agent_chat_conversation_elements,
     };
 
     #[test]
@@ -1573,30 +1436,5 @@ mod tests {
         assert_eq!(cancellation.kind.as_deref(), Some("userStopped"));
         assert_eq!(cancellation.semantic_id, "conversation.turnStatus:8");
         assert!(cancellation.value.is_none());
-    }
-
-    #[test]
-    fn prompt_popup_cache_cleanup_requires_exact_generation() {
-        let id = "test:prompt-popup-cache-generation";
-        prompt_popup_semantic_cache().lock().unwrap().insert(
-            id.to_string(),
-            PromptPopupElementSnapshot {
-                generation: Some(14),
-                elements: Vec::new(),
-                focused_semantic_id: None,
-                selected_semantic_id: None,
-            },
-        );
-
-        assert!(!remove_dictation_microphone_prompt_popup_snapshot_if_generation(id, 13));
-        assert!(prompt_popup_semantic_cache()
-            .lock()
-            .unwrap()
-            .contains_key(id));
-        assert!(remove_dictation_microphone_prompt_popup_snapshot_if_generation(id, 14));
-        assert!(!prompt_popup_semantic_cache()
-            .lock()
-            .unwrap()
-            .contains_key(id));
     }
 }

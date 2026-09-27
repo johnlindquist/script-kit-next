@@ -208,14 +208,6 @@ pub(crate) fn glass_capsule(
     )
 }
 
-pub(crate) fn remove_glass_capsule_group(window: &Window, group: &'static str) {
-    crate::platform::footer_hit_regions::remove_group(window, group);
-    #[cfg(target_os = "macos")]
-    crate::platform::glass_button_host::remove_group(window, group);
-    #[cfg(not(target_os = "macos"))]
-    let _ = (window, group);
-}
-
 pub(crate) fn remove_glass_capsule_window(window: &Window) {
     crate::platform::footer_hit_regions::remove_for_window(window);
     #[cfg(target_os = "macos")]

@@ -42,7 +42,6 @@ impl ScriptListApp {
         match view {
             AppView::ScriptList | AppView::DayPage { .. } => Some(ActionsDialogHost::MainList),
             AppView::ClipboardHistoryView { .. } => Some(ActionsDialogHost::ClipboardHistory),
-            AppView::DictationHistoryView { .. } => Some(ActionsDialogHost::DictationHistory),
             AppView::FavoritesBrowseView { .. } => Some(ActionsDialogHost::Favorites),
             AppView::ThemeChooserView { .. } => Some(ActionsDialogHost::ThemeChooser),
             AppView::EmojiPickerView { .. } => Some(ActionsDialogHost::EmojiPicker),
@@ -467,17 +466,6 @@ impl ScriptListApp {
             ActionsDialogHost::ClipboardHistory => {
                 if let Some(entry) = self.selected_clipboard_entry() {
                     self.toggle_clipboard_actions(entry, window, cx);
-                    true
-                } else if self.show_actions_popup {
-                    self.toggle_actions(cx, window);
-                    true
-                } else {
-                    false
-                }
-            }
-            ActionsDialogHost::DictationHistory => {
-                if let Some(entry) = self.selected_dictation_history_entry() {
-                    self.toggle_dictation_history_actions(entry, window, cx);
                     true
                 } else if self.show_actions_popup {
                     self.toggle_actions(cx, window);
@@ -1359,7 +1347,6 @@ impl ScriptListApp {
             ActionsDialogHost::MainList
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory
-            | ActionsDialogHost::DictationHistory
             | ActionsDialogHost::Favorites
             | ActionsDialogHost::ThemeChooser
             | ActionsDialogHost::EmojiPicker

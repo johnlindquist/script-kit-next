@@ -34,7 +34,6 @@ pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
         "main.current-app-commands",
         "main.agent-chat-history",
         "main.browser-history",
-        "main.dictation-history",
         "main.notes-browse",
         "main.notes-browse-no-match",
         "main.notes-browse-loading",
@@ -132,16 +131,6 @@ pub(crate) const AGENT_CHAT_POPUP_FIXTURE_IDS: &[&str] = &[
     "agent-chat.popup.profile",
 ];
 
-pub(crate) const DICTATION_FIXTURE_IDS: &[&str] = &[
-    "dictation.recording",
-    "dictation.confirming",
-    "dictation.transcribing",
-    "dictation.delivering",
-    "dictation.finished",
-    "dictation.failed",
-    "dictation.microphone-picker",
-];
-
 pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &["secondary.snap"];
 
 pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
@@ -157,6 +146,5 @@ pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
         .chain(FLOW_FIXTURE_IDS.iter().copied())
         .chain(SDK_CHAT_FIXTURE_IDS.iter().copied())
         .chain(AGENT_CHAT_POPUP_FIXTURE_IDS.iter().copied())
-        .chain(DICTATION_FIXTURE_IDS.iter().copied())
         .chain(SECONDARY_FIXTURE_IDS.iter().copied())
 }
