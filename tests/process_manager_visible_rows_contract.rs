@@ -59,13 +59,28 @@ fn process_manager_render_and_keyboard_use_visible_entry_helper() {
 fn process_manager_refresh_is_visible_row_owned() {
     for required in [
         "self.builtin_uniform_list_scrollbar(&self.process_list_scroll_handle",
-        "Clamp selection index against the visible filtered rows.",
-        "Self::process_manager_filtered_entries(\n                                        &app.cached_processes,\n                                        filter,",
-        "Self::process_manager_filtered_entries(\n                                        &this.cached_processes,\n                                        &current_filter,",
+        "app.replace_process_manager_rows(new_processes, false);",
+        "this.replace_process_manager_rows(",
+        "Self::process_manager_filtered_entries(&this.cached_processes, &current_filter)",
     ] {
         assert!(
             PROCESS_MANAGER.contains(required),
             "Process Manager scrolling/refresh should stay visible-row-owned: {required}"
+        );
+    }
+    let replace_rows = source_between(
+        PROCESS_MANAGER,
+        "fn replace_process_manager_rows(",
+        "*selected_index = restore.selected_index;",
+    );
+    for required in [
+        "Self::process_manager_filtered_entries(&self.cached_processes, &filter)",
+        "capture_dynamic_uniform_list_snapshot(",
+        "reconcile_dynamic_uniform_list_snapshot(&snapshot, &new_keys)",
+    ] {
+        assert!(
+            replace_rows.contains(required),
+            "Process Manager refresh should reconcile selection against the visible filtered rows: {required}"
         );
     }
 }
@@ -74,8 +89,7 @@ fn process_manager_refresh_is_visible_row_owned() {
 fn process_manager_chrome_and_clicks_use_shared_contracts() {
     for required in [
         "AppChromeColors::from_theme(&self.theme)",
-        "rgba(chrome.text_hint_rgba)",
-        ".h_full()\n                .flex()\n                .flex_col()\n                .items_center()\n                .justify_center()",
+        "crate::components::render_simple_empty_state(",
         "cx.stop_propagation();",
         "trigger_process_manager_stop_all(cx)",
     ] {
