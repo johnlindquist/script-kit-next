@@ -40,7 +40,6 @@ impl ScriptListApp {
                 | AppView::MiniPrompt { .. }
                 | AppView::MicroPrompt { .. }
                 | AppView::DivPrompt { .. }
-                | AppView::HotkeyPrompt { .. }
                 | AppView::WebcamView { .. } => FocusTarget::AppRoot,
                 AppView::FormPrompt { .. } => FocusTarget::FormPrompt,
                 AppView::EditorPrompt { .. } | AppView::ScratchPadView { .. } => {

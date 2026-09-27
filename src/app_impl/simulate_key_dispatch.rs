@@ -226,6 +226,25 @@ impl ScriptListApp {
                 && matches!(view.current_view, AppView::MiniPrompt { .. });
             match &view.current_view {
                 AppView::ScriptList => {
+                    let keystroke = gpui::Keystroke {
+                        modifiers: gpui::Modifiers {
+                            platform: has_cmd,
+                            shift: has_shift,
+                            control: _has_ctrl,
+                            alt: _has_alt,
+                            function: false,
+                        },
+                        key: if key_lower == "esc" {
+                            "escape".to_string()
+                        } else {
+                            key_lower.clone()
+                        },
+                        key_char: None,
+                    };
+                    if view.one_window_shortcut_keystroke(&keystroke, ctx) {
+                        logging::log("STDIN", "SimulateKey: recorded by the shortcut view");
+                        return DispatchOutcome::success();
+                    }
                     if view.consume_return_to_script_list_enter_guard(
                         &key_lower,
                         &gpui::Modifiers {
@@ -1523,42 +1542,6 @@ impl ScriptListApp {
                                     ),
                                 );
                             }
-                        }
-                    }
-                }
-                AppView::HotkeyPrompt { entity, id, .. } => {
-                    logging::log(
-                        "STDIN",
-                        &format!("SimulateKey: Dispatching '{}' to HotkeyPrompt", key_lower),
-                    );
-                    let entity_clone = entity.clone();
-                    let prompt_id_clone = id.clone();
-
-                    if ((key_lower == "escape" || key_lower == "esc") && !has_cmd)
-                        || (has_cmd && key_lower == "w")
-                    {
-                        logging::log("STDIN", "SimulateKey: cancel HotkeyPrompt");
-                        view.submit_prompt_response(prompt_id_clone, None, ctx);
-                        view.cancel_script_execution(ctx);
-                    } else {
-                        let modifiers = gpui::Modifiers {
-                            platform: has_cmd,
-                            control: _has_ctrl,
-                            alt: _has_alt,
-                            shift: has_shift,
-                            ..Default::default()
-                        };
-                        let submitted = entity_clone.update(ctx, |prompt, cx| {
-                            prompt.handle_key_down(&key_lower, modifiers, cx);
-                            if prompt.shortcut.is_complete() {
-                                Some(prompt.shortcut.to_hotkey_info_json())
-                            } else {
-                                None
-                            }
-                        });
-                        if let Some(value) = submitted {
-                            logging::log("STDIN", "SimulateKey: captured HotkeyPrompt shortcut");
-                            view.submit_prompt_response(prompt_id_clone, Some(value), ctx);
                         }
                     }
                 }

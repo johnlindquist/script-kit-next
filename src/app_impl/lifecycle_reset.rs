@@ -607,7 +607,6 @@ impl ScriptListApp {
             && script_kit_gpui::is_main_window_visible()
             && !self.is_pinned
             && !crate::dictation::is_dictation_recording()
-            && self.tab_ai_save_offer_state.is_none()
             && self.shortcut_recorder_state.is_none()
     }
 

@@ -153,12 +153,6 @@ enum AppView {
         id: String,
         entity: Entity<TemplatePrompt>,
     },
-    /// Showing transient SDK hotkey capture prompt
-    HotkeyPrompt {
-        #[allow(dead_code)]
-        id: String,
-        entity: Entity<crate::components::shortcut_recorder::ShortcutRecorder>,
-    },
     /// Showing chat prompt for conversational interfaces
     ChatPrompt {
         #[allow(dead_code)]
@@ -832,7 +826,6 @@ impl AppView {
             AppView::EnvPrompt { .. } => "EnvPrompt",
             AppView::DropPrompt { .. } => "DropPrompt",
             AppView::TemplatePrompt { .. } => "TemplatePrompt",
-            AppView::HotkeyPrompt { .. } => "HotkeyPrompt",
             AppView::ChatPrompt { .. } => "ChatPrompt",
             AppView::MiniPrompt { .. } => "MiniPrompt",
             AppView::MicroPrompt { .. } => "MicroPrompt",
@@ -883,7 +876,6 @@ impl AppView {
             AppView::ArgPrompt { .. }
             | AppView::DivPrompt { .. }
             | AppView::FormPrompt { .. }
-            | AppView::HotkeyPrompt { .. }
             | AppView::ChatPrompt { .. }
             | AppView::MiniPrompt { .. }
             | AppView::MicroPrompt { .. } => SurfaceKind::PromptEntity,
@@ -995,7 +987,6 @@ impl AppView {
             | AppView::EnvPrompt { .. }
             | AppView::DropPrompt { .. }
             | AppView::TemplatePrompt { .. }
-            | AppView::HotkeyPrompt { .. }
             | AppView::ChatPrompt { .. }
             | AppView::MicroPrompt { .. }
             | AppView::NamingPrompt { .. }
@@ -1038,7 +1029,6 @@ impl AppView {
             AppView::EnvPrompt { .. } => Some("env_prompt"),
             AppView::DropPrompt { .. } => Some("drop_prompt"),
             AppView::TemplatePrompt { .. } => Some("template_prompt"),
-            AppView::HotkeyPrompt { .. } => Some("hotkey_prompt"),
             AppView::MiniPrompt { .. } => Some("mini_prompt"),
             AppView::ClipboardHistoryView { .. } => Some("clipboard_history"),
             AppView::FileSearchView { .. } => Some("file_search"),
@@ -1787,16 +1777,6 @@ struct AliasInputState {
     command_name: String,
     /// Whether the command already had an alias (empty words remove it).
     has_alias: bool,
-}
-
-/// The open Tab AI save offer, shown after a successful ephemeral script run.
-/// When this is Some, its question is in the line above the input.
-#[derive(Debug, Clone)]
-struct TabAiSaveOfferState {
-    /// The execution record for the completed Tab AI run.
-    record: crate::ai::TabAiExecutionRecord,
-    /// Derived filename stem (e.g. "force-quit-this-app").
-    filename_stem: String,
 }
 
 #[cfg(test)]

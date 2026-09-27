@@ -12,7 +12,7 @@
 //! - [`FormCheckbox`] - Checkbox with label
 //! - [`PromptFooter`] - Footer component with logo, primary/secondary action buttons
 //! - [`PromptContainer`] - Container component for consistent prompt window layout
-//! - [`ShortcutRecorder`] - Modal for recording keyboard shortcuts with visual feedback
+//! - [`RecordedShortcut`] - The keys recorded for a shortcut, shown as ⌘⇧K
 //!
 //!
 //! # Design Patterns
@@ -27,7 +27,6 @@ pub mod ai_recovery;
 pub(crate) mod braille_loading;
 pub(crate) mod builtin_leading_separator;
 pub mod button;
-pub(crate) mod confirm_modal_shell;
 /// Shared per-turn conversation action affordances (response copy control).
 pub(crate) mod conversation_actions;
 /// Shared typed owner of conversation paint values for Agent Chat AND Flow.
@@ -54,7 +53,6 @@ pub(crate) mod launcher_ask_ai_hint;
 pub(crate) mod list_scroll_affordance;
 pub(crate) mod main_view_chrome;
 pub mod minimal_prompt_shell;
-pub(crate) mod modal_dim;
 pub(crate) mod navigation_affordance;
 pub(crate) mod non_list_state;
 pub mod notes_editor;
@@ -86,12 +84,6 @@ pub use ai_recovery::{
 };
 #[allow(unused_imports)]
 pub use button::{Button, ButtonColors, ButtonVariant};
-#[allow(unused_imports)]
-pub(crate) use confirm_modal_shell::{
-    confirm_modal_header, confirm_modal_shell, modal_action_row, ConfirmModalShellConfig,
-    ModalActionRowButton, CONFIRM_MODAL_RADIUS, CONFIRM_MODAL_SHELL_ID,
-    MODAL_ACTION_DISABLED_OPACITY, MODAL_ACTION_ROW_TOP_MARGIN_PX, MODAL_WIDTH_PX,
-};
 #[allow(unused_imports)]
 pub use focusable_prompt_wrapper::{
     match_focusable_prompt_intercepted_key, FocusablePrompt, FocusablePromptInterceptedKey,
@@ -185,9 +177,7 @@ pub(crate) use prompt_layout_shell::{
 #[allow(unused_imports)]
 pub use section_divider::SectionDivider;
 #[allow(unused_imports)]
-pub use shortcut_recorder::{
-    RecordedShortcut, ShortcutConflict, ShortcutRecorder, ShortcutRecorderColors,
-};
+pub use shortcut_recorder::RecordedShortcut;
 #[allow(unused_imports)]
 pub use text_input::{TextInputState, TextSelection};
 #[allow(unused_imports)]

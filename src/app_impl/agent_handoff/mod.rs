@@ -1003,7 +1003,7 @@ impl ScriptListApp {
         if self.try_route_cmd_enter_to_menu_syntax_ai(cx) {
             return true;
         }
-        if self.show_actions_popup || self.tab_ai_save_offer_state.is_some() {
+        if self.show_actions_popup {
             return false;
         }
         if !Self::supports_global_cmd_enter_ai_entry(&self.current_view) {
@@ -2241,7 +2241,6 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => FocusTarget::EnvPrompt,
             AppView::DropPrompt { .. } => FocusTarget::DropPrompt,
             AppView::TemplatePrompt { .. } => FocusTarget::TemplatePrompt,
-            AppView::HotkeyPrompt { .. } => FocusTarget::AppRoot,
 
             AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
                 FocusTarget::TermPrompt
@@ -3573,7 +3572,6 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => "EnvPrompt".to_string(),
             AppView::DropPrompt { .. } => "DropPrompt".to_string(),
             AppView::TemplatePrompt { .. } => "TemplatePrompt".to_string(),
-            AppView::HotkeyPrompt { .. } => "HotkeyPrompt".to_string(),
             AppView::ChatPrompt { .. } => "ChatPrompt".to_string(),
             AppView::ClipboardHistoryView { .. } => "ClipboardHistory".to_string(),
             AppView::AppLauncherView { .. } => "AppLauncher".to_string(),
@@ -3732,7 +3730,6 @@ impl ScriptListApp {
             | AppView::TermPrompt { .. }
             | AppView::QuickTerminalView { .. }
             | AppView::DropPrompt { .. }
-            | AppView::HotkeyPrompt { .. }
             | AppView::WebcamView { .. }
             | AppView::CreationFeedback { .. }
             | AppView::ScriptIssuesView { .. }
@@ -3744,7 +3741,7 @@ impl ScriptListApp {
 
     /// Complete the pending Tab AI execution after the script actually exits.
     ///
-    /// Gates memory write-back, save-offer, and temp-file cleanup on real
+    /// Gates memory write-back, keeping the script, and temp-file cleanup on real
     /// completion status — never at dispatch time.
     ///
     /// Called from the prompt-handler `ScriptExit` / `ScriptError` paths
@@ -3793,12 +3790,7 @@ impl ScriptListApp {
             }
 
             if crate::ai::should_offer_save(&record) {
-                tracing::info!(
-                    event = "tab_ai_save_offer_open",
-                    slug = %record.slug,
-                    prompt_type = %record.prompt_type,
-                );
-                self.open_tab_ai_save_offer(record, cx);
+                self.save_tab_ai_script(record, cx);
             }
         } else {
             let message = error.unwrap_or_else(|| "Tab AI script failed".to_string());
@@ -3806,7 +3798,7 @@ impl ScriptListApp {
             cx.notify();
         }
     }
-    // ── Tab AI save-offer overlay ──────────────────────────────────────
+    // ── Tab AI script, kept automatically ──────────────────────────────
 
     fn tab_ai_default_save_name(record: &crate::ai::TabAiExecutionRecord) -> String {
         let derived = super::prompt_ai::derive_script_name_from_description(&record.intent);
@@ -3817,69 +3809,29 @@ impl ScriptListApp {
         }
     }
 
-    /// Offer to keep the script a successful Tab AI run produced, as a question in the line
-    /// above the input: ↵ Save, Esc Not Now.
-    pub(crate) fn open_tab_ai_save_offer(
+    /// Keeps the script a successful Tab AI run produced: it is saved at once and the line
+    /// above the input says "Saved as <file>"; ⌘Z deletes exactly that file.
+    pub(crate) fn save_tab_ai_script(
         &mut self,
         record: crate::ai::TabAiExecutionRecord,
         cx: &mut Context<Self>,
     ) {
         let filename_stem = Self::tab_ai_default_save_name(&record);
-        tracing::info!(
-            event = "tab_ai_save_offer_state_set",
-            filename_stem_sha256 = %crate::logging::log_private_user_value(&filename_stem),
-            filename_stem_bytes = filename_stem.len(),
-        );
-        self.tab_ai_save_offer_state = Some(TabAiSaveOfferState {
-            record,
-            filename_stem: filename_stem.clone(),
-        });
-        self.mark_main_data_changed();
-        self.mark_main_presentation_changed();
-        self.one_window_ask(
-            "script",
-            "Save this script?",
-            format!("Save it as {filename_stem}.ts to run it again from the launcher."),
-            vec![
-                ("Save".to_string(), Box::new(|app, cx| app.save_tab_ai_script(cx))),
-                ("Not Now".to_string(), Box::new(|app, cx| app.close_tab_ai_save_offer(cx))),
-            ],
-            Some(Box::new(|app, cx| app.close_tab_ai_save_offer(cx))),
-            cx,
-        );
-        cx.notify();
-    }
-
-    pub(crate) fn close_tab_ai_save_offer(&mut self, cx: &mut Context<Self>) {
-        if self.tab_ai_save_offer_state.take().is_some() {
-            self.mark_main_data_changed();
-            self.mark_main_presentation_changed();
-            tracing::info!(event = "tab_ai_save_offer_dismissed");
-            self.pending_focus = Some(self.tab_ai_return_focus_target());
-            cx.notify();
-        }
-    }
-
-    pub(crate) fn save_tab_ai_script(&mut self, cx: &mut Context<Self>) {
-        let Some(state) = self.tab_ai_save_offer_state.clone() else {
-            return;
-        };
-
         // Route through the contract pipeline (extraction, convention
         // enforcement, concurrent-prompt-API rejection, receipt, background
         // Bun verification) instead of a bare create + write — a generated
         // script that the tested generator would reject must not land on
-        // disk unflagged. The user-chosen filename stem still wins.
-        let prompt = if state.record.intent.trim().is_empty() {
-            state.filename_stem.as_str()
+        // disk unflagged.
+        let prompt = if record.intent.trim().is_empty() {
+            filename_stem.as_str()
         } else {
-            state.record.intent.as_str()
+            record.intent.as_str()
         };
         let created_path =
             match crate::ai::script_generation::save_generated_script_from_response_with_slug(
                 prompt,
-                &state.record.generated_source,
-                Some(&state.filename_stem),
+                &record.generated_source,
+                Some(&filename_stem),
             ) {
                 Ok(path) => path,
                 Err(error) => {
@@ -3887,79 +3839,63 @@ impl ScriptListApp {
                         event = "tab_ai_save_create_failed",
                         error_sha256 = %crate::logging::log_private_user_value(&error.to_string()),
                         filename_stem_sha256 = %crate::logging::log_private_user_value(
-                            &state.filename_stem
+                            &filename_stem
                         ),
                     );
-                    // The offer has closed; say what went wrong where the
-                    // user is now looking.
-                    self.tab_ai_save_offer_state = None;
-                    self.mark_main_data_changed();
-                    self.mark_main_presentation_changed();
-                    self.notice_failed(format!("Failed to save script: {error}"), cx);
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("Couldn't save {filename_stem}.ts: {error}"),
+                        cx,
+                    );
                     return;
                 }
             };
-
-        tracing::info!(
-            event = "tab_ai_script_saved",
-            filename_stem_sha256 = %crate::logging::log_private_user_value(&state.filename_stem),
-            filename_stem_bytes = state.filename_stem.len(),
-            path_sha256 = %crate::logging::log_private_user_value(&created_path.to_string_lossy()),
-        );
-
-        let created_file_path = if created_path.is_absolute() {
-            created_path.clone()
+        let written = if created_path.is_absolute() {
+            created_path
         } else {
             match std::env::current_dir() {
                 Ok(cwd) => cwd.join(&created_path),
-                Err(_) => created_path.clone(),
+                Err(_) => created_path,
             }
         };
-
-        let editor_error = if self.main_services.is_production() {
-            crate::script_creation::open_in_editor(&created_path, &self.config).err()
-        } else {
-            None
-        };
-        if let MainServices::OwnedFixtures(sources) = &mut self.main_services {
-            let sources = Arc::make_mut(sources);
-            if sources.overlay_fixture_id == Some("main-overlay.tab-ai-save-offer")
-                && sources.overlay_actions.len() < 16
-            {
-                sources
-                    .overlay_actions
-                    .push("saved_not_validated_or_opened".into());
-            }
-        }
-
-        self.tab_ai_save_offer_state = None;
-        self.mark_main_data_changed();
-        self.mark_main_presentation_changed();
-
-        match editor_error {
-            Some(error) => {
-                tracing::warn!(
-                    event = "tab_ai_save_editor_open_failed",
-                    error = %error,
-                );
-                self.one_window_notice(crate::line_notice::FAILED, format!("Saved script but failed to open editor: {error}"), cx);
-            }
-            None => {
-                self.one_window_notice(crate::line_notice::DONE, if self.main_services.is_production() {
-                            format!("Saved '{}' and opened in editor", state.filename_stem)
-                        } else {
-                            format!(
-                                "Saved '{}' in owned storage; verification not run",
-                                state.filename_stem
-                            )
-                        }, cx);
-            }
-        }
-
-        self.open_creation_feedback_payload(
-            prompts::CreationFeedbackPayload::generated_script(created_file_path),
+        tracing::info!(
+            event = "tab_ai_script_saved",
+            filename_stem_sha256 = %crate::logging::log_private_user_value(&filename_stem),
+            filename_stem_bytes = filename_stem.len(),
+            path_sha256 = %crate::logging::log_private_user_value(&written.to_string_lossy()),
+        );
+        let file_name = written
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| format!("{filename_stem}.ts"));
+        self.one_window_done_undoable(
+            "script",
+            format!("Saved as {file_name}"),
+            Box::new(move |app, cx| app.remove_saved_tab_ai_script(&written, cx)),
             cx,
         );
+        cx.notify();
+    }
+
+    /// ⌘Z after a Tab AI script was kept: the file it wrote goes away.
+    fn remove_saved_tab_ai_script(&mut self, written: &std::path::Path, cx: &mut Context<Self>) {
+        match std::fs::remove_file(written) {
+            Ok(()) => tracing::info!(
+                event = "tab_ai_script_save_undone",
+                path_sha256 = %crate::logging::log_private_user_value(&written.to_string_lossy()),
+            ),
+            Err(error) => {
+                let name = written
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    format!("Couldn't remove {name}: {error}"),
+                    cx,
+                );
+            }
+        }
     }
 }
 

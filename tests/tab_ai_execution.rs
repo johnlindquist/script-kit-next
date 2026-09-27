@@ -372,13 +372,6 @@ fn prompt_handler_completes_tab_ai_on_real_script_lifecycle_events() {
         normalized.contains("self.complete_tab_ai_execution(false,"),
         "ScriptError must finalize failed Tab AI runs"
     );
-    assert!(
-        normalized
-            .contains("let keep_tab_ai_save_offer_open = self.tab_ai_save_offer_state.is_some();")
-            && normalized.contains("if keep_tab_ai_save_offer_open {")
-            && normalized.contains("Tab AI active after script exit - preserving view"),
-        "ScriptExit must keep the view alive while the Tab AI save offer is active"
-    );
 }
 
 // ── Public Export Coverage ──
