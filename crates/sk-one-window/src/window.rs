@@ -8,6 +8,8 @@ mod finishing;
 mod keys;
 mod show;
 mod staging;
+#[cfg(test)]
+mod tests;
 mod text;
 mod time;
 mod views;
@@ -16,7 +18,7 @@ use crate::Ms;
 use crate::contract::{DISMISS_SETTLE_MS, ENTER_GUARD_MS, JEV_DEBOUNCE_MS, MAX_MATCHES, words};
 use crate::enter::{EnterGuard, EnterTarget};
 use crate::height::{ContentCause, HeightDecision, HeightGovernor};
-use crate::hold::{HeldChange, HeldState, Holds};
+use crate::hold::{Held, HeldChange, HeldState, Holds};
 use crate::ledger::{Entry, EntryState, Ledger, NewEntry, Risk, risk_of};
 use crate::list::{Item, ListState};
 use crate::row::{Row, RowAct};
@@ -129,6 +131,11 @@ pub enum Event {
     View(ViewOp),
     /// The open view's Enter changed.
     ViewEnter(EnterTarget),
+    /// A view under the top one changed its Enter; ↵ says it when that view is on top again.
+    ViewEnterBelow {
+        view: String,
+        target: EnterTarget,
+    },
     Done(Done),
     /// A view held a message on its own.
     Hold {
@@ -158,11 +165,15 @@ pub enum Event {
     Content {
         px: f32,
     },
+    /// The window went away without running anything (the user switched to another app); the
+    /// host brings it home when it resets.
+    Dismissed,
     Summon,
     Focused(Subject),
-    /// The staged subject's actions.
+    /// The staged subject's actions, as the host lists them. A row with the key of one the window
+    /// offered itself (undo, run again, share…) keeps doing what the window does for it.
     Actions(Vec<Row>),
-    /// Shows a line above the input until cleared.
+    /// Shows a line above the input until cleared; one a view set also goes when no view is open.
     Line(Option<SlotLine>),
     Tick,
 }
@@ -239,6 +250,9 @@ pub enum Effect {
 pub struct Outcome {
     pub effects: Vec<Effect>,
     pub consumed: bool,
+    /// The row Enter or ⌘1–3 ran, whether the host runs it ([`Effect::Run`]) or the window does
+    /// (undo, send now, share…).
+    pub picked: Option<(Row, RunHow)>,
 }
 
 /// What the window shows, for the host to draw and traces to compare.
@@ -276,6 +290,8 @@ pub struct OneWindow {
     views: ViewStack,
     staged: Option<Staged>,
     line: Option<SlotLine>,
+    /// The line was set by a view, and goes when no view is open.
+    line_from_view: bool,
     focused: Subject,
     ledger: Ledger,
     holds: Holds,
@@ -288,6 +304,7 @@ pub struct OneWindow {
     dismiss: Option<PendingDismiss>,
     away: bool,
     steps: Option<(String, Vec<String>)>,
+    picked: Option<(Row, RunHow)>,
     wake: Option<Ms>,
     now: Ms,
 }
@@ -311,6 +328,7 @@ impl OneWindow {
             views: ViewStack::default(),
             staged: None,
             line: None,
+            line_from_view: false,
             focused: Subject {
                 kind: SubjectKind::Window,
                 label: "Front window".into(),
@@ -326,6 +344,7 @@ impl OneWindow {
             dismiss: None,
             away: false,
             steps: None,
+            picked: None,
             wake: None,
             now: 0,
         }
@@ -393,10 +412,15 @@ impl OneWindow {
         let consumed = self.apply(now, ev, &mut fx);
         self.sync_pause(now, &mut fx);
         self.sync_staged(now);
+        if self.line_from_view && !self.in_view() {
+            self.line = None;
+            self.line_from_view = false;
+        }
         self.schedule(now, &mut fx);
         Outcome {
             effects: fx,
             consumed,
+            picked: self.picked.take(),
         }
     }
 
@@ -438,7 +462,14 @@ impl OneWindow {
                 if let Some(i) = self.list.held.take() {
                     self.list.asking = false;
                     if let Some(row) = self.list.jev.get(i).and_then(|s| s.row.clone()) {
-                        self.run(now, row, RunHow::Slot, fx);
+                        let readings: Vec<Row> = (0..self.list.jev.len())
+                            .filter_map(|j| self.list.jev.get(j).and_then(|s| s.row.clone()))
+                            .collect();
+                        if crate::list::unsure(&row, &readings) {
+                            self.list.asking = true;
+                        } else {
+                            self.run(now, row, RunHow::Slot, fx);
+                        }
                     }
                 }
                 true
@@ -450,6 +481,7 @@ impl OneWindow {
                 self.list.jev.down(now, &text);
                 self.list.held = None;
                 self.list.asking = false;
+                self.refresh_rows();
                 let user = self.user_turn(now);
                 self.guard.arm_unless_user(now, user);
                 true
@@ -466,6 +498,13 @@ impl OneWindow {
                 }
                 true
             }
+            Event::ViewEnterBelow { view, target } => match self.views.below_mut(&view) {
+                Some(frame) => {
+                    frame.enter = Some(target);
+                    true
+                }
+                None => false,
+            },
             Event::Done(done) => {
                 self.done(now, done, fx);
                 true
@@ -561,6 +600,10 @@ impl OneWindow {
                 }
                 true
             }
+            Event::Dismissed => {
+                self.away = true;
+                true
+            }
             Event::Summon => {
                 self.away = false;
                 fx.push(Effect::Show);
@@ -573,13 +616,22 @@ impl OneWindow {
             }
             Event::Actions(rows) => {
                 if let Some(staged) = self.staged.as_mut() {
-                    staged.rows = rows;
+                    staged.rows = rows
+                        .into_iter()
+                        .map(|mut row| {
+                            if let Some(own) = staged.rows.iter().find(|o| o.key == row.key) {
+                                row.act = own.act;
+                            }
+                            row
+                        })
+                        .collect();
                     staged.waiting_for_rows = false;
                     self.refresh_rows();
                 }
                 true
             }
             Event::Line(line) => {
+                self.line_from_view = line.is_some() && self.in_view();
                 self.line = line;
                 true
             }

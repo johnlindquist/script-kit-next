@@ -124,6 +124,7 @@ impl OneWindow {
     }
 
     pub(super) fn run(&mut self, now: Ms, row: Row, how: RunHow, fx: &mut Vec<Effect>) {
+        self.picked = Some((row.clone(), how));
         let staged_entry = self.staged.as_ref().and_then(|s| s.subject.entry);
         let from_staged = self
             .staged
@@ -132,6 +133,9 @@ impl OneWindow {
         if from_staged && row.act != RowAct::Share {
             self.staged = None;
             self.refresh_rows();
+        }
+        if row.takes_back_last() && self.take_back(now, row.target.as_deref(), fx) {
+            return;
         }
         match row.act {
             RowAct::Host => fx.push(Effect::Run { row, how }),
@@ -150,6 +154,30 @@ impl OneWindow {
         }
     }
 
+    /// A reading that takes something back: it stops the waiting messages it names, or else undoes
+    /// the last thing that ran if that can be undone. Returns whether it did either.
+    fn take_back(&mut self, now: Ms, target: Option<&str>, fx: &mut Vec<Effect>) -> bool {
+        let ids: Vec<u64> = self
+            .holds
+            .live()
+            .filter(|h| target.is_some_and(|t| t == "all" || t == h.label))
+            .map(|h| h.id)
+            .collect();
+        if !ids.is_empty() {
+            self.staged = None;
+            self.unsend(now, &ids, fx);
+            return true;
+        }
+        match self.ledger.last().cloned() {
+            Some(e) if e.risk == Risk::Undo && e.state == EntryState::Done => {
+                self.staged = None;
+                self.entry_act(now, RowAct::Undo, &e, fx);
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub(super) fn entry_act(&mut self, now: Ms, act: RowAct, entry: &Entry, fx: &mut Vec<Effect>) {
         match act {
             RowAct::Unsend => {
@@ -159,13 +187,7 @@ impl OneWindow {
             }
             RowAct::SendNow => {
                 if let Some(h) = entry.held.and_then(|id| self.holds.send_now(now, id)) {
-                    self.ledger.mark_sent(entry.id, now);
-                    fx.push(Effect::Held {
-                        op: HeldOp::Sent,
-                        id: h.id,
-                        label: h.label,
-                        request: h.request,
-                    });
+                    self.sent(now, h.id, fx);
                 }
                 self.home(now, String::new(), fx);
             }
