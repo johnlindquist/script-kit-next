@@ -422,7 +422,6 @@ impl ScriptListApp {
     }
 
     /// Handle keyboard input for the Create AI Preset form.
-    #[allow(dead_code)] // Called from startup_new_actions.rs interceptor
     pub(crate) fn handle_create_ai_preset_key(
         &mut self,
         key: &str,
@@ -524,82 +523,6 @@ impl ScriptListApp {
                     _ => model.push_str(key),
                 }
                 cx.notify();
-            }
-        }
-    }
-
-    /// Handle keyboard input for the Search AI Presets view.
-    #[allow(dead_code)] // Called from startup_new_actions.rs interceptor
-    pub(crate) fn handle_search_ai_presets_key(
-        &mut self,
-        key: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let AppView::SearchAiPresetsView {
-            ref filter,
-            ref mut selected_index,
-        } = self.current_view
-        {
-            if crate::ui_foundation::is_key_enter(key) {
-                // Build the same item list as render_search_ai_presets to ensure
-                // selected_index maps to the correct preset.
-                let all_presets = crate::ai::presets::load_presets().unwrap_or_default();
-                let default_presets: Vec<(&str, &str, &str)> = vec![
-                    (
-                        "general",
-                        "General Assistant",
-                        "Helpful AI assistant for any task",
-                    ),
-                    ("coder", "Code Assistant", "Expert programmer and debugger"),
-                    (
-                        "writer",
-                        "Writing Assistant",
-                        "Help with writing and editing",
-                    ),
-                    (
-                        "researcher",
-                        "Research Assistant",
-                        "Deep analysis and research",
-                    ),
-                    (
-                        "creative",
-                        "Creative Partner",
-                        "Brainstorming and creative ideas",
-                    ),
-                ];
-                let mut items: Vec<(String, String, String)> = Vec::new();
-                for (id, name, desc) in &default_presets {
-                    items.push((id.to_string(), name.to_string(), desc.to_string()));
-                }
-                for preset in &all_presets {
-                    if !default_presets.iter().any(|(did, _, _)| *did == preset.id) {
-                        items.push((
-                            preset.id.clone(),
-                            preset.name.clone(),
-                            preset.description.clone(),
-                        ));
-                    }
-                }
-                let filter_lower = filter.to_lowercase();
-                let filtered: Vec<_> = if filter.is_empty() {
-                    items.iter().collect()
-                } else {
-                    items
-                        .iter()
-                        .filter(|(id, name, desc)| {
-                            name.to_lowercase().contains(&filter_lower)
-                                || desc.to_lowercase().contains(&filter_lower)
-                                || id.to_lowercase().contains(&filter_lower)
-                        })
-                        .collect()
-                };
-                if let Some((id, _, _)) = filtered.get(*selected_index) {
-                    let id_clone = id.to_string();
-                    self.select_ai_preset(&id_clone, window, cx);
-                }
-            } else if crate::ui_foundation::is_key_escape(key) {
-                self.go_back_or_close(window, cx);
             }
         }
     }

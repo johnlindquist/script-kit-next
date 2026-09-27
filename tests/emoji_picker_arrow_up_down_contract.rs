@@ -21,12 +21,10 @@
 //! no-op against an empty or single-line filter. The grid's
 //! `selected_index` never changed and the visible selection never moved.
 //!
-//! The stale comment `// Called from startup_new_arrow.rs interceptor`
-//! atop `navigate_emoji_picker` (src/render_builtins/emoji_picker.rs)
-//! pointed at a dead file (`src/app_impl/startup_new_arrow.rs` — never
-//! `include!`d, never compiled) that DID contain a correct arm, which
-//! is likely why the gap in the active interceptor went unnoticed: the
-//! parallel file implied the arm existed somewhere in the tree.
+//! A stale comment atop the old `navigate_emoji_picker` helper pointed at
+//! an uncompiled copy of the interceptor that DID contain a correct arm,
+//! which is likely why the gap in the active interceptor went unnoticed.
+//! The copy and the helper have since been deleted.
 //!
 //! Pass #35 adds the missing `AppView::EmojiPickerView` arm in the
 //! Up/Down branch of `src/app_impl/startup.rs`, using

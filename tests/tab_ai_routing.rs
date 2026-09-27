@@ -8,7 +8,6 @@
 //! remains a compatibility wrapper for older harness entry callers.
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
-const TAB_NEW_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
 const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const TERM_RENDER_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
@@ -76,25 +75,25 @@ fn startup_tab_interceptor_does_not_steal_tab_from_quick_terminal() {
 }
 
 #[test]
-fn startup_new_tab_interceptor_writes_tab_bytes_directly_to_quick_terminal_pty() {
+fn startup_tab_interceptor_writes_tab_bytes_directly_to_quick_terminal_pty() {
     assert!(
-        TAB_NEW_SOURCE.contains("AppView::QuickTerminalView"),
-        "startup_new_tab.rs must special-case QuickTerminalView"
+        TAB_SOURCE.contains("AppView::QuickTerminalView"),
+        "startup.rs must special-case QuickTerminalView"
     );
     assert!(
-        TAB_NEW_SOURCE.contains("term.terminal.input(bytes)"),
+        TAB_SOURCE.contains("term.terminal.input(bytes)"),
         "QuickTerminalView Tab handling must write raw bytes to the PTY"
     );
     assert!(
-        TAB_NEW_SOURCE.contains("b\"\\t\""),
+        TAB_SOURCE.contains("b\"\\t\""),
         "plain Tab must be written as a tab byte"
     );
     assert!(
-        TAB_NEW_SOURCE.contains("b\"\\x1b[Z\""),
+        TAB_SOURCE.contains("b\"\\x1b[Z\""),
         "Shift+Tab must be written as a backtab escape sequence"
     );
     assert!(
-        TAB_NEW_SOURCE.contains("cx.stop_propagation();"),
+        TAB_SOURCE.contains("cx.stop_propagation();"),
         "QuickTerminalView Tab handling must stop propagation so GPUI focus traversal does not consume the key"
     );
 }

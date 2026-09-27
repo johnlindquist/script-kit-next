@@ -618,8 +618,8 @@ impl ScriptListApp {
     }
 
     /// Keyboard entry point for the menu-syntax trigger picker. Keyboard
-    /// interceptors in `startup.rs` (arrow keys), `startup_new_tab.rs`
-    /// (Tab / Enter), and `render_script_list/mod.rs` (Escape) call this
+    /// interceptors in `startup.rs` (arrow keys, Tab / Enter) and
+    /// `render_script_list/mod.rs` (Escape) call this
     /// when the picker is active. Returns `true` when the intent was consumed
     /// and the caller should NOT route the keystroke anywhere else.
     pub(crate) fn apply_menu_syntax_trigger_picker_intent(

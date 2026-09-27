@@ -57,14 +57,12 @@ fn root_launcher_placeholder_teaches_core_sigils() {
 #[test]
 fn root_launcher_placeholder_replaces_theme_identifier_resets() {
     let startup = read_source("src/app_impl/startup.rs");
-    let startup_new = read_source("src/app_impl/startup_new_prelude.rs");
     let lifecycle_reset = read_source("src/app_impl/lifecycle_reset.rs");
     let registries_state = read_source("src/app_impl/registries_state.rs");
     let theme_focus = read_source("src/app_impl/theme_focus.rs");
 
     for (path, source) in [
         ("src/app_impl/startup.rs", startup.as_str()),
-        ("src/app_impl/startup_new_prelude.rs", startup_new.as_str()),
         ("src/app_impl/lifecycle_reset.rs", lifecycle_reset.as_str()),
         (
             "src/app_impl/registries_state.rs",
@@ -82,8 +80,8 @@ fn root_launcher_placeholder_replaces_theme_identifier_resets() {
         "startup should not expose the theme identifier as the root placeholder"
     );
     assert!(
-        !startup_new.contains("AccentVariation::default().placeholder()"),
-        "new startup path should not expose the accent identifier as the root placeholder"
+        !startup.contains("AccentVariation::default().placeholder()"),
+        "startup should not expose the accent identifier as the root placeholder"
     );
     assert!(
         !lifecycle_reset.contains("current_main_menu_theme.placeholder()"),

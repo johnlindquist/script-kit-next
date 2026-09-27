@@ -1,17 +1,11 @@
 use std::fs;
 
-fn read_arrow_interceptor_source() -> String {
-    fs::read_to_string("src/app_impl/startup_new_arrow.rs")
-        .expect("Failed to read src/app_impl/startup_new_arrow.rs")
-}
-
 fn read_live_startup_source() -> String {
     fs::read_to_string("src/app_impl/startup.rs").expect("Failed to read src/app_impl/startup.rs")
 }
 
 #[test]
 fn test_script_list_source_filters_block_input_history_recall() {
-    let generated_source = read_arrow_interceptor_source();
     let live_source = read_live_startup_source();
     let helper_source = fs::read_to_string("src/app_impl/filter_input_core.rs")
         .expect("Failed to read src/app_impl/filter_input_core.rs");
@@ -24,13 +18,6 @@ fn test_script_list_source_filters_block_input_history_recall() {
     );
 
     assert!(
-        generated_source.contains("!this.source_filter_mode_blocks_input_history_recall()")
-            && generated_source.contains("this.input_history.navigate_up()")
-            && generated_source.contains("this.input_history.navigate_down()"),
-        "generated arrow path must guard both Up and Down input-history recall behind the source-filter predicate"
-    );
-
-    assert!(
         live_source.contains("let source_filter_mode =")
             && live_source.contains("this.source_filter_mode_blocks_input_history_recall()")
             && live_source.contains("if !source_filter_mode && (in_history || at_top_of_list)")
@@ -40,70 +27,16 @@ fn test_script_list_source_filters_block_input_history_recall() {
 }
 
 #[test]
-fn test_emoji_picker_arrows_delegate_to_shared_navigation_helper() {
-    let source = read_arrow_interceptor_source();
-
-    let arm_start = source
-        .find("AppView::EmojiPickerView { .. } =>")
-        .expect("emoji picker arrow arm should exist");
-    let arm = &source[arm_start..(arm_start + 1200).min(source.len())];
-
-    assert!(
-        arm.contains("this.navigate_emoji_picker(direction, cx);"),
-        "emoji picker arrow navigation should call the shared helper"
-    );
-    assert!(
-        !arm.contains("old_idx.saturating_sub"),
-        "emoji picker arrow navigation should not re-introduce inline index math"
-    );
-}
-
-#[test]
-fn test_window_switcher_arrow_navigation_uses_filtered_count() {
-    let source = read_arrow_interceptor_source();
-
-    let arm_start = source
-        .find("AppView::WindowSwitcherView")
-        .expect("window switcher arrow arm should exist");
-    let arm = &source[arm_start..(arm_start + 1200).min(source.len())];
-
-    assert!(
-        arm.contains("let filter_lower = filter.to_lowercase();"),
-        "window switcher arrow navigation should derive its count from the active filter"
-    );
-    assert!(
-        !arm.contains("let filtered_len = this.cached_windows.len();"),
-        "window switcher arrow navigation must not use raw cached_windows.len() when a filter is active"
-    );
-}
-
-#[test]
-fn test_process_manager_arrow_navigation_uses_filtered_count() {
-    let source = read_arrow_interceptor_source();
-
-    let arm_start = source
-        .find("AppView::ProcessManagerView")
-        .expect("process manager arrow arm should exist");
-    let arm = &source[arm_start..(arm_start + 1200).min(source.len())];
-
-    assert!(
-        arm.contains("let filter_lower = filter.to_lowercase();"),
-        "process manager arrow navigation should derive its count from the active filter"
-    );
-    assert!(
-        !arm.contains("let filtered_len = this.cached_processes.len();"),
-        "process manager arrow navigation must not use raw cached_processes.len() when a filter is active"
-    );
-}
-
-#[test]
 fn test_search_ai_presets_arrow_navigation_clamps_to_filtered_count() {
-    let source = read_arrow_interceptor_source();
+    let source = read_live_startup_source();
 
     let arm_start = source
         .find("AppView::SearchAiPresetsView")
         .expect("search ai presets arrow arm should exist");
-    let arm = &source[arm_start..(arm_start + 4000).min(source.len())];
+    let arm_len = source[arm_start + 1..]
+        .find("AppView::")
+        .map_or(source.len() - arm_start, |next| next + 1);
+    let arm = &source[arm_start..arm_start + arm_len];
 
     assert!(
         arm.contains("*selected_index + 1 < filtered_len"),
@@ -117,7 +50,7 @@ fn test_search_ai_presets_arrow_navigation_clamps_to_filtered_count() {
 
 #[test]
 fn test_app_launcher_arrow_navigation_scrolls_selected_item() {
-    let source = read_arrow_interceptor_source();
+    let source = read_live_startup_source();
 
     let arm_start = source
         .find("AppView::AppLauncherView")
@@ -136,7 +69,7 @@ fn test_app_launcher_arrow_navigation_scrolls_selected_item() {
 
 #[test]
 fn test_favorites_browse_arrow_navigation_clamps_to_filtered_count() {
-    let source = read_arrow_interceptor_source();
+    let source = read_live_startup_source();
 
     let arm_start = source
         .find("AppView::FavoritesBrowseView")

@@ -6,7 +6,6 @@
 
 const APP_LAUNCHER: &str = include_str!("../src/render_builtins/app_launcher.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
-const STARTUP_NEW_ARROW: &str = include_str!("../src/app_impl/startup_new_arrow.rs");
 const SIMULATE_KEY_DISPATCH: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 
 fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
@@ -121,10 +120,7 @@ fn app_launcher_key_handler_does_not_duplicate_text_input() {
 
 #[test]
 fn app_launcher_global_arrow_navigation_uses_filtered_rows() {
-    for (label, source) in [
-        ("startup.rs", STARTUP),
-        ("startup_new_arrow.rs", STARTUP_NEW_ARROW),
-    ] {
+    for (label, source) in [("startup.rs", STARTUP)] {
         let arrow_body = source_between(
             source,
             "AppView::AppLauncherView {\n                                    selected_index,",

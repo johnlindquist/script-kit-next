@@ -85,8 +85,8 @@ fn test_calculate_fallback_error_message_includes_expression_and_recovery() {
 
 #[test]
 fn test_shift_tab_no_longer_routes_through_harness_entry_intent() {
-    let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
-        .expect("Failed to read src/app_impl/startup_new_tab.rs");
+    let startup_tab = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
 
     assert!(
         !startup_tab.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
@@ -95,20 +95,26 @@ fn test_shift_tab_no_longer_routes_through_harness_entry_intent() {
 }
 
 #[test]
-fn test_cmd_enter_routes_to_harness_terminal_in_startup_new_tab() {
-    let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
-        .expect("Failed to read src/app_impl/startup_new_tab.rs");
+fn test_cmd_enter_routes_through_global_ai_entry_helper() {
+    let startup = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+    let intent_launcher = fs::read_to_string("src/app_impl/intent_launcher.rs")
+        .expect("Failed to read src/app_impl/intent_launcher.rs");
 
     assert!(
-        startup_tab.contains("try_route_global_cmd_enter_to_agent_chat_context_capture"),
-        "Cmd+Enter in startup_new_tab.rs should route through the global AI-entry helper"
+        startup.contains("self.route_main_window_cmd_enter(cx)"),
+        "Cmd+Enter in the startup interceptor should route through route_main_window_cmd_enter"
+    );
+    assert!(
+        intent_launcher.contains("self.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)"),
+        "route_main_window_cmd_enter should fall back to the global AI-entry helper"
     );
 }
 
 #[test]
 fn test_tab_interceptor_matches_tab_key_case_insensitive() {
-    let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
-        .expect("Failed to read src/app_impl/startup_new_tab.rs");
+    let startup_tab = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
 
     assert!(
         startup_tab.contains("eq_ignore_ascii_case(\"tab\")"),

@@ -6,7 +6,6 @@ const OBJECT_SELECTOR_OWNER: &str =
     include_str!("../src/app_impl/menu_syntax_object_selector_main_list.rs");
 const RENDER_SCRIPT_LIST: &str = include_str!("../src/render_script_list/mod.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
-const STARTUP_NEW_ARROW: &str = include_str!("../src/app_impl/startup_new_arrow.rs");
 
 #[test]
 fn object_selector_rows_are_cached_as_main_list_rows() {
@@ -79,16 +78,5 @@ fn object_selector_arrows_are_not_popup_intents() {
             && !arrow_block.contains("apply_menu_syntax_object_selector_intent")
             && !arrow_block.contains("InlinePickerKeyIntent::MoveDown"),
         "ArrowUp/ArrowDown must flow to shared main-list movement, not object selector popup movement"
-    );
-
-    let split_arrow_block = STARTUP_NEW_ARROW
-        .split("let menu_syntax_owns_main_list =")
-        .nth(1)
-        .and_then(|tail| tail.split("if menu_syntax_owns_main_list").next())
-        .expect("split arrow menu-syntax ownership block");
-    assert!(
-        !split_arrow_block.contains("menu_syntax_object_selector_state.owns_main_list()")
-            && !split_arrow_block.contains("menu_syntax_trigger_picker_state.owns_main_list()"),
-        "split arrow routing must not divert object/trigger rows away from shared list movement"
     );
 }

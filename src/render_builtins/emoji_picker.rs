@@ -22,63 +22,6 @@ impl EmojiPickerEmptyState {
 }
 
 impl ScriptListApp {
-    // Helper retained for callers that prefer a single-call row-aware
-    // navigator. The live `cx.intercept_keystrokes` Up/Down arm in
-    // `src/app_impl/startup.rs` now inlines the same layout + move_index
-    // sequence directly so the arm's shape is pinned by
-    // `tests/emoji_picker_arrow_up_down_contract.rs`.
-    #[allow(dead_code)]
-    pub(crate) fn navigate_emoji_picker(
-        &mut self,
-        direction: crate::emoji::EmojiNavDirection,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let frequent_snapshot = self.emoji_frequent_snapshot.clone();
-        let AppView::EmojiPickerView {
-            filter,
-            selected_index,
-            selected_category,
-        } = &mut self.current_view
-        else {
-            return false;
-        };
-
-        let display =
-            crate::emoji::display_ordered_emojis(filter, *selected_category, &frequent_snapshot);
-        if display.emojis.is_empty() {
-            *selected_index = 0;
-            self.hovered_index = None;
-            cx.notify();
-            return false;
-        }
-
-        *selected_index = (*selected_index).min(display.emojis.len() - 1);
-
-        let layout = crate::emoji::build_display_grid_layout(&display, crate::emoji::GRID_COLS);
-
-        let old_index = *selected_index;
-        *selected_index = layout.move_index(old_index, direction);
-        let row = layout.scroll_row_for_index(*selected_index);
-
-        tracing::debug!(
-            target: "script_kit::scroll",
-            event = "scroll_to_item",
-            reason = "selection_changed",
-            direction = ?direction,
-            old_index,
-            selected_index = *selected_index,
-            row,
-        );
-
-        self.emoji_scroll_handle
-            .scroll_to_item(row, ScrollStrategy::Nearest);
-
-        self.input_mode = InputMode::Keyboard;
-        self.hovered_index = None;
-        cx.notify();
-        true
-    }
-
     fn render_emoji_picker(
         &mut self,
         filter: String,

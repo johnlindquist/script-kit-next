@@ -610,9 +610,8 @@ impl ScriptListApp {
     /// in history, Up keeps walking older entries and Down past the newest
     /// clears back to the live filter.
     ///
-    /// This is the SimulateKey-parity twin of the real-key handlers in
-    /// `app_impl/startup.rs` (legacy key path) and
-    /// `app_impl/startup_new_arrow.rs` (arrow interceptor). Battery 13 found
+    /// This is the SimulateKey-parity twin of the real-key arrow interceptor
+    /// in `app_impl/startup.rs`. Battery 13 found
     /// the protocol dispatch (`simulate_key_dispatch.rs`) called bare
     /// move_selection_up/down, making history recall unreachable from
     /// automation — a story the probe fleet could never see.

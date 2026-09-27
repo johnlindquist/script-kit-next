@@ -125,7 +125,6 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
 }
 const RENDER_IMPL_SOURCE: &str = include_str!("../../src/main_sections/render_impl.rs");
 const STARTUP_SOURCE: &str = include_str!("../../src/app_impl/startup.rs");
-const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../../src/app_impl/startup_new_tab.rs");
 const UTILITY_VIEWS_SOURCE: &str = include_str!("../../src/app_execute/utility_views.rs");
 
 #[test]
@@ -559,10 +558,6 @@ fn file_search_plain_tab_navigates_into_selected_directory() {
             && STARTUP_SOURCE.contains("cx.stop_propagation();"),
         "live Tab interceptor must consume FileSearchView Tab and browse into the selected directory"
     );
-    assert!(
-        STARTUP_NEW_TAB_SOURCE.contains("this.navigate_file_search_into_selected_directory(cx)"),
-        "startup_new_tab.rs parity source must keep FileSearchView Tab directory navigation"
-    );
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -812,7 +807,6 @@ fn directory_dot_filter_restarts_stream_when_hidden_visibility_changes() {
 fn file_search_current_directory_tracks_hidden_visibility() {
     let state_source = include_str!("../../src/main_sections/app_state.rs");
     let startup_source = include_str!("../../src/app_impl/startup.rs");
-    let startup_new_state_source = include_str!("../../src/app_impl/startup_new_state.rs");
     let core_source = include_str!("../../src/app_impl/filter_input_core.rs");
     let change_source = include_str!("../../src/app_impl/filter_input_change.rs");
 
@@ -821,9 +815,8 @@ fn file_search_current_directory_tracks_hidden_visibility() {
         "app state must remember whether the current directory cache includes hidden entries"
     );
     assert!(
-        startup_source.contains("file_search_current_dir_show_hidden: false")
-            && startup_new_state_source.contains("file_search_current_dir_show_hidden: false"),
-        "all ScriptListApp constructors must initialize hidden-directory cache state"
+        startup_source.contains("file_search_current_dir_show_hidden: false"),
+        "the ScriptListApp constructor must initialize hidden-directory cache state"
     );
     assert!(
         core_source.contains("self.file_search_current_dir_show_hidden = parsed.show_hidden;"),
@@ -961,11 +954,10 @@ fn directory_stream_batches_keep_auto_selection_pinned_to_first_row() {
 
 #[test]
 fn file_search_user_navigation_locks_selection_mode() {
-    let arrow_source = include_str!("../../src/app_impl/startup_new_arrow.rs");
     let render_source = include_str!("../../src/render_builtins/file_search.rs");
 
     assert!(
-        arrow_source.contains("this.lock_file_search_selection_to_user_choice();"),
+        STARTUP_SOURCE.contains("this.lock_file_search_selection_to_user_choice();"),
         "file-search arrow navigation must mark selection as user-owned"
     );
     assert!(

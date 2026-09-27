@@ -71,15 +71,11 @@ fn capture_composer_renders_hint_surface_instead_of_empty_state() {
 }
 
 #[test]
-fn menu_syntax_hint_surface_has_dedicated_scroll_and_arrow_routing() {
+fn menu_syntax_hint_surface_has_dedicated_scroll() {
     let render = fs::read_to_string("src/render_script_list/mod.rs")
         .expect("Failed to read src/render_script_list/mod.rs");
     let app_state = fs::read_to_string("src/main_sections/app_state.rs")
         .expect("Failed to read src/main_sections/app_state.rs");
-    let arrow = fs::read_to_string("src/app_impl/startup_new_arrow.rs")
-        .expect("Failed to read src/app_impl/startup_new_arrow.rs");
-    let main_hint = fs::read_to_string("src/app_impl/menu_syntax_main_hint.rs")
-        .expect("Failed to read src/app_impl/menu_syntax_main_hint.rs");
 
     assert!(
         app_state.contains("menu_syntax_main_hint_scroll_handle: ScrollHandle"),
@@ -92,20 +88,6 @@ fn menu_syntax_hint_surface_has_dedicated_scroll_and_arrow_routing() {
             && render.contains(".overflow_y_scroll()")
             && render.contains("ScrollableElement::vertical_scrollbar"),
         "the menu syntax hint panel must scroll when its content is taller than the main list area"
-    );
-    assert!(
-        main_hint.contains("fn scroll_menu_syntax_main_hint(&mut self, direction: f32)")
-            && main_hint.contains("menu_syntax_main_hint_scroll_handle")
-            && main_hint.contains("FREE_SCROLL_LINE_DELTA_PX"),
-        "keyboard scroll should use the same free-scroll handle as the rendered hint panel"
-    );
-    assert!(
-        arrow.contains("let menu_syntax_owns_main_list =")
-            && arrow.contains("capture_composer_owns_input_for(&this.filter_text)")
-            && arrow.contains("command_owns_input_for(&this.filter_text)")
-            && arrow
-                .contains("this.scroll_menu_syntax_main_hint(if is_down { 1.0 } else { -1.0 });"),
-        "ScriptList Up/Down should scroll the owned menu syntax panel before normal history/list navigation"
     );
 }
 
@@ -461,8 +443,6 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
         .expect("Failed to read src/app_impl/filter_input_change.rs");
     let startup = fs::read_to_string("src/app_impl/startup.rs")
         .expect("Failed to read src/app_impl/startup.rs");
-    let startup_new_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
-        .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
     assert!(
         source_after(&trigger_picker, "fn should_show_has_field_completion(")
@@ -499,10 +479,7 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
     assert!(
         startup.contains("InlinePickerKeyIntent::Accept")
             && startup.contains("is_plain_enter")
-            && startup.contains("menu_syntax_trigger_picker_owns_main_keyboard()")
-            && startup_new_tab.contains("InlinePickerKeyIntent::Accept")
-            && startup_new_tab.contains("is_plain_enter")
-            && startup_new_tab.contains("menu_syntax_trigger_picker_owns_main_keyboard()"),
+            && startup.contains("menu_syntax_trigger_picker_owns_main_keyboard()"),
         "physical Enter startup paths must route to menu-syntax trigger Accept before ordinary launcher Enter"
     );
 }

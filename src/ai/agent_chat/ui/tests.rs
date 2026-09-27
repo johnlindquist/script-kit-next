@@ -360,7 +360,6 @@ fn turn_finished_returns_to_idle_from_streaming() {
 const TAB_AI_MODE_SOURCE: &str = include_str!("../../../app_impl/agent_handoff/mod.rs");
 const ACTIONS_TOGGLE_SOURCE: &str = include_str!("../../../app_impl/actions_toggle.rs");
 const STARTUP_SOURCE: &str = include_str!("../../../app_impl/startup.rs");
-const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../../../app_impl/startup_new_tab.rs");
 const SIMULATE_KEY_DISPATCH_SOURCE: &str =
     include_str!("../../../app_impl/simulate_key_dispatch.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../../../main_sections/render_impl.rs");

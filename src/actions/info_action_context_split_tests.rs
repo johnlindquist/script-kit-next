@@ -166,16 +166,13 @@ fn normalize_display_shortcut_maps_cmd_i_symbols() {
 }
 
 #[test]
-fn startup_interceptor_scopes_cmd_i_to_script_list_view() {
-    let source = fs::read_to_string("src/app_impl/startup_new_actions.rs")
-        .expect("Failed to read startup_new_actions.rs");
+fn script_list_key_handler_routes_cmd_i_to_toggle_info() {
+    let source = fs::read_to_string("src/render_script_list/mod.rs")
+        .expect("Failed to read src/render_script_list/mod.rs");
 
     assert!(
-        source.contains("Cmd+I -> toggle_info (ScriptList)"),
-        "startup interceptor must route Cmd+I to toggle_info for ScriptList"
-    );
-    assert!(
-        source.contains("AppView::ScriptList"),
-        "startup interceptor must scope Cmd+I to ScriptList view only"
+        source.contains("Shortcut Cmd+I -> toggle_info")
+            && source.contains("this.handle_action(\"toggle_info\".to_string(), window, cx);"),
+        "the ScriptList key handler must route Cmd+I to toggle_info"
     );
 }
