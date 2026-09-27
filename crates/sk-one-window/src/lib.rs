@@ -8,10 +8,13 @@
 pub mod contract;
 pub mod enter;
 pub mod height;
+pub mod history;
 pub mod hold;
 pub mod ledger;
 pub mod list;
+pub mod notice;
 pub mod row;
+pub mod setup;
 pub mod slot;
 pub mod stage;
 pub mod trace;

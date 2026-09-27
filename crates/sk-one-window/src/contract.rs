@@ -201,3 +201,30 @@ mod tests {
         }
     }
 }
+
+/// Words for what waits, what can be taken back, what ran today, and what still needs setting up.
+pub mod ledger_words {
+    /// "Runs in 8s": something that isn't a message waits before it runs.
+    pub fn runs_in(seconds: u64) -> String {
+        format!("Runs in {seconds}s")
+    }
+    pub const RAN: &str = "ran";
+    pub const NOT_RUN: &str = "stopped";
+    pub const UNDO: &str = "undo";
+    pub const TODAY: &str = "Today";
+    pub const ACT_ON_IT: &str = "Act on it";
+    pub const HISTORY_HEAD: &str = "What you ran today · newest first";
+    pub const NEEDS_SETUP: &str = "Needs setup";
+    pub const BUN_MISSING: &str = "bun is not installed";
+    pub const BUN_INSTALL: &str = "Install from bun.sh";
+    pub const BUN_URL: &str = "https://bun.sh";
+
+    /// "Didn't send: To Sarah" / "Didn't run: Empty Trash".
+    pub fn stopped(label: &str, run: bool) -> String {
+        if run {
+            format!("Didn't run: {label}")
+        } else {
+            format!("Didn't send: {label}")
+        }
+    }
+}

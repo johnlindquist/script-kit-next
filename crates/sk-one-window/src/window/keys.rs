@@ -36,6 +36,9 @@ impl OneWindow {
                     self.unsend(now, &[id], fx);
                     return true;
                 }
+                if self.undo_last(now, fx) {
+                    return true;
+                }
             }
             Key::Up if empty && self.staged.is_none() && self.list.sel == 0 => {
                 let target = self

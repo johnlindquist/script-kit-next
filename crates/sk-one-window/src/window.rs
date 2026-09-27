@@ -6,6 +6,7 @@
 
 mod finishing;
 mod keys;
+mod ledger_rules;
 mod show;
 mod staging;
 #[cfg(test)]
@@ -178,6 +179,12 @@ pub enum Event {
     /// Shows a line above the input until cleared; one a view set also goes when no view is open.
     Line(Option<SlotLine>),
     Tick,
+    /// Word from the app (a script's `toast()` or `hud()`, a failure): it lands in the ledger.
+    Notice(crate::notice::Notice),
+    /// The host is about to run something that can't be taken back: it waits in the line first.
+    Irreversible(crate::notice::Irreversible),
+    /// A view put something in the line (history's Enter stages the entry it's on).
+    Stage(Subject),
 }
 
 impl Event {
@@ -312,6 +319,8 @@ pub struct OneWindow {
     picked: Option<(Row, RunHow)>,
     wake: Option<Ms>,
     now: Ms,
+    /// Waiting things that are runs rather than messages.
+    runs_held: Vec<u64>,
 }
 
 impl Default for OneWindow {
@@ -352,6 +361,7 @@ impl OneWindow {
             picked: None,
             wake: None,
             now: 0,
+            runs_held: Vec::new(),
         }
     }
 
@@ -642,6 +652,18 @@ impl OneWindow {
                 true
             }
             Event::Tick => true,
+            Event::Notice(notice) => {
+                self.on_notice(now, notice);
+                true
+            }
+            Event::Irreversible(run) => {
+                self.on_irreversible(now, run, fx);
+                true
+            }
+            Event::Stage(subject) => {
+                self.stage(now, subject, None, words::STAGED, fx);
+                true
+            }
         }
     }
 }
