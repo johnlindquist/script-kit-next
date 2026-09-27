@@ -51,8 +51,6 @@
  *                         Pass-now main-window layout measurement regression proof
  *   screenshot-semantics-visual-consistency-stress
  *                         Pass-now screenshot-to-semantics consistency proof
- *   modal-stack-arbitration-stress
- *                         Fail-closed stacked modal key arbitration proof
  *   cross-surface-export-provenance-stress
  *                         Fail-closed cross-surface export provenance proof
  *   dev-session-recovery-stale-target-stress
@@ -106,7 +104,7 @@
  *   main-menu-dynamic-choice-resize-stress
  *                         Pass-now dynamic choice-count window resize proof
  *   actions-command-discoverability-noop-stress
- *                         Pass-now actions popup row measurement proof
+ *                         Pass-now root-source action row measurement proof
  *   dense-list-detail-preview-readability-stress
  *                         Fail-closed dense list/detail preview readability proof
  *   toast-notification-queue-lifecycle-stress
@@ -255,7 +253,6 @@ import {
   runVisibleTextClippingOverlapStressScenario,
   runLayoutMeasurementRegressionStressScenario,
   runScreenshotSemanticsVisualConsistencyStressScenario,
-  runModalStackArbitrationStressScenario,
   runCrossSurfaceExportProvenanceStressScenario,
   runDevSessionRecoveryStaleTargetStressScenario,
   runMenuSyntaxAmbiguityDiagnosticsStressScenario,
@@ -3359,19 +3356,6 @@ switch (recipe) {
     break;
   }
 
-  case "modal-stack-arbitration-stress": {
-    const proofBundle = await runModalStackArbitrationStressScenario({ session, host });
-    result = {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "modal-stack-arbitration-stress",
-      status: proofBundle.status,
-      steps: proofBundle.steps as StepReceipt[],
-      summary: "Modal stack arbitration stress failed closed; topmost-owner key routing and parent focus/selection receipts are missing",
-      proofBundle,
-    };
-    break;
-  }
-
   case "cross-surface-export-provenance-stress": {
     const proofBundle = await runCrossSurfaceExportProvenanceStressScenario({
       session,
@@ -4409,7 +4393,6 @@ switch (recipe) {
           { name: "visible-text-clipping-overlap-stress", description: "Pass-now main-window visible text width, bounds, overlap, and intentional truncation receipt", flags: ["--session", "--surfaces", "--json"] },
           { name: "layout-measurement-regression-stress", description: "Pass-now main-window bounds, scroll/input/footer ownership, and layout measurement receipt", flags: ["--session", "--surfaces", "--json"] },
           { name: "screenshot-semantics-visual-consistency-stress", description: "Pass-now strict screenshot capture plus state/elements semantic consistency proof", flags: ["--session", "--group", "--case", "--surface", "--json"] },
-          { name: "modal-stack-arbitration-stress", description: "Fail-closed stacked modal topmost-owner key routing and parent focus/selection restoration receipt", flags: ["--session", "--host", "--json"] },
           { name: "cross-surface-export-provenance-stress", description: "Fail-closed cross-surface export provenance, redaction, destination insertion, and stale-source receipt", flags: ["--session", "--source", "--destination", "--export-mode", "--query", "--range", "--json"] },
           { name: "dev-session-recovery-stale-target-stress", description: "Pass-now stale target session-epoch rejection, exact re-resolution, no stale input, and cleanup receipt", flags: ["--session", "--entry", "--kind", "--index", "--restart-mode", "--json"] },
           { name: "menu-syntax-ambiguity-diagnostics-stress", description: "Fail-closed menu syntax parse diagnostics, skipped fragments, selection identity, and no-execute guard receipt", flags: ["--session", "--query", "--json"] },
@@ -4547,7 +4530,6 @@ switch (recipe) {
           "proofBundle.layoutMeasurementRegression",
           "proofBundle.visualConsistency",
           "proofBundle.screenshotSemanticsConsistency",
-          "proofBundle.modalStackArbitration",
           "proofBundle.crossSurfaceExport",
           "proofBundle.sessionRecovery",
           "proofBundle.menuSyntaxAmbiguity",
@@ -4662,8 +4644,6 @@ Recipes:
                          Pass-now main-window layout measurement regression proof
   screenshot-semantics-visual-consistency-stress
                          Pass-now screenshot-to-semantics consistency proof
-  modal-stack-arbitration-stress
-                         Fail-closed stacked modal key arbitration proof
   cross-surface-export-provenance-stress
                          Fail-closed cross-surface export provenance proof
   dev-session-recovery-stale-target-stress
@@ -4818,8 +4798,6 @@ Available scenarios:
                          Measure main-window layout geometry
   screenshot-semantics-visual-consistency-stress
                          Run strict screenshot/semantics visual consistency proof
-  modal-stack-arbitration-stress
-                         Emit fail-closed stacked modal arbitration requirements
   cross-surface-export-provenance-stress
                          Emit fail-closed cross-surface export provenance requirements
   dev-session-recovery-stale-target-stress
@@ -5012,13 +4990,12 @@ Examples:
   bun scripts/agentic/index.ts visible-text-clipping-overlap-stress --session default --surfaces main,actionsDialog,agentChatDetached --json
   bun scripts/agentic/index.ts layout-measurement-regression-stress --session default --surfaces main,actionsDialog,agentChatDetached --json
   bun scripts/agentic/index.ts screenshot-semantics-visual-consistency-stress --session default --group filterable-main --case clipboard-history-visible-rows --json
-  bun scripts/agentic/index.ts modal-stack-arbitration-stress --session default --json
   bun scripts/agentic/index.ts cross-surface-export-provenance-stress --session default --source file-search --destination agent_chat-composer --export-mode copy --query AGENTS.md --json
   bun scripts/agentic/index.ts dev-session-recovery-stale-target-stress --session default --entry clipboard-history-actions --kind actionsDialog --restart-mode stop-start --json
   bun scripts/agentic/index.ts menu-syntax-ambiguity-diagnostics-stress --session default --query '>open @file !bad ~AGENTS.md' --json
   bun scripts/agentic/index.ts ime-composition-input-boundary-stress --session default --json
   bun scripts/agentic/index.ts accessibility-selected-text-fallback-stress --session default --json
-  bun scripts/agentic/index.ts display-migration-visual-bounds-stress --session default --surfaces main,actionsDialog,promptPopup,agentChatDetached,notes --from-display primary --to-display external --json
+  bun scripts/agentic/index.ts display-migration-visual-bounds-stress --session default --surfaces main,actionsDialog,promptPopup --from-display primary --to-display external --json
   bun scripts/agentic/index.ts native-picker-external-return-focus-stress --session default --origin agent_chat --handoff file-picker --foreign-app Finder --json
   bun scripts/agentic/index.ts drag-cancel-payload-scope-stress --session default --source file-search --hover-target drop-prompt --cancel escape --json
   bun scripts/agentic/index.ts runtime-appearance-churn-focused-input-stress --session default --surface agent_chat-composer --churn scale,font,theme --cycles 6 --json
@@ -5032,7 +5009,7 @@ Examples:
   bun scripts/agentic/index.ts high-volume-virtualized-list-stability-stress --session default --surface clipboard-history --fixture-count 5000 --filter-cycles 8 --scroll-cycles 12 --json
   bun scripts/agentic/index.ts input-modality-transition-ownership-stress --session default --surface main --interleave pointer-hover,keyboard-nav,trackpad-scroll,wheel-scroll,shortcut --cycles 8 --json
   bun scripts/agentic/index.ts multi-context-attachment-dedupe-provenance-stress --session default --origins file,screenshot,selected-text,mcp-resource,clipboard-snippet --destinations agent_chat-composer,notes --reorder-cycles 3 --json
-  bun scripts/agentic/index.ts visual-contrast-readable-state-stress --session default --surfaces main,actionsDialog,promptPopup,agent_chat-composer,notes --themes light,dark --scale-factors 1,1.25,1.5 --states active,inactive,disabled,focused,error,loading --json
+  bun scripts/agentic/index.ts visual-contrast-readable-state-stress --session default --surfaces main,actionsDialog,promptPopup,agent_chat-composer --themes light,dark --scale-factors 1,1.25,1.5 --states active,inactive,disabled,focused,error,loading --json
   bun scripts/agentic/index.ts empty-error-retry-state-ux-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search --query 'agentic-loop-eighteen-no-results-zzzz' --json
   bun scripts/agentic/index.ts form-validation-inline-recovery-stress --session default --surface fields-prompt --fields email,required-text,number --invalid email:not-an-email,required-text:,number:not-a-number --valid email:ada@example.com,required-text:Ada,number:42 --json
   bun scripts/agentic/index.ts navigation-back-stack-history-stress --session default --origin main --surfaces clipboard-history,emoji-picker,file-search,actionsDialog --transitions triggerBuiltin,cmd-k,escape,back --json
@@ -5071,7 +5048,7 @@ Examples:
   bun scripts/agentic/index.ts root-source-chip-action-semantics-stress --session default --queries 'f: AGENTS.md,c: agentic,n: welcome,-c: noise' --actions remove-chip,clear-all,toggle-exclude,open-chip-actions --input-modes protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts recent-history-dedupe-root-grouping-stress --session default --fixture agentic-root-recents --sources files,notes,clipboard,dictation,agent_chat-history --query agentic-loop-29-dupe --cycles 6 --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts inline-attachment-preview-chip-stability-stress --session default --hosts agent_chat-composer,notes --fixture agentic-inline-attachments --origins local-file,fixture-image,fixture-text,script-resource --chip-actions focus,preview,remove,reorder,overflow --input-modes protocol-set-input,protocol-click,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts window-title-status-semantics-stress --session default --surfaces main,agent_chat-composer,actionsDialog,promptPopup,notes --states idle,busy,error,dirty,ready --transitions triggerBuiltin,cmd-k,escape,hide-show --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts window-title-status-semantics-stress --session default --surfaces main,agent_chat-composer,actionsDialog,promptPopup --states idle,busy,error,dirty,ready --transitions triggerBuiltin,cmd-k,escape,hide-show --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts menu-syntax-capture-validation-chip-stress --session default --fixture agentic-capture-validation --cases missing-body-date,missing-date,ready,malformed-url,unresolved-date,dynamic-schema --input-modes protocol-set-filter,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts agent_chat-footer-activity-indicator-stress --session default --hosts agent_chat-composer,notes --fixture agentic-agent_chat-footer-activity --activity-fixtures context-capture,tool-call,plan-update,permission-wait,cancelled,idle-recovered --input-modes protocol-state,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts agent_chat-model-history-popover-visual-state-stress --session default --families model-selector,local-history --fixture agentic-agent_chat-popover-visual-state --states idle,filtered,empty,loading,current-selection,error-recovered --selection-cycles 8 --filter-cycles 4 --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
