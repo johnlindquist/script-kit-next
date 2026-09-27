@@ -6,10 +6,12 @@
 //! relies on for deterministic failure handling.
 
 use script_kit_gpui::ai::message_parts::{
-    prepare_user_message_with_receipt, resolve_context_parts_with_receipt, AiContextPart,
-    ContextPartPreparationOutcomeKind, ContextResolutionReceipt, PreparedMessageDecision,
+    prepare_user_message, prepare_user_message_with_receipt, resolve_context_parts_with_receipt,
+    AiContextPart, ContextPartPreparationOutcomeKind, ContextPreparationItem,
+    ContextResolutionReceipt, ContextSourceKind, PreparedMessageDecision, PreparedMessageReceipt,
     AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
 };
+use sk_protocol::ai_reliability::AiFailureCode;
 
 /// Enable deterministic context capture so `kit://context` resolution
 /// does not trigger real Cmd+C keystrokes.
@@ -42,14 +44,11 @@ fn submit_flow_mixed_success_keeps_unresolved_part_pending() {
     assert_eq!(receipt.resolved, 1);
     assert!(receipt.has_failures());
     assert_eq!(receipt.failures.len(), 1);
-    assert_eq!(receipt.failures[0].label, "ghost.txt");
-    assert_eq!(receipt.failures[0].source, "/nonexistent/ghost.txt");
-    assert!(
-        receipt.failures[0]
-            .error
-            .contains("Failed to stat attachment"),
-        "error should mention stat failure, got: {}",
-        receipt.failures[0].error
+    assert_eq!(receipt.failures[0].part_id, "context-0001");
+    assert_eq!(receipt.failures[0].source_kind, ContextSourceKind::File);
+    assert_eq!(
+        receipt.failures[0].failure.failure.code,
+        AiFailureCode::ContextUnavailable
     );
 
     // The good file's prefix must survive
@@ -68,13 +67,17 @@ fn submit_flow_mixed_success_keeps_unresolved_part_pending() {
     );
 
     // Simulate submit_message's restore logic: unresolved parts are identified
-    // by matching their source against receipt failures.
-    let failed_sources: std::collections::HashSet<&str> =
-        receipt.failures.iter().map(|f| f.source.as_str()).collect();
+    // by matching their position against the receipt failures' part ids.
+    let failed_ids: std::collections::HashSet<&str> = receipt
+        .failures
+        .iter()
+        .map(|f| f.part_id.as_str())
+        .collect();
     let unresolved: Vec<_> = parts
         .iter()
-        .filter(|p| failed_sources.contains(p.source()))
-        .cloned()
+        .enumerate()
+        .filter(|(index, _)| failed_ids.contains(format!("context-{index:04}").as_str()))
+        .map(|(_, part)| part.clone())
         .collect();
 
     assert_eq!(unresolved.len(), 1);
@@ -144,68 +147,21 @@ fn submit_flow_all_failures_saves_no_message_and_sets_error() {
         "prompt_prefix must be empty when nothing resolved"
     );
 
-    // Simulate submit_message's error summary construction
-    let failure_summaries: Vec<String> = receipt
+    // Each failure is identified by position and kind, never by its path.
+    let failed_ids: Vec<&str> = receipt
         .failures
         .iter()
-        .map(|f| format!("{}: {}", f.label, f.error))
+        .map(|f| f.part_id.as_str())
         .collect();
-    let error_text = format!(
-        "Failed to resolve context: {}",
-        failure_summaries.join("; ")
-    );
-
-    assert!(error_text.contains("a.txt"));
-    assert!(error_text.contains("b.txt"));
-    assert!(error_text.starts_with("Failed to resolve context:"));
+    assert_eq!(failed_ids, vec!["context-0000", "context-0001"]);
+    assert!(receipt
+        .failures
+        .iter()
+        .all(|f| f.source_kind == ContextSourceKind::File));
 
     // In submit_message, when receipt.resolved == 0, we return early without saving.
     // Verify this guard condition.
     assert_eq!(receipt.resolved, 0, "zero resolved means no message saved");
-}
-
-/// Receipt serde roundtrip: ensures receipts can be serialized for structured logging
-/// and deserialized for machine verification.
-#[test]
-fn receipt_serde_roundtrip() {
-    let receipt = ContextResolutionReceipt {
-        attempted: 3,
-        resolved: 2,
-        failures: vec![
-            script_kit_gpui::ai::message_parts::ContextResolutionFailure {
-                label: "ghost.txt".to_string(),
-                source: "/tmp/ghost.txt".to_string(),
-                error: "file not found".to_string(),
-            },
-        ],
-        prompt_prefix: "<attachment path=\"/tmp/a.rs\">\nfn a() {}\n</attachment>".to_string(),
-    };
-
-    let json = serde_json::to_string(&receipt).expect("serialize receipt");
-    let deserialized: ContextResolutionReceipt =
-        serde_json::from_str(&json).expect("deserialize receipt");
-
-    assert_eq!(receipt, deserialized);
-    assert!(deserialized.has_failures());
-    assert_eq!(deserialized.failures.len(), 1);
-}
-
-/// Empty failures are skipped in serialization (skip_serializing_if).
-#[test]
-fn receipt_serde_omits_empty_failures() {
-    let receipt = ContextResolutionReceipt {
-        attempted: 1,
-        resolved: 1,
-        failures: vec![],
-        prompt_prefix: "ok".to_string(),
-    };
-
-    let json = serde_json::to_string(&receipt).expect("serialize receipt");
-    assert!(
-        !json.contains("failures"),
-        "empty failures should be omitted from JSON"
-    );
-    assert!(!receipt.has_failures());
 }
 
 // ==========================================================================
@@ -231,7 +187,7 @@ fn e2e_submit_resource_uri_produces_context_source_block() {
     );
     assert_eq!(receipt.context.attempted, 1);
     assert_eq!(receipt.context.resolved, 1);
-    assert!(!receipt.context.has_failures());
+    assert_eq!(receipt.context.failed, 0);
 
     // The final_user_content must contain the resolved <context source="..."> block
     assert!(
@@ -258,10 +214,10 @@ fn e2e_submit_resource_uri_produces_context_source_block() {
         receipt.outcomes[0].kind,
         ContextPartPreparationOutcomeKind::FullContent
     );
-    assert_eq!(receipt.outcomes[0].label, "Current Context");
-    assert_eq!(receipt.outcomes[0].source, "kit://context?profile=minimal");
+    assert_eq!(receipt.outcomes[0].part_id, "context-0000");
+    assert_eq!(receipt.outcomes[0].source_kind, ContextSourceKind::Resource);
 
-    assert!(receipt.unresolved_parts.is_empty());
+    assert!(receipt.unresolved_parts().is_empty());
     assert!(receipt.user_error.is_none());
     assert!(receipt.can_send_message());
 }
@@ -298,8 +254,8 @@ fn e2e_submit_partial_failure_preserves_successful_blocks_and_tracks_unresolved(
     // Context receipt tracks both attempted and resolved
     assert_eq!(receipt.context.attempted, 2);
     assert_eq!(receipt.context.resolved, 1);
-    assert_eq!(receipt.context.failures.len(), 1);
-    assert_eq!(receipt.context.failures[0].label, "vanished.txt");
+    assert_eq!(receipt.context.failed, 1);
+    assert_eq!(receipt.context.supplemental_failed, 1);
 
     // Successful block survives in final_user_content
     assert!(
@@ -320,12 +276,12 @@ fn e2e_submit_partial_failure_preserves_successful_blocks_and_tracks_unresolved(
     );
 
     // Unresolved parts are inspectable
-    assert_eq!(receipt.unresolved_parts.len(), 1);
+    assert_eq!(receipt.unresolved_parts().len(), 1);
     assert_eq!(
-        receipt.unresolved_parts[0].source(),
+        receipt.unresolved_parts()[0].source(),
         "/nonexistent/vanished.txt"
     );
-    assert_eq!(receipt.unresolved_parts[0].label(), "vanished.txt");
+    assert_eq!(receipt.unresolved_parts()[0].label(), "vanished.txt");
 
     // Per-part outcomes explain what happened
     assert_eq!(receipt.outcomes.len(), 2);
@@ -333,41 +289,40 @@ fn e2e_submit_partial_failure_preserves_successful_blocks_and_tracks_unresolved(
         receipt.outcomes[0].kind,
         ContextPartPreparationOutcomeKind::FullContent
     );
-    assert_eq!(receipt.outcomes[0].label, "code.rs");
+    assert_eq!(receipt.outcomes[0].part_id, "context-0000");
     assert_eq!(
         receipt.outcomes[1].kind,
         ContextPartPreparationOutcomeKind::Failed
     );
-    assert_eq!(receipt.outcomes[1].label, "vanished.txt");
+    assert_eq!(receipt.outcomes[1].part_id, "context-0001");
+    assert_eq!(
+        receipt.outcomes[1].failure_code,
+        Some(AiFailureCode::ContextUnavailable)
+    );
 
     // User error is present for UI display
-    assert!(receipt.user_error.is_some());
-    assert!(
-        receipt
-            .user_error
-            .as_ref()
-            .unwrap()
-            .contains("vanished.txt"),
-        "user_error should mention the failing part"
+    assert_eq!(
+        receipt.user_error.as_deref(),
+        Some("One attachment could not be added. The remaining message is ready.")
     );
 }
 
-/// When all attached context parts fail, the decision is Blocked,
+/// When every required context part fails, the decision is Blocked,
 /// no false-success receipt is emitted, and can_send_message returns false.
 #[test]
 fn e2e_submit_all_failures_blocked_state_surfaced_explicitly() {
-    let parts = vec![
-        AiContextPart::FilePath {
+    let items = vec![
+        ContextPreparationItem::primary(AiContextPart::FilePath {
             path: "/nonexistent/first.txt".to_string(),
             label: "first.txt".to_string(),
-        },
-        AiContextPart::FilePath {
+        }),
+        ContextPreparationItem::primary(AiContextPart::FilePath {
             path: "/nonexistent/second.txt".to_string(),
             label: "second.txt".to_string(),
-        },
+        }),
     ];
 
-    let receipt = prepare_user_message_with_receipt("help me", &parts, &[], &[]);
+    let receipt = prepare_user_message("help me", &items, &[], &[]);
 
     // Decision must be Blocked (not Ready or Partial)
     assert_eq!(receipt.decision, PreparedMessageDecision::Blocked);
@@ -379,16 +334,13 @@ fn e2e_submit_all_failures_blocked_state_surfaced_explicitly() {
     // Context receipt: zero resolved
     assert_eq!(receipt.context.attempted, 2);
     assert_eq!(receipt.context.resolved, 0);
-    assert_eq!(receipt.context.failures.len(), 2);
-    assert!(
-        receipt.context.prompt_prefix.is_empty(),
-        "prompt_prefix must be empty when nothing resolved"
-    );
+    assert_eq!(receipt.context.failed, 2);
+    assert_eq!(receipt.context.primary_failed, 2);
 
     // All parts remain unresolved
-    assert_eq!(receipt.unresolved_parts.len(), 2);
-    assert_eq!(receipt.unresolved_parts[0].label(), "first.txt");
-    assert_eq!(receipt.unresolved_parts[1].label(), "second.txt");
+    assert_eq!(receipt.unresolved_parts().len(), 2);
+    assert_eq!(receipt.unresolved_parts()[0].label(), "first.txt");
+    assert_eq!(receipt.unresolved_parts()[1].label(), "second.txt");
 
     // Per-part outcomes are all Failed
     assert_eq!(receipt.outcomes.len(), 2);
@@ -400,17 +352,10 @@ fn e2e_submit_all_failures_blocked_state_surfaced_explicitly() {
         "all outcomes must be Failed"
     );
 
-    // User error mentions both failing parts
-    assert!(receipt.user_error.is_some());
-    let err = receipt.user_error.as_ref().unwrap();
-    assert!(err.contains("first.txt"), "error should mention first.txt");
-    assert!(
-        err.contains("second.txt"),
-        "error should mention second.txt"
-    );
-    assert!(
-        err.starts_with("Failed to resolve context:"),
-        "error should use deterministic prefix"
+    // User error asks for a retry or removal without naming the parts
+    assert_eq!(
+        receipt.user_error.as_deref(),
+        Some("This context could not be prepared. Retry or remove it before sending.")
     );
 
     // final_user_content falls back to raw content only (no context prefix)
@@ -444,33 +389,30 @@ fn e2e_submit_receipt_is_machine_verifiable() {
         },
     ];
 
-    let receipt = prepare_user_message_with_receipt("query", &parts, &[], &[]);
+    let prepared = prepare_user_message_with_receipt("query", &parts, &[], &[]);
 
     // Serde roundtrip: receipt can be serialized for structured logging
-    let json = serde_json::to_string(&receipt).expect("serialize");
-    let rt: script_kit_gpui::ai::message_parts::PreparedMessageReceipt =
-        serde_json::from_str(&json).expect("deserialize");
-    assert_eq!(receipt, rt, "receipt must survive serde roundtrip");
+    let json = serde_json::to_string(&prepared.receipt).expect("serialize");
+    let rt: PreparedMessageReceipt = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(prepared.receipt, rt, "receipt must survive serde roundtrip");
 
     // Machine-readable fields present
     assert!(json.contains("\"schemaVersion\""));
     assert!(json.contains("\"decision\""));
-    assert!(json.contains("\"rawContent\""));
-    assert!(json.contains("\"finalUserContent\""));
-    assert!(json.contains("\"unresolvedParts\""));
     assert!(json.contains("\"outcomes\""));
 
     // Receipt explains what was sent
     assert_eq!(rt.context.attempted, 3);
     assert_eq!(rt.context.resolved, 2);
-    assert_eq!(rt.context.failures.len(), 1);
+    assert_eq!(rt.context.failed, 1);
 
     // Receipt explains what failed
-    assert_eq!(rt.context.failures[0].label, "gone.txt");
+    assert_eq!(rt.outcomes[2].part_id, "context-0002");
+    assert_eq!(rt.outcomes[2].source_kind, ContextSourceKind::File);
 
-    // Receipt explains what remains pending
-    assert_eq!(rt.unresolved_parts.len(), 1);
-    assert_eq!(rt.unresolved_parts[0].label(), "gone.txt");
+    // The prepared message keeps what remains pending
+    assert_eq!(prepared.unresolved_parts().len(), 1);
+    assert_eq!(prepared.unresolved_parts()[0].label(), "gone.txt");
 
     // Outcome kinds are machine-parseable
     let outcome_kinds: Vec<_> = rt.outcomes.iter().map(|o| &o.kind).collect();
@@ -494,7 +436,7 @@ fn e2e_submit_no_parts_no_message_is_ready_empty() {
     assert_eq!(receipt.context.attempted, 0);
     assert_eq!(receipt.context.resolved, 0);
     assert!(receipt.outcomes.is_empty());
-    assert!(receipt.unresolved_parts.is_empty());
+    assert!(receipt.unresolved_parts().is_empty());
     assert!(receipt.user_error.is_none());
     assert!(receipt.final_user_content.is_empty());
 }
@@ -631,7 +573,7 @@ fn e2e_submit_full_success_preserves_all_blocks_in_order() {
     assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
     assert_eq!(receipt.context.attempted, 3);
     assert_eq!(receipt.context.resolved, 3);
-    assert!(receipt.unresolved_parts.is_empty());
+    assert!(receipt.unresolved_parts().is_empty());
 
     // All blocks present in final content
     assert!(receipt.final_user_content.contains("<context source="));

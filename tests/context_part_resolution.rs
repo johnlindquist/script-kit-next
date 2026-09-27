@@ -5,8 +5,9 @@
 
 use script_kit_gpui::ai::message_parts::{
     resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix,
-    resolve_context_parts_with_receipt, AiContextPart, ContextResolutionReceipt,
+    resolve_context_parts_with_receipt, AiContextPart, ContextResolutionReceipt, ContextSourceKind,
 };
+use sk_protocol::ai_reliability::AiFailureCode;
 use std::sync::Arc;
 
 /// Enable deterministic context capture so `kit://context` resolution
@@ -313,14 +314,11 @@ fn receipt_reports_partial_failure_for_missing_file() {
     assert_eq!(receipt.resolved, 1);
     assert!(receipt.has_failures());
     assert_eq!(receipt.failures.len(), 1);
-    assert_eq!(receipt.failures[0].label, "ghost.txt");
-    assert_eq!(receipt.failures[0].source, "/nonexistent/ghost.txt");
-    assert!(
-        receipt.failures[0]
-            .error
-            .contains("Failed to stat attachment"),
-        "error should mention stat failure, got: {}",
-        receipt.failures[0].error
+    assert_eq!(receipt.failures[0].part_id, "context-0001");
+    assert_eq!(receipt.failures[0].source_kind, ContextSourceKind::File);
+    assert_eq!(
+        receipt.failures[0].failure.failure.code,
+        AiFailureCode::ContextUnavailable
     );
 }
 

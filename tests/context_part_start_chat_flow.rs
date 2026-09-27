@@ -5,8 +5,9 @@
 //! behavior when parts fail.
 
 use script_kit_gpui::ai::message_parts::{
-    resolve_context_parts_with_receipt, AiContextPart, ContextResolutionReceipt,
+    resolve_context_parts_with_receipt, AiContextPart, ContextResolutionReceipt, ContextSourceKind,
 };
+use sk_protocol::ai_reliability::AiFailureCode;
 
 /// Empty message + valid parts → the resolved prefix becomes the user content,
 /// and the chat title should be "Context attachment".
@@ -141,35 +142,18 @@ fn start_chat_invalid_part_surfaces_failure_deterministically() {
     assert_eq!(receipt.resolved, 0);
     assert!(receipt.has_failures());
     assert_eq!(receipt.failures.len(), 1);
-    assert_eq!(receipt.failures[0].label, "ghost.txt");
-    assert_eq!(receipt.failures[0].source, "/nonexistent/ghost.txt");
-    assert!(
-        receipt.failures[0]
-            .error
-            .contains("Failed to stat attachment"),
-        "error should mention stat failure, got: {}",
-        receipt.failures[0].error
+    assert_eq!(receipt.failures[0].part_id, "context-0000");
+    assert_eq!(receipt.failures[0].source_kind, ContextSourceKind::File);
+    assert_eq!(
+        receipt.failures[0].failure.failure.code,
+        AiFailureCode::ContextUnavailable
     );
 
-    // Simulate handle_start_chat's receipt-based failure contract:
-    // When receipt.resolved == 0, the error must be surfaced, not silently swallowed.
-    let failure_summaries: Vec<String> = receipt
-        .failures
-        .iter()
-        .map(|f| format!("{}: {}", f.label, f.error))
-        .collect();
-    let error_text = format!(
-        "Failed to resolve context: {}",
-        failure_summaries.join("; ")
-    );
-
+    // When receipt.resolved == 0, the error must be surfaced, not silently swallowed:
+    // the screen gets the failure's safe primary message.
     assert!(
-        error_text.contains("ghost.txt"),
-        "error should identify the failing part"
-    );
-    assert!(
-        error_text.starts_with("Failed to resolve context:"),
-        "error should use deterministic prefix"
+        !receipt.failures[0].failure.primary_message().is_empty(),
+        "the failure should carry a message for the screen"
     );
 
     // The chat is still created (so SDK gets a valid chatId), but with raw message fallback
@@ -206,7 +190,7 @@ fn start_chat_mixed_parts_preserves_successful_prefix() {
     assert_eq!(receipt.resolved, 1);
     assert!(receipt.has_failures());
     assert_eq!(receipt.failures.len(), 1);
-    assert_eq!(receipt.failures[0].label, "bad.txt");
+    assert_eq!(receipt.failures[0].part_id, "context-0001");
 
     // Simulate handle_start_chat's partial-success path
     let message = "explain";

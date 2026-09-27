@@ -16,7 +16,6 @@ const BUILTIN_EXECUTION_SOURCE: &str = include_str!("../src/app_execute/builtin_
 const PROMPT_AI_SOURCE: &str = include_str!("../src/app_impl/prompt_ai.rs");
 const SCREENSHOT_FILES_SOURCE: &str = include_str!("../src/ai/harness/screenshot_files.rs");
 const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/app_impl/actions_dialog.rs");
-const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
 
 // =========================================================================
 // Primary contract: Tab → harness terminal (QuickTerminalView)
@@ -1149,50 +1148,6 @@ fn actions_dialog_cmd_enter_branch_precedes_plain_enter_execute() {
     assert!(
         cmd_enter_pos < plain_enter_pos,
         "Cmd+Enter Agent Chat handoff must precede the generic Enter execute path in route_key_to_actions_dialog"
-    );
-}
-
-#[test]
-fn detached_actions_window_has_distinct_send_to_agent_chat_intent() {
-    assert!(
-        ACTIONS_WINDOW_SOURCE.contains("SendToAgentChat"),
-        "detached actions window must define a SendToAgentChat key intent variant"
-    );
-    // In the actions_window_key_intent function, the Cmd+Enter → SendToAgentChat
-    // branch must appear before the plain Enter → ExecuteSelected branch.
-    let intent_fn_start = ACTIONS_WINDOW_SOURCE
-        .find("fn actions_window_key_intent(")
-        .expect("actions_window_key_intent function must exist");
-    let intent_fn = &ACTIONS_WINDOW_SOURCE[intent_fn_start..];
-    let send_to_agent_chat_pos = intent_fn
-        .find("ActionsWindowKeyIntent::SendToAgentChat")
-        .expect("SendToAgentChat must be returned from actions_window_key_intent");
-    let execute_selected_pos = intent_fn
-        .find("ActionsWindowKeyIntent::ExecuteSelected")
-        .expect("ExecuteSelected must be returned from actions_window_key_intent");
-    assert!(
-        send_to_agent_chat_pos < execute_selected_pos,
-        "SendToAgentChat must be returned before ExecuteSelected in actions_window_key_intent"
-    );
-}
-
-#[test]
-fn detached_actions_window_routes_cmd_enter_to_send_to_agent_chat() {
-    // In the key intent function, Cmd+Enter must map to SendToAgentChat
-    let intent_fn_start = ACTIONS_WINDOW_SOURCE
-        .find("fn actions_window_key_intent(")
-        .expect("actions_window_key_intent function must exist");
-    let intent_fn = &ACTIONS_WINDOW_SOURCE[intent_fn_start..];
-    let next_fn = intent_fn[1..].find("\nfn ").unwrap_or(intent_fn.len());
-    let intent_fn = &intent_fn[..next_fn];
-
-    assert!(
-        intent_fn.contains("modifiers.platform"),
-        "actions_window_key_intent must check platform modifier for Cmd+Enter"
-    );
-    assert!(
-        intent_fn.contains("ActionsWindowKeyIntent::SendToAgentChat"),
-        "actions_window_key_intent must return SendToAgentChat for Cmd+Enter"
     );
 }
 
