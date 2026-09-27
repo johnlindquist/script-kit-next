@@ -186,6 +186,19 @@ pub mod alias_validation;
 #[path = "app_impl/routes.rs"]
 pub mod routes;
 
+// What each utility built-in (Stop All Processes, Selfie, Turn This Into a
+// Command, …) says and reports. Same re-export pattern as `path_action`: the
+// binary `include!`s the file from `app_execute/builtin_execution.rs` and its
+// tests run under `cargo test --lib`.
+#[path = "app_execute/builtin_execution_utility_actions.rs"]
+pub mod utility_builtin_actions;
+
+// What an action hands the model's chat and what the line says when that
+// fails. Same re-export pattern: the binary `include!`s it from
+// `app_actions/handle_action/deferred_agent_chat.rs`.
+#[path = "app_actions/handle_action/deferred_agent_chat_action.rs"]
+pub mod deferred_agent_chat_action;
+
 // Pure menu-syntax trigger picker state machine + row adapter. Same
 // `#[path]` re-export pattern as `path_action` and `routes` — the
 // binary consumes it via `app_impl::menu_syntax_trigger_picker` while
