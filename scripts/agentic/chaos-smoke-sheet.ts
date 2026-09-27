@@ -262,7 +262,7 @@ async function main() {
   });
 
   // ─── Story 7: actions menu (Cmd+K) ─────────────────────────────────────
-  await runStory("s7-actions", "Actions menu open/close", "Cmd+K to open the actions popup, Escape to close.", async (step) => {
+  await runStory("s7-actions", "Actions menu open/close", "Cmd+K to stage actions in place, Escape to let go.", async (step) => {
     await step("Open main", "triggerBuiltin mainList", async () => {
       driver.send({ type: "triggerBuiltin", name: "mainList" });
       await Bun.sleep(150);
@@ -271,7 +271,7 @@ async function main() {
       driver.simulateKey("k", ["cmd"]);
     });
     const c = await step("Escape (close actions)", "simulateKey escape", async () => driver.simulateKey("escape"));
-    return { ok: !c.crashed, reason: !c.crashed ? "actions popup opened and closed" : "actions popup crashed" };
+    return { ok: !c.crashed, reason: !c.crashed ? "actions staged and let go" : "actions staging crashed" };
   });
 
   // ─── Story 8: arrow-key navigation stress ──────────────────────────────

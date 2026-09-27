@@ -105,14 +105,6 @@ const PROMPTS: PromptCase[] = [
     ],
   },
   {
-    id: "confirm",
-    view: "confirmPrompt",
-    cases: [
-      ["nominal", { type: "confirm", id: pid(), message: "Proceed?" }],
-      ["hostile", { type: "confirm", id: pid(), message: `${BIDI} ${HUGE_LINE.slice(0, 1000)}`, confirmText: ZALGO, cancelText: COMBINING.slice(0, 200) }],
-    ],
-  },
-  {
     id: "fields",
     view: "fields",
     cases: [
@@ -187,12 +179,11 @@ async function state(): Promise<any> {
 }
 
 const MAIN_TARGET = { type: "main" } as const;
-const CONFIRM_TARGET = { type: "id", id: "confirm-popup" } as const;
 
-async function ownerReceipt(promptId: string): Promise<any> {
+async function ownerReceipt(): Promise<any> {
   const windowsResult: any = await d.listAutomationWindows({ timeoutMs: 5000 }).catch((error) => ({ error: String(error) }));
   const windows: any[] = windowsResult?.windows ?? [];
-  const target = promptId === "confirm" ? CONFIRM_TARGET : MAIN_TARGET;
+  const target = MAIN_TARGET;
   const targetState = await d.request(
     { type: "getState", target },
     { expect: "stateResult", timeoutMs: 5000 },
@@ -201,9 +192,7 @@ async function ownerReceipt(promptId: string): Promise<any> {
     { target },
     { timeoutMs: 5000 },
   ).catch((error) => ({ error: String(error) }));
-  const owningWindow = promptId === "confirm"
-    ? windows.find((window) => window.id === "confirm-popup")
-    : windows.find((window) => window.id === "main");
+  const owningWindow = windows.find((window) => window.id === "main");
   return { target, windows, owningWindow: owningWindow ?? null, targetState, targetElements };
 }
 
@@ -283,12 +272,12 @@ try {
         await ensureShown();
         const t0 = performance.now();
         d.send(msg as any);
-        if (p.id === "mini" || p.id === "confirm") {
+        if (p.id === "mini") {
           await d.waitForSettle({
             timeoutMs: 5000,
-            probe: () => p.id === "confirm" ? d.listAutomationWindows() : d.getState(),
+            probe: () => d.getState(),
           }).catch(() => {});
-          owner = await ownerReceipt(p.id);
+          owner = await ownerReceipt();
           st = owner.targetState;
         } else {
           await Bun.sleep(250);
@@ -300,10 +289,7 @@ try {
         row.visibleChoiceCount = st.visibleChoiceCount ?? null;
         row.attempts = attempt;
         row.owner = owner;
-        opened = p.id === "confirm"
-          ? owner?.owningWindow?.id === "confirm-popup"
-            && (owner?.targetElements?.elements ?? []).some((element: any) => element.semanticId === "panel:confirm-dialog")
-          : !st.__dead && (st.promptType ?? "") === p.view;
+        opened = !st.__dead && (st.promptType ?? "") === p.view;
         if (!opened && !st.__dead) await Bun.sleep(300); // likely evicted by a parallel instance
       }
       if (EXPLORE)
@@ -374,25 +360,7 @@ try {
       // sessionless prompts must dismiss on Escape via the direct-reset
       // guard in simulate_key_dispatch.rs (current_script_pid.is_none()).
       // A stuck view is a FAIL; hide→show recovery below is only cleanup.
-      let after: any;
-      if (p.id === "confirm") {
-        d.simulateKey("escape");
-        let confirmStillOpen = true;
-        for (let attempt = 0; attempt < 20 && confirmStillOpen; attempt++) {
-          await Bun.sleep(100);
-          const listed: any = await d.listAutomationWindows({ timeoutMs: 3000 }).catch(() => ({ windows: [] }));
-          confirmStillOpen = (listed.windows ?? []).some((window: any) => window.id === "confirm-popup");
-        }
-        after = await state();
-        row.confirmPopupAfterEscape = confirmStillOpen;
-        if (confirmStillOpen) {
-          note("FAIL", p.id, `${label}:escape`, {
-            note: "sessionless confirm-popup remained registered after Escape",
-          });
-        }
-      } else {
-        after = await escapeToIdle();
-      }
+      let after: any = await escapeToIdle();
       row.afterEscape = after.promptType ?? null;
       if (after.__dead) note("FAIL", p.id, `${label}:escape`, { dead: after.__dead });
       else if (!IDLE_VIEWS.has(after.promptType ?? "") && after.windowVisible !== false) {

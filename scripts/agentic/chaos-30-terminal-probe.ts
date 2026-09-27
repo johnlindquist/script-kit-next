@@ -34,7 +34,6 @@ const BINARY = resolve(
 		"target-agent/artifacts/finder-terminal/script-kit-gpui",
 );
 const MAIN_TARGET: Json = { type: "kind", kind: "main" };
-const ACTIONS_TARGET: Json = { type: "kind", kind: "actionsDialog" };
 const VIEW = "quickTerminal";
 const ALL_ROWS = [
 	"spawn-exit-codes",
@@ -43,7 +42,6 @@ const ALL_ROWS = [
 	"ansi-osc-hostile",
 	"huge-output-flood",
 	"ctrl-c-kill",
-	"command-bar-interactions",
 	"theme-hot-reload",
 ] as const;
 type RowId = (typeof ALL_ROWS)[number];
@@ -427,27 +425,6 @@ async function runBattery(): Promise<void> {
 		return { ...opened, ptyProof };
 	}
 
-	async function dialogState(): Promise<Json | null> {
-		try {
-			const result = (await driver.request(
-				{ type: "getState", target: ACTIONS_TARGET, summaryOnly: true },
-				{ expect: "stateResult", timeoutMs: 5_000 },
-			)) as Json;
-			return (result.actionsDialog ?? result) as Json;
-		} catch {
-			return null;
-		}
-	}
-
-	async function actionsWindows(): Promise<Json[]> {
-		const table = await windows();
-		return ((table.windows ?? []) as Json[]).filter((window) =>
-			String(window.kind ?? window.id ?? window.automationId ?? "")
-				.toLowerCase()
-				.includes("action"),
-		);
-	}
-
 	async function gpuiKey(
 		key: string,
 		modifiers: string[] = [],
@@ -457,76 +434,6 @@ async function runBattery(): Promise<void> {
 			{ type: "keyDown", key, modifiers },
 			{ target, timeoutMs: 8_000 },
 		);
-	}
-
-	async function openTerminalActions(): Promise<Json> {
-		await gpuiKey("k", ["cmd"]);
-		return poll(
-			"terminal actions popup",
-			async () => ({
-				state: await dialogState(),
-				windows: await actionsWindows(),
-			}),
-			(value) => Boolean(value.state) && value.windows.length === 1,
-			8_000,
-		);
-	}
-
-	async function activateTerminalAction(
-		actionId: string,
-		title: string,
-	): Promise<Json> {
-		await openTerminalActions();
-		const filterResult = (await driver.request(
-			{
-				type: "batch",
-				target: ACTIONS_TARGET,
-				commands: [{ type: "setInput", text: title }],
-				options: { stopOnError: true, timeout: 6_000 },
-			},
-			{ expect: "batchResult", timeoutMs: 8_000 },
-		)) as Json;
-		if (filterResult.success !== true)
-			throw new HarnessInvalid(
-				`filter terminal action failed: ${JSON.stringify(filterResult)}`,
-			);
-		const elements = (await driver.getElements(
-			{ target: ACTIONS_TARGET, limit: 300 },
-			{ timeoutMs: 6_000 },
-		)) as Json;
-		const node = walk(elements).find((candidate) => {
-			const semanticId = String(candidate.semanticId ?? candidate.id ?? "");
-			const label = String(
-				candidate.label ?? candidate.title ?? candidate.text ?? "",
-			);
-			return semanticId.endsWith(`:${actionId}`) || label === title;
-		});
-		const semanticId = String(node?.semanticId ?? node?.id ?? "");
-		if (!semanticId)
-			throw new HarnessInvalid(
-				`terminal action ${actionId}/${title} lacked semantic id`,
-			);
-		const selection = (await driver.request(
-			{
-				type: "batch",
-				target: ACTIONS_TARGET,
-				commands: [{ type: "selectBySemanticId", semanticId }],
-				options: { stopOnError: true, timeout: 6_000 },
-			},
-			{ expect: "batchResult", timeoutMs: 8_000 },
-		)) as Json;
-		if (selection.success !== true)
-			throw new HarnessInvalid(
-				`select terminal action failed: ${JSON.stringify(selection)}`,
-			);
-		const dispatch = await gpuiKey("enter", [], ACTIONS_TARGET);
-		await poll(
-			`terminal action ${actionId} closes popup`,
-			actionsWindows,
-			(value) => value.length === 0,
-			8_000,
-		);
-		return { filterResult, semanticId, selection, dispatch };
 	}
 
 	async function baselineErrors(): Promise<Set<string>> {
@@ -1015,63 +922,6 @@ async function runBattery(): Promise<void> {
 			);
 			await captureSample("after-raw-ctrl-c");
 
-			await runFixture("signal.sh", ["kill-action"]);
-			await waitForText("NN30-SIGNAL-kill-action-READY", 8_000);
-			await openTerminalActions();
-			const killElements = (await driver.getElements(
-				{ target: ACTIONS_TARGET, limit: 400 },
-				{ timeoutMs: 8_000 },
-			)) as Json;
-			const killReachable = walk(killElements).some((node) => {
-				const semantic = String(node.semanticId ?? node.id ?? "");
-				const label = String(node.label ?? node.title ?? node.text ?? "");
-				return semantic.endsWith(":kill") || label === "Kill Process";
-			});
-			check(
-				"kill_process_is_reachable_from_terminal_command_bar",
-				killReachable,
-				"product",
-				{
-					documentedAction: "Kill Process — Send SIGTERM to terminate process",
-				},
-			);
-			await gpuiKey("k", ["cmd"], MAIN_TARGET);
-			await poll(
-				"close kill reachability popup",
-				actionsWindows,
-				(value) => value.length === 0,
-				8_000,
-			);
-
-			let killAction: Json | null = null;
-			let sawTerm = false;
-			let sawInt = false;
-			if (killReachable) {
-				killAction = await activateTerminalAction("kill", "Kill Process");
-				const afterKill = await poll(
-					"Kill Process signal marker",
-					terminalText,
-					(text) =>
-						text.includes("NN30-SIGNAL-kill-action=TERM") ||
-						text.includes("NN30-SIGNAL-kill-action=INT"),
-					8_000,
-				);
-				sawTerm = afterKill.includes("NN30-SIGNAL-kill-action=TERM");
-				sawInt = afterKill.includes("NN30-SIGNAL-kill-action=INT");
-				check(
-					"kill_process_delivers_documented_sigterm",
-					sawTerm && !sawInt,
-					"product",
-					{
-						documentedSignal: "SIGTERM",
-						sawTerm,
-						sawInt,
-					},
-				);
-			} else {
-				await typeRaw("\u0003");
-				await waitForText("NN30-SIGNAL-kill-action=INT", 8_000);
-			}
 			await typeRaw("printf 'NN30-AFTER-SIGNALS-ALIVE\\n'\r");
 			const finalText = await waitForText("NN30-AFTER-SIGNALS-ALIVE", 8_000);
 			check(
@@ -1082,184 +932,10 @@ async function runBattery(): Promise<void> {
 					marker: "NN30-AFTER-SIGNALS-ALIVE",
 				},
 			);
-			await captureSample("after-command-bar-kill");
+			await captureSample("after-signals");
 			receipt.evidence = {
 				fixture: fixtures.paths["signal.sh"],
 				rawInterruptMarker: "NN30-SIGNAL-raw=INT",
-				killReachable,
-				killMarkers: { term: sawTerm, int: sawInt },
-				killAction,
-			};
-		},
-		"command-bar-interactions": async (receipt, check, captureSample) => {
-			await runFixture("stty-size.sh", ["before-actions"]);
-			const beforeText = await waitForText("NN30-STTY-before-actions", 8_000);
-			const beforeSize = beforeText.match(
-				/NN30-STTY-before-actions rows=(\d+) cols=(\d+)/,
-			);
-			await openTerminalActions();
-			const [dialog, elements] = await Promise.all([
-				dialogState(),
-				driver.getElements(
-					{ target: ACTIONS_TARGET, limit: 400 },
-					{ timeoutMs: 8_000 },
-				) as Promise<Json>,
-			]);
-			const actionIds = [
-				...new Set(
-					walk(elements)
-						.flatMap((node) => {
-							const direct = node.actionId ?? node.action_id;
-							const semantic = String(node.semanticId ?? node.id ?? "");
-							const suffix = /(?:action|row)/.test(semantic)
-								? semantic.split(":").at(-1)
-								: undefined;
-							return [direct, suffix];
-						})
-						.filter(
-							(value): value is string =>
-								typeof value === "string" && value.length > 0,
-						),
-				),
-			].sort((a, b) => a.localeCompare(b));
-			const required = [
-				"clear",
-				"copy_all",
-				"find",
-				"reset",
-				"scroll_to_bottom",
-			];
-			const missing = required.filter((id) => !actionIds.includes(id));
-			check(
-				"terminal_command_bar_exposes_required_stable_actions",
-				missing.length === 0,
-				"product",
-				{
-					actionIds,
-					required,
-					missing,
-					dialog,
-				},
-			);
-			await gpuiKey("k", ["cmd"], MAIN_TARGET);
-			await poll(
-				"terminal actions toggle closes",
-				actionsWindows,
-				(value) => value.length === 0,
-				8_000,
-			);
-
-			const toggleSamples: Json[] = [];
-			for (let cycle = 0; cycle < 4; cycle += 1) {
-				await gpuiKey("k", ["cmd"], MAIN_TARGET);
-				const opened = await poll(
-					`actions open cycle ${cycle}`,
-					actionsWindows,
-					(value) => value.length === 1,
-					8_000,
-				);
-				toggleSamples.push({
-					cycle,
-					phase: "open",
-					count: opened.length,
-					capturedAt: new Date().toISOString(),
-				});
-				await gpuiKey("k", ["cmd"], MAIN_TARGET);
-				const closed = await poll(
-					`actions close cycle ${cycle}`,
-					actionsWindows,
-					(value) => value.length === 0,
-					8_000,
-				);
-				toggleSamples.push({
-					cycle,
-					phase: "close",
-					count: closed.length,
-					capturedAt: new Date().toISOString(),
-				});
-			}
-			check(
-				"rapid_command_bar_toggle_never_duplicates_popup",
-				toggleSamples.every(
-					(sample) => sample.count === (sample.phase === "open" ? 1 : 0),
-				),
-				"product",
-				{ toggleSamples },
-			);
-
-			let findAction: Json | null = null;
-			let findSurface: Json | undefined;
-			if (actionIds.includes("find")) {
-				findAction = await activateTerminalAction("find", "Find");
-				await Bun.sleep(100);
-				const afterFindElements = await terminalElements();
-				findSurface = walk(afterFindElements).find((node) => {
-					const semantic = String(
-						node.semanticId ?? node.id ?? "",
-					).toLowerCase();
-					const role = String(node.role ?? "").toLowerCase();
-					return (
-						semantic.includes("terminal-search") ||
-						semantic.includes("terminal-find") ||
-						role === "searchbox"
-					);
-				});
-			}
-			check(
-				"find_action_opens_observable_terminal_search",
-				Boolean(findSurface),
-				"product",
-				{
-					findActionPresent: actionIds.includes("find"),
-					findSurface: findSurface ?? null,
-					contract:
-						"Displayed Find action says Search in terminal output; it must not silently no-op.",
-				},
-			);
-			if (findSurface) {
-				await gpuiKey("escape", [], MAIN_TARGET);
-				await poll(
-					"terminal search dismiss",
-					state,
-					(value) => value.promptType === VIEW,
-					8_000,
-				);
-			}
-
-			const clearAction = actionIds.includes("clear")
-				? await activateTerminalAction("clear", "Clear Terminal")
-				: null;
-			await runFixture("stty-size.sh", ["after-actions"]);
-			await typeRaw("printf 'NN30-COMMAND-BAR-RESTORED\\n'\r");
-			const afterText = await waitForText("NN30-COMMAND-BAR-RESTORED", 8_000);
-			const afterSize = afterText.match(
-				/NN30-STTY-after-actions rows=(\d+) cols=(\d+)/,
-			);
-			const sameSize =
-				beforeSize?.[1] === afterSize?.[1] &&
-				beforeSize?.[2] === afterSize?.[2];
-			check(
-				"command_bar_restores_terminal_focus_and_grid_size",
-				Boolean(afterSize) && sameSize,
-				"product",
-				{
-					before: beforeSize
-						? { rows: beforeSize[1], cols: beforeSize[2] }
-						: null,
-					after: afterSize ? { rows: afterSize[1], cols: afterSize[2] } : null,
-					focusMarker: afterText.includes("NN30-COMMAND-BAR-RESTORED"),
-				},
-			);
-			await captureSample("after-command-bar-interactions");
-			receipt.evidence = {
-				actionIds,
-				dialog,
-				toggleSamples,
-				findAction,
-				findSurface: findSurface ?? null,
-				clearAction,
-				beforeSize: beforeSize?.slice(1) ?? null,
-				afterSize: afterSize?.slice(1) ?? null,
 			};
 		},
 		"theme-hot-reload": async (receipt, check, captureSample) => {

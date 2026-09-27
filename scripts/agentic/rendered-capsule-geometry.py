@@ -76,8 +76,8 @@ def edge_box(
     """Measure capsule edges from composited luminance gradients.
 
     The settled native bounds locate narrow search bands only; the selected edge
-    coordinates come from pixels. This avoids both the global focus/material
-    change outside an Actions popup and CGWindow's model-frame values.
+    coordinates come from pixels. This avoids both global focus/material
+    changes and CGWindow's model-frame values.
     """
     gray = image.convert("L")
     width, height = gray.size
