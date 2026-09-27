@@ -84,25 +84,25 @@ describe("proof transaction identity", () => {
   test("lifetime comparison rejects reopen and geometry drift", () => {
     const before = {
       windows: [{
-        id: "notes",
-        kind: "notes",
+        id: "snapOverlay",
+        kind: "snapOverlay",
         generation: 3,
         pid: 10,
         bounds: { x: 0, y: 0, width: 600, height: 500 },
       }],
     };
-    expect(compareWindowLifetimeSnapshots("notes", before, before).consistent).toBe(true);
+    expect(compareWindowLifetimeSnapshots("snapOverlay", before, before).consistent).toBe(true);
 
     const reopened = {
       windows: [{
-        id: "notes",
-        kind: "notes",
+        id: "snapOverlay",
+        kind: "snapOverlay",
         generation: 4,
         pid: 10,
         bounds: { x: 0, y: 0, width: 600, height: 500 },
       }],
     };
-    const result = compareWindowLifetimeSnapshots("notes", before, reopened);
+    const result = compareWindowLifetimeSnapshots("snapOverlay", before, reopened);
     expect(result.consistent).toBe(false);
     expect(result.errors).toContain("window instance changed during target inspection");
   });

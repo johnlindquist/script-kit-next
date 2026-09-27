@@ -89,7 +89,7 @@ export function validateChildReceipt(
     }
   } else if (expectedScenario === "rapid-toggle") {
     if (
-      !["actions", "notes"].every(
+      !["actions"].every(
         (name) => receipt.phases?.[name]?.pass === true,
       )
     ) {
@@ -101,19 +101,10 @@ export function validateChildReceipt(
     if (receipt.interference?.receipt == null) {
       errors.push("rapid-toggle interference telemetry missing");
     }
-  } else if (expectedScenario === "notes-fallback") {
-    if (receipt.hostClockTiming?.ordered !== true) {
-      errors.push("notes fallback shared-host-clock timing missing");
-    }
-    if (receipt.interference?.receipt == null) {
-      errors.push("notes fallback interference telemetry missing");
-    }
   } else if (expectedScenario.startsWith("lifecycle")) {
     const required = [
       "main-exit",
       "main-entry",
-      "notes-entry",
-      "notes-close-before-settle-reopen",
     ];
     errors.push(...validateUniqueScenarioSet(
       (receipt.scenarios ?? []).map((scenario: any) => scenario?.name),

@@ -417,39 +417,11 @@ try {
     styleExcerpt: editorStyleText.slice(0, 1000),
   });
 
-  driver.send({ type: "openNotes", requestId: `${runId}-open-notes` });
-  await waitFor(
-    "notes target ready",
-    () =>
-      driver
-        .getElements(
-          { target: { type: "kind", kind: "notes", index: 0 }, limit: 80 },
-          { timeoutMs: 5000 },
-        )
-        .catch((error) => ({ error: String(error) })),
-    (value) => !("error" in (value as Record<string, unknown>)),
-    10_000,
-  );
   const noteText = `# ${topic} related note\n\n${noteFact}\n`;
-  const setNote = (await driver.request(
-    {
-      type: "batch",
-      requestId: `${runId}-set-note`,
-      target: { type: "kind", kind: "notes", index: 0 },
-      commands: [{ type: "setInput", text: noteText }],
-      options: { stopOnError: true, timeout: 10_000 },
-    },
-    { expect: "batchResult", timeoutMs: 11_000 },
-  )) as Json;
-  check("set_notes_fact", setNote.success === true, { setNote });
-  await driver.request(
-    {
-      type: "simulateGpuiEvent",
-      requestId: `${runId}-save-note`,
-      target: { type: "kind", kind: "notes", index: 0 },
-      event: { type: "keyDown", key: "s", modifiers: ["cmd"] },
-    },
-    { expect: "simulateGpuiEventResult", timeoutMs: 5000 },
+  const noteCreated = isoNow();
+  writeFile(
+    join(notesDir, `${runId}-related-note.md`),
+    ["---", `id: ${randomUUID()}`, `created: ${noteCreated}`, `updated: ${noteCreated}`, "---", "", noteText].join("\n"),
   );
   const noteFiles = await waitFor(
     "canonical note file",

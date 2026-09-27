@@ -31,7 +31,6 @@ const TOOLS: Record<string, { file: string; summary: string }> = {
   surfaces: { file: "surfaces.ts", summary: "Enumerate known surface contracts" },
   act: { file: "act.ts", summary: "Perform actions against a target (set-input, key, click, ...)" },
   events: { file: "events.ts", summary: "Protocol bus + app log tailing (tail | record | logs | crashes)" },
-  notes: { file: "notes.ts", summary: "Notes-specific inspection and resize compare (inspect | resize-compare)" },
   actions: { file: "actions.ts", summary: "Actions dialog inspection" },
   "agent-chat": { file: "agent_chat.ts", summary: "Agent Chat surface inspection" },
   dictation: { file: "dictation.ts", summary: "Dictation surface inspection" },

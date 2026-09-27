@@ -37,7 +37,6 @@ const PHASES: Record<
     storyId: "04-day-page",
     dims: { w: 1500, h: 960 },
   },
-  notes: { screen: "notes", storyId: "05-notes", dims: { w: 700, h: 560 } },
 };
 
 function runPhase(name: string) {

@@ -7,8 +7,6 @@
 export const LEGACY_FULL_SCENARIO_ORDER = [
   "main-exit",
   "main-entry",
-  "notes-entry",
-  "notes-close-before-settle-reopen",
 ] as const;
 
 export type LifecycleScenarioName = (typeof LEGACY_FULL_SCENARIO_ORDER)[number];
@@ -32,8 +30,6 @@ export const SCENARIO_CAPTURE_DURATIONS_MS: Record<
   // before the fade tail was observable.
   "main-exit": 400,
   "main-entry": 700,
-  "notes-entry": 800,
-  "notes-close-before-settle-reopen": 950,
 };
 
 /** Capture pre-roll before the main-exit hide is issued (observation value). */
@@ -50,11 +46,11 @@ export const MAIN_EXIT_POST_HIDE_SETTLE_MS = 320;
 /**
  * Resolve a capture profile to its ordered scenario list.
  *
- * - `full` (default) is the exact legacy four in the exact legacy order.
+ * - `full` (default) is the exact legacy scenarios in the exact legacy order.
  * - `entry-color` is the minimal set the displayed-color metric needs:
  *   main-entry ALWAYS pulls in main-exit because the metric requires the
  *   explicit post-exit hidden background reference.
- * - `extended` is the legacy four (an optional embedded Actions scenario may
+ * - `extended` is the legacy scenarios (an optional embedded Actions scenario may
  *   append later; it never reorders or drops the legacy prefix).
  */
 export function resolveScenarioNames(

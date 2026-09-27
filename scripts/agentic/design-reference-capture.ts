@@ -36,7 +36,6 @@ const DEFAULT_OUT: Record<string, string> = {
   actions: "design/mockups/screens/actions-dialog/reference/actions-dialog@2x.png",
   confirm: "design/mockups/screens/confirm-popup/reference/confirm-popup@2x.png",
   clipboard: "design/mockups/screens/clipboard-history/reference/clipboard-history@2x.png",
-  notes: "design/mockups/screens/notes/reference/notes@2x.png",
   settings: "design/mockups/screens/settings/reference/settings@2x.png",
   arg: "design/mockups/screens/arg-prompt/reference/arg-prompt@2x.png",
   "agent-chat": "design/mockups/screens/agent-chat/reference/agent-chat@2x.png",
@@ -49,7 +48,6 @@ const CAPTURE_TARGET: Record<string, { type: string; kind: string }> = {
   actions: { type: "kind", kind: "actionsDialog" },
   confirm: { type: "kind", kind: "main" },
   clipboard: { type: "kind", kind: "main" },
-  notes: { type: "kind", kind: "notes" },
   settings: { type: "kind", kind: "main" },
   arg: { type: "kind", kind: "main" },
   "agent-chat": { type: "kind", kind: "main" },
@@ -78,18 +76,6 @@ const DAY_PAGE_FIXTURE = [
   "10:02 [Script Kit](https://scriptkit.com) landing refresh notes",
   "09:47 [Clipboard entry](kit://clipboard-history?id=day-page-mockup-seed)",
   "",
-].join("\n");
-
-// Must equal design/mockups/screens/notes/index.html content exactly (8 lines).
-const NOTES_FIXTURE_MARKDOWN = [
-  "# Design Contract Notes",
-  "",
-  "Track every painted value in",
-  "the Notes window.",
-  "",
-  "- Titlebar 36 px",
-  "- Editor 16 px mono, 20 px line",
-  "- Footer buttons hug",
 ].join("\n");
 
 // Deterministic clipboard fixture rows. Newest first; one pinned. Content is
@@ -189,12 +175,6 @@ async function main() {
   // driver wipes its sessionDir at launch, so the fixture home lives outside
   // it and is wired via env instead of sandboxHome.
   const fixtureHome = screen === "clipboard" ? seedClipboardFixtureHome() : null;
-  // notes: sandbox DB env pins default 350×280 bounds (window_ops.rs:672-674)
-  // and keeps the capture off the real notes database.
-  const notesDbPath =
-    screen === "notes"
-      ? join(mkdtempSync(join(tmpdir(), "design-capture-notes-")), "notes.sqlite")
-      : null;
   const driver = await Driver.launch({
     sessionName: `design-reference-capture-${screen}`,
     // settings/day-page: sandbox HOME gives deterministic default-config
@@ -204,7 +184,6 @@ async function main() {
     ...(fixtureHome
       ? { env: { HOME: fixtureHome, SK_PATH: join(fixtureHome, ".scriptkit") } }
       : {}),
-    ...(notesDbPath ? { env: { SCRIPT_KIT_TEST_NOTES_DB_PATH: notesDbPath } } : {}),
     ...(screen === "day-page" ? { env: { SCRIPT_KIT_BRAIN_TZ: DAY_PAGE_TZ } } : {}),
   });
   try {
@@ -353,43 +332,6 @@ async function main() {
       } as never, { timeoutMs: 5_000 }).catch(() => {});
       await driver.waitForSettle();
       await Bun.sleep(600);
-    }
-
-    if (screen === "notes") {
-      driver.send({ type: "openNotes" } as never);
-      const notesTarget = { type: "kind", kind: "notes", index: 0 };
-      // Wait until the notes window is targetable.
-      let layout: { error?: string; windowBounds?: { height?: number } } = { error: "pending" };
-      for (let attempt = 0; attempt < 40; attempt++) {
-        layout = (await driver
-          .request({ type: "getLayoutInfo", target: notesTarget } as never, { timeoutMs: 2_000 })
-          .catch(() => ({ error: "timeout" }))) as typeof layout;
-        if (!layout.error) break;
-        await Bun.sleep(250);
-      }
-      if (layout.error) throw new Error(`notes window never became targetable: ${layout.error}`);
-      await driver.request(
-        {
-          type: "batch",
-          target: notesTarget,
-          commands: [{ type: "setInput", text: NOTES_FIXTURE_MARKDOWN }],
-          options: { stopOnError: true, timeout: 8_000 },
-        } as never,
-        { timeoutMs: 10_000 },
-      );
-      // Autosize settle: two consecutive equal window heights.
-      let lastHeight = -1;
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const info = (await driver
-          .request({ type: "getLayoutInfo", target: notesTarget } as never, { timeoutMs: 2_000 })
-          .catch(() => null)) as { windowBounds?: { height?: number } } | null;
-        const height = info?.windowBounds?.height ?? -2;
-        if (height === lastHeight && height > 0) break;
-        lastHeight = height;
-        await Bun.sleep(250);
-      }
-      // Let the 1500ms saved-flash "✓" clear before capturing the rest state.
-      await Bun.sleep(1_700);
     }
 
     const state = (await driver.getState()) as {

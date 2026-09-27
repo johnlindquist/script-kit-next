@@ -8,13 +8,12 @@
  *
  * Usage:
  *   bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
- *     [--target-json '{"type":"kind","kind":"agentChatDetached","index":0}'] [--surface agent_chat]
+ *     [--target-json '{"type":"kind","kind":"promptPopup","index":0}'] [--surface agent_chat]
  *
  * Recipes:
  *   agent_chat-accept             Full Agent Chat picker accept; choose key with --key enter|tab
  *   agent_chat-enter-accept       Compatibility alias for --key enter
  *   agent_chat-tab-accept         Compatibility alias for --key tab
- *   agent_chat-detached-accept    One-command detached Agent Chat proof: resolve → accept → identity check
  *   agent_chat-open               Open Agent Chat and verify it reaches ready state
  *   agent_chat-setup-recovery     Recovery from Agent Chat setup state; select agent with --select-agent ID
  *   surface-navigate       Navigate known surfaces, safely interact, and capture image-library screenshots
@@ -106,22 +105,14 @@
  *                         Pass-now DivPrompt tall-container overflow layout proof
  *   main-menu-dynamic-choice-resize-stress
  *                         Pass-now dynamic choice-count window resize proof
- *   notes-window-resize-stress
- *                         Pass-now sandboxed Notes window grow/shrink resize proof
- *   notes-delete-confirm-route-proof
- *                         Pass-now sandboxed Notes delete confirm-popup route proof
  *   actions-command-discoverability-noop-stress
  *                         Pass-now actions popup row measurement proof
  *   dense-list-detail-preview-readability-stress
  *                         Fail-closed dense list/detail preview readability proof
  *   toast-notification-queue-lifecycle-stress
  *                         Fail-closed toast/notification queue lifecycle proof
- *   destructive-confirm-modal-safety-stress
- *                         Fail-closed destructive confirm dry-run safety proof
  *   confirm-modal-style-preview-proof
  *                         Fail-closed: Confirm Modal style-preview scenario owner is missing
- *   sdk-confirm-runtime-proof
- *                         Pass-now SDK confirm script route proof
  *   loading-skeleton-progress-restoration-stress
  *                         Fail-closed loading skeleton/progress restoration proof
  *   icon-image-fallback-redaction-stress
@@ -160,8 +151,6 @@
  *                         Fail-closed filter input decoration chip layout proof
  *   focus-ring-viewport-integrity-stress
  *                         Fail-closed focus ring viewport integrity proof
- *   warning-banner-action-dismiss-semantics-stress
- *                         Fail-closed warning banner action/dismiss semantics proof
  *   select-prompt-multiselect-keyboard-state-stress
  *                         Fail-closed SelectPrompt keyboard multi-selection state proof
  *   file-search-preview-sanitization-stress
@@ -244,10 +233,8 @@ import {
   runBrowserTabsCacheIdentityStressScenario,
   runClipboardHistoryPortalRangeStressScenario,
   runCurrentAppCommandsFrontmostStressScenario,
-  runDetachedAgentChatTargetThreadingStressScenario,
   runDropPromptNativeDropPrivacyStressScenario,
   runActionsDialogExactIdScenario,
-  runDetachedAgentChatExactIdScenario,
   runMainWindowExactIdScenario,
   runNotesAgentChatDelayedActionOriginStressScenario,
   runPathPromptFilesystemEdgeStressScenario,
@@ -295,13 +282,9 @@ import {
   runLongTextWrapResizeSurfaceStressScenario,
   runDivContainerScrollOverflowStressScenario,
   runMainMenuDynamicChoiceResizeStressScenario,
-  runNotesWindowResizeStressScenario,
-  runNotesDeleteConfirmRouteProofScenario,
   runActionsCommandDiscoverabilityNoopStressScenario,
   runDenseListDetailPreviewReadabilityStressScenario,
   runToastNotificationQueueLifecycleStressScenario,
-  runDestructiveConfirmModalSafetyStressScenario,
-  runSdkConfirmRuntimeProofScenario,
   runLoadingSkeletonProgressRestorationStressScenario,
   runIconImageFallbackRedactionStressScenario,
   runFooterStatusPersistenceStressScenario,
@@ -350,7 +333,6 @@ import {
   runSettingsPreferencesReadonlyDetailPanelStressScenario,
   runDesignPickerPreviewRestoreVisualStressScenario,
   runDictationHistoryTranscriptPreviewRedactionStressScenario,
-  runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
   runScreenshotIdentityAgentChatContextStressScenario,
@@ -392,7 +374,7 @@ interface RecipeReceipt {
   proofBundle?: unknown;
 }
 
-type SurfaceProofKind = "main" | "actionsDialog" | "promptPopup" | "agentChatDetached";
+type SurfaceProofKind = "main" | "actionsDialog" | "promptPopup";
 
 interface SurfaceProofUsage {
   stateFirst: true;
@@ -539,7 +521,7 @@ function buildCmd(
  * When `skipEnsureFocus` is true, the `--ensure-focus` flag is omitted so
  * macos-input.ts will not attempt OS-level focus enforcement before trying
  * protocol-level and GPUI dispatch paths. This is the correct mode for
- * detached Agent Chat and picker targets that don't need foreground keyboard focus.
+ * picker targets that don't need foreground keyboard focus.
  */
 function nativeInputArgs(
   command: string,
@@ -622,7 +604,7 @@ async function send(
  * Decide how to deliver input to a target surface.
  *
  * Decision rule:
- *   - agentChatDetached, actionsDialog, promptPopup → "batch" (protocol-level, no OS focus needed)
+ *   - actionsDialog, promptPopup → "batch" (protocol-level, no OS focus needed)
  *   - Exact ID targets → "batch"
  *   - main/focused/unspecified → "native" (OS-level input via macos-input.ts)
  */
@@ -637,7 +619,6 @@ function chooseInputMethod(
   if (target.type === "id") return "batch";
   if (target.type === "kind") {
     if (
-      target.kind === "agentChatDetached" ||
       target.kind === "actionsDialog" ||
       target.kind === "promptPopup"
     ) {
@@ -1824,15 +1805,13 @@ async function recipeSurfaceProofPreflight(session: string): Promise<StepReceipt
   return steps;
 }
 
-function inferSurfaceClass(kind: SurfaceProofKind): "main" | "attachedPopup" | "detached" {
+function inferSurfaceClass(kind: SurfaceProofKind): "main" | "attachedPopup" {
   switch (kind) {
     case "main":
       return "main";
     case "actionsDialog":
     case "promptPopup":
       return "attachedPopup";
-    case "agentChatDetached":
-      return "detached";
   }
 }
 
@@ -1886,7 +1865,7 @@ function surfaceProofCapabilities(
     inspect: true,
     waitFor: true,
     batch: attachedPopup ? ["setInput"] : [],
-    gpuiEvent: kind === "agentChatDetached",
+    gpuiEvent: false,
     nativeInputRequired: false,
     screenshotRequired: false,
   };
@@ -1898,34 +1877,19 @@ async function collectSurfaceStateAndElements(
   kind: SurfaceProofKind
 ): Promise<{ stateStep: StepReceipt; elementsStep: StepReceipt }> {
   const stamp = Date.now();
-  const stateStep =
-    kind === "agentChatDetached"
-      ? await step("surface.getAgentChatState", () =>
-          rpc(
-            session,
-            buildCmd(
-              {
-                type: "getAgentChatState",
-                requestId: `surface-proof-${kind}-state-${stamp}`,
-              },
-              target
-            ),
-            { expect: "agent_chatStateResult", timeout: 5000 }
-          )
-        )
-      : await step("surface.getState", () =>
-          rpc(
-            session,
-            buildCmd(
-              {
-                type: "getState",
-                requestId: `surface-proof-${kind}-state-${stamp}`,
-              },
-              target
-            ),
-            { expect: "stateResult", timeout: 5000 }
-          )
-        );
+  const stateStep = await step("surface.getState", () =>
+    rpc(
+      session,
+      buildCmd(
+        {
+          type: "getState",
+          requestId: `surface-proof-${kind}-state-${stamp}`,
+        },
+        target
+      ),
+      { expect: "stateResult", timeout: 5000 }
+    )
+  );
 
   const elementsStep = await step("surface.getElements", () =>
     rpc(
@@ -1976,9 +1940,6 @@ async function recipeSurfaceProof(
       break;
     case "promptPopup":
       bundle = await runPromptPopupExactIdScenario(session, index);
-      break;
-    case "agentChatDetached":
-      bundle = await runDetachedAgentChatExactIdScenario(session, index);
       break;
   }
 
@@ -2063,7 +2024,7 @@ async function recipeSurfaceProof(
 
 /**
  * Returns true when the target is the main window (or no target specified).
- * Non-main targets (e.g., agentChatDetached) should skip show/triggerBuiltin.
+ * Non-main targets should skip show/triggerBuiltin.
  */
 function isMainLikeTarget(target?: AutomationTargetJson): boolean {
   if (!target) return true;
@@ -2095,14 +2056,14 @@ async function recipeAgentChatOpen(
       )
     );
   } else {
-    // Non-main target: skip show/triggerBuiltin — the detached Agent Chat
-    // surface is assumed to already exist. We only wait/verify.
+    // Non-main target: skip show/triggerBuiltin — the targeted surface is
+    // assumed to already exist. We only wait/verify.
     steps.push({
       name: "skip-main-open",
       status: "pass",
       output: {
         skipped: true,
-        reason: "non-main Agent Chat target supplied; assuming detached target already exists",
+        reason: "non-main Agent Chat target supplied; assuming the target already exists",
         target: opts.target,
       },
       durationMs: 0,
@@ -2221,7 +2182,7 @@ async function recipeAgentChatPickerAccept(
   );
 
   // 3. Type / to open the supported slash picker.
-  //    For non-main targets (detached Agent Chat, popups), route through batch/GPUI first
+  //    For non-main targets (popups), route through batch/GPUI first
   //    so the flow succeeds even when the human user types in another app.
   const typeAtStep = await routedInputStep("type-slash-trigger", "type", "/", session, {
     target: opts.target,
@@ -2615,308 +2576,6 @@ async function recipeAgentChatSetupRecovery(
   };
 }
 
-/**
- * Resolved identity for a detached Agent Chat window.
- * Threaded through the entire recipe so proof stays coherent.
- */
-interface DetachedResolved {
-  targetJson: AutomationTargetJson;
-  surfaceId: string | null;
-  automationWindowId: number | null;
-  osWindowId: number | null;
-}
-
-async function recipeAgentChatDetachedAccept(
-  session: string,
-  acceptKey: "enter" | "tab",
-  opts: {
-    emitVision?: boolean;
-    kind?: string;
-    index?: number;
-  } = {}
-): Promise<RecipeReceipt> {
-  const steps: StepReceipt[] = [];
-  const kind = opts.kind ?? "agentChatDetached";
-  const index = opts.index ?? 0;
-
-  // 1. Promote to exact target — resolve the kind-based target to an exact ID
-  //    first, then inspect. This ensures all subsequent RPCs use the exact ID
-  //    and never re-resolve by kind.
-  const inspectStep = await step("promote-exact-target", () =>
-    runTool(
-      [
-        "bun",
-        "scripts/agentic/automation-window.ts",
-        "inspect",
-        "--session",
-        session,
-        "--kind",
-        kind,
-        "--index",
-        String(index),
-      ],
-      "promote-exact-target"
-    )
-  );
-  steps.push(inspectStep);
-
-  if (inspectStep.status !== "pass") {
-    return {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "agent_chat-detached-accept",
-      status: "error",
-      steps,
-      summary: "Cannot proceed: exact target promotion failed",
-    };
-  }
-
-  // Extract identity from the inspect envelope and promote to exact ID
-  const inspectOutput = inspectStep.output as Record<string, unknown>;
-  const surfaceId = (inspectOutput.surfaceId as string) ?? null;
-  const rawWindowId = inspectOutput.automationWindowId;
-  const parsedWindowId =
-    typeof rawWindowId === "number"
-      ? rawWindowId
-      : rawWindowId != null
-        ? Number(rawWindowId)
-        : null;
-  const automationWindowId =
-    typeof parsedWindowId === "number" &&
-    Number.isFinite(parsedWindowId) &&
-    parsedWindowId > 0
-      ? parsedWindowId
-      : null;
-  const osWindowId =
-    typeof inspectOutput.osWindowId === "number" && inspectOutput.osWindowId > 0
-      ? inspectOutput.osWindowId
-      : null;
-
-  // Promote: if we got an automation window ID from inspect, use exact ID
-  // targeting. Detached proof flows MUST have an exact target — no kind fallback.
-  if (automationWindowId == null) {
-    console.error(
-      JSON.stringify({
-        event: "agentic.proof_flow.exact_target_required",
-        fromKind: kind,
-        fromIndex: index,
-        reason: "automationWindowId not available from inspect; detached proof requires exact target",
-      })
-    );
-    return {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "agent_chat-detached-accept",
-      status: "error",
-      steps,
-      summary: "Cannot proceed: detached Agent Chat proof requires exact automationWindowId but inspect returned none",
-    };
-  }
-
-  const targetJson: AutomationTargetJson = { type: "id", id: String(automationWindowId) };
-  console.error(
-    JSON.stringify({
-      event: "agentic.promote_exact_target",
-      fromKind: kind,
-      fromIndex: index,
-      promotedTargetJson: targetJson,
-      automationWindowId,
-      surfaceId,
-      osWindowId,
-    })
-  );
-
-  const resolved: DetachedResolved = {
-    targetJson,
-    surfaceId,
-    automationWindowId,
-    osWindowId,
-  };
-
-  if (osWindowId == null) {
-    console.error(
-      JSON.stringify({
-        event: "agentic.proof_flow.os_window_id_required",
-        automationWindowId,
-        surfaceId,
-        reason: "detached Agent Chat proof requires osWindowId for exact screenshot routing",
-      })
-    );
-    steps.push({
-      name: "require-os-window-id",
-      status: "fail",
-      output: {
-        error: "detached Agent Chat proof requires osWindowId from inspect output",
-        resolved,
-      },
-      durationMs: 0,
-    });
-    return {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "agent_chat-detached-accept",
-      status: "error",
-      steps,
-      summary: "Cannot proceed: detached Agent Chat proof requires osWindowId for exact screenshot routing",
-    };
-  }
-
-  // 2. Emit structured identity bundle log on stderr
-  console.error(
-    JSON.stringify({
-      event: "agent_chat_final_identity_bundle",
-      automationWindowId,
-      surfaceId,
-      osWindowId,
-    })
-  );
-
-  // 3. Delegate to the standard picker-accept recipe with resolved identity threaded through.
-  //    Use osWindowId (native CGWindowID from inspect) for strict capture proof.
-  const captureWindowId = osWindowId ?? undefined;
-  const acceptResult = await recipeAgentChatPickerAccept(session, acceptKey, {
-    emitVision: opts.emitVision,
-    target: targetJson,
-    surface: surfaceId ?? undefined,
-    captureWindowId: captureWindowId ?? undefined,
-    inputMode: "force-native",
-  });
-
-  // Incorporate accept steps (skip the wrapper — flatten the inner steps for transparency)
-  for (const s of acceptResult.steps) {
-    steps.push(s);
-  }
-
-  // 4. Validate proof receipt chain — detached proof requires a real proof bundle
-  const proofBundle = acceptResult.proofBundle as Record<string, unknown> | undefined;
-
-  if (!proofBundle) {
-    console.error(
-      JSON.stringify({
-        event: "agentic.proof_flow.receipt_missing",
-        recipe: "agent_chat-detached-accept",
-        automationWindowId,
-        reason: "acceptResult.proofBundle is absent; detached proof requires a real proof bundle",
-      })
-    );
-    steps.push({
-      name: "proof-receipt-check",
-      status: "fail",
-      output: {
-        error: "proofBundle missing from accept result",
-        resolved,
-      },
-      durationMs: 0,
-    });
-    return {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "agent_chat-detached-accept",
-      status: "error",
-      steps,
-      summary: "Detached Agent Chat proof failed: proofBundle missing from accept result",
-    };
-  }
-
-  const captureTarget = proofBundle.captureTarget as Record<string, unknown> | undefined;
-  if (!captureTarget) {
-    console.error(
-      JSON.stringify({
-        event: "agentic.proof_flow.receipt_missing",
-        recipe: "agent_chat-detached-accept",
-        automationWindowId,
-        reason: "proofBundle.captureTarget is absent; detached proof requires capture identity",
-      })
-    );
-    steps.push({
-      name: "proof-receipt-check",
-      status: "fail",
-      output: {
-        error: "proofBundle.captureTarget missing",
-        resolved,
-        proofBundle,
-      },
-      durationMs: 0,
-    });
-    return {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "agent_chat-detached-accept",
-      status: "error",
-      steps,
-      summary: "Detached Agent Chat proof failed: proofBundle.captureTarget missing",
-    };
-  }
-
-  // Validate identity alignment — requested vs actual window
-  let identityMismatch = false;
-  const requestedId = captureTarget.requestedWindowId;
-  const actualId = captureTarget.actualWindowId;
-  if (requestedId != null && actualId != null && requestedId !== actualId) {
-    identityMismatch = true;
-    console.error(
-      JSON.stringify({
-        event: "agentic.proof_flow.capture_identity_mismatch",
-        recipe: "agent_chat-detached-accept",
-        automationWindowId,
-        requestedWindowId: requestedId,
-        actualWindowId: actualId,
-      })
-    );
-  }
-
-  if (identityMismatch) {
-    steps.push({
-      name: "identity-check",
-      status: "fail",
-      output: {
-        error: "captureTarget identity mismatch",
-        resolved,
-        proofBundle,
-      },
-      durationMs: 0,
-    });
-  } else {
-    steps.push({
-      name: "proof-receipt-check",
-      status: "pass",
-      output: { resolved, captureTarget },
-      durationMs: 0,
-    });
-    steps.push({
-      name: "identity-check",
-      status: "pass",
-      output: { resolved },
-      durationMs: 0,
-    });
-  }
-
-  const allPass = !identityMismatch && acceptResult.status === "pass";
-
-  // Attach resolvedTarget only when a real proof bundle exists
-  const mergedProofBundle: Record<string, unknown> = {
-    ...proofBundle,
-    resolvedTarget: resolved,
-  };
-
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    recipe: "agent_chat-detached-accept",
-    status: allPass
-      ? "pass"
-      : identityMismatch || steps.some((s) => s.status === "fail")
-        ? "fail"
-        : steps.some((s) => s.status === "error")
-          ? "error"
-          : "fail",
-    steps,
-    summary: allPass
-      ? `Detached Agent Chat picker accepted via ${acceptKey} (window ${automationWindowId})`
-      : identityMismatch
-        ? "Identity mismatch: captureTarget.requestedWindowId != actualWindowId"
-        : `Failed at: ${steps
-            .filter((s) => s.status !== "pass")
-            .map((s) => s.name)
-            .join(", ")}`,
-    proofBundle: mergedProofBundle,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
@@ -3154,14 +2813,6 @@ switch (recipe) {
     });
     break;
 
-  case "agent_chat-detached-accept":
-    result = await recipeAgentChatDetachedAccept(session, key, {
-      emitVision: vision,
-      kind: kind ?? "agentChatDetached",
-      index: index ?? 0,
-    });
-    break;
-
   case "check-leaks": {
     const target = targetJson ?? { type: "main" };
     // 1. Get PID
@@ -3195,29 +2846,6 @@ switch (recipe) {
       status: leaks === 0 ? "pass" : "fail",
       steps: [targetReceipt, recordReceipt, analyzeReceipt],
       summary: leaks === 0 ? "No leaks detected" : `${leaks} leaks detected`,
-    };
-    break;
-  }
-
-  case "agent_chat-detached-target-threading-stress": {
-    const proofBundle = await runDetachedAgentChatTargetThreadingStressScenario({
-      session,
-      kind: kind ?? "agentChatDetached",
-      index: index ?? 0,
-      minTargets: minTargets ?? 2,
-      key,
-      vision,
-    });
-    result = {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "agent_chat-detached-target-threading-stress",
-      status: proofBundle.status,
-      steps: proofBundle.steps as StepReceipt[],
-      summary:
-        proofBundle.status === "pass"
-          ? "Detached Agent Chat target identity stayed stable across native input, Agent Chat state, waitFor, and strict capture"
-          : `Detached Agent Chat target threading stress failed: ${JSON.stringify(proofBundle.failure ?? proofBundle.targetThread?.driftFailures ?? [])}`,
-      proofBundle,
     };
     break;
   }
@@ -4247,50 +3875,6 @@ switch (recipe) {
     break;
   }
 
-  case "notes-window-resize-stress": {
-    const proofBundle = await runNotesWindowResizeStressScenario({
-      session,
-      shortLineCount,
-      tallLineCount,
-    });
-    result = {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "notes-window-resize-stress",
-      status: proofBundle.status,
-      failClosed: proofBundle.failClosed,
-      failureMode: proofBundle.failureMode,
-      missingReceipt: proofBundle.missingReceipt,
-      linearIssue: proofBundle.linearIssue,
-      steps: proofBundle.steps as StepReceipt[],
-      summary: proofBundle.status === "pass"
-        ? "Notes window resize stress used a sandbox notes DB, drove targeted Notes setInput, measured grow/shrink bounds, and cleaned up without screenshots"
-        : "Notes window resize stress failed; inspect proofBundle.notesWindowResize for missing sandbox, bounds, grow, shrink, or cleanup receipts",
-      proofBundle,
-    };
-    break;
-  }
-
-  case "notes-delete-confirm-route-proof": {
-    const proofBundle = await runNotesDeleteConfirmRouteProofScenario({
-      session,
-    });
-    result = {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "notes-delete-confirm-route-proof",
-      status: proofBundle.status,
-      failClosed: proofBundle.failClosed,
-      failureMode: proofBundle.failureMode,
-      missingReceipt: proofBundle.missingReceipt,
-      linearIssue: proofBundle.linearIssue,
-      steps: proofBundle.steps as StepReceipt[],
-      summary: proofBundle.status === "pass"
-        ? "Notes delete confirm route used a sandbox Notes DB, real Notes shortcuts, attached confirm-popup, cancel button, and DB mutation check"
-        : "Notes delete confirm route failed; inspect proofBundle.notesDeleteConfirmRoute for missing popup identity, button, focus, cancel, or sandbox DB receipts",
-      proofBundle,
-    };
-    break;
-  }
-
   case "actions-command-discoverability-noop-stress": {
     const proofBundle = await runActionsCommandDiscoverabilityNoopStressScenario({
       session,
@@ -4360,29 +3944,6 @@ switch (recipe) {
     break;
   }
 
-  case "destructive-confirm-modal-safety-stress": {
-    const proofBundle = await runDestructiveConfirmModalSafetyStressScenario({
-      session,
-      host,
-      fixture,
-      paths,
-      dryRunOnly,
-    });
-    result = {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "destructive-confirm-modal-safety-stress",
-      status: proofBundle.status,
-      failClosed: proofBundle.failClosed,
-      failureMode: proofBundle.failureMode,
-      missingReceipt: proofBundle.missingReceipt,
-      linearIssue: proofBundle.linearIssue,
-      steps: proofBundle.steps as StepReceipt[],
-      summary: "Destructive confirm modal safety stress failed closed; dry-run prompt identity, Enter/Escape, restore, stale rejection, and no-system-command receipts are missing",
-      proofBundle,
-    };
-    break;
-  }
-
   case "confirm-modal-style-preview-proof": {
     result = {
       schemaVersion: SCHEMA_VERSION,
@@ -4402,26 +3963,6 @@ switch (recipe) {
         durationMs: 0,
       }],
       summary: "Confirm Modal style preview cannot run because its scenario owner is missing; no runtime interaction was attempted.",
-    };
-    break;
-  }
-
-  case "sdk-confirm-runtime-proof": {
-    const proofBundle = await runSdkConfirmRuntimeProofScenario({
-      session,
-      cancel: "escape",
-    });
-    result = {
-      schemaVersion: SCHEMA_VERSION,
-      recipe: "sdk-confirm-runtime-proof",
-      status: proofBundle.status,
-      failClosed: proofBundle.failClosed,
-      failureMode: proofBundle.failureMode,
-      missingReceipt: proofBundle.missingReceipt,
-      linearIssue: proofBundle.linearIssue,
-      steps: proofBundle.steps as StepReceipt[],
-      summary: "SDK confirm runtime proof drives global confirm() through the script run route and verifies shared ConfirmPrompt cancellation returns boolean false",
-      proofBundle,
     };
     break;
   }
@@ -4553,12 +4094,6 @@ switch (recipe) {
   case "focus-ring-viewport-integrity-stress": {
     const proofBundle = await runFocusRingViewportIntegrityStressScenario({ session, surfaces, fixture, inputModes, steps: proofSteps, noNativeInput, noNativePointer, noSubmit, dryRunOnly, localFixtureOnly });
     result = { schemaVersion: SCHEMA_VERSION, recipe: "focus-ring-viewport-integrity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Focus ring viewport integrity stress failed closed; focus bounds, viewport clipping, footer/popup occlusion, tab order, and no-submit receipts are missing", proofBundle };
-    break;
-  }
-
-  case "warning-banner-action-dismiss-semantics-stress": {
-    const proofBundle = await runWarningBannerActionDismissSemanticsStressScenario({ session, surface, fixtures, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noConfigWrite, localFixtureOnly });
-    result = { schemaVersion: SCHEMA_VERSION, recipe: "warning-banner-action-dismiss-semantics-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Warning banner action/dismiss semantics stress failed closed; banner state, action-vs-dismiss, contrast, and obstruction receipts are missing", proofBundle };
     break;
   }
 
@@ -4784,11 +4319,6 @@ switch (recipe) {
         console.log(JSON.stringify(bundle, null, 2));
         process.exit(bundle.warnings.length > 0 ? 1 : 0);
       }
-      case "detached-agent_chat-exact-id": {
-        const bundle = await runDetachedAgentChatExactIdScenario(session, index ?? 0);
-        console.log(JSON.stringify(bundle, null, 2));
-        process.exit(bundle.warnings.length > 0 ? 1 : 0);
-      }
       default:
         result = {
           schemaVersion: SCHEMA_VERSION,
@@ -4796,7 +4326,7 @@ switch (recipe) {
           status: "error",
           steps: [],
           summary:
-            `Unknown scenario: ${resolvedScenario}. Available: main-window-exact-id, actions-dialog-exact-id, prompt-popup-exact-id, detached-agent_chat-exact-id`,
+            `Unknown scenario: ${resolvedScenario}. Available: main-window-exact-id, actions-dialog-exact-id, prompt-popup-exact-id`,
         };
     }
     break;
@@ -4851,8 +4381,6 @@ switch (recipe) {
           { name: "agent_chat-accept", description: "Full Agent Chat picker accept", flags: ["--session", "--key", "--vision", "--target-json", "--surface", "--json"] },
           { name: "agent_chat-enter-accept", description: "Compatibility alias for --key enter", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
           { name: "agent_chat-tab-accept", description: "Compatibility alias for --key tab", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
-          { name: "agent_chat-detached-accept", description: "One-command detached Agent Chat proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
-          { name: "agent_chat-detached-target-threading-stress", description: "Multi-window detached Agent Chat proof with exact target threading, native input, and strict capture identity", flags: ["--session", "--kind", "--index", "--min-targets", "--key", "--vision", "--json"] },
           { name: "notes-agent_chat-delayed-action-origin-stress", description: "Fail-closed Notes Agent Chat delayed-action origin/generation stress receipt", flags: ["--session", "--drift", "--json"] },
           { name: "file-portal-origin-roundtrip", description: "Fail-closed Agent Chat portal origin/context-part round-trip receipt", flags: ["--session", "--origin", "--portal", "--selection", "--query", "--json"] },
           { name: "permission-privacy-preflight", description: "Read-only permission preflight that never opens System Settings or mutates OS permissions", flags: ["--session", "--kinds", "--json"] },
@@ -4908,14 +4436,10 @@ switch (recipe) {
           { name: "long-text-wrap-resize-surface-stress", description: "Pass-now main-window long text bounds, width, overlap, footer/input collision, and cleanup receipt", flags: ["--session", "--surfaces", "--widths", "--fixtures", "--json"] },
           { name: "div-container-scroll-overflow-stress", description: "Pass-now real DivPrompt tall-container overflow layout and cleanup receipt", flags: ["--session", "--item-count", "--json"] },
           { name: "main-menu-dynamic-choice-resize-stress", description: "Pass-now small/large choice-count window height resize receipt", flags: ["--session", "--small-count", "--large-count", "--json"] },
-          { name: "notes-window-resize-stress", description: "Pass-now sandboxed Notes window grow/shrink resize receipt", flags: ["--session", "--short-line-count", "--tall-line-count", "--json"] },
-          { name: "notes-delete-confirm-route-proof", description: "Sandboxed Notes delete: trash without a modal, then permanent delete from the Trash confirm-popup (Cancel focused) cancel receipt", flags: ["--session", "--json"] },
           { name: "actions-command-discoverability-noop-stress", description: "Pass-now real Cmd-K action popup row measurement with safe no-execution guards", flags: ["--session", "--hosts", "--states", "--json"] },
           { name: "dense-list-detail-preview-readability-stress", description: "Fail-closed UX stress for dense list/detail preview readability during filter, selection, and resize churn", flags: ["--session", "--surfaces", "--query", "--filter-cycles", "--selection-cycles", "--resize-cycles", "--json"] },
           { name: "toast-notification-queue-lifecycle-stress", description: "Fail-closed UX stress for toast queue, notification bridge, duplicate collapse, autohide, dismiss, bounds, and stale rejection", flags: ["--session", "--surface", "--fixtures", "--cycles", "--json"] },
-          { name: "destructive-confirm-modal-safety-stress", description: "Fail-closed UX stress for destructive confirm dry-run identity, Enter/Escape safety, parent restore, and no real system command", flags: ["--session", "--host", "--fixture", "--paths", "--dry-run-only", "--json"] },
           { name: "confirm-modal-style-preview-proof", description: "Fail-closed: the Confirm Modal style-preview scenario owner is missing", flags: ["--session", "--json"] },
-          { name: "sdk-confirm-runtime-proof", description: "Pass-now SDK confirm script route proof through shared ConfirmPrompt and Escape false result", flags: ["--session", "--json"] },
           { name: "loading-skeleton-progress-restoration-stress", description: "Fail-closed UX stress for local loading skeleton/progress generations, stale rejection, activation blocking, and restoration", flags: ["--session", "--surfaces", "--fixture", "--cycles", "--json"] },
           { name: "icon-image-fallback-redaction-stress", description: "Fail-closed UX stress for icon/image fallback, source redaction, stale image rejection, and accessible labels", flags: ["--session", "--surfaces", "--fixtures", "--json"] },
           { name: "footer-status-persistence-stress", description: "Fail-closed UX stress for footer/status owner, generation, transition persistence, duplicate rejection, and stale status", flags: ["--session", "--surfaces", "--transitions", "--json"] },
@@ -4935,7 +4459,6 @@ switch (recipe) {
           { name: "mini-full-transition-layout-continuity-stress", description: "Fail-closed visual receipt contract for mini/full transition layout continuity", flags: ["--session", "--surfaces", "--transitions", "--fixture", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--local-fixture-only", "--json"] },
           { name: "filter-input-decoration-chip-layout-stress", description: "Fail-closed visual receipt contract for filter input decoration chip layout and clipping", flags: ["--session", "--surfaces", "--queries", "--widths", "--scale-factors", "--fixture", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--local-fixture-only", "--json"] },
           { name: "focus-ring-viewport-integrity-stress", description: "Fail-closed visual receipt contract for focus ring viewport bounds and occlusion", flags: ["--session", "--surfaces", "--fixture", "--input-modes", "--steps", "--no-native-input", "--no-native-pointer", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
-          { name: "warning-banner-action-dismiss-semantics-stress", description: "Fail-closed UX receipt contract for warning banner action/dismiss semantics", flags: ["--session", "--surface", "--fixtures", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--local-fixture-only", "--json"] },
           { name: "select-prompt-multiselect-keyboard-state-stress", description: "Fail-closed UX receipt contract for SelectPrompt keyboard-only multi-selection state parity", flags: ["--session", "--surface", "--fixture", "--choices", "--selection-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "file-search-preview-sanitization-stress", description: "Fail-closed UX receipt contract for File Search safe preview sanitization", flags: ["--session", "--surface", "--fixture", "--preview-fixtures", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--local-fixture-only", "--json"] },
           { name: "hotkey-prompt-transient-capture-cancel-stress", description: "Fail-closed UX receipt contract for HotkeyPrompt transient capture/cancel semantics", flags: ["--session", "--surface", "--fixture", "--chords", "--cancel-methods", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-config-write", "--no-global-hotkey-registration", "--dry-run-only", "--local-fixture-only", "--json"] },
@@ -4968,7 +4491,7 @@ switch (recipe) {
           { name: "design-picker-preview-restore-visual-stress", description: "Fail-closed visual receipt contract for Design Picker preview restore", flags: ["--session", "--fixture", "--catalog-ids", "--preview-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-security-prompts", "--no-system-settings", "--no-tcc-mutation", "--no-config-write", "--no-design-write", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "dictation-history-transcript-preview-redaction-stress", description: "Fail-closed UX receipt contract for Dictation History transcript preview redaction", flags: ["--session", "--fixture", "--transcript-fixtures", "--queries", "--selection-cycles", "--view-steps", "--input-modes", "--dictation-fixture", "--no-microphone", "--no-media-capture", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-security-prompts", "--no-system-settings", "--no-tcc-mutation", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "agent_chat-setup-recovery", description: "Recovery from Agent Chat setup state", flags: ["--session", "--select-agent", "--json"] },
-          { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
+          { name: "surface-proof", description: "Seconds-first proof for main / attached popup surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
           { name: "scenario", description: "Run a replayable scenario with proof bundle", flags: ["--session", "--scenario", "--index", "--json"] },
           { name: "vision-loop", description: "Materialize visionCrops from receipt", flags: ["--receipt", "--out-dir"] },
@@ -4976,7 +4499,6 @@ switch (recipe) {
         ],
         contracts: [
           "surface-proof-contract",
-          "detached-proof-contract",
           "no-focus-input-ladder",
           "popup-capture-receipts",
         ],
@@ -5049,7 +4571,6 @@ switch (recipe) {
           "proofBundle.miniFullTransitionLayoutContinuityReceipt",
           "proofBundle.filterInputDecorationChipLayoutReceipt",
           "proofBundle.focusRingViewportIntegrityReceipt",
-          "proofBundle.warningBannerActionDismissSemanticsReceipt",
           "proofBundle.selectPromptMultiselectKeyboardStateReceipt",
           "proofBundle.fileSearchPreviewSanitizationReceipt",
           "proofBundle.hotkeyPromptTransientCaptureCancelReceipt",
@@ -5067,16 +4588,16 @@ switch (recipe) {
           "proofBundle.delayedAction",
         ],
         routing: {
-          description: "Non-main targets are exact-id threaded. Attached popups prefer batch/simulateGpuiEvent. Detached Agent Chat target-threading stress forces native input with focus enforcement.",
+          description: "Non-main targets are exact-id threaded. Attached popups prefer batch/simulateGpuiEvent.",
           methods: ["batch", "simulateGpuiEvent", "native", "force-native", "force-batch", "force-gpui"],
-          nonMainTargets: ["agentChatDetached", "actionsDialog", "promptPopup"],
+          nonMainTargets: ["actionsDialog", "promptPopup"],
         },
       };
       console.log(JSON.stringify(helpJson, null, 2));
       process.exit(0);
     }
     console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
-  [--target-json '{"type":"kind","kind":"agentChatDetached","index":0}'] [--surface agent_chat]
+  [--target-json '{"type":"kind","kind":"promptPopup","index":0}'] [--surface agent_chat]
   [--kind KIND] [--index N] [--select-agent ID] [--scenario NAME]
 
 Recipes:
@@ -5085,9 +4606,6 @@ Recipes:
   agent_chat-accept             Full Agent Chat picker accept; choose key with --key enter|tab
   agent_chat-enter-accept       Compatibility alias for --key enter
   agent_chat-tab-accept         Compatibility alias for --key tab
-  agent_chat-detached-accept    One-command detached Agent Chat proof: resolve → accept → identity check
-  agent_chat-detached-target-threading-stress
-                         Multi-window detached Agent Chat proof with exact target threading
   notes-agent_chat-delayed-action-origin-stress
                          Fail-closed Notes Agent Chat delayed-action origin/generation stress
   file-portal-origin-roundtrip
@@ -5198,22 +4716,14 @@ Recipes:
                          Pass-now DivPrompt tall-container overflow layout proof
   main-menu-dynamic-choice-resize-stress
                          Pass-now dynamic choice-count window resize proof
-  notes-window-resize-stress
-                         Pass-now sandboxed Notes window grow/shrink resize proof
-  notes-delete-confirm-route-proof
-                         Pass-now sandboxed Notes delete confirm-popup route proof
   actions-command-discoverability-noop-stress
                          Pass-now action popup row measurement proof
   dense-list-detail-preview-readability-stress
                          Fail-closed dense list/detail preview readability proof
   toast-notification-queue-lifecycle-stress
                          Fail-closed toast/notification queue lifecycle proof
-  destructive-confirm-modal-safety-stress
-                         Fail-closed destructive confirm dry-run safety proof
   confirm-modal-style-preview-proof
                          Fail-closed: Confirm Modal style-preview scenario owner is missing
-  sdk-confirm-runtime-proof
-                         Pass-now SDK confirm script route proof
   loading-skeleton-progress-restoration-stress
                          Fail-closed loading skeleton/progress restoration proof
   icon-image-fallback-redaction-stress
@@ -5235,7 +4745,7 @@ Recipes:
   command-search-highlighting-accessory-badges-stress
                          Fail-closed command search highlight/badge proof
   agent_chat-setup-recovery     Recovery from Agent Chat setup; select agent with --select-agent ID
-  surface-proof          Seconds-first proof for main / attached popup / detached surfaces
+  surface-proof          Seconds-first proof for main / attached popup surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
   scenario               Run a replayable scenario with proof bundle output
   vision-loop            Materialize visionCrops from receipt (pass --receipt, --out-dir)
@@ -5244,20 +4754,16 @@ Recipes:
 Target threading:
   --target-json JSON   Agent Chat window target for all RPCs (reused across all steps)
   --surface SURFACE    Automation surface for native input focus (main, agent_chat, etc.)
-  --kind KIND          Target kind for agent_chat-detached-accept (default: agentChatDetached)
-  --index N            Target kind index for agent_chat-detached-accept (default: 0)
   --scenario NAME      Scenario name for the scenario recipe
 
 Input routing (non-main targets):
   attached popups → batch/simulateGpuiEvent first, no OS focus unless required
-  detached Agent Chat target-threading stress → force-native with OS focus enforcement
   main, focused, unspecified → native (macos-input.ts with OS focus enforcement)
 
 Available scenarios:
   main-window-exact-id    Resolve exact main target, inspect, getElements
   actions-dialog-exact-id Resolve exact attached ActionsDialog target, inspect, waitFor
   prompt-popup-exact-id   Resolve exact attached PromptPopup target, inspect, waitFor
-  detached-agent_chat-exact-id  Resolve exact detached Agent Chat target, inspect, GPUI event, inspect again
   file-portal-origin-roundtrip
                          Emit fail-closed portal origin/context receipt requirements
   permission-privacy-preflight
@@ -5368,12 +4874,8 @@ Available scenarios:
                          Emit fail-closed dense list/detail preview readability requirements
   toast-notification-queue-lifecycle-stress
                          Emit fail-closed toast/notification queue lifecycle requirements
-  destructive-confirm-modal-safety-stress
-                         Emit fail-closed destructive confirm dry-run safety requirements
   confirm-modal-style-preview-proof
                          Fail closed because the Confirm Modal style-preview scenario owner is missing
-  sdk-confirm-runtime-proof
-                         Prove SDK global confirm() reaches shared ConfirmPrompt
   loading-skeleton-progress-restoration-stress
                          Emit fail-closed loading skeleton/progress restoration requirements
   icon-image-fallback-redaction-stress
@@ -5412,8 +4914,6 @@ Available scenarios:
                          Emit fail-closed filter input decoration chip layout requirements
   focus-ring-viewport-integrity-stress
                          Emit fail-closed focus ring viewport integrity requirements
-  warning-banner-action-dismiss-semantics-stress
-                         Emit fail-closed warning banner action/dismiss semantics requirements
   select-prompt-multiselect-keyboard-state-stress
                          Emit fail-closed SelectPrompt keyboard multi-selection state requirements
   file-search-preview-sanitization-stress
@@ -5482,13 +4982,8 @@ Examples:
   bun scripts/agentic/index.ts surface-navigate --session default --group filterable-main --case all --interact safe --capture --fresh-per-case --out-dir .notes/image-library --manifest .notes/image-library/manifest.json --json
   bun scripts/agentic/index.ts surface-navigate --session popup --group attached-popup --case actions-dialog-attached-popup --capture --fresh-per-case --json
   bun scripts/agentic/index.ts surface-proof --session default --kind promptPopup --index 0
-  bun scripts/agentic/index.ts surface-proof --session default --kind agentChatDetached --index 0
   bun scripts/agentic/index.ts agent_chat-accept --session default --key enter
   bun scripts/agentic/index.ts agent_chat-accept --session default --key tab --vision
-  bun scripts/agentic/index.ts agent_chat-accept --session default --key enter \\
-    --target-json '{"type":"kind","kind":"agentChatDetached","index":0}' --surface agent_chat --vision
-  bun scripts/agentic/index.ts agent_chat-detached-accept --session default --kind agentChatDetached --index 0 --key enter --vision
-  bun scripts/agentic/index.ts agent_chat-detached-target-threading-stress --session default --kind agentChatDetached --index 0 --min-targets 2 --key enter --vision --json
   bun scripts/agentic/index.ts notes-agent_chat-delayed-action-origin-stress --session default --drift generation --json
   bun scripts/agentic/index.ts file-portal-origin-roundtrip --session default --host agent_chat --portal file-search --json
   bun scripts/agentic/index.ts permission-privacy-preflight --session default --json
@@ -5544,14 +5039,10 @@ Examples:
   bun scripts/agentic/index.ts long-text-wrap-resize-surface-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --widths mini,narrow,full --fixtures long-name,long-path,long-description,multiline-snippet --json
   bun scripts/agentic/index.ts div-container-scroll-overflow-stress --session default --item-count 80 --json
   bun scripts/agentic/index.ts main-menu-dynamic-choice-resize-stress --session default --small-count 3 --large-count 15 --json
-  bun scripts/agentic/index.ts notes-window-resize-stress --session default --short-line-count 2 --tall-line-count 80 --json
-  bun scripts/agentic/index.ts notes-delete-confirm-route-proof --session default --json
   bun scripts/agentic/index.ts actions-command-discoverability-noop-stress --session default --hosts main,clipboard-history,emoji-picker,file-search,app-launcher --states actionable,disabled,no-op --json
   bun scripts/agentic/index.ts dense-list-detail-preview-readability-stress --session default --surfaces file-search,sdk-reference,script-template-catalog --query agentic-loop-nineteen-preview --filter-cycles 4 --selection-cycles 8 --resize-cycles 3 --json
   bun scripts/agentic/index.ts toast-notification-queue-lifecycle-stress --session default --surface main --fixtures success,duplicate,persistent,dismiss,autohide --cycles 3 --json
-  bun scripts/agentic/index.ts destructive-confirm-modal-safety-stress --session default --host main --fixture agentic-destructive-dry-run --paths cancel,confirm,stale-confirm --dry-run-only --json
   bun scripts/agentic/index.ts confirm-modal-style-preview-proof --session default --json
-  bun scripts/agentic/index.ts sdk-confirm-runtime-proof --session default --json
   bun scripts/agentic/index.ts loading-skeleton-progress-restoration-stress --session default --surfaces sdk-reference,script-template-catalog --fixture delayed-local --cycles 4 --json
   bun scripts/agentic/index.ts icon-image-fallback-redaction-stress --session default --surfaces app-launcher,file-search,clipboard-history --fixtures missing-file,corrupt-png,private-local-path,data-uri-redacted --json
   bun scripts/agentic/index.ts footer-status-persistence-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --transitions filter,selection,cmd-k,escape,clear-filter --json
@@ -5571,7 +5062,6 @@ Examples:
   bun scripts/agentic/index.ts mini-full-transition-layout-continuity-stress --session default --surfaces main,mini-prompt,fields-prompt,actionsDialog --transitions mini-to-full,full-to-mini,hide-show,return-to-origin --fixture agentic-mini-full-layout --input-modes protocol-key,protocol-resize --no-native-input --no-native-pointer --no-system-pasteboard --local-fixture-only --json
   bun scripts/agentic/index.ts filter-input-decoration-chip-layout-stress --session default --surfaces main --queries 'f: AGENTS.md,c: agentic,~/script,:actions,;note,!command,literal\\:chip' --widths mini,narrow,full --scale-factors 1,1.25,1.5 --fixture agentic-filter-input-decorations --input-modes protocol-set-filter,protocol-resize --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --local-fixture-only --json
   bun scripts/agentic/index.ts focus-ring-viewport-integrity-stress --session default --surfaces main,actionsDialog,fields-prompt,path-prompt --fixture agentic-focus-rings --input-modes protocol-key,simulate-gpui-event --steps tab,shift-tab,up,down,escape --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
-  bun scripts/agentic/index.ts warning-banner-action-dismiss-semantics-stress --session default --surface main --fixtures warning,actionable,dismissible,error --input-modes protocol-hover,protocol-click,protocol-key --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --local-fixture-only --json
   bun scripts/agentic/index.ts select-prompt-multiselect-keyboard-state-stress --session default --surface select-prompt --fixture agentic-multiselect --choices 24 --selection-steps space,cmd-a,filter-preserve,clear-filter,range-toggle,escape-restore --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts file-search-preview-sanitization-stress --session default --surface file-search --fixture agentic-safe-preview --preview-fixtures text,binary,large-text,missing-file,private-path,unsupported-kind --selection-cycles 8 --filter-cycles 4 --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --local-fixture-only --json
   bun scripts/agentic/index.ts hotkey-prompt-transient-capture-cancel-stress --session default --surface hotkey-prompt --fixture agentic-transient-hotkey --chords cmd+shift+7,ctrl+space --cancel-methods escape,cmd-w --input-modes protocol-key,simulate-key --no-native-input --no-native-pointer --no-config-write --no-global-hotkey-registration --dry-run-only --local-fixture-only --json
@@ -5606,7 +5096,6 @@ Examples:
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
-  bun scripts/agentic/index.ts scenario --session default --scenario detached-agent_chat-exact-id --index 0
   bun scripts/agentic/index.ts agent_chat-setup-recovery --session default --select-agent opencode --json
   bun scripts/agentic/index.ts help --json`);
     process.exit(0);

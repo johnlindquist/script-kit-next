@@ -1303,9 +1303,6 @@ describe("noninteractive DevTools operator safety", () => {
   });
 
   test.each([
-    ["Notes live resize", "notes-live-resize.ts"],
-    ["Notes bottom resize", "notes-bottom-resize.ts"],
-    ["Notes glass fallback", "notes-glass-entry-fallback.ts"],
     ["Actions entry filmstrip", "actions-entry-filmstrip.ts"],
     ["glass lifecycle filmstrip", "glass-lifecycle-filmstrip.ts"],
     ["rapid toggle stress", "rapid-toggle-stress.ts"],
@@ -1404,17 +1401,12 @@ describe("noninteractive DevTools operator safety", () => {
     ["semantic-command", "cons-flow-ux.semantic-command"],
     ["entry-verbs", "cons-flow-ux.entry-verbs"],
     ["dictation-recovery-focus", "cons-flow-ux.dictation-recovery-focus"],
-    ["notes-search", "cons-flow-ux.notes-search"],
     ["dictation-delivery", "cons-flow-ux.dictation-delivery"],
     ["context-preparation", "cons-flow-ux.context-preparation"],
-    ["notes-today", "cons-flow-ux.notes-today"],
     ["dictation-dismiss-targets", "cons-flow-ux.dictation-dismiss-targets"],
     ["flow-history", "cons-flow-ux.flow-history"],
-    ["notes-handoff", "cons-flow-ux.notes-handoff"],
-    ["notes-agent-chat-return", "cons-flow-ux.notes-agent-chat-return"],
     ["context-lifecycle", "cons-flow-ux.context-lifecycle"],
     ["conversation-hosts", "conversation-hosts.private-pasteboard-archive"],
-    ["notes-actions", "notes-actions.private-pasteboard-archive"],
     ["dictation-history", "dictation-history.system-clipboard"],
   ])("consistency workflow %s refuses before runtime receipts, fixtures, or child processes", (name, expectedOwner) => {
     const result = child(`
@@ -1448,15 +1440,14 @@ describe("noninteractive DevTools operator safety", () => {
   });
 
   test.each([
-    ["notes-spine-host-wiring", "notes-spine-host-wiring.workflow-child"],
     ["day-page-context-roundtrip", "day-page-context-roundtrip.workflow-child"],
     ["day-page-agent-chat-handoff-scope", "day-page-agent-chat-handoff-scope.workflow-child"],
     ["day-agent-chat-return", "day-agent-chat-return.workflow-child"],
-  ])("Notes/Today child %s refuses before auth, output, app, or native access", (name, expectedOwner) => {
+  ])("Day page child %s refuses before auth, output, app, or native access", (name, expectedOwner) => {
     const result = child(`
       import * as filesystem from "node:fs";
       import { mock } from "bun:test";
-      const unsafe = (() => { throw new Error("unsafe Notes/Today child side effect reached"); });
+      const unsafe = (() => { throw new Error("unsafe Day page child side effect reached"); });
       mock.module("node:fs", () => ({
         ...filesystem,
         copyFileSync: unsafe,
@@ -1472,7 +1463,7 @@ describe("noninteractive DevTools operator safety", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain(`SCRIPT_KIT_NONINTERACTIVE=1 refused ${expectedOwner}`);
-    expect(result.stdout.toString()).not.toContain("unsafe Notes/Today child side effect reached");
+    expect(result.stdout.toString()).not.toContain("unsafe Day page child side effect reached");
   });
 
   test("SAFE-001 refusal preserves its exact preexisting authoritative runtime receipt", () => {
@@ -1506,7 +1497,6 @@ describe("noninteractive DevTools operator safety", () => {
 
   test.each([
     ["conversation hosts", "conversation-hosts-probe.ts"],
-    ["Notes actions", "notes-actions-probe.ts"],
   ])("%s refuses before archiving every private pasteboard format", (_owner, file) => {
     const result = child(`
       import * as filesystem from "node:fs";
@@ -1787,7 +1777,7 @@ describe("noninteractive DevTools operator safety", () => {
       commands: Array<{ name: string; description: string }>;
     };
     expect(help.script).toBe("index");
-    expect(help.commands.length).toBeGreaterThanOrEqual(127);
+    expect(help.commands.length).toBeGreaterThanOrEqual(120);
     expect(help.commands.find((command) => command.name === "confirm-modal-style-preview-proof")?.description)
       .toContain("scenario owner is missing");
     expect(result.stderr.toString()).not.toContain("passive agentic help started");
@@ -1813,7 +1803,7 @@ describe("noninteractive DevTools operator safety", () => {
     ["app launch", ["driver", "smoke"]],
     ["performance recording", ["perf", "record", "--pid", "42", "--template", "Leaks"]],
     ["session start", ["actions", "inspect", "--start"]],
-    ["window reveal", ["notes", "inspect", "--open"]],
+    ["window reveal", ["main", "inspect", "--show"]],
   ])("central DevTools dispatcher rejects %s before delegation", (_kind, args) => {
     const result = child(`
       Bun.spawn = (() => { throw new Error("unsafe DevTools dispatcher child started"); });
@@ -1956,51 +1946,12 @@ describe("noninteractive DevTools operator safety", () => {
     expect(result.stdout.toString()).not.toContain("live operator session was touched");
   });
 
-  test("Notes cleanup owns its exact session and never stops resumed operator state", () => {
-    const result = child(`
-      process.env.SCRIPT_KIT_NONINTERACTIVE = "0";
-      const calls = [];
-      let resumed = false;
-      Bun.spawn = ((command) => {
-        calls.push(command);
-        const payload = command[2] === "start"
-          ? { status: "ok", session: command[3], pid: 4242, sessionGeneration: "notes-generation", resumed, ready: true }
-          : { status: "ok", session: command[3], ownershipVerified: true };
-        return {
-          stdout: new Response(JSON.stringify(payload)).body,
-          stderr: new Response("").body,
-          exited: Promise.resolve(0),
-        };
-      });
-      const { maybeOpenNotes, stopSession } = await import("./scripts/devtools/notes.ts");
-      await maybeOpenNotes({ start: true, session: "owned-notes", open: false });
-      await stopSession("owned-notes");
-      resumed = true;
-      await maybeOpenNotes({ start: true, session: "borrowed-notes", open: false });
-      try { await stopSession("borrowed-notes"); }
-      catch (error) { console.log("borrowed=" + error.message); }
-      try { await maybeOpenNotes({ start: true, session: "dev-watch", open: false }); }
-      catch (error) { console.log("reserved=" + error.message); }
-      console.log("calls=" + JSON.stringify(calls));
-    `);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString()).toContain("borrowed=DevTools session is not owned");
-    expect(result.stdout.toString()).toContain("reserved=Notes DevTools cannot claim the borrowed operator session");
-    expect(result.stdout.toString()).toContain(
-      '["bash","scripts/agentic/session.sh","stop","owned-notes","--expected-pid","4242","--expected-generation","notes-generation"]',
-    );
-    expect(result.stdout.toString()).not.toContain('"stop","borrowed-notes"');
-    expect(result.stdout.toString()).not.toContain('"start","dev-watch"');
-  });
-
   test("independent DevTools transports cannot bypass strict session-start safety", () => {
     const commands: Array<[string, string[]]> = [
       ["actions", ["inspect", "--start"]],
       ["dictation", ["inspect", "--start"]],
       ["inspect", ["--start"]],
       ["events", ["record", "--start", "--", "bun", "scripts/devtools/surfaces.ts"]],
-      ["notes", ["inspect", "--start"]],
       ["main", ["inspect", "--start"]],
       ["agent_chat", ["open-detached-placeholder", "--start"]],
     ];

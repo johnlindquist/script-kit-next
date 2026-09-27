@@ -22,7 +22,7 @@ test("generated surface inventory includes every AI recovery host", () => {
     contractMappingCount: 54,
     uniqueAppViewVariantCount: 53,
     runtimeCoverageProfileCount: 19,
-    orientationAliasCount: 5,
+    orientationAliasCount: 3,
   });
   expect(report.featureMapSource).toEqual({
     path: "FEATURE_MAP.md",

@@ -262,35 +262,6 @@ try {
     "input:clipboard-filter",
   );
 
-  runtimeStage = "notes-editor";
-  driver.send({ type: "openNotes", requestId: "pf003-open-notes" });
-  const notesTarget = { type: "kind", kind: "notes", index: 0 };
-  await waitFor(
-    "Notes registration",
-    () => driver!.getTargetState(notesTarget, { timeoutMs: 3_000 }),
-    (state) => Boolean(asObj(state.notes ?? state).entryReveal),
-  );
-  await driver.simulateGpuiKeyDown("n", {
-    modifiers: ["cmd"],
-    target: notesTarget,
-    timeoutMs: 5_000,
-  });
-  await driver.request(
-    {
-      type: "batch",
-      target: notesTarget,
-      commands: [{ type: "setInput", text: canaries.note }],
-      options: { stopOnError: true, rollbackOnError: false, timeout: 5_000 },
-    },
-    { expect: "batchResult", timeoutMs: 6_000 },
-  );
-  runtime.notesEditor = await waitForPrivateElement(
-    driver,
-    "Notes editor",
-    notesTarget,
-    "input:notes-editor",
-  );
-
   runtimeStage = "agent-chat-composer";
   driver.send({ type: "openAiWithMockData" });
   await waitFor(
@@ -347,7 +318,7 @@ const cleanup = driver
     };
 const runtimePassed = runtimeError == null
   && runtimeStage === "complete"
-  && Object.keys(runtime).length === 4
+  && Object.keys(runtime).length === 3
   && responseStreamCanaryMatches === 0;
 const cleanupPassed = cleanup.processExited
   && cleanup.streamsDrained

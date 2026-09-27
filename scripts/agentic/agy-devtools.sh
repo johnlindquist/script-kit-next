@@ -247,8 +247,6 @@ elif target_hint.startswith("kind:"):
     target_args, target_selector = ["--target-kind", target_hint[5:]], target_hint
 elif target_hint.startswith("title:"):
     target_args, target_selector = ["--target-title", target_hint[6:]], target_hint
-elif target_hint == "auto" and surface_id == "notes":
-    target_args, target_selector = ["--target-kind", "notes"], "kind:notes"
 elif target_hint == "auto" and surface_id == "dictation":
     target_args, target_selector = [], "dictation/passive"
 
@@ -273,11 +271,7 @@ if surface_id in {"main", "actions-dialog", "prompt", "agent_chat", "portal", "t
     add("devtools.coverage", "coverage.ts", ["bun", "scripts/devtools/coverage.ts", "--surface", surface_id], "030-coverage.json")
 elif surface_id == "notes":
     add("devtools.coverage", "coverage.ts", ["bun", "scripts/devtools/coverage.ts", "--surface", "notes"], "010-coverage.json")
-    if "resize" in text or "autosize" in text or "shrink" in text or "grow" in text:
-        add("devtools.notes.resize-compare", "notes.ts", ["bun", "scripts/devtools/notes.ts", "resize-compare", "--start", "--sandbox"], "020-notes-resize.json")
-    else:
-        add("devtools.notes.inspect", "notes.ts", ["bun", "scripts/devtools/notes.ts", "inspect", "--open"], "020-notes-inspect.json")
-    add("devtools.inspect", "inspect.ts", ["bun", "scripts/devtools/inspect.ts", "--session", session, "--target-kind", "notes", "--bug", "<prompt>", "--surface", "Notes"], "030-inspect.json")
+    add("devtools.inspect", "inspect.ts", ["bun", "scripts/devtools/inspect.ts", "--session", session, *target_args, "--bug", "<prompt>", "--surface", "Notes"], "020-inspect.json")
 elif surface_id == "dictation":
     add("devtools.coverage", "coverage.ts", ["bun", "scripts/devtools/coverage.ts", "--surface", "dictation"], "010-coverage.json")
     add("devtools.dictation.inspect", "dictation.ts", ["bun", "scripts/devtools/dictation.ts", "inspect"], "020-dictation-inspect.json")

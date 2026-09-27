@@ -1,10 +1,8 @@
 #!/usr/bin/env bun
 /**
- * Runtime proof for the shared Day/Notes editor-host contract:
+ * Runtime proof for the Day Page editor-host contract:
  * - Day uses components.notes_editor but does not mount a local spine overlay.
  * - Day @context typing round-trips through the main menu and cancels back.
- * - Notes keeps its local spine overlay, but the owner/render path is the
- *   shared components.notes_editor spine contract.
  */
 import { Driver, type Json } from "../devtools/driver";
 import { openDayPage } from "./day-page-open-helper";
@@ -13,7 +11,6 @@ const binary =
   process.env.PROBE_BINARY ??
   "target-agent/artifacts/day-notes-host-contract/script-kit-gpui";
 const runId = `day-notes-host-${Date.now().toString(36)}`;
-const notesTarget = { type: "kind", kind: "notes", index: 0 };
 const outPath = ".test-output/day-notes-editor-host-contract-probe.json";
 
 type Check = { name: string; pass: boolean; detail?: Json };
@@ -76,31 +73,6 @@ function localOverlayIds(elements: Json): string[] {
       lower === "notes-spine-list"
     );
   });
-}
-
-async function notesState(driver: Driver): Promise<Json> {
-  const result = (await driver.request(
-    { type: "getState", target: notesTarget },
-    { expect: "stateResult", timeoutMs: 5000 },
-  )) as Json;
-  return (result.notes ?? result) as Json;
-}
-
-async function setNotesText(driver: Driver, text: string): Promise<Json> {
-  return (await driver.request(
-    {
-      type: "batch",
-      requestId: `${runId}-notes-set-${Date.now()}`,
-      target: notesTarget,
-      commands: [{ type: "setInput", text }],
-      options: { stopOnError: true, timeout: 5000 },
-    },
-    { expect: "batchResult", timeoutMs: 6000 },
-  )) as Json;
-}
-
-async function notesElements(driver: Driver): Promise<Json> {
-  return (await driver.getElements({ target: notesTarget, limit: 220 }, { timeoutMs: 5000 })) as Json;
 }
 
 function gpuiMainKey(
@@ -219,67 +191,6 @@ try {
   });
   check("day_context_round_trip_cancelled_logged", appLog.includes("event=day_page_context_round_trip_cancelled"), {
     logPath: driver.logPath,
-  });
-
-  driver.send({ type: "openNotes", requestId: `${runId}-open-notes` });
-  await waitFor(
-    "Notes window ready",
-    () => notesElements(driver!).catch((error) => ({ error: String(error) }) as Json),
-    (value) => !("error" in value),
-    10_000,
-  );
-  check("notes_opened", true, {});
-
-  const noteText = `;to`;
-  const setNotes = await setNotesText(driver, noteText);
-  check("notes_set_capture_segment", setNotes.success === true, { setNotes });
-  const activeNotesState = await waitFor(
-    "Notes shared spine active",
-    () => notesState(driver!),
-    (state) => {
-      const spine = (state.spine ?? {}) as Json;
-      return spine.active === true && Number(spine.rowCount ?? 0) > 0;
-    },
-    8000,
-  );
-  const notesSpine = (activeNotesState.spine ?? {}) as Json;
-  check("notes_spine_reports_shared_owner", notesSpine.owner === "components.notes_editor", {
-    spine: notesSpine,
-  });
-  check(
-    "notes_spine_reports_shared_render_path",
-    notesSpine.renderPath === "components.notes_editor.spine.render_spine_overlay",
-    { spine: notesSpine },
-  );
-  check("notes_spine_overlay_id_preserved", notesSpine.overlayElementId === "notes-spine-list", {
-    spine: notesSpine,
-  });
-  const activeNotesElements = await notesElements(driver);
-  check("notes_spine_overlay_runtime_contract_present", notesSpine.overlayElementId === "notes-spine-list", {
-    overlayElementId: notesSpine.overlayElementId ?? null,
-    noteElementSample: ids(activeNotesElements).slice(0, 80),
-  });
-
-  await driver.simulateKey("escape");
-  const dismissedNotesState = await waitFor(
-    "Notes spine dismissed",
-    () => notesState(driver!),
-    (state) => ((state.spine ?? {}) as Json).active !== true,
-    6000,
-  );
-  check("notes_escape_dismisses_spine", ((dismissedNotesState.spine ?? {}) as Json).active !== true, {
-    spine: dismissedNotesState.spine ?? null,
-  });
-
-  await setNotesText(driver, "@file:readme");
-  await sleep(250);
-  const contextNotesState = await notesState(driver);
-  const contextSpine = (contextNotesState.spine ?? {}) as Json;
-  check("notes_context_mentions_do_not_open_local_overlay", contextSpine.active !== true, {
-    spine: contextSpine,
-  });
-  check("notes_context_overlay_contract_false", contextSpine.contextMentionsLocalOverlay === false, {
-    spine: contextSpine,
   });
 
   await driver.close();

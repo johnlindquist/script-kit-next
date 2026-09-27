@@ -13,6 +13,7 @@ import {
 } from "./consistency.ts";
 import { validateReceipt } from "./lib/receipt-schema.ts";
 import {
+  NOTES_WINDOW_RETIRED_TASK_IDS,
   WORKFLOW_TASK_PRIMITIVE_ID,
   WORKFLOW_TASK_PROOF_SPECS,
   workflowTaskProofSourceOwners,
@@ -144,8 +145,10 @@ describe("source-bound canonical safety and workflow task proofs", () => {
       .toThrow();
   });
 
-  test("all 28 tasks have one exact executable owner and task-specific observed stages", () => {
-    expect(new Set(Object.keys(WORKFLOW_TASK_PROOF_SPECS))).toEqual(new Set(CONS_FLOW_UX_IDS));
+  test("every live task has one exact executable owner and task-specific observed stages", () => {
+    const specIds = new Set(Object.keys(WORKFLOW_TASK_PROOF_SPECS));
+    expect([...NOTES_WINDOW_RETIRED_TASK_IDS].filter((taskId) => specIds.has(taskId))).toEqual([]);
+    expect(new Set([...specIds, ...NOTES_WINDOW_RETIRED_TASK_IDS])).toEqual(new Set(CONS_FLOW_UX_IDS));
     for (const [taskId, spec] of Object.entries(WORKFLOW_TASK_PROOF_SPECS)) {
       expect(spec.producerOwner.startsWith("scripts/agentic/cons-flow-ux/")).toBe(true);
       expect(spec.stageIds.length).toBeGreaterThanOrEqual(2);
@@ -154,15 +157,6 @@ describe("source-bound canonical safety and workflow task proofs", () => {
       expect(new Set(spec.negativeControlIds).size).toBe(spec.negativeControlIds.length);
       expect(workflowTaskProofSourceOwners(taskId as WorkflowTaskProofId)).toContain(spec.producerOwner);
     }
-    expect(workflowTaskProofSourceOwners("WF-013")).toContain(
-      "scripts/agentic/day-page-context-roundtrip-probe.ts",
-    );
-    expect(workflowTaskProofSourceOwners("WF-014")).toContain(
-      "scripts/agentic/day-page-agent-chat-handoff-scope-probe.ts",
-    );
-    expect(workflowTaskProofSourceOwners("WF-015")).toContain(
-      "scripts/agentic/day-agent-chat-return-probe.ts",
-    );
   });
 
   test.each(Object.keys(WORKFLOW_TASK_PROOF_SPECS) as WorkflowTaskProofId[])(
@@ -211,13 +205,13 @@ describe("source-bound canonical safety and workflow task proofs", () => {
     (value: WorkflowTaskProofOptions) => void,
     string,
   ]>([
-    ["missing", (value) => { value.stages.pop(); }, "required stage: cart-delete-failure"],
+    ["missing", (value) => { value.stages.pop(); }, "required stage: portal-cancellation-restores-context"],
     ["duplicate", (value) => {
       value.stages[1] = { ...value.stages[0]! };
     }, "unique stable identities"],
     ["failed", (value) => { value.stages[0]!.pass = false; }, "observed registered target transaction"],
   ])("%s actual journey stages cannot pass", (_name, update, expectedError) => {
-    expect(mutate("WF-016", update)).toThrow(expectedError);
+    expect(mutate("WF-003", update)).toThrow(expectedError);
   });
 
   test.each<[
@@ -325,7 +319,7 @@ describe("source-bound canonical safety and workflow task proofs", () => {
   });
 
   test("unobserved workflows remain typed blocked instead of fabricated green", () => {
-    const prepared = prepareBlockedWorkflowTaskProof("SAFE-004", "no actual user journey executed");
+    const prepared = prepareBlockedWorkflowTaskProof("WF-024", "no actual user journey executed");
     expect(prepared.exitCode).toBe(3);
     expect(prepared.receipt.disposition).toBe("BLOCKED_MISSING_PRIMITIVE");
     expect(prepared.receipt.pass).toBe(false);
@@ -368,26 +362,4 @@ describe("source-bound canonical safety and workflow task proofs", () => {
     expect(JSON.stringify(actual.receipt)).toContain("stale-workflow-proof-source");
   });
 
-  test("composed Notes/Today proof cannot hide a stale actual child owner", () => {
-    const directory = mkdtempSync(join(tmpdir(), "workflow-task-stale-child-"));
-    temporaryDirectories.push(directory);
-    const taskId = "WF-013";
-    const prepared = prepareWorkflowTaskProof(taskId, options(taskId));
-    writeWorkflowTaskProof(taskId, prepared.receipt, directory);
-    const current = currentIdentity({
-      fileSha256: (path) => path === "scripts/agentic/day-page-context-roundtrip-probe.ts"
-        ? "0".repeat(64)
-        : createHash("sha256").update(readFileSync(path)).digest("hex"),
-    });
-    const result = verifyTask({
-      taskId,
-      scope: "cons-flow-ux",
-      receiptsRoot: directory,
-      catalog: parseTaskCatalog(readFileSync(DEFAULT_CONSISTENCY_CATALOG_PATH, "utf8")),
-      progress: parseProgressSections(readFileSync(".notes/CONSISTENCY-PROGRESS.md", "utf8")),
-      current,
-    });
-    expect(result.exitCode).toBe(3);
-    expect(JSON.stringify(result.receipt)).toContain("stale-workflow-proof-source");
-  });
 });

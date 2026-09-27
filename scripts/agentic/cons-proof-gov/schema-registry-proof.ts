@@ -258,7 +258,6 @@ try {
     ["actions.inspect", ["bun", "scripts/devtools/actions.ts", "inspect", "--session", "c02-missing", "--main"]],
     ["act.key", ["bun", "scripts/devtools/act.ts", "key", "--session", "c02-missing", "--main", "--key", "Escape"]],
     ["compare.redgreen", ["bun", "scripts/devtools/compare.ts", "redgreen", "--red", redPath, "--green", greenPath]],
-    ["notes.inspect", ["bun", "scripts/devtools/notes.ts", "inspect", "--session", "c02-missing"]],
     ["dictation.inspect", ["bun", "scripts/devtools/dictation.ts", "inspect", "--session", "c02-missing"]],
     ["inspect.orchestrate", ["bun", "scripts/devtools/inspect.ts", "--session", "c02-missing", "--main", "--bug", "static fixture", "--surface", "ScriptList"]],
   ];

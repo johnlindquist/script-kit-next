@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 /**
  * Runtime proof: fresh Day Page + Notes markdown reaches Brain-profile Agent
- * Chat recall without waiting for the background indexer.
+ * Chat recall without waiting for the background indexer. The note is written
+ * straight to brain/notes because there is no Notes window to type it into.
  */
 import { Database } from "bun:sqlite";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -12,6 +13,7 @@ import {
   readdirSync,
   readFileSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -223,40 +225,12 @@ try {
     mtimeMs: statSync(dayFile).mtimeMs,
   });
 
-  driver.send({ type: "openNotes", requestId: `${runId}-open-notes` });
-  await waitFor(
-    "notes window elements",
-    () =>
-      driver
-        .getElements(
-          { target: { type: "kind", kind: "notes", index: 0 }, limit: 80 },
-          { timeoutMs: 5000 },
-        )
-        .catch((error) => ({ error: String(error) })),
-    (value) => !("error" in (value as Record<string, unknown>)),
-    10_000,
-  );
-
   const noteText = `# ${topic} note\n\n${noteFact}\n`;
-  const setNote = (await driver.request(
-    {
-      type: "batch",
-      requestId: `${runId}-set-note`,
-      target: { type: "kind", kind: "notes", index: 0 },
-      commands: [{ type: "setInput", text: noteText }],
-      options: { stopOnError: true, timeout: 10_000 },
-    },
-    { expect: "batchResult", timeoutMs: 11_000 },
-  )) as Json;
-  check("set_notes_fact", setNote.success === true, { setNote });
-  await driver.request(
-    {
-      type: "simulateGpuiEvent",
-      requestId: `${runId}-save-note`,
-      target: { type: "kind", kind: "notes", index: 0 },
-      event: { type: "keyDown", key: "s", modifiers: ["cmd"] },
-    },
-    { expect: "simulateGpuiEventResult", timeoutMs: 5000 },
+  const noteCreated = new Date().toISOString();
+  mkdirSync(notesDir, { recursive: true });
+  writeFileSync(
+    join(notesDir, `${runId}-note.md`),
+    ["---", `id: ${randomUUID()}`, `created: ${noteCreated}`, `updated: ${noteCreated}`, "---", "", noteText].join("\n"),
   );
 
   const noteFiles = await waitFor(

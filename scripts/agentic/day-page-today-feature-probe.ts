@@ -155,7 +155,7 @@ try {
   const dialogIds = dialogFlat
     .map((el) => `${el.semanticId ?? el.id ?? ""}|${el.text ?? ""}|${el.value ?? ""}`)
     .slice(0, 60);
-  const hasOpenInNotesWindow = dialogFlat.some((el) =>
+  const hasOpenAsNote = dialogFlat.some((el) =>
     [el.semanticId, el.id, el.text, el.value].some(
       (v) =>
         typeof v === "string" &&
@@ -182,9 +182,9 @@ try {
           v.includes("Send Prompt")),
     ),
   );
-  check("today_actions_rows_visible", hasOpenInNotesWindow && hasSaveToday && !hasPromptHandoffRows, {
+  check("today_actions_rows_visible", hasOpenAsNote && hasSaveToday && !hasPromptHandoffRows, {
     dialogIds,
-    hasOpenInNotesWindow,
+    hasOpenAsNote,
     hasSaveToday,
     hasDeprecatedAgentRow,
     hasPromptHandoffRows,

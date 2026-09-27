@@ -2,8 +2,8 @@
 /**
  * Visible, fail-closed stress proof for animation-heavy window toggles.
  *
- * The probe exercises the real GPUI dispatch path for Cmd+K and the Notes
- * toggle command. Each phase posts input as fast
+ * The probe exercises the real GPUI dispatch path for Cmd+K. Each phase
+ * posts input as fast
  * as the app can acknowledge it, watches for duplicate automation windows,
  * proves a deliberate recovery action, and rejects fresh ERROR/crash logs.
  */
@@ -17,10 +17,7 @@ import {
 } from "./glass-evidence-contract.ts";
 import { announceTestStatus } from "./test-status.ts";
 import { requireValidatedHelper } from "./glass-native-helper-cache.ts";
-import {
-  classifyNativeInventory,
-  deriveUniqueOwnerDelta,
-} from "./glass-topology-contract.ts";
+import { classifyNativeInventory } from "./glass-topology-contract.ts";
 import {
   finishInterferenceMonitor,
   startInterferenceMonitor,
@@ -173,25 +170,6 @@ async function nativeWindowInventory(
   };
 }
 
-async function notesLifecycleState(driver: Driver) {
-  try {
-    const state = await driver.getTargetState(
-      { type: "id", id: "notes" },
-      { timeoutMs: 5_000 },
-    );
-    const notes = state?.notes ?? state ?? null;
-    return notes
-      ? {
-        entryReveal: notes.entryReveal ?? null,
-        windowLifecycle: notes.windowLifecycle ?? null,
-        editor: notes.editor ?? null,
-      }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 const binary = resolve(arg("--binary", process.env.SCRIPT_KIT_GPUI_BINARY ?? "")!);
 const themeFixture = arg("--theme-fixture");
 const outPath = resolve(
@@ -203,13 +181,13 @@ const outPath = resolve(
 if (!binary || !existsSync(binary)) {
   throw new Error(`binary missing: ${binary || "<unset>"}`);
 }
-// C08: backward-compatible probe profiles. `full` runs Actions + Notes;
+// C08: backward-compatible probe profiles. `full` runs Actions;
 // `pf011` (the PF-011 aggregator profile) runs the same phases and REQUIRES
 // the named theme fixture and prepared helper manifests instead of
 // interpreting Swift source.
 const RAPID_TOGGLE_PROFILES: Record<string, string[]> = {
-  full: ["actions", "notes"],
-  pf011: ["actions", "notes"],
+  full: ["actions"],
+  pf011: ["actions"],
 };
 const profile = arg("--profile", "full") ?? "full";
 const requiredPhaseNames = RAPID_TOGGLE_PROFILES[profile];
@@ -555,207 +533,6 @@ try {
       ),
   );
 
-  await announceTestStatus(
-    "MWND-15B · Notes hammer",
-    "16 immediate Notes toggles, reopen recovery, then real Cmd+W close",
-  );
-  const notesErrorBaseline = ((await driver.getLogs({
-    limit: 500,
-    level: "error",
-  }))?.entries ?? []).length;
-  let maxNotesWindows = 0;
-  const notesSamples: Json[] = [];
-  for (let index = 0; index < 16; index += 1) {
-    driver.send({
-      type: "openNotes",
-      requestId: `mwnd15-notes-${index}`,
-    });
-    await Bun.sleep(20);
-    const windows = await driver.listAutomationWindows({ timeoutMs: 5_000 });
-    const count = countKind(windows, "notes");
-    maxNotesWindows = Math.max(maxNotesWindows, count);
-    const native = driver.pid
-      ? await nativeWindowInventory(driver.pid, "Notes", mainWindowId)
-      : { ids: [], error: "driver PID unavailable" };
-    const notesState = count > 0 ? await notesLifecycleState(driver) : null;
-    notesSamples.push({
-      index,
-      automationWindowCount: count,
-      nativeWindowIds: native.ids,
-      nativeWindowCount: native.ids.length,
-      nativeWindowError: native.error,
-      nativeTopology: native.topology,
-      notesState,
-    });
-  }
-  await Bun.sleep(350);
-  const notesAfterBurst = await driver.listAutomationWindows({ timeoutMs: 5_000 });
-  if (countKind(notesAfterBurst, "notes") > 0) {
-    driver.send({ type: "openNotes", requestId: "mwnd15-notes-normalize-close" });
-    await waitForKindCount(driver, "notes", 0, 2_000);
-  }
-  const notesOpenStarted = performance.now();
-  driver.send({ type: "openNotes", requestId: "mwnd15-notes-recovery-open" });
-  const notesOpen = await waitForKindCount(driver, "notes", 1, 2_000);
-  const notesOpenMs = performance.now() - notesOpenStarted;
-  const hiddenInputBefore = await notesLifecycleState(driver);
-  const hiddenInputText = "mwnd15 hidden editor input";
-  const hiddenInputReceipt = await driver.request({
-    type: "batch",
-    target: { type: "kind", kind: "notes", index: 0 },
-    commands: [{ type: "setInput", text: hiddenInputText }],
-    options: { stopOnError: true, rollbackOnError: false, timeout: 5_000 },
-    trace: "on",
-  }, { expect: "batchResult", timeoutMs: 6_000 });
-  const hiddenInputAfter = await notesLifecycleState(driver);
-  const hiddenInputAccepted = hiddenInputBefore?.entryReveal?.bodyVisible === false
-    && hiddenInputReceipt?.success !== false
-    && hiddenInputBefore?.editor?.textFingerprint
-      !== hiddenInputAfter?.editor?.textFingerprint
-    && Number(hiddenInputAfter?.editor?.textLength ?? 0) === hiddenInputText.length;
-  const beforeTail = driver.pid
-    ? await nativeWindowInventory(driver.pid, "Notes", mainWindowId)
-    : { ids: [], error: "driver PID unavailable" };
-  driver.send({ type: "openNotes", requestId: "mwnd15-notes-close-before-tail" });
-  await Bun.sleep(40);
-  const duringNotesExit = await notesLifecycleState(driver);
-  driver.send({ type: "openNotes", requestId: "mwnd15-notes-reopen-before-tail" });
-  const notesReopened = await waitForKindCount(driver, "notes", 1, 2_000);
-  const afterTail = driver.pid
-    ? await nativeWindowInventory(driver.pid, "Notes", mainWindowId)
-    : { ids: [], error: "driver PID unavailable" };
-  const reusedNativeWindow = beforeTail.ids.length === 1
-    && afterTail.ids.length === 1
-    && beforeTail.ids[0] === afterTail.ids[0];
-  const notesOwnerDelta = deriveUniqueOwnerDelta(
-    initialNativeInventory.windows as any[],
-    beforeTail.windows as any[],
-    "Notes",
-    Number(driver.pid),
-    mainWindowId,
-  );
-  let revealAfterReopen = await notesLifecycleState(driver);
-  const revealDeadline = performance.now() + 2_000;
-  while (
-    revealAfterReopen?.entryReveal?.bodyVisible !== true
-    && performance.now() < revealDeadline
-  ) {
-    await Bun.sleep(20);
-    revealAfterReopen = await notesLifecycleState(driver);
-  }
-  const noteReveals = [
-    ...notesSamples.map((sample) => sample?.notesState?.entryReveal),
-    duringNotesExit?.entryReveal,
-    revealAfterReopen?.entryReveal,
-  ].filter((reveal) => reveal != null);
-  const notesRevealGenerations = [
-    ...new Set(
-      noteReveals
-        .map((reveal) => Number(reveal?.generation))
-        .filter(Number.isFinite),
-    ),
-  ];
-  // Generation numbers are local to a Notes window instance. Rapid close/open
-  // pulses can construct several instances that each begin at generation 1,
-  // so a generation-only set collapses real independent reveals into one and
-  // produces a false failure. The composite identity proves that at least two
-  // distinct reveal lifecycles ran without weakening any timing or topology
-  // requirement.
-  const notesRevealInstances = [
-    ...new Set(
-      noteReveals
-        .map((reveal) => {
-          const instanceId = Number(reveal?.instanceId);
-          const generation = Number(reveal?.generation);
-          return Number.isFinite(instanceId) && Number.isFinite(generation)
-            ? `${instanceId}:${generation}`
-            : null;
-        })
-        .filter((identity): identity is string => identity != null),
-    ),
-  ];
-  const notesCloseStarted = performance.now();
-  const notesShortcutDispatch = await driver.simulateGpuiKeyDown("w", {
-    modifiers: ["cmd"],
-    target: { type: "kind", kind: "notes", index: 0 },
-    timeoutMs: 5_000,
-  });
-  const notesClose = await waitForKindCount(driver, "notes", 0, 2_000);
-  const notesCloseMs = performance.now() - notesCloseStarted;
-  const notesErrors = boundedErrors(
-    await driver.getLogs({ limit: 500, level: "error" }),
-    notesErrorBaseline,
-  );
-  const notesPass = maxNotesWindows <= 1
-    && notesSamples.every((sample) => Number(sample?.nativeWindowCount ?? 0) <= 1)
-    && notesSamples.every((sample) => sample?.nativeTopology?.pass === true)
-    && notesOpen.pass
-    && hiddenInputAccepted
-    && notesRevealInstances.length >= 2
-    && duringNotesExit?.windowLifecycle?.phase === "Exiting"
-    && duringNotesExit?.windowLifecycle?.hasExitTicket === true
-    && typeof duringNotesExit?.windowLifecycle?.exitGeneration === "number"
-    && notesReopened.pass
-    && reusedNativeWindow
-    && notesOwnerDelta.pass
-    && beforeTail.topology?.pass === true
-    && afterTail.topology?.pass === true
-    && revealAfterReopen?.entryReveal?.bodyVisible === true
-    && notesShortcutDispatch?.success === true
-    && notesShortcutDispatch?.dispatchCompleted === true
-    && notesClose.pass
-    && notesOpenMs <= 750
-    && notesCloseMs <= 750
-    && notesErrors.length === 0;
-  receipt.phases.notes = {
-    pass: notesPass,
-    pulses: notesSamples.length,
-    samples: notesSamples,
-    maxNotesWindows,
-    notesOpenMs: Number(notesOpenMs.toFixed(2)),
-    notesCloseMs: Number(notesCloseMs.toFixed(2)),
-    cmdWClose: {
-      dispatch: notesShortcutDispatch,
-      closed: notesClose,
-    },
-    hiddenInput: {
-      accepted: hiddenInputAccepted,
-      bodyVisibleBefore: hiddenInputBefore?.entryReveal?.bodyVisible ?? null,
-      bodyVisibleAfter: hiddenInputAfter?.entryReveal?.bodyVisible ?? null,
-      beforeFingerprint: hiddenInputBefore?.editor?.textFingerprint ?? null,
-      afterFingerprint: hiddenInputAfter?.editor?.textFingerprint ?? null,
-      textLength: hiddenInputAfter?.editor?.textLength ?? null,
-      receiptSuccess: hiddenInputReceipt?.success ?? null,
-    },
-    closeBeforeTailReopen: {
-      beforeNativeWindowIds: beforeTail.ids,
-      afterNativeWindowIds: afterTail.ids,
-      reusedNativeWindow,
-      ownerDelta: notesOwnerDelta,
-      beforeTopology: beforeTail.topology,
-      afterTopology: afterTail.topology,
-      reopened: notesReopened,
-      duringExit: duringNotesExit,
-      entryReveal: revealAfterReopen,
-    },
-    revealGenerations: notesRevealGenerations,
-    revealInstances: notesRevealInstances,
-    errors: notesErrors,
-  };
-  (receipt.executedPhaseNames as string[]).push("notes");
-  (receipt.observerErrors as string[]).push(
-    ...notesSamples
-      .filter((sample: Json) => sample?.nativeWindowError != null)
-      .map((sample: Json) =>
-        `notes pulse ${sample?.index}: native window query failed: ${sample?.nativeWindowError}`
-      ),
-    ...notesSamples
-      .filter((sample: Json) => sample?.nativeTopology == null)
-      .map((sample: Json) =>
-        `notes pulse ${sample?.index}: native topology query missing`
-      ),
-  );
-
   const finalInputStarted = performance.now();
   driver.send({ type: "show" });
   await waitForKindCount(driver, "main", 1, 2_000);
@@ -775,7 +552,6 @@ try {
   receipt.crashScan = { pass: crashMarkers.length === 0, markers: crashMarkers };
   receipt.driverStats = driver.stats;
   receipt.pass = actionsPass
-    && notesPass
     && receipt.requiredPhaseNames.every((name: string) =>
       (receipt.executedPhaseNames as string[]).includes(name)
     )

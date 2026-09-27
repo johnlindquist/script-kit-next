@@ -110,8 +110,6 @@ import { validateArtifactReference } from "./glass-evidence-contract.ts";
 const LIFECYCLE_SCENARIOS = [
   "main-exit",
   "main-entry",
-  "notes-entry",
-  "notes-close-before-settle-reopen",
 ];
 
 function importableReceipt() {
@@ -215,7 +213,7 @@ describe("validateArtifactReference", () => {
 
   test("a wrong or incomplete scenario set is rejected", () => {
     const receipt = importableReceipt();
-    receipt.scenarios = receipt.scenarios.slice(0, 3);
+    receipt.scenarios = receipt.scenarios.slice(0, -1);
     const errors = validateArtifactReference(receipt, expectation, {
       hashFile: matchingHash,
     });
@@ -224,7 +222,7 @@ describe("validateArtifactReference", () => {
 
   test("capture-health failure in any scenario is rejected", () => {
     const receipt = importableReceipt();
-    (receipt.scenarios[2].filmstrip.receipt as any).captureHealthPass = false;
+    (receipt.scenarios[receipt.scenarios.length - 1].filmstrip.receipt as any).captureHealthPass = false;
     const errors = validateArtifactReference(receipt, expectation, {
       hashFile: matchingHash,
     });
