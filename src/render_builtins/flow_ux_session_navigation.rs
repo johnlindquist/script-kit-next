@@ -840,8 +840,8 @@ impl ScriptListApp {
     /// Otherwise → open the desk with the text as the filter so the user
     /// picks (the Create Flow row is always present for the no-match case).
     ///
-    /// 2026-07-10: no longer wired to Tab — Tab-with-text is Quick AI again
-    /// (`open_quick_ai_from_launcher`); flows stay reachable as main-menu rows.
+    /// Not wired to Tab — Tab-with-text hands the words to an agent in the
+    /// one-window strip; flows stay reachable as main-menu rows.
     /// Kept for a future explicit flow-routing entry point.
     #[allow(dead_code)]
     pub(crate) fn route_text_to_flow(

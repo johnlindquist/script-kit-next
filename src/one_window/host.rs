@@ -606,12 +606,7 @@ impl ScriptListApp {
 
     /// The line above the input, the input, the list as drawn, and the floating footer's zone.
     fn one_window_natural_height(&self) -> f32 {
-        if self
-            .one_window
-            .views()
-            .top()
-            .is_some_and(|top| super::work::WORK_VIEWS.contains(&top.name.as_str()))
-        {
+        if self.one_window_work_view_open() {
             return self.one_window_height_ceiling();
         }
         let (grouped, _) = self.get_grouped_results_cached();

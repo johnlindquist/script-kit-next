@@ -6,14 +6,13 @@
 
 use std::collections::HashMap;
 
-use gpui::{AppContext as _, ClipboardItem, Context, Entity, Subscription};
+use gpui::{ClipboardItem, Context, Entity, Subscription};
 use sk_one_window::steps::StepSpec;
 use sk_one_window::strip::TaskState;
 use sk_one_window::work::{WorkEffect, WorkEvent};
 use sk_one_window::{chat, connect, steps, strip, Done, Event, Risk, Row};
 
 use crate::ai::agent_chat::events::AgentChatEvent;
-use crate::ai::agent_chat::ui::components::transcript::AgentChatTranscript;
 use crate::ai::agent_chat::ui::mock_fixture::AgentChatFixtureControl;
 use crate::ai::agent_chat::ui::thread::{
     AgentChatThread, AgentChatThreadMessageRole as Role, AgentChatThreadStatus as Status,
@@ -27,11 +26,10 @@ const CHAT_THREAD: &str = "one-window-chat";
 /// What the owned-evaluation fixture model says; it never calls a provider.
 const FIXTURE_REPLY: &str = "Fixture Agent Chat response.";
 
-/// A conversation the window shows: the thread, the transcript that draws it, and what the reducer
-/// last heard about it.
+/// A conversation the window runs on Agent Chat: the thread, and what the reducer last heard
+/// about it.
 pub(crate) struct ModelThread {
     pub(crate) thread: Entity<AgentChatThread>,
-    pub(crate) transcript: Entity<AgentChatTranscript>,
     fixture: Option<AgentChatFixtureControl>,
     heard: Option<(String, Status)>,
     _observer: Subscription,
@@ -56,6 +54,30 @@ fn reply_of(thread: &AgentChatThread) -> String {
         .map(|m| m.body.to_string())
         .collect::<Vec<_>>()
         .join("\n\n")
+}
+
+/// A reading that asks the model or hands the job to an agent opens that work in place.
+fn work_of_plan(plan: &crate::intent::Plan) -> Option<WorkEvent> {
+    use crate::intent::engine::Step;
+    match plan.steps.as_slice() {
+        [Step::Ask { question, .. }] => Some(WorkEvent::AskModel {
+            sentence: question.clone(),
+        }),
+        [Step::Transform {
+            tool: None,
+            instruction: Some(instruction),
+            ..
+        }] => Some(WorkEvent::AskModel {
+            sentence: instruction.clone(),
+        }),
+        [Step::Delegate { task, project, .. }] => Some(WorkEvent::Agent {
+            task: match project {
+                Some(project) => format!("In {project}: {task}"),
+                None => task.clone(),
+            },
+        }),
+        _ => None,
+    }
 }
 
 /// "tell mo i'm running late" → ("Mo", "I'm running late").
@@ -127,6 +149,25 @@ pub(crate) fn steps_row(
 }
 
 impl ScriptListApp {
+    /// Whether one of the work views covers the list.
+    pub(crate) fn one_window_work_view_open(&self) -> bool {
+        self.one_window
+            .views()
+            .top()
+            .is_some_and(|top| WORK_VIEWS.contains(&top.name.as_str()))
+    }
+
+    /// What an agent said last, for its view.
+    pub(crate) fn one_window_agent_reply(&self, id: &str) -> Option<&str> {
+        self.one_window_host
+            .work
+            .agents
+            .get(id)
+            .and_then(|m| m.heard.as_ref())
+            .map(|(reply, _)| reply.as_str())
+            .filter(|reply| !reply.is_empty())
+    }
+
     /// Tab with words typed on the list hands them to an agent.
     pub(crate) fn one_window_tab_hands_to_agent(&self) -> bool {
         !self.one_window.in_view() && !self.one_window.text().trim().is_empty()
@@ -136,16 +177,16 @@ impl ScriptListApp {
     /// reading that hands the job to an agent.
     pub(crate) fn one_window_route_work(&mut self, row: &Row, cx: &mut Context<Self>) -> bool {
         let said = self.one_window.said();
-        let delegates = self
+        let plan = self
             .intent_launcher
             .plan(self.one_window.text(), &row.key)
-            .is_some_and(|plan| plan.pathway == crate::intent::engine::Pathway::Delegate);
+            .filter(|plan| plan.ready);
         let event = if row.key == steps::ROW_KEY {
             WorkEvent::OpenSteps { sentence: said }
         } else if row.key.starts_with("down:model") || row.key.starts_with("fallback-ai:") {
             WorkEvent::AskModel { sentence: said }
-        } else if delegates {
-            WorkEvent::Agent { task: said }
+        } else if let Some(event) = plan.as_deref().and_then(work_of_plan) {
+            event
         } else {
             return false;
         };
@@ -346,13 +387,11 @@ impl ScriptListApp {
             )?;
             (thread, None)
         };
-        let transcript = cx.new(|cx| AgentChatTranscript::new(Vec::new(), cx));
         let observer = cx.observe(&thread, move |app, thread, cx| {
             app.one_window_model_changed(&id, &thread, cx);
         });
         Ok(ModelThread {
             thread,
-            transcript,
             fixture,
             heard: None,
             _observer: observer,
@@ -365,9 +404,9 @@ impl ScriptListApp {
         thread: &Entity<AgentChatThread>,
         cx: &mut Context<Self>,
     ) {
-        let (messages, status, reply) = {
+        let (status, reply) = {
             let t = thread.read(cx);
-            (t.messages.clone(), t.status, reply_of(t))
+            (t.status, reply_of(t))
         };
         let work = &mut self.one_window_host.work;
         let model = if id == CHAT_THREAD {
@@ -378,10 +417,6 @@ impl ScriptListApp {
         let Some(model) = model else {
             return;
         };
-        model.transcript.update(cx, |transcript, cx| {
-            transcript.set_messages(messages, cx);
-            transcript.set_thread_status(status, cx);
-        });
         let heard = Some((reply.clone(), status));
         if model.heard == heard {
             return;

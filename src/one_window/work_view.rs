@@ -33,16 +33,8 @@ impl ScriptListApp {
             Some(def.search.height),
         )
         .header_height;
-        let mut rows: Vec<AnyElement> = vec![div()
-            .debug_selector(|| "oneWindowSectionHeader:0".to_string())
-            .h(px(head_h))
-            .child(render_section_header(
-                &self.one_window.views().crumb(),
-                None,
-                colors,
-                true,
-            ))
-            .into_any_element()];
+        let crumb = self.one_window.views().crumb();
+        let mut rows: Vec<AnyElement> = vec![self.one_window_header(0, &crumb, colors, head_h)];
         match top.as_str() {
             chat::VIEW => self.one_window_chat_rows(&mut rows, colors, head_h),
             steps::VIEW => self.one_window_steps_rows(&mut rows, colors),
@@ -106,6 +98,55 @@ impl ScriptListApp {
             .into_any_element()
     }
 
+    fn one_window_header(
+        &self,
+        ix: usize,
+        label: &str,
+        colors: ListItemColors,
+        head_h: f32,
+    ) -> AnyElement {
+        div()
+            .debug_selector(move || format!("oneWindowSectionHeader:{ix}"))
+            .flex_none()
+            .h(px(head_h))
+            .child(render_section_header(label, None, colors, ix == 0))
+            .into_any_element()
+    }
+
+    /// One turn of the chat: yours on the user-message surface, the model's tagged as its own.
+    fn one_window_turn(&self, who: Who, text: &str) -> AnyElement {
+        let def = self.current_main_menu_theme.def();
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let colors = &self.theme.colors;
+        let edge = def.shell.header_padding_x + def.search.text_inset_x;
+        let turn = div()
+            .flex_none()
+            .mx(px(edge))
+            .my(px(def.slot_line.gap_px))
+            .flex()
+            .flex_col()
+            .gap(px(def.slot_line.gap_px))
+            .text_size(px(def.search.font_size * 0.8))
+            .text_color(rgb(colors.text.primary))
+            .child(text.to_string());
+        match who {
+            Who::You => turn
+                .px(px(def.slot_line.gap_px * 2.0))
+                .py(px(def.slot_line.gap_px))
+                .rounded(px(def.slot_line.gap_px * 2.0))
+                .bg(rgba(chrome.chat_user_message_surface_rgba))
+                .into_any_element(),
+            Who::Model => turn
+                .child(
+                    div()
+                        .text_size(px(def.slot_line.label_font_size))
+                        .text_color(rgb(colors.text.muted))
+                        .child(chat::WRITTEN_BY.to_uppercase()),
+                )
+                .into_any_element(),
+        }
+    }
+
     fn one_window_chat_rows(
         &self,
         rows: &mut Vec<AnyElement>,
@@ -115,44 +156,15 @@ impl ScriptListApp {
         let Some(c) = self.one_window.chat() else {
             return;
         };
-        let transcript = self
-            .one_window_host
-            .work
-            .chat
-            .as_ref()
-            .map(|m| m.transcript.clone());
-        let body = match transcript {
-            Some(transcript) => div()
-                .flex_1()
-                .min_h(px(0.))
-                .child(transcript)
-                .into_any_element(),
-            None => div()
-                .flex_1()
-                .min_h(px(0.))
-                .flex()
-                .flex_col()
-                .children(c.turns.iter().map(|t| {
-                    self.one_window_note(match t.who {
-                        Who::You => format!("You: {}", t.text),
-                        Who::Model => t.text.clone(),
-                    })
-                }))
-                .into_any_element(),
-        };
-        rows.push(body);
-        if c.reply().is_some() {
-            rows.push(self.one_window_note(chat::WRITTEN_BY));
+        for t in &c.turns {
+            rows.push(self.one_window_turn(t.who, &t.text));
         }
         match &c.phase {
+            ChatPhase::Idle => rows.push(self.one_window_note("Say what to ask the model")),
+            ChatPhase::Writing => rows.push(self.one_window_note("The model is writing…")),
+            ChatPhase::Ranking => rows.push(self.one_window_note("Jev is reading the draft…")),
             ChatPhase::Ready => {
-                rows.push(
-                    div()
-                        .debug_selector(|| "oneWindowSectionHeader:1".to_string())
-                        .h(px(head_h))
-                        .child(render_section_header(chat::NEXT_HEAD, None, colors, false))
-                        .into_any_element(),
-                );
+                rows.push(self.one_window_header(1, chat::NEXT_HEAD, colors, head_h));
                 for (i, row) in c.next.iter().enumerate() {
                     rows.push(self.one_window_row(
                         format!("chat-next:{}", row.key),
@@ -165,7 +177,6 @@ impl ScriptListApp {
                 }
             }
             ChatPhase::Failed(message) => rows.push(self.one_window_note(message.clone())),
-            _ => {}
         }
     }
 
@@ -174,6 +185,7 @@ impl ScriptListApp {
             return;
         };
         let conns = self.one_window.work().connections();
+        let focus = s.sel.or_else(|| s.missing(conns).map(|(i, _)| i));
         for (i, step) in s.steps.iter().enumerate() {
             let (icon, status) = match (step.state, step.waits_on(conns)) {
                 (StepState::Done, _) => ("check", "Done".to_string()),
@@ -191,7 +203,7 @@ impl ScriptListApp {
                 title,
                 Some(status),
                 icon,
-                s.sel == Some(i) && s.phase != StepsPhase::Running,
+                focus == Some(i) && s.phase != StepsPhase::Running,
                 colors,
             ));
         }
@@ -219,8 +231,8 @@ impl ScriptListApp {
         ));
         rows.push(self.one_window_row(
             "connect:waiting".to_string(),
-            format!("“{}”", c.waiting),
-            Some("Waiting to run · runs as soon as you're connected, no retyping".to_string()),
+            format!("Waiting to run · “{}”", c.waiting),
+            Some("Runs as soon as you're connected, no retyping".to_string()),
             "sparkles",
             false,
             colors,
@@ -233,18 +245,7 @@ impl ScriptListApp {
         if let Some(status) = status {
             rows.push(self.one_window_note(status));
         }
-        rows.push(
-            div()
-                .debug_selector(|| "oneWindowSectionHeader:1".to_string())
-                .h(px(head_h))
-                .child(render_section_header(
-                    "Also works once connected",
-                    None,
-                    colors,
-                    false,
-                ))
-                .into_any_element(),
-        );
+        rows.push(self.one_window_header(1, "Also works once connected", colors, head_h));
         for (i, can) in info.can.iter().enumerate() {
             rows.push(self.one_window_row(
                 format!("connect-can:{i}"),
@@ -270,14 +271,8 @@ impl ScriptListApp {
             true,
             colors,
         ));
-        if let Some(model) = self.one_window_host.work.agents.get(&task.id) {
-            rows.push(
-                div()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .child(model.transcript.clone())
-                    .into_any_element(),
-            );
+        if let Some(reply) = self.one_window_agent_reply(&task.id) {
+            rows.push(self.one_window_turn(Who::Model, reply));
         }
         rows.push(self.one_window_note("Esc keeps it working in the strip · ⌘J brings it back"));
     }
@@ -292,6 +287,7 @@ impl ScriptListApp {
         let def = self.current_main_menu_theme.def();
         let tokens = def.slot_line;
         let colors = &self.theme.colors;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let target = self
             .one_window
             .work()
@@ -306,6 +302,7 @@ impl ScriptListApp {
             .left_0()
             .right_0()
             .bottom(px(crate::footer_popup::main_window_footer_reservation_height()))
+            .bg(rgba(chrome.panel_surface_rgba))
             .flex()
             .flex_col()
             .children(tasks.iter().map(|t| {

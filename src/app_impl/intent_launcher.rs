@@ -212,43 +212,6 @@ impl ScriptListApp {
                 Step::Remember { text, subject } => {
                     return self.run_intent_remember(text, subject.as_deref(), cx);
                 }
-                Step::Ask { question, subject } => {
-                    let variant = if subject.is_some() {
-                        crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard
-                    } else {
-                        crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::QuickAi
-                    };
-                    self.open_tab_ai_agent_chat_with_entry_intent_variant(
-                        Some(question.clone()),
-                        variant,
-                        cx,
-                    );
-                    return Ok(());
-                }
-                Step::Delegate { task, project, .. } => {
-                    let prompt = match project {
-                        Some(project) => format!("In {project}: {task}"),
-                        None => task.clone(),
-                    };
-                    self.open_tab_ai_agent_chat_with_entry_intent_variant(
-                        Some(prompt),
-                        crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
-                        cx,
-                    );
-                    return Ok(());
-                }
-                Step::Transform {
-                    tool: None,
-                    instruction,
-                    ..
-                } => {
-                    self.open_tab_ai_agent_chat_with_entry_intent_variant(
-                        instruction.clone(),
-                        crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
-                        cx,
-                    );
-                    return Ok(());
-                }
                 _ => {}
             }
         }

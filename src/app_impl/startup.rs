@@ -1208,36 +1208,19 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Quick AI: Tab with a non-empty query sends the
-                            // typed text to the zero-context Quick AI profile
-                            // (pinned Quick AI model, no tools/skills/memories). This is
-                            // the header Tab chip's advertised action whenever
-                            // the input has text, so it runs BEFORE root-file
-                            // directory completion — only path-shaped queries
-                            // (~/, /) keep Tab for browsing, matching the
-                            // chip's predicate in `main_header_tab_chip_action`.
-                            // (2026-07-10: restored after the Conversation Desk
-                            // pivot briefly routed Tab-with-text to the flow
-                            // router — flows stay reachable as main-menu rows.)
+                            // Tab with words typed hands them to an agent that works in the
+                            // strip above the capsules; in a one-window view the view gets it.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !has_shift
                                 && !this.show_actions_popup
-                                && !this.filter_text.trim().is_empty()
                                 && !crate::file_search::looks_like_root_directory_browse_query(
                                     &this.filter_text,
                                 )
-                                && this.main_view_context_chip_has_action(
-                                    crate::components::main_view_chrome::MAIN_VIEW_CONTEXT_QUICK_AI_BUTTON_ID,
-                                    crate::components::main_view_chrome::SemanticChipAction::OpenSurface,
-                                )
+                                && this.one_window_owns_list()
+                                && this
+                                    .one_window_key(sk_one_window::Key::Tab, cx)
+                                    .taken()
                             {
-                                let query = this.filter_text.clone();
-                                tracing::info!(
-                                    target: "script_kit::tab_ai",
-                                    event = "quick_ai_tab_entry",
-                                    "Tab → Quick AI (zero-context spark)"
-                                );
-                                this.open_quick_ai_from_launcher(query, window, cx);
                                 cx.stop_propagation();
                                 return;
                             }

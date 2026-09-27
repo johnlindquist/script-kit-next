@@ -734,37 +734,6 @@ impl ScriptListApp {
         );
     }
 
-    /// Quick AI: launcher Tab-with-text entry. Sends `query` as the first
-    /// turn of a fresh zero-context session (Quick AI profile — pinned fast model,
-    /// no tools/skills/memories/context) and clears the launcher filter so
-    /// returning from the chat lands on a clean list.
-    ///
-    /// The `QuickAi` ui variant does the heavy lifting downstream: it derives a
-    /// suppressed context policy, skips detached/embedded chat reuse, and routes
-    /// launch resolution to `resolve_quick_ai_launch`.
-    pub(crate) fn open_quick_ai_from_launcher(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let query = query.trim().to_string();
-        if query.is_empty() {
-            return;
-        }
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "quick_ai_launcher_entry",
-            query_chars = query.chars().count(),
-        );
-        self.clear_filter(window, cx);
-        self.open_tab_ai_agent_chat_with_entry_intent_variant(
-            Some(query),
-            crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::QuickAi,
-            cx,
-        );
-    }
-
     pub(crate) fn open_agent_chat_from_quick_ai_handoff(
         &mut self,
         seed_text: String,

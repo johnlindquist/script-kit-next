@@ -469,18 +469,11 @@ impl ScriptListApp {
                                     && !crate::file_search::looks_like_root_directory_browse_query(
                                         &view.filter_text,
                                     )
-                                    && view.main_view_context_chip_has_action(
-                                        crate::components::main_view_chrome::MAIN_VIEW_CONTEXT_QUICK_AI_BUTTON_ID,
-                                        crate::components::main_view_chrome::SemanticChipAction::OpenSurface,
-                                    )
-                                {
-                                    tracing::info!(
-                                        target: "script_kit::tab_ai",
-                                        event = "quick_ai_tab_entry",
-                                        "SimulateKey Tab → Quick AI (zero-context spark)"
-                                    );
-                                    let query = view.filter_text.clone();
-                                    view.open_quick_ai_from_launcher(query, window, ctx);
+                                    && view.one_window_owns_list()
+                                    && view
+                                        .one_window_key(sk_one_window::Key::Tab, ctx)
+                                        .taken()                                {
+                                    logging::log("STDIN", "SimulateKey: Tab - hand the words to an agent");
                                 } else if view.try_navigate_root_file_directory_with_tab(
                                     has_shift, window, ctx,
                                 ) {
@@ -615,18 +608,11 @@ impl ScriptListApp {
                                     && !crate::file_search::looks_like_root_directory_browse_query(
                                         &view.filter_text,
                                     )
-                                    && view.main_view_context_chip_has_action(
-                                        crate::components::main_view_chrome::MAIN_VIEW_CONTEXT_QUICK_AI_BUTTON_ID,
-                                        crate::components::main_view_chrome::SemanticChipAction::OpenSurface,
-                                    )
-                                {
-                                    tracing::info!(
-                                        target: "script_kit::tab_ai",
-                                        event = "quick_ai_tab_entry",
-                                        "SimulateKey Tab → Quick AI (zero-context spark)"
-                                    );
-                                    let query = view.filter_text.clone();
-                                    view.open_quick_ai_from_launcher(query, window, ctx);
+                                    && view.one_window_owns_list()
+                                    && view
+                                        .one_window_key(sk_one_window::Key::Tab, ctx)
+                                        .taken()                                {
+                                    logging::log("STDIN", "SimulateKey: Tab - hand the words to an agent");
                                 } else if view.try_navigate_root_file_directory_with_tab(
                                     has_shift, window, ctx,
                                 ) {
