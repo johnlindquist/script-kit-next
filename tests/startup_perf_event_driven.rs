@@ -8,6 +8,10 @@ fn read_script_list_startup_source() -> String {
     read_source("src/app_impl/startup.rs")
 }
 
+fn read_script_list_app_new_source() -> String {
+    read_source("src/app_impl/startup_data.rs")
+}
+
 fn read_prompt_ai_source() -> String {
     read_source("src/app_impl/prompt_ai.rs")
 }
@@ -45,7 +49,7 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
 
 #[test]
 fn test_script_list_app_new_uses_event_driven_receive_when_loading_startup_data() {
-    let source = read_script_list_startup_source();
+    let source = read_script_list_app_new_source();
     let body = function_body(&source, "pub(crate) fn new(");
 
     assert!(
@@ -138,7 +142,7 @@ fn test_history_recall_suppresses_programmatic_filter_echo_and_waits_for_render_
     );
     assert!(
         startup.contains("history_recalled")
-            && startup.contains("logging::log_user_value(&text)")
+            && startup.contains("logging::log_private_user_value(&text)")
             && !startup.contains("format!(\"Recalled: {}\", text)"),
         "History recall logging should use safe previews instead of raw user-entered history text"
     );

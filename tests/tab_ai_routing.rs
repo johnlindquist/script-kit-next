@@ -922,8 +922,10 @@ fn agent_chat_thread_resolves_context_parts_on_submit() {
         "AgentChatThread must resolve context parts at submit time and log it",
     );
     assert!(
-        AGENT_CHAT_THREAD_SOURCE.contains("resolve_context_parts_with_receipt"),
-        "AgentChatThread must use resolve_context_parts_with_receipt for typed parts",
+        AGENT_CHAT_THREAD_SOURCE.contains("include!(\"thread_context_resolution.rs\");")
+            && AGENT_CHAT_THREAD_SOURCE
+                .contains("Self::resolve_pending_context_items_with(&pending_parts,"),
+        "AgentChatThread must resolve typed parts into a receipt with resolve_pending_context_items_with",
     );
 }
 
