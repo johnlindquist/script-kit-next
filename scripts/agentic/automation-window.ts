@@ -343,7 +343,7 @@ function parseArgs() {
   const session = sessionIdx >= 0 && args[sessionIdx + 1] ? args[sessionIdx + 1] : "default";
 
   const kindIdx = args.indexOf("--kind");
-  const kind = kindIdx >= 0 && args[kindIdx + 1] ? args[kindIdx + 1] : "agentChatDetached";
+  const kind = kindIdx >= 0 && args[kindIdx + 1] ? args[kindIdx + 1] : "main";
 
   const indexIdx = args.indexOf("--index");
   const index = indexIdx >= 0 && args[indexIdx + 1] ? Number(args[indexIdx + 1]) : 0;
@@ -416,7 +416,7 @@ Commands:
 
 Options:
   --session NAME    Session name (default: "default")
-  --kind KIND       Target kind: agentChatDetached | actionsDialog | promptPopup | notes | main | focused
+  --kind KIND       Target kind: main | actionsDialog | promptPopup | snapOverlay | focused (default: main)
   --index N         Kind index (default: 0)
   --id WINDOW_ID    Resolve by exact automation window ID
   --title TEXT      Resolve by titleContains target

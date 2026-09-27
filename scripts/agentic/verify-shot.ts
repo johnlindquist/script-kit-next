@@ -147,9 +147,6 @@ interface CapturePlan {
  * For attached popups (ActionsDialog, PromptPopup), the screenshot captures
  * the parent (main) window. The `targetBounds` field specifies the exact
  * crop region within the parent screenshot where the popup lives.
- *
- * For detached windows (AgentChatDetached, Notes), the screenshot is the window
- * itself at origin (0, 0).
  */
 interface PopupCaptureReceipt {
   /** The capture strategy used. */
@@ -2862,9 +2859,7 @@ let popupCaptureInfraError = false;
 if (inspection) {
   const wk = inspection.windowKind;
   const attachedPopupKinds = ["ActionsDialog", "PromptPopup", "actionsDialog", "promptPopup"];
-  const detachedKinds = ["AgentChatDetached", "Notes", "agentChatDetached", "notes"];
   const isAttached = attachedPopupKinds.includes(wk);
-  const isDetached = detachedKinds.includes(wk);
 
   // Parse targetBoundsInScreenshot from inspection if available
   let targetBounds: PopupCaptureReceipt["targetBounds"] = null;
@@ -2914,13 +2909,6 @@ if (inspection) {
         semanticReceiptsArePrimary: true,
       };
     }
-  } else if (isDetached) {
-    popupCapture = {
-      strategy: "direct_window_capture",
-      windowKind: wk,
-      targetBounds: null,
-      semanticReceiptsArePrimary: true,
-    };
   } else {
     popupCapture = {
       strategy: "not_applicable",
