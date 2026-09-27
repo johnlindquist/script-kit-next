@@ -46,8 +46,8 @@ fn supervisor_writes_pid_lifecycle_and_app_exit_json() {
         "app_process_exited",
         "app-exit.json",
         "lifecycle.ndjson",
-        "\"cleanExit\": return_code == 0",
-        "pid_path.write_text",
+        "\"cleanExit\": code == 0 and exited and group_exited",
+        "(session_dir / \"pid\").write_text(",
     ] {
         assert!(
             SUPERVISOR_PY.contains(needle),

@@ -31,9 +31,9 @@ fn set_filter_text_immediate_doc_comment_pins_verbatim_contract() {
     // that silently drops or weakens it (e.g. rewords to remove the
     // MAX_STDIN_COMMAND_BYTES reference) trips this assert.
     let sig_idx = FILTER_INPUT_UPDATES
-        .find("pub(crate) fn set_filter_text_immediate(")
+        .find("pub(crate) fn set_filter_text_and_cursor_immediate(")
         .expect(
-            "filter_input_updates.rs must keep fn set_filter_text_immediate — \
+            "filter_input_updates.rs must keep fn set_filter_text_and_cursor_immediate — \
              this is the stdin setFilter writer",
         );
     // Doc comment must appear in the ~1600 bytes immediately preceding
@@ -66,9 +66,14 @@ fn set_filter_text_immediate_does_not_truncate_before_store() {
     // refactor that adds `text.truncate(N)`, `text = text[..N].into()`,
     // or `text.chars().take(N)` between these points silently breaks
     // the verbatim contract.
+    assert!(
+        FILTER_INPUT_UPDATES
+            .contains("self.set_filter_text_and_cursor_immediate(text, cursor, window, cx);"),
+        "set_filter_text_immediate must delegate to the cursor-aware setFilter writer"
+    );
     let sig_idx = FILTER_INPUT_UPDATES
-        .find("pub(crate) fn set_filter_text_immediate(")
-        .expect("set_filter_text_immediate must exist");
+        .find("pub(crate) fn set_filter_text_and_cursor_immediate(")
+        .expect("set_filter_text_and_cursor_immediate must exist");
     let store_idx = FILTER_INPUT_UPDATES[sig_idx..]
         .find("self.filter_text = text.clone();")
         .map(|off| sig_idx + off)
@@ -94,7 +99,7 @@ fn current_input_value_returns_filter_text_clone_for_script_list() {
     // `&self.filter_text[..N]`) breaks the verbatim-echo contract on
     // the read side.
     let fn_idx = PROMPT_HANDLER
-        .find("fn current_input_value(&self) -> String {")
+        .find("fn current_input_value(&self, cx: &App) -> String {")
         .expect(
             "prompt_handler/mod.rs must keep fn current_input_value — it \
              is the sole reader that produces getState.inputValue",

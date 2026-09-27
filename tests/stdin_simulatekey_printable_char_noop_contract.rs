@@ -72,8 +72,10 @@ fn emoji_picker_unhandled_arm_returns_without_side_effect() {
         .find(';')
         .expect("EmojiPicker Unhandled-key log must terminate with a statement");
     assert!(
-        after_log[semi + 1..].trim_start().starts_with("return;"),
-        "EmojiPicker `_ =>` arm in simulate_key_dispatch.rs must `return;` immediately after the Unhandled-key log"
+        after_log[semi + 1..]
+            .trim_start()
+            .starts_with("return DispatchOutcome::success();"),
+        "EmojiPicker `_ =>` arm in simulate_key_dispatch.rs must return immediately after the Unhandled-key log"
     );
 }
 

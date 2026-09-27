@@ -55,17 +55,19 @@ fn both_dispatchers_use_named_generic_cmdk_predicate() {
 }
 
 #[test]
-fn both_dispatchers_call_toggle_actions_after_fallback_log() {
+fn both_dispatchers_route_fallback_through_canonical_actions_toggle() {
     let anchor_idx = SIMULATE_KEY_HELPER
         .find(FALLBACK_LOG_LINE)
         .unwrap_or_else(|| panic!("simulate_key_dispatch.rs lost the fallback log anchor."));
-    let tail = &SIMULATE_KEY_HELPER[anchor_idx
-        ..anchor_idx
-            .saturating_add(400)
-            .min(SIMULATE_KEY_HELPER.len())];
+    let fallback_block = &SIMULATE_KEY_HELPER[anchor_idx..];
+    let tail = fallback_block
+        .split("} else if")
+        .next()
+        .expect("fallback block must end at the next key branch");
     assert!(
-        tail.contains("view.toggle_actions(ctx, window);"),
-        "simulate_key_dispatch.rs fallback block must call `view.toggle_actions(ctx, window)`"
+        tail.contains("view.dispatch_actions_toggle_for_current_view(")
+            && tail.contains("\"simulate_key_fallback\""),
+        "simulate_key_dispatch.rs fallback block must open actions through `view.dispatch_actions_toggle_for_current_view`, the same per-view dispatcher the keyboard uses"
     );
 }
 

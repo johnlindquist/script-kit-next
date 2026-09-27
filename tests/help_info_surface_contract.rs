@@ -51,29 +51,36 @@ fn info_guidance_shortcuts_use_footer_keycaps_not_hint_strip() {
     let info = fs::read_to_string("src/components/info_state.rs")
         .expect("failed to read src/components/info_state.rs");
     let guidance_row = section_between(&info, "fn render_guidance_row", "\n\n#[cfg(test)]");
+    let cue = section_between(&info, "fn render_info_cue", "\nfn ");
+    let cue_width = section_between(&info, "fn info_cue_measured_width_px", "\nfn ");
 
     assert!(
-        guidance_row.contains("crate::components::footer_chrome::render_footer_shortcut_keycaps"),
+        guidance_row.contains(".child(render_info_cue(&item.cue, theme, palette))")
+            && section_between(cue, "InfoCue::Shortcut", "InfoCue::Trigger").contains(
+                "crate::components::footer_chrome::render_footer_shortcut_keycaps_from_tokens"
+            ),
         "InfoState guidance shortcuts must render through footer keycaps"
     );
     assert!(
-        info.contains(
-            "crate::components::footer_chrome::footer_shortcut_keycaps_measured_width_px"
+        section_between(cue_width, "InfoCue::Shortcut", "InfoCue::Trigger").contains(
+            "crate::components::footer_chrome::footer_shortcut_keycaps_measured_width_from_tokens"
         ),
         "InfoState guidance shortcut column must size from measured footer keycap widths"
     );
-    assert!(
-        !guidance_row.contains("crate::components::hint_strip::render_inline_shortcut_keys")
-            && !guidance_row.contains("shortcut_tokens_from_hint")
-            && !guidance_row.contains("whisper_inline_shortcut_colors"),
-        "InfoState guidance shortcuts must not regress to hint_strip inline shortcut styling"
-    );
-    assert!(
-        !guidance_row.contains(".child(shortcut)")
-            && !guidance_row.contains("child(shortcut.to_string())")
-            && !guidance_row.contains("SharedString::from(shortcut)"),
-        "InfoState guidance shortcuts must not regress to raw shortcut text"
-    );
+    for renderer in [guidance_row, cue] {
+        assert!(
+            !renderer.contains("crate::components::hint_strip::render_inline_shortcut_keys")
+                && !renderer.contains("shortcut_tokens_from_hint")
+                && !renderer.contains("whisper_inline_shortcut_colors"),
+            "InfoState guidance shortcuts must not regress to hint_strip inline shortcut styling"
+        );
+        assert!(
+            !renderer.contains(".child(shortcut)")
+                && !renderer.contains("child(shortcut.to_string())")
+                && !renderer.contains("SharedString::from(shortcut)"),
+            "InfoState guidance shortcuts must not regress to raw shortcut text"
+        );
+    }
 }
 
 #[test]

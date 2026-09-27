@@ -1,5 +1,6 @@
+use script_kit_gpui::mcp_resources::{sdk_reference_entries_for_ui, SdkSupport};
+
 const SDK: &str = include_str!("../scripts/kit-sdk.ts");
-const MCP_RESOURCES: &str = include_str!("../src/mcp_resources/mod.rs");
 const QUERY_OPS: &str = include_str!("../src/protocol/message/variants/query_ops.rs");
 
 fn body_after(marker: &str) -> &str {
@@ -79,20 +80,21 @@ fn rust_protocol_exposes_file_search_but_not_find_prompt() {
 
 #[test]
 fn sdk_reference_marks_find_as_unsupported_with_file_search_alternative() {
-    assert!(
-        MCP_RESOURCES.contains("\"find\","),
-        "unsupported SDK inventory must include find"
-    );
-    assert!(
-        MCP_RESOURCES.contains("SdkFunctionRef::unsupported(\n            \"find\""),
+    let entries = sdk_reference_entries_for_ui();
+    let find = entries
+        .iter()
+        .find(|entry| entry.name == "find")
+        .expect("unsupported SDK inventory must include find");
+    assert_eq!(
+        find.support,
+        SdkSupport::Unsupported,
         "SDK reference must mark find as unsupported"
     );
     assert!(
-        MCP_RESOURCES.contains("fileSearch(query, { onlyin })"),
-        "find unsupported note must point callers to onlyin-capable fileSearch"
-    );
-    assert!(
-        MCP_RESOURCES.contains("sdk_reference_marks_find_as_unsupported_prompt_gap"),
-        "direct SDK reference test should pin the generated reference contract"
+        find.unsupported_note
+            .as_deref()
+            .is_some_and(|note| note.contains("fileSearch(query, { onlyin })")),
+        "find unsupported note must point callers to onlyin-capable fileSearch: {:?}",
+        find.unsupported_note
     );
 }
