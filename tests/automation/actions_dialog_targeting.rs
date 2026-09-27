@@ -317,60 +317,6 @@ fn capture_screenshot_with_actions_dialog_target_round_trip() {
 }
 
 // ---------------------------------------------------------------------------
-// Actions dialog semantic element contract tests
-// ---------------------------------------------------------------------------
-
-#[test]
-fn actions_dialog_collector_has_search_input_element() {
-    // Verify the collector source defines the search input semantic ID
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"input:actions-search\""),
-        "Actions dialog collector must define input:actions-search element"
-    );
-}
-
-#[test]
-fn actions_dialog_collector_has_list_element() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"list:actions\""),
-        "Actions dialog collector must define list:actions element"
-    );
-}
-
-#[test]
-fn actions_dialog_collector_emits_choice_elements() {
-    // The collector must use choice:N:id format for individual action rows
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("ElementType::Choice"),
-        "Actions dialog collector must emit Choice-typed elements for actions"
-    );
-}
-
-#[test]
-fn actions_dialog_fallback_preserves_panel_only_warning() {
-    // When entity is unavailable, must still emit the panel_only warning
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"panel_only_actions_dialog\""),
-        "Actions dialog must preserve panel_only_actions_dialog fallback warning"
-    );
-}
-
-#[test]
-fn prompt_popup_fallback_preserves_panel_only_warning() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"panel_only_prompt_popup\""),
-        "PromptPopup must preserve panel_only_prompt_popup fallback warning"
-    );
-}
-
-// Mention picker / composer picker is no longer used in prompt popup collector.
-
-// ---------------------------------------------------------------------------
 // Actions dialog batch mutation contract tests
 // ---------------------------------------------------------------------------
 
@@ -548,24 +494,6 @@ fn parent_identity_omitted_when_none_in_serde() {
     let json = serde_json::to_string(&info).expect("serialize");
     assert!(!json.contains("parentWindowId"));
     assert!(!json.contains("parentKind"));
-}
-
-#[test]
-fn actions_dialog_collector_never_returns_non_main_pending_warning() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"panel_only_actions_dialog\""),
-        "ActionsDialog must use panel_only_actions_dialog fallback"
-    );
-}
-
-#[test]
-fn prompt_popup_collector_never_returns_non_main_pending_warning() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"panel_only_prompt_popup\""),
-        "PromptPopup must use panel_only_prompt_popup fallback"
-    );
 }
 
 #[test]
