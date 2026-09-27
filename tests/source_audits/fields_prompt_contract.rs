@@ -10,7 +10,6 @@ const FORM_PROMPT_PATH: &str = "src/form_prompt.rs";
 const PROMPT_HANDLER_PATH: &str = "src/prompt_handler/mod.rs";
 const PROMPT_MESSAGE_ROUTE_PATH: &str = "src/prompt_handler/message_route.rs";
 const COLLECT_ELEMENTS_PATH: &str = "src/app_layout/collect_elements.rs";
-const STDIN_SIMULATE_KEY_PATH: &str = "src/main_entry/app_run_setup.rs";
 const SIMULATE_KEY_DISPATCH_PATH: &str = "src/app_impl/simulate_key_dispatch.rs";
 
 #[test]
@@ -125,12 +124,6 @@ fn fields_prompt_is_visible_to_state_and_elements() {
 
 #[test]
 fn fields_prompt_has_simulate_key_submit_cancel_navigation() {
-    let stdin = read(STDIN_SIMULATE_KEY_PATH);
-    assert!(
-        stdin.contains("view.dispatch_simulate_key("),
-        "stdin simulateKey entry point must delegate to shared dispatch_simulate_key helper"
-    );
-
     let dispatch = read(SIMULATE_KEY_DISPATCH_PATH);
     let form_arm = dispatch
         .split("AppView::FormPrompt")

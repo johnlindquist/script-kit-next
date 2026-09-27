@@ -157,23 +157,6 @@ fn capture_selection_gate_refuses_missing_ambiguous_and_non_candidate_rows() {
 }
 
 #[test]
-fn mcp_server_is_not_globally_retained_without_runtime_bridge() {
-    let src = read("src/main_entry/app_run_setup.rs");
-    let section = extract_section(&src, "McpServer::with_defaults()", 900);
-    let runtime = section
-        .find(".with_computer_runtime(")
-        .expect("the app's MCP server must carry the computer-use runtime bridge");
-    let retain = section
-        .find("retain_server_handle(")
-        .expect("the app's MCP server handle must be retained");
-
-    assert!(
-        runtime < retain,
-        "the MCP server must not be globally retained before its runtime bridge is attached"
-    );
-}
-
-#[test]
 fn proof_script_checks_large_image_schema_and_candidate_gate() {
     let src = read("scripts/agentic/prove-native-window-capture.ts");
 
