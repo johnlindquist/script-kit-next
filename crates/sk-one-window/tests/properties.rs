@@ -392,7 +392,7 @@ mod views {
     use sk_one_window::contract::ENTER_GUARD_MS;
     use sk_one_window::form::{FieldState, Form, FormKey, Reading, Slot, SlotName, Source, Verb};
     use sk_one_window::window::{Effect, Event, Key, OneWindow, ViewOp, ViewSpec};
-    use sk_one_window::{EnterTarget, Subject, SubjectKind};
+    use sk_one_window::{EnterTarget, Row, Subject, SubjectKind};
 
     const SLOTS: [SlotName; 5] = [
         SlotName::Who,
@@ -457,6 +457,30 @@ mod views {
         win.handle(30, Event::Key(Key::Escape));
         assert!(win.staged().is_none());
         win.handle(40, Event::Paste("84".into()));
+        assert_eq!(win.list().sel, 0);
+    }
+
+    /// Running one of the staged subject's rows lets go of it, and the list it leaves starts
+    /// at its first row, not at the action's place.
+    #[test]
+    fn a_staged_row_that_ran_leaves_the_list_at_its_top() {
+        let mut win = OneWindow::default();
+        win.handle(
+            0,
+            Event::Suggested(vec![
+                Row::new("s:a", "A"),
+                Row::new("s:b", "B"),
+                Row::new("s:c", "C"),
+                Row::new("s:d", "D"),
+                Row::new("s:e", "E"),
+            ]),
+        );
+        win.handle(10, Event::Paste("84".into()));
+        for t in [20, 30, 40] {
+            win.handle(t, Event::Key(Key::Down));
+        }
+        win.handle(50, Event::Key(Key::Enter));
+        assert!(win.staged().is_none());
         assert_eq!(win.list().sel, 0);
     }
 
