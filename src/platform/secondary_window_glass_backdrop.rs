@@ -51,14 +51,6 @@ impl TahoeBackdropLayout {
     }
 }
 
-/// Windows whose glass resolves as an untinted popup material
-/// (`NativeGlassSurfaceRole::PopupBackdrop`): the Actions menu.
-/// Keyed by the same label the close paths already pass.
-#[cfg(target_os = "macos")]
-fn window_name_uses_popup_backdrop(window_name: &str) -> bool {
-    window_name == "Actions popup"
-}
-
 #[cfg(target_os = "macos")]
 fn tahoe_backdrop_layout(window_name: &str) -> TahoeBackdropLayout {
     if window_name == "Main window" && crate::footer_popup::main_window_footer_in_stage() {

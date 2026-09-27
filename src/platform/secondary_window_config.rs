@@ -1,27 +1,3 @@
-// ============================================================================
-// Actions Popup Window Configuration
-// ============================================================================
-
-#[cfg(target_os = "macos")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct NativeGlassEntryReceipt {
-    pub(crate) window_number: i64,
-    pub(crate) configured: bool,
-    pub(crate) backdrop_found_or_created: bool,
-    pub(crate) native_selectors_supported: bool,
-    pub(crate) style_applied: bool,
-    pub(crate) style_signature: NativeGlassStyleSignature,
-    pub(crate) morph_started: bool,
-    /// `f64::to_bits` of the visible entry start alpha the morph launched
-    /// with (bits keep the receipt `Eq`). `None` when no morph ran.
-    pub(crate) morph_start_alpha_bits: Option<u64>,
-    /// Fade duration in ms; every material, content, and alpha channel has
-    /// settled by then.
-    pub(crate) settle_duration_ms: u64,
-    pub(crate) configured_at_monotonic_ns: u64,
-    pub(crate) configured_at_unix_ms: u64,
-}
-
 /// The main-entry receipt is native-observed state, separate from the
 /// catalog's selected spec. It survives a hide/reopen until the next entry.
 #[cfg(target_os = "macos")]
@@ -161,10 +137,6 @@ pub fn main_glass_entry_lifecycle_receipt() -> serde_json::Value {
 #[derive(Clone, Copy, Debug)]
 struct TahoeGlassBackdropResult {
     created: bool,
-    found_or_created: bool,
-    native_selectors_supported: bool,
-    style_applied: bool,
-    style_signature: NativeGlassStyleSignature,
 }
 
 /// Alpha for TRULY HIDDEN parking only (window ordered out between shows).
@@ -172,65 +144,16 @@ struct TahoeGlassBackdropResult {
 /// park helpers runtime-check `isVisible == false` before applying this.
 #[cfg(target_os = "macos")]
 const GLASS_HIDDEN_PARK_ALPHA: f64 = 0.0;
-/// The floating footer overlay re-presents on the main entry's clock with no
-/// hold before its own fade.
-#[cfg(target_os = "macos")]
-const GLASS_ENTRY_CONTENT_HOLD_DURATION: f64 = 0.0;
-#[cfg(target_os = "macos")]
-const GLASS_ENTRY_CONTENT_FADE_DURATION: f64 = 0.088;
 /// Every window exits with the same fixed-frame alpha fade.
 #[cfg(target_os = "macos")]
 const GLASS_EXIT_DURATION: f64 = 0.12;
 const GLASS_EXIT_REMOVE_DELAY_MS: u64 = 135;
-
-/// Defocus radius, in points, the floating footer overlay resolves out of
-/// when it re-presents.
-#[cfg(target_os = "macos")]
-const GLASS_ENTRY_BLUR_RADIUS: f64 = 8.0;
-
-/// Live override for the footer overlay defocus radius, in points:
-/// `SCRIPT_KIT_GLASS_ENTRY_BLUR=16 script-kit-gpui`. `0` disables it.
-#[cfg(target_os = "macos")]
-fn glass_entry_blur_radius() -> f64 {
-    std::env::var("SCRIPT_KIT_GLASS_ENTRY_BLUR")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<f64>().ok())
-        .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 64.0)
-        .unwrap_or(GLASS_ENTRY_BLUR_RADIUS)
-}
-
-/// Footer overlay fade duration; `SCRIPT_KIT_GLASS_CONTENT_FADE=<ms>`
-/// overrides it.
-#[cfg(target_os = "macos")]
-fn glass_entry_content_fade_duration() -> f64 {
-    std::env::var("SCRIPT_KIT_GLASS_CONTENT_FADE")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<f64>().ok())
-        .filter(|value| value.is_finite() && *value >= 0.0 && *value <= 2000.0)
-        .map(|ms| ms / 1000.0)
-        .unwrap_or(GLASS_ENTRY_CONTENT_FADE_DURATION)
-}
 
 pub fn glass_exit_remove_delay() -> std::time::Duration {
     std::time::Duration::from_millis(GLASS_EXIT_REMOVE_DELAY_MS)
 }
 
 include!("secondary_window_glass_lifecycle.rs");
-
-// SAFETY: Caller must pass a valid NSWindow pointer on the main thread.
-// The function nil-checks all derived pointers (content view, appearance).
-#[cfg(target_os = "macos")]
-unsafe fn configure_window_vibrancy_common(
-    window: id,
-    log_target: &str,
-    window_name: &str,
-    is_dark: bool,
-    backdrop_role: NativeGlassSurfaceRole,
-) -> NativeGlassEntryReceipt {
-    configure_window_vibrancy_common_impl(window, log_target, window_name, is_dark, backdrop_role)
-}
-
-include!("secondary_window_vibrancy_impl.rs");
 
 #[cfg(target_os = "macos")]
 fn current_window_material() -> crate::theme::VibrancyMaterial {
@@ -269,24 +192,6 @@ fn tahoe_liquid_glass_class() -> Option<id> {
     } else {
         Some(glass_class)
     }
-}
-
-#[cfg(target_os = "macos")]
-#[allow(dead_code)] // Kept for reference: the blur-era themed glass tint.
-unsafe fn liquid_glass_tint_color() -> id {
-    let theme = crate::theme::get_cached_theme();
-    let rgba = crate::ui_foundation::main_window_matched_background_rgba(&theme);
-    let red = ((rgba >> 24) & 0xff) as f64 / 255.0;
-    let green = ((rgba >> 16) & 0xff) as f64 / 255.0;
-    let blue = ((rgba >> 8) & 0xff) as f64 / 255.0;
-    let alpha = (rgba & 0xff) as f64 / 255.0;
-    msg_send![
-        class!(NSColor),
-        colorWithCalibratedRed: red
-        green: green
-        blue: blue
-        alpha: alpha
-    ]
 }
 
 /// True when the AppKit Liquid Glass API (macOS 26 Tahoe) is available, i.e.
@@ -331,84 +236,6 @@ fn native_glass_composition_gate(
 pub fn tahoe_native_glass_composition_available() -> bool {
     false
 }
-
-/// Background appearance for a vibrancy-enabled window: `Transparent` when
-/// the Tahoe glass backdrop supplies the material (a `Blurred` appearance
-/// would stack the gpui fork's NSVisualEffectView above the glass and hide
-/// it), `Blurred` otherwise.
-pub fn vibrancy_window_background() -> gpui::WindowBackgroundAppearance {
-    if tahoe_native_glass_composition_available() {
-        gpui::WindowBackgroundAppearance::Transparent
-    } else {
-        gpui::WindowBackgroundAppearance::Blurred
-    }
-}
-
-/// Resolve the NSWindow behind a live GPUI window and run the shared
-/// secondary vibrancy/glass configuration on it (glass backdrop, VEV
-/// handling, glass-mode window base). For overlay windows (confirm popup,
-/// AI, flow manager) that have no dedicated native config path.
-#[cfg(target_os = "macos")]
-pub fn configure_overlay_window_glass(window: &gpui::Window, window_name: &str) {
-    let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
-        return;
-    };
-    let raw_window_handle::RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
-        return;
-    };
-    let ns_view = appkit.ns_view.as_ptr() as id;
-    let is_dark = crate::theme::get_cached_theme().should_use_dark_vibrancy();
-    // SAFETY: ns_view belongs to the live GPUI window on the main thread;
-    // `-[NSView window]` is standard and the result is nil-checked inside
-    // configure_secondary_window_vibrancy.
-    unsafe {
-        let ns_window: id = msg_send![ns_view, window];
-        if ns_window.is_null() {
-            return;
-        }
-        configure_secondary_window_vibrancy(ns_window, window_name, is_dark);
-    }
-}
-
-/// Configure a GPUI overlay that will be attached to a parent NSWindow.
-#[cfg(target_os = "macos")]
-pub fn configure_child_attached_overlay_window_glass(
-    window: &gpui::Window,
-    log_target: &str,
-    window_name: &str,
-) {
-    let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
-        return;
-    };
-    let raw_window_handle::RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
-        return;
-    };
-    let ns_view = appkit.ns_view.as_ptr() as id;
-    let is_dark = crate::theme::get_cached_theme().should_use_dark_vibrancy();
-    unsafe {
-        let ns_window: id = msg_send![ns_view, window];
-        if ns_window.is_null() {
-            return;
-        }
-        let backdrop_role = if window_name_uses_popup_backdrop(window_name) {
-            NativeGlassSurfaceRole::PopupBackdrop
-        } else {
-            NativeGlassSurfaceRole::WindowBackdrop
-        };
-        configure_window_vibrancy_common(ns_window, log_target, window_name, is_dark, backdrop_role);
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_child_attached_overlay_window_glass(
-    _window: &gpui::Window,
-    _log_target: &str,
-    _window_name: &str,
-) {
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_overlay_window_glass(_window: &gpui::Window, _window_name: &str) {}
 
 include!("secondary_window_glass_backdrop.rs");
 /// Pass-through hit test: the backdrop never participates in input so it can
@@ -593,11 +420,6 @@ unsafe fn configure_tahoe_window_backdrop_with_result(
         msg_send![glass_view, setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
 
     let style = resolve_native_glass_style(&crate::theme::get_cached_theme(), backdrop_role);
-    let tint_selector_supported: bool =
-        msg_send![glass_view, respondsToSelector: sel!(setTintColor:)];
-    let corner_selector_supported: bool =
-        msg_send![glass_view, respondsToSelector: sel!(setCornerRadius:)];
-    let native_selectors_supported = tint_selector_supported && corner_selector_supported;
     // A reconfigure pass over an existing backdrop is a theme/appearance
     // refresh, not a new installation.
     let tint_applied = apply_native_glass_style_with_reason(
@@ -678,13 +500,7 @@ unsafe fn configure_tahoe_window_backdrop_with_result(
         );
     }
 
-    Some(TahoeGlassBackdropResult {
-        created,
-        found_or_created: glass_count == 1 && backmost,
-        native_selectors_supported,
-        style_applied: tint_applied,
-        style_signature: style.signature,
-    })
+    Some(TahoeGlassBackdropResult { created })
 }
 
 /// Build an autoreleased NSString from a Rust `&str` (nil on interior NUL).
@@ -706,337 +522,10 @@ fn configure_tahoe_window_backdrop(
     false
 }
 
-/// Configure the actions popup window as a non-movable child window with vibrancy.
-///
-/// This function configures a popup window with:
-/// - isMovable = false - prevents window dragging
-/// - isMovableByWindowBackground = false - prevents dragging by clicking background
-/// - Same window level as main window (NSFloatingWindowLevel = 3)
-/// - hidesOnDeactivate = true - auto-hides when app loses focus
-/// - hasShadow = true - shadow for depth perception
-/// - Disabled restoration - no position caching
-/// - animationBehavior = NSWindowAnimationBehaviorNone - no animation on close
-/// - Appearance-aware vibrancy (VibrantDark/VibrantLight on views, window appearance nil) + POPOVER material for frosted glass effect
-///
-/// # Arguments
-/// * `window` - The NSWindow pointer to configure
-/// * `is_dark` - Whether to use dark vibrancy (true) or light vibrancy (false)
-///
-/// # Safety
-///
-/// - `window` must be a valid, non-null NSWindow pointer obtained from GPUI
-///   window creation. The pointer is checked for null at entry.
-/// - Must be called on the main thread (all AppKit property setters require it).
-/// - NSAppearance pointers are nil-checked before use.
-/// - Content view is nil-checked before recursing into visual effect views.
-#[cfg(target_os = "macos")]
-unsafe fn configure_attached_popup_window(
-    window: id,
-    is_dark: bool,
-    log_target: &str,
-    window_name: &str,
-    backdrop_role: NativeGlassSurfaceRole,
-) {
-    if window.is_null() {
-        tracing::warn!(
-            event = "attached_popup_configure.null_window",
-            window_name,
-            "Cannot configure null attached popup window"
-        );
-        return;
-    }
-
-    // Disable window dragging
-    let _: () = msg_send![window, setMovable: false];
-    let _: () = msg_send![window, setMovableByWindowBackground: false];
-
-    // Popups are content-sized by GPUI (`set_inline_popup_window_bounds` / actions
-    // resize helpers). Strip AppKit's resizable style mask so edge drags cannot
-    // override the computed height.
-    const NS_WINDOW_STYLE_MASK_RESIZABLE: u64 = 1 << 3;
-    let style_mask: u64 = msg_send![window, styleMask];
-    let non_resizable_mask = style_mask & !NS_WINDOW_STYLE_MASK_RESIZABLE;
-    let _: () = msg_send![window, setStyleMask: non_resizable_mask];
-
-    // Regression guard:
-    // Detached child popups can still take mouse focus even when GPUI opens them
-    // with `focus: false`. If AppKit promotes the child to the key panel on click,
-    // the parent panel visually drops its active shadow even though our close/focus
-    // policy keeps it open. `setBecomesKeyOnlyIfNeeded:true` keeps these popup
-    // windows in the "clickable child" role instead of eagerly stealing key status.
-    //
-    // Keep this for Actions-style child popups unless we intentionally rework the
-    // parent/child focus model and verify the shadow behavior again.
-    let _: () = msg_send![window, setBecomesKeyOnlyIfNeeded: true];
-
-    // Keep the level GPUI assigned (WindowKind::PopUp → NSPopUpMenuWindowLevel = 101).
-    // Do NOT call setLevel here — any override downgrades the popup below the
-    // main window which is also at 101. See CLAUDE.md "Window Level Rules".
-
-    // NOTE: We intentionally do NOT set setHidesOnDeactivate:true here.
-    // The main window is a non-activating panel (WindowKind::PopUp), so the app
-    // is never "active" in the macOS sense. If we set hidesOnDeactivate, the
-    // actions popup would immediately hide since the app isn't active.
-    // Instead, we manage visibility ourselves via close_actions_window().
-
-    // Disable close animation (NSWindowAnimationBehaviorNone = 2)
-    // This prevents the white flash on dismiss
-    let _: () = msg_send![window, setAnimationBehavior: NS_WINDOW_ANIMATION_BEHAVIOR_NONE];
-
-    // Disable restoration
-    let _: () = msg_send![window, setRestorable: false];
-
-    // Disable frame autosave
-    let empty_string: id = msg_send![class!(NSString), string];
-    let _: () = msg_send![window, setFrameAutosaveName: empty_string];
-
-    configure_window_vibrancy_common(window, log_target, window_name, is_dark, backdrop_role);
-
-    // SAFETY: `window` is a valid, non-null NSWindow pointer (checked at function entry).
-    // orderFrontRegardless brings the popup visually above the main panel without
-    // activating the app — same pattern as show_main_window_without_activation.
-    let _: () = msg_send![window, orderFrontRegardless];
-}
-
-/// Configure the Actions popup without activating its parent application.
-///
-/// # Safety
-/// `window` must be a valid, live `NSWindow` pointer, and this function must
-/// be called on the AppKit main thread while the window remains owned.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
-    configure_attached_popup_window(
-        window,
-        is_dark,
-        "ACTIONS",
-        "Actions popup",
-        NativeGlassSurfaceRole::PopupBackdrop,
-    );
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
-    // No-op on non-macOS platforms
-}
-
-/// Configure an Agent Chat inline dropdown popup window with the same vibrancy path as
-/// actions popups, including the detached AppKit shadow.
-///
-/// # Safety
-/// Same invariants as `configure_actions_popup_window`.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_inline_dropdown_popup_window(window: id, is_dark: bool) {
-    configure_attached_popup_window(
-        window,
-        is_dark,
-        "POPUP",
-        "Inline popup",
-        NativeGlassSurfaceRole::WindowBackdrop,
-    );
-
-    // Inline dropdowns should read as native child popups with depth.
-    let _: () = msg_send![window, setHasShadow: true];
-
-    tracing::info!(
-        target: "script_kit::popup",
-        event = "inline_dropdown_popup_window_configured",
-        dark = is_dark,
-        "Configured inline dropdown popup window"
-    );
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_inline_dropdown_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
-    // No-op on non-macOS platforms
-}
-
-/// Configure the child-attached shortcut recorder with its own morph receipt.
-///
-/// # Safety
-/// `window` must be a valid, live `NSWindow` pointer, and this function must
-/// be called on the AppKit main thread while the window remains owned.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_shortcut_recorder_popup_window(window: id, is_dark: bool) {
-    configure_attached_popup_window(
-        window,
-        is_dark,
-        "SHORTCUT",
-        "Shortcut recorder popup",
-        NativeGlassSurfaceRole::WindowBackdrop,
-    );
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_shortcut_recorder_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {}
-
-/// Configure the launcher footer popup window. This uses the shared popup
-/// vibrancy path, disables its shadow, and ignores mouse events so the launcher
-/// content beneath it remains interactive.
-///
-/// # Safety
-/// Same invariants as `configure_actions_popup_window`.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool) {
-    configure_attached_popup_window(
-        window,
-        is_dark,
-        "ACTIONS",
-        "Actions popup",
-        NativeGlassSurfaceRole::WindowBackdrop,
-    );
-    let _: () = msg_send![window, setIgnoresMouseEvents: true];
-
-    // SAFETY: `window` is a valid NSWindow. The footer popup sits flush with
-    // the parent window, so remove native panel depth that is appropriate for
-    // centered confirm/actions popups but wrong for the footer strip.
-    let content_view: id = msg_send![window, contentView];
-    if content_view != nil {
-        let layer: id = msg_send![content_view, layer];
-        if layer != nil {
-            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
-        }
-        let _: () = msg_send![content_view, setWantsLayer: true];
-        let layer: id = msg_send![content_view, layer];
-        if layer != nil {
-            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
-        }
-    }
-    let _: () = msg_send![window, setHasShadow: false];
-
-    let title: id = msg_send![
-        class!(NSString),
-        stringWithUTF8String: c"Script Kit Footer".as_ptr()
-    ];
-    if title != nil {
-        let _: () = msg_send![window, setTitle: title];
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_footer_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
-    // No-op on non-macOS platforms
-}
-
-// ============================================================================
-// Secondary Window Vibrancy Configuration
-// ============================================================================
-
-/// Configure vibrancy for a secondary window (Notes, AI, etc.)
-///
-/// This applies the same VibrantDark appearance and NSVisualEffectView configuration
-/// that the main window and actions popup use, ensuring consistent blur effect
-/// across all Script Kit windows.
-///
-/// # Arguments
-/// * `window` - The NSWindow pointer to configure
-/// * `window_name` - Name for logging (e.g., "Notes", "AI")
-/// * `is_dark` - Whether to use dark vibrancy (true) or light vibrancy (false)
-///
-/// # Safety
-///
-/// - `window` must be a valid, non-null NSWindow pointer obtained from GPUI
-///   window creation. The pointer is checked for null at entry.
-/// - Must be called on the main thread (all AppKit property setters require it).
-/// - NSAppearance and content view pointers are nil-checked before use.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str, is_dark: bool) {
-    let _ = configure_secondary_window_vibrancy_with_receipt(window, window_name, is_dark);
-}
-
-#[cfg(target_os = "macos")]
-pub(crate) unsafe fn configure_secondary_window_vibrancy_with_receipt(
-    window: id,
-    window_name: &str,
-    is_dark: bool,
-) -> Option<NativeGlassEntryReceipt> {
-    if window.is_null() {
-        logging::log(
-            "PANEL",
-            &format!(
-                "WARNING: Cannot configure null window for {} vibrancy",
-                window_name
-            ),
-        );
-        return None;
-    }
-
-    Some(configure_window_vibrancy_common(
-        window,
-        "PANEL",
-        window_name,
-        is_dark,
-        NativeGlassSurfaceRole::WindowBackdrop,
-    ))
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_secondary_window_vibrancy(
-    _window: *mut std::ffi::c_void,
-    _window_name: &str,
-    _is_dark: bool,
-) {
-    // No-op on non-macOS platforms
-}
-
 #[cfg(not(target_os = "macos"))]
 #[cfg(test)]
 mod secondary_window_config_tests {
     include!("secondary_window_config_behavior_tests.rs");
-
-    #[test]
-    fn actions_popup_focus_shadow_contract_uses_becomes_key_only_if_needed() {
-        let source = include_str!("secondary_window_config.rs");
-        assert!(
-            source.contains("setBecomesKeyOnlyIfNeeded: true"),
-            "actions-style child popups must keep becomesKeyOnlyIfNeeded enabled so clicking them does not visually demote the parent window"
-        );
-    }
-
-    #[test]
-    fn actions_popup_strips_appkit_resizable_style_mask() {
-        let source = include_str!("secondary_window_config.rs");
-        assert!(
-            source.contains("NS_WINDOW_STYLE_MASK_RESIZABLE")
-                && source.contains("setStyleMask: non_resizable_mask"),
-            "content-sized child popups must not keep AppKit edge-resize affordances"
-        );
-    }
-
-    #[test]
-    fn secondary_appearance_refresh_title_predicate_covers_current_and_legacy_secondary_titles() {
-        for title in [
-            "Notes",
-            "Mini AI",
-            "Script Kit Agent Chat",
-            "Script Kit Agent Chat",
-            "Script Kit Notes",
-            "Actions",
-            "Script Kit Footer",
-        ] {
-            assert!(
-                super::should_refresh_secondary_window_appearance(title),
-                "appearance refresh must cover secondary window title: {title}"
-            );
-        }
-    }
-
-    #[test]
-    fn secondary_appearance_refresh_title_predicate_rejects_generic_titles() {
-        for title in [
-            "Agent Chat",
-            "Notes Archive",
-            "Mini",
-            "AI",
-            "Script Kit",
-            "Script Kit Main",
-            "Random User Window",
-        ] {
-            assert!(
-                !super::should_refresh_secondary_window_appearance(title),
-                "appearance refresh predicate must not match generic/non-secondary title: {title}"
-            );
-        }
-    }
 
     // Source-contract guards for the native Tahoe NSGlassEffectView backdrop
     // (Oracle-Session tahoe-native-glass-backdrop). These do not prove runtime
@@ -1118,113 +607,6 @@ mod secondary_window_config_tests {
     fn tahoe_glass_backdrop_ordering_constant_is_backmost() {
         assert_eq!(super::NS_WINDOW_BELOW, -1);
     }
-}
-
-fn should_refresh_secondary_window_appearance(title: &str) -> bool {
-    const EXACT_SECONDARY_TITLES: &[&str] = &["Notes", "Mini AI", "Script Kit Agent Chat"];
-    const EXISTING_SECONDARY_TITLE_MARKERS: &[&str] = &[
-        "Script Kit Agent Chat",
-        "Script Kit Notes",
-        "Actions",
-        "Script Kit Footer",
-    ];
-
-    EXACT_SECONDARY_TITLES.contains(&title)
-        || EXISTING_SECONDARY_TITLE_MARKERS
-            .iter()
-            .any(|marker| title.contains(marker))
-}
-
-/// Update appearance for all secondary windows (Notes, AI, Actions) when system appearance changes.
-/// This ensures consistency across all windows when user toggles light/dark mode.
-///
-/// # Arguments
-/// * `is_dark` - true for dark mode (VibrantDark), false for light mode (VibrantLight)
-///
-/// # Safety
-/// - Must be called on the main thread
-/// - Uses Objective-C runtime to enumerate and update windows
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-pub fn update_all_secondary_windows_appearance(is_dark: bool) {
-    use cocoa::base::{id, nil};
-    use objc::{class, msg_send, sel, sel_impl};
-
-    // SAFETY: NSApplication.sharedApplication is always valid after app launch.
-    // We iterate windows with count-bounded indices. Each window, title, and
-    // UTF8String pointer is checked for nil/null before use.
-    // Window appearance set to nil; appearance applied to NSVisualEffectViews instead.
-    unsafe {
-        let app: id = msg_send![class!(NSApplication), sharedApplication];
-        let windows: id = msg_send![app, windows];
-        if windows.is_null() {
-            return;
-        }
-        let count: usize = msg_send![windows, count];
-
-        logging::log(
-            "APPEARANCE",
-            &format!("Updating {} windows to is_dark={}", count, is_dark),
-        );
-
-        for i in 0..count {
-            let window: id = msg_send![windows, objectAtIndex: i];
-            if window == nil {
-                continue;
-            }
-
-            // Get window title to identify secondary windows
-            let title: id = msg_send![window, title];
-            if title == nil {
-                continue;
-            }
-
-            let title_str: *const std::os::raw::c_char = msg_send![title, UTF8String];
-            if title_str.is_null() {
-                continue;
-            }
-
-            let title_string = std::ffi::CStr::from_ptr(title_str)
-                .to_string_lossy()
-                .to_string();
-
-            // Match secondary window titles
-            if should_refresh_secondary_window_appearance(&title_string) {
-                // Clear window appearance so GPUI can detect system appearance changes.
-                // Set appearance on individual NSVisualEffectViews instead.
-                let _: () = msg_send![window, setAppearance: nil];
-
-                // Walk view hierarchy and set appearance + material on each NSVisualEffectView
-                let content_view: id = msg_send![window, contentView];
-                if content_view != nil {
-                    let mut vev_count = 0;
-                    let material = current_window_material();
-                    configure_visual_effect_views_recursive(
-                        content_view,
-                        &mut vev_count,
-                        is_dark,
-                        material,
-                    );
-                    configure_tahoe_window_backdrop(window, "APPEARANCE", &title_string);
-                    logging::log(
-                        "APPEARANCE",
-                        &format!(
-                            "Updated window '{}': cleared window appearance, configured {} NSVisualEffectView(s) for {} using {}",
-                            title_string,
-                            vev_count,
-                            if is_dark { "dark" } else { "light" },
-                            current_window_material_name(material),
-                        ),
-                    );
-                }
-            }
-        }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn update_all_secondary_windows_appearance(_is_dark: bool) {
-    // No-op on non-macOS platforms
 }
 
 include!("secondary_window_resize_policy.rs");

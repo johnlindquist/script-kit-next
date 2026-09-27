@@ -3,11 +3,6 @@
 pub(crate) enum NativeGlassSurfaceRole {
     WindowBackdrop,
     FloatingCapsule,
-    /// Untinted window backdrop for the Actions popup. It always sits inside
-    /// the main window, so it composites over already-tinted main glass; the
-    /// stability tint on top of that read as a washed-out gray settle
-    /// (2026-09-23 owner report). Frosted, no tint: keeps the glassy tone.
-    PopupBackdrop,
 }
 
 #[cfg(target_os = "macos")]
@@ -41,14 +36,10 @@ pub(crate) fn resolve_native_glass_style(
     let matched = crate::ui_foundation::main_window_matched_background_rgba(theme);
     let tint_rgb = (matched >> 8) & 0x00ff_ffff;
     let tint_floor = crate::ui::chrome::LIQUID_GLASS_STABILITY_TINT_ALPHA_FLOOR;
-    let effective_tint_alpha = if matches!(role, NativeGlassSurfaceRole::PopupBackdrop) {
-        0.0
-    } else {
-        requested_tint_alpha
-            .unwrap_or(tint_floor)
-            .max(tint_floor)
-            .clamp(0.0, 1.0)
-    };
+    let effective_tint_alpha = requested_tint_alpha
+        .unwrap_or(tint_floor)
+        .max(tint_floor)
+        .clamp(0.0, 1.0);
     let capsule = matches!(role, NativeGlassSurfaceRole::FloatingCapsule);
     let veil_alpha = if capsule {
         crate::ui::chrome::LIQUID_GLASS_CAPSULE_VEIL_ALPHA
@@ -194,32 +185,6 @@ impl NativeGlassStyleLedger {
         mutation
     }
 
-    fn style_mutation_count_during_entry(&self, window_number: i64) -> usize {
-        let Some((start, end)) = self.entry_span(window_number) else {
-            return 0;
-        };
-        let mut seen_surfaces: std::collections::HashSet<usize> = self
-            .applications
-            .iter()
-            .filter(|app| app.window_number == window_number && app.at_ns < start)
-            .map(|app| app.surface_id)
-            .collect();
-        let mut count = 0;
-        for application in self
-            .applications
-            .iter()
-            .filter(|app| app.window_number == window_number)
-            .filter(|app| app.at_ns >= start && app.at_ns <= end)
-        {
-            if seen_surfaces.contains(&application.surface_id)
-                && application.reason == NativeGlassStyleApplicationReason::Install
-            {
-                count += 1;
-            }
-            seen_surfaces.insert(application.surface_id);
-        }
-        count
-    }
 }
 
 #[cfg(target_os = "macos")]
@@ -252,14 +217,6 @@ unsafe fn record_native_glass_entry_span(window: id, duration_seconds: f64) {
     with_native_glass_style_ledger(|ledger| {
         ledger.record_entry_span(window_number, start_ns, end_ns)
     });
-}
-
-/// Runtime count of forbidden mid-entry style mutations for a window. A
-/// healthy entry reports 0.
-#[cfg(target_os = "macos")]
-#[allow(dead_code)]
-pub(crate) fn native_glass_style_mutation_count_during_entry(window_number: i64) -> usize {
-    with_native_glass_style_ledger(|ledger| ledger.style_mutation_count_during_entry(window_number))
 }
 
 /// Apply the complete shared native glass policy. AppKit mutations are made
@@ -444,7 +401,6 @@ pub(crate) unsafe fn apply_native_glass_style_with_reason(
     let role_name = match style.role {
         NativeGlassSurfaceRole::WindowBackdrop => "window_backdrop",
         NativeGlassSurfaceRole::FloatingCapsule => "floating_capsule",
-        NativeGlassSurfaceRole::PopupBackdrop => "popup_backdrop",
     };
     tracing::info!(
         target: "script_kit::native_glass",
@@ -484,23 +440,4 @@ pub(crate) unsafe fn apply_native_glass_style_with_reason(
         );
     }
     true
-}
-
-/// Compatibility entry point for callers that do not yet own a role.
-///
-/// # Safety
-/// `glass_view` must be a valid NSGlassEffectView (or nil-checked upstream)
-/// on the main thread.
-#[cfg(target_os = "macos")]
-#[allow(
-    dead_code,
-    reason = "the legacy native glass-tint adapter is retained for callers without a surface role"
-)]
-pub(crate) unsafe fn apply_theme_glass_tint(glass_view: id) -> bool {
-    let theme = crate::theme::get_cached_theme();
-    apply_native_glass_style_with_reason(
-        glass_view,
-        resolve_native_glass_style(&theme, NativeGlassSurfaceRole::WindowBackdrop),
-        NativeGlassStyleApplicationReason::ThemeRefresh,
-    )
 }
