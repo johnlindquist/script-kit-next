@@ -5,6 +5,7 @@ use super::*;
 impl OneWindow {
     pub(super) fn on_key(&mut self, now: Ms, key: Key, fx: &mut Vec<Effect>) -> bool {
         let armed = self.guard.armed(now);
+        self.list.steady.key();
         if self.in_view() {
             return match key {
                 Key::Enter if armed => {

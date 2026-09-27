@@ -14,6 +14,7 @@ pub mod list;
 pub mod row;
 pub mod slot;
 pub mod stage;
+pub mod steady;
 pub mod trace;
 pub mod view;
 pub mod window;

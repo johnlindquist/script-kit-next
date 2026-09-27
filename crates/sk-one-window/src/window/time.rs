@@ -76,6 +76,7 @@ impl OneWindow {
             armed_end,
             self.jev_due.as_ref().map(|(at, _)| *at),
             self.dismiss.as_ref().map(|d| d.at),
+            self.list.reading_wake(now),
         ]
         .into_iter()
         .flatten()

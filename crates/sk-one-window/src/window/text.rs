@@ -23,6 +23,7 @@ impl OneWindow {
         self.text = text;
         self.host_names.clear();
         self.list.on_text(&self.text);
+        self.list.steady.on_text(now, &self.text, typed);
         self.refresh_rows();
         self.jev_due =
             (!self.text.trim().is_empty()).then(|| (now + JEV_DEBOUNCE_MS, self.text.clone()));
