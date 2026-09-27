@@ -105,29 +105,6 @@ const FOOTER_BRAILLE_SPINNER_LANE_PX: f32 =
 const FOOTER_ACTIVE_DOT_MIN_OPACITY: f32 = 0.6;
 #[cfg(target_os = "macos")]
 const FOOTER_ACTIVE_DOT_HALF_CYCLE_SECONDS: f64 = 1.0;
-#[cfg(target_os = "macos")]
-const FOOTER_RUN_SLOT_MIN_WIDTH: f64 =
-    crate::components::footer_chrome::FOOTER_RUN_SLOT_MIN_WIDTH_PX as f64;
-#[cfg(target_os = "macos")]
-const FOOTER_RUN_SLOT_MAX_WIDTH: f64 =
-    crate::components::footer_chrome::FOOTER_RUN_SLOT_MAX_WIDTH_PX as f64;
-#[cfg(target_os = "macos")]
-const FOOTER_ACTIONS_SLOT_WIDTH: f64 =
-    crate::components::footer_chrome::FOOTER_ACTIONS_SLOT_WIDTH_PX as f64;
-#[cfg(target_os = "macos")]
-const FOOTER_AI_SLOT_WIDTH: f64 = crate::components::footer_chrome::FOOTER_AI_SLOT_WIDTH_PX as f64;
-#[cfg(target_os = "macos")]
-const FOOTER_APPLY_SLOT_WIDTH: f64 =
-    crate::components::footer_chrome::FOOTER_APPLY_SLOT_WIDTH_PX as f64;
-#[cfg(target_os = "macos")]
-const FOOTER_CLOSE_SLOT_WIDTH: f64 =
-    crate::components::footer_chrome::FOOTER_CLOSE_SLOT_WIDTH_PX as f64;
-#[cfg(target_os = "macos")]
-const FOOTER_STOP_SLOT_WIDTH: f64 =
-    crate::components::footer_chrome::FOOTER_STOP_SLOT_WIDTH_PX as f64;
-#[cfg(target_os = "macos")]
-const FOOTER_PASTE_RESPONSE_SLOT_WIDTH: f64 =
-    crate::components::footer_chrome::FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX as f64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FooterAction {
@@ -873,17 +850,6 @@ pub(crate) fn active_main_window_footer_surface() -> Option<&'static str> {
     main_window_footer_host_snapshot().installed_surface
 }
 
-#[cfg(target_os = "macos")]
-pub(crate) unsafe fn native_footer_host_attached(ns_window: cocoa::base::id) -> bool {
-    if ns_window == cocoa::base::nil {
-        return false;
-    }
-    find_subview_by_identifier(
-        reusable_window_footer_search_root(ns_window),
-        FOOTER_EFFECT_ID,
-    ) != cocoa::base::nil
-}
-
 pub(crate) fn sync_main_footer_popup(
     window: &mut Window,
     config: Option<&MainWindowFooterConfig>,
@@ -962,54 +928,6 @@ pub(crate) fn sync_main_footer_popup(
 
     #[cfg(not(target_os = "macos"))]
     let _ = (window, config);
-}
-
-pub(crate) fn sync_window_footer_popup(
-    window: &mut Window,
-    config: &MainWindowFooterConfig,
-    _cx: &mut App,
-) {
-    sync_footer_owner(window, Some(config));
-    if window.is_owned_hidden() {
-        return;
-    }
-    #[cfg(target_os = "macos")]
-    if let Some((_, ns_window)) = window_gpui_view_and_ns_window(window) {
-        // SAFETY: this is the current live GPUI window on the AppKit thread.
-        unsafe {
-            if ensure_reusable_window_footer_host(ns_window)
-                && refresh_window_footer_host(ns_window, config)
-            {
-                mark_footer_installed(window.window_handle(), true);
-            }
-        }
-    }
-}
-
-/// Remove the reusable native footer host associated with THIS window (not the
-/// main-window global). This is the symmetric teardown to
-/// [`sync_window_footer_popup`]: it tears down only the footer-effect subview
-/// on this window's own NSWindow via `removeFromSuperview`, leaving the native
-/// NSVisualEffectView blur trio on every OTHER window untouched. Agent Chat
-/// calls this when its resolved footer owner transitions away from the native
-/// spacer (to an inline rail or an external host) so a detached window never
-/// leaves an orphan native footer host behind.
-///
-/// It is a no-op when no host is installed on this window (`remove_reusable_window_footer_host`
-/// finds no matching subview and returns), so callers may invoke it defensively
-/// on any non-native owner.
-pub(crate) fn clear_window_footer_popup(window: &mut Window, _cx: &mut App) {
-    sync_footer_owner(window, None);
-    if window.is_owned_hidden() {
-        return;
-    }
-    #[cfg(target_os = "macos")]
-    if let Some((_, ns_window)) = window_gpui_view_and_ns_window(window) {
-        // SAFETY: this is the current live GPUI window on the AppKit thread.
-        unsafe {
-            remove_reusable_window_footer_host(ns_window);
-        }
-    }
 }
 
 pub(crate) fn close_main_footer_popup(cx: &mut App) {
@@ -1344,18 +1262,6 @@ fn footer_divider_rgba(theme: &crate::theme::Theme, default_rgba: u32) -> u32 {
 unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfig) -> bool {
     sync_main_window_glass_scroll_bands(ns_window);
     refresh_footer_host_impl(ns_window, main_window_footer_search_root(ns_window), config)
-}
-
-/// Refresh a reusable (non-main) window footer host — detached Agent Chat;
-/// AppKit renders the glyphs natively.
-#[cfg(target_os = "macos")]
-unsafe fn refresh_window_footer_host(ns_window: id, config: &MainWindowFooterConfig) -> bool {
-    sync_float_footer_child_frame(ns_window);
-    refresh_footer_host_impl(
-        ns_window,
-        reusable_window_footer_search_root(ns_window),
-        config,
-    )
 }
 
 #[cfg(target_os = "macos")]

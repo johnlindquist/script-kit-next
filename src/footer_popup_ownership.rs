@@ -263,14 +263,6 @@ fn sync_footer_binding(handle: AnyWindowHandle, config: Option<&MainWindowFooter
     Some(binding)
 }
 
-fn mark_footer_installed(handle: AnyWindowHandle, native: bool) {
-    if let Some(host) = FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&handle.window_id()) {
-        host.snapshot.installed_surface = host.config.as_ref().map(|config| config.surface);
-        host.snapshot.native_host_installed = native;
-        host.applied_theme_revision = crate::theme::get_theme_snapshot().revision;
-    }
-}
-
 fn main_footer_handle() -> Option<AnyWindowHandle> { crate::get_main_window_handle() }
 
 fn clear_footer_refresh_signature(handle: AnyWindowHandle) {

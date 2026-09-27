@@ -45,14 +45,6 @@ pub(crate) const FOOTER_ACTION_CONTENT_PADDING_X_PX: f32 = 4.0;
 pub(crate) const FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX: f32 = 12.0;
 pub(crate) const FOOTER_KEY_ANCHORED_CONTENT_PADDING_X_PX: f32 = 6.0;
 pub(crate) const FOOTER_ACTION_BUTTON_RADIUS_PX: f32 = 6.0;
-pub(crate) const FOOTER_RUN_SLOT_MIN_WIDTH_PX: f32 = 92.0;
-pub(crate) const FOOTER_RUN_SLOT_MAX_WIDTH_PX: f32 = 242.0;
-pub(crate) const FOOTER_ACTIONS_SLOT_WIDTH_PX: f32 = 92.0;
-pub(crate) const FOOTER_AI_SLOT_WIDTH_PX: f32 = 52.0;
-pub(crate) const FOOTER_APPLY_SLOT_WIDTH_PX: f32 = 84.0;
-pub(crate) const FOOTER_CLOSE_SLOT_WIDTH_PX: f32 = 84.0;
-pub(crate) const FOOTER_STOP_SLOT_WIDTH_PX: f32 = 76.0;
-pub(crate) const FOOTER_PASTE_RESPONSE_SLOT_WIDTH_PX: f32 = 140.0;
 pub(crate) const FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE: &str =
     "runtime.footerChrome.shortcutKeycapLayoutModel";
 

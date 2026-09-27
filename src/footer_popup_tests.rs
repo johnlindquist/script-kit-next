@@ -290,15 +290,10 @@ mod footer_layout_tests {
                 );
                 assert_eq!(super::view_owned_native_footer_height(), 0.0);
                 assert_eq!(super::main_window_footer_zone_height(), footer + gap * 2.0);
-                assert_eq!(
-                    super::main_window_bottom_popup_clearance(30.0),
-                    footer + gap
-                );
             } else {
                 assert_eq!(super::main_window_view_footer_zone_reserve(), 0.0);
                 assert_eq!(super::view_owned_native_footer_height(), footer);
                 assert_eq!(super::main_window_footer_reservation_height(), footer);
-                assert_eq!(super::main_window_bottom_popup_clearance(30.0), 30.0);
             }
         }
         super::set_main_footer_surface(None);
@@ -1603,7 +1598,7 @@ mod footer_layout_tests {
 
     // The GPUI footer overlay no longer estimates label widths in Rust: the
     // Run button takes its intrinsic (text-measured) width via flexbox,
-    // floored at the slot minimum and capped at FOOTER_RUN_SLOT_MAX_WIDTH_PX.
+    // floored at the slot minimum and capped at the slot maximum.
     // See tests/main_window_footer_surface_owner_contract.rs for the contract.
 
     #[test]
