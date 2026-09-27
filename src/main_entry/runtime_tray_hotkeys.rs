@@ -80,8 +80,8 @@
                     Some(TrayMenuAction::OpenNotes) => {
                         logging::log("TRAY", "Notes menu item clicked");
                         let _ = cx.update(|cx| {
-                            if let Err(e) = notes::open_notes_window(cx) {
-                                logging::log("TRAY", &format!("Failed to open notes window: {}", e));
+                            if let Err(e) = notes::open_note(cx, notes::NoteTarget::Today) {
+                                logging::log("TRAY", &format!("Failed to open notes: {}", e));
                             }
                         });
                     }
@@ -213,10 +213,10 @@
             // This is more efficient than polling and responds immediately
             while let Ok(hotkey_event) = hotkeys::notes_hotkey_channel().1.recv().await {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
-                logging::log("HOTKEY", "Notes hotkey triggered - opening notes window");
+                logging::log("HOTKEY", "Notes hotkey triggered - opening today's note");
                 let _ = cx.update(|cx: &mut gpui::App| {
-                    if let Err(e) = notes::open_notes_window(cx) {
-                        logging::log("HOTKEY", &format!("Failed to open notes window: {}", e));
+                    if let Err(e) = notes::open_note(cx, notes::NoteTarget::Today) {
+                        logging::log("HOTKEY", &format!("Failed to open notes: {}", e));
                     }
                 });
             }
@@ -401,14 +401,14 @@
                 // Handle special deeplink types
                 if command_id.starts_with("notes/") {
                     // Notes deeplink - open the specific note when a valid id is present,
-                    // otherwise just toggle the notes window.
+                    // otherwise open today's note.
                     let note_id = command_id.strip_prefix("notes/").unwrap_or("");
                     logging::log("DEEPLINK", &format!("Opening notes (note_id: {})", note_id));
                     let parsed_note_id = notes::NoteId::parse(note_id);
                     let _ = cx.update(move |cx| {
                         let result = match parsed_note_id {
-                            Some(id) => notes::open_note_in_notes_window(cx, id),
-                            None => notes::open_notes_window(cx),
+                            Some(id) => notes::open_note(cx, notes::NoteTarget::Note(id)),
+                            None => notes::open_note(cx, notes::NoteTarget::Today),
                         };
                         if let Err(e) = result {
                             logging::log("DEEPLINK", &format!("Failed to open notes: {}", e));

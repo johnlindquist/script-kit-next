@@ -5,7 +5,7 @@ use crate::spine::catalog_subsearch::ContextSubsearchSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ActivationSurface {
-    NotesWindow,
+    Notes,
     DayPage,
 }
 
@@ -408,7 +408,7 @@ mod tests {
     use super::*;
 
     fn resolve(href: &str) -> Activation {
-        resolve_activation(href, ActivationSurface::NotesWindow)
+        resolve_activation(href, ActivationSurface::Notes)
     }
 
     #[test]
@@ -534,7 +534,7 @@ mod tests {
     #[test]
     fn kit_resources_resolve_to_preview_with_surface_affordance() {
         assert_eq!(
-            resolve_activation("kit://scripts", ActivationSurface::NotesWindow),
+            resolve_activation("kit://scripts", ActivationSurface::Notes),
             Activation::KitResourcePreview {
                 uri: "kit://scripts".to_string(),
                 allow_agent_chat_action: false,
