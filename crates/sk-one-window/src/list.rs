@@ -5,7 +5,7 @@
 //! it is there. A row read from older words never owns Enter, and a weak fuzzy name never does.
 
 use crate::Ms;
-use crate::contract::{JEV_ROWS, MIN_READING_P, ROW_ARM_MS, words};
+use crate::contract::{ASK_LEAD_P, JEV_ROWS, MIN_READING_P, ROW_ARM_MS, words};
 use crate::enter::EnterTarget;
 use crate::row::{Row, RowAct};
 
@@ -184,6 +184,21 @@ pub fn fresh_readings(rows: Vec<Row>, names: &[Row]) -> Vec<Row> {
             fill.is_empty() || !strong.contains(&fill)
         })
         .collect()
+}
+
+/// Whether an Enter that waited for Jev should ask once instead of running `held`: it isn't Jev's
+/// top reading, or the next reading is too close behind.
+pub fn unsure(held: &Row, rows: &[Row]) -> bool {
+    let mut ps: Vec<(&str, f32)> = rows
+        .iter()
+        .map(|r| (r.key.as_str(), r.p.unwrap_or(0.0)))
+        .collect();
+    ps.sort_by(|a, b| b.1.total_cmp(&a.1));
+    match ps.as_slice() {
+        [] => false,
+        [(top, _)] => *top != held.key,
+        [(top, p), (_, next), ..] => *top != held.key || p - next < ASK_LEAD_P,
+    }
 }
 
 /// What Jev's reserved rows become when it doesn't answer. None is a reading of the sentence and
@@ -398,9 +413,7 @@ impl ListState {
                         };
                         EnterTarget::new(id, label)
                     }
-                    Some(row) if self.asking => {
-                        EnterTarget::new(id, format!("{} — ↵ again", row.title))
-                    }
+                    Some(row) if self.asking => EnterTarget::new(id, words::ask_again(&row.title)),
                     Some(row) => EnterTarget::new(id, row.title.clone()),
                 }
             }
@@ -508,6 +521,19 @@ mod tests {
         assert_eq!(s.get(0).unwrap().row.as_ref().unwrap().key, "a");
         assert_eq!(s.get(1).unwrap().row.as_ref().unwrap().key, "d");
         assert_eq!(s.get(2).unwrap().row.as_ref().unwrap().key, "c");
+    }
+
+    #[test]
+    fn a_waiting_enter_asks_unless_its_row_leads_clearly() {
+        let reading = |k: &str, p: f32| Row {
+            p: Some(p),
+            ..Row::new(k, k)
+        };
+        let rows = [reading("a", 0.6), reading("b", 0.5), reading("c", 0.1)];
+        assert!(unsure(&rows[0], &rows), "10 points ahead is too close");
+        assert!(unsure(&rows[1], &rows), "not the top reading");
+        let rows = [reading("a", 0.8), reading("b", 0.5)];
+        assert!(!unsure(&rows[0], &rows));
     }
 
     #[test]

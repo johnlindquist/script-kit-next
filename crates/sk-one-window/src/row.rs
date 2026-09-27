@@ -63,6 +63,10 @@ pub struct Row {
     /// The reading's verb, when it does something to the target rather than open it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verb: Option<String>,
+    /// Where the reading's target came from: `"last"` is something that just ran or is waiting
+    /// to go, named by `target` (`"all"` for every waiting message).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
     /// The sentence Jev read the words as.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fill: Option<String>,
@@ -120,6 +124,12 @@ impl Row {
     /// What the ↵ button says for this row.
     pub fn enter_words(&self) -> &str {
         self.enter_label.as_deref().unwrap_or(&self.title)
+    }
+
+    /// A reading that takes back what just ran or stops what's waiting ("don't send the launcher
+    /// one", "undo that").
+    pub fn takes_back_last(&self) -> bool {
+        self.verb.as_deref() == Some("undo") && self.source.as_deref() == Some("last")
     }
 
     /// A name strong enough to own Enter.

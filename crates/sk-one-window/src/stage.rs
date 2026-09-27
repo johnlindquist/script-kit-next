@@ -19,6 +19,8 @@ pub enum SubjectKind {
     Selection,
     Window,
     Message,
+    /// An answer open in a view: "this" is what it says.
+    Answer,
     #[default]
     Thing,
 }
@@ -270,16 +272,18 @@ pub fn default_actions(subject: &Subject) -> Vec<Row> {
                 act("check", "Mark it done", "mark it done", RowAct::Host),
             ]
         }
-        SubjectKind::Entry | SubjectKind::Script | SubjectKind::Thing => vec![
-            act("open", "Open it", "open it", RowAct::Host),
-            act("copy", "Copy it", "copy it", RowAct::Host),
-            act(
-                "message",
-                "Send it to someone",
-                "send this to sarah",
-                RowAct::Host,
-            ),
-        ],
+        SubjectKind::Entry | SubjectKind::Script | SubjectKind::Answer | SubjectKind::Thing => {
+            vec![
+                act("open", "Open it", "open it", RowAct::Host),
+                act("copy", "Copy it", "copy it", RowAct::Host),
+                act(
+                    "message",
+                    "Send it to someone",
+                    "send this to sarah",
+                    RowAct::Host,
+                ),
+            ]
+        }
     }
 }
 
