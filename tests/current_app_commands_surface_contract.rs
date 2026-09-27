@@ -28,7 +28,10 @@ fn current_app_commands_uses_shared_chrome_text_tokens() {
         );
     }
     assert!(source.contains("chrome.text_primary_hex"));
-    assert!(source.contains("chrome.text_hint_rgba"));
+    assert!(
+        source.contains("self.render_builtin_main_input_count_label("),
+        "Current App Commands count copy should use the shared built-in count label, which resolves the chrome hint token"
+    );
 }
 
 #[test]
@@ -77,18 +80,15 @@ fn current_app_commands_row_clicks_follow_launcher_activation_contract() {
 }
 
 #[test]
-fn current_app_commands_header_uses_bounded_flex_for_filter_and_count() {
+fn current_app_commands_header_uses_shared_main_input_header_for_filter_and_count() {
     let source = production_source();
     for needle in [
-        ".flex_1()",
-        ".min_w(px(0.))",
-        ".flex_none()",
-        ".whitespace_nowrap()",
-        "chrome.text_hint_rgba",
+        "header: self.render_builtin_main_input_header(",
+        "vec![self.render_builtin_main_input_count_label(format!(",
     ] {
         assert!(
             source.contains(needle),
-            "Current App Commands header should keep filter/count layout bounded: {needle}"
+            "Current App Commands header should lay out filter and count through the shared main-input header: {needle}"
         );
     }
 }

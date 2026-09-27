@@ -61,12 +61,26 @@ fn renderer_routes_all_visible_lists_through_filtered_entry_helper() {
         ),
         "The initial render pass must use the shared filtered-entry helper."
     );
-    assert_eq!(
-        CURRENT_APP_COMMANDS_RENDERER
-            .matches("&this.cached_current_app_entries")
-            .count(),
-        2,
-        "Keyboard and wheel handlers must recompute rows through the shared helper."
+    let key_handler = source_between(
+        CURRENT_APP_COMMANDS_RENDERER,
+        "let handle_key = cx.listener(",
+        "// Pre-compute colors",
+    );
+    assert!(
+        key_handler.contains(
+            "Self::current_app_commands_filtered_entries(\n                    &this.cached_current_app_entries,"
+        ),
+        "The keyboard handler must recompute rows through the shared helper."
+    );
+    let wheel_handler = source_between(
+        CURRENT_APP_COMMANDS_RENDERER,
+        ".on_scroll_wheel(cx.listener(",
+        "))",
+    );
+    assert!(
+        wheel_handler.contains("this.observe_builtin_native_list_scroll(event, cx);")
+            && !wheel_handler.contains("cached_current_app_entries"),
+        "The wheel handler scrolls the native list and must not build its own row set."
     );
 }
 

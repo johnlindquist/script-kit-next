@@ -20,6 +20,34 @@ fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &tail[..end_rel]
 }
 
+/// Extract a function from its signature through its closing brace.
+fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("function not found: '{signature}'"));
+    let tail = &source[start..];
+    let open = tail.find('{').expect("function should have a body");
+    let mut depth = 0usize;
+    for (offset, ch) in tail[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &tail[..open + offset + 1];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unterminated body for '{signature}'")
+}
+
+fn position(body: &str, marker: &str, owner: &str) -> usize {
+    body.find(marker)
+        .unwrap_or_else(|| panic!("marker not found in {owner}: '{marker}'"))
+}
+
 // ---------------------------------------------------------------------------
 // 1) Shared reconciliation helper exists with the correct pipeline
 // ---------------------------------------------------------------------------
@@ -27,43 +55,44 @@ fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 #[test]
 fn shared_script_list_reconciliation_helper_exists() {
     let source = read("src/app_impl/filter_input_updates.rs");
-    assert!(
-        source.contains("fn reconcile_script_list_after_filter_change"),
-        "expected shared script-list filter reconciliation helper"
+    let helper = fn_body(
+        &source,
+        "pub(crate) fn reconcile_script_list_after_filter_change(",
     );
     assert!(
-        source.contains("self.scroll_to_selected_if_needed(reason);"),
-        "shared reconciliation must reveal the final selected row"
+        helper.contains(
+            "self.sync_list_state_for_filter_replacement(MainListReplacementPolicy::ResetToTop);"
+        ),
+        "shared reconciliation must reveal the final selected row by resetting the replaced list to its top"
     );
+    let publication = fn_body(&source, "fn finish_main_menu_publication(");
     assert!(
-        source.contains("self.rebuild_main_window_preflight_if_needed();"),
+        helper.contains("self.finish_main_menu_publication(reason, None, cx)")
+            && publication.contains("self.rebuild_main_window_preflight_if_needed();"),
         "shared reconciliation must rebuild preflight outside render"
     );
 }
 
 #[test]
-fn reconciliation_helper_ordering_sync_before_select_before_reveal_before_preflight() {
+fn reconciliation_helper_orders_rows_then_selection_then_viewport_then_preflight() {
     let source = read("src/app_impl/filter_input_updates.rs");
-    let body = section_between(
+    let body = fn_body(
         &source,
-        "fn reconcile_script_list_after_filter_change",
-        "pub(crate) fn queue_filter_compute",
+        "pub(crate) fn reconcile_script_list_after_filter_change(",
     );
 
     // Verify ordering: each step must appear after the previous one
     let ordered_markers = [
-        "sync_list_state()",
-        "selected_index = 0",
-        "validate_selection_bounds",
-        "scroll_to_selected_if_needed(reason)",
-        "rebuild_main_window_preflight_if_needed()",
+        "self.rebuild_main_menu_results_cache(cx)",
+        "self.reset_main_menu_selection_intent();",
+        "self.reconcile_main_menu_selection_intent();",
+        "self.sync_list_state_for_filter_replacement(",
+        "self.finish_main_menu_publication(reason, None, cx)",
     ];
 
     let mut last_pos = 0usize;
     for marker in ordered_markers {
-        let pos = body
-            .find(marker)
-            .unwrap_or_else(|| panic!("marker not found in reconciliation helper: '{marker}'"));
+        let pos = position(body, marker, "reconciliation helper");
         assert!(
             pos >= last_pos,
             "ordering violation: '{marker}' appeared before the previous step in reconciliation helper"
@@ -73,40 +102,34 @@ fn reconciliation_helper_ordering_sync_before_select_before_reveal_before_prefli
 }
 
 // ---------------------------------------------------------------------------
-// 1b) Reconciliation helper must clear scroll dedup guard before reveal
+// 1b) List replacement must clear scroll dedup guard before reveal
 // ---------------------------------------------------------------------------
 
 #[test]
-fn reconciliation_helper_clears_last_scrolled_index_before_reveal() {
+fn filter_replacement_clears_last_scrolled_index_before_reveal() {
     // scroll_to_selected_if_needed has a dedup guard:
     //   if self.last_scrolled_index == Some(target) { return; }
-    // After a filter change resets selected_index to 0, last_scrolled_index
-    // could already be Some(0) from the previous cycle. Without clearing it,
-    // the scroll would be silently skipped even though list content changed.
-    let source = read("src/app_impl/filter_input_updates.rs");
-    let body = section_between(
-        &source,
-        "fn reconcile_script_list_after_filter_change",
-        "pub(crate) fn queue_filter_compute",
-    );
+    // After a filter change resets the selection to the first row,
+    // last_scrolled_index could already be Some(0) from the previous cycle.
+    // Without clearing it, a later reveal would be silently skipped even
+    // though list content changed.
+    let source = read("src/app_navigation/impl_scroll.rs");
+    let body = fn_body(&source, "pub fn sync_list_state_for_filter_replacement(");
 
-    assert!(
-        body.contains("self.last_scrolled_index = None;"),
-        "reconciliation helper must clear last_scrolled_index to bypass \
-         scroll_to_selected_if_needed's dedup guard after filter changes"
+    let clear_pos = position(
+        body,
+        "self.last_scrolled_index = None;",
+        "filter replacement",
     );
-
-    // The clear must happen BEFORE the reveal call
-    let clear_pos = body
-        .find("self.last_scrolled_index = None;")
-        .expect("last_scrolled_index = None not found");
-    let reveal_pos = body
-        .find("self.scroll_to_selected_if_needed(reason);")
-        .expect("scroll_to_selected_if_needed not found");
+    let reveal_pos = position(
+        body,
+        "self.main_list_state.scroll_to(restored_offset);",
+        "filter replacement",
+    );
     assert!(
         clear_pos < reveal_pos,
-        "last_scrolled_index must be cleared BEFORE scroll_to_selected_if_needed \
-         to ensure the dedup guard doesn't skip the reveal"
+        "last_scrolled_index must be cleared BEFORE the replaced list scrolls \
+         to its restored offset so the dedup guard doesn't skip a later reveal"
     );
 }
 
@@ -124,7 +147,7 @@ fn scroll_helper_has_dedup_guard_on_last_scrolled_index() {
     assert!(
         body.contains("if self.last_scrolled_index == Some(target)"),
         "scroll_to_selected_if_needed must have the dedup guard that \
-         reconciliation_helper_clears_last_scrolled_index_before_reveal depends on"
+         filter_replacement_clears_last_scrolled_index_before_reveal depends on"
     );
 }
 
@@ -135,34 +158,34 @@ fn scroll_helper_has_dedup_guard_on_last_scrolled_index() {
 #[test]
 fn queue_filter_compute_uses_shared_reconciliation_helper() {
     let source = read("src/app_impl/filter_input_updates.rs");
-    let start = source
-        .find("pub(crate) fn queue_filter_compute")
-        .expect("queue_filter_compute not found");
-    let section = &source[start..(start + 2600).min(source.len())];
+    let queue = fn_body(&source, "pub(crate) fn queue_filter_compute(");
+    let apply = fn_body(&source, "fn apply_filter_compute_now(");
 
     assert!(
-        section
-            .contains("app.reconcile_script_list_after_filter_change(\"filter_coalesced\", cx);"),
+        queue.contains("self.apply_filter_compute_now(value, cx);")
+            && queue.contains("app.apply_filter_compute_now(latest, cx);")
+            && apply
+                .contains("self.reconcile_script_list_after_filter_change(\"query_commit\", cx);"),
         "queue_filter_compute should use the shared reconciliation helper"
     );
     assert!(
-        !section.contains("scroll_to_reveal_item(app.selected_index)"),
-        "queue_filter_compute should not bypass scroll_to_selected_if_needed"
+        !queue.contains("scroll_to_reveal_item(") && !apply.contains("scroll_to_reveal_item("),
+        "queue_filter_compute should not bypass the shared list replacement"
     );
 }
 
 #[test]
 fn set_filter_text_immediate_uses_shared_reconciliation_helper() {
     let source = read("src/app_impl/filter_input_updates.rs");
-    let start = source
-        .find("pub(crate) fn set_filter_text_immediate")
-        .expect("set_filter_text_immediate not found");
-    let section = &source[start..(start + 2600).min(source.len())];
+    let immediate = fn_body(&source, "pub(crate) fn set_filter_text_immediate(");
+    let with_cursor = fn_body(
+        &source,
+        "pub(crate) fn set_filter_text_and_cursor_immediate(",
+    );
 
     assert!(
-        section.contains(
-            "self.reconcile_script_list_after_filter_change(\"set_filter_text_immediate\", cx);"
-        ),
+        immediate.contains("self.set_filter_text_and_cursor_immediate(text, cursor, window, cx);")
+            && with_cursor.contains("self.apply_filter_compute_now(text.clone(), cx);"),
         "set_filter_text_immediate should use the shared reconciliation helper"
     );
 }
@@ -170,24 +193,29 @@ fn set_filter_text_immediate_uses_shared_reconciliation_helper() {
 #[test]
 fn queue_filter_compute_still_resizes_and_notifies() {
     let source = read("src/app_impl/filter_input_updates.rs");
-    let body = section_between(
+    let apply = fn_body(&source, "fn apply_filter_compute_now(");
+    let helper = fn_body(
         &source,
-        "pub(crate) fn queue_filter_compute",
-        "pub(crate) fn set_filter_text_immediate",
+        "pub(crate) fn reconcile_script_list_after_filter_change(",
     );
 
+    let reconcile_pos = position(
+        apply,
+        "self.reconcile_script_list_after_filter_change(\"query_commit\", cx);",
+        "apply_filter_compute_now",
+    );
     assert!(
-        body.contains("update_window_size()"),
+        apply[reconcile_pos..].contains("self.update_window_size();"),
         "queue_filter_compute must trigger window resize after reconciliation"
     );
     assert!(
-        body.contains("cx.notify()"),
+        helper.contains("cx.notify_with_owned_cause(\"mainSearchPublication\", sequence);"),
         "queue_filter_compute must notify after mutations"
     );
 }
 
 // ---------------------------------------------------------------------------
-// 2) sync_list_state must always invalidate reveal cache and restore reveal
+// 3) sync_list_state must always invalidate reveal cache
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -222,23 +250,5 @@ fn sync_list_state_always_invalidates_reveal_cache() {
         invalidation_pos > splice_block_end,
         "last_scrolled_index = None must be OUTSIDE the item_count-changed branch \
          so it fires even when the count stays the same"
-    );
-}
-
-#[test]
-fn sync_list_state_restores_reveal_for_current_selection() {
-    let source = read("src/app_navigation/impl_scroll.rs");
-    let body = section_between(
-        &source,
-        "pub fn sync_list_state(&mut self)",
-        "pub fn validate_selection_bounds",
-    );
-
-    let has_reveal = body.contains("scroll_to_reveal_item(self.selected_index)");
-
-    assert!(
-        has_reveal,
-        "sync_list_state must restore reveal for the current selected_index \
-         after syncing item_count"
     );
 }
