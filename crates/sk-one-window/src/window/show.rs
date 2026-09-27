@@ -11,6 +11,9 @@ impl OneWindow {
         if let Some(line) = &self.line {
             return line.clone();
         }
+        if let Some(line) = self.work_line() {
+            return line;
+        }
         if let Some(staged) = &self.staged {
             let s = &staged.subject;
             return SlotLine::new(SlotKind::Staged, s.label.clone(), s.title.clone())

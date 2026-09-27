@@ -4,6 +4,7 @@
 //! input says, which header leads the list, what Enter runs and when it is ignored, how the
 //! window's height moves, and what waits before it goes. Nothing here reads a clock.
 
+mod chat_work;
 mod finishing;
 mod keys;
 mod show;

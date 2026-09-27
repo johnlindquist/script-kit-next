@@ -5,7 +5,9 @@
 //! Enter never runs something that changed under the key. The host feeds [`window::Event`]s with
 //! the current time and applies the [`window::Effect`]s it gets back.
 
+pub mod asks;
 pub mod chat;
+pub mod chat_with;
 pub mod connect;
 pub mod contract;
 pub mod enter;
@@ -14,6 +16,8 @@ pub mod hold;
 pub mod ledger;
 pub mod list;
 pub mod marks;
+pub mod models;
+pub mod past_chats;
 pub mod row;
 pub mod slot;
 pub mod stage;
