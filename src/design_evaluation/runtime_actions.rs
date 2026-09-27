@@ -5,7 +5,7 @@ use crate::protocol::{
     DictationFixtureCommand, DictationFixtureDestination, FixtureControl, FlowFixtureCommand,
     SdkChatFixtureCommand,
 };
-use crate::{AppView, ScriptListApp};
+use crate::AppView;
 use anyhow::{ensure, Context as _, Result};
 use gpui::Entity;
 use serde_json::{json, Value};
@@ -639,10 +639,10 @@ impl Evaluator {
             "batch_timeout_exceeds_session_limit"
         );
         let started = std::time::Instant::now();
-        let generation = mounted
-            .info
-            .generation
-            .context("window_generation_missing")?;
+        ensure!(
+            mounted.info.generation.is_some(),
+            "window_generation_missing"
+        );
         let target = Self::instance(mounted)?;
         let mut results = Vec::with_capacity(commands.len());
         let mut failed_at = None;
@@ -974,22 +974,7 @@ impl Evaluator {
                 owner: RootOwner::ConversationPopup,
             });
         }
-        self.tick(true)?;
-        let mut cx = self.cx.app.borrow_mut();
-        let (info, owner) = match family {
-            _ => anyhow::bail!("unknown_auxiliary_family"),
-        };
-        let handle = crate::windows::get_runtime_window_handle_for_generation(
-            &info.id,
-            info.generation.context("auxiliary_generation_missing")?,
-        )
-        .context("auxiliary_handle_missing")?;
-        Ok(Mounted {
-            fixture_id: fixture_id.into(),
-            info,
-            handle,
-            owner,
-        })
+        anyhow::bail!("unknown_auxiliary_family")
     }
 }
 

@@ -9,15 +9,6 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use gpui::{point, px, size, AnyView, AnyWindowHandle, App, Entity};
-use std::sync::{Arc, Mutex};
-use std::{cell::RefCell, rc::Rc};
-
-#[derive(Clone)]
-pub(crate) struct SecondaryFixtureParent {
-    pub id: String,
-    pub generation: u64,
-    pub handle: AnyWindowHandle,
-}
 
 pub(crate) enum SecondaryFixtureControls {
     Snap {
@@ -65,31 +56,8 @@ impl MountedSecondaryFixture {
     }
 }
 
-fn parent_geometry(
-    parent: &SecondaryFixtureParent,
-    cx: &mut App,
-) -> Result<(gpui::Bounds<gpui::Pixels>, Option<gpui::DisplayId>)> {
-    ensure!(
-        crate::windows::get_runtime_window_handle_for_generation(&parent.id, parent.generation)
-            == Some(parent.handle),
-        "secondary_parent_stale"
-    );
-    ensure!(
-        crate::windows::runtime_window_host_policy(&parent.id, parent.generation)?
-            == WindowHostPolicy::OwnedHidden,
-        "secondary_parent_not_owned"
-    );
-    parent.handle.update(cx, |_, window, cx| {
-        (
-            window.bounds(),
-            window.display(cx).map(|display| display.id()),
-        )
-    })
-}
-
 pub(crate) fn mount_secondary_fixture(
     fixture_id: &str,
-    parent: Option<SecondaryFixtureParent>,
     cx: &mut App,
 ) -> Result<MountedSecondaryFixture> {
     WindowHostPolicy::OwnedHidden.validate()?;

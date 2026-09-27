@@ -771,26 +771,9 @@ impl Evaluator {
                     owner: RootOwner::Dictation(entity),
                 }
             }
-            "actions" | "snap" => {
-                let parent = if descriptor.parent_fixture_id.is_some() {
-                    let mounted = match parent.as_ref() {
-                        Some(target) => self.resolve(target)?.clone(),
-                        None => self.ensure_main()?,
-                    };
-                    Some(secondary_fixtures::SecondaryFixtureParent {
-                        id: mounted.info.id.clone(),
-                        generation: mounted
-                            .info
-                            .generation
-                            .context("parent_generation_missing")?,
-                        handle: mounted.handle,
-                    })
-                } else {
-                    None
-                };
+            "snap" => {
                 let fixture = Rc::new(secondary_fixtures::mount_secondary_fixture(
                     fixture_id,
-                    parent,
                     &mut self.cx.app.borrow_mut(),
                 )?);
                 let info = crate::windows::automation_window_by_id(&fixture.automation_id)

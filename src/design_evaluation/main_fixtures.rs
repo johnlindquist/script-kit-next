@@ -637,7 +637,7 @@ pub(crate) fn mount_main_overlay_fixture(
     window: &mut Window,
     cx: &mut Context<ScriptListApp>,
 ) -> anyhow::Result<()> {
-    use gpui_component::{notification::Notification, WindowExt as _};
+    use gpui_component::WindowExt as _;
     crate::runtime_policy::WindowHostPolicy::OwnedHidden.validate()?;
     anyhow::ensure!(
         window.is_owned_hidden(),
