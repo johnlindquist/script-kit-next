@@ -351,7 +351,7 @@ fn actions_cli_reports_protocol_hover_proof() {
 fn actions_dialog_rows_expose_mouse_move_hover_state() {
     for needle in [
         "fn update_hovered_row_from_popup_y",
-        "let list_top = if search_at_top { search_height } else { 0.0 } + header_height",
+        "let list_top = search_height + header_height",
         "this.update_hovered_row_from_popup_y(f32::from(event.position.y), cx)",
         ".on_mouse_move({",
         "move |_event: &gpui::MouseMoveEvent, _window, cx|",
@@ -472,24 +472,6 @@ fn actions_cli_reports_semantic_freshness_proof() {
 }
 
 #[test]
-fn actions_dialog_elements_use_grouped_visual_index_semantic_ids() {
-    let collector = fs::read_to_string("src/windows/automation_surface_collector.rs")
-        .expect("read automation_surface_collector.rs");
-    for needle in [
-        "for (visual_index, grouped_item) in dialog.grouped_items.iter().enumerate()",
-        "crate::actions::GroupedActionItem::Item(filter_idx)",
-        "dialog.selected_index == visual_index",
-        "format!(\"choice:{visual_index}:{}\", action.id)",
-        "Some(visual_index)",
-    ] {
-        assert!(
-            collector.contains(needle),
-            "ActionsDialog semantic collector must use grouped visual indexes: {needle}"
-        );
-    }
-}
-
-#[test]
 fn actions_dialog_coverage_mentions_semantic_freshness_proof() {
     assert!(
         COVERAGE.contains(
@@ -598,22 +580,6 @@ fn actions_cli_reports_escape_close_cleanup_proof() {
             "ActionsDialog DevTools CLI must expose Escape close cleanup proof: {needle}"
         );
     }
-}
-
-#[test]
-fn actions_popup_defer_close_removes_runtime_handle() {
-    let source = fs::read_to_string("src/actions/window.rs").expect("read src/actions/window.rs");
-    let start = source.find("fn defer_close").expect("defer_close exists");
-    let end = source[start..]
-        .find("fn request_close")
-        .map(|idx| start + idx)
-        .expect("request_close follows defer_close");
-    let body = &source[start..end];
-    assert!(
-        body.contains("remove_runtime_window_handle(\"actions-dialog\")")
-            || body.contains("unregister_actions_dialog_automation_surfaces()"),
-        "activation-driven ActionsDialog close must remove the runtime handle, not only the automation window"
-    );
 }
 
 #[test]

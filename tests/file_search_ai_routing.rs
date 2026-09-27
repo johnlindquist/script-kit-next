@@ -34,8 +34,12 @@ fn file_search_plain_cmd_enter_attempts_shared_global_route_first() {
         source.contains("file_search_cmd_enter_global_route_attempted"),
         "FileSearch plain Cmd+Enter must emit a structured log before using the shared route"
     );
+    let attempted_at = source
+        .find("file_search_cmd_enter_global_route_attempted")
+        .expect("FileSearch plain Cmd+Enter logs the shared route attempt");
     assert!(
-        source.contains("this.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)"),
+        source[attempted_at..]
+            .contains(".try_route_global_cmd_enter_to_agent_chat_context_capture("),
         "FileSearch plain Cmd+Enter must attempt the shared global Agent Chat route first"
     );
 }

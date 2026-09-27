@@ -168,8 +168,8 @@ fn matrix_exposes_known_native_footer_surfaces() {
     let entries = matrix_entries();
     for (variant, expected_footer) in [
         ("QuickTerminalView", Some("quick_terminal")),
-        ("TermPrompt", None),
-        ("MicroPrompt", None),
+        ("TermPrompt", Some("term_prompt")),
+        ("MicroPrompt", Some("micro_prompt")),
         ("BrowseKitsView", Some("kit_store_browse")),
         ("InstalledKitsView", Some("kit_store_installed")),
     ] {

@@ -14,7 +14,9 @@ fn process_manager_empty_state_copy_is_modeled() {
         "Process Manager empty states should own filter classification and visible copy"
     );
     assert!(
-        PROCESS_MANAGER.contains("ProcessManagerEmptyState::from_filter(&filter).message()"),
+        PROCESS_MANAGER.contains(
+            "let state = ProcessManagerEmptyState::from_filter(&filter);\n            crate::components::render_simple_empty_state(\n                \"process-manager-empty\",\n                state.message(),"
+        ),
         "Process Manager renderer should derive empty-state copy from the model"
     );
     assert!(

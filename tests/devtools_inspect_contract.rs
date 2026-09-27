@@ -1,7 +1,12 @@
 use std::fs;
 
 const INSPECT: &str = include_str!("../scripts/devtools/inspect.ts");
-const TARGETS: &str = include_str!("../scripts/devtools/targets.ts");
+// targets.ts is the CLI; the identity pipeline it reports lives in the shared libs.
+const TARGETS: &str = concat!(
+    include_str!("../scripts/devtools/targets.ts"),
+    include_str!("../scripts/devtools/lib/target-identity.ts"),
+    include_str!("../scripts/devtools/lib/client.ts"),
+);
 const SURFACE: &str = include_str!("../scripts/devtools/surface.ts");
 const ELEMENTS: &str = include_str!("../scripts/devtools/elements.ts");
 const LAYOUT: &str = include_str!("../scripts/devtools/layout.ts");
@@ -219,7 +224,7 @@ fn scroll_cli_reports_viewport_selected_row_and_overflow_pressure() {
     for needle in [
         "script-kit-devtools.scroll",
         "scroll.inspect",
-        "scripts/devtools/targets.ts",
+        "resolveTargetReceipt",
         "getState",
         "summaryOnly",
         "mainListScroll",
@@ -257,7 +262,7 @@ fn focus_cli_reports_focus_selected_nodes_and_keyboard_owner() {
     for needle in [
         "script-kit-devtools.focus",
         "focus.inspect",
-        "scripts/devtools/targets.ts",
+        "resolveTargetReceipt",
         "getState",
         "getElements",
         "summaryOnly",
@@ -291,11 +296,11 @@ fn focus_cli_reports_focus_selected_nodes_and_keyboard_owner() {
 }
 
 #[test]
-fn text_cli_reports_text_fingerprints_and_text_bounds_gap() {
+fn text_cli_reports_text_fingerprints_and_text_bounds() {
     for needle in [
         "script-kit-devtools.text",
         "text.measure",
-        "scripts/devtools/targets.ts",
+        "resolveTargetReceipt",
         "getState",
         "getElements",
         "summaryOnly",
@@ -306,7 +311,9 @@ fn text_cli_reports_text_fingerprints_and_text_bounds_gap() {
         "textLength",
         "fingerprint",
         "footerTexts",
-        "textBounds",
+        "textFitMeasurements",
+        "lineBoxBounds",
+        "glyphBounds",
         "blocked-by-missing-primitive",
         "strictTargetIdentity",
     ] {
@@ -331,7 +338,7 @@ fn keyboard_cli_reports_bindings_policies_and_duplicate_keys() {
     for needle in [
         "script-kit-devtools.keyboard",
         "keyboard.inspect",
-        "scripts/devtools/targets.ts",
+        "resolveTargetReceipt",
         "getState",
         "summaryOnly",
         "keyboardPolicy",

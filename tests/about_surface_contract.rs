@@ -13,7 +13,8 @@ fn about_surface_uses_shared_chrome_tokens_not_local_alpha_packing() {
         "About should resolve chrome through shared AppChromeColors"
     );
     assert!(
-        ABOUT_RENDER_SOURCE.contains("non_list_palette(&theme)"),
+        ABOUT_RENDER_SOURCE.contains("NonListCompositionOwner::About")
+            && ABOUT_RENDER_SOURCE.contains("let palette = composition.palette();"),
         "About body should route product-surface colors through the shared non-list palette"
     );
     for needle in [
@@ -174,7 +175,7 @@ fn about_quick_actions_wrap_before_overflowing_narrow_widths() {
             .expect("quick action row should precede update card")];
 
     assert!(
-        quick_actions.contains("non_list_action_row(vec![")
+        quick_actions.contains("composition\n        .action_row(vec![")
             && quick_actions.contains(".max_w(px(metrics.max_width))")
             && quick_actions.contains(".flex_wrap()"),
         "About quick actions should use the shared non-list action row and wrap within the content column"

@@ -14,7 +14,9 @@ fn window_switcher_empty_state_copy_is_modeled() {
         "Window Switcher empty states should own filter classification and visible copy"
     );
     assert!(
-        WINDOW_SWITCHER.contains("WindowSwitcherEmptyState::from_filter(&filter).message()"),
+        WINDOW_SWITCHER.contains(
+            "let state = WindowSwitcherEmptyState::from_filter(&filter);\n            crate::components::render_simple_empty_state(\n                \"window-switcher-empty\",\n                state.message(),"
+        ),
         "Window Switcher renderer should derive empty-state copy from the model"
     );
     assert!(

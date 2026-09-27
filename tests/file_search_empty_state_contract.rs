@@ -26,8 +26,9 @@ fn file_search_empty_state_render_paths_use_model() {
         "file search state audit should derive empty-state copy from the model"
     );
     assert!(
-        FILE_SEARCH_RENDERER.contains("let state = FileSearchEmptyState::from_query(query);")
-            && FILE_SEARCH_RENDERER.contains("EmptyState::new(state.title()"),
+        FILE_SEARCH_RENDERER.contains(
+            "let state = FileSearchEmptyState::from_query(query);\n            crate::components::render_simple_empty_state(\n                \"file-search-empty\",\n                state.title(),"
+        ),
         "inline list empty title should derive from the model"
     );
     assert!(

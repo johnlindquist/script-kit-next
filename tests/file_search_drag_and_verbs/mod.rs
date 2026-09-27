@@ -98,6 +98,31 @@ fn native_file_drag_uses_file_url_pasteboard_type() {
 // ──────────────────────────────────────────────────────────────────────
 
 const FILE_SEARCH_SOURCE: &str = include_str!("../../src/render_builtins/file_search.rs");
+
+/// The braced body of the first item whose text starts with `signature`.
+fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("missing function signature: {signature}"));
+    let open = start
+        + source[start..]
+            .find('{')
+            .unwrap_or_else(|| panic!("missing function body open: {signature}"));
+    let mut depth = 0usize;
+    for (offset, ch) in source[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &source[open..=open + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("missing function body close: {signature}");
+}
 const RENDER_IMPL_SOURCE: &str = include_str!("../../src/main_sections/render_impl.rs");
 const STARTUP_SOURCE: &str = include_str!("../../src/app_impl/startup.rs");
 const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../../src/app_impl/startup_new_tab.rs");
@@ -204,7 +229,7 @@ fn file_search_drag_move_clears_gpui_file_drag_payload() {
 #[test]
 fn file_search_header_input_click_restores_focus_even_when_occluding_root() {
     let header = FILE_SEARCH_SOURCE
-        .split("let header_element = div()")
+        .split("let input_body = div()")
         .nth(1)
         .expect("File Search must render an explicit header element")
         .split("// List pane: loading/empty/results with scrollbar overlay")
@@ -510,9 +535,8 @@ fn file_search_refocus_restores_keyboard_after_drag_out() {
     assert!(
         RENDER_IMPL_SOURCE.contains("window.activate_window();")
             && RENDER_IMPL_SOURCE.contains("FileSearch deferred root refocus")
-            && RENDER_IMPL_SOURCE.contains(
-                "take_file_search_native_drag_awaiting_app_reactivate()"
-            )
+            && RENDER_IMPL_SOURCE
+                .contains("take_file_search_native_drag_awaiting_app_reactivate()")
             && RENDER_IMPL_SOURCE.contains("platform::activate_main_window();"),
         "FileSearchView root mouse down after native drag-out must activate the app and re-key the panel"
     );
@@ -695,22 +719,19 @@ fn internal_directory_browse_preserves_current_results_until_first_batch() {
         "the preserving browse helper must enable the stable transition path"
     );
 
-    let transition_start = source
-        .find("fn open_file_search_view_with_result_transition(")
-        .expect("transition helper must exist");
-    let transition = &source[transition_start..(transition_start + 5200).min(source.len())];
+    let transition = function_body(source, "fn open_file_search_view_with_result_transition(");
 
     assert!(
         transition.contains(
             "if !preserve_current_results_until_first_batch && !seeded_initial_results {"
-        )
-            && transition.contains("self.cached_file_results.clear();")
+        ) && transition.contains("self.cached_file_results.clear();")
             && transition.contains("self.file_search_display_indices.clear();"),
         "preserving directory navigation and seeded first-paint opens must avoid clearing visible rows until replacement rows are ready"
     );
     assert!(
         transition.contains("let preserve_stream_results =")
-            && transition.contains("preserve_current_results_until_first_batch || seeded_initial_results")
+            && transition
+                .contains("preserve_current_results_until_first_batch || seeded_initial_results")
             && transition.contains("preserve_stream_results,")
             && transition.contains("cx,"),
         "the preserving flag must flow into restart_file_search_stream_for_query, including the seeded mini-directory first-paint path"
@@ -746,19 +767,21 @@ fn directory_stream_reveals_results_as_one_stable_batch() {
     let directory_start = source
         .find("FileSearchStreamSource::Directory {\n                    dir: parsed.directory,")
         .expect("directory stream restart call must exist");
-    let directory_section = &source[directory_start..(directory_start + 2600).min(source.len())];
+    let directory_policy = function_body(&source[directory_start..], "FileSearchStreamPolicy {");
     assert!(
-        directory_section.contains("true,\n                true,\n                cx,"),
+        directory_policy.contains("sort_on_done: true,")
+            && directory_policy.contains("defer_batches_until_done: true,"),
         "directory streams must defer UI updates until the listing is complete"
     );
 
     let spotlight_start = source
         .find("FileSearchStreamSource::Spotlight {\n                query: query.clone(),")
         .expect("spotlight stream restart call must exist");
-    let spotlight_section = &source[spotlight_start..(spotlight_start + 2600).min(source.len())];
+    let spotlight_policy = function_body(&source[spotlight_start..], "FileSearchStreamPolicy {");
     assert!(
-        spotlight_section
-            .contains("false,\n            false,\n            false,\n            cx,"),
+        spotlight_policy.contains("clear_on_first_batch: false,")
+            && spotlight_policy.contains("sort_on_done: false,")
+            && spotlight_policy.contains("defer_batches_until_done: false,"),
         "Spotlight search should keep progressive streaming behavior"
     );
 }
@@ -845,7 +868,8 @@ fn refresh_directory_shows_hud_and_restores_focus() {
 
     assert!(
         handler_section.contains("directory_action.success_hud(&dir)")
-            && FILES_ACTION_SOURCE.contains("Self::Refresh => Some(\"Refreshed Directory\".to_string())"),
+            && FILES_ACTION_SOURCE
+                .contains("Self::Refresh => Some(\"Refreshed Directory\".to_string())"),
         "refresh_directory must show the `Refreshed Directory` HUD through the current-directory action plan"
     );
     assert!(

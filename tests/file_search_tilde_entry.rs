@@ -77,7 +77,9 @@ fn filter_input_change_routes_script_list_mode_exit_entries() {
         "filter_input_change must route '?' into help/actions"
     );
     assert!(
-        source.contains("toggle_actions(cx, window)"),
+        source.contains(
+            "ScriptListSpecialEntry::ActionsHelp => {\n                self.one_window_stage(cx);"
+        ),
         "filter_input_change must open actions/help for '?'"
     );
 }

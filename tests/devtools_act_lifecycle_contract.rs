@@ -115,15 +115,16 @@ fn parse_timeouts_and_errors_are_failed_actions() {
 fn printable_text_keys_use_input_ladder_not_simulatekey_allowlist_block() {
     for needle in [
         "function isPrintableTextKey",
-        "setFilterTextInput",
-        "type: \"setFilter\"",
+        "return isPrintableTextKey(args) || isBackspaceTextKey(args);",
+        "function textEditingKeyPayload",
+        "commands: [{ type: \"setInput\", text: nextInput }]",
         "currentInput",
         "function postActionReceiptArgs",
-        "return isPrintableTextKey(args) ? withoutExpectedSurface(args) : args",
         "const afterArgs = postActionReceiptArgs(args);",
         "isPrintableTextKey(args) && after.target && after.classification === \"blocked-by-missing-primitive\"",
         "if (args.actionKind === \"key\" && !allowedKeys.has(normalizedKey) && !isPrintableTextKey(args))",
-        "if (isPrintableTextKey(args)) return \"stdin_command_parsed\";",
+        "channel: args.actionKind === \"key\" && !isTextEditingKey(args) ? \"simulateKey\" : \"batch\"",
+        "? textEditingKeyPayload(args, selector, before)",
         "nativeEscalation: false",
         "noNativeEscalation: !guardWithPreflight.nativeEscalation",
     ] {

@@ -5,6 +5,7 @@ const STARTUP_NEW_PRELUDE: &str = include_str!("../src/app_impl/startup_new_prel
 const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
 const SUBMIT_DIAGNOSTICS: &str = include_str!("../src/app_impl/submit_diagnostics.rs");
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
+const MAIN_LIST_ROWS: &str = include_str!("../src/app_impl/filtering_cache_main_list_rows.rs");
 const THEME_CHOOSER: &str = include_str!("../src/render_builtins/theme_chooser.rs");
 const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 const PROTOCOL_QUERY_VARIANTS: &str = include_str!("../src/protocol/message/variants/query_ops.rs");
@@ -47,6 +48,17 @@ fn source_function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     panic!("missing function body close: {signature}");
 }
 
+/// The braced body of the first `pattern => { ... }` match arm.
+fn match_arm_body<'a>(source: &'a str, pattern: &str) -> &'a str {
+    let start = source
+        .find(pattern)
+        .unwrap_or_else(|| panic!("missing match arm: {pattern}"));
+    let arrow = source[start..]
+        .find("=> {")
+        .unwrap_or_else(|| panic!("missing match arm body: {pattern}"));
+    source_function_body(&source[start + arrow..], "=> {")
+}
+
 fn source_window<'a>(source: &'a str, start: &str, len: usize) -> &'a str {
     let start_idx = source
         .find(start)
@@ -56,49 +68,28 @@ fn source_window<'a>(source: &'a str, start: &str, len: usize) -> &'a str {
 }
 
 #[test]
-fn brain_inbox_enter_stages_agent_chat_without_submit_or_resolve() {
+fn brain_inbox_enter_opens_chat_with_the_item_waiting_without_submit_or_resolve() {
     // Brain Inbox launcher rows are observations that require an explicit
-    // user decision. Plain Enter may stage a follow-up draft, but must not
-    // submit an Agent Chat turn or destructively resolve the inbox row.
+    // user decision. Plain Enter opens the chat with the item waiting in the
+    // line above the input, but must not submit a turn, fill the input, or
+    // destructively resolve the inbox row.
     let execute_body = source_function_body(
         SELECTION_FALLBACK,
         "pub(crate) fn execute_root_brain_inbox_open",
     );
     assert!(
-        execute_body.contains("brain_inbox_context_part(&item)")
-            && execute_body.contains("open_agent_chat_with_staged_brain_inbox_prompt("),
-        "Brain Inbox Enter should build context and delegate to the staging helper"
+        execute_body.contains("self.one_window_open_chat(")
+            && execute_body.contains("ChatEntry::quick()")
+            && execute_body.contains(".with(Self::brain_inbox_context_part(&item))"),
+        "Brain Inbox Enter should build context and open the chat with it waiting in the line"
     );
     assert!(
-        !execute_body.contains("resolve_root_brain_inbox_item")
+        !execute_body.contains("ChatEntry::sending(")
+            && !execute_body.contains("ChatEntry::seeded(")
+            && !execute_body.contains("resolve_root_brain_inbox_item")
             && !execute_body.contains("execute_root_note_open")
-            && !execute_body.contains("brain_inbox_composer_draft")
             && !execute_body.contains("resume_agent_chat_conversation_with_followup"),
-        "Brain Inbox Enter must not resolve, open notes directly, prefill the composer, or use the auto-submit follow-up route"
-    );
-
-    let staging_body = source_function_body(
-        SELECTION_FALLBACK,
-        "fn open_agent_chat_with_staged_brain_inbox_prompt",
-    );
-    assert!(
-        staging_body.contains(
-            "open_clean_agent_chat(cx)"
-        ) && staging_body.contains("stage_brain_inbox_context_on_agent_chat(")
-            && staging_body.contains("chat_view.resume_from_history(thread_id,"),
-        "The Brain Inbox staging helper should open Agent Chat without entry intent, optionally resume chat history, and stage inbox context"
-    );
-    assert!(
-        !staging_body.contains("submit_reused_entry_intent")
-            && !staging_body.contains("submit_input")
-            && !staging_body.contains("set_input(prompt")
-            && !staging_body.contains("resolve_root_brain_inbox_item"),
-        "The Brain Inbox staging helper must not auto-submit, put the full prompt in the composer, or resolve the inbox item"
-    );
-    assert!(
-        staging_body.find("resume_from_history(thread_id,")
-            < staging_body.find("stage_brain_inbox_context_on_agent_chat("),
-        "Brain Inbox chat_turn handoff should resume history before staging the inbox context"
+        "Brain Inbox Enter must not send, fill the input, resolve, open notes directly, or use the auto-submit follow-up route"
     );
 
     let context_part_body = source_function_body(SELECTION_FALLBACK, "fn brain_inbox_context_part");
@@ -109,44 +100,11 @@ fn brain_inbox_enter_stages_agent_chat_without_submit_or_resolve() {
             && context_part_body.contains("mime_type: Some(\"text/markdown\".to_string())"),
         "The full Brain Inbox prompt should be staged as a markdown TextBlock context part"
     );
-
-    let stage_context_body = source_function_body(
-        SELECTION_FALLBACK,
-        "fn stage_brain_inbox_context_on_agent_chat",
-    );
-    assert!(
-        stage_context_body.contains("replace_pending_context_parts")
-            && stage_context_body.contains("vec![context_part]")
-            && stage_context_body.contains("brain_inbox_local_assistant_message(&context_part)")
-            && stage_context_body.contains("push_local_assistant_message")
-            && !stage_context_body.contains("set_input("),
-        "Agent Chat staging should replace pending context and show local assistant guidance without preloading the composer"
-    );
-    assert!(
-        !stage_context_body.contains("submit_input")
-            && !stage_context_body.contains("submit_blocks")
-            && !stage_context_body.contains("start_turn"),
-        "Brain Inbox guidance must not start a provider turn"
-    );
-
-    let assistant_message_body =
-        source_function_body(SELECTION_FALLBACK, "fn brain_inbox_local_assistant_message");
-    assert!(
-        assistant_message_body.contains("split_once(\"\\nTask:\\n\")")
-            && assistant_message_body
-                .contains("strip_prefix(\"Follow up on this Brain Inbox item.\\n\\n\")")
-            && assistant_message_body.contains("What should we do with this?"),
-        "Visible Brain Inbox assistant guidance should use clean intro copy and show the actual inbox context"
-    );
 }
 
 #[test]
 fn mini_prompt_enter_records_submit_owner_before_resetting_to_script_list() {
-    let submit_fn = source_between(
-        ARG_HELPERS,
-        "fn submit_arg_prompt_from_current_state(",
-        "\n    fn is_valid_builtin_mic_selection",
-    );
+    let submit_fn = source_function_body(ARG_HELPERS, "fn submit_arg_prompt_from_current_state(");
 
     assert!(
         MINI_RENDER.contains("this.submit_arg_prompt_from_current_state(&prompt_id, cx);")
@@ -229,7 +187,7 @@ fn script_list_enter_refuses_immediate_prompt_submit_echo() {
         ("startup.rs", STARTUP),
         ("startup_new_prelude.rs", STARTUP_NEW_PRELUDE),
     ] {
-        let press_enter = source_window(source, "InputEvent::PressEnter", 4200);
+        let press_enter = match_arm_body(source, "InputEvent::PressEnter");
         assert!(
             press_enter.contains("submit_arg_prompt_from_current_state(&prompt_id, cx);"),
             "{name} must route Arg/MiniPrompt Enter to the shared prompt submit helper"
@@ -252,7 +210,7 @@ fn script_list_enter_refuses_immediate_prompt_submit_echo() {
         "submit diagnostics must log consumed ScriptList Enter echoes and expose receipts"
     );
     let execute_selected =
-        source_window(SELECTION_FALLBACK, "pub(crate) fn execute_selected", 1400);
+        source_function_body(SELECTION_FALLBACK, "pub(crate) fn execute_selected(");
     assert!(
         execute_selected
             .contains("should_consume_script_list_enter_after_submit(\"execute_selected\")")
@@ -262,37 +220,46 @@ fn script_list_enter_refuses_immediate_prompt_submit_echo() {
                 < execute_selected.find("execute_menu_syntax_command_invocation"),
         "execute_selected must be guarded and recorded before any ScriptList execution sink"
     );
-    let execute_selected_fallback =
-        source_window(SELECTION_FALLBACK, "pub fn execute_selected_fallback", 1800);
     assert!(
-        execute_selected_fallback.contains(
-            "should_consume_script_list_enter_after_submit(\"execute_selected_fallback\")"
-        ) && execute_selected_fallback
-            .contains("record_submit_diagnostic(\n                \"launcher_fallback\","),
-        "execute_selected_fallback must be guarded and recorded before fallback execution"
+        execute_selected.find("should_consume_script_list_enter_after_submit")
+            < execute_selected.find("self.run_selected_row(observation, cx)"),
+        "grouped rows, fallbacks included, must run only behind the execute_selected Enter echo guard"
     );
 }
 
 #[test]
 fn script_list_submit_requires_live_filter_and_grouped_cache_domain() {
-    let helper = source_window(
+    let helper = source_function_body(
         SELECTION_FALLBACK,
-        "fn live_script_list_flat_selection_for_submit",
-        2600,
+        "pub(crate) fn live_script_list_flat_selection_for_submit",
+    );
+    let resolver = source_function_body(
+        MAIN_LIST_ROWS,
+        "pub(crate) fn resolved_main_menu_selected_subject",
+    );
+    let painted = source_function_body(
+        MAIN_LIST_ROWS,
+        "pub(crate) fn painted_main_menu_selected_subject",
     );
     assert!(
-        helper.contains("matches!(self.current_view, AppView::ScriptList)"),
+        helper.contains("self.resolved_main_menu_selected_subject()"),
+        "ScriptList submit guard must resolve rows through the current-query resolver"
+    );
+    assert!(
+        painted.contains("matches!(self.current_view, AppView::ScriptList)"),
         "ScriptList submit guard must only resolve main-list rows on ScriptList"
     );
     assert!(
-        helper.contains("self.filter_text != self.computed_filter_text")
-            && helper.find("self.filter_text != self.computed_filter_text")
-                < helper.find("self.get_grouped_results_cached()"),
-        "ScriptList submit must block while live filter_text and computed_filter_text disagree"
+        resolver.contains("if !self.root_search.query_is_current()")
+            && resolver.find("if !self.root_search.query_is_current()")
+                < resolver.find("self.painted_main_menu_selected_subject()"),
+        "ScriptList submit must block while the live query and the computed query disagree"
     );
     assert!(
-        helper.contains("has_grouped_results_for_filter_text(&self.computed_filter_text)"),
-        "ScriptList submit must verify grouped cache ownership for the current filter before resolving selected_index"
+        painted.contains(
+            "self.main_menu_committed_query_stamp() != self.root_search.computed_query_stamp()"
+        ),
+        "ScriptList submit must verify grouped cache ownership for the current query before resolving selected_index"
     );
     assert!(
         FILTERING_CACHE.contains("source-filters={grouped_source_filter_key}")
@@ -301,7 +268,9 @@ fn script_list_submit_requires_live_filter_and_grouped_cache_domain() {
         "Grouped cache domains may include source/current-app/generation fields, so submit guards must not require exact filter-only keys"
     );
     assert!(
-        helper.contains("flat_result_index_for_coerced_grouped_selection(self.selected_index)"),
+        painted.contains(
+            ".find(|row| row.grouped_index == self.selected_index && row.eligibility.selectable)"
+        ) && helper.contains("MainMenuRowSubject::SearchResult { flat_index }"),
         "ScriptList submit must resolve through the grouped visible-row cache"
     );
     assert!(
@@ -312,21 +281,21 @@ fn script_list_submit_requires_live_filter_and_grouped_cache_domain() {
 
 #[test]
 fn execute_selected_uses_live_selection_guard_before_row_execution() {
-    let execute_selected =
-        source_window(SELECTION_FALLBACK, "pub(crate) fn execute_selected", 14000);
+    let run_row = source_function_body(SELECTION_FALLBACK, "pub(crate) fn run_selected_row(");
     assert!(
-        execute_selected.contains("live_script_list_flat_selection_for_submit()"),
+        run_row.contains("live_script_list_flat_selection_for_submit()"),
         "execute_selected must route visible-row submit through the live selection guard"
     );
     assert!(
-        execute_selected.find("live_script_list_flat_selection_for_submit()")
-            < execute_selected.find("inline_calculator_for_result_index"),
-        "live selection guard must run before calculator or row execution"
+        run_row.contains("ResolvedMainMenuSelection::Calculator { row, result }")
+            && run_row.find("self.resolved_main_menu_selected_subject()")
+                < run_row.find("one_window_open_calculator_answer"),
+        "calculator rows must resolve through the same current-query resolver before running"
     );
-    let guard_pos = execute_selected
+    let guard_pos = run_row
         .find("live_script_list_flat_selection_for_submit()")
-        .expect("execute_selected must call live selection guard");
-    let after_guard = &execute_selected[guard_pos..];
+        .expect("run_selected_row must call live selection guard");
+    let after_guard = &run_row[guard_pos..];
     assert!(
         after_guard.find("live_script_list_flat_selection_for_submit()")
             < after_guard.find("mark_opened_from_main_menu"),
@@ -336,28 +305,32 @@ fn execute_selected_uses_live_selection_guard_before_row_execution() {
 
 #[test]
 fn selected_main_list_search_result_owned_uses_live_selection_guard() {
-    let selected_owned = source_window(
+    let selected_owned = source_function_body(
         SELECTION_FALLBACK,
         "pub(crate) fn selected_main_list_search_result_owned",
-        1400,
     );
     assert!(
-        selected_owned.contains("live_script_list_flat_selection_for_submit()"),
+        selected_owned.contains("self.resolved_main_menu_selected_subject()")
+            && selected_owned.contains("row.eligibility.activatable"),
         "all owned ScriptList result lookups must share the live selection guard"
     );
 }
 
 #[test]
 fn fallback_enter_cannot_execute_legacy_cached_fallback_without_grouped_row() {
-    let fallback_submit =
-        source_window(SELECTION_FALLBACK, "pub fn execute_selected_fallback", 2200);
+    let run_row = source_function_body(SELECTION_FALLBACK, "pub(crate) fn run_selected_row(");
+    let guard_pos = run_row
+        .find("live_script_list_flat_selection_for_submit()")
+        .expect("run_selected_row must call live selection guard");
     assert!(
-        fallback_submit.contains("scripts::SearchResult::Fallback"),
+        run_row[guard_pos..].contains("scripts::SearchResult::Fallback(fallback_match) =>")
+            && run_row[guard_pos..]
+                .contains("self.execute_fallback_item(&fallback_match.fallback, cx)"),
         "fallback Enter must execute only a live grouped fallback row"
     );
     assert!(
-        !fallback_submit.contains("main_menu_fallback_state.selected_item().cloned()")
-            && !fallback_submit.contains("execute_selected_fallback.legacy"),
+        !SELECTION_FALLBACK.contains("main_menu_fallback_state.selected_item().cloned()")
+            && !SELECTION_FALLBACK.contains("execute_selected_fallback"),
         "fallback Enter must not execute legacy cached fallback state outside the visible grouped row domain"
     );
 }
@@ -373,8 +346,13 @@ fn get_state_exposes_submit_diagnostics_receipt() {
         PROMPT_HANDLER.contains("self.submit_diagnostics_snapshot()"),
         "main-window getState must forward submit diagnostics"
     );
+    let submit_current_value =
+        source_function_body(PROMPT_HANDLER, "fn submit_current_value(&mut self");
     assert!(
-        PROMPT_HANDLER.contains("record_submit_diagnostic(\n                    \"protocol\",\n                    \"submit_current_value\""),
+        submit_current_value.contains("self.submit_main_menu_selected_subject(cx)?")
+            && submit_current_value.contains("self.submit_arg_prompt_from_current_state(&id, cx)")
+            && source_function_body(ARG_HELPERS, "fn submit_arg_prompt_from_current_state(")
+                .contains("record_submit_diagnostic"),
         "protocol-driven submit_current_value must record submit diagnostics"
     );
     assert!(
@@ -382,11 +360,11 @@ fn get_state_exposes_submit_diagnostics_receipt() {
         "protocol forceSubmit must record submit diagnostics"
     );
     assert!(
-        DEVTOOLS_FOCUS.contains("submitDiagnostics: state.submitDiagnostics ?? null")
+        DEVTOOLS_FOCUS.contains("submitDiagnostics: diagnostic(state.submitDiagnostics ?? null)")
             && DEVTOOLS_ACT.contains("focus.inspect.submitDiagnostics")
             && DEVTOOLS_ACT.contains("isPromptEntityTargetReceipt")
             && DEVTOOLS_ACT.contains("sourceAfter.submitDiagnostics")
-            && DEVTOOLS_ACT.contains("submitDiagnostics: {\n      before: before.submitDiagnostics ?? null,\n      after: after.submitDiagnostics ?? null,"),
+            && DEVTOOLS_ACT.contains("submitDiagnostics: diagnostic({\n      before: before.submitDiagnostics ?? null,\n      after: after.submitDiagnostics ?? null,"),
         "DevTools act/focus receipts must expose before/after submit diagnostics"
     );
 }
@@ -402,6 +380,8 @@ fn get_state_exposes_submit_diagnostics_receipt() {
 fn empty_spine_subsearch_prefixes_are_not_submit_armed() {
     const AGENT_HANDOFF: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
     const IMPL_MOVEMENT: &str = include_str!("../src/app_navigation/impl_movement.rs");
+    const IMPL_SCROLL: &str = include_str!("../src/app_navigation/impl_scroll.rs");
+    const APP_STATE: &str = include_str!("../src/main_sections/app_state.rs");
 
     let rich_classifier = source_window(FILTERING_CACHE, "fn active_rich_spine_subsearch(", 900);
     assert!(
@@ -425,10 +405,17 @@ fn empty_spine_subsearch_prefixes_are_not_submit_armed() {
         "Enter in an unarmed empty colon mode must be consumed before any row acceptance or plan submission"
     );
 
-    let down = source_window(IMPL_MOVEMENT, "fn move_selection_down(", 1200);
+    let down = source_function_body(IMPL_MOVEMENT, "fn move_selection_down(");
+    let move_by = source_function_body(IMPL_SCROLL, "fn move_selection_by(");
+    let keyboard_select = source_function_body(IMPL_MOVEMENT, "fn set_selected_index(");
+    let select_row = source_function_body(APP_STATE, "pub(crate) fn select_main_menu_row(");
     assert!(
-        down.contains("spine_empty_subsearch_selection_suppressed()")
-            && down.contains("arm_spine_empty_subsearch_selection()"),
+        down.contains("self.move_selection_by(1, cx)")
+            && move_by.contains("spine_empty_subsearch_selection_suppressed()")
+            && move_by.contains("\"spine_empty_subsearch_arm\"")
+            && keyboard_select.contains("MainMenuSelectionOrigin::Keyboard")
+            && select_row.contains("MainMenuSelectionOrigin::Keyboard")
+            && select_row.contains("self.arm_spine_empty_subsearch_selection();"),
         "Down must be the explicit arming gesture for the unarmed empty colon mode"
     );
 }
