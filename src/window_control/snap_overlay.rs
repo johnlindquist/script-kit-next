@@ -232,6 +232,7 @@ pub(crate) fn open_snap_overlay_window(
     cx: &mut App,
 ) -> Result<WindowHandle<SnapOverlayView>> {
     host_policy.validate()?;
+    #[allow(clippy::disallowed_methods)] // the tiling guide over other apps, not an app view
     let handle = cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),

@@ -779,6 +779,7 @@ impl Render for SpotlightGlassDemo {
 fn main() {
     application().run(|cx| {
         let bounds = Bounds::centered(None, size(px(WINDOW_W), px(WINDOW_H)), cx);
+        #[allow(clippy::disallowed_methods)] // standalone demo binary
         let demo_window = cx
             .open_window(
                 WindowOptions {

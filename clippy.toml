@@ -1,0 +1,6 @@
+# The app draws on one window. Views, actions, notes, chat, dictation and every
+# "are you sure" live under the main input; a new window needs an #[allow] at its call site.
+disallowed-methods = [
+    { path = "gpui::App::open_window", reason = "one window: draw it as a view in the main window" },
+    { path = "gpui::AsyncApp::open_window", reason = "one window: draw it as a view in the main window" },
+]

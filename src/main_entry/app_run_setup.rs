@@ -314,6 +314,7 @@ app.run(move |cx: &mut App| {
         let config_for_tray_actions = config_for_app.clone();
 
         // Root is required for gpui_component's InputState focus tracking
+        #[allow(clippy::disallowed_methods)] // the main window
         let window: WindowHandle<Root> = match cx.open_window(
             match main_window_options(bounds, window_background, crate::runtime_policy::WindowHostPolicy::Interactive) {
                 Ok(options) => options,
