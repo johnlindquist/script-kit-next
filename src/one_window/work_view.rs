@@ -9,7 +9,7 @@ use sk_one_window::steps::{self, Phase as StepsPhase, StepState};
 use sk_one_window::strip::{self, TaskState};
 
 use crate::list_item::{render_section_header, IconKind, ListItem, ListItemColors};
-use crate::ScriptListApp;
+use crate::{FocusedInput, ScriptListApp};
 
 const STRIP_ID: &str = "one-window-strip";
 
@@ -387,4 +387,86 @@ pub(crate) fn strip_snapshot(app: &ScriptListApp) -> serde_json::Value {
         })).collect::<Vec<_>>(),
         "cmdJ": strip.target().map(|t| t.id.clone()),
     })
+}
+
+impl ScriptListApp {
+    /// What automation sees while a work view covers the list: the input, the view's header, and
+    /// its rows and turns from the same state the view draws. Words the user wrote are redacted.
+    pub(crate) fn collect_one_window_work_elements(
+        &self,
+        limit: usize,
+    ) -> (Vec<crate::protocol::ElementInfo>, usize) {
+        use crate::protocol::{ElementContentKind, ElementInfo};
+        let header = |ix: usize, label: &str| ElementInfo {
+            semantic_id: crate::protocol::generate_semantic_id("section", ix, label),
+            role: Some("sectionHeader".to_string()),
+            kind: Some("sectionHeader".to_string()),
+            selectable: Some(false),
+            ..ElementInfo::panel(label)
+        };
+        let product = |id: String, ix: usize, title: &str, selected: bool| ElementInfo {
+            semantic_id: id,
+            ..ElementInfo::product_static_choice(ix, title, title, selected)
+        };
+        let yours = |id: String, ix: usize, text: &str, selected: bool| ElementInfo {
+            semantic_id: id,
+            ..ElementInfo::redacted_choice(
+                ix,
+                text,
+                text,
+                selected,
+                ElementContentKind::UserContent,
+            )
+        };
+        let mut out = vec![
+            ElementInfo::input(
+                "filter",
+                Some(self.filter_text.as_str()),
+                self.focused_input != FocusedInput::None,
+            ),
+            header(0, &self.one_window.views().crumb()),
+        ];
+        if let Some(c) = self.one_window.chat() {
+            for (i, t) in c.turns.iter().enumerate() {
+                out.push(yours(format!("chat-turn:{i}"), i, &t.text, false));
+            }
+            if c.phase == ChatPhase::Ready {
+                out.push(header(1, chat::NEXT_HEAD));
+                for (i, row) in c.next.iter().enumerate() {
+                    out.push(product(
+                        format!("chat-next:{}", row.key),
+                        i,
+                        &row.title,
+                        i == c.sel,
+                    ));
+                }
+            }
+        } else if let Some(s) = self.one_window.steps_view() {
+            let conns = self.one_window.work().connections();
+            let focus = s.sel.or_else(|| s.missing(conns).map(|(i, _)| i));
+            for (i, step) in s.steps.iter().enumerate() {
+                out.push(yours(format!("step:{i}"), i, &step.text, focus == Some(i)));
+            }
+        } else if let Some(c) = self.one_window.connecting() {
+            let name = connect::name_of(&c.integration);
+            out.push(product(
+                format!("connect:{}", c.integration),
+                0,
+                &format!("This needs {name}"),
+                true,
+            ));
+            out.push(yours("connect:waiting".into(), 1, &c.waiting, false));
+            if let Some(info) = connect::integration(&c.integration) {
+                out.push(header(1, "Also works once connected"));
+                for (i, can) in info.can.iter().enumerate() {
+                    out.push(product(format!("connect-can:{i}"), i + 2, can, false));
+                }
+            }
+        } else if let Some(task) = self.one_window.open_task() {
+            out.push(yours(format!("agent:{}", task.id), 0, &task.label, true));
+        }
+        let total = out.len();
+        out.truncate(limit);
+        (out, total)
+    }
 }
