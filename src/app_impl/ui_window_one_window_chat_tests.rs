@@ -127,7 +127,10 @@ fn asking_about_the_highlighted_row_stages_it_and_sends_it_with_the_first_turn()
         wait(cx, 20);
         key(&app, cx, Key::CmdK);
         wait(cx, ENTER_GUARD_MS);
-        let label = (enter_label(&app, cx), painted_first_row(&app, cx));
+        let leading = (enter_label(&app, cx), painted_first_row(&app, cx));
+        key(&app, cx, Key::Down);
+        wait(cx, ENTER_GUARD_MS);
+        let label = (leading, enter_label(&app, cx));
         key(&app, cx, Key::Enter);
         wait(cx, 20);
         let opened = (top_view(&app, cx), staged(&app, cx), windows(cx) == before);
@@ -143,14 +146,17 @@ fn asking_about_the_highlighted_row_stages_it_and_sends_it_with_the_first_turn()
             turns(&app, cx).into_iter().next(),
         )
     });
+    let ((leading, painted), about) = label;
     assert_eq!(
-        label,
-        (
-            "Ask the model about it".to_string(),
-            Some("Ask the model about it".to_string())
-        ),
+        Some(leading.as_str()),
+        painted.as_deref(),
         "the painted list starts with the row the Enter button names"
     );
+    assert_ne!(
+        leading, "Ask the model about it",
+        "⌘K then Enter does what the row does"
+    );
+    assert_eq!(about, "Ask the model about it", "asking is one ↓ away");
     assert_eq!(
         opened,
         (Some("chat".into()), Some(1), true),

@@ -89,14 +89,15 @@ impl ScriptListApp {
             },
             None => crate::actions::get_global_actions(),
         };
+        let mut rows = actions
+            .iter()
+            .filter(|action| action.is_enabled())
+            .map(action_row);
         Event::Actions(
-            std::iter::once(super::chat_entry::about_row())
-                .chain(
-                    actions
-                        .iter()
-                        .filter(|action| action.is_enabled())
-                        .map(action_row),
-                )
+            rows.next()
+                .into_iter()
+                .chain(std::iter::once(super::chat_entry::about_row()))
+                .chain(rows)
                 .collect(),
         )
     }

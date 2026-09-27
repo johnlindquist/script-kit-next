@@ -13,7 +13,7 @@ pub(crate) use crate::ai::agent_chat::ui::entry::ChatEntry;
 use crate::ai::message_parts::AiContextPart;
 use crate::{AppView, FocusTarget, ScriptListApp};
 
-/// The row ⌘K offers first for what it staged: the chat opens about it.
+/// The row ⌘K offers after what it staged's own action: the chat opens about it.
 pub(crate) const ABOUT_KEY: &str = "chat:about";
 
 pub(crate) fn about_row() -> sk_one_window::Row {
