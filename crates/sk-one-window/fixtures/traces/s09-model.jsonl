@@ -1,0 +1,338 @@
+{"meta":{"chapter":"s09-model","speed":3,"mode":"demo","recordedAt":"2026-09-27T00:05:10.956Z","ok":true,"attempts":1,"durationMs":21557,"url":"/lab/s09-model.html?record=1&speed=3"}}
+{"t":0,"ev":"init","holdMs":8000,"focused":{"kind":"selection","label":"Selected","title":"“hey john, just checking in on the launch stuff, can u…”","sub":"in Mail","icon":"type"},"history":[],"text":"","ctx":"mail","connected":[]}
+{"t":0,"ev":"content","px":252}
+{"t":0,"out":"height","mode":"grow","px":252,"initial":true}
+{"t":0,"out":"enter","id":"brief:reading","label":"Reading what's next…","armed":false}
+{"t":2,"out":"slot","kind":"focused","label":"Focused","title":"“hey john, just checking in on the launch stuff, can u…”","sub":"in Mail","dimmed":true}
+{"t":2,"out":"header","words":"Before you type"}
+{"t":2,"out":"list","rows":[{"key":"brief:reading","title":"Reading what's next…"}],"sel":0}
+{"t":2,"ev":"names","text":"","rows":[{"key":"brief:reading","title":"Reading what's next…","pinned":true,"head":"Before you type","enterLabel":"Reading what's next…"}]}
+{"t":177,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline","pinned":true,"head":null,"enterLabel":"Fill in “send Sarah the Q4 timeline”"},{"key":"brief:join Standup","title":"Join Standup","pinned":true,"head":null,"enterLabel":"Fill in “join Standup”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"}],"via":"render"}
+{"t":178,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":true}
+{"t":179,"out":"header","words":"Before Standup · in 18 min"}
+{"t":179,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline"},{"key":"brief:join Standup","title":"Join Standup"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"}],"sel":0}
+{"t":3893,"ev":"text","text":"r"}
+{"t":3895,"out":"enter","id":"Mail menu: Message › Reply","label":"Reply","armed":false}
+{"t":3895,"ev":"names","text":"r","rows":[{"key":"Mail menu: Message › Reply","title":"Reply","enterLabel":"Reply","score":102.75,"head":null,"fallback":false},{"key":"Mail menu: Message › Redirect","title":"Redirect","enterLabel":"Redirect","score":102.6,"head":null,"fallback":false},{"key":"Mail menu: Message › Reply All","title":"Reply All","enterLabel":"Reply All","score":102.55,"head":null,"fallback":false}],"via":"text"}
+{"t":3896,"out":"header","words":"Matches"}
+{"t":3897,"out":"list","rows":[{"key":"Mail menu: Message › Reply","title":"Reply"},{"key":"Mail menu: Message › Redirect","title":"Redirect"},{"key":"Mail menu: Message › Reply All","title":"Reply All"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":3915,"ev":"text","text":"re"}
+{"t":3916,"ev":"names","text":"re","rows":[{"key":"Mail menu: Message › Reply","title":"Reply","enterLabel":"Reply","score":102.75,"head":null,"fallback":false},{"key":"Mail menu: Message › Redirect","title":"Redirect","enterLabel":"Redirect","score":102.6,"head":null,"fallback":false},{"key":"Mail menu: Message › Reply All","title":"Reply All","enterLabel":"Reply All","score":102.55,"head":null,"fallback":false}],"via":"text"}
+{"t":3943,"ev":"text","text":"rep"}
+{"t":3944,"ev":"names","text":"rep","rows":[{"key":"Mail menu: Message › Reply","title":"Reply","enterLabel":"Reply","score":102.75,"head":null,"fallback":false},{"key":"Mail menu: Message › Reply All","title":"Reply All","enterLabel":"Reply All","score":102.55,"head":null,"fallback":false},{"key":"Move Mail to Previous Display","title":"Move Mail to Previous Display","enterLabel":"Move Mail to Previous Display","score":26.55,"head":null,"fallback":false}],"via":"text"}
+{"t":3945,"out":"list","rows":[{"key":"Mail menu: Message › Reply","title":"Reply"},{"key":"Mail menu: Message › Reply All","title":"Reply All"},{"key":"Move Mail to Previous Display","title":"Move Mail to Previous Display"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":3968,"ev":"text","text":"repl"}
+{"t":3969,"ev":"names","text":"repl","rows":[{"key":"Mail menu: Message › Reply","title":"Reply","enterLabel":"Reply","score":102.75,"head":null,"fallback":false},{"key":"Mail menu: Message › Reply All","title":"Reply All","enterLabel":"Reply All","score":102.55,"head":null,"fallback":false},{"key":"Move Mail to Previous Display","title":"Move Mail to Previous Display","enterLabel":"Move Mail to Previous Display","score":26.55,"head":null,"fallback":false}],"via":"text"}
+{"t":3995,"ev":"text","text":"reply"}
+{"t":3996,"ev":"names","text":"reply","rows":[{"key":"Mail menu: Message › Reply","title":"Reply","enterLabel":"Reply","score":102.75,"head":null,"fallback":false},{"key":"Mail menu: Message › Reply All","title":"Reply All","enterLabel":"Reply All","score":102.55,"head":null,"fallback":false},{"key":"Move Mail to Previous Display","title":"Move Mail to Previous Display","enterLabel":"Move Mail to Previous Display","score":26.55,"head":null,"fallback":false}],"via":"text"}
+{"t":4015,"ev":"text","text":"reply "}
+{"t":4015,"ev":"names","text":"reply ","rows":[{"key":"Mail menu: Message › Reply","title":"Reply","enterLabel":"Reply","score":102.75,"head":null,"fallback":false},{"key":"Mail menu: Message › Reply All","title":"Reply All","enterLabel":"Reply All","score":102.55,"head":null,"fallback":false},{"key":"Move Mail to Previous Display","title":"Move Mail to Previous Display","enterLabel":"Move Mail to Previous Display","score":26.55,"head":null,"fallback":false}],"via":"text"}
+{"t":4047,"ev":"text","text":"reply t"}
+{"t":4048,"out":"enter","id":"slot0","label":"Runs what Jev understands","armed":false}
+{"t":4048,"ev":"names","text":"reply t","rows":[{"key":"fallback-google:reply t","title":"Search Google for “reply t”","enterLabel":"Search Google for “reply t”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:reply t","title":"Ask AI “reply t”","enterLabel":"Ask AI “reply t”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":4051,"out":"height","mode":"hold","px":551,"by":"govern","list":302,"floor":393}
+{"t":4052,"out":"header","words":"Jev","note":"⌘1–3"}
+{"t":4052,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:reply t","title":"Search Google for “reply t”"},{"key":"fallback-ai:reply t","title":"Ask AI “reply t”"}],"sel":0}
+{"t":4069,"ev":"text","text":"reply to"}
+{"t":4070,"ev":"names","text":"reply to","rows":[{"key":"fallback-google:reply to","title":"Search Google for “reply to”","enterLabel":"Search Google for “reply to”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:reply to","title":"Ask AI “reply to”","enterLabel":"Ask AI “reply to”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":4070,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:reply to","title":"Search Google for “reply to”"},{"key":"fallback-ai:reply to","title":"Ask AI “reply to”"}],"sel":0}
+{"t":4086,"ev":"text","text":"reply to "}
+{"t":4087,"ev":"names","text":"reply to ","rows":[{"key":"fallback-google:reply to ","title":"Search Google for “reply to ”","enterLabel":"Search Google for “reply to ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:reply to ","title":"Ask AI “reply to ”","enterLabel":"Ask AI “reply to ”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":4088,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:reply to ","title":"Search Google for “reply to ”"},{"key":"fallback-ai:reply to ","title":"Ask AI “reply to ”"}],"sel":0}
+{"t":4110,"ev":"text","text":"reply to s"}
+{"t":4111,"ev":"names","text":"reply to s","rows":[{"key":"fallback-google:reply to s","title":"Search Google for “reply to s”","enterLabel":"Search Google for “reply to s”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:reply to s","title":"Ask AI “reply to s”","enterLabel":"Ask AI “reply to s”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":4112,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:reply to s","title":"Search Google for “reply to s”"},{"key":"fallback-ai:reply to s","title":"Ask AI “reply to s”"}],"sel":0}
+{"t":4137,"ev":"text","text":"reply to sa"}
+{"t":4138,"ev":"names","text":"reply to sa","rows":[{"key":"fallback-google:reply to sa","title":"Search Google for “reply to sa”","enterLabel":"Search Google for “reply to sa”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:reply to sa","title":"Ask AI “reply to sa”","enterLabel":"Ask AI “reply to sa”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":4139,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:reply to sa","title":"Search Google for “reply to sa”"},{"key":"fallback-ai:reply to sa","title":"Ask AI “reply to sa”"}],"sel":0}
+{"t":4164,"ev":"text","text":"reply to sar"}
+{"t":4165,"ev":"names","text":"reply to sar","rows":[{"key":"fallback-google:reply to sar","title":"Search Google for “reply to sar”","enterLabel":"Search Google for “reply to sar”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:reply to sar","title":"Ask AI “reply to sar”","enterLabel":"Ask AI “reply to sar”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":4166,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:reply to sar","title":"Search Google for “reply to sar”"},{"key":"fallback-ai:reply to sar","title":"Ask AI “reply to sar”"}],"sel":0}
+{"t":4186,"ev":"text","text":"reply to sara"}
+{"t":4187,"ev":"names","text":"reply to sara","rows":[{"key":"fallback-google:reply to sara","title":"Search Google for “reply to sara”","enterLabel":"Search Google for “reply to sara”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:reply to sara","title":"Ask AI “reply to sara”","enterLabel":"Ask AI “reply to sara”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":4188,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:reply to sara","title":"Search Google for “reply to sara”"},{"key":"fallback-ai:reply to sara","title":"Ask AI “reply to sara”"}],"sel":0}
+{"t":4208,"ev":"text","text":"reply to sarah"}
+{"t":4209,"ev":"names","text":"reply to sarah","rows":[{"key":"fallback-google:reply to sarah","title":"Search Google for “reply to sarah”","enterLabel":"Search Google for “reply to sarah”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:reply to sarah","title":"Ask AI “reply to sarah”","enterLabel":"Ask AI “reply to sarah”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":4210,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:reply to sarah","title":"Search Google for “reply to sarah”"},{"key":"fallback-ai:reply to sarah","title":"Ask AI “reply to sarah”"}],"sel":0}
+{"t":4496,"ev":"jev","text":"reply to sarah","rows":[{"key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","icon":"reply","p":0.9400000000000001,"fill":"reply to Sarah","target":"Sarah","verb":"reply","kind":"ask","source":"inbox"},{"key":"jev:message … (Message)","title":"Message “reply to sarah”","icon":"capture","p":0.04,"fill":"message “reply to sarah”","kind":"capture"},{"key":"jev:selected text: draft a reply","title":"Draft a reply","icon":"reply","p":0.01,"fill":"draft a reply","target":"the selection","verb":"reply","kind":"ask","source":"selection"}],"ms":213}
+{"t":4496,"out":"enter","id":"slot0","label":"Reply to Sarah","armed":false}
+{"t":4497,"out":"list","rows":[{"key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","jev":true},{"key":"jev:message … (Message)","title":"Message “reply to sarah”","jev":true},{"key":null,"title":"","jev":true,"reading":false},{"key":"fallback-google:reply to sarah","title":"Search Google for “reply to sarah”"},{"key":"fallback-ai:reply to sarah","title":"Ask AI “reply to sarah”"}],"sel":0}
+{"t":4801,"ev":"content","px":460}
+{"t":4803,"out":"height","mode":"shrink","px":460,"from":551}
+{"t":4804,"ev":"key","key":"Enter"}
+{"t":4804,"out":"run","key":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","title":"Reply to Sarah","how":"slot"}
+{"t":4804,"ev":"view","op":"open","name":"reply","row":"jev:reply: Mail Sarah — can u send the updated timeline by thurs?","via":"key:Enter","enter":{"id":"reply:need","label":"Say what to tell Sarah"},"label":"Reply","takesInput":true}
+{"t":4806,"ev":"viewEnter","id":"reply:need","label":"Say what to tell Sarah","onTop":true,"via":"open"}
+{"t":4807,"out":"enter","id":"reply:need","label":"Say what to tell Sarah","armed":false}
+{"t":4808,"ev":"content","px":302,"via":"open"}
+{"t":4808,"out":"height","mode":"hold","px":551,"to":302,"waitMs":300}
+{"t":4809,"out":"header","words":"Reply","view":"reply"}
+{"t":5110,"out":"height","mode":"shrink","px":302,"from":551}
+{"t":5743,"ev":"text","text":""}
+{"t":5828,"ev":"text","text":"w"}
+{"t":5828,"ev":"viewEnter","id":"reply:words","label":"Put “w” in What","onTop":true,"via":"text"}
+{"t":5828,"out":"enter","id":"reply:words","label":"Put “w” in What","armed":false}
+{"t":5854,"ev":"text","text":"wr"}
+{"t":5854,"ev":"viewEnter","id":"reply:words","label":"Put “wr” in What","onTop":true,"via":"text"}
+{"t":5854,"out":"enter","id":"reply:words","label":"Put “wr” in What","armed":false}
+{"t":5881,"ev":"text","text":"wri"}
+{"t":5881,"ev":"viewEnter","id":"reply:words","label":"Put “wri” in What","onTop":true,"via":"text"}
+{"t":5881,"out":"enter","id":"reply:words","label":"Put “wri” in What","armed":false}
+{"t":5909,"ev":"text","text":"writ"}
+{"t":5909,"ev":"viewEnter","id":"reply:words","label":"Put “writ” in What","onTop":true,"via":"text"}
+{"t":5910,"out":"enter","id":"reply:words","label":"Put “writ” in What","armed":false}
+{"t":5938,"ev":"text","text":"write"}
+{"t":5938,"ev":"viewEnter","id":"reply:words","label":"Put “write” in What","onTop":true,"via":"text"}
+{"t":5938,"out":"enter","id":"reply:words","label":"Put “write” in What","armed":false}
+{"t":5962,"ev":"text","text":"write "}
+{"t":5993,"ev":"text","text":"write i"}
+{"t":5993,"ev":"viewEnter","id":"reply:words","label":"Put “write i” in What","onTop":true,"via":"text"}
+{"t":5993,"out":"enter","id":"reply:words","label":"Put “write i” in What","armed":false}
+{"t":6022,"ev":"text","text":"write it"}
+{"t":6022,"ev":"viewEnter","id":"reply:model","label":"Have the model write it","onTop":true,"via":"text"}
+{"t":6023,"out":"enter","id":"reply:model","label":"Have the model write it","armed":false}
+{"t":6046,"ev":"text","text":"write it "}
+{"t":6077,"ev":"text","text":"write it f"}
+{"t":6096,"ev":"text","text":"write it fo"}
+{"t":6124,"ev":"text","text":"write it for"}
+{"t":6153,"ev":"text","text":"write it for "}
+{"t":6183,"ev":"text","text":"write it for m"}
+{"t":6204,"ev":"text","text":"write it for me"}
+{"t":6606,"ev":"key","key":"Enter"}
+{"t":6606,"ev":"view","op":"open","name":"chat","via":"key:Enter","enter":{"id":"chat:writing","label":"The model is writing…"},"label":"The model","takesInput":true}
+{"t":6609,"ev":"viewEnter","id":"chat:writing","label":"The model is writing…","onTop":true,"via":"open"}
+{"t":6609,"out":"enter","id":"chat:writing","label":"The model is writing…","armed":false}
+{"t":6610,"out":"header","words":"The model","view":"chat"}
+{"t":6610,"out":"text","text":"","by":"page","silent":true}
+{"t":7064,"ev":"content","px":312}
+{"t":7064,"out":"height","mode":"grow","px":312,"from":302}
+{"t":7412,"ev":"content","px":504}
+{"t":7412,"out":"height","mode":"grow","px":504,"from":312}
+{"t":7413,"ev":"viewEnter","id":"chat:ranking","label":"Jev is reading the draft…","onTop":true}
+{"t":7413,"out":"enter","id":"chat:ranking","label":"Jev is reading the draft…","armed":true}
+{"t":7413,"out":"header","words":"The model","view":"chat","head":"What to do with it · Jev ranks, you pick"}
+{"t":7545,"ev":"viewEnter","id":"chat:0:use","label":"Use it as the reply to Sarah","onTop":true}
+{"t":7545,"out":"enter","id":"chat:0:use","label":"Use it as the reply to Sarah","armed":true}
+{"t":8568,"ev":"text","text":"s"}
+{"t":8569,"ev":"viewEnter","id":"chat:say","label":"Ask the model: “s”","onTop":true,"via":"text"}
+{"t":8569,"out":"enter","id":"chat:say","label":"Ask the model: “s”","armed":false}
+{"t":8604,"ev":"text","text":"sh"}
+{"t":8604,"ev":"viewEnter","id":"chat:say","label":"Ask the model: “sh”","onTop":true,"via":"text"}
+{"t":8604,"out":"enter","id":"chat:say","label":"Ask the model: “sh”","armed":false}
+{"t":8627,"ev":"text","text":"sho"}
+{"t":8627,"ev":"viewEnter","id":"chat:say","label":"Ask the model: “sho”","onTop":true,"via":"text"}
+{"t":8627,"out":"enter","id":"chat:say","label":"Ask the model: “sho”","armed":false}
+{"t":8656,"ev":"text","text":"shor"}
+{"t":8656,"ev":"viewEnter","id":"chat:say","label":"Ask the model: “shor”","onTop":true,"via":"text"}
+{"t":8656,"out":"enter","id":"chat:say","label":"Ask the model: “shor”","armed":false}
+{"t":8685,"ev":"text","text":"short"}
+{"t":8685,"ev":"viewEnter","id":"chat:say","label":"Ask the model: “short”","onTop":true,"via":"text"}
+{"t":8685,"out":"enter","id":"chat:say","label":"Ask the model: “short”","armed":false}
+{"t":8708,"ev":"text","text":"shorte"}
+{"t":8708,"ev":"viewEnter","id":"chat:say","label":"Ask the model: “shorte”","onTop":true,"via":"text"}
+{"t":8708,"out":"enter","id":"chat:say","label":"Ask the model: “shorte”","armed":false}
+{"t":8731,"ev":"text","text":"shorter"}
+{"t":8731,"ev":"viewEnter","id":"chat:say","label":"Ask the model: “shorter”","onTop":true,"via":"text"}
+{"t":8732,"out":"enter","id":"chat:say","label":"Ask the model: “shorter”","armed":false}
+{"t":8966,"ev":"key","key":"Enter"}
+{"t":8967,"ev":"viewEnter","id":"chat:writing","label":"The model is writing…","onTop":true,"via":"key:Enter"}
+{"t":8967,"out":"enter","id":"chat:writing","label":"The model is writing…","armed":false}
+{"t":8967,"out":"header","words":"The model","view":"chat"}
+{"t":8967,"out":"text","text":"","by":"page","silent":true}
+{"t":9397,"ev":"content","px":609}
+{"t":9397,"out":"height","mode":"grow","px":609,"from":504}
+{"t":9398,"ev":"viewEnter","id":"chat:ranking","label":"Jev is reading the draft…","onTop":true}
+{"t":9398,"out":"enter","id":"chat:ranking","label":"Jev is reading the draft…","armed":true}
+{"t":9398,"out":"header","words":"The model","view":"chat","head":"What to do with it · Jev ranks, you pick"}
+{"t":9507,"ev":"viewEnter","id":"chat:1:use","label":"Use it as the reply to Sarah","onTop":true}
+{"t":9507,"out":"enter","id":"chat:1:use","label":"Use it as the reply to Sarah","armed":true}
+{"t":10273,"ev":"key","key":"Enter"}
+{"t":10273,"ev":"view","op":"back","from":"chat","via":"key:Enter","name":"reply"}
+{"t":10274,"ev":"viewEnter","id":"reply:send:Hi Sarah, timeline's updated: beta Oct 14, launch Nov 4. Screenshots go to marketing today.","label":"Send to Sarah: “Hi Sarah, timeline's updated: beta Oct 14, launch Nov…”","onTop":true,"via":"back"}
+{"t":10274,"out":"enter","id":"reply:send:Hi Sarah, timeline's updated: beta Oct 14, launch Nov 4. Screenshots go to marketing today.","label":"Send to Sarah: “Hi Sarah, timeline's updated: beta Oct 14, launch Nov…”","armed":false}
+{"t":10275,"ev":"content","px":328,"via":"back"}
+{"t":10275,"out":"height","mode":"hold","px":609,"to":328,"waitMs":300}
+{"t":10275,"out":"header","words":"Reply","view":"reply"}
+{"t":10275,"out":"text","text":"reply to sarah","by":"page","silent":true}
+{"t":10577,"out":"height","mode":"shrink","px":328,"from":609}
+{"t":12077,"ev":"key","key":"Enter"}
+{"t":12077,"ev":"done","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","icon":"message","risk":"hold","stay":false,"form":"message","via":"key:Enter"}
+{"t":12077,"ev":"hold","label":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","via":"done"}
+{"t":12077,"out":"held","label":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","op":"start"}
+{"t":12079,"ev":"view","op":"home","from":"reply","via":"done"}
+{"t":12080,"out":"enter","id":"slot0","label":"Reply to Sarah","armed":true}
+{"t":12081,"ev":"content","px":460,"via":"home"}
+{"t":12081,"out":"height","mode":"grow","px":460,"from":328}
+{"t":12081,"out":"text","text":"","by":"page"}
+{"t":12081,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":true}
+{"t":12082,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline","pinned":true,"head":null,"enterLabel":"Fill in “send Sarah the Q4 timeline”"},{"key":"brief:join Standup","title":"Join Standup","pinned":true,"head":null,"enterLabel":"Fill in “join Standup”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"}],"via":"home"}
+{"t":12083,"out":"slot","kind":"holding","label":"Sending in 8s","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
+{"t":12083,"out":"header","words":"Before Standup · in 18 min"}
+{"t":12083,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline"},{"key":"brief:join Standup","title":"Join Standup"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"}],"sel":0}
+{"t":12083,"out":"toast","text":"Sending in 8s · To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”"}
+{"t":12950,"ev":"text","text":"b"}
+{"t":12950,"out":"enter","id":"Mail menu: Message › Block Sender","label":"Block Sender","armed":false}
+{"t":12950,"ev":"names","text":"b","rows":[{"key":"Mail menu: Message › Block Sender","title":"Block Sender","enterLabel":"Block Sender","score":102.4,"head":null,"fallback":false},{"key":"open Books (app)","title":"Books","enterLabel":"Books","score":101.75,"head":null,"fallback":false},{"key":"open Blender (app)","title":"Blender","enterLabel":"Blender","score":101.65,"head":null,"fallback":false}],"via":"text"}
+{"t":12951,"out":"slot","kind":"holding","label":"Paused while you type","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
+{"t":12951,"out":"header","words":"Matches"}
+{"t":12951,"out":"list","rows":[{"key":"Mail menu: Message › Block Sender","title":"Block Sender"},{"key":"open Books (app)","title":"Books"},{"key":"open Blender (app)","title":"Blender"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":12971,"ev":"text","text":"br"}
+{"t":12971,"out":"enter","id":"find the page about … (Browser history)","label":"Browser history","armed":false}
+{"t":12972,"ev":"names","text":"br","rows":[{"key":"find the page about … (Browser history)","title":"Browser history","enterLabel":"Browser history","score":99.25,"head":null,"fallback":false},{"key":"open DB Browser for SQLite (app)","title":"DB Browser for SQLite","enterLabel":"DB Browser for SQLite","score":80.95,"head":null,"fallback":false},{"key":"Search Browser Tabs (Script Kit builtin)","title":"Search Browser Tabs","enterLabel":"Search Browser Tabs","score":79.05,"head":null,"fallback":false}],"via":"text"}
+{"t":12972,"out":"list","rows":[{"key":"find the page about … (Browser history)","title":"Browser history"},{"key":"open DB Browser for SQLite (app)","title":"DB Browser for SQLite"},{"key":"Search Browser Tabs (Script Kit builtin)","title":"Search Browser Tabs"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":12994,"ev":"text","text":"bra"}
+{"t":12995,"out":"enter","id":"slot0","label":"Runs what Jev understands","armed":false}
+{"t":12995,"ev":"names","text":"bra","rows":[{"key":"Mail menu: View › Organize by Conversation","title":"Organize by Conversation","enterLabel":"Organize by Conversation","score":26.8,"head":null,"fallback":false},{"key":"open BetterDisplay (app)","title":"BetterDisplay","enterLabel":"BetterDisplay","score":26.35,"head":null,"fallback":false},{"key":"Search Browser Tabs (Script Kit builtin)","title":"Search Browser Tabs","enterLabel":"Search Browser Tabs","score":24.05,"head":null,"fallback":false}],"via":"text"}
+{"t":12996,"out":"height","mode":"hold","px":551,"by":"govern","list":354,"floor":393}
+{"t":12996,"out":"header","words":"Jev","note":"⌘1–3"}
+{"t":12996,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"Mail menu: View › Organize by Conversation","title":"Organize by Conversation"},{"key":"open BetterDisplay (app)","title":"BetterDisplay"},{"key":"Search Browser Tabs (Script Kit builtin)","title":"Search Browser Tabs"}],"sel":0}
+{"t":13009,"ev":"text","text":"brai"}
+{"t":13010,"ev":"names","text":"brai","rows":[{"key":"Mail menu: View › Organize by Conversation","title":"Organize by Conversation","enterLabel":"Organize by Conversation","score":26.8,"head":null,"fallback":false}],"via":"text"}
+{"t":13011,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"Mail menu: View › Organize by Conversation","title":"Organize by Conversation"}],"sel":0}
+{"t":13031,"ev":"text","text":"brain"}
+{"t":13031,"ev":"names","text":"brain","rows":[{"key":"Mail menu: View › Organize by Conversation","title":"Organize by Conversation","enterLabel":"Organize by Conversation","score":26.8,"head":null,"fallback":false}],"via":"text"}
+{"t":13053,"ev":"text","text":"brains"}
+{"t":13054,"ev":"names","text":"brains","rows":[{"key":"fallback-google:brains","title":"Search Google for “brains”","enterLabel":"Search Google for “brains”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:brains","title":"Ask AI “brains”","enterLabel":"Ask AI “brains”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":13055,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:brains","title":"Search Google for “brains”"},{"key":"fallback-ai:brains","title":"Ask AI “brains”"}],"sel":0}
+{"t":13072,"ev":"text","text":"brainst"}
+{"t":13073,"ev":"names","text":"brainst","rows":[{"key":"fallback-google:brainst","title":"Search Google for “brainst”","enterLabel":"Search Google for “brainst”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:brainst","title":"Ask AI “brainst”","enterLabel":"Ask AI “brainst”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":13074,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:brainst","title":"Search Google for “brainst”"},{"key":"fallback-ai:brainst","title":"Ask AI “brainst”"}],"sel":0}
+{"t":13079,"out":"held","label":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","op":"pause"}
+{"t":13093,"ev":"text","text":"brainsto"}
+{"t":13094,"ev":"names","text":"brainsto","rows":[{"key":"fallback-google:brainsto","title":"Search Google for “brainsto”","enterLabel":"Search Google for “brainsto”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:brainsto","title":"Ask AI “brainsto”","enterLabel":"Ask AI “brainsto”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":13095,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:brainsto","title":"Search Google for “brainsto”"},{"key":"fallback-ai:brainsto","title":"Ask AI “brainsto”"}],"sel":0}
+{"t":13112,"ev":"text","text":"brainstor"}
+{"t":13113,"ev":"names","text":"brainstor","rows":[{"key":"fallback-google:brainstor","title":"Search Google for “brainstor”","enterLabel":"Search Google for “brainstor”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:brainstor","title":"Ask AI “brainstor”","enterLabel":"Ask AI “brainstor”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":13113,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:brainstor","title":"Search Google for “brainstor”"},{"key":"fallback-ai:brainstor","title":"Ask AI “brainstor”"}],"sel":0}
+{"t":13130,"ev":"text","text":"brainstorm"}
+{"t":13131,"ev":"names","text":"brainstorm","rows":[{"key":"fallback-google:brainstorm","title":"Search Google for “brainstorm”","enterLabel":"Search Google for “brainstorm”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:brainstorm","title":"Ask AI “brainstorm”","enterLabel":"Ask AI “brainstorm”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":13131,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:brainstorm","title":"Search Google for “brainstorm”"},{"key":"fallback-ai:brainstorm","title":"Ask AI “brainstorm”"}],"sel":0}
+{"t":13150,"ev":"text","text":"brainstorm "}
+{"t":13150,"ev":"names","text":"brainstorm ","rows":[{"key":"fallback-google:brainstorm ","title":"Search Google for “brainstorm ”","enterLabel":"Search Google for “brainstorm ”","score":null,"head":null,"fallback":true},{"key":"fallback-ai:brainstorm ","title":"Ask AI “brainstorm ”","enterLabel":"Ask AI “brainstorm ”","score":null,"head":null,"fallback":true}],"via":"text"}
+{"t":13151,"out":"list","rows":[{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":"fallback-google:brainstorm ","title":"Search Google for “brainstorm ”"},{"key":"fallback-ai:brainstorm ","title":"Ask AI “brainstorm ”"}],"sel":0}
+{"t":13177,"ev":"text","text":"brainstorm n"}
+{"t":13178,"out":"enter","id":"model:chat","label":"Open a chat with the model","armed":false}
+{"t":13178,"ev":"names","text":"brainstorm n","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm n”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13179,"out":"header","words":"Matches"}
+{"t":13179,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm n”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13195,"ev":"text","text":"brainstorm na"}
+{"t":13196,"ev":"names","text":"brainstorm na","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm na”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13196,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm na”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13212,"ev":"text","text":"brainstorm nam"}
+{"t":13212,"ev":"names","text":"brainstorm nam","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm nam”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13213,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm nam”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13234,"ev":"text","text":"brainstorm name"}
+{"t":13235,"ev":"names","text":"brainstorm name","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm name”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13236,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm name”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13255,"ev":"text","text":"brainstorm names"}
+{"t":13256,"ev":"names","text":"brainstorm names","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13257,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13274,"ev":"text","text":"brainstorm names "}
+{"t":13275,"ev":"names","text":"brainstorm names ","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13306,"ev":"text","text":"brainstorm names f"}
+{"t":13307,"ev":"names","text":"brainstorm names f","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names f”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13308,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names f”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13325,"ev":"text","text":"brainstorm names fo"}
+{"t":13326,"ev":"names","text":"brainstorm names fo","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names fo”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13327,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names fo”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13341,"ev":"text","text":"brainstorm names for"}
+{"t":13342,"ev":"names","text":"brainstorm names for","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13343,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13359,"ev":"text","text":"brainstorm names for "}
+{"t":13359,"ev":"names","text":"brainstorm names for ","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13390,"ev":"text","text":"brainstorm names for t"}
+{"t":13390,"ev":"names","text":"brainstorm names for t","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for t”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13391,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for t”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13410,"ev":"text","text":"brainstorm names for th"}
+{"t":13411,"ev":"names","text":"brainstorm names for th","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for th”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13412,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for th”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13431,"ev":"text","text":"brainstorm names for the"}
+{"t":13431,"ev":"names","text":"brainstorm names for the","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13432,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13448,"ev":"text","text":"brainstorm names for the "}
+{"t":13448,"ev":"names","text":"brainstorm names for the ","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13473,"ev":"text","text":"brainstorm names for the l"}
+{"t":13474,"ev":"names","text":"brainstorm names for the l","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the l”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13475,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the l”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13490,"ev":"text","text":"brainstorm names for the la"}
+{"t":13490,"ev":"names","text":"brainstorm names for the la","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the la”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13491,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the la”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13505,"ev":"text","text":"brainstorm names for the lau"}
+{"t":13505,"ev":"names","text":"brainstorm names for the lau","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the lau”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13506,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the lau”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13526,"ev":"text","text":"brainstorm names for the laun"}
+{"t":13527,"ev":"names","text":"brainstorm names for the laun","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the laun”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13528,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the laun”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13547,"ev":"text","text":"brainstorm names for the launc"}
+{"t":13548,"ev":"names","text":"brainstorm names for the launc","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launc”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13549,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launc”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13564,"ev":"text","text":"brainstorm names for the launch"}
+{"t":13565,"ev":"names","text":"brainstorm names for the launch","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13566,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13584,"ev":"text","text":"brainstorm names for the launch "}
+{"t":13585,"ev":"names","text":"brainstorm names for the launch ","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13613,"ev":"text","text":"brainstorm names for the launch p"}
+{"t":13613,"ev":"names","text":"brainstorm names for the launch p","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch p”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13614,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch p”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13636,"ev":"text","text":"brainstorm names for the launch pa"}
+{"t":13637,"ev":"names","text":"brainstorm names for the launch pa","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch pa”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13638,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch pa”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13655,"ev":"text","text":"brainstorm names for the launch par"}
+{"t":13656,"ev":"names","text":"brainstorm names for the launch par","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch par”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13657,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch par”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13674,"ev":"text","text":"brainstorm names for the launch part"}
+{"t":13674,"ev":"names","text":"brainstorm names for the launch part","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch part”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13675,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch part”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13695,"ev":"text","text":"brainstorm names for the launch party"}
+{"t":13696,"ev":"names","text":"brainstorm names for the launch party","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch party”","enterLabel":"Open a chat with the model","score":100,"head":null,"fallback":false}],"via":"text"}
+{"t":13697,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch party”"},{"key":null,"title":"Understanding…","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true},{"key":null,"title":"","jev":true,"reading":true}],"sel":0}
+{"t":13913,"ev":"jev","text":"brainstorm names for the launch party","rows":[{"key":"jev:ask AI … (Ask AI)","title":"Ask AI “brainstorm names for the launch party”","icon":"ask","p":0.36,"fill":"ask AI “brainstorm names for the launch party”","kind":"ask"},{"key":"jev:add a line to the note: Launcher ideas","title":"Add to Launcher ideas","icon":"append","p":0.06999999999999999,"fill":"add to Launcher ideas","target":"Launcher ideas","verb":"append","kind":"capture","source":"notes"},{"key":"jev:have an agent … (Agent)","title":"Have an agent “brainstorm names for the launch party”","icon":"delegate","p":0.060000000000000005,"fill":"have an agent “brainstorm names for the launch party”","kind":"delegate"},{"key":"jev:note to self … (Today's note)","title":"Note to self “brainstorm names for the launch party”","icon":"capture","p":0.060000000000000005,"fill":"note to self “brainstorm names for the launch party”","kind":"capture"},{"key":"jev:post in the Slack channel #launcher","title":"Post in #launcher","icon":"message","p":0.03,"fill":"post in #launcher","target":"#launcher","verb":"message","kind":"capture","source":"screen"},{"key":"jev:answer: Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","title":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","icon":"answer","p":0.03,"fill":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","target":"Launcher ideas: Enter should never change under your finger · Actions are sentences, not buttons","verb":"answer","kind":"recall","source":"notes"},{"key":"jev:message … (Message)","title":"Message “brainstorm names for the launch party”","icon":"capture","p":0.03,"fill":"message “brainstorm names for the launch party”","kind":"capture"},{"key":"jev:Agent Chat (Script Kit builtin)","title":"Agent Chat","icon":"builtin","p":0.03,"fill":"Agent Chat","target":"Agent Chat","kind":"run"},{"key":"jev:add a todo … (Todo)","title":"Add a todo “brainstorm names for the launch party”","icon":"capture","p":0.02,"fill":"add a todo “brainstorm names for the launch party”","kind":"capture"},{"key":"jev:New Script (Script Kit builtin)","title":"New Script","icon":"builtin","p":0.02,"fill":"New Script","target":"New Script","kind":"run"},{"key":"jev:open the note: Launcher ideas","title":"Open Launcher ideas note","icon":"open","p":0.02,"fill":"open Launcher ideas note","target":"Launcher ideas","verb":"open","kind":"run","source":"notes"},{"key":"jev:open the note: Q4 launch timeline","title":"Open Q4 launch timeline note","icon":"open","p":0.02,"fill":"open Q4 launch timeline note","target":"Q4 launch timeline","verb":"open","kind":"run","source":"notes"},{"key":"jev:Search Browser Tabs (Script Kit builtin)","title":"Search Browser Tabs","icon":"builtin","p":0.02,"fill":"Search Browser Tabs","target":"Search Browser Tabs","kind":"run"},{"key":"jev:Send Selection to Agent Chat (Script Kit builtin)","title":"Send Selection to Agent Chat","icon":"builtin","p":0.02,"fill":"Send Selection to Agent Chat","target":"Send Selection to Agent Chat","kind":"run"}],"ms":143}
+{"t":13915,"out":"list","rows":[{"key":"model:chat","title":"Ask the model: “brainstorm names for the launch party”"},{"key":"jev:ask AI … (Ask AI)","title":"Ask AI “brainstorm names for the launch party”","jev":true},{"key":"jev:add a line to the note: Launcher ideas","title":"Add to Launcher ideas","jev":true},{"key":"jev:have an agent … (Agent)","title":"Have an agent “brainstorm names for the launch party”","jev":true}],"sel":0}
+{"t":14217,"ev":"content","px":447}
+{"t":14217,"out":"height","mode":"shrink","px":447,"from":551}
+{"t":14449,"ev":"key","key":"Enter"}
+{"t":14449,"out":"run","key":"model:chat","title":"Ask the model: “brainstorm names for the launch party”","how":"match"}
+{"t":14449,"ev":"view","op":"open","name":"chat","via":"key:Enter","enter":{"id":"chat:writing","label":"The model is writing…"},"label":"The model","takesInput":true}
+{"t":14451,"ev":"viewEnter","id":"chat:writing","label":"The model is writing…","onTop":true,"via":"open"}
+{"t":14451,"out":"enter","id":"chat:writing","label":"The model is writing…","armed":false}
+{"t":14451,"out":"height","mode":"hold","px":448,"to":447,"waitMs":300}
+{"t":14451,"out":"header","words":"The model","view":"chat"}
+{"t":14451,"out":"text","text":"","by":"page","silent":true}
+{"t":14479,"out":"held","label":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","op":"resume"}
+{"t":14479,"out":"slot","kind":"holding","label":"Sending in 7s","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
+{"t":14754,"out":"height","mode":"shrink","px":447,"from":448}
+{"t":14859,"out":"height","mode":"grow","px":447,"from":447}
+{"t":15320,"ev":"content","px":609}
+{"t":15320,"out":"height","mode":"grow","px":609,"from":447}
+{"t":15320,"ev":"viewEnter","id":"chat:ranking","label":"Jev is reading the draft…","onTop":true}
+{"t":15320,"out":"enter","id":"chat:ranking","label":"Jev is reading the draft…","armed":true}
+{"t":15321,"out":"header","words":"The model","view":"chat","head":"What to do with it · Jev ranks, you pick"}
+{"t":15480,"out":"slot","kind":"holding","label":"Sending in 6s","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
+{"t":15481,"ev":"viewEnter","id":"chat:0:change","label":"Ask for more names","onTop":true}
+{"t":15481,"out":"enter","id":"chat:0:change","label":"Ask for more names","armed":true}
+{"t":16218,"ev":"key","key":"ArrowDown"}
+{"t":16219,"ev":"viewEnter","id":"chat:0:copy","label":"Copy them","onTop":true,"via":"key:ArrowDown"}
+{"t":16219,"out":"enter","id":"chat:0:copy","label":"Copy them","armed":false}
+{"t":16346,"ev":"key","key":"ArrowDown"}
+{"t":16346,"ev":"viewEnter","id":"chat:0:note","label":"Add them to today's note","onTop":true,"via":"key:ArrowDown"}
+{"t":16346,"out":"enter","id":"chat:0:note","label":"Add them to today's note","armed":false}
+{"t":16480,"out":"slot","kind":"holding","label":"Sending in 5s","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
+{"t":17074,"ev":"key","key":"Enter"}
+{"t":17074,"ev":"done","title":"Added the launch party names to “Today”","icon":"append","risk":"undo","stay":false,"via":"key:Enter"}
+{"t":17075,"ev":"view","op":"home","from":"chat","via":"done"}
+{"t":17076,"out":"enter","id":"model:chat","label":"Open a chat with the model","armed":true}
+{"t":17076,"ev":"content","px":447,"via":"home"}
+{"t":17077,"out":"height","mode":"shrink","px":447,"from":609}
+{"t":17077,"out":"text","text":"","by":"page"}
+{"t":17077,"out":"enter","id":"brief:review #812","label":"Fill in “review #812”","armed":true}
+{"t":17077,"ev":"names","text":"","rows":[{"key":"brief:review #812","title":"Review #812","pinned":true,"head":"Before Standup · in 18 min","enterLabel":"Fill in “review #812”"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline","pinned":true,"head":null,"enterLabel":"Fill in “send Sarah the Q4 timeline”"},{"key":"brief:join Standup","title":"Join Standup","pinned":true,"head":null,"enterLabel":"Fill in “join Standup”"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb","pinned":true,"head":null,"enterLabel":"Fill in “Toggle Do Not Disturb”"},{"key":"brief:record the Jev demo","title":"Record the Jev demo","pinned":true,"head":"Later today","enterLabel":"Fill in “record the Jev demo”"}],"via":"home"}
+{"t":17078,"ev":"content","px":490}
+{"t":17078,"out":"height","mode":"hold","px":609,"to":490,"waitMs":300}
+{"t":17078,"out":"header","words":"Before Standup · in 18 min"}
+{"t":17078,"out":"list","rows":[{"key":"brief:review #812","title":"Review #812"},{"key":"brief:send Sarah the Q4 timeline","title":"Send Sarah the Q4 timeline"},{"key":"brief:join Standup","title":"Join Standup"},{"key":"brief:Toggle Do Not Disturb","title":"Toggle Do Not Disturb"},{"key":"brief:record the Jev demo","title":"Record the Jev demo"}],"sel":0}
+{"t":17078,"out":"toast","text":"Added to “Today” · written by the model"}
+{"t":17381,"out":"height","mode":"shrink","px":490,"from":609}
+{"t":17481,"out":"slot","kind":"holding","label":"Sending in 4s","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
+{"t":18480,"out":"slot","kind":"holding","label":"Sending in 3s","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
+{"t":19480,"out":"slot","kind":"holding","label":"Sending in 2s","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
+{"t":20480,"out":"slot","kind":"holding","label":"Sending in 1s","title":"To Sarah: “Hi Sarah, timeline's updated: beta Oct 14, …”","sub":"","dimmed":false}
