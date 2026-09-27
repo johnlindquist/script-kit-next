@@ -1204,9 +1204,6 @@ export function analyzeStationaryFidelity(
   if (appKit?.backdropFooterIntersectionArea !== 0) errors.push("main/footer materials overlap");
   if (appKit?.outerWindowHasShadow !== false) errors.push("outer window shadow must stay disabled");
   const mainStage = components.find((component) => component.name === "main-content-stage");
-  const dialogBoundary = components.find((component) =>
-    component.name === "main-window-dialog-layer-boundary"
-  );
   const expectedMainStage = {
     x: 0,
     y: 0,
@@ -1221,11 +1218,6 @@ export function analyzeStationaryFidelity(
     && measured.y + measured.height <= expectedMainStage.y + expectedMainStage.height;
   for (const [name, component, requiredFields] of [
     ["main-content-stage", mainStage, ["bounds", "visibleBounds"]],
-    [
-      "main-window-dialog-layer-boundary",
-      dialogBoundary,
-      ["bounds", "visibleBounds", "clipBounds"],
-    ],
   ] as const) {
     if (!component) {
       errors.push(`${name} paint-time bounds are missing`);
@@ -1532,7 +1524,6 @@ export function analyzeStationaryFidelity(
     mainBackdropFrame,
     footerContainerFrame,
     mainStage: mainStage ?? null,
-    dialogBoundary: dialogBoundary ?? null,
     transparentGapPoints: appKit?.transparentGapPoints ?? null,
   };
 }
@@ -2558,9 +2549,6 @@ export async function cli() {
             activeFooter: (state as any)?.activeFooter ?? null,
             mainStage: (layout as any)?.components?.find(
               (component: any) => component.name === "main-content-stage",
-            ) ?? null,
-            dialogBoundary: (layout as any)?.components?.find(
-              (component: any) => component.name === "main-window-dialog-layer-boundary",
             ) ?? null,
             capture,
             appearanceCheck,

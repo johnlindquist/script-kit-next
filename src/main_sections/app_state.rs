@@ -1858,7 +1858,6 @@ pub(crate) struct ScriptListApp {
     /// Most recent Tab AI execution waiting for success/failure accounting.
     pending_tab_ai_execution: Option<crate::ai::TabAiExecutionRecord>,
     /// Tab AI save-offer overlay state — when Some, prompts to persist the last successful ephemeral script.
-    tab_ai_save_offer_state: Option<TabAiSaveOfferState>,
     /// Persistent harness terminal session — reused across Tab presses.
     pub(crate) tab_ai_harness: Option<crate::ai::TabAiHarnessSessionState>,
     /// Generation counter for cancelling stale deferred capture results.

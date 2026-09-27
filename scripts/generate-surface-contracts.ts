@@ -92,10 +92,6 @@ interface NativePeerInventory {
 // Reviewed source census, not fixture dispatch. Fixture IDs are never authored
 // here: only the compiled catalogue can provide them.
 const SECONDARY_FACTORIES = [
-  ["ConfirmPopupWindow", ["src/confirm/window.rs", "src/confirm/parent_dialog.rs"]],
-  ["AgentChatView", ["src/ai/agent_chat/ui/chat_window.rs"]],
-  ["AgentChatHistoryPopup", ["src/ai/agent_chat/ui/history_popup.rs"]],
-  ["HudView", ["src/hud_manager/mod.rs"]],
   ["SnapOverlayView", ["src/window_control/snap_overlay.rs"]],
 ] as const;
 

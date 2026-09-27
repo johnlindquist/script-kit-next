@@ -18,7 +18,6 @@ impl ScriptListApp {
             AppView::EnvPrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
             AppView::DropPrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
             AppView::TemplatePrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
-            AppView::HotkeyPrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
             AppView::ChatPrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
             AppView::NamingPrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
             AppView::ScratchPadView { entity, .. } => ("", Some(entity.entity_id()), 0),

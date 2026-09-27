@@ -47,8 +47,7 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
     match id {
         "prompt.fields" => return ("fields-prompt", &["input:fields-*"]),
         "main-overlay.alias" => return ("scriptList", &["alias-*"]),
-        "main-overlay.tab-ai-save-offer" => return ("scriptList", &["tab-ai-save-offer"]),
-        "main-overlay.root-dialog" => return ("scriptList", &["root-dialog:*"]),
+        "main-overlay.tab-ai-saved" => return ("scriptList", &["main-view-slot-line"]),
         "main-overlay.logs" => return ("scriptList", &["main-log-panel"]),
         "main-overlay.loading" => return ("scriptList", &["main-loading"]),
         "main-overlay.effects" => return ("scriptList", &["main-background-effect"]),
@@ -72,7 +71,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             &["list:dropped-files", "choice:dropped-file-*"],
         ),
         Some("TemplatePrompt") => ("template-prompt", &["input:*"]),
-        Some("HotkeyPrompt") => ("hotkey-prompt", &["panel:hotkey-capture"]),
         Some("ChatPrompt") => ("chat-prompt", &["input:*", "list:chat-messages"]),
         Some("TermPrompt") => ("term-prompt", &["list:term-lines", "choice:*"]),
         Some("NamingPrompt") => ("naming-prompt", &["input:*"]),
@@ -167,13 +165,9 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "ScriptList",
             "src/app_impl/alias_input.rs::show_alias_input",
         ),
-        "main-overlay.tab-ai-save-offer" => (
+        "main-overlay.tab-ai-saved" => (
             "ScriptList",
-            "src/app_impl/agent_handoff/mod.rs::open_tab_ai_save_offer",
-        ),
-        "main-overlay.root-dialog" => (
-            "ScriptList",
-            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
+            "src/app_impl/agent_handoff/mod.rs::save_tab_ai_script",
         ),
         "main-overlay.logs" => ("ScriptList", "src/render_script_list/mod.rs::log_panel"),
         "main-overlay.loading" => (
@@ -254,7 +248,7 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "prompt.env" => ("EnvPrompt", "src/prompts/env"),
         "prompt.drop" => ("DropPrompt", "src/prompts/drop.rs"),
         "prompt.template" => ("TemplatePrompt", "src/prompts/template"),
-        "prompt.hotkey" => ("HotkeyPrompt", "src/components/shortcut_recorder.rs"),
+        "prompt.hotkey" => ("ScriptList", "src/one_window/shortcut_view.rs"),
         "prompt.chat" => ("ChatPrompt", "src/prompts/chat"),
         "prompt.term" => ("TermPrompt", "src/term_prompt"),
         "prompt.naming" => ("NamingPrompt", "src/prompts/naming"),

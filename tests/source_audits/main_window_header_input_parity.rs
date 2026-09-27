@@ -315,7 +315,6 @@ fn prompt_and_child_content_surfaces_use_root_shared_context_header_fallback() {
         "AppView::EnvPrompt { .. }",
         "AppView::DropPrompt { .. }",
         "AppView::TemplatePrompt { .. }",
-        "AppView::HotkeyPrompt { .. }",
         "AppView::ChatPrompt { .. }",
         "AppView::MiniPrompt { .. }",
         "AppView::MicroPrompt { .. }",

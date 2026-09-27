@@ -48,8 +48,7 @@ pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
 
 pub(crate) const MAIN_OVERLAY_FIXTURE_IDS: &[&str] = &[
     "main-overlay.alias",
-    "main-overlay.tab-ai-save-offer",
-    "main-overlay.root-dialog",
+    "main-overlay.tab-ai-saved",
     "main-overlay.logs",
     "main-overlay.loading",
     "main-overlay.effects",

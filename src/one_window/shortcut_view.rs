@@ -1,18 +1,32 @@
 //! Giving a script a shortcut happens in the main window: a view under the input says "Press
 //! the keys for …", the keys you press show as keycaps, Enter saves them and Esc backs out.
+//! A script's `hotkey()` asks through the same view: Enter hands the keys to the script and Esc
+//! cancels its prompt.
 
 use gpui::Context;
 use sk_one_window::{EnterTarget, Event, Key, Row};
 
 use super::learns::OwnView;
 use crate::components::shortcut_recorder::RecordedShortcut;
+use crate::prompt_completion::{PromptCompletionBinding, PromptOutcome};
+use crate::protocol::SubmitValue;
 use crate::ScriptListApp;
 
-/// The keys pressed so far for one command.
+/// Who the recorded keys are for.
+#[derive(Clone, Debug)]
+pub(crate) enum KeysFor {
+    /// A command's shortcut: Enter saves it to config.ts.
+    Command,
+    /// A script's `hotkey()`: Enter answers its prompt with the keys.
+    Script(PromptCompletionBinding),
+}
+
+/// The keys pressed so far, and the words the view leads with.
 #[derive(Clone, Debug)]
 pub(crate) struct Recording {
-    pub(crate) name: String,
+    pub(crate) head: String,
     pub(crate) keys: RecordedShortcut,
+    pub(crate) keys_for: KeysFor,
 }
 
 fn press_the_keys(name: &str) -> String {
@@ -66,17 +80,42 @@ impl ScriptListApp {
             command_id,
             command_name: command_name.clone(),
         });
+        self.one_window_record(press_the_keys(&command_name), KeysFor::Command, cx);
+    }
+
+    /// The shortcut view for a script's `hotkey()`, leading with the script's words.
+    pub(crate) fn one_window_record_hotkey(
+        &mut self,
+        head: String,
+        prompt: PromptCompletionBinding,
+        cx: &mut Context<Self>,
+    ) {
+        self.one_window_record(head, KeysFor::Script(prompt), cx);
+    }
+
+    fn one_window_record(&mut self, head: String, keys_for: KeysFor, cx: &mut Context<Self>) {
         self.one_window_host.learns.shortcut = Some(Recording {
-            name: command_name.clone(),
+            head: head.clone(),
             keys: RecordedShortcut::new(),
+            keys_for,
         });
         self.one_window_open_view(
             OwnView::Shortcut,
-            press_the_keys(&command_name),
+            head,
             Some(EnterTarget::new("shortcut:empty", "Press the keys first")),
             true,
             cx,
         );
+    }
+
+    /// The keys a script's `hotkey()` has recorded so far.
+    pub(crate) fn one_window_hotkey_keys(&self) -> Option<&RecordedShortcut> {
+        self.one_window_host
+            .learns
+            .shortcut
+            .as_ref()
+            .filter(|recording| matches!(recording.keys_for, KeysFor::Script(_)))
+            .map(|recording| &recording.keys)
     }
 
     /// Leaves the shortcut view without saving.
@@ -85,6 +124,7 @@ impl ScriptListApp {
         self.one_window_host.learns.shortcut = None;
         if self.one_window_own_view() == Some(OwnView::Shortcut) {
             self.one_window_handle(Event::View(sk_one_window::ViewOp::Back), cx);
+            self.one_window_republish_own(cx);
         }
         cx.notify();
     }
@@ -96,27 +136,31 @@ impl ScriptListApp {
         keystroke: &gpui::Keystroke,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.one_window_host.learns.shortcut.is_none() {
+        let Some(recording) = self.one_window_host.learns.shortcut.as_ref() else {
+            return false;
+        };
+        if !matches!(self.current_view, crate::AppView::ScriptList)
+            || self.one_window_own_view() != Some(OwnView::Shortcut)
+        {
             return false;
         }
+        let for_script = matches!(recording.keys_for, KeysFor::Script(_));
         let bare = !keystroke.modifiers.modified();
         match keystroke.key.as_str() {
             "escape" if bare => self.one_window_shortcut_key(Key::Escape, cx),
             "enter" if bare => self.one_window_shortcut_key(Key::Enter, cx),
             _ => {
                 let keys = recorded(keystroke);
-                let conflict = keys
-                    .is_complete()
+                let caps = keys.to_keycaps().concat();
+                let conflict = (keys.is_complete() && !for_script)
                     .then(|| self.one_window_shortcut_conflict(&keys))
                     .flatten();
                 let (id, label) = match (keys.is_complete(), conflict) {
                     (true, Some(owner)) => {
                         ("shortcut:conflict", format!("Already used by {owner}"))
                     }
-                    (true, None) => (
-                        "shortcut:save",
-                        format!("Save {}", keys.to_keycaps().concat()),
-                    ),
+                    (true, None) if for_script => ("shortcut:use", format!("Use {caps}")),
+                    (true, None) => ("shortcut:save", format!("Save {caps}")),
                     (false, _) => ("shortcut:empty", "Press the keys first".to_string()),
                 };
                 if let Some(recording) = self.one_window_host.learns.shortcut.as_mut() {
@@ -145,24 +189,33 @@ impl ScriptListApp {
             .map(|conflict| conflict.command_name)
     }
 
-    /// Enter saves the recorded keys; Esc goes back.
+    /// Enter saves the recorded keys (or hands them to the script); Esc goes back (or cancels
+    /// the script's prompt).
     pub(super) fn one_window_shortcut_key(&mut self, key: Key, cx: &mut Context<Self>) {
-        match key {
-            Key::Escape => self.close_shortcut_recorder(cx),
-            Key::Enter => {
-                let Some(keys) = self
-                    .one_window_host
-                    .learns
-                    .shortcut
-                    .as_ref()
-                    .map(|recording| recording.keys.clone())
-                    .filter(RecordedShortcut::is_complete)
-                else {
-                    return;
-                };
-                self.handle_shortcut_save(&keys, cx);
+        let Some(recording) = self.one_window_host.learns.shortcut.clone() else {
+            return;
+        };
+        let outcome = match key {
+            Key::Escape => PromptOutcome::Cancelled,
+            Key::Enter if recording.keys.is_complete() => {
+                PromptOutcome::Submitted(SubmitValue::Text(recording.keys.to_hotkey_info_json()))
             }
-            _ => {}
+            _ => return,
+        };
+        match recording.keys_for {
+            KeysFor::Command => match outcome {
+                PromptOutcome::Submitted(_) => self.handle_shortcut_save(&recording.keys, cx),
+                _ => self.close_shortcut_recorder(cx),
+            },
+            KeysFor::Script(prompt) => {
+                if !prompt.observation().retired {
+                    if let Err(error) = prompt.try_complete(outcome) {
+                        self.notice_failed(error.to_string(), cx);
+                    }
+                }
+                self.mark_main_data_changed();
+                self.close_shortcut_recorder(cx);
+            }
         }
     }
 
@@ -176,10 +229,14 @@ impl ScriptListApp {
         } else {
             caps.concat()
         };
+        let sub = match recording.keys_for {
+            KeysFor::Command => "Enter saves them · Esc backs out",
+            KeysFor::Script(_) => "Enter uses them · Esc cancels",
+        };
         let row = Row::new("shortcut:keys", title)
-            .with_sub("Enter saves them · Esc backs out")
+            .with_sub(sub)
             .with_icon("shortcut");
-        Some((press_the_keys(&recording.name), vec![row]))
+        Some((recording.head.clone(), vec![row]))
     }
 }
 

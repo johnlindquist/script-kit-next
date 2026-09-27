@@ -8,7 +8,7 @@ use crate::prompt_completion::{
     PromptCompletionBinding, PromptCompletionObservation, PromptInstance, PromptOutcome,
     SubmissionError,
 };
-use crate::protocol::{Choice, Field, Message, ProtocolAction, SubmitValue};
+use crate::protocol::{Choice, Field, Message, ProtocolAction};
 use crate::{AppView, FocusTarget, FocusedInput, ScriptListApp};
 use gpui::{px, App, AppContext, Context, Window};
 
@@ -218,6 +218,7 @@ impl ScriptListApp {
         let id = instance.id.clone();
         let callback = binding.submit_callback();
         let theme = self.theme.clone();
+        let mut hotkey = None;
         // Validation and fallible leaf construction precede replacing the active
         // lifetime. A failed constructor cannot retire the previous prompt.
         let (view, focus) = match seed {
@@ -528,31 +529,8 @@ impl ScriptListApp {
                 )
             }
             PromptSeed::Hotkey(seed) => {
-                let entity = cx.new(|cx| {
-                    crate::components::shortcut_recorder::ShortcutRecorder::new(cx, theme)
-                        .with_capture_only(true)
-                        .with_command_name(seed.description)
-                });
-                let completion = binding.clone();
-                cx.observe(&entity, move |this, recorder, cx| {
-                    if !matches!(&this.current_view, AppView::HotkeyPrompt { entity, .. } if entity == &recorder) { return; }
-                    if completion.observation().receipt.is_some() { return; }
-                    let outcome = recorder.update(cx, |recorder, _cx| {
-                        use crate::components::shortcut_recorder::RecorderAction;
-                        match recorder.take_pending_action() {
-                            Some(RecorderAction::Cancel) => Some(PromptOutcome::Cancelled),
-                            Some(RecorderAction::Save(shortcut)) => Some(PromptOutcome::Submitted(SubmitValue::Text(shortcut.to_hotkey_info_json()))),
-                            None if recorder.shortcut.is_complete() => Some(PromptOutcome::Submitted(SubmitValue::Text(recorder.shortcut.to_hotkey_info_json()))),
-                            None => None,
-                        }
-                    });
-                    if let Some(outcome) = outcome {
-                        if let Err(error) = completion.try_complete(outcome) { this.notice_failed(error.to_string(), cx); }
-                        this.mark_main_data_changed();
-                        cx.notify();
-                    }
-                }).detach();
-                (AppView::HotkeyPrompt { id, entity }, FocusTarget::AppRoot)
+                hotkey = Some(seed.description);
+                (AppView::ScriptList, FocusTarget::MainFilter)
             }
             PromptSeed::Chat(seed) => {
                 anyhow::ensure!(
@@ -683,10 +661,15 @@ impl ScriptListApp {
             AppView::ArgPrompt { .. } | AppView::MiniPrompt { .. } | AppView::MicroPrompt { .. }
         ) {
             FocusedInput::ArgPrompt
+        } else if hotkey.is_some() {
+            FocusedInput::MainFilter
         } else {
             FocusedInput::None
         };
         self.pending_focus = Some(focus);
+        if let (Some(head), Some(binding)) = (hotkey, self.prompt_completion.clone()) {
+            self.one_window_record_hotkey(head, binding, cx);
+        }
         self.bind_owned_surface_revision_observers(cx);
         cx.notify();
         Ok(instance)
@@ -818,7 +801,6 @@ impl ScriptListApp {
             | AppView::EnvPrompt { id, .. }
             | AppView::DropPrompt { id, .. }
             | AppView::TemplatePrompt { id, .. }
-            | AppView::HotkeyPrompt { id, .. }
             | AppView::ChatPrompt { id, .. }
             | AppView::TermPrompt { id, .. }
             | AppView::NamingPrompt { id, .. } => Some(id.as_str()),
@@ -955,9 +937,6 @@ impl ScriptListApp {
                 observation.validation_error =
                     prompt.validation_errors.iter().flatten().next().cloned();
             }
-            AppView::HotkeyPrompt { entity, .. } => {
-                observation.input = entity.read(cx).shortcut.to_config_string()
-            }
             AppView::ChatPrompt { entity, .. } => {
                 let prompt = entity.read(cx);
                 observation.input = prompt.input_text().to_owned();
@@ -983,6 +962,11 @@ impl ScriptListApp {
                     .validation_error
                     .as_ref()
                     .map(|error| format!("{error:?}"));
+            }
+            AppView::ScriptList => {
+                if let Some(keys) = self.one_window_hotkey_keys() {
+                    observation.input = keys.to_config_string();
+                }
             }
             AppView::WebcamView { entity } => {
                 let prompt = entity.read(cx);
@@ -1109,10 +1093,6 @@ impl ScriptListApp {
             }),
             AppView::NamingPrompt { entity, .. } => entity.update(cx, |prompt, cx| {
                 prompt.theme = theme;
-                cx.notify();
-            }),
-            AppView::HotkeyPrompt { entity, .. } => entity.update(cx, |prompt, cx| {
-                prompt.update_theme(theme);
                 cx.notify();
             }),
             AppView::WebcamView { entity } => entity.update(cx, |prompt, cx| {

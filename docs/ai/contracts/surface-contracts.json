@@ -1004,7 +1004,7 @@
       ]
     },
     {
-      "id": "main-overlay.tab-ai-save-offer",
+      "id": "main-overlay.tab-ai-saved",
       "family": "mainOverlay",
       "root": "main",
       "owner": "src/main_entry/app_run_setup.rs",
@@ -1021,34 +1021,10 @@
         "Live providers, credentials, network and operator storage"
       ],
       "appViewVariant": "ScriptList",
-      "presentationOwner": "src/app_impl/agent_handoff/mod.rs::open_tab_ai_save_offer",
+      "presentationOwner": "src/app_impl/agent_handoff/mod.rs::save_tab_ai_script",
       "expectedSemanticSurface": "scriptList",
       "requiredSemanticIds": [
-        "tab-ai-save-offer"
-      ]
-    },
-    {
-      "id": "main-overlay.root-dialog",
-      "family": "mainOverlay",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "ScriptList",
-      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
-      "expectedSemanticSurface": "scriptList",
-      "requiredSemanticIds": [
-        "root-dialog:*"
+        "main-view-slot-line"
       ]
     },
     {
@@ -1443,11 +1419,11 @@
         "System clipboard, device access, TCC and external-app insertion",
         "Live providers, credentials, network and operator storage"
       ],
-      "appViewVariant": "HotkeyPrompt",
-      "presentationOwner": "src/components/shortcut_recorder.rs",
-      "expectedSemanticSurface": "hotkey-prompt",
+      "appViewVariant": "ScriptList",
+      "presentationOwner": "src/one_window/shortcut_view.rs",
+      "expectedSemanticSurface": "scriptList",
       "requiredSemanticIds": [
-        "panel:hotkey-capture"
+        "input:filter"
       ]
     },
     {
@@ -2047,27 +2023,24 @@
         "main-overlay.effects",
         "main-overlay.loading",
         "main-overlay.logs",
-        "main-overlay.root-dialog",
-        "main-overlay.tab-ai-save-offer",
+        "main-overlay.tab-ai-saved",
         "main-search-contract",
         "main.menu-syntax-history",
         "main.menu-syntax-object",
         "main.menu-syntax-trigger",
         "main.root-search-frame-stability",
-        "main.script-list"
+        "main.script-list",
+        "prompt.hotkey"
       ],
       "presentationOwners": [
-        "src/app_impl/agent_handoff/mod.rs::open_tab_ai_save_offer",
+        "src/app_impl/agent_handoff/mod.rs::save_tab_ai_script",
         "src/app_impl/alias_input.rs::show_alias_input",
-        "src/app_impl/lifecycle_reset.rs::flush_pending_toasts",
         "src/components/braille_loading.rs::constellation_loading_layer",
         "src/debug_grid/mod.rs::render_grid_overlay",
         "src/effects.rs::background_effect_layer",
-        "src/main_sections/render_impl.rs::WarningBanner",
+        "src/one_window/shortcut_view.rs",
         "src/render_script_list",
-        "src/render_script_list/mod.rs::log_panel",
-        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
-        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer"
+        "src/render_script_list/mod.rs::log_panel"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -2120,17 +2093,6 @@
       ],
       "presentationOwners": [
         "src/form_prompt.rs"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "appViewVariant": "HotkeyPrompt",
-      "surfaceKind": "PromptEntity",
-      "fixtureIds": [
-        "prompt.hotkey"
-      ],
-      "presentationOwners": [
-        "src/components/shortcut_recorder.rs"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -2816,7 +2778,6 @@
         "ArgPrompt",
         "DivPrompt",
         "FormPrompt",
-        "HotkeyPrompt",
         "ChatPrompt",
         "MiniPrompt",
         "MicroPrompt"
@@ -2835,11 +2796,6 @@
         {
           "variant": "FormPrompt",
           "nativeFooterSurface": "form_prompt",
-          "meaning": "routeLabelOnly"
-        },
-        {
-          "variant": "HotkeyPrompt",
-          "nativeFooterSurface": "hotkey_prompt",
           "meaning": "routeLabelOnly"
         },
         {
@@ -3803,18 +3759,12 @@
       "surfaceKind": "AttachmentPortalBrowser",
       "appViewVariants": [
         "BrowserHistoryView",
-        "DictationHistoryView",
         "NotesBrowseView"
       ],
       "appViewFooters": [
         {
           "variant": "BrowserHistoryView",
           "nativeFooterSurface": "browser_history",
-          "meaning": "routeLabelOnly"
-        },
-        {
-          "variant": "DictationHistoryView",
-          "nativeFooterSurface": "dictation_history",
           "meaning": "routeLabelOnly"
         },
         {

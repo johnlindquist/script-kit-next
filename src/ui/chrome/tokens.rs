@@ -4,8 +4,6 @@ pub use crate::window_resize::main_layout::{
 };
 
 pub const DIVIDER_OPACITY: f32 = crate::theme::opacity::OPACITY_HOVER;
-/// Theme-derived scrim opacity for dimming GPUI content behind modal windows.
-pub const MAIN_WINDOW_MODAL_DIM_OPACITY: f32 = crate::theme::opacity::OPACITY_MODAL_DIM;
 
 pub const LIQUID_GLASS_MIN_HIT_PX: f32 = 28.0;
 pub const LIQUID_GLASS_MIN_VISUAL_PX: f32 = 20.0;

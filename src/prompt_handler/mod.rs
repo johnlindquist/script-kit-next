@@ -19,13 +19,6 @@ fn prompt_coming_soon_warning(prompt_name: &str) -> String {
     format!("{prompt_name} prompt coming soon.")
 }
 
-fn should_restore_main_window_after_script_exit(
-    script_hid_window: bool,
-    keep_tab_ai_save_offer_open: bool,
-) -> bool {
-    script_hid_window && keep_tab_ai_save_offer_open
-}
-
 include!("script_error_context.rs");
 
 /// Resolve an automation window target and reject non-main windows.
@@ -1623,35 +1616,16 @@ impl ScriptListApp {
                     "SCRIPT_REQUESTED_HIDE reset to: false"
                 );
 
-                let keep_tab_ai_save_offer_open = self.tab_ai_save_offer_state.is_some();
                 let keep_agent_chat_open = self.one_window.chat().is_some();
 
-                if keep_tab_ai_save_offer_open {
+                if keep_agent_chat_open {
                     tracing::info!(
                         category = "VISIBILITY",
-                        keep_tab_ai_save_offer_open,
                         keep_agent_chat_open,
                         "Tab AI active after script exit - preserving view"
                     );
 
-                    if should_restore_main_window_after_script_exit(script_hid_window, true) {
-                        tracing::info!(
-                            category = "VISIBILITY",
-                            "Script had hidden window - requesting show for follow-up UI"
-                        );
-                        script_kit_gpui::request_show_main_window();
-                    }
-
-                    return;
-                } else if keep_agent_chat_open {
-                    tracing::info!(
-                        category = "VISIBILITY",
-                        keep_tab_ai_save_offer_open,
-                        keep_agent_chat_open,
-                        "Tab AI active after script exit - preserving view"
-                    );
-
-                    if should_restore_main_window_after_script_exit(script_hid_window, true) {
+                    if script_hid_window {
                         tracing::info!(
                             category = "VISIBILITY",
                             "Script had hidden window - requesting show for follow-up UI"
@@ -2147,16 +2121,6 @@ impl ScriptListApp {
                     ),
                     AppView::TemplatePrompt { id, .. } => (
                         "template".to_string(),
-                        Some(id.clone()),
-                        None,
-                        String::new(),
-                        0,
-                        0,
-                        -1,
-                        None,
-                    ),
-                    AppView::HotkeyPrompt { id, .. } => (
-                        "hotkey".to_string(),
                         Some(id.clone()),
                         None,
                         String::new(),
@@ -6262,7 +6226,6 @@ impl ScriptListApp {
             AppView::FormPrompt { entity, .. } => entity.read(cx).prompt_type().to_string(),
             AppView::EditorPrompt { .. } => "editor".to_string(),
             AppView::TermPrompt { .. } => "term".to_string(),
-            AppView::HotkeyPrompt { .. } => "hotkey".to_string(),
             AppView::ChatPrompt { .. } => "chat".to_string(),
             AppView::MiniPrompt { .. } => "mini".to_string(),
             AppView::MicroPrompt { .. } => "micro".to_string(),

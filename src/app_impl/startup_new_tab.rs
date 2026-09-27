@@ -80,7 +80,6 @@
                                 owner,
                                 has_shift,
                                 show_actions_popup = this.show_actions_popup,
-                                save_offer_open = this.tab_ai_save_offer_state.is_some(),
                             );
 
                             if this.main_window_modal_owns_keyboard() {
@@ -282,13 +281,6 @@
                                     }
                                 });
                                 cx.stop_propagation();
-                                return;
-                            }
-
-                            // Block Tab while the save-offer overlay is visible
-                            if this.tab_ai_save_offer_state.is_some() {
-                                cx.stop_propagation();
-                                return;
                             }
                         });
                     }
