@@ -52,10 +52,9 @@ fn wrapper_inference_knows_core_surfaces() {
         "PromptEntity",
         "blockedByDefault",
         "unavailablePrimitives",
-        "Known minimal Agent Chat path",
-        "Known minimal Theme Designer path",
-        "builtin/choose-theme",
-        "accent-color-hex",
+        "Agent Chat inspection path",
+        "Theme inspection path",
+        "revision-bound theme preview/revert transaction",
     ] {
         assert!(AGY_DEVTOOLS_SH.contains(needle), "missing {needle}");
     }

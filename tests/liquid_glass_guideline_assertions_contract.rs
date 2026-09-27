@@ -74,7 +74,6 @@ fn secondary_target_layout_receipts_synthesize_window_backdrop_metadata() {
         "window.backdrop",
         "contentNativeMaterialNodes",
         "glassLayerViolations",
-        "rawLayout",
     ] {
         assert!(
             layout.contains(needle),

@@ -1,4 +1,8 @@
-const TARGETS_TS: &str = include_str!("../scripts/devtools/targets.ts");
+// targets.ts is the CLI; lifecycle parsing lives in the shared client.
+const TARGETS_TS: &str = concat!(
+    include_str!("../scripts/devtools/targets.ts"),
+    include_str!("../scripts/devtools/lib/client.ts"),
+);
 
 #[test]
 fn targets_preserve_parsed_session_lifecycle_errors() {
