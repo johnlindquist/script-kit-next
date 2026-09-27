@@ -2418,6 +2418,11 @@ impl ScriptListApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
+        if matches!(self.current_view, AppView::ScriptList) && self.one_window_owns_list() {
+            return self
+                .one_window_key(sk_one_window::Key::CmdEnter, cx)
+                .taken();
+        }
         let explicit_spine_prompt_plan =
             self.script_list_cmd_enter_has_explicit_spine_prompt_plan();
         if explicit_spine_prompt_plan && self.try_submit_spine_prompt_plan_from_enter(cx) {
@@ -4321,7 +4326,7 @@ impl ScriptListApp {
             other => {
                 return Err(format!(
                     "unsupported Agent Chat return-route fixture {other:?}"
-                ))
+                ));
             }
         };
         cx.notify();

@@ -373,6 +373,13 @@ impl ScriptListApp {
                         && view.one_window_owns_list()
                     {
                         view.one_window_key(sk_one_window::Key::CmdZ, ctx);
+                    } else if has_cmd
+                        && !has_shift
+                        && key_lower == "j"
+                        && view.one_window_owns_list()
+                    {
+                        // Mirrors the live ⌘J arm in src/render_script_list/mod.rs.
+                        view.one_window_key(sk_one_window::Key::CmdJ, ctx);
                     } else if has_cmd && key_lower == "k" {
                         logging::log("STDIN", "SimulateKey: Cmd+K - dispatch actions toggle");
                         view.handle_cmd_k_actions_toggle(window, ctx);
@@ -385,13 +392,13 @@ impl ScriptListApp {
                         // Mirrors the live GPUI handler in
                         // src/render_script_list/mod.rs: Cmd+Enter (no
                         // shift/alt/ctrl) runs what the typed sentence means,
-                        // and opens Agent Chat with the current selection when
+                        // and opens the model's chat under the input when
                         // there's no sentence to read. Without this arm,
                         // automation callers of SimulateKey fell through to the
                         // plain `enter` case and executed the selected item.
                         logging::log(
                             "STDIN",
-                            "SimulateKey: Cmd+Enter - run the sentence or open Agent Chat",
+                            "SimulateKey: Cmd+Enter - run the sentence or open the model's chat",
                         );
                         view.route_main_window_cmd_enter(ctx);
                     } else if view.handle_menu_syntax_form_key_input(

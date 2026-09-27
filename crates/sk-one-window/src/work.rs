@@ -67,6 +67,10 @@ pub enum WorkEvent {
     TaskEnded {
         id: String,
     },
+    /// Hand a job to an agent without opening its view: it works in the strip.
+    Background {
+        task: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]

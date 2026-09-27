@@ -154,6 +154,12 @@ impl OneWindow {
                 .work
                 .strip
                 .update(&id, status, progress, state, approve),
+            WorkEvent::Background { task } => {
+                let id = self.work.strip.next_id();
+                self.work.strip.start(Task::agent(&id, &task));
+                fx.push(Effect::Work(WorkEffect::StartAgent { id, task }));
+                true
+            }
             WorkEvent::TaskEnded { id } => {
                 if self.work.agent.as_deref() == Some(id.as_str()) {
                     self.work.agent = None;
@@ -823,6 +829,27 @@ mod tests {
                 text: "both".into()
             }]
         );
+    }
+
+    #[test]
+    fn a_job_handed_off_in_the_background_starts_in_the_strip_without_moving_anything() {
+        let mut win = OneWindow::default();
+        win.handle(0, Event::Text("fix".into()));
+        let before = win.list().layout();
+        let fx = work(
+            &mut win,
+            10,
+            WorkEvent::Background {
+                task: "fix SK-431".into(),
+            },
+        );
+        assert!(
+            matches!(work_fx(&fx).as_slice(), [WorkEffect::StartAgent { task, .. }] if task == "fix SK-431")
+        );
+        assert!(!win.in_view());
+        assert_eq!(win.list().layout(), before);
+        assert_eq!(win.text(), "fix");
+        assert_eq!(win.work().strip().tasks().len(), 1);
     }
 
     #[test]

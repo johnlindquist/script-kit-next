@@ -147,14 +147,6 @@ impl ScriptListApp {
             return Some(self.execute_intent_plan(&plan, cx));
         }
         match key {
-            "down:model" => {
-                self.open_tab_ai_agent_chat_with_entry_intent_variant(
-                    Some(text.to_string()),
-                    crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::QuickAi,
-                    cx,
-                );
-                Some(Ok(()))
-            }
             "down:note" => Some(append_capture_to_day("note", text, None).map(|()| {
                 self.one_window_ran_here(cx);
             })),
@@ -171,8 +163,8 @@ impl ScriptListApp {
         self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
     }
 
-    /// ⌘↵ in the main window: Jev's first row for the words, or Agent Chat when nothing is
-    /// typed or the list belongs to launcher syntax.
+    /// ⌘↵ in the main window: Jev's first row for the words, or the model's chat under the input
+    /// when nothing is typed. Agent Chat keeps ⌘↵ when the list belongs to launcher syntax.
     pub(crate) fn route_main_window_cmd_enter(&mut self, cx: &mut Context<Self>) -> bool {
         if matches!(self.current_view, AppView::ScriptList) {
             self.flush_pending_main_menu_query(cx);
@@ -184,9 +176,9 @@ impl ScriptListApp {
             || self.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)
     }
 
-    /// Whether ⌘↵ runs the words rather than opening Agent Chat, for the footer.
+    /// Whether ⌘↵ goes to the one window (the words, or the model's chat), for the footer.
     pub(crate) fn cmd_enter_runs_intent(&self) -> bool {
-        self.one_window_owns_list() && !self.filter_text.trim().is_empty()
+        self.one_window_owns_list()
     }
 
     /// Runs a plan's steps in order. Launcher lines (captures, searches) run through the
@@ -531,7 +523,11 @@ fn append_memory_to_day(text: &str) -> Result<(), &'static str> {
         .map_err(|_| "intent_brain_write_failed")
 }
 
-fn append_capture_to_day(target: &str, body: &str, when: Option<&str>) -> Result<(), &'static str> {
+pub(crate) fn append_capture_to_day(
+    target: &str,
+    body: &str,
+    when: Option<&str>,
+) -> Result<(), &'static str> {
     let entry = match target {
         "todo" | "reminder" => crate::brain::substrate::DayEntry::Task {
             body: body.to_string(),

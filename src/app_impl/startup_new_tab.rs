@@ -264,8 +264,18 @@
                                 return;
                             }
 
-                            // Tab-to-Agent deprecated: Cmd+Enter is the AI entry.
-                            // Ghost text acceptance (above) now owns plain Tab.
+                            // Tab with words typed hands them to an agent that works in the
+                            // strip; in a one-window view the view gets the key.
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && !has_shift
+                                && this.one_window_owns_list()
+                                && this
+                                    .one_window_key(sk_one_window::Key::Tab, cx)
+                                    .taken()
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
 
                             // Agent Chat owns Tab locally. Plain Tab stays swallowed so
                             // the global interceptor cannot re-open a fresh chat.
