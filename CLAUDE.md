@@ -268,7 +268,7 @@ everything that used to pop up now lands in the line above the input, which the
   "bun is not installed · Install from bun.sh"; Enter opens bun.sh). Nothing is drawn above the
   line and the input never moves.
 - Prove these with the reducer (`./scripts/agentic/agent-cargo.sh test -p sk-one-window`,
-  including `tests/replay.rs` and `tests/properties.rs`), the app tests in
+  including `tests/replay.rs` and `tests/properties/`), the app tests in
   `enter_button_property_tests::ledger`, and owned-evaluator frames
   (`scripts/agentic/one-window-frames.ts`) that show exactly one owned window.
 

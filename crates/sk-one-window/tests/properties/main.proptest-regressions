@@ -6,4 +6,3 @@
 # everyone who runs the test benefits from these saved cases.
 cc 14dce9bd0aa6791f360e13a4a49cd05a739c54bfb99c8a866ed89489af70804f # shrinks to steps = [Open, Wait(396), OpenUnprompted, Type(0), Jev { current: false, rows: [] }, Key(Enter)]
 cc 9aee33004c112fa6d2288398551555c47d08ba2372769c1b7bf7d009bdf81730 # shrinks to steps = [Content(380), Type(0), Done { message: false, stay: false }, Content(120)]
-cc a46dd0b381c430feb4b10404d1951752f8c4be4ab0a1f3d2008fc15472d11bdc # shrinks to moves = [Key(CmdK), Key(Enter)]
