@@ -857,7 +857,7 @@ impl DictationOverlay {
             && crate::dictation::microphone_permission_status()
                 == crate::dictation::DictationMicrophonePermissionStatus::Denied
         {
-            self.show_microphone_unavailable("Microphone permission is denied in macOS. Allow microphone access in System Settings, then refresh the device list.", "microphone_permission_denied", window, cx);
+            self.show_microphone_unavailable("Microphone permission is denied in macOS. Allow microphone access in System Settings, then refresh the device list.", "microphone_permission_denied", cx);
             return;
         }
         let menu_items = if selection_mode
@@ -891,13 +891,13 @@ impl DictationOverlay {
                         category = "DICTATION",
                         "Microphone selector found no input devices"
                     );
-                    self.show_microphone_unavailable("No input microphones are available. Connect a microphone, then refresh the device list.", "no_input_devices", window, cx);
+                    self.show_microphone_unavailable("No input microphones are available. Connect a microphone, then refresh the device list.", "no_input_devices", cx);
                     return;
                 }
                 Err(error) => {
                     let diagnostic = crate::logging::log_private_user_value(&error.to_string());
                     tracing::warn!(category = "DICTATION", diagnostic = %diagnostic.sha256, "Failed to list microphones from overlay selector");
-                    self.show_microphone_unavailable("Couldn’t load microphones. Recording keeps using its current device. Refresh the device list to try again.", &diagnostic.sha256, window, cx);
+                    self.show_microphone_unavailable("Couldn’t load microphones. Recording keeps using its current device. Refresh the device list to try again.", &diagnostic.sha256, cx);
                     return;
                 }
             }
@@ -3226,29 +3226,9 @@ impl DictationOverlay {
         &mut self,
         message: &'static str,
         diagnostic: &str,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let owner = cx.entity().downgrade();
-        let refresh_owner = owner.clone();
-        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
-            window,
-            cx,
-            DICTATION_OVERLAY_AUTOMATION_ID,
-            crate::confirm::ParentConfirmOptions {
-                title: "Microphones Unavailable".into(),
-                body: format!("{message}\n\nDiagnostic: {diagnostic}").into(),
-                confirm_text: "Refresh device list".into(),
-                cancel_text: "Dismiss".into(),
-                risk: crate::confirm::ConfirmRisk::Safe,
-                width: px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-            },
-            move |window, cx| {
-                if let Some(owner) = refresh_owner.upgrade() {
-                    owner.update(cx, |this, cx| this.open_microphone_picker(window, cx));
-                }
-            },
-            |_, _| {},
-        );
+        tracing::warn!(event = "dictation_microphones_unavailable", diagnostic);
+        crate::line_notice::say(cx, crate::line_notice::FAILED, message);
     }
 }

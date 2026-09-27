@@ -72,10 +72,10 @@ fn action_handler_dispatch_structure_exists() {
         "Action handler must dispatch quick_look"
     );
 
-    // Must have toast_manager usage for errors (may be in chunk files)
+    // Errors are said in the line above the input (may be in chunk files)
     assert!(
-        content.contains("toast_manager.push("),
-        "Action handler must use toast_manager for error feedback"
+        content.contains("self.notice_failed("),
+        "Action handler must say its failures in the line"
     );
 }
 
@@ -1772,7 +1772,7 @@ fn ai_unavailable_builtin_uses_named_action_states() {
     assert!(
         content.contains("Send Screen Area to Agent Chat is unavailable")
             && content.contains("ai_send_screen_area_unavailable")
-            && content.contains("Toast::error(message, &self.theme)"),
+            && content.contains("self.one_window_notice(crate::line_notice::FAILED, message, cx)"),
         "Send Screen Area should keep its unavailable toast and error detail"
     );
 }
@@ -2392,7 +2392,6 @@ fn notes_builtin_uses_named_action_states() {
     );
     assert!(
         content.contains("notes_handoff_submit_reset")
-            && content.contains("crate::confirm::route_key_to_confirm_popup(\"escape\", cx)")
             && content.contains("crate::actions::close_actions_window(cx)")
             && content.contains("self.mark_filter_resync_after_actions_if_needed()")
             && content.contains("self.pending_focus = None")

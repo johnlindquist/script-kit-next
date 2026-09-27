@@ -249,14 +249,6 @@ impl ScriptListApp {
                     }
                 }
                 InputEvent::PressEnter { .. } => {
-                    // Block Enter when confirm picker is active — the confirm
-                    // popup's key routing already handled this Enter via
-                    // capture_key_down in render_impl.
-                    if confirm::is_confirm_window_open() {
-                        logging::log("KEY", "Ignoring PressEnter: confirm picker is active");
-                        return;
-                    }
-
                     if this.main_window_footer_shortcut_is_blocked("enter", &*cx) {
                         tracing::info!(
                             target: "script_kit::footer_popup",
@@ -632,8 +624,6 @@ impl ScriptListApp {
             current_design: DesignVariant::default(),
             // Cohesive main-menu theme exploration: start on the first variation.
             current_main_menu_theme: crate::designs::MainMenuThemeVariant::default(),
-            // Toast manager: initialize for error notifications
-            toast_manager: ToastManager::new(),
             // Clipboard image cache: decoded RenderImages for thumbnails/preview
             clipboard_image_cache: std::collections::HashMap::new(),
             // Frecency store for tracking script usage
@@ -708,8 +698,7 @@ impl ScriptListApp {
             last_scrolled_arg: None,
             last_scrolled_clipboard: None,
             last_scrolled_window: None,
-            // Show warning banner when bun is not available
-            show_bun_warning: !bun_available,
+            bun_missing: !bun_available,
             // Menu bar integration: Now handled by frontmost_app_tracker module
             // which pre-fetches menu items in background when apps activate
             // Shortcut recorder state - starts as None (no recorder showing)
@@ -801,10 +790,39 @@ impl ScriptListApp {
         // introduced by later file edits HUD.
         app.announced_registry_conflicts = conflicts.into_iter().collect();
         app.flush_pending_main_menu_query(cx);
+        let this = cx.weak_entity();
+        crate::line_notice::install(cx, move |cx, icon, text, said| {
+            let _ = this.update(cx, |app, cx| match said {
+                crate::line_notice::Said::Notice => app.one_window_notice(icon, text, cx),
+                crate::line_notice::Said::Undoable(undo) => {
+                    app.one_window_done_undoable(icon, text, Box::new(|_, cx| undo(cx)), cx)
+                }
+                crate::line_notice::Said::Held(run) => {
+                    app.one_window_hold(icon, text, Box::new(|_, cx| run(cx)), cx)
+                }
+                crate::line_notice::Said::Ask {
+                    detail,
+                    choices,
+                    cancel,
+                } => {
+                    let choices = choices
+                        .into_iter()
+                        .map(|(label, run)| {
+                            let run: crate::one_window::ledger_view::LedgerRun =
+                                Box::new(|_, cx| run(cx));
+                            (label, run)
+                        })
+                        .collect();
+                    let cancel = cancel.map(|cancel| {
+                        let cancel: crate::one_window::ledger_view::LedgerRun =
+                            Box::new(|_, cx| cancel(cx));
+                        cancel
+                    });
+                    app.one_window_ask(icon, text, detail, choices, cancel, cx)
+                }
+            });
+        });
 
-        // First interceptor: an open modal owns the keyboard before any
-        // launcher, window-close, or navigation interceptor sees a key.
-        app.install_modal_key_owner_interceptor(cx);
         app.install_main_window_close_interceptor(cx);
 
         // Add Tab key interceptor for "Ask AI" feature and file search directory navigation
@@ -2712,10 +2730,7 @@ impl ScriptListApp {
                                     "Interceptor: Cmd+M -> cycle vibrancy material",
                                 );
                                 let description = platform::cycle_vibrancy_material();
-                                this.toast_manager.push(
-                                    components::toast::Toast::info(description, &this.theme)
-                                        .duration_ms(Some(TOAST_INFO_MS)),
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, description, cx);
                                 cx.notify();
                                 cx.stop_propagation();
                                 return;
@@ -2728,10 +2743,7 @@ impl ScriptListApp {
                                     "Interceptor: Cmd+Shift+A -> cycle vibrancy appearance",
                                 );
                                 let description = platform::cycle_appearance();
-                                this.toast_manager.push(
-                                    components::toast::Toast::info(description, &this.theme)
-                                        .duration_ms(Some(TOAST_INFO_MS)),
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, description, cx);
                                 cx.notify();
                                 cx.stop_propagation();
                                 return;
@@ -2762,7 +2774,6 @@ impl ScriptListApp {
 }
 
 include!("startup/navigation_routes.rs");
-include!("startup/modal_key_owner.rs");
 
 #[cfg(test)]
 mod tests {

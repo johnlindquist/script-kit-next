@@ -1732,7 +1732,7 @@ fn global_clear_history_remains_separate_from_per_item_delete() {
         "fn dispatch_detached_action(",
     );
     assert!(
-        clear_request.contains("open_parent_confirm_dialog_for_entity(")
+        clear_request.contains("crate::line_notice::hold(")
             && clear_request.contains("clear_agent_chat_history_at(")
             && clear_request.contains("Some(ConfirmedAgentChatHistoryDeletion)"),
         "global history deletion must delegate to the confirmed whole-history owner, not per-item deletion"

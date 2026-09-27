@@ -2,4 +2,5 @@
 //! connect it to `ScriptListApp`.
 
 pub(crate) mod host;
+pub(crate) mod ledger_view;
 pub(crate) mod slot_line;

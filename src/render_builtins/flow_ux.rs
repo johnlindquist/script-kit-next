@@ -618,21 +618,21 @@ impl ScriptListApp {
                             use crate::flows::model::RunPhase;
                             let friendly = crate::flows::model::friendly_flow_name(&run.flow_name);
                             let elapsed = format_run_elapsed(run.elapsed_ms());
-                            let toast = match run.phase {
-                                RunPhase::Succeeded => crate::components::toast::Toast::success(
+                            let (icon, notice) = match run.phase {
+                                RunPhase::Succeeded => (
+                                    crate::line_notice::DONE,
                                     format!("{friendly} finished ({elapsed})"),
-                                    &app.theme,
                                 ),
-                                RunPhase::Cancelled => crate::components::toast::Toast::success(
+                                RunPhase::Cancelled => (
+                                    crate::line_notice::DONE,
                                     format!("{friendly} cancelled ({elapsed})"),
-                                    &app.theme,
                                 ),
-                                _ => crate::components::toast::Toast::error(
+                                _ => (
+                                    crate::line_notice::FAILED,
                                     format!("{friendly}: {}", run.display_status()),
-                                    &app.theme,
                                 ),
                             };
-                            app.toast_manager.push(toast.duration_ms(Some(4000)));
+                            app.one_window_notice(icon, notice, cx);
                             dirty = true;
                         }
 
@@ -1546,12 +1546,10 @@ impl ScriptListApp {
                 let meta = &self.conversations.flow_sessions[index].0;
                 let details = flow_recovery_copy_details(meta);
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(details));
-                self.toast_manager.push(
-                    crate::components::toast::Toast::success(
-                        "Safe diagnostic details copied".to_string(),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(2000)),
+                self.one_window_notice(
+                    crate::line_notice::DONE,
+                    "Safe diagnostic details copied".to_string(),
+                    cx,
                 );
                 cx.notify();
             }
@@ -1609,12 +1607,10 @@ impl ScriptListApp {
             .reliability
             .retry_turn(&flow_id, turn_ordinal)
         {
-            self.toast_manager.push(
-                crate::components::toast::Toast::error(
-                    "Retry limit reached — start a new thread from ⌘K".to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(2500)),
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                "Retry limit reached — start a new thread from ⌘K".to_string(),
+                cx,
             );
             cx.notify();
             return;

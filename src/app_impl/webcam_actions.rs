@@ -173,18 +173,18 @@ impl ScriptListApp {
         if let Some(binding) = &binding {
             let state = binding.observation();
             if state.retired || state.completed {
-                self.show_error_toast("webcam_prompt_already_completed", cx);
+                self.notice_failed("webcam_prompt_already_completed", cx);
                 return false;
             }
         } else if crate::runtime_policy::is_owned_evaluation() {
-            self.show_error_toast("webcam_completion_missing", cx);
+            self.notice_failed("webcam_completion_missing", cx);
             return false;
         }
 
         let Some(pixel_buffer) = pixel_buffer else {
             if let Some(binding) = &binding { binding.record_error(crate::prompt_completion::SubmissionError::InvalidInput); }
             cx.notify();
-            self.show_error_toast("No camera frame available yet", cx);
+            self.notice_failed("No camera frame available yet", cx);
             return false;
         };
 
@@ -194,7 +194,7 @@ impl ScriptListApp {
                 if let Some(binding) = &binding { binding.record_error(crate::prompt_completion::SubmissionError::InvalidInput); }
                 tracing::error!(error = %e, "Failed to capture webcam photo");
                 cx.notify();
-                self.show_error_toast(format!("Failed to capture photo: {}", e), cx);
+                self.notice_failed(format!("Failed to capture photo: {}", e), cx);
                 return false;
             }
         };
@@ -204,7 +204,7 @@ impl ScriptListApp {
             if let Err(error) = policy.require_owned_path(&save_dir).map_err(|error| error.to_string())
                 .and_then(|_| std::fs::create_dir_all(&save_dir).map_err(|error| error.to_string())) {
                 if let Some(binding) = &binding { binding.record_error(crate::prompt_completion::SubmissionError::StorageFailure); }
-                self.show_error_toast(error.to_string(), cx);
+                self.notice_failed(error.to_string(), cx);
                 return false;
             }
         }
@@ -217,7 +217,7 @@ impl ScriptListApp {
                         crate::protocol::SubmitValue::Text(save_path.to_string_lossy().into_owned()),
                     );
                     if let Err(error) = binding.try_complete(outcome) {
-                        self.show_error_toast(error.to_string(), cx);
+                        self.notice_failed(error.to_string(), cx);
                         return false;
                     }
                 }
@@ -235,11 +235,7 @@ impl ScriptListApp {
                     "Webcam photo saved"
                 );
                 cx.notify();
-                self.show_hud(
-                    format!("Photo saved to {}", save_path.display()),
-                    Some(HUD_LONG_MS),
-                    cx,
-                );
+                self.one_window_notice(crate::line_notice::INFO, format!("Photo saved to {}", save_path.display()), cx);
                 let save_path_str = save_path.to_string_lossy().to_string();
                 if let Err(error) = crate::file_search::reveal_in_finder(&save_path_str) {
                     let safe_error = crate::logging::log_private_user_value(&error.to_string());
@@ -257,7 +253,7 @@ impl ScriptListApp {
                 if let Some(binding) = &binding { binding.record_error(crate::prompt_completion::SubmissionError::StorageFailure); }
                 tracing::error!(reason = ?error.kind(), "Failed to save private webcam photo");
                 cx.notify();
-                self.show_error_toast(
+                self.notice_failed(
                     "Photo could not be saved safely. Check Desktop and try again.",
                     cx,
                 );
@@ -273,7 +269,7 @@ impl ScriptListApp {
             "Webcam capture requested on unsupported platform"
         );
         cx.notify();
-        self.show_unsupported_platform_toast("Webcam capture", cx);
+        self.notice_unsupported_platform("Webcam capture", cx);
         false
     }
 
@@ -350,7 +346,7 @@ impl ScriptListApp {
                     return crate::action_helpers::DispatchOutcome::success().with_trace_id(dctx.trace_id.clone()).with_detail("webcam_close");
                 }
                 cx.notify();
-                self.show_hud("Webcam closed".to_string(), Some(HUD_SHORT_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, "Webcam closed".to_string(), cx);
                 self.hide_main_and_reset(cx);
 
                 crate::action_helpers::DispatchOutcome::success()

@@ -9,6 +9,14 @@ use tracing::debug;
 use super::types::{relative_luminance_srgb, ColorScheme, Theme};
 pub use crate::list_item::ListItemColors;
 
+/// The implicit GPUI line height: `TextStyle::default()` uses `phi()` and
+/// `line_height_in_pixels` rounds (vendor/gpui/src/style.rs), so a 14pt line is 23 and a 20pt
+/// line is 32 wherever a renderer never overrides it.
+pub fn default_line_height_px(font_size: f32) -> f32 {
+    const PHI: f32 = 1.618_034;
+    (font_size * PHI).round()
+}
+
 /// Canonical accent palette used by theme customization UIs.
 pub const ACCENT_PALETTE: &[(u32, &str)] = &[
     (0xFBBF24, "Amber"),

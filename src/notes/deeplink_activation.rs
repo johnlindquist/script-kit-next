@@ -29,7 +29,7 @@ pub(crate) enum Activation {
         uri: String,
         allow_agent_chat_action: bool,
     },
-    ConfirmBeforeRun {
+    HoldBeforeRun {
         command_id: String,
         raw_href: String,
     },
@@ -136,7 +136,7 @@ pub(crate) fn hover_hint_verb(activation: &Activation) -> Option<&'static str> {
         Activation::OpenFile { .. } => Some("Open file"),
         Activation::OpenExternalUrl { .. } => Some("Open in browser"),
         Activation::ScopedSearch { .. } => Some("Search"),
-        Activation::ConfirmBeforeRun { .. } => Some("Run (asks first)"),
+        Activation::HoldBeforeRun { .. } => Some("Run (waits first)"),
         Activation::Error(_) => None,
     }
 }
@@ -230,21 +230,17 @@ fn kit_resource_preview_title(uri: &str) -> String {
     }
 }
 
-pub(crate) fn run_deeplink_confirm_options(
-    command_id: &str,
-    raw_href: &str,
-) -> crate::confirm::ParentConfirmOptions {
-    crate::confirm::ParentConfirmOptions {
-        title: "Run Script Kit command?".into(),
-        body: format!(
-            "This note link wants to run `{}`.\n\n{}",
-            command_id, raw_href
-        )
-        .into(),
-        confirm_text: "Run".into(),
-        cancel_text: "Cancel".into(),
-        risk: crate::confirm::ConfirmRisk::Destructive,
-        width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
+/// A link's problem as one line: the title, then each paragraph of the detail.
+pub(crate) fn deeplink_notice(title: &str, detail: &str) -> String {
+    let detail: Vec<&str> = detail
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect();
+    if detail.is_empty() {
+        title.to_string()
+    } else {
+        format!("{title} — {}", detail.join(" · "))
     }
 }
 
@@ -263,7 +259,7 @@ fn resolve_scriptkit(path: &str, raw_href: &str) -> Activation {
 
     if let Some(script_name) = path.strip_prefix("run/") {
         return match build_command_id(CommandCategory::Script, script_name) {
-            Ok(command_id) => Activation::ConfirmBeforeRun {
+            Ok(command_id) => Activation::HoldBeforeRun {
                 command_id,
                 raw_href: raw_href.to_string(),
             },
@@ -278,7 +274,7 @@ fn resolve_scriptkit(path: &str, raw_href: &str) -> Activation {
 
     if path.starts_with("commands/") {
         return match command_id_from_deeplink(raw_href) {
-            Ok(command_id) => Activation::ConfirmBeforeRun {
+            Ok(command_id) => Activation::HoldBeforeRun {
                 command_id,
                 raw_href: raw_href.to_string(),
             },
@@ -428,7 +424,7 @@ mod tests {
         );
         assert_eq!(
             hover_hint_verb(&resolve("scriptkit://run/example-script")),
-            Some("Run (asks first)")
+            Some("Run (waits first)")
         );
     }
 
@@ -454,7 +450,7 @@ mod tests {
     fn resolves_run_deeplink_to_confirm_before_run() {
         assert_eq!(
             resolve("scriptkit://run/example-script"),
-            Activation::ConfirmBeforeRun {
+            Activation::HoldBeforeRun {
                 command_id: "script/example-script".to_string(),
                 raw_href: "scriptkit://run/example-script".to_string(),
             }
@@ -465,7 +461,7 @@ mod tests {
     fn resolves_command_deeplink_to_confirm_before_run() {
         assert_eq!(
             resolve("scriptkit://commands/builtin/clipboard-history"),
-            Activation::ConfirmBeforeRun {
+            Activation::HoldBeforeRun {
                 command_id: "builtin/clipboard-history".to_string(),
                 raw_href: "scriptkit://commands/builtin/clipboard-history".to_string(),
             }

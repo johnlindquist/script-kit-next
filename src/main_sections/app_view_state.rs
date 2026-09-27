@@ -680,7 +680,7 @@ impl LauncherSurfaceContractVocabulary {
 ///
 /// Oracle-Session `shortcuts-hud-grid-dismiss-logic` — kept separate from
 /// popup-specific dismissal (confirm/actions overlays have their own close
-/// paths through `close_actions_popup_for_current_view` / `confirm::*`).
+/// paths through `close_actions_popup_for_current_view`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DismissTrigger {
     /// Main launcher window lost focus — the `focus_lost` click-outside path.
@@ -1886,33 +1886,25 @@ struct ShortcutRecorderState {
     command_name: String,
 }
 
-/// The open alias editor. When this is Some, its modal is on screen.
+/// The open alias editor. When this is Some, its view is under the input.
 #[derive(Debug)]
 struct AliasInputState {
     /// The unique command identifier (e.g., "builtin/clipboard-history", "app/com.apple.Safari")
     command_id: String,
     /// Human-readable name of the command being configured
     command_name: String,
-    /// The modal's field, shared with the popup that edits it.
-    field: crate::confirm::SharedConfirmTextField,
-    /// Whether the command already had an alias (the modal offers Remove).
+    /// Whether the command already had an alias (empty words remove it).
     has_alias: bool,
-    /// Dropping the state closes the modal: its lifetime check holds a weak
-    /// reference to this token.
-    _open: std::rc::Rc<()>,
 }
 
 /// The open Tab AI save offer, shown after a successful ephemeral script run.
-/// When this is Some, its modal is on screen.
+/// When this is Some, its question is in the line above the input.
 #[derive(Debug, Clone)]
 struct TabAiSaveOfferState {
     /// The execution record for the completed Tab AI run.
     record: crate::ai::TabAiExecutionRecord,
     /// Derived filename stem (e.g. "force-quit-this-app").
     filename_stem: String,
-    /// Dropping the state closes the modal: its lifetime check holds a weak
-    /// reference to this token.
-    _open: std::rc::Rc<()>,
 }
 
 #[cfg(test)]

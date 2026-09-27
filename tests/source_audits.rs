@@ -64,9 +64,6 @@ pub fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
 #[path = "source_audits/ai_recovery_button_placement.rs"]
 mod ai_recovery_button_placement;
 
-#[path = "source_audits/builtin_confirmation.rs"]
-mod builtin_confirmation;
-
 #[path = "source_audits/clipboard_actions.rs"]
 mod clipboard_actions;
 
@@ -159,12 +156,6 @@ mod emoji_picker;
 
 #[path = "source_audits/paste_parity.rs"]
 mod paste_parity;
-
-#[path = "source_audits/no_popup_confirm_callers.rs"]
-mod no_popup_confirm_callers;
-
-#[path = "source_audits/confirm_modal_shared_shell.rs"]
-mod confirm_modal_shared_shell;
 
 #[path = "source_audits/arrow_interceptor_filtered_bounds.rs"]
 mod arrow_interceptor_filtered_bounds;

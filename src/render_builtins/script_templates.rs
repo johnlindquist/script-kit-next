@@ -176,9 +176,9 @@ impl ScriptListApp {
                             crate::mcp_resources::format_script_template_markdown(template);
                         match crate::platform::copy_text_to_clipboard(&markdown) {
                             Ok(()) => {
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     catalog_action.copied_hud(&template.title),
-                                    Some(2000),
                                     cx,
                                 );
                             }

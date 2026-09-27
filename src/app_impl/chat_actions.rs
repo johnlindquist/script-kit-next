@@ -22,7 +22,11 @@ impl ScriptListApp {
                 });
             }
             if let Some(model_name) = selected_model_name {
-                self.show_hud(format!("Model: {}", model_name), Some(HUD_SHORT_MS), cx);
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    format!("Model: {}", model_name),
+                    cx,
+                );
             }
             return;
         }
@@ -81,7 +85,7 @@ impl ScriptListApp {
                         copied,
                         crate::components::conversation_actions::ConversationCommandExecution::Executed
                     ) {
-                        self.show_hud("Copied response".to_string(), Some(HUD_SHORT_MS), cx);
+                        self.one_window_notice(crate::line_notice::INFO, "Copied response".to_string(), cx);
                     }
                 }
             }
@@ -92,44 +96,14 @@ impl ScriptListApp {
                     return;
                 };
 
-                let message = "Clear this conversation? This cannot be undone.".to_string();
-                cx.spawn(async move |this, cx| {
-                    let confirmed = match crate::confirm::confirm_with_parent_dialog(
-                        cx,
-                        crate::confirm::ParentConfirmOptions::irreversible(
-                            "Clear Conversation",
-                            message,
-                            "Clear",
-                        ),
-                        "clear_conversation",
-                    )
-                    .await
-                    {
-                        Ok(confirmed) => confirmed,
-                        Err(e) => {
-                            let _ = this.update(cx, move |this, cx| {
-                                tracing::error!(
-                                    event = "clear_conversation_dialog_open_failed",
-                                    error = %e,
-                                    "Failed to open clear conversation dialog"
-                                );
-                                this.show_error_toast("Failed to open confirmation dialog", cx);
-                            });
-                            return;
-                        }
-                    };
-
-                    if !confirmed {
-                        return;
-                    }
-
-                    let _ = this.update(cx, |_, cx| {
-                        chat_entity.update(cx, |chat, cx| {
-                            chat.clear_messages(cx);
-                        });
-                    });
-                })
-                .detach();
+                self.one_window_hold(
+                    "trash",
+                    "Clear this conversation",
+                    Box::new(move |_, cx| {
+                        chat_entity.update(cx, |chat, cx| chat.clear_messages(cx));
+                    }),
+                    cx,
+                );
             }
             "capture_screen_area" => {
                 if let AppView::ChatPrompt { entity, .. } = &self.current_view {

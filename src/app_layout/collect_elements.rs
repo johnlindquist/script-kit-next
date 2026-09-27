@@ -1784,12 +1784,17 @@ impl ScriptListApp {
         }
 
         self.append_footer_elements(&mut outcome, limit);
-        if let Some(undo) =
-            crate::undo_offer::semantic_element(crate::undo_offer::UndoSurface::Main)
-        {
-            outcome.total_count += 1;
-            if outcome.elements.len() < limit {
-                outcome.elements.push(undo);
+        if matches!(self.current_view, AppView::ScriptList) {
+            let line = self.one_window.slot_line(self.one_window_clock());
+            for (key, label) in line.hints.iter().filter(|(_, label)| !label.is_empty()) {
+                let mut hint = protocol::ElementInfo::button(0, key);
+                hint.semantic_id =
+                    format!("{}:{label}", crate::one_window::slot_line::SLOT_LINE_ID);
+                hint.role = Some("slot-line-hint".to_string());
+                outcome.total_count += 1;
+                if outcome.elements.len() < limit {
+                    outcome.elements.push(hint);
+                }
             }
         }
         outcome

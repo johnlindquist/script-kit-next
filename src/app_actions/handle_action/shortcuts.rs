@@ -273,9 +273,9 @@ impl ScriptListApp {
                                     command_id = %command_id,
                                     "Removed config shortcut"
                                 );
-                                self.show_hud(
+                                self.one_window_notice(
+                                    crate::line_notice::INFO,
                                     remove_action.success_hud().to_string(),
-                                    Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
                                 // Refresh scripts to update shortcut display
@@ -399,9 +399,9 @@ impl ScriptListApp {
                                     command_id = %command_id,
                                     "Removed alias override"
                                 );
-                                self.show_hud(
+                                self.one_window_notice(
+                                    crate::line_notice::INFO,
                                     remove_action.success_hud().to_string(),
-                                    Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
                                 // Refresh scripts to update alias display and registry

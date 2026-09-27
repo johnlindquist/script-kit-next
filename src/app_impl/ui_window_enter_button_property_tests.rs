@@ -735,6 +735,9 @@ impl Oracle for SentenceReader {
     }
 }
 
+#[path = "ui_window_enter_button_ledger_tests.rs"]
+mod ledger;
+
 fn key(app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext, key: Key) -> (bool, bool) {
     app.update(cx, |app, cx| {
         let handled = app.one_window_key(key, cx);

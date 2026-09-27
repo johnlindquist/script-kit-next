@@ -47,6 +47,7 @@ pub(crate) struct OneWindowHost {
     /// A row that ran and opened something; its title is what finished when that ends.
     finishing: Option<Row>,
     last_run: Option<Row>,
+    pub(super) ledger: super::ledger_view::LedgerHost,
 }
 
 /// What the reducer did with one event.
@@ -192,8 +193,8 @@ impl ScriptListApp {
                     effect @ (Effect::ViewKey(_)
                     | Effect::Held { .. }
                     | Effect::Undo { .. }
-                    | Effect::Again { .. }
-                    | Effect::OpenScript { .. }
+                    | Effect::Again { .. }) => self.one_window_ledger_effect(effect, cx),
+                    effect @ (Effect::OpenScript { .. }
                     | Effect::SaveScript { .. }
                     | Effect::ActionsFor(_)) => tracing::info!(
                         target: "script_kit::one_window",
@@ -209,6 +210,7 @@ impl ScriptListApp {
                 handled.run_error = Some(error);
             }
         }
+        self.one_window_let_go(cx);
         cx.notify();
         handled
     }
@@ -349,6 +351,7 @@ impl ScriptListApp {
             slot.row.as_ref().map(|row| &row.key).hash(&mut hasher);
             slot.stale.hash(&mut hasher);
         }
+        self.one_window_ledger_token(&mut hasher);
         hasher.finish()
     }
 
@@ -367,6 +370,9 @@ impl ScriptListApp {
         if !self.one_window_owns(text) {
             return (grouped, flat, false);
         }
+        if let Some((grouped, flat)) = self.one_window_own_list(text) {
+            return (grouped, flat, true);
+        }
         if text.trim().is_empty() {
             if grouped
                 .iter()
@@ -378,6 +384,8 @@ impl ScriptListApp {
                     GroupedListItem::SectionHeader(words::SUGGESTED.to_string(), None),
                 );
             }
+            let mut flat = flat;
+            self.one_window_prepend_setup(&mut grouped, &mut flat);
             return (grouped, flat, false);
         }
         if self.one_window.text() != text {
@@ -463,8 +471,11 @@ impl ScriptListApp {
                     continue;
                 }
                 Item::Slot(slot) => SearchResult::Intent(self.one_window_jev_match(*slot, text)),
-                item => match list.row(item).and_then(|row| results.get(&row.key)) {
-                    Some(result) => result.clone(),
+                item => match list.row(item) {
+                    Some(row) => results
+                        .get(&row.key)
+                        .cloned()
+                        .unwrap_or_else(|| super::ledger_view::own_row_result(row)),
                     None => continue,
                 },
             };
@@ -518,6 +529,9 @@ impl ScriptListApp {
     pub(crate) fn one_window_suggested(&mut self, cx: &mut Context<Self>) {
         if !self.computed_filter_text.trim().is_empty()
             || !self.one_window_owns(&self.computed_filter_text)
+            || self
+                .one_window_own_list(&self.computed_filter_text)
+                .is_some()
         {
             return;
         }
@@ -777,6 +791,9 @@ impl ScriptListApp {
         if let Some(ran) = self.run_jev_row(&row.key, &text, cx) {
             return ran.map_err(anyhow::Error::msg);
         }
+        if let Some(ran) = self.one_window_run_own(&row, cx) {
+            return ran;
+        }
         let list = self.one_window.list();
         let position = list
             .visible()
@@ -792,6 +809,7 @@ impl ScriptListApp {
         if grouped_index != self.selected_index {
             self.select_main_menu_row(grouped_index, MainMenuSelectionOrigin::Keyboard, cx);
         }
+        self.one_window_remember_rerun(&row);
         let observation = self.selected_row_dispatch_observation();
         self.run_selected_row(observation, cx).map(|_| ())
     }

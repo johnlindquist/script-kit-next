@@ -43,7 +43,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         if let Err(error) = crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::ExternalStorage) {
-            self.show_error_toast(error.to_string(), cx);
+            self.notice_failed(error.to_string(), cx);
             return;
         }
         let (target_directory, extension) = match target {
@@ -66,7 +66,7 @@ impl ScriptListApp {
             config, input: String::new(),
         });
         if let Err(error) = self.construct_prompt_seed(seed, cx) {
-            self.show_error_toast(error.to_string(), cx);
+            self.notice_failed(error.to_string(), cx);
             return;
         }
         self.opened_from_main_menu = true;
@@ -98,13 +98,7 @@ impl ScriptListApp {
             Ok(r) => r,
             Err(e) => {
                 tracing::error!(error = %e, payload = %json, "Failed to parse naming payload");
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to parse naming result: {}", e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
+                self.one_window_notice(crate::line_notice::FAILED, format!("Failed to parse naming result: {}", e), cx);
                 self.go_back_or_close(window, cx);
                 return;
             }
@@ -182,13 +176,7 @@ impl ScriptListApp {
                                     template_id
                                 ),
                             );
-                            self.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("Unknown template: {}", template_id),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(TOAST_ERROR_MS)),
-                            );
+                            self.one_window_notice(crate::line_notice::FAILED, format!("Unknown template: {}", template_id), cx);
                         }
                     }
                 }
@@ -230,33 +218,15 @@ impl ScriptListApp {
                             path = %created_file_path.display(),
                             "script_creation_receipt.unavailable"
                         );
-                        self.toast_manager.push(
-                            components::toast::Toast::warning(
-                                "Created script, but verification receipt was unavailable",
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
-                        );
+                        self.one_window_notice(crate::line_notice::FAILED, "Created script, but verification receipt was unavailable", cx);
                     }
                 }
 
                 if let Err(e) = script_creation::open_in_editor(&path, &self.config) {
                     logging::log("ERROR", &format!("Failed to open in editor: {}", e));
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("Created {} but failed to open editor: {}", item_type, e),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                    );
+                    self.one_window_notice(crate::line_notice::FAILED, format!("Created {} but failed to open editor: {}", item_type, e), cx);
                 } else {
-                    self.toast_manager.push(
-                        components::toast::Toast::success(
-                            format!("New {} created and opened in editor", item_type),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_SUCCESS_MS)),
-                    );
+                    self.one_window_notice(crate::line_notice::DONE, format!("New {} created and opened in editor", item_type), cx);
                 }
 
                 self.open_creation_feedback_payload(
@@ -266,13 +236,7 @@ impl ScriptListApp {
             }
             Err(e) => {
                 logging::log("ERROR", &format!("Failed to create {}: {}", item_type, e));
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to create {}: {}", item_type, e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
+                self.one_window_notice(crate::line_notice::FAILED, format!("Failed to create {}: {}", item_type, e), cx);
                 self.go_back_or_close(window, cx);
             }
         }

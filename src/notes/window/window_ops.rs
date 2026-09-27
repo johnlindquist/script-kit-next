@@ -1400,7 +1400,7 @@ pub fn close_notes_window(cx: &mut App) {
                 .and_then(|guard| guard.clone())
             {
                 if !notes_app.update(cx, |app, cx| {
-                    if !app.save_before_window_close(window, cx) {
+                    if !app.save_before_window_close(cx) {
                         return false;
                     }
                     let _ = app.entry_reveal.prepare_for_window_exit();

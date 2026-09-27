@@ -440,30 +440,21 @@ const CLIPBOARD_CACHE_SIZE: usize = 100;
 include!("deferred_agent_chat.rs");
 
 impl ScriptListApp {
-    /// Show an error toast and call cx.notify() to ensure the UI updates.
-    ///
-    /// Consolidates the repeated pattern of pushing an error toast, setting the
-    /// duration to TOAST_ERROR_MS, and calling cx.notify().
-    ///
-    /// The optional `error_code` is logged for machine-readable diagnostics but
-    /// never shown to the user.  Use the stable constants from
-    /// `crate::action_helpers` (e.g. `ERROR_LAUNCH_FAILED`).
-    fn show_error_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
-        self.show_error_toast_with_code(message, None, cx);
+    /// Says in the line above the input that something failed.
+    fn notice_failed(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        self.notice_failed_with_code(message, None, cx);
     }
 
-    /// Show a short success toast in the main window.
-    fn show_success_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
-        let msg: String = message.into();
-        self.toast_manager.push(
-            components::toast::Toast::success(msg, &self.theme)
-                .duration_ms(Some(TOAST_SUCCESS_MS)),
-        );
-        cx.notify();
+    /// Says in the line above the input that something worked.
+    fn notice_done(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        self.one_window_notice(crate::line_notice::DONE, message, cx);
     }
 
-    /// Like `show_error_toast` but also logs a stable error code.
-    fn show_error_toast_with_code(
+    /// Like `notice_failed`, and logs a stable error code.
+    ///
+    /// The code is for machine-readable diagnostics and is never shown to the user. Use the
+    /// stable constants from `crate::action_helpers` (e.g. `ERROR_LAUNCH_FAILED`).
+    fn notice_failed_with_code(
         &mut self,
         message: impl Into<String>,
         error_code: Option<&str>,
@@ -477,10 +468,7 @@ impl ScriptListApp {
                 "Action error"
             );
         }
-        self.toast_manager.push(
-            components::toast::Toast::error(msg, &self.theme).duration_ms(Some(TOAST_ERROR_MS)),
-        );
-        cx.notify();
+        self.one_window_notice(crate::line_notice::FAILED, msg, cx);
     }
 
     /// Copy application text with destination-accurate success/error feedback.
@@ -502,35 +490,28 @@ impl ScriptListApp {
                         receipt.feedback("Copied".to_owned())
                     }
                 };
-                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, message, cx);
                 if close_after {
                     self.hide_main_and_reset(cx);
                 }
             }
             Err(e) => {
                 tracing::error!(error = %e, "Text copy failed");
-                self.show_error_toast(format!("Failed to copy text: {e}"), cx);
+                self.notice_failed(format!("Failed to copy text: {e}"), cx);
             }
         }
     }
 
-    /// Show a consistent "not supported on this platform" warning toast.
-    ///
-    /// Uses Toast::warning (not error) per the feedback matrix — unsupported
-    /// platform is a warning, not an error.  Internally logs with the
+    /// Says "not supported on this platform" in the line, and logs the
     /// `unsupported_platform` error code.
     #[cfg_attr(target_os = "macos", allow(dead_code))]
-    fn show_unsupported_platform_toast(&mut self, feature: &str, cx: &mut Context<Self>) {
+    fn notice_unsupported_platform(&mut self, feature: &str, cx: &mut Context<Self>) {
         tracing::warn!(
             error_code = crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
             feature = feature,
             "Unsupported platform"
         );
-        self.toast_manager.push(
-            components::toast::Toast::warning(unsupported_platform_message(feature), &self.theme)
-                .duration_ms(Some(TOAST_WARNING_MS)),
-        );
-        cx.notify();
+        self.one_window_notice(crate::line_notice::FAILED, unsupported_platform_message(feature), cx);
     }
 
     pub(crate) fn hide_main_and_reset(&self, cx: &mut Context<Self>) {
@@ -644,7 +625,7 @@ impl ScriptListApp {
                             duration_ms = started_at.elapsed().as_millis() as u64,
                             "Failed to complete deferred chat handoff after hiding main window"
                         );
-                        this.show_error_toast(deferred_action_kind.failure_message(&error), cx);
+                        this.notice_failed(deferred_action_kind.failure_message(&error), cx);
                     });
                 }
             }
@@ -956,7 +937,7 @@ impl ScriptListApp {
     fn show_outcome_feedback(&mut self, outcome: &DispatchOutcome, cx: &mut Context<Self>) {
         if outcome.status == ActionOutcomeStatus::Error {
             if let Some(ref msg) = outcome.user_message {
-                self.show_error_toast_with_code(msg.clone(), outcome.error_code, cx);
+                self.notice_failed_with_code(msg.clone(), outcome.error_code, cx);
             }
         }
     }
@@ -1316,11 +1297,7 @@ impl ScriptListApp {
                     });
                 }
             });
-            self.show_hud(
-                model_action.hud_message(&model_display_name),
-                Some(HUD_SHORT_MS),
-                cx,
-            );
+            self.one_window_notice(crate::line_notice::INFO, model_action.hud_message(&model_display_name), cx);
 
             let mut outcome = DispatchOutcome::success();
             outcome.user_message = Some(model_action.switched_message(&model_display_name));
@@ -2283,7 +2260,7 @@ impl ScriptListApp {
     fn handle_action(&mut self, action_id: String, window: &mut Window, cx: &mut Context<Self>) {
         if action_id.starts_with("brain_inbox_open:") {
             if !self.open_brain_inbox_action(&action_id, cx) {
-                self.show_error_toast(
+                self.notice_failed(
                     "The inbox changed. Open Brain Inbox in Actions and choose again.",
                     cx,
                 );
@@ -2340,13 +2317,7 @@ impl ScriptListApp {
         } else {
             None
         };
-        let dictation_outcome = self.handle_dictation_history_action(
-            &action_id_stripped,
-            selected_dictation_entry,
-            &dctx,
-            window,
-            cx,
-        );
+        let dictation_outcome = self.handle_dictation_history_action(&action_id_stripped, selected_dictation_entry, &dctx, cx);
         if dictation_outcome.was_handled() {
             log_dispatch_outcome(
                 &action_id_stripped,
@@ -2384,7 +2355,7 @@ impl ScriptListApp {
             if o.was_handled() {
                 ("shortcut_alias", o)
             } else {
-                let o = self.handle_script_action(&action_id_stripped, &dctx, window, cx);
+                let o = self.handle_script_action(&action_id_stripped, &dctx, cx);
                 if o.was_handled() {
                     ("script", o)
                 } else {
@@ -2392,7 +2363,7 @@ impl ScriptListApp {
                     if o.was_handled() {
                         ("file", o)
                     } else {
-                        let o = self.handle_app_action(&action_id_stripped, &dctx, window, cx);
+                        let o = self.handle_app_action(&action_id_stripped, &dctx, cx);
                         if o.was_handled() {
                             ("app", o)
                         } else {

@@ -138,11 +138,7 @@ impl ScriptListApp {
                                 entity_for_escape.update(cx, |editor, _| editor.submit_cancel());
                             } else {
                                 this.editor_escape_armed_at = Some(std::time::Instant::now());
-                                this.show_hud(
-                                    "Press Esc again to discard and cancel".to_string(),
-                                    None,
-                                    cx,
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, "Press Esc again to discard and cancel".to_string(), cx);
                             }
                             return true;
                         }

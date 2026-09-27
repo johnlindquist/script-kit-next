@@ -633,13 +633,7 @@ impl ScriptListApp {
     ) {
         let selected = selected.clone();
 
-        self.toast_manager.push(
-            components::toast::Toast::info(
-                KitStorePluginMutation::Install.progress_message(&selected.name),
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_INFO_MS)),
-        );
+        self.one_window_notice(crate::line_notice::INFO, KitStorePluginMutation::Install.progress_message(&selected.name), cx);
         cx.notify();
 
         cx.spawn(async move |this, cx| {
@@ -660,13 +654,7 @@ impl ScriptListApp {
                         &installed.name,
                         cx,
                     );
-                    this.toast_manager.push(
-                        components::toast::Toast::success(
-                            KitStorePluginMutation::Install.success_message(&installed.name),
-                            &this.theme,
-                        )
-                        .duration_ms(Some(TOAST_SUCCESS_MS)),
-                    );
+                    this.one_window_notice(crate::line_notice::DONE, KitStorePluginMutation::Install.success_message(&installed.name), cx);
                     cx.notify();
                 }
                 Err(error) => {
@@ -674,13 +662,7 @@ impl ScriptListApp {
                         error = %error,
                         "plugin_store_install_failed"
                     );
-                    this.toast_manager.push(
-                        components::toast::Toast::error(
-                            KitStorePluginMutation::Install.failure_message(None, &error),
-                            &this.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                    );
+                    this.one_window_notice(crate::line_notice::FAILED, KitStorePluginMutation::Install.failure_message(None, &error), cx);
                     cx.notify();
                 }
             });
@@ -696,13 +678,7 @@ impl ScriptListApp {
         let kit = kit.clone();
         let kit_name = kit.name.clone();
 
-        self.toast_manager.push(
-            components::toast::Toast::info(
-                KitStorePluginMutation::Update.progress_message(&kit_name),
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_INFO_MS)),
-        );
+        self.one_window_notice(crate::line_notice::INFO, KitStorePluginMutation::Update.progress_message(&kit_name), cx);
         cx.notify();
 
         cx.spawn(async move |this, cx| {
@@ -715,25 +691,13 @@ impl ScriptListApp {
                     tracing::info!(plugin_id = %kit_name, "plugin_store_updated");
                     this.kit_store_refresh_installed_view(None, cx);
                     this.request_plugin_runtime_refresh(KitStorePluginMutation::Update, &kit_name, cx);
-                    this.toast_manager.push(
-                        components::toast::Toast::success(
-                            KitStorePluginMutation::Update.success_message(&kit_name),
-                            &this.theme,
-                        )
-                        .duration_ms(Some(TOAST_SUCCESS_MS)),
-                    );
+                    this.one_window_notice(crate::line_notice::DONE, KitStorePluginMutation::Update.success_message(&kit_name), cx);
                     cx.notify();
                 }
                 Err(error) => {
                     tracing::warn!(plugin_id = %kit_name, error = %error, "plugin_store_update_failed");
-                    this.toast_manager.push(
-                        components::toast::Toast::error(
-                            KitStorePluginMutation::Update
-                                .failure_message(Some(&kit_name), &error),
-                            &this.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                    );
+                    this.one_window_notice(crate::line_notice::FAILED, KitStorePluginMutation::Update
+                                .failure_message(Some(&kit_name), &error), cx);
                     cx.notify();
                 }
             });
@@ -749,13 +713,7 @@ impl ScriptListApp {
         let kit = kit.clone();
         let kit_name = kit.name.clone();
 
-        self.toast_manager.push(
-            components::toast::Toast::info(
-                KitStorePluginMutation::Remove.progress_message(&kit_name),
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_INFO_MS)),
-        );
+        self.one_window_notice(crate::line_notice::INFO, KitStorePluginMutation::Remove.progress_message(&kit_name), cx);
         cx.notify();
 
         cx.spawn(async move |this, cx| {
@@ -768,25 +726,13 @@ impl ScriptListApp {
                     tracing::info!(plugin_id = %kit_name, "plugin_store_removed");
                     this.kit_store_refresh_installed_view(Some(&kit_name), cx);
                     this.request_plugin_runtime_refresh(KitStorePluginMutation::Remove, &kit_name, cx);
-                    this.toast_manager.push(
-                        components::toast::Toast::success(
-                            KitStorePluginMutation::Remove.success_message(&kit_name),
-                            &this.theme,
-                        )
-                        .duration_ms(Some(TOAST_SUCCESS_MS)),
-                    );
+                    this.one_window_notice(crate::line_notice::DONE, KitStorePluginMutation::Remove.success_message(&kit_name), cx);
                     cx.notify();
                 }
                 Err(error) => {
                     tracing::warn!(plugin_id = %kit_name, error = %error, "plugin_store_remove_failed");
-                    this.toast_manager.push(
-                        components::toast::Toast::error(
-                            KitStorePluginMutation::Remove
-                                .failure_message(Some(&kit_name), &error),
-                            &this.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                    );
+                    this.one_window_notice(crate::line_notice::FAILED, KitStorePluginMutation::Remove
+                                .failure_message(Some(&kit_name), &error), cx);
                     cx.notify();
                 }
             });

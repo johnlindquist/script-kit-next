@@ -1288,7 +1288,7 @@ impl ScriptListApp {
                         app.mark_main_data_changed();
                         Self::resize_file_search_window_after_results_change(presentation, app.file_search_display_indices.len(), false, true);
                         if matches!(error, crate::file_search::SearchFailure::Cancelled) { cx.notify(); }
-                        else { app.show_error_toast(format!("File search failed: {error}"), cx); }
+                        else { app.notice_failed(format!("File search failed: {error}"), cx); }
                     });
                     return;
                 }

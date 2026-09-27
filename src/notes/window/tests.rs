@@ -613,28 +613,6 @@ fn test_notes_keyboard_delete_shortcut_works_in_trash_view() {
 }
 
 #[test]
-fn test_delete_dialog_cancel_restores_primary_focus_after_dialog() {
-    const NOTES_SOURCE: &str = include_str!("notes.rs");
-    assert!(
-        NOTES_SOURCE.contains("this.restore_primary_focus_after_dialog(window, cx);"),
-        "Cancel should restore focus after the dialog lifecycle completes"
-    );
-}
-
-#[test]
-fn test_delete_dialog_width_uses_viewport_size() {
-    const NOTES_SOURCE: &str = include_str!("notes.rs");
-    assert!(
-        NOTES_SOURCE.contains("window.viewport_size().width"),
-        "Dialog width should prefer viewport_size"
-    );
-    assert!(
-        NOTES_SOURCE.contains("window.bounds().size.width"),
-        "Dialog width should fall back to bounds when viewport width is zero"
-    );
-}
-
-#[test]
 fn test_on_search_change_uses_reload_helper_instead_of_silently_swallowing_errors() {
     const NOTES_SOURCE: &str = include_str!("notes.rs");
     assert!(
@@ -678,88 +656,11 @@ fn test_request_delete_selected_note_log_includes_viability_fields() {
 }
 
 #[test]
-fn test_resolve_notes_delete_dialog_source_width_prefers_viewport() {
-    assert_eq!(
-        NotesApp::resolve_notes_delete_dialog_source_width(360.0, 520.0),
-        360.0
-    );
-}
-
-#[test]
-fn test_resolve_notes_delete_dialog_source_width_falls_back_to_bounds() {
-    assert_eq!(
-        NotesApp::resolve_notes_delete_dialog_source_width(0.0, 520.0),
-        520.0
-    );
-}
-
-#[test]
-fn test_resolve_notes_delete_dialog_source_width_uses_default_when_sizes_missing() {
-    assert_eq!(
-        NotesApp::resolve_notes_delete_dialog_source_width(0.0, 0.0),
-        472.0
-    );
-}
-
-#[test]
-fn test_resolve_notes_delete_dialog_source_width_ignores_tiny_startup_sizes() {
-    // Both viewport and bounds are tiny positive startup artifacts → default
-    assert_eq!(
-        NotesApp::resolve_notes_delete_dialog_source_width(0.0, 12.0),
-        472.0
-    );
-    assert_eq!(
-        NotesApp::resolve_notes_delete_dialog_source_width(8.0, 16.0),
-        472.0
-    );
-}
-
-#[test]
-fn test_resolve_notes_delete_dialog_source_width_uses_viable_bounds_during_startup() {
-    // Viewport zero but bounds is a real window size → use bounds
-    assert_eq!(
-        NotesApp::resolve_notes_delete_dialog_source_width(0.0, 320.0),
-        320.0
-    );
-}
-
-#[test]
-fn test_resolve_notes_delete_dialog_source_width_uses_viable_viewport_over_tiny_bounds() {
-    // Viewport is viable, bounds is tiny → use viewport
-    assert_eq!(
-        NotesApp::resolve_notes_delete_dialog_source_width(360.0, 12.0),
-        360.0
-    );
-}
-
-#[test]
-fn test_delete_dialog_width_prefers_viewport_but_falls_back_when_zero() {
-    const NOTES_SOURCE: &str = include_str!("notes.rs");
-    assert!(
-        NOTES_SOURCE.contains("window.viewport_size().width"),
-        "Dialog width should still prefer viewport_size"
-    );
-    assert!(
-        NOTES_SOURCE.contains("window.bounds().size.width"),
-        "Dialog width should fall back to bounds when viewport width is unavailable"
-    );
-}
-
-#[test]
 fn test_notes_render_does_not_apply_pending_focus_surface_in_render() {
     const RENDER_SOURCE: &str = include_str!("render.rs");
     assert!(
         !RENDER_SOURCE.contains("self.apply_pending_focus_surface(window, cx);"),
         "Notes render must stay read-only; apply focus outside render"
-    );
-}
-
-#[test]
-fn test_delete_dialog_requests_dialog_focus_surface_before_opening() {
-    const NOTES_SOURCE: &str = include_str!("notes.rs");
-    assert!(
-        NOTES_SOURCE.contains("self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);"),
-        "Delete flow should request the dialog focus surface before opening the confirm dialog"
     );
 }
 

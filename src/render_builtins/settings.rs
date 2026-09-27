@@ -146,7 +146,7 @@ impl ScriptListApp {
             // real refusal (missing snap-mode builtin): an error toast with
             // the same reason the descriptor projects.
             if let Some(reason) = descriptor.disabled_reason {
-                self.show_error_toast(reason, cx);
+                self.notice_failed(reason, cx);
             }
             return;
         }
@@ -354,7 +354,7 @@ impl ScriptListApp {
                 } else {
                     // Defensive: availability rechecked above should have
                     // refused already; keep the exact legacy feedback.
-                    self.show_error_toast(SETTINGS_CONFIGURE_SNAP_MODE_DISABLED_REASON, cx);
+                    self.notice_failed(SETTINGS_CONFIGURE_SNAP_MODE_DISABLED_REASON, cx);
                 }
             }
             SettingsAction::ResetWindowPositions => {

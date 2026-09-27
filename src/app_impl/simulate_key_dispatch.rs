@@ -35,40 +35,6 @@ impl ScriptListApp {
 
         // Handle key based on current view
         let key_lower = key.to_lowercase();
-        if crate::confirm::is_confirm_window_open()
-            && (key_lower == "escape"
-                || key_lower == "esc"
-                || key_lower == "enter"
-                || key_lower == "return"
-                || key_lower == "tab")
-        {
-            let gpui_modifiers = gpui::Modifiers {
-                platform: has_cmd,
-                shift: has_shift,
-                alt: _has_alt,
-                control: _has_ctrl,
-                ..Default::default()
-            };
-            let confirm_key = if key_lower == "return" {
-                "enter"
-            } else if key_lower == "esc" {
-                "escape"
-            } else {
-                key_lower.as_str()
-            };
-            let handled = crate::confirm::consume_main_window_key_while_confirm_open(
-                confirm_key,
-                &gpui_modifiers,
-                ctx,
-            );
-            logging::log(
-                "STDIN",
-                &format!("SimulateKey: {key} - confirm popup handled={handled}"),
-            );
-            if handled {
-                return DispatchOutcome::success();
-            }
-        }
         let simulate_key_target_is_notes = target.map_or_else(
             || {
                 crate::windows::focused_automation_window().is_some_and(|info| {
@@ -108,31 +74,6 @@ impl ScriptListApp {
                         ),
                     );
                 }
-            }
-        }
-        if !has_cmd
-            && !has_shift
-            && !_has_alt
-            && !_has_ctrl
-            && simulate_key_target_is_notes
-            && (key_lower == "escape"
-                || key_lower == "esc"
-                || key_lower == "enter"
-                || key_lower == "return")
-            && crate::confirm::is_confirm_window_open()
-        {
-            let confirm_key = if key_lower == "enter" || key_lower == "return" {
-                "enter"
-            } else {
-                "escape"
-            };
-            let handled = crate::confirm::route_key_to_confirm_popup(confirm_key, ctx);
-            logging::log(
-                "STDIN",
-                &format!("SimulateKey: {key} - Notes confirm popup handled={handled}"),
-            );
-            if handled {
-                return DispatchOutcome::success();
             }
         }
         if !has_cmd
@@ -1352,7 +1293,7 @@ impl ScriptListApp {
                                             message
                                         ),
                                     );
-                                    view.show_hud(message, Some(3000), ctx);
+                                    view.one_window_notice(crate::line_notice::INFO, message, ctx);
                                 } else {
                                     logging::log(
                                         "STDIN",

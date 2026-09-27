@@ -338,7 +338,7 @@ impl ScriptListApp {
                                 {
                                     return false;
                                 }
-                                app.show_error_toast(error, cx);
+                                app.notice_failed(error, cx);
                                 true
                             })
                             .ok()
@@ -376,7 +376,7 @@ impl ScriptListApp {
                     if !matches!(&app.current_view, AppView::ScratchPadView { entity, .. } if entity == &editor) { return; }
                     let error = editor.read(cx).autosave_error.clone();
                     if error != last_error {
-                        if let Some(error) = error.as_ref() { app.show_error_toast(format!("Failed to auto-save scratch pad: {error}"), cx); }
+                        if let Some(error) = error.as_ref() { app.notice_failed(format!("Failed to auto-save scratch pad: {error}"), cx); }
                         last_error = error;
                     }
                 }).detach();
@@ -547,7 +547,7 @@ impl ScriptListApp {
                         }
                     });
                     if let Some(outcome) = outcome {
-                        if let Err(error) = completion.try_complete(outcome) { this.show_error_toast(error.to_string(), cx); }
+                        if let Err(error) = completion.try_complete(outcome) { this.notice_failed(error.to_string(), cx); }
                         this.mark_main_data_changed();
                         cx.notify();
                     }

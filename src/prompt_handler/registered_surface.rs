@@ -381,24 +381,16 @@ pub(crate) fn apply_registered_surface_command(
         protocol::AutomationWindowKind::PromptPopup => {
             let subtype = resolve_prompt_popup_subtype(&target)?;
             revalidate_prompt_popup_target(&target, subtype)?;
-            if subtype == PromptPopupSubtype::Confirm {
-                anyhow::ensure!(
-                    crate::confirm::get_confirm_popup_snapshot(cx, generation, None).is_some(),
-                    "confirm_target_owner_mismatch"
-                );
-            }
             match command {
                 protocol::BatchCommand::SetInput { text } if subtype == PromptPopupSubtype::AgentChatHistory => {
                     crate::ai::agent_chat::ui::history_popup::batch_set_history_popup_input(generation, text, cx)?;
                     return Ok(None);
                 }
                 protocol::BatchCommand::SelectByValue { value, submit } => match subtype {
-                    PromptPopupSubtype::Confirm => crate::confirm::batch_select_confirm_button_by_value(generation, value, *submit, cx)?,
                     PromptPopupSubtype::DictationMicrophone => crate::dictation::batch_select_dictation_microphone_popup_row_by_value(generation, value, *submit, cx)?,
                     PromptPopupSubtype::AgentChatHistory => crate::ai::agent_chat::ui::history_popup::batch_select_history_popup_by_value(generation, value, *submit, cx)?,
                 },
                 protocol::BatchCommand::SelectBySemanticId { semantic_id, submit } => match subtype {
-                    PromptPopupSubtype::Confirm => crate::confirm::batch_select_confirm_button_by_semantic_id(generation, semantic_id, *submit, cx)?,
                     PromptPopupSubtype::DictationMicrophone => crate::dictation::batch_select_dictation_microphone_popup_row_by_semantic_id(generation, semantic_id, *submit, cx)?,
                     PromptPopupSubtype::AgentChatHistory => crate::ai::agent_chat::ui::history_popup::batch_select_history_popup_by_semantic_id(generation, semantic_id, *submit, cx)?,
                 },

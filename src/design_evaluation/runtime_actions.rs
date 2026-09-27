@@ -546,11 +546,6 @@ impl Evaluator {
                     crate::validate_gpui_expected_identity(expected, &actual)
                         .map_err(anyhow::Error::msg)?;
                     main.update(cx, |app, cx| match command {
-                        crate::protocol::BatchCommand::SetInput { text }
-                            if app.alias_input_state.is_some() =>
-                        {
-                            super::main_fixtures::set_main_overlay_input(app, text, window, cx)
-                        }
                         crate::protocol::BatchCommand::SelectBySemanticId {
                             semantic_id,
                             submit,

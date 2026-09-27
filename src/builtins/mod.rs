@@ -295,6 +295,8 @@ pub enum BuiltInFeature {
     SdkReference,
     /// Discoverability browser for Script Kit gestures, sigils, and shortcuts.
     Tips,
+    /// Today's runs as a view under the same input; Enter acts on one again.
+    RunHistory,
     /// Script template catalog — launcher view that picks a starter template
     /// then opens the naming prompt. Kept distinct from
     /// [`ScriptCommandType::NewScript`] so the fast `New Script` path stays
@@ -547,6 +549,7 @@ impl BuiltInEntry {
             BuiltInFeature::AiVault => "Open AI Vault",
             BuiltInFeature::SdkReference => "Open SDK Reference",
             BuiltInFeature::Tips => "Browse Tips",
+            BuiltInFeature::RunHistory => "Show What Ran",
             BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate v1 Scripts",
             BuiltInFeature::BackgroundEffectNext | BuiltInFeature::BackgroundEffectPrevious => {
@@ -672,6 +675,7 @@ impl BuiltInEntry {
             BuiltInFeature::AiVault => "Vault",
             BuiltInFeature::SdkReference => "SDK Docs",
             BuiltInFeature::Tips => "Tips",
+            BuiltInFeature::RunHistory => "Today",
             BuiltInFeature::NewScriptFromTemplate => "Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate",
             BuiltInFeature::BackgroundEffectNext => "Next Effect",
@@ -889,6 +893,24 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "lightbulb",
         ));
         debug!("Added Tips built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/run-history",
+            "What You Ran Today",
+            "Everything that ran, newest first; pick one to undo it, run it again, or share it",
+            vec![
+                "what did i run today",
+                "what did i do today",
+                "what have i run",
+                "history",
+                "ran",
+                "today",
+                "undo",
+                "again",
+            ],
+            BuiltInFeature::RunHistory,
+            "history",
+        ));
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/migrate-v1-scripts",

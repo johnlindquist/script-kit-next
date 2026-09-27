@@ -163,25 +163,13 @@ impl ScriptListApp {
             &profile_id,
             &ctx,
         ) else {
-            self.toast_manager.push(
-                crate::components::toast::Toast::error(
-                    format!("Agent Chat profile not found: {profile_id}"),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_MS)),
-            );
+            self.one_window_notice(crate::line_notice::FAILED, format!("Agent Chat profile not found: {profile_id}"), cx);
             cx.notify();
             return;
         };
 
         if let Err(error) = crate::config::save_user_preferences(&prefs) {
-            self.toast_manager.push(
-                crate::components::toast::Toast::error(
-                    format!("Failed to save Agent Chat profile: {error}"),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_MS)),
-            );
+            self.one_window_notice(crate::line_notice::FAILED, format!("Failed to save Agent Chat profile: {error}"), cx);
             cx.notify();
             return;
         }
@@ -603,11 +591,7 @@ impl ScriptListApp {
 
         if prompt.is_empty() && parts.is_empty() {
             if let Some(profile_name) = selected_profile_name {
-                self.show_hud(
-                    format!("Default Agent Chat profile: {profile_name}"),
-                    Some(HUD_SHORT_MS),
-                    cx,
-                );
+                self.one_window_notice(crate::line_notice::INFO, format!("Default Agent Chat profile: {profile_name}"), cx);
                 cx.notify();
                 return true;
             }
@@ -1340,11 +1324,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(part) = self.quick_terminal_context_part_from_entity(entity, cx) else {
-            self.show_hud(
-                "No terminal output to attach".to_string(),
-                Some(HUD_SHORT_MS),
-                cx,
-            );
+            self.one_window_notice(crate::line_notice::FAILED, "No terminal output to attach".to_string(), cx);
             return false;
         };
 
@@ -1371,11 +1351,7 @@ impl ScriptListApp {
         }
 
         let Some(part) = self.quick_terminal_context_part_from_entity(entity.clone(), cx) else {
-            self.show_hud(
-                "No terminal output to attach".to_string(),
-                Some(HUD_SHORT_MS),
-                cx,
-            );
+            self.one_window_notice(crate::line_notice::FAILED, "No terminal output to attach".to_string(), cx);
             return true;
         };
 
@@ -2210,13 +2186,7 @@ impl ScriptListApp {
                                 event = "tab_ai_live_quick_submit_build_failed",
                                 error = %error,
                             );
-                            this.toast_manager.push(
-                                crate::components::toast::Toast::error(
-                                    format!("Failed to build quick-submit context: {error}"),
-                                    &this.theme,
-                                )
-                                .duration_ms(Some(TOAST_ERROR_MS)),
-                            );
+                            this.one_window_notice(crate::line_notice::FAILED, format!("Failed to build quick-submit context: {error}"), cx);
                             cx.notify();
                         }
                     }
@@ -3035,13 +3005,7 @@ impl ScriptListApp {
                     event = "tab_ai_harness_start_failed",
                     error = %error,
                 );
-                self.toast_manager.push(
-                        crate::components::toast::Toast::error(
-                            format!("Failed to start harness: {error}. Install the configured CLI or update claudeCode.path in ~/.scriptkit/config.ts"),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                    );
+                self.one_window_notice(crate::line_notice::FAILED, format!("Failed to start harness: {error}. Install the configured CLI or update claudeCode.path in ~/.scriptkit/config.ts"), cx);
                 cx.notify();
                 return;
             }
@@ -3195,13 +3159,7 @@ impl ScriptListApp {
                                 event = "tab_ai_harness_context_build_failed",
                                 error = %error,
                             );
-                            this.toast_manager.push(
-                                crate::components::toast::Toast::error(
-                                    format!("Failed to build harness context: {error}"),
-                                    &this.theme,
-                                )
-                                .duration_ms(Some(TOAST_ERROR_MS)),
-                            );
+                            this.one_window_notice(crate::line_notice::FAILED, format!("Failed to build harness context: {error}"), cx);
                             cx.notify();
                         }
                     }
@@ -3621,13 +3579,7 @@ impl ScriptListApp {
                 if let Err(error) = result {
                     if let Some(app) = app.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.toast_manager.push(
-                                crate::components::toast::Toast::error(
-                                    format!("Failed to inject Tab AI context: {error}"),
-                                    &this.theme,
-                                )
-                                .duration_ms(Some(TOAST_ERROR_MS)),
-                            );
+                            this.one_window_notice(crate::line_notice::FAILED, format!("Failed to inject Tab AI context: {error}"), cx);
                             cx.notify();
                         });
                     }
@@ -5942,10 +5894,7 @@ impl ScriptListApp {
             }
         } else {
             let message = error.unwrap_or_else(|| "Tab AI script failed".to_string());
-            self.toast_manager.push(
-                components::toast::Toast::error(message, &self.theme)
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-            );
+            self.one_window_notice(crate::line_notice::FAILED, message, cx);
             cx.notify();
         }
     }
@@ -5960,8 +5909,8 @@ impl ScriptListApp {
         }
     }
 
-    /// Offer to keep the script a successful Tab AI run produced, in the
-    /// shared confirm modal: ↵ Save, Esc Not Now.
+    /// Offer to keep the script a successful Tab AI run produced, as a question in the line
+    /// above the input: ↵ Save, Esc Not Now.
     pub(crate) fn open_tab_ai_save_offer(
         &mut self,
         record: crate::ai::TabAiExecutionRecord,
@@ -5973,37 +5922,21 @@ impl ScriptListApp {
             filename_stem_sha256 = %crate::logging::log_private_user_value(&filename_stem),
             filename_stem_bytes = filename_stem.len(),
         );
-        let options = crate::confirm::ParentConfirmOptions {
-            title: "Save this script?".into(),
-            body: format!("Save it as {filename_stem}.ts to run it again from the launcher.")
-                .into(),
-            confirm_text: "Save".into(),
-            cancel_text: "Not Now".into(),
-            ..Default::default()
-        };
-        let open = std::rc::Rc::new(());
-        let still_open = std::rc::Rc::downgrade(&open);
         self.tab_ai_save_offer_state = Some(TabAiSaveOfferState {
             record,
-            filename_stem,
-            _open: open,
+            filename_stem: filename_stem.clone(),
         });
         self.mark_main_data_changed();
         self.mark_main_presentation_changed();
-        let app = cx.entity().downgrade();
-        self.open_main_window_confirm(
-            options,
-            // Closing the offer from elsewhere closes the modal.
-            move || still_open.upgrade().is_some(),
-            move |save, cx| {
-                let _ = app.update(cx, |app, cx| {
-                    if save {
-                        app.save_tab_ai_script(cx);
-                    } else {
-                        app.close_tab_ai_save_offer(cx);
-                    }
-                });
-            },
+        self.one_window_ask(
+            "script",
+            "Save this script?",
+            format!("Save it as {filename_stem}.ts to run it again from the launcher."),
+            vec![
+                ("Save".to_string(), Box::new(|app, cx| app.save_tab_ai_script(cx))),
+                ("Not Now".to_string(), Box::new(|app, cx| app.close_tab_ai_save_offer(cx))),
+            ],
+            Some(Box::new(|app, cx| app.close_tab_ai_save_offer(cx))),
             cx,
         );
         cx.notify();
@@ -6049,12 +5982,12 @@ impl ScriptListApp {
                             &state.filename_stem
                         ),
                     );
-                    // The modal has closed; say what went wrong where the
+                    // The offer has closed; say what went wrong where the
                     // user is now looking.
                     self.tab_ai_save_offer_state = None;
                     self.mark_main_data_changed();
                     self.mark_main_presentation_changed();
-                    self.show_error_toast(format!("Failed to save script: {error}"), cx);
+                    self.notice_failed(format!("Failed to save script: {error}"), cx);
                     return;
                 }
             };
@@ -6101,29 +6034,17 @@ impl ScriptListApp {
                     event = "tab_ai_save_editor_open_failed",
                     error = %error,
                 );
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Saved script but failed to open editor: {error}"),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
+                self.one_window_notice(crate::line_notice::FAILED, format!("Saved script but failed to open editor: {error}"), cx);
             }
             None => {
-                self.toast_manager.push(
-                    components::toast::Toast::success(
-                        if self.main_services.is_production() {
+                self.one_window_notice(crate::line_notice::DONE, if self.main_services.is_production() {
                             format!("Saved '{}' and opened in editor", state.filename_stem)
                         } else {
                             format!(
                                 "Saved '{}' in owned storage; verification not run",
                                 state.filename_stem
                             )
-                        },
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_SUCCESS_MS)),
-                );
+                        }, cx);
             }
         }
 

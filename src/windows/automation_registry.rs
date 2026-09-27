@@ -59,7 +59,6 @@ fn kind_rank(kind: AutomationWindowKind) -> u8 {
         AutomationWindowKind::Dictation => 5,
         AutomationWindowKind::ActionsDialog => 7,
         AutomationWindowKind::PromptPopup => 8,
-        AutomationWindowKind::Hud => 9,
         AutomationWindowKind::SnapOverlay => 10,
     }
 }
@@ -1139,7 +1138,7 @@ pub(crate) mod tests {
 
         // Targeting a non-existent kind fails with an error, not a silent fallback
         let missing = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::Hud,
+            kind: AutomationWindowKind::SnapOverlay,
             index: None,
         };
         let err = resolve_automation_window(Some(&missing));

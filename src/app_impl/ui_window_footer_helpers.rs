@@ -324,7 +324,11 @@ impl ScriptListApp {
 
         let markdown = crate::mcp_resources::format_sdk_reference_entry_markdown(&entry);
         match crate::platform::copy_text_to_clipboard(&markdown) {
-            Ok(()) => self.show_hud(format!("Copied {} reference", entry.name), Some(2000), cx),
+            Ok(()) => self.one_window_notice(
+                crate::line_notice::INFO,
+                format!("Copied {} reference", entry.name),
+                cx,
+            ),
             Err(error) => tracing::warn!(
                 %error,
                 "sdk_reference footer copy_text_to_clipboard failed"
@@ -353,9 +357,9 @@ impl ScriptListApp {
 
         let markdown = crate::mcp_resources::format_script_template_markdown(&template);
         match crate::platform::copy_text_to_clipboard(&markdown) {
-            Ok(()) => self.show_hud(
+            Ok(()) => self.one_window_notice(
+                crate::line_notice::INFO,
                 format!("Copied {} template", template.title),
-                Some(2000),
                 cx,
             ),
             Err(error) => tracing::warn!(

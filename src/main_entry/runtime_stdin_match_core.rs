@@ -152,14 +152,6 @@
                                 // the actions dialog. `close_actions_window` clears the
                                 // static AND the registry; idempotent.
                                 crate::actions::close_actions_window(ctx);
-                                // Sibling teardown for confirm-popup
-                                // (`id: "confirm-popup"`, PromptPopup kind).
-                                // Pass #25 fix: close_confirm_window at
-                                // src/confirm/window.rs:385 is the only
-                                // production removal path; no hide dispatcher
-                                // calls it (`attacker-hide-path-confirm-popup-registry-stale`).
-                                // Pure registry op; idempotent.
-                                crate::windows::remove_automation_window("confirm-popup");
 
                                 // Check if Notes is open for logging only.
                                 let notes_open = notes::is_notes_window_open();

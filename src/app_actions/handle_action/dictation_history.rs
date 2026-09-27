@@ -126,11 +126,11 @@ impl ScriptListApp {
                 error_fingerprint = %crate::dictation::redacted_transcript_fingerprint(&error.to_string()),
                 "Failed to delete Dictation History entry",
             );
-            self.show_error_toast("Failed to delete dictation", cx);
+            self.notice_failed("Failed to delete dictation", cx);
             return;
         }
         self.refresh_dictation_history_selection_after_delete();
-        self.show_hud("Deleted dictation".to_string(), Some(HUD_MEDIUM_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, "Deleted dictation".to_string(), cx);
         cx.notify();
     }
 
@@ -139,7 +139,6 @@ impl ScriptListApp {
         action_id: &str,
         selected_entry: Option<crate::dictation::DictationHistoryEntry>,
         _dctx: &DispatchContext,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         match action_id {
@@ -149,7 +148,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast(history_action.selection_required_message(), cx);
+                    self.notice_failed(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -173,7 +172,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast(history_action.selection_required_message(), cx);
+                    self.notice_failed(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -196,14 +195,14 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast(history_action.selection_required_message(), cx);
+                    self.notice_failed(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 match crate::notes::save_note_with_content(cx, entry.transcript) {
                     Ok(()) => {
                         if let Some(message) = history_action.success_hud() {
-                            self.show_hud(message.to_string(), Some(HUD_MEDIUM_MS), cx);
+                            self.one_window_notice(crate::line_notice::INFO, message.to_string(), cx);
                         }
                     }
                     Err(error) => {
@@ -222,13 +221,13 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast(history_action.selection_required_message(), cx);
+                    self.notice_failed(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(entry.transcript));
                 if let Some(message) = history_action.success_hud() {
-                    self.show_hud(message.to_string(), Some(HUD_MEDIUM_MS), cx);
+                    self.one_window_notice(crate::line_notice::INFO, message.to_string(), cx);
                 }
                 DispatchOutcome::success()
             }
@@ -238,33 +237,19 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast(history_action.selection_required_message(), cx);
+                    self.notice_failed(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 let pending = self.dictation_history_attachment_is_pending(&entry.id, cx);
-                let body = crate::dictation::delete_history_confirmation_body(pending);
                 let entry_id = entry.id.clone();
-                let owner = cx.entity().downgrade();
-                let owner_for_confirm = owner.clone();
-                self.was_window_focused = true;
-                crate::confirm::open_parent_confirm_dialog_for_entity(
-                    window,
+                self.one_window_hold(
+                    "trash",
+                    crate::dictation::delete_history_held_title(pending),
+                    Box::new(move |this, cx| {
+                        this.delete_dictation_history_entry_confirmed(&entry_id, cx);
+                    }),
                     cx,
-                    owner,
-                    crate::confirm::ParentConfirmOptions::irreversible(
-                        "Delete Dictation?",
-                        body,
-                        "Delete",
-                    ),
-                    move |_window, cx| {
-                        if let Some(entity) = owner_for_confirm.upgrade() {
-                            entity.update(cx, |this, cx| {
-                                this.delete_dictation_history_entry_confirmed(&entry_id, cx);
-                            });
-                        }
-                    },
-                    |_window, _cx| {},
                 );
                 DispatchOutcome::success()
             }

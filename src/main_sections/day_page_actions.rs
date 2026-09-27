@@ -696,7 +696,6 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        use gpui_component::WindowExt as _;
         self.agent_chat_handoff_generation = self.agent_chat_handoff_generation.wrapping_add(1);
         let generation = self.agent_chat_handoff_generation;
         let mut receipt = packet.receipt.clone();
@@ -722,7 +721,7 @@ impl DayPageView {
             cx.notify();
             return;
         };
-        window.defer(cx, move |window, cx| {
+        window.defer(cx, move |_, cx| {
             // A later handoff owns the destination; a superseded request must
             // not open a chat or replace its composer.
             if origin.read(cx).agent_chat_handoff_generation != generation {
@@ -793,24 +792,17 @@ impl DayPageView {
                         receipt["failureCode"] = serde_json::json!(failure.failure.code);
                         receipt["diagnostic"] = serde_json::json!(failure.failure.diagnostic);
                     }
-                    window.push_notification(
-                        gpui_component::notification::Notification::error(
-                            failure.primary_message(),
-                        )
-                        .autohide(false)
-                        .id1::<DayPageView>("day-page-handoff"),
+                    crate::line_notice::say(
                         cx,
+                        crate::line_notice::FAILED,
+                        failure.primary_message(),
                     );
                     view.handoff_failure = Some(failure);
                 } else {
-                    window.push_notification(
-                        gpui_component::notification::Notification::info(format!(
-                            "{} context staged in Agent Chat",
-                            packet.scope.kind()
-                        ))
-                        .autohide_after(std::time::Duration::from_millis(2000))
-                        .id1::<DayPageView>("day-page-handoff"),
+                    crate::line_notice::say(
                         cx,
+                        crate::line_notice::DONE,
+                        format!("{} context staged in Agent Chat", packet.scope.kind()),
                     );
                 }
                 view.document_revision = view.document_revision.wrapping_add(1);

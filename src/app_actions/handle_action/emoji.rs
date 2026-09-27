@@ -201,7 +201,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(emoji) = selected_emoji else {
-                    self.show_error_toast(paste_action.selection_required_message(), cx);
+                    self.notice_failed(paste_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -233,14 +233,14 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(emoji) = selected_emoji else {
-                    self.show_error_toast(copy_action.selection_required_message(), cx);
+                    self.notice_failed(copy_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 let payload = match copy_action.payload(&emoji) {
                     Ok(payload) => payload,
                     Err(message) => {
-                        self.show_error_toast(message, cx);
+                        self.notice_failed(message, cx);
                         return DispatchOutcome::success();
                     }
                 };
@@ -248,7 +248,7 @@ impl ScriptListApp {
                 tracing::info!(action = %action_id, emoji = %emoji.value, "emoji action");
                 match crate::platform::copy_text(&payload.clipboard_text) {
                     Ok(receipt) => {
-                        self.show_hud(receipt.feedback(payload.hud_text), Some(HUD_SHORT_MS), cx);
+                        self.one_window_notice(crate::line_notice::INFO, receipt.feedback(payload.hud_text), cx);
                         DispatchOutcome::success()
                     }
                     Err(error) => DispatchOutcome::error(
@@ -262,7 +262,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(emoji) = selected_emoji else {
-                    self.show_error_toast(pin_action.selection_required_message(), cx);
+                    self.notice_failed(pin_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -270,9 +270,9 @@ impl ScriptListApp {
                 pin_action.apply(&mut self.pinned_emojis, &emoji.value);
                 if let Err(error) = crate::emoji_pins::save_pinned_emojis(&self.pinned_emojis) {
                     tracing::error!(error = %error, emoji = %emoji.value, action = %action_id, "failed to update pinned emoji");
-                    self.show_error_toast(pin_action.failure_message(error), cx);
+                    self.notice_failed(pin_action.failure_message(error), cx);
                 } else {
-                    self.show_hud(pin_action.success_hud(&emoji.value), Some(HUD_SHORT_MS), cx);
+                    self.one_window_notice(crate::line_notice::INFO, pin_action.success_hud(&emoji.value), cx);
                     cx.notify();
                 }
                 DispatchOutcome::success()

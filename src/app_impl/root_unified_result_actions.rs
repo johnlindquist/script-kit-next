@@ -744,9 +744,9 @@ pub(crate) fn execute_root_unified_result_action(
         }
         (RootUnifiedResultAction::ClipboardCopy, RootUnifiedActionSubject::Clipboard(entry)) => {
             if let Err(error) = crate::clipboard_history::copy_entry_to_clipboard(&entry.id) {
-                app.show_hud(
+                app.one_window_notice(
+                    crate::line_notice::FAILED,
                     format!("Failed to copy clipboard entry: {error}"),
-                    Some(crate::HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -767,9 +767,9 @@ pub(crate) fn execute_root_unified_result_action(
         }
         (RootUnifiedResultAction::ClipboardPin, RootUnifiedActionSubject::Clipboard(entry)) => {
             if let Err(error) = crate::clipboard_history::pin_entry(&entry.id) {
-                app.show_hud(
+                app.one_window_notice(
+                    crate::line_notice::FAILED,
                     format!("Failed to pin clipboard entry: {error}"),
-                    Some(crate::HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -777,9 +777,9 @@ pub(crate) fn execute_root_unified_result_action(
         }
         (RootUnifiedResultAction::ClipboardUnpin, RootUnifiedActionSubject::Clipboard(entry)) => {
             if let Err(error) = crate::clipboard_history::unpin_entry(&entry.id) {
-                app.show_hud(
+                app.one_window_notice(
+                    crate::line_notice::FAILED,
                     format!("Failed to unpin clipboard entry: {error}"),
-                    Some(crate::HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -790,9 +790,9 @@ pub(crate) fn execute_root_unified_result_action(
             RootUnifiedActionSubject::Clipboard(entry),
         ) => {
             if let Err(error) = crate::clipboard_history::quick_look_entry(entry) {
-                app.show_hud(
+                app.one_window_notice(
+                    crate::line_notice::FAILED,
                     format!("Failed to preview clipboard entry: {error}"),
-                    Some(crate::HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -800,9 +800,9 @@ pub(crate) fn execute_root_unified_result_action(
         }
         (RootUnifiedResultAction::ClipboardDelete, RootUnifiedActionSubject::Clipboard(entry)) => {
             if let Err(error) = crate::clipboard_history::remove_entry(&entry.id) {
-                app.show_hud(
+                app.one_window_notice(
+                    crate::line_notice::FAILED,
                     format!("Failed to delete clipboard entry: {error}"),
-                    Some(crate::HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -919,9 +919,9 @@ pub(crate) fn execute_root_unified_result_action(
         }
         (RootUnifiedResultAction::AiVaultRevealInCmux, RootUnifiedActionSubject::AiVault(hit)) => {
             let receipt = crate::ai_vault::reveal_vault_session(hit);
-            app.show_hud(
+            app.one_window_notice(
+                crate::line_notice::INFO,
                 vault_receipt_hud("AI Vault reveal", &receipt),
-                Some(crate::HUD_MEDIUM_MS),
                 cx,
             );
             true
@@ -965,9 +965,9 @@ pub(crate) fn execute_root_unified_result_action(
         ) => {
             if let Some(entry) = crate::dictation::get_history_entry(id) {
                 if let Err(error) = crate::notes::save_note_with_content(cx, entry.transcript) {
-                    app.show_hud(
+                    app.one_window_notice(
+                        crate::line_notice::FAILED,
                         format!("Failed to create note: {error}"),
-                        Some(crate::HUD_MEDIUM_MS),
                         cx,
                     );
                 }
@@ -979,28 +979,14 @@ pub(crate) fn execute_root_unified_result_action(
             RootUnifiedActionSubject::Dictation { id, .. },
         ) => {
             let pending = app.dictation_history_attachment_is_pending(id, cx);
-            let body = crate::dictation::delete_history_confirmation_body(pending);
             let entry_id = id.clone();
-            let owner = cx.entity().downgrade();
-            let owner_for_confirm = owner.clone();
-            app.was_window_focused = true;
-            crate::confirm::open_parent_confirm_dialog_for_entity(
-                window,
+            app.one_window_hold(
+                "trash",
+                crate::dictation::delete_history_held_title(pending),
+                Box::new(move |app, cx| {
+                    app.delete_dictation_history_entry_confirmed(&entry_id, cx);
+                }),
                 cx,
-                owner,
-                crate::confirm::ParentConfirmOptions::irreversible(
-                    "Delete Dictation?",
-                    body,
-                    "Delete",
-                ),
-                move |_window, cx| {
-                    if let Some(entity) = owner_for_confirm.upgrade() {
-                        entity.update(cx, |app, cx| {
-                            app.delete_dictation_history_entry_confirmed(&entry_id, cx);
-                        });
-                    }
-                },
-                |_window, _cx| {},
             );
             true
         }
@@ -1014,9 +1000,9 @@ pub(crate) fn execute_root_unified_result_action(
             if let Err(error) =
                 crate::file_search::reveal_in_finder(&app_info.path.to_string_lossy())
             {
-                app.show_hud(
+                app.one_window_notice(
+                    crate::line_notice::FAILED,
                     format!("Failed to reveal app: {error}"),
-                    Some(crate::HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -1131,9 +1117,9 @@ impl ScriptListApp {
             crate::ai_vault::AiVaultTerminalRouting::UserPreferred,
         );
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(command));
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             "Copied AI Vault resume command".to_string(),
-            Some(crate::HUD_SHORT_MS),
             cx,
         );
     }
@@ -1164,9 +1150,9 @@ impl ScriptListApp {
   },
 },"#;
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(snippet.to_string()));
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             "Copied AI Vault terminal config snippet".to_string(),
-            Some(crate::HUD_SHORT_MS),
             cx,
         );
     }
@@ -1195,9 +1181,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let receipt = crate::ai_vault::resume_vault_session(hit, routing);
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             vault_receipt_hud("AI Vault resume", &receipt),
-            Some(crate::HUD_MEDIUM_MS),
             cx,
         );
     }

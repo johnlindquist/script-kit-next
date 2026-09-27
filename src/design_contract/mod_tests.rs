@@ -6,14 +6,6 @@ mod tests {
     fn every_conflict_has_complete_lifecycle_identity() {
         let bundle = checked_in_design_bundle().expect("bundle builds");
         let expected_conflicts = [
-            "confirmLayout.protocolModelVsRendererTruth",
-            "confirmGap.rendererSpacingVsLayoutOracle",
-            "confirmTypography.implicitLineHeightVsModeledSlots",
-            "confirmFooter.heightLadder",
-            "confirmFooter.slotVsInnerFrame",
-            "confirmFooter.selectedNeutralVsDangerTitle",
-            "confirmStack.rendererIntrinsicVsLayoutModel",
-            "confirmCapture.stockThemeVsReferenceRaster",
             "actionsRow.compactSlotVsInheritedItemHeight",
             "actionsRow.radiusConfiguredVsPainted",
             "actionsRow.selectionConfiguredVsPainted",
@@ -199,37 +191,6 @@ mod tests {
             "actionsRow.compactSlotVsInheritedItemHeight",
             "actionsShortcut.popupTokensVsFooterRenderer",
             "actionsFooter.legacyHeightVsFooterlessContract",
-        ] {
-            assert!(
-                bundle.conflicts.iter().any(|c| c.id == conflict_id),
-                "missing conflict {conflict_id}"
-            );
-        }
-
-        // ── Confirm prompt (in-window) ──────────────────────────────────
-        // Geometry pixel-validated 2026-07-11 (see module comment).
-        assert_eq!(length("confirmPrompt.window.height"), 500.0);
-        assert_eq!(length("confirmPrompt.content.padding"), 24.0);
-        assert_eq!(length("confirmPrompt.stack.gap"), 12.0);
-        assert_eq!(length("confirmPrompt.title.fontSize"), 20.0);
-        assert_eq!(length("confirmPrompt.body.fontSize"), 14.0);
-        assert_eq!(length("confirmPrompt.stack.maxWidth"), 560.0);
-        // GPUI's implicit phi() line heights, rounded like line_height_in_pixels.
-        assert_eq!(length("resolved.confirmPrompt.title.lineHeight"), 32.0);
-        assert_eq!(length("resolved.confirmPrompt.body.lineHeight"), 23.0);
-        assert_eq!(length("resolved.confirmPrompt.footerSpacerHeight"), 32.0);
-        // HEADER_PADDING_Y*2 + context height 22 = 38 (min 28 not binding).
-        assert_eq!(length("resolved.confirmPrompt.headerHeight"), 38.0);
-        assert_eq!(rgba8("resolved.confirmPrompt.titleDanger"), "#EF4444FF");
-        assert_eq!(rgba8("resolved.confirmPrompt.titleDefault"), "#FFFFFFFF");
-        assert_eq!(rgba8("resolved.confirmPrompt.bodyText"), "#FFFFFFFF");
-        for conflict_id in [
-            "confirmLayout.protocolModelVsRendererTruth",
-            "confirmGap.rendererSpacingVsLayoutOracle",
-            "confirmTypography.implicitLineHeightVsModeledSlots",
-            "confirmFooter.heightLadder",
-            "confirmFooter.slotVsInnerFrame",
-            "confirmStack.rendererIntrinsicVsLayoutModel",
         ] {
             assert!(
                 bundle.conflicts.iter().any(|c| c.id == conflict_id),
@@ -643,7 +604,7 @@ mod tests {
         let collapsed = crate::day_page::layout::day_page_layout_budget(
             length("window.height") as f32,
             30.0,
-            length("resolved.confirmPrompt.footerSpacerHeight") as f32,
+            32.0,
             1,
             false,
             length("notes.editor.paddingY") as f32,
@@ -679,10 +640,6 @@ mod tests {
         ));
         assert!(css.contains("--sk-actions-dialog-height: 300px;"));
         assert!(!css.contains("--sk-actions-dialog-footer-height:"));
-        assert!(css.contains("--sk-confirm-window-height: 500px;"));
-        assert!(css.contains("--sk-confirm-stack-max-width: 560px;"));
-        assert!(css.contains("--sk-confirm-title-danger: rgb(239 68 68);"));
-        assert!(css.contains("--sk-confirm-body-line-height: 23px;"));
 
         // Every --sk-notes-* var appears exactly once, with resolved values.
         for var in [

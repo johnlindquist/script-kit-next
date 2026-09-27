@@ -117,7 +117,7 @@ impl ScriptListApp {
                         true
                     }
                     Err(failure) => {
-                        self.show_error_toast(failure.primary_message().to_string(), cx);
+                        self.notice_failed(failure.primary_message().to_string(), cx);
                         false
                     }
                 }
@@ -143,10 +143,7 @@ impl ScriptListApp {
                             destination = destination.as_str(),
                             "notes_browse_open_in_notes_window_failed"
                         );
-                        self.show_error_toast(
-                            "The selected note couldn’t be opened.".to_string(),
-                            cx,
-                        );
+                        self.notice_failed("The selected note couldn’t be opened.".to_string(), cx);
                         false
                     }
                 }

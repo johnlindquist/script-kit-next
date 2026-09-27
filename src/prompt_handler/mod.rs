@@ -106,7 +106,6 @@ enum AgentChatReadTarget {
 enum PromptPopupSubtype {
     AgentChatHistory,
     DictationMicrophone,
-    Confirm,
 }
 
 fn resolve_prompt_popup_subtype(
@@ -119,7 +118,6 @@ fn resolve_prompt_popup_subtype(
         crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
             PromptPopupSubtype::DictationMicrophone
         }
-        "confirm-popup" => PromptPopupSubtype::Confirm,
         other => {
             return Err(crate::protocol::TransactionError::action_failed(format!(
                 "PromptPopup target {other} is not a batch-addressable popup subtype"
@@ -136,7 +134,6 @@ fn resolve_prompt_popup_subtype(
             resolved.generation.is_some()
                 && crate::dictation::is_dictation_microphone_popup_window_open()
         }
-        PromptPopupSubtype::Confirm => crate::confirm::is_confirm_popup_window_open(),
     };
     if !is_open {
         return Err(crate::protocol::TransactionError::action_failed(format!(
@@ -1511,11 +1508,12 @@ impl ScriptListApp {
         }
     }
 
-    fn show_prompt_coming_soon_toast(&mut self, prompt_name: &str, cx: &mut Context<Self>) {
-        let toast = Toast::warning(prompt_coming_soon_warning(prompt_name), &self.theme)
-            .duration_ms(Some(TOAST_WARNING_MS));
-        self.toast_manager.push(toast);
-        cx.notify();
+    fn notice_prompt_coming_soon(&mut self, prompt_name: &str, cx: &mut Context<Self>) {
+        self.one_window_notice(
+            crate::line_notice::FAILED,
+            prompt_coming_soon_warning(prompt_name),
+            cx,
+        );
     }
 
     /// Handle a prompt message from the script.
@@ -1562,7 +1560,7 @@ impl ScriptListApp {
                     input: String::new(),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("arg", false, cx);
@@ -1579,7 +1577,7 @@ impl ScriptListApp {
                     input: String::new(),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("mini", false, cx);
@@ -1596,7 +1594,7 @@ impl ScriptListApp {
                     input: String::new(),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("micro", false, cx);
@@ -1635,7 +1633,7 @@ impl ScriptListApp {
                     options: container_options,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("div", false, cx);
@@ -1646,7 +1644,7 @@ impl ScriptListApp {
                     html,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("form", false, cx);
@@ -1661,7 +1659,7 @@ impl ScriptListApp {
                     fields,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("fields", false, cx);
@@ -1674,7 +1672,7 @@ impl ScriptListApp {
                 if let Err(error) =
                     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)
                 {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 let terminal = match command {
@@ -1689,7 +1687,7 @@ impl ScriptListApp {
                 let terminal = match terminal {
                     Ok(terminal) => terminal,
                     Err(error) => {
-                        self.show_error_toast(error.to_string(), cx);
+                        self.notice_failed(error.to_string(), cx);
                         return;
                     }
                 };
@@ -1698,7 +1696,7 @@ impl ScriptListApp {
                     terminal,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("term", true, cx);
@@ -1717,7 +1715,7 @@ impl ScriptListApp {
                     template,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("editor", true, cx);
@@ -1979,29 +1977,13 @@ impl ScriptListApp {
                     );
                 }
 
-                // CRITICAL: Show error via HUD (highly visible floating window)
-                // This ensures the user sees the error even if the main window is hidden/dismissed
-                // HUD appears at bottom-center of screen for 5 seconds
-                let hud_message = if error_message.chars().count() > 140 {
-                    // Use chars().take() to safely handle multi-byte UTF-8 characters
+                let notice = if error_message.chars().count() > 140 {
                     let truncated: String = error_message.chars().take(137).collect();
                     format!("Script Error: {}...", truncated)
                 } else {
                     format!("Script Error: {}", error_message)
                 };
-                self.show_hud(hud_message, Some(HUD_SLOW_MS), cx);
-
-                // Also create in-app toast with expandable details (for when window is visible)
-                // Use stderr_output if available, otherwise use stack_trace
-                let details_text = stderr_output.clone().or_else(|| stack_trace.clone());
-                let log_path = script_kit_gpui::scriptlet_cache::get_log_file_path();
-                let toast = build_script_error_toast(
-                    error_message.clone(),
-                    details_text,
-                    &script_path,
-                    &log_path,
-                    &self.theme,
-                );
+                self.one_window_notice(crate::line_notice::FAILED, notice, cx);
 
                 // Log suggestions if present
                 if !suggestions.is_empty() {
@@ -2011,15 +1993,6 @@ impl ScriptListApp {
                         "Script error suggestions"
                     );
                 }
-
-                // Push toast to manager
-                let toast_id = self.toast_manager.push(toast);
-                tracing::info!(
-                    category = "UI",
-                    script_path = %script_path,
-                    toast_id = %toast_id,
-                    "Toast created for script error"
-                );
 
                 self.route_script_error_to_agent_chat(
                     ScriptErrorAgentChatContext {
@@ -2046,7 +2019,7 @@ impl ScriptListApp {
             PromptMessage::ProtocolError {
                 correlation_id,
                 summary,
-                details,
+                details: _,
                 severity,
                 script_path,
             } => {
@@ -2057,26 +2030,11 @@ impl ScriptListApp {
                     "Protocol parse issue received"
                 );
 
-                let mut toast = Toast::from_severity(summary.clone(), severity, &self.theme)
-                    .details_opt(details.clone())
-                    .duration_ms(Some(TOAST_ERROR_DETAILED_MS));
-
-                if let Some(ref detail_text) = details {
-                    let detail_clone = detail_text.clone();
-                    toast = toast.action(ToastAction::new(
-                        "copy-details",
-                        "Copy Details",
-                        Box::new(move |_, _, _| {
-                            use arboard::Clipboard;
-                            if let Ok(mut clipboard) = Clipboard::new() {
-                                let _ = clipboard.set_text(detail_clone.clone());
-                            }
-                        }),
-                    ));
-                }
-
-                self.toast_manager.push(toast);
-                cx.notify();
+                let icon = match severity {
+                    crate::error::ErrorSeverity::Info => crate::line_notice::INFO,
+                    _ => crate::line_notice::FAILED,
+                };
+                self.one_window_notice(icon, summary, cx);
             }
             PromptMessage::UnhandledMessage { message_type } => {
                 tracing::warn!(
@@ -2085,11 +2043,11 @@ impl ScriptListApp {
                     "Displaying unhandled message warning"
                 );
 
-                let toast = Toast::warning(unhandled_message_warning(&message_type), &self.theme)
-                    .duration_ms(Some(TOAST_WARNING_MS));
-
-                self.toast_manager.push(toast);
-                cx.notify();
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    unhandled_message_warning(&message_type),
+                    cx,
+                );
             }
 
             PromptMessage::GetState {
@@ -5663,7 +5621,7 @@ impl ScriptListApp {
                     hint,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("path", false, cx);
@@ -5678,7 +5636,7 @@ impl ScriptListApp {
                 if let Err(error) =
                     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Credentials)
                 {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
 
@@ -5734,7 +5692,7 @@ impl ScriptListApp {
                     local_storage: None,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 let auto_submitted = if let AppView::EnvPrompt { entity, .. } = &self.current_view {
@@ -5747,7 +5705,7 @@ impl ScriptListApp {
                 if auto_submitted {
                     let completion = completion.observation();
                     if let Some(error) = completion.error {
-                        self.show_error_toast(error.to_string(), cx);
+                        self.notice_failed(error.to_string(), cx);
                     } else if completion.completed {
                         self.transition_current_view_and_rekey_main_automation_surface(
                             previous_view,
@@ -5775,7 +5733,7 @@ impl ScriptListApp {
                     owned_files: None,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("drop", false, cx);
@@ -5786,7 +5744,7 @@ impl ScriptListApp {
                     template,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("template", false, cx);
@@ -5806,7 +5764,7 @@ impl ScriptListApp {
                     disabled: Vec::new(),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("select", false, cx);
@@ -5826,52 +5784,52 @@ impl ScriptListApp {
                     "ShowConfirm prompt"
                 );
 
-                let options = crate::confirm::ParentConfirmOptions {
-                    title: title
-                        .filter(|title| !title.trim().is_empty())
-                        .map(gpui::SharedString::from)
-                        .unwrap_or("Confirm".into()),
-                    body: gpui::SharedString::from(message),
-                    confirm_text: confirm_text
-                        .map(gpui::SharedString::from)
-                        .unwrap_or("OK".into()),
-                    cancel_text: cancel_text
-                        .map(gpui::SharedString::from)
-                        .unwrap_or("Cancel".into()),
-                    risk: match risk {
-                        None => crate::confirm::ConfirmRisk::Safe,
-                        Some(crate::protocol::ConfirmPromptRisk::Destructive) => {
-                            crate::confirm::ConfirmRisk::Destructive
-                        }
-                        Some(crate::protocol::ConfirmPromptRisk::Irreversible) => {
-                            crate::confirm::ConfirmRisk::Irreversible
-                        }
-                    },
-                    ..Default::default()
-                };
-
                 let binding = PromptCompletionBinding::sdk(id, self.response_sender.clone());
                 if let Some(previous) = self.prompt_completion.replace(binding.clone()) {
                     previous.retire();
                 }
                 self.prepare_window_for_prompt("UI", "confirm", "");
-                let live = binding.clone();
-                let app = cx.entity().downgrade();
-                self.open_main_window_confirm(
-                    options,
-                    // The question stops mattering when the script moves on.
-                    move || !live.observation().retired,
-                    move |confirmed, cx| {
+                let answer = |confirmed: bool| -> crate::one_window::ledger_view::LedgerRun {
+                    let binding = binding.clone();
+                    Box::new(move |app, cx| {
+                        // The question stops mattering when the script moves on.
+                        if binding.observation().retired {
+                            return;
+                        }
                         if let Err(error) =
                             binding.try_complete(PromptOutcome::Confirmed(confirmed))
                         {
-                            let _ = app.update(cx, |app, cx| {
-                                app.show_error_toast(error.to_string(), cx)
-                            });
+                            app.notice_failed(error.to_string(), cx);
                         }
-                    },
-                    cx,
-                );
+                    })
+                };
+                let title = title.filter(|title| !title.trim().is_empty());
+                match risk {
+                    None => {
+                        let (asked, detail) = match title {
+                            Some(title) => (title, message),
+                            None => (message, String::new()),
+                        };
+                        self.one_window_ask(
+                            "ask",
+                            asked,
+                            detail,
+                            vec![
+                                (confirm_text.unwrap_or_else(|| "OK".into()), answer(true)),
+                                (cancel_text.unwrap_or_else(|| "Cancel".into()), answer(false)),
+                            ],
+                            Some(answer(false)),
+                            cx,
+                        );
+                    }
+                    Some(_) => self.one_window_hold_or_stop(
+                        crate::line_notice::FAILED,
+                        title.unwrap_or(message),
+                        answer(true),
+                        Some(answer(false)),
+                        cx,
+                    ),
+                }
 
                 cx.notify();
             }
@@ -5893,7 +5851,7 @@ impl ScriptListApp {
                     if let Err(error) = crate::runtime_policy::check(
                         crate::runtime_policy::ExternalEffect::Provider,
                     ) {
-                        self.show_error_toast(error.to_string(), cx);
+                        self.notice_failed(error.to_string(), cx);
                         return;
                     }
                 }
@@ -5901,7 +5859,7 @@ impl ScriptListApp {
                     if let Err(error) = crate::runtime_policy::check(
                         crate::runtime_policy::ExternalEffect::ExternalStorage,
                     ) {
-                        self.show_error_toast(error.to_string(), cx);
+                        self.notice_failed(error.to_string(), cx);
                         return;
                     }
                 }
@@ -6216,7 +6174,10 @@ impl ScriptListApp {
                     }
                 }
             }
-            PromptMessage::ShowHud { text, duration_ms } => {
+            PromptMessage::ShowHud {
+                text,
+                duration_ms: _,
+            } => {
                 if script_kit_gpui::script_requested_hide() {
                     script_kit_gpui::set_script_requested_hide(false);
                     tracing::info!(
@@ -6224,7 +6185,7 @@ impl ScriptListApp {
                         "HUD consumed script-requested hide without restoring main window"
                     );
                 }
-                self.show_hud(text, duration_ms, cx);
+                self.one_window_notice(crate::line_notice::INFO, text, cx);
             }
             PromptMessage::SetStatus { status, message } => {
                 tracing::info!(
@@ -6239,13 +6200,13 @@ impl ScriptListApp {
             PromptMessage::SetInput { text } => {
                 if let Some(window) = current_window {
                     if let Err(error) = self.set_input_text_in_window(&text, window, cx) {
-                        self.show_error_toast(error.to_string(), cx);
+                        self.notice_failed(error.to_string(), cx);
                     }
                 } else if matches!(
                     self.current_view,
                     AppView::EditorPrompt { .. } | AppView::ScratchPadView { .. }
                 ) {
-                    self.show_error_toast("prompt_input_window_required".to_string(), cx);
+                    self.notice_failed("prompt_input_window_required".to_string(), cx);
                 } else {
                     self.set_prompt_input(text, cx);
                 }
@@ -6277,7 +6238,7 @@ impl ScriptListApp {
                     state = "stubbed",
                     "Received unsupported prompt message"
                 );
-                self.show_prompt_coming_soon_toast("fields()", cx);
+                self.notice_prompt_coming_soon("fields()", cx);
             }
             PromptMessage::ShowHotkey { id, placeholder } => {
                 let seed = PromptSeed::Hotkey(HotkeyPromptSeed {
@@ -6285,7 +6246,7 @@ impl ScriptListApp {
                     description: placeholder.unwrap_or_else(|| "Press a shortcut".into()),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.show_error_toast(error.to_string(), cx);
+                    self.notice_failed(error.to_string(), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("hotkey", false, cx);
@@ -6298,7 +6259,7 @@ impl ScriptListApp {
                     state = "stubbed",
                     "Received unsupported prompt message"
                 );
-                self.show_prompt_coming_soon_toast("widget()", cx);
+                self.notice_prompt_coming_soon("widget()", cx);
             }
             PromptMessage::WebcamComingSoon { id } => {
                 tracing::warn!(
@@ -6308,7 +6269,7 @@ impl ScriptListApp {
                     state = "stubbed",
                     "Received unsupported prompt message"
                 );
-                self.show_prompt_coming_soon_toast("webcam()", cx);
+                self.notice_prompt_coming_soon("webcam()", cx);
             }
             PromptMessage::MicComingSoon { id } => {
                 tracing::warn!(
@@ -6318,7 +6279,7 @@ impl ScriptListApp {
                     state = "stubbed",
                     "Received unsupported prompt message"
                 );
-                self.show_prompt_coming_soon_toast("mic()", cx);
+                self.notice_prompt_coming_soon("mic()", cx);
             }
             PromptMessage::AiStartChat {
                 request_id,

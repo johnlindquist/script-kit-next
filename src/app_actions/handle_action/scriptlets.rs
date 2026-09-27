@@ -233,7 +233,7 @@ impl ScriptListApp {
                                         error = %message,
                                         "Async action failed: edit_scriptlet"
                                     );
-                                    this.show_error_toast_with_code(
+                                    this.notice_failed_with_code(
                                         message,
                                         Some(crate::action_helpers::ERROR_LAUNCH_FAILED),
                                         cx,
@@ -261,11 +261,7 @@ impl ScriptListApp {
                                         duration_ms = start.elapsed().as_millis() as u64,
                                         "Async action completed: reveal_scriptlet_in_finder"
                                     );
-                                    this.show_hud(
-                                        source_action.reveal_success_hud().to_string(),
-                                        Some(HUD_SHORT_MS),
-                                        cx,
-                                    );
+                                    this.one_window_notice(crate::line_notice::INFO, source_action.reveal_success_hud().to_string(), cx);
                                     this.hide_main_and_reset(cx);
                                 }
                                 Err(message) => {
@@ -276,7 +272,7 @@ impl ScriptListApp {
                                         error = %message,
                                         "Async action failed: reveal_scriptlet_in_finder"
                                     );
-                                    this.show_error_toast_with_code(
+                                    this.notice_failed_with_code(
                                         message,
                                         Some(crate::action_helpers::ERROR_REVEAL_FAILED),
                                         cx,
@@ -394,7 +390,7 @@ impl ScriptListApp {
                                                     execution_result.success_hud(&action.name)
                                                 {
                                                     tracing::info!(category = "UI", action = %action.name, "scriptlet action executed successfully");
-                                                    self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                                                    self.one_window_notice(crate::line_notice::INFO, message, cx);
                                                 }
                                             }
                                             ScriptletDynamicExecutionResult::Failed(error_msg)
@@ -405,7 +401,7 @@ impl ScriptListApp {
                                                 if let Some(message) =
                                                     execution_result.error_toast()
                                                 {
-                                                    self.show_error_toast(message, cx);
+                                                    self.notice_failed(message, cx);
                                                 }
                                             }
                                         }

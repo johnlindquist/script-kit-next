@@ -6,29 +6,12 @@ impl Render for DayPageView {
         self.maybe_rebind_after_midnight(window, cx);
         self.maybe_autosave(window, cx);
         if let Some((message, kind)) = self.pending_feedback.take() {
-            use crate::components::document_status::{
-                DocumentFeedbackKind, DocumentSaveFailureNotification,
-            };
-            use gpui_component::WindowExt as _;
-            if kind == DocumentFeedbackKind::SaveRecovered {
-                window.remove_notification::<DocumentSaveFailureNotification>(cx);
-            }
-            let notification = if kind.is_error() {
-                gpui_component::notification::Notification::error(message).autohide(false)
+            let icon = if kind.is_error() {
+                crate::line_notice::FAILED
             } else {
-                gpui_component::notification::Notification::info(message)
-                    .autohide_after(std::time::Duration::from_millis(2000))
+                crate::line_notice::INFO
             };
-            let notification = if kind == DocumentFeedbackKind::SaveFailure {
-                notification.id::<DocumentSaveFailureNotification>()
-            } else {
-                notification.id1::<DayPageView>(if kind.is_error() {
-                    "day-page-error"
-                } else {
-                    "day-page-feedback"
-                })
-            };
-            window.push_notification(notification, cx);
+            crate::line_notice::say(cx, icon, message);
         }
 
         let Some(app) = self.app.upgrade() else {

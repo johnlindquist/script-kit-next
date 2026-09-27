@@ -58,16 +58,8 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
         "main-overlay.alias" => return ("scriptList", &["alias-*"]),
         "main-overlay.tab-ai-save-offer" => return ("scriptList", &["tab-ai-save-offer"]),
         "main-overlay.root-dialog" => return ("scriptList", &["root-dialog:*"]),
-        "main-overlay.root-notification" => return ("scriptList", &["root-notification:*"]),
-        "main-overlay.warning" => {
-            return (
-                "scriptList",
-                &["main-warning-banner", "main-warning-banner:dismiss"],
-            )
-        }
         "main-overlay.logs" => return ("scriptList", &["main-log-panel"]),
         "main-overlay.loading" => return ("scriptList", &["main-loading"]),
-        "main-overlay.toast" => return ("scriptList", &["root-notification:*"]),
         "main-overlay.effects" => return ("scriptList", &["main-background-effect"]),
         "main-overlay.debug-grid" => return ("scriptList", &["main-debug-grid"]),
         _ => {}
@@ -186,25 +178,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
                     "choice:1:dictation-mic-row-1",
                 ],
             ),
-            "secondary.confirm" => (
-                "confirmDialog",
-                &[
-                    "panel:confirm-dialog",
-                    "button:0:confirm",
-                    "button:1:cancel",
-                ],
-            ),
-            "secondary.confirm-three-button" => (
-                "confirmDialog",
-                &[
-                    "panel:confirm-dialog",
-                    "button:0:confirm",
-                    "button:1:secondary",
-                    "button:2:cancel",
-                ],
-            ),
-            "secondary.hud" => ("hud", &["panel:hud"]),
-            "secondary.hud-action" => ("hud", &["panel:hud", "hud:primary-action"]),
             "secondary.snap" => ("snapOverlay", &["panel:snap-overlay", "snap:target:*"]),
             "secondary.footer" => ("footerOverlay", &["footer-action:*"]),
             "secondary.shortcut-recorder" => ("shortcutRecorder", &["shortcut-key-display"]),
@@ -242,22 +215,10 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "ScriptList",
             "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
         ),
-        "main-overlay.root-notification" => (
-            "ScriptList",
-            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
-        ),
-        "main-overlay.warning" => (
-            "ScriptList",
-            "src/main_sections/render_impl.rs::WarningBanner",
-        ),
         "main-overlay.logs" => ("ScriptList", "src/render_script_list/mod.rs::log_panel"),
         "main-overlay.loading" => (
             "ScriptList",
             "src/components/braille_loading.rs::constellation_loading_layer",
-        ),
-        "main-overlay.toast" => (
-            "ScriptList",
-            "src/app_impl/lifecycle_reset.rs::flush_pending_toasts",
         ),
         "main-overlay.effects" => ("ScriptList", "src/effects.rs::background_effect_layer"),
         "main-overlay.debug-grid" => ("ScriptList", "src/debug_grid/mod.rs::render_grid_overlay"),
@@ -499,20 +460,6 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "src/actions/window.rs",
             "src/actions/dialog.rs",
             Some("main.script-list"),
-        ),
-        "secondary.confirm" | "secondary.confirm-three-button" => (
-            "confirm",
-            "secondary",
-            "src/confirm/window.rs",
-            "src/confirm/parent_dialog.rs",
-            Some("main.script-list"),
-        ),
-        "secondary.hud" | "secondary.hud-action" => (
-            "hud",
-            "secondary",
-            "src/hud_manager/mod.rs",
-            "src/hud_manager/mod.rs::HudView",
-            None,
         ),
         "secondary.snap" => (
             "snap",

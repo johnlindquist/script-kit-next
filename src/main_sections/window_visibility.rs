@@ -810,12 +810,6 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // its first line (`remove_automation_window("actions-dialog")`), so
     // it is strictly stronger than the pre-#29 call. Idempotent.
     crate::actions::close_actions_window(cx);
-    // Sibling teardown for confirm-popup (`id: "confirm-popup"`, PromptPopup
-    // kind). Pass #25 fix: close_confirm_window at src/confirm/window.rs:385
-    // is the only production path removing this id; no hide dispatcher calls
-    // it (`attacker-hide-path-confirm-popup-registry-stale`). Same bypass
-    // shape as the actions-dialog sibling above; pure registry op, idempotent.
-    crate::windows::remove_automation_window("confirm-popup");
 
     // 5. Hide only the main panel. `cx.hide()` app-hides all windows, so any
     // false-negative secondary-window check can take Notes down with main.

@@ -111,10 +111,7 @@ impl ScriptListApp {
                         }
                         WindowSwitcherFocusCompletion::ShowErrorToast(failure_message) => {
                             logging::log("ERROR", &failure_message);
-                            this.toast_manager.push(
-                                components::toast::Toast::error(failure_message, &this.theme)
-                                    .duration_ms(Some(TOAST_ERROR_MS)),
-                            );
+                            this.one_window_notice(crate::line_notice::FAILED, failure_message, cx);
                             cx.notify();
                         }
                     }

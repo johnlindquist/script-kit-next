@@ -50,7 +50,7 @@ fn execute_fallback_action(
             };
             if let Some(effect) = external_effect {
                 if let Err(refusal) = crate::runtime_policy::check(effect) {
-                    app.show_error_toast(refusal.to_string(), cx);
+                    app.notice_failed(refusal.to_string(), cx);
                     return;
                 }
             }
@@ -90,14 +90,16 @@ fn execute_fallback_action(
                     let receipt = match crate::platform::copy_text(&content) {
                         Ok(receipt) => receipt,
                         Err(error) => {
-                            app.show_error_toast(error, cx);
+                            app.notice_failed(error, cx);
                             return;
                         }
                     };
                     if let Err(e) = notes::open_notes_window(cx) {
                         logging::log("FALLBACK", &format!("Failed to open Notes: {}", e));
                     } else {
-                        hud_manager::show_hud(
+                        crate::line_notice::say(
+                            cx,
+                            crate::line_notice::INFO,
                             match receipt.destination() {
                                 crate::runtime_policy::CopyDestination::SystemClipboard => {
                                     "Text copied - paste into Notes".to_string()
@@ -107,8 +109,6 @@ fn execute_fallback_action(
                                         .to_string()
                                 }
                             },
-                            Some(HUD_MEDIUM_MS),
-                            cx,
                         );
                     }
                 }
@@ -119,7 +119,7 @@ fn execute_fallback_action(
                         Ok(receipt) => {
                             logging::log("FALLBACK", &receipt.feedback("Text copied".into()))
                         }
-                        Err(error) => app.show_error_toast(error, cx),
+                        Err(error) => app.notice_failed(error, cx),
                     }
                 }
 
@@ -143,19 +143,23 @@ fn execute_fallback_action(
                             let receipt = match crate::platform::copy_text(&result_str) {
                                 Ok(receipt) => receipt,
                                 Err(error) => {
-                                    app.show_error_toast(error, cx);
+                                    app.notice_failed(error, cx);
                                     return;
                                 }
                             };
-                            hud_manager::show_hud(
-                                receipt.feedback(format!("= {}", result_str)),
-                                Some(HUD_MEDIUM_MS),
+                            crate::line_notice::say(
                                 cx,
+                                crate::line_notice::INFO,
+                                receipt.feedback(format!("= {}", result_str)),
                             );
                         }
                         Err(e) => {
                             logging::log("FALLBACK", &format!("Calculation error: {}", e));
-                            hud_manager::show_hud(format!("Error: {}", e), Some(HUD_LONG_MS), cx);
+                            crate::line_notice::say(
+                                cx,
+                                crate::line_notice::FAILED,
+                                format!("Error: {}", e),
+                            );
                         }
                     }
                 }

@@ -408,9 +408,9 @@ impl ScriptListApp {
                                     .and_then(|s| s.to_str())
                                     .unwrap_or("process");
 
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     terminate_action.success_hud(script_name),
-                                    Some(HUD_SHORT_MS),
                                     cx,
                                 );
 
@@ -428,7 +428,7 @@ impl ScriptListApp {
                                     error = err_msg.as_str(),
                                     "process_manager.terminate_failed"
                                 );
-                                this.show_error_toast(
+                                this.notice_failed(
                                     terminate_action.failure_message(pid, &err_msg),
                                     cx,
                                 );

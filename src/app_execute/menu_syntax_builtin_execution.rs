@@ -40,12 +40,12 @@ impl ScriptListApp {
                     &invocation.body,
                     &invocation.tags,
                 );
-                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, message, cx);
                 self.close_and_reset_window(cx);
                 AppOwnedCaptureOutcome::Handled
             }
             Err(message) => {
-                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, message, cx);
                 AppOwnedCaptureOutcome::Invalid
             }
         }

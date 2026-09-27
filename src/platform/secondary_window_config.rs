@@ -850,44 +850,6 @@ pub fn configure_inline_dropdown_popup_window(_window: *mut std::ffi::c_void, _i
     // No-op on non-macOS platforms
 }
 
-/// Configure the confirm popup window with the same vibrancy setup as the
-/// actions popup. Reuses the shared popup vibrancy path so confirm dialogs
-/// get native macOS blur.
-///
-/// # Safety
-/// Same invariants as `configure_actions_popup_window`.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
-    configure_attached_popup_window(
-        window,
-        is_dark,
-        "CONFIRM",
-        "Confirm popup",
-        NativeGlassSurfaceRole::PopupBackdrop,
-    );
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_confirm_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
-    // No-op on non-macOS platforms
-}
-
-/// Configure an attached toast with the confirm popup's material, so it
-/// enters and leaves with the same glass animation.
-///
-/// # Safety
-/// Same invariants as `configure_actions_popup_window`.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_toast_popup_window(window: id, is_dark: bool) {
-    configure_attached_popup_window(
-        window,
-        is_dark,
-        "TOAST",
-        "Toast popup",
-        NativeGlassSurfaceRole::PopupBackdrop,
-    );
-}
-
 /// Configure the child-attached shortcut recorder with its own morph receipt.
 ///
 /// # Safety
@@ -1060,41 +1022,6 @@ pub unsafe fn configure_dictation_overlay_window(window: id, is_dark: bool) {
     }
 }
 
-/// Configure a HUD overlay with the same native background and material path as
-/// the main window while preserving HUD-specific level and input behavior in the
-/// caller.
-///
-/// # Safety
-///
-/// - `window` must be a valid, non-null NSWindow pointer obtained from GPUI
-///   window creation. The pointer is checked for null at entry.
-/// - Must be called on the main thread because AppKit property setters are not
-///   thread-safe.
-/// - NSAppearance and content view pointers are nil-checked before use.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool) {
-    if window.is_null() {
-        logging::log("HUD", "WARNING: Cannot configure null HUD window vibrancy");
-        return;
-    }
-
-    configure_window_vibrancy_common(
-        window,
-        "HUD",
-        "HUD",
-        is_dark,
-        NativeGlassSurfaceRole::WindowBackdrop,
-    );
-
-    let title: id = msg_send![
-        class!(NSString),
-        stringWithUTF8String: c"Script Kit HUD".as_ptr()
-    ];
-    if title != nil {
-        let _: () = msg_send![window, setTitle: title];
-    }
-}
-
 #[cfg(not(target_os = "macos"))]
 pub fn configure_secondary_window_vibrancy(
     _window: *mut std::ffi::c_void,
@@ -1106,11 +1033,6 @@ pub fn configure_secondary_window_vibrancy(
 
 #[cfg(not(target_os = "macos"))]
 pub fn configure_dictation_overlay_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
-    // No-op on non-macOS platforms
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn configure_hud_window_vibrancy(_window: *mut std::ffi::c_void, _is_dark: bool) {
     // No-op on non-macOS platforms
 }
 
@@ -1138,36 +1060,6 @@ mod secondary_window_config_tests {
     }
 
     #[test]
-    fn hud_window_vibrancy_reuses_main_window_material_source() {
-        let source = include_str!("secondary_window_config.rs");
-        let start = source
-            .find("pub unsafe fn configure_hud_window_vibrancy")
-            .expect("HUD vibrancy function exists");
-        let body = &source[start..];
-        let body = body
-            .split("#[cfg(not(target_os = \"macos\"))]")
-            .next()
-            .expect("HUD vibrancy function body");
-
-        assert!(
-            body.contains("configure_window_vibrancy_common(")
-                && body.contains("\"HUD\",")
-                && body.contains("NativeGlassSurfaceRole::WindowBackdrop"),
-            "HUD window vibrancy must reuse the shared native background/material configuration"
-        );
-        assert!(
-            body.contains("c\"Script Kit HUD\".as_ptr()")
-                && super::should_refresh_secondary_window_appearance("Script Kit HUD"),
-            "HUD windows need a stable title so theme/appearance refresh can retint them with the shared material path"
-        );
-        assert!(
-            source.contains("fn current_window_material()")
-                && source.contains("get_cached_theme().get_vibrancy().material"),
-            "shared native window configuration must source material from the cached theme"
-        );
-    }
-
-    #[test]
     fn secondary_appearance_refresh_title_predicate_covers_current_and_legacy_secondary_titles() {
         for title in [
             "Notes",
@@ -1178,7 +1070,6 @@ mod secondary_window_config_tests {
             "Actions",
             "Script Kit Footer",
             "Script Kit Dictation",
-            "Script Kit HUD",
         ] {
             assert!(
                 super::should_refresh_secondary_window_appearance(title),
@@ -1295,7 +1186,6 @@ fn should_refresh_secondary_window_appearance(title: &str) -> bool {
         "Actions",
         "Script Kit Footer",
         "Script Kit Dictation",
-        "Script Kit HUD",
     ];
 
     EXACT_SECONDARY_TITLES.contains(&title)
