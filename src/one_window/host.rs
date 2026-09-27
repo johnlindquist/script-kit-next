@@ -995,6 +995,8 @@ impl ScriptListApp {
                 .collect::<Vec<_>>(),
             "jevSettled": list.jev.settled_for(&list.text),
             "heightPx": self.one_window_host.height,
+            "nowMs": now,
+            "typedAtMs": self.one_window.height().typed_at(),
             "sinceTypedMs": self.one_window.height().typed_at().map(|at| now.saturating_sub(at)),
             "view": self.one_window.views().top().map(|top| top.name.as_str()),
             "crumb": self.one_window.views().crumb(),
