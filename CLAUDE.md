@@ -268,7 +268,9 @@ Nothing floats over the main window, because there is nothing else to float over
 Dictation, detached chat, history, actions and footer-overlay windows are all gone (2026-09-27),
 and the only other window the app ever opens is the snap overlay drawn while snapping a window to a
 screen edge. Automation targets are the main window or a view's surface id inside it; a test that
-needs "a second window" to prove targeting has nothing real to target.
+needs "a second window" to prove targeting has nothing real to target. `clippy.toml` refuses
+`gpui::App::open_window` / `gpui::AsyncApp::open_window`; the main window and the snap overlay are
+the only `#[allow(clippy::disallowed_methods)]` call sites, and a new one is a design change, not a fix.
 
 - Every action declares its risk instead of asking. Irreversible (quit, shut down, empty the
   Trash, clear history, permanent deletes, anything in `DEFAULT_CONFIRMATION_COMMANDS`) waits
@@ -298,8 +300,13 @@ needs "a second window" to prove targeting has nothing real to target.
   line and the input never moves.
 - Prove these with the reducer (`./scripts/agentic/agent-cargo.sh test -p sk-one-window`,
   including `tests/replay.rs` and `tests/properties/`), the app tests in
-  `enter_button_property_tests::ledger`, and owned-evaluator frames
-  (`scripts/agentic/one-window-frames.ts`) that show exactly one owned window.
+  `enter_button_property_tests::ledger`, and owned-evaluator frames that show exactly one owned
+  window: `bash scripts/agentic/one-window/run.sh` builds once, captures every chapter in
+  `scripts/agentic/one-window/chapters/` and the typing, fast-navigation and views stress runs
+  through `scripts/agentic/one-window-frames.ts`, and grades each frame (input never moves, the
+  34 pt line, a 28 pt header first, no row fill or bar, the 24 pt yellow tile, zero popups, ↵
+  never returning to an earlier label while the text grows). A chapter's `.expect.json` fails any
+  step that now shows a different header, ↵ label or view.
 
 # Agent Cargo Wrapper
 

@@ -43,7 +43,7 @@ the matrix only through a future QA lock-in selection.
 - Stable anchor: `day-page-opens-in-main-launcher-window`
 - Surface: Day Page / Main Launcher
 - Status: Active (Brain Time T9), pending QA lock-in selection
-- User contract: Tap-while-open toggles Script List ↔ Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Cmd+P uses the same Notes search container/result language as the Notes Window, with selected rows opening in the current host editor by default. Esc dismisses the main window.
+- User contract: Tap-while-open toggles Script List ↔ Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Cmd+P uses the same Notes search container/result language as the Notes view, with selected rows opening in the current editor by default. Esc dismisses the main window.
 - Regression risk: Gesture routing or `AppView` morph refactors can break in-place toggle, day rollover binding, or editor save semantics.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test --lib day_page`
@@ -144,17 +144,18 @@ the matrix only through a future QA lock-in selection.
 
 - Stable anchor: `cmd-k-actions-target-the-current-row`
 - Choice id: `cmd-k-actions-popup-targets-current-row`
-- Surface: Actions / Cmd+K
+- Surface: Actions / Cmd+K in place
 - Status: Active QA lock-in candidate
-- User contract: Cmd+K/open-actions creates an ActionsDialog with parent subject identity, selectable actions, stable focus, and Escape returns to the parent surface with the same or intentionally updated selection.
-- Regression risk: Actions refactors can detach from the wrong item, lose parent surface ownership, or close the parent window unexpectedly.
+- User contract: ⌘K puts the highlighted row in the line above the input ("Acting on · …") and the list under the same input becomes that row's actions, led by a "Say what to do with it, or pick one" header. The row's own action comes first, so ⌘K then ↵ does what the row does; "Ask the model about it" is next. Typing filters the actions, ↵ runs the highlighted one on the staged row, and Esc lets go and highlights the row again. No window opens.
+- Regression risk: Staging refactors can act on a different row than the line names, change what ↵ does after ⌘K, open a separate surface, or lose the highlighted row on Esc.
 - Proof commands:
-  - `bun scripts/devtools/actions.ts inspect --session core-qa --start --open --keep-open --main --surface ScriptList --limit 200`
-  - `bun scripts/devtools/act.ts key --key Escape --target-kind actionsDialog --strict`
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test properties`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui enter_button_property_tests::staging`
+  - `./scripts/agentic/agent-cargo.sh test --test main_window_actions_key_intent_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test actions_dialog_enter_routing_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test actions_popup_parent_preserves_semantic_surface_contract -- --nocapture`
-- Pass evidence: Actions receipt shows open dialog, parentSubjectId/text, selectable actions, dismissal classified as dismissed/source-live, and contracts pass.
-- Fail evidence: Dialog fails to open, parent identity is missing, Escape kills the parent, selection changes unexpectedly, or contracts fail.
+  - `bash scripts/agentic/one-window/run.sh` (chapters `m2`, `p2-b` and `p2-k-*`)
+- Pass evidence: Property and Enter-button tests pass; frames show the line reading "Acting on" with the row's name, the staged header leading the actions, ↵ naming the highlighted action, zero popups and the input at the same y before, during and after.
+- Fail evidence: A popup window opens, the line names a different row than the actions act on, ↵ after ⌘K runs something other than the row's own action, Esc leaves a different row highlighted, or tests fail.
 
 ### Escape and focus loss preserve the right state
 
@@ -162,14 +163,14 @@ the matrix only through a future QA lock-in selection.
 - Choice id: `escape-go-back-hide-preserves-state`
 - Surface: Main Launcher / Window Focus
 - Status: Active QA lock-in candidate
-- User contract: Escape clears filters, goes back from built-ins opened from main, or hides only the main panel according to route state; Notes/Agent Chat windows remain alive.
-- Regression risk: Hide/reset refactors can app-hide secondary windows, clear state too aggressively, or trap the user on a stale route.
+- User contract: Escape lets go of what's staged, then goes back one view (a chat, a note, a form, an answer, an actions list), then clears the input, and only then hides the main window. Focus loss hides the one window without recording anything or losing the view it was on.
+- Regression risk: Hide/reset refactors can skip a step of the Esc ladder, clear state too aggressively, or trap the user on a stale view.
 - Proof commands:
-  - `bun scripts/devtools/events.ts record --session core-qa --start --show -- bun scripts/devtools/act.ts key --key Escape --main --strict --surface ScriptList`
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test replay`
   - `./scripts/agentic/agent-cargo.sh test --test main_focus_loss_preserve_state_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test hide_rpc_surface_reset_contract -- --nocapture`
-- Pass evidence: Receipt classifies Escape as safe dismissal/clear/back behavior and source tests prove no direct app-hide/reset drift.
-- Fail evidence: Escape hides the wrong window, leaves stale route/filter state, loses secondary windows, or source contracts fail.
+- Pass evidence: The replayed prototype traces agree on every Esc step, and the focus-loss and hide contracts pass.
+- Fail evidence: Escape hides the window while something is staged or a view is open, leaves stale view or filter state, or contracts fail.
 
 ### Agent Chat accepts a prompt and exposes response lifecycle
 
@@ -204,38 +205,39 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Probe receipt contains keyRoutes and acceptedItems with acceptedViaKey tab/enter, cursorAfter, and context state.
 - Fail evidence: Selector never opens, acceptedItems stays empty, cursor/chip count is wrong, event route is propagated incorrectly, or contract fails.
 
-### Detached Agent Chat targets, reattaches, and cleans up
+### Agent Chat opens under the main input and past chats reopen in place
 
 - Stable anchor: `detached-agent-chat-with-pi-backend-targets-reattaches-and-cleans-up`
 - Choice id: `agent_chat-detached-targeting-and-close-cleanup`
-- Surface: Agent Chat / Detached Agent Chat
+- Surface: Agent Chat / Past chats
 - Status: Active QA lock-in candidate
-- User contract: Detached Agent Chat windows appear in listAutomationWindows, inspect target resolves by kind/id, reattach identity is stable, and close cleanup removes only the detached host.
-- Regression risk: Detached windows are prone to stale registry entries, wrong-window reads, and leaked popups after refactors.
+- User contract: Every way into the model's chat (the launcher, ⌘↵, a script error, the SDK, stdin, the tray, dictation, a note) opens the one chat under the main input in the main window. What the chat is about waits in the line above the input and goes with the first turn. Past chats are rows under the main input that filter as you type and reopen in place; deleting one waits 8 s in the line and ⌘Z stops it.
+- Regression risk: Chat entry points can drift back to a separate window, lose what was staged before the first turn, or reopen the wrong conversation.
 - Proof commands:
-  - `bun scripts/devtools/inspect.ts --session core-qa --target-kind agentChatDetached --limit 200`
-  - `bun scripts/devtools/surface.ts inspect --surface AgentChat --target-kind agentChatDetached`
-  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_reattach_identity_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test detached_agent_chat_close_cleanup_contract -- --nocapture`
-- Pass evidence: Window inventory/inspect identifies agentChatDetached with full or acceptable semantic quality, reattach id remains stable, and close cleanup contracts pass.
-- Fail evidence: Target resolution fails, detached and main state are mixed, registry remains after close, or contracts fail.
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test work_replay`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui one_window::past_chats`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui enter_button_property_tests::chat`
+  - `./scripts/agentic/agent-cargo.sh test --test chat_surface_behavior_contract -- --nocapture`
+  - `bash scripts/agentic/one-window/run.sh` (chapter `p2-w-chat`)
+- Pass evidence: Chat replay and unit tests pass; the chat chapter's frames show the chat under the same input, past chats as rows under a header, zero popups and the input at the same y.
+- Fail evidence: A second window appears, the staged subject is missing from the first turn, a past chat opens a different conversation, a delete happens before the wait runs out, or tests fail.
 
-### Notes edit state survives main-window activity
+### Notes open under the main input and keep their text
 
 - Stable anchor: `notes-edit-state-survives-main-window-activity`
 - Choice id: `notes-edit-persist-main-hide-isolation`
-- Surface: Notes
+- Surface: Notes (view in the main window)
 - Status: Active QA lock-in candidate
-- User contract: Notes window is targetable, editor semantic id/input state is present, content changes are reflected in notes_state, and main hide/back actions do not close or reset Notes.
-- Regression risk: Window lifecycle changes can app-hide Notes, drop editor focus, or lose unsaved note state.
+- User contract: Notes open as a view under the main input, today's note by default. Lines keep their markup apart from their words, talking or typing to today's note adds the words, and Esc goes back to the list without losing the note's text.
+- Regression risk: View refactors can reopen Notes in a window of its own, drop unsaved text on Esc, or move the input when the note grows.
 - Proof commands:
-  - `bun scripts/devtools/notes.ts inspect --session core-qa --start --open --limit 200`
-  - `bun scripts/devtools/act.ts key --key Escape --main --strict --surface ScriptList`
-  - `bun scripts/devtools/notes.ts inspect --session core-qa --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_transaction_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_devtools_state_contract -- --nocapture`
-- Pass evidence: Notes receipts show visible editor before and after main interaction, stable editor state, and Notes contracts pass.
-- Fail evidence: Notes closes, editor state disappears, focus target corrupts, or source contracts fail.
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui one_window::notes`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui enter_button_property_tests::notes`
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test talk talking_to_todays_note_adds_the_words`
+  - `./scripts/agentic/agent-cargo.sh test --test mcp_notes_tools -- --nocapture`
+  - `bash scripts/agentic/one-window/run.sh` (chapter `p2-c-notes`)
+- Pass evidence: Note tests pass; the notes chapter's frames show note lines under the same input, zero popups and the input at the same y through opening, typing and Esc.
+- Fail evidence: A Notes window opens, words are lost after Esc, the input moves, or tests fail.
 
 ### Dictation fixture delivery records a safe target receipt
 
@@ -308,18 +310,16 @@ the matrix only through a future QA lock-in selection.
 - Choice id: `automation-window-targeting-strict-all-core-windows`
 - Surface: Automation / Window Targeting
 - Status: Active QA lock-in candidate
-- User contract: listAutomationWindows and inspectAutomationWindow resolve explicit targets, include window id/kind/bounds/osWindowId when available, and never silently fall back to the wrong focused window.
+- User contract: listAutomationWindows and inspectAutomationWindow resolve explicit targets, include window id/kind/bounds/osWindowId when available, and never silently fall back to the wrong focused window. The app has one window, so every Script Kit surface resolves to the main window.
 - Owned search target contract: The caller's observed identity remains authoritative across client calls and deferred dispatch. A refreshed observation never silently replaces an explicit stale expectation. Pointer actions bind to the completed geometry frame; window retirement invalidates old actions, provider attachments, and retained frames.
 - Regression risk: Any runtime QA suite depends on strict targeting; target drift makes receipts false positives.
 - Proof commands:
   - `bun scripts/devtools/surfaces.ts`
   - `bun scripts/devtools/inspect.ts --session core-qa --main --strict --limit 200`
-  - `bun scripts/devtools/inspect.ts --session core-qa --target-kind notes --limit 200`
-  - `bun scripts/devtools/inspect.ts --session core-qa --target-kind actionsDialog --limit 200`
   - `./scripts/agentic/agent-cargo.sh test --test automation_window_targeting -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test screenshot_identity_threading_contract -- --nocapture`
-- Pass evidence: Receipts show exact target identity for each available window and tests pass for target resolution and screenshot identity.
-- Fail evidence: Target resolves to focused/main unexpectedly, id/kind missing, screenshot identity mismatches, or contracts fail.
+- Pass evidence: Receipts show exact target identity for the main window and tests pass for target resolution and screenshot identity.
+- Fail evidence: Target resolves to the wrong window, id/kind missing, screenshot identity mismatches, or contracts fail.
 
 ### Permission preflight guides the user without surprise prompts
 
@@ -332,7 +332,6 @@ the matrix only through a future QA lock-in selection.
 - Proof commands:
   - `bun scripts/devtools/inspect.ts --session core-qa --start --show --main --surface ScriptList --limit 200`
   - `./scripts/agentic/agent-cargo.sh test --test permission_guide_assistant_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test ai_preflight_generation_guard_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test platform_accessibility_contract -- --nocapture`
 - Pass evidence: Inspect receipt exposes preflight/permission state when relevant and source contracts pass for permission guide, AI preflight guard, and accessibility wiring.
 - Fail evidence: Missing permission has no surfaced guidance, hidden prompt path appears, preflight is stale, or contracts fail.
@@ -434,38 +433,37 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Inspect and contracts show rows or clear empty state for tabs/history with correct source semantics.
 - Fail evidence: Provider absence yields blank UI, actions target wrong URL/tab, filter-aware elements break, or contracts fail.
 
-### Actions dialog keyboard navigation keeps a valid selection
+### Actions list keyboard navigation keeps a valid selection
 
 - Stable anchor: `actions-dialog-keyboard-navigation-keeps-a-valid-selection`
 - Choice id: `actions-dialog-keyboard-selection-invariants`
-- Surface: Actions Dialog
+- Surface: Actions list (in place)
 - Status: Active QA lock-in candidate
-- User contract: Arrow navigation skips headers, selection never leaves selectable bounds, Enter routes according to action policy, and Escape closes the dialog without mutating parent state.
-- Regression risk: Keyboard handling regressions make actions feel broken and can dispatch the wrong action.
+- User contract: In the actions list ⌘K puts under the input, arrow navigation skips headers, the highlight never leaves selectable rows, ↵ runs the highlighted action according to its policy, and Esc lets go without changing the list underneath.
+- Regression risk: Keyboard handling regressions make actions feel broken and can run the wrong action.
 - Proof commands:
-  - `bun scripts/devtools/actions.ts inspect --session core-qa --start --open --keep-open --main --surface ScriptList --limit 200`
-  - `bun scripts/devtools/act.ts key --key ArrowDown --target-kind actionsDialog --strict`
-  - `bun scripts/devtools/act.ts key --key ArrowUp --target-kind actionsDialog --strict`
   - `./scripts/agentic/agent-cargo.sh test --test actions_dialog_arrow_nav_skips_section_headers_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test actions_dialog_selection_clamps_to_item_contract -- --nocapture`
-- Pass evidence: Runtime receipts show valid selectedSemanticId after keypresses and source contracts pass for arrow navigation and clamping.
-- Fail evidence: Selection lands on a header, goes out of bounds, Enter targets wrong action, Escape corrupts parent, or tests fail.
+  - `./scripts/agentic/agent-cargo.sh test --test actions_dialog_route_stack_contract -- --nocapture`
+  - `bash scripts/agentic/one-window/run.sh` (chapters `p2-b` and `p2-k-*`)
+- Pass evidence: Navigation and clamping contracts pass; frames show the yellow tile on a selectable action row after every arrow key.
+- Fail evidence: The highlight lands on a header or goes out of bounds, ↵ runs the wrong action, Esc changes the list underneath, or tests fail.
 
-### Actions lifecycle preserves parent or closes only the correct host
+### Undoable actions run at once and irreversible ones wait in the line
 
 - Stable anchor: `actions-lifecycle-preserves-parent-or-closes-only-the-correct-host`
 - Choice id: `actions-lifecycle-parent-child-close-rules`
-- Surface: Actions / Popup Lifecycle
+- Surface: Actions / Undo and hold in the line
 - Status: Active QA lock-in candidate
-- User contract: Action receipts classify source-live, source-closed-parent-live, dismissed, or failed with parentAfter/sourceAfter details.
-- Regression risk: Action lifecycle bugs can leave orphan popups, close the main window, or run actions against stale parent state.
+- User contract: An action that can be undone runs at once and the line above the input says what ran with ⌘Z to take it back. One that can't be undone waits in the line ("Runs in 8s · …"), pauses while you type, runs when the wait ends, and ⌘Z stops it. Nothing asks in a dialog, and nothing shows a toast or HUD.
+- Regression risk: Action lifecycle changes can bring back confirm dialogs or toasts, run an irreversible action at once, or commit a held action twice.
 - Proof commands:
-  - `bun scripts/devtools/events.ts record --session core-qa --start --show -- bun scripts/devtools/actions.ts inspect --open --keep-open --main --surface ScriptList --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test actions_window_render_autoclose_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test close_actions_window_first_line_registry_clear_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test builtin_actions_window_feedback_contract -- --nocapture`
-- Pass evidence: Event receipt has explicit lifecycle classification and contracts pass for autoclose, registry clear, and feedback.
-- Fail evidence: Orphaned dialog, parent closed unexpectedly, registry stale, missing feedback, or tests fail.
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test properties`
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test replay`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui enter_button_property_tests::ledger`
+  - `bash scripts/agentic/one-window/run.sh` (chapter `p2-a`)
+- Pass evidence: The held-message properties (one commit per hold, ⌘Z stops it, typing pauses it) and trace replay pass; frames show the countdown in the line, zero popups, and the input at the same y.
+- Fail evidence: A dialog, toast or HUD appears, an irreversible action runs before its wait, ⌘Z fails to stop it, a hold commits twice, or tests fail.
 
 ### Mini mode toggles, sizes, and reveals filtered rows
 
@@ -497,7 +495,6 @@ the matrix only through a future QA lock-in selection.
   - `bun scripts/devtools/inspect.ts --session core-qa --start --show --main --surface InlineAgent --limit 200`
   - `./scripts/agentic/agent-cargo.sh test --test focused_text_prompt_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test focused_text_agent_chat_action_receipt_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test stdin_focused_text_protocol_wired -- --nocapture`
 - Pass evidence: Inspect/protocol receipts expose focusedText state and action receipts; source contracts pass for prompt, actions, and protocol wiring.
 - Fail evidence: Session id missing, mutation targets wrong app, private text leaked, copy/replace receipt absent, or tests fail.
 
@@ -511,8 +508,6 @@ the matrix only through a future QA lock-in selection.
 - Regression risk: Context handoff connects many sources; drift can silently drop or mislabel what the user asked AI to use.
 - Proof commands:
   - `bun scripts/devtools/inspect.ts --session core-qa --start --show --main --surface AgentChat --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test context_selector_portal_builtin_parity_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test add_to_ai_flow -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test context_contract_end_to_end -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test context_part_submission_flow -- --nocapture`
 - Pass evidence: Receipts/state show attached context chips and context contracts pass end-to-end.
@@ -522,18 +517,16 @@ the matrix only through a future QA lock-in selection.
 
 - Stable anchor: `agent-chat-history-can-resume-and-export-conversations`
 - Choice id: `agent_chat-history-resume-export`
-- Surface: Agent Chat / History
+- Surface: Agent Chat / Past chats
 - Status: Active QA lock-in candidate
-- User contract: History rows are searchable, resume targets the selected conversation id, and export emits one canonical path with transcript metadata.
+- User contract: Past chats are rows under the main input, each saying when it was in words. Filtering finds them, ↵ reopens the selected conversation in place with your turns, the model's and its tools, and export emits one canonical path with transcript metadata.
 - Regression risk: History and export refactors can duplicate export paths, resume the wrong thread, or lose message metadata.
 - Proof commands:
-  - `bash scripts/agentic/session.sh rpc core-qa '{"type":"triggerBuiltin","requestId":"core-qa-agent-chat-pi-backend-history","builtinId":"builtin/agent-chat-pi-backend-history"}' --expect triggerBuiltinResult --timeout 8000`
-  - `bun scripts/devtools/inspect.ts --session core-qa --main --surface AgentChatHistory --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_history_empty_state_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui one_window::past_chats`
   - `./scripts/agentic/agent-cargo.sh test --test agent_chat_existing_chat_mutation_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test agent_chat_conversation_export_single_path_contract -- --nocapture`
-- Pass evidence: Inspect shows history rows or empty state and contracts pass for resume/mutation/export single path.
-- Fail evidence: Wrong conversation resumed, duplicate export routes, missing empty state, or tests fail.
+- Pass evidence: Past-chat tests pass for dates and saved turns, and contracts pass for resume, mutation and single-path export.
+- Fail evidence: Wrong conversation resumed, saved turns lost, duplicate export routes, or tests fail.
 
 ### Agent Chat setup and onboarding offer recoverable actions
 
@@ -546,8 +539,6 @@ the matrix only through a future QA lock-in selection.
 - Proof commands:
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"getAgentChatState","requestId":"core-qa-agent-chat-pi-backend-setup","target":{"type":"main"}}' --expect agent_chatStateResult --timeout 8000`
   - `./scripts/agentic/agent-cargo.sh test --test agent_chat_onboarding -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test ai_preflight_prompt_compiler_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test agent_chat_plugin_skill_thread_affinity_contract -- --nocapture`
 - Pass evidence: Agent Chat state receipt has setup details when applicable and onboarding/preflight/thread-affinity contracts pass.
 - Fail evidence: Setup state absent for blocked condition, actions do nothing, picker selection stale, or tests fail.
 
@@ -567,39 +558,38 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: RPC/contract output shows streaming status and cleanup invariants pass for cancel, config reload, and live subscriptions.
 - Fail evidence: Cancel ignored, duplicate subscription events, transcript corruption, provider reload drift, or tests fail.
 
-### Notes Agent Chat actions match chat behavior without leaking host state
+### Asking about a note opens the one chat with the note staged
 
 - Stable anchor: `notes-agent-chat-with-pi-backend-actions-match-chat-behavior-without-leaking-host-state`
 - Choice id: `notes-agent_chat-actions-history-parity`
-- Surface: Notes / Hosted Agent Chat
+- Surface: Notes / Agent Chat
 - Status: Active QA lock-in candidate
-- User contract: Notes Agent Chat has targetable composer, note context chip/source, actions parity, history portal terminal state, and host isolation from main Agent Chat.
-- Regression risk: Hosted Agent Chat can accidentally use main chat state or lose note-specific context during refactors.
+- User contract: Asking the model about a note opens the one chat under the main input with the note waiting in the line above it; the note's words go with the first turn and the note itself is unchanged. There is no second chat host inside Notes.
+- Regression risk: Note-to-chat handoff can lose the note as context, send it twice, or open a chat host of its own.
 - Proof commands:
-  - `bun scripts/devtools/notes.ts inspect --session core-qa --start --open --open-agent-chat-pi-backend --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_ai_routing -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_agent_chat_actions_parity_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_agent_chat_history_portal_terminal_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test notes_hosted_agent_chat_host_isolation_contract -- --nocapture`
-- Pass evidence: Notes DevTools receipt shows hosted Agent Chat state and contracts pass for routing, actions parity, history portal, and isolation.
-- Fail evidence: Notes Agent Chat targets main chat, loses note context, actions differ without reason, or tests fail.
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui enter_button_property_tests::chat`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui one_window::chat_entry`
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test talk talking_to_the_model_opens_its_chat_with_the_words`
+- Pass evidence: Chat-entry tests show the note staged in the line and sent once with the first turn.
+- Fail evidence: The note is missing from the first turn, sent twice, or a separate chat host appears, or tests fail.
 
-### Dictation setup, history, and overlay lifecycle are coherent
+### Dictation talks in the main window and reads typing or a request
 
 - Stable anchor: `dictation-setup-history-and-overlay-lifecycle-are-coherent`
 - Choice id: `dictation-setup-history-overlay-lifecycle`
-- Surface: Dictation / Setup and History
+- Surface: Dictation (in the main window)
 - Status: Active QA lock-in candidate
-- User contract: Dictation setup NUX, microphone popup, history empty/list states, overlay focus hide, and stop lifecycle report consistent state.
-- Regression risk: Dictation has many small windows and async states that can desync from the main app.
+- User contract: Holding the voice key talks in the main window; the line says "Typing into · <app>" or what the words will do. Words that read as writing paste at the cursor of the frontmost app and the window goes; words that read as a request become a sentence in the input. The reading changes at most once while you talk, and letting go acts only when it is sure. Setup, stop and recovery stay in the same window.
+- Regression risk: Dictation has async states that can desync from the window: a reading can flip back and forth, act while unsure, or bring back an overlay.
 - Proof commands:
-  - `bun scripts/devtools/dictation.ts inspect --session core-qa --start --show`
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test talk`
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test properties voice`
   - `./scripts/agentic/agent-cargo.sh test --test dictation_setup_nux_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test dictation_microphone_popup_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test dictation_history_empty_state_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test dictation_lifecycle_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test dictation_stop_liveness_contract -- --nocapture`
-- Pass evidence: Dictation inspect classifies ok or specific primitive blocker and contracts pass for setup/history/overlay/stop liveness.
-- Fail evidence: Blank setup, missing history empty state, overlay fails to hide/focus, stop never completes, or tests fail.
+  - `bash scripts/agentic/one-window/run.sh` (chapter `p2-e`)
+- Pass evidence: Talk tests and voice properties pass; frames show the voice rows under the same input, zero popups and the input at the same y.
+- Fail evidence: An overlay or popup appears, the reading changes more than once, letting go acts while unsure, stop never completes, or tests fail.
 
 ### Settings exposes visible rows, empty state, and permission routes
 
@@ -647,7 +637,6 @@ the matrix only through a future QA lock-in selection.
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"triggerBuiltin","requestId":"core-qa-theme","builtinId":"builtin/theme-chooser"}' --expect triggerBuiltinResult --timeout 8000`
   - `bun scripts/devtools/act.ts set-theme-control --control theme --value light --session core-qa --main --strict --surface ThemeChooser`
   - `./scripts/agentic/agent-cargo.sh test --test theme_chooser_key_propagation_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test design_picker_persistence_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test theme_contrast_audit -- --nocapture`
 - Pass evidence: Theme control receipt succeeds, selected theme/design state is persisted, and key/contrast contracts pass.
 - Fail evidence: Control mutation unsupported without blocker, keys leak to parent, persistence missing, or tests fail.
@@ -686,23 +675,21 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: EmojiPicker inspect shows rows/empty state and arrow/choice-count contracts pass.
 - Fail evidence: Selection jumps, empty state missing, choice count lies, or tests fail.
 
-### Design Gallery and Picker browse, persist, and resize
+### Design catalog stays unique and designs persist
 
 - Stable anchor: `design-gallery-and-picker-browse-persist-and-resize`
 - Choice id: `design-gallery-picker-browse-persist-resize`
-- Surface: Design Gallery / Design Picker
+- Surface: Designs / Theme
 - Status: Active QA lock-in candidate
-- User contract: Design rows are unique, selection persists, action receipts are present, and resize does not corrupt visible rows or state counts.
+- User contract: Design ids in the catalog are unique, the designs config schema matches what the app reads, and legacy design variants migrate instead of lingering.
 - Regression risk: Design surfaces share list/layout code and can reveal drift in noncritical appearance flows.
 - Proof commands:
-  - `bash scripts/agentic/session.sh rpc core-qa '{"type":"triggerBuiltin","requestId":"core-qa-design-gallery","builtinId":"builtin/design-gallery"}' --expect triggerBuiltinResult --timeout 8000`
-  - `bun scripts/devtools/inspect.ts --session core-qa --main --surface DesignGallery --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test design_gallery_text_state_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test design_picker_actions_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test design_picker_resize_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test design_catalog_uniqueness -- --nocapture`
-- Pass evidence: Inspect shows design rows/text state and contracts pass for actions, resize, persistence/uniqueness.
-- Fail evidence: Duplicate rows, selection not persisted, resize breaks layout, or tests fail.
+  - `./scripts/agentic/agent-cargo.sh test --test designs_config_schema_parity -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test legacy_design_variant_migration -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --test no_legacy_design_variant -- --nocapture`
+- Pass evidence: Catalog, schema and migration contracts pass.
+- Fail evidence: Duplicate design ids, schema drift, a legacy variant left unmigrated, or tests fail.
 
 ### Quick Terminal opens warm and closes cleanly
 
@@ -729,7 +716,6 @@ the matrix only through a future QA lock-in selection.
 - Proof commands:
   - `bun scripts/devtools/act.ts set-input --text '~/' --session core-qa --main --strict --surface ScriptList`
   - `./scripts/agentic/agent-cargo.sh test --test path_prompt_filesystem_edges_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test path_action -- --nocapture`
 - Pass evidence: Path-related state/contract tests pass and runtime input path handling stays stable.
 - Fail evidence: Tilde not expanded, invalid path panics, selected path missing, or contracts fail.
 
@@ -747,38 +733,39 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Inspect/drop state is present when prompt active and native drop contract passes.
 - Fail evidence: Drop ignored, files attached to wrong surface, rejection silent, or contract fails.
 
-### Shortcut recorder captures keys and shows errors clearly
+### Shortcut view captures keys and shows errors clearly
 
 - Stable anchor: `shortcut-recorder-captures-keys-and-shows-errors-clearly`
 - Choice id: `shortcut-recorder-captures-errors-and-popup-state`
-- Surface: Shortcut Recorder
+- Surface: Shortcut view (in the main window)
 - Status: Active QA lock-in candidate
-- User contract: Shortcut recorder popup is targetable, records normalized keycaps, and surfaces validation errors without corrupting existing shortcut config.
-- Regression risk: Keyboard shortcut changes can break recording, display, or conflict validation.
+- User contract: Giving something a shortcut (a saved run, a script, the SDK's hotkey()) opens the shortcut view under the main input with a "Press the keys for …" header. It records normalized keycaps, names the saved script, and shows validation errors without corrupting existing shortcut config. Esc goes back.
+- Regression risk: Keyboard shortcut changes can break recording, display, or conflict validation, or bring back a popup recorder.
 - Proof commands:
-  - `bun scripts/devtools/inspect.ts --session core-qa --target-kind promptPopup --limit 200`
-  - `./scripts/agentic/agent-cargo.sh test --test shortcut_recorder_popup_window_contract -- --nocapture`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui one_window::shortcut_view`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui one_window::learns`
   - `./scripts/agentic/agent-cargo.sh test --test shortcut_error_messages -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test shortcut_keycap_unification_contract -- --nocapture`
-- Pass evidence: Popup inspect and shortcut contracts pass for capture, error messages, and keycap normalization.
-- Fail evidence: Shortcut not recorded, invalid shortcut silently accepted, popup target wrong, or contracts fail.
+  - `bash scripts/agentic/one-window/run.sh` (chapters `p2-e` and `p2-z-hotkey`)
+- Pass evidence: Shortcut tests pass for capture, naming, error messages and keycap normalization; frames show the shortcut view under the same input with zero popups.
+- Fail evidence: Shortcut not recorded, invalid shortcut silently accepted, a popup opens, or tests fail.
 
-### About, Help, and Confirm surfaces render stable contracts
+### About and Help render stable contracts, and asks happen in the line
 
 - Stable anchor: `about-help-and-confirm-surfaces-render-stable-contracts`
 - Choice id: `about-help-confirm-surfaces-contracts`
-- Surface: About / Help / Confirm
+- Surface: About / Help
 - Status: Active QA lock-in candidate
-- User contract: About/Help surfaces expose expected text/actions, Confirm has explicit confirm/cancel controls, and focus/keyboard contracts are stable.
+- User contract: About/Help surfaces expose expected text/actions under the main input and keep focus/keyboard contracts stable. Nothing asks in a Confirm dialog: SDK `confirm()` stages its question in the line and its answers become rows, and a destructive one holds for 8 s with ⌘Z to stop it.
 - Regression risk: Small shared surfaces catch regressions in prompt chrome, buttons, and focus policies.
 - Proof commands:
   - `bash scripts/agentic/session.sh rpc core-qa '{"type":"triggerBuiltin","requestId":"core-qa-about","builtinId":"builtin/about"}' --expect triggerBuiltinResult --timeout 8000`
   - `bun scripts/devtools/inspect.ts --session core-qa --main --surface About --limit 200`
   - `./scripts/agentic/agent-cargo.sh test --test about_surface_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test help_info_surface_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test confirm_prompt_surface_contract -- --nocapture`
-- Pass evidence: Inspect shows informational surface content and contracts pass for About, Help, and Confirm.
-- Fail evidence: Missing content/actions, wrong focus, confirm/cancel semantics drift, or tests fail.
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui enter_button_property_tests::ledger`
+- Pass evidence: Inspect shows informational surface content and contracts pass for About and Help; ledger tests pass for asks and holds in the line.
+- Fail evidence: Missing content/actions, wrong focus, a confirm dialog appears, or tests fail.
 
 ### DevTools inspect, elements, layout, and measure produce trustworthy receipts
 
@@ -811,7 +798,6 @@ the matrix only through a future QA lock-in selection.
   - `bun scripts/devtools/coverage.ts --surface main`
   - `./scripts/agentic/agent-cargo.sh test --test devtools_act_lifecycle_contract -- --nocapture`
   - `./scripts/agentic/agent-cargo.sh test --test devtools_coverage_contract -- --nocapture`
-  - `./scripts/agentic/agent-cargo.sh test --test devtools_session_contract -- --nocapture`
 - Pass evidence: Events receipt embeds child receipt, coverage reports surface status, and DevTools lifecycle/session contracts pass.
 - Fail evidence: Recorder drops child output, safety gates absent, coverage stale, session cleanup fails, or contracts fail.
 
