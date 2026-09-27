@@ -33,9 +33,11 @@ fn rich_context() -> TabAiContextBlob {
             input_text: Some("Slack".to_string()),
             focused_semantic_id: Some("input:filter".to_string()),
             selected_semantic_id: Some("choice:0:slack".to_string()),
-            visible_elements: vec![script_kit_gpui::protocol::ElementInfo::choice(
-                0, "Slack", "slack", true,
-            )],
+            visible_elements: vec![
+                script_kit_gpui::protocol::ElementInfo::product_static_choice(
+                    0, "Slack", "slack", true,
+                ),
+            ],
         },
         script_kit_gpui::context_snapshot::AiContextSnapshot {
             frontmost_app: Some(script_kit_gpui::context_snapshot::FrontmostAppContext {

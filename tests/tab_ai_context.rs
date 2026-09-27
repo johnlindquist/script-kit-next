@@ -24,8 +24,8 @@ fn full_blob() -> TabAiContextBlob {
             selected_semantic_id: Some("choice:1:item-b".to_string()),
             visible_elements: vec![
                 ElementInfo::input("filter", Some("search"), true),
-                ElementInfo::choice(0, "Item A", "item-a", false),
-                ElementInfo::choice(1, "Item B", "item-b", true),
+                ElementInfo::product_static_choice(0, "Item A", "item-a", false),
+                ElementInfo::product_static_choice(1, "Item B", "item-b", true),
             ],
         },
         AiContextSnapshot {

@@ -933,8 +933,8 @@ fn tab_ai_full_context_blob_preserves_surface_quality() {
         selected_semantic_id: Some("choice:0:docker-logs".to_string()),
         visible_elements: vec![
             ElementInfo::input("filter", Some("docker"), true),
-            ElementInfo::choice(0, "docker-logs", "docker-logs", true),
-            ElementInfo::choice(1, "docker-stop", "docker-stop", false),
+            ElementInfo::product_static_choice(0, "docker-logs", "docker-logs", true),
+            ElementInfo::product_static_choice(1, "docker-stop", "docker-stop", false),
         ],
     };
     let blob = TabAiContextBlob::from_parts(
@@ -1032,7 +1032,7 @@ fn tab_ai_receipt_matches_blob_quality_for_rich_surfaces() {
             selected_semantic_id: Some("choice:0:first-item".to_string()),
             visible_elements: vec![
                 ElementInfo::input("filter", Some("filter text"), true),
-                ElementInfo::choice(0, "item", "first-item", true),
+                ElementInfo::product_static_choice(0, "item", "first-item", true),
             ],
         };
 
