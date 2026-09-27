@@ -3,6 +3,7 @@
 
 pub(crate) mod automations;
 pub(crate) mod connections;
+pub(crate) mod height_host;
 pub(crate) mod host;
 pub(crate) mod learns;
 pub(crate) mod ledger_view;
