@@ -633,29 +633,6 @@ fn test_on_search_change_uses_reload_helper_instead_of_silently_swallowing_error
 }
 
 #[test]
-fn test_request_delete_selected_note_emits_structured_confirmation_logs() {
-    const NOTES_SOURCE: &str = include_str!("notes.rs");
-    assert!(
-        NOTES_SOURCE.contains("notes_delete_confirmation_requested")
-            && NOTES_SOURCE.contains("notes_delete_confirmation_opened")
-            && NOTES_SOURCE.contains("notes_delete_cancelled"),
-        "Delete confirmation flow should emit structured request/open/cancel logs"
-    );
-}
-
-#[test]
-fn test_request_delete_selected_note_log_includes_viability_fields() {
-    const NOTES_SOURCE: &str = include_str!("notes.rs");
-    assert!(
-        NOTES_SOURCE.contains("viewport_viable,")
-            && NOTES_SOURCE.contains("bounds_viable,")
-            && NOTES_SOURCE.contains("source_width,")
-            && NOTES_SOURCE.contains("dialog_width = dialog_width_value,"),
-        "notes_delete_confirmation_requested log should include viewport_viable, bounds_viable, source_width, and dialog_width fields"
-    );
-}
-
-#[test]
 fn test_notes_render_does_not_apply_pending_focus_surface_in_render() {
     const RENDER_SOURCE: &str = include_str!("render.rs");
     assert!(

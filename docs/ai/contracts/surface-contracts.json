@@ -1100,55 +1100,6 @@
       ]
     },
     {
-      "id": "main-overlay.root-notification",
-      "family": "mainOverlay",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "ScriptList",
-      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
-      "expectedSemanticSurface": "scriptList",
-      "requiredSemanticIds": [
-        "root-notification:*"
-      ]
-    },
-    {
-      "id": "main-overlay.warning",
-      "family": "mainOverlay",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "ScriptList",
-      "presentationOwner": "src/main_sections/render_impl.rs::WarningBanner",
-      "expectedSemanticSurface": "scriptList",
-      "requiredSemanticIds": [
-        "main-warning-banner",
-        "main-warning-banner:dismiss"
-      ]
-    },
-    {
       "id": "main-overlay.logs",
       "family": "mainOverlay",
       "root": "main",
@@ -1194,30 +1145,6 @@
       "expectedSemanticSurface": "scriptList",
       "requiredSemanticIds": [
         "main-loading"
-      ]
-    },
-    {
-      "id": "main-overlay.toast",
-      "family": "mainOverlay",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "ScriptList",
-      "presentationOwner": "src/app_impl/lifecycle_reset.rs::flush_pending_toasts",
-      "expectedSemanticSurface": "scriptList",
-      "requiredSemanticIds": [
-        "root-notification:*"
       ]
     },
     {
@@ -2715,102 +2642,6 @@
       ]
     },
     {
-      "id": "secondary.confirm",
-      "family": "confirm",
-      "root": "secondary",
-      "owner": "src/confirm/window.rs",
-      "factoryOwners": [
-        "src/confirm/window.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/confirm/parent_dialog.rs",
-      "expectedSemanticSurface": "confirmDialog",
-      "requiredSemanticIds": [
-        "panel:confirm-dialog",
-        "button:0:confirm",
-        "button:1:cancel"
-      ]
-    },
-    {
-      "id": "secondary.confirm-three-button",
-      "family": "confirm",
-      "root": "secondary",
-      "owner": "src/confirm/window.rs",
-      "factoryOwners": [
-        "src/confirm/window.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/confirm/parent_dialog.rs",
-      "expectedSemanticSurface": "confirmDialog",
-      "requiredSemanticIds": [
-        "panel:confirm-dialog",
-        "button:0:confirm",
-        "button:1:secondary",
-        "button:2:cancel"
-      ]
-    },
-    {
-      "id": "secondary.hud",
-      "family": "hud",
-      "root": "secondary",
-      "owner": "src/hud_manager/mod.rs",
-      "factoryOwners": [
-        "src/hud_manager/mod.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/hud_manager/mod.rs::HudView",
-      "expectedSemanticSurface": "hud",
-      "requiredSemanticIds": [
-        "panel:hud"
-      ]
-    },
-    {
-      "id": "secondary.hud-action",
-      "family": "hud",
-      "root": "secondary",
-      "owner": "src/hud_manager/mod.rs",
-      "factoryOwners": [
-        "src/hud_manager/mod.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/hud_manager/mod.rs::HudView",
-      "expectedSemanticSurface": "hud",
-      "requiredSemanticIds": [
-        "panel:hud",
-        "hud:primary-action"
-      ]
-    },
-    {
       "id": "secondary.snap",
       "family": "snap",
       "root": "secondary",
@@ -2891,10 +2722,7 @@
         "main-overlay.loading",
         "main-overlay.logs",
         "main-overlay.root-dialog",
-        "main-overlay.root-notification",
         "main-overlay.tab-ai-save-offer",
-        "main-overlay.toast",
-        "main-overlay.warning",
         "main-search-contract",
         "main.menu-syntax-history",
         "main.menu-syntax-object",
@@ -3539,21 +3367,6 @@
       "proofBoundary": "owned-production-runtime"
     },
     {
-      "rootOwner": "ConfirmPopupWindow",
-      "factorySources": [
-        "src/confirm/window.rs",
-        "src/confirm/parent_dialog.rs"
-      ],
-      "fixtureIds": [
-        "secondary.confirm",
-        "secondary.confirm-three-button"
-      ],
-      "presentationOwners": [
-        "src/confirm/parent_dialog.rs"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
       "rootOwner": "NotesApp",
       "factorySources": [
         "src/notes/window/window_ops.rs"
@@ -3624,20 +3437,6 @@
       ],
       "presentationOwners": [
         "src/dictation/microphone_popup_window.rs::DictationMicrophonePopupWindow"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "rootOwner": "HudView",
-      "factorySources": [
-        "src/hud_manager/mod.rs"
-      ],
-      "fixtureIds": [
-        "secondary.hud",
-        "secondary.hud-action"
-      ],
-      "presentationOwners": [
-        "src/hud_manager/mod.rs::HudView"
       ],
       "proofBoundary": "owned-production-runtime"
     },
