@@ -146,7 +146,6 @@ require_clean_source_identity() {
     scripts/devtools/capture-dom-fidelity.ts
     scripts/devtools/window-engine-foundation.ts
     scripts/devtools/inspect.ts
-    scripts/devtools/notes.ts
     scripts/devtools/target-identity.test.ts
     scripts/devtools/__tests__/client-lib.test.ts
     scripts/devtools/receipt-output.test.ts

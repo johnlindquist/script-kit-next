@@ -114,7 +114,6 @@ export const WORKFLOW_STAGE_PRIMITIVES = new Set([
   "devtools.keyboard.inspect",
   "devtools.actions.inspect",
   "devtools.act",
-  "devtools.notes.inspect",
   "devtools.dictation.inspect",
   "devtools.dictation.deliverFixture",
   "devtools.inspect.orchestrate",

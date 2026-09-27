@@ -3069,7 +3069,6 @@ describe("nonintrusive executed Rust verification", () => {
     "scripts/devtools/capture-dom-fidelity.ts",
     "scripts/devtools/window-engine-foundation.ts",
     "scripts/devtools/inspect.ts",
-    "scripts/devtools/notes.ts",
     "scripts/devtools/lib/client.ts",
     "scripts/devtools/lib/target-identity.ts",
     "scripts/devtools/lib/privacy.ts",

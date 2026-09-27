@@ -18,7 +18,6 @@ const ACTIONS: &str = include_str!("../scripts/devtools/actions.ts");
 const ACT: &str = include_str!("../scripts/devtools/act.ts");
 const COMPARE: &str = include_str!("../scripts/devtools/compare.ts");
 const EVENTS: &str = include_str!("../scripts/devtools/events.ts");
-const NOTES: &str = include_str!("../scripts/devtools/notes.ts");
 const DICTATION: &str = include_str!("../scripts/devtools/dictation.ts");
 const SCHEMA: &str = include_str!("../scripts/devtools/schema.ts");
 const DEVTOOLS_SKILL: &str = include_str!("../.agents/skills/script-kit-devtools/SKILL.md");
@@ -598,86 +597,6 @@ fn focus_and_keyboard_report_native_footer_activation_gap() {
 }
 
 #[test]
-fn notes_cli_exposes_notes_window_state_and_missing_runtime_primitives() {
-    for needle in [
-        "script-kit-devtools.notes",
-        "notes.inspect",
-        "openNotes",
-        "scripts/devtools/targets.ts",
-        "scripts/devtools/elements.ts",
-        "scripts/devtools/focus.ts",
-        "scripts/devtools/text.ts",
-        "scripts/devtools/layout.ts",
-        "scripts/devtools/coverage.ts",
-        "input:notes-editor",
-        "panel:notes-window",
-        "activeNoteId",
-        "dirtyState",
-        "selectionRange",
-        "draftSnapshot",
-        "editorAnchor",
-        "previewAnchor",
-        "scrollMetricsAvailable",
-        "scrollTopAvailable",
-        "scrollHeightAvailable",
-        "clientHeightAvailable",
-        "scrollTop",
-        "scrollHeight",
-        "clientHeight",
-        "togglePreview",
-        "bodyFingerprint",
-        "bodyByteLength",
-        "selectionUnit",
-        "contentReturned",
-        "layout.measure",
-        "editorRegion",
-        "storage",
-        "commandBars",
-        "shortcutRegistry",
-        "focusTransitions",
-        "autosize",
-        "lastAutosizeTransition",
-        "shortcutActivation",
-        "runtimeState",
-        "stateResult",
-        "redacted",
-        "getState",
-        "editorFingerprint",
-        "missingRuntimePrimitives",
-        "blocked-by-missing-primitive",
-        "resize-compare",
-        "SCRIPT_KIT_TEST_NOTES_DB_PATH",
-        "--sandbox-db",
-        "--confirm-real-notes-mutation",
-        "blocked-by-real-data-risk",
-        "devtools.notes.resizeCompare",
-        "height grew after tall content",
-        "height shrank after short content",
-        "autosize generation advanced",
-        "raw note content redacted",
-    ] {
-        assert!(
-            NOTES.contains(needle),
-            "notes CLI must expose Notes-specific inspect field or gap: {needle}"
-        );
-    }
-
-    assert!(
-        DEVTOOLS_SKILL.contains("Notes CLI"),
-        "DevTools skill should route Notes window debugging through notes CLI"
-    );
-    assert!(
-        SCHEMA.contains("bun scripts/devtools/notes.ts inspect"),
-        "schema should name the concrete notes implementation"
-    );
-    assert!(
-        SCHEMA.contains("devtools.notes.resizeCompare")
-            && SCHEMA.contains("bun scripts/devtools/notes.ts resize-compare"),
-        "schema should name the concrete Notes resize-compare primitive"
-    );
-}
-
-#[test]
 fn dictation_cli_passively_reports_media_state_targets_and_delivery_gaps() {
     for needle in [
         "script-kit-devtools.dictation",
@@ -836,7 +755,6 @@ fn devtools_docs_are_checked_in() {
         "scripts/devtools/act.ts",
         "scripts/devtools/compare.ts",
         "scripts/devtools/events.ts",
-        "scripts/devtools/notes.ts",
         "scripts/devtools/dictation.ts",
     ] {
         assert!(

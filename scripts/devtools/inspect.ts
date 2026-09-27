@@ -445,10 +445,9 @@ function visibleWindowProof(inspect: JsonObject) {
 function likelyOwners(surface: string | undefined, targetKind: string, missing: string[]) {
   const owners = new Set<string>();
   const normalizedSurface = String(surface ?? "").toLowerCase();
-  if (normalizedSurface.includes("notes") || targetKind === "notes") {
-    owners.add("src/notes/window.rs");
-    owners.add("src/notes/window/render_editor_body.rs");
-    owners.add("scripts/devtools/notes.ts");
+  if (normalizedSurface.includes("notes")) {
+    owners.add("src/one_window/notes.rs");
+    owners.add("src/notes/open.rs");
   }
   if (normalizedSurface.includes("actions") || targetKind === "actionsdialog") {
     owners.add("src/actions/dialog.rs");

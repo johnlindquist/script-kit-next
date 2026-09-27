@@ -1803,7 +1803,7 @@ describe("noninteractive DevTools operator safety", () => {
     ["app launch", ["driver", "smoke"]],
     ["performance recording", ["perf", "record", "--pid", "42", "--template", "Leaks"]],
     ["session start", ["actions", "inspect", "--start"]],
-    ["window reveal", ["notes", "inspect", "--open"]],
+    ["window reveal", ["main", "inspect", "--show"]],
   ])("central DevTools dispatcher rejects %s before delegation", (_kind, args) => {
     const result = child(`
       Bun.spawn = (() => { throw new Error("unsafe DevTools dispatcher child started"); });
@@ -1946,51 +1946,12 @@ describe("noninteractive DevTools operator safety", () => {
     expect(result.stdout.toString()).not.toContain("live operator session was touched");
   });
 
-  test("Notes cleanup owns its exact session and never stops resumed operator state", () => {
-    const result = child(`
-      process.env.SCRIPT_KIT_NONINTERACTIVE = "0";
-      const calls = [];
-      let resumed = false;
-      Bun.spawn = ((command) => {
-        calls.push(command);
-        const payload = command[2] === "start"
-          ? { status: "ok", session: command[3], pid: 4242, sessionGeneration: "notes-generation", resumed, ready: true }
-          : { status: "ok", session: command[3], ownershipVerified: true };
-        return {
-          stdout: new Response(JSON.stringify(payload)).body,
-          stderr: new Response("").body,
-          exited: Promise.resolve(0),
-        };
-      });
-      const { maybeOpenNotes, stopSession } = await import("./scripts/devtools/notes.ts");
-      await maybeOpenNotes({ start: true, session: "owned-notes", open: false });
-      await stopSession("owned-notes");
-      resumed = true;
-      await maybeOpenNotes({ start: true, session: "borrowed-notes", open: false });
-      try { await stopSession("borrowed-notes"); }
-      catch (error) { console.log("borrowed=" + error.message); }
-      try { await maybeOpenNotes({ start: true, session: "dev-watch", open: false }); }
-      catch (error) { console.log("reserved=" + error.message); }
-      console.log("calls=" + JSON.stringify(calls));
-    `);
-
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString()).toContain("borrowed=DevTools session is not owned");
-    expect(result.stdout.toString()).toContain("reserved=Notes DevTools cannot claim the borrowed operator session");
-    expect(result.stdout.toString()).toContain(
-      '["bash","scripts/agentic/session.sh","stop","owned-notes","--expected-pid","4242","--expected-generation","notes-generation"]',
-    );
-    expect(result.stdout.toString()).not.toContain('"stop","borrowed-notes"');
-    expect(result.stdout.toString()).not.toContain('"start","dev-watch"');
-  });
-
   test("independent DevTools transports cannot bypass strict session-start safety", () => {
     const commands: Array<[string, string[]]> = [
       ["actions", ["inspect", "--start"]],
       ["dictation", ["inspect", "--start"]],
       ["inspect", ["--start"]],
       ["events", ["record", "--start", "--", "bun", "scripts/devtools/surfaces.ts"]],
-      ["notes", ["inspect", "--start"]],
       ["main", ["inspect", "--start"]],
       ["agent_chat", ["open-detached-placeholder", "--start"]],
     ];
