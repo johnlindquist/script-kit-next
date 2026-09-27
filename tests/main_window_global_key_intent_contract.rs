@@ -73,18 +73,18 @@ fn tab_interceptor_dispatches_the_named_global_key_intent() {
 }
 
 #[test]
-fn global_key_intent_handler_routes_to_the_shared_agent_chat_context_helper() {
+fn global_key_intent_handler_routes_cmd_enter_through_the_main_window_router() {
     let handler = source_between(
         STARTUP,
         "fn handle_main_window_global_key_intent(",
-        "\n    pub(crate) fn new(",
+        "\n    fn handle_main_window_actions_key_intent(",
     );
     assert!(
         handler.contains("MainWindowGlobalKeyIntent::OpenAgentChatWithCurrentContext =>"),
         "The handler must own the Agent Chat context intent arm."
     );
     assert!(
-        handler.contains("self.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)"),
-        "The Agent Chat context intent must preserve the shared routing helper."
+        handler.contains("self.route_main_window_cmd_enter(cx)"),
+        "The Agent Chat context intent must go through the shared main-window Cmd+Enter router."
     );
 }

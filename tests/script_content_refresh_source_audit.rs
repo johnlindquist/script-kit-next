@@ -46,7 +46,7 @@ fn script_loader_still_reads_bodies_for_full_text_indexing() {
         "loader must keep reading script files into memory for content search"
     );
     assert!(
-        source.contains("Failed to read script body for content indexing"),
-        "loader should keep the content-indexing diagnostic"
+        source.contains("body: Some(body.into()),"),
+        "loader must keep the script body it read so content search can index it"
     );
 }

@@ -9,6 +9,8 @@ const QUICK_TERMINAL_WARM_SOURCE: &str = include_str!("../src/app_impl/quick_ter
 const THEME_FOCUS_SOURCE: &str = include_str!("../src/app_impl/theme_focus.rs");
 const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
+const UI_WINDOW_FOOTER_HELPERS_SOURCE: &str =
+    include_str!("../src/app_impl/ui_window_footer_helpers.rs");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const RENDER_TERM_PROMPT_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
@@ -118,15 +120,15 @@ fn quick_terminal_theme_respects_light_dark_contract() {
 }
 
 #[test]
-fn quick_terminal_native_footer_does_not_capture_sdk_term_prompt_footer() {
+fn quick_terminal_and_sdk_term_prompt_keep_separate_native_footer_surfaces() {
     assert!(
         APP_VIEW_STATE_SOURCE
             .contains("AppView::QuickTerminalView { .. } => Some(\"quick_terminal\")"),
         "QuickTerminalView must register the native footer surface"
     );
     assert!(
-        !APP_VIEW_STATE_SOURCE.contains("AppView::TermPrompt { .. } => Some(\"term_prompt\")"),
-        "SDK TermPrompt must not register a native footer surface; it keeps the GPUI terminal hint strip"
+        APP_VIEW_STATE_SOURCE.contains("AppView::TermPrompt { .. } => Some(\"term_prompt\")"),
+        "SDK TermPrompt must register its own native footer surface, not Quick Terminal's"
     );
     // SDK terminals keep the GPUI hint strip and pass escape_cancels = true
     // so it advertises that Escape cancels the script (audit finding #15).
@@ -137,8 +139,12 @@ fn quick_terminal_native_footer_does_not_capture_sdk_term_prompt_footer() {
     );
     assert!(
         RENDER_TERM_PROMPT_SOURCE.contains("\"native_footer_spacer\"")
-            && UI_WINDOW_SOURCE.contains("render_native_main_window_footer_spacer()"),
-        "Quick Terminal must reserve space for the native AppKit footer through the shared footer slot"
+            && RENDER_TERM_PROMPT_SOURCE
+                .contains("self.main_window_footer_slot(render_terminal_prompt_hint_strip(")
+            && UI_WINDOW_SOURCE.contains(
+                "crate::components::footer_chrome::render_main_window_footer_config_rail("
+            ),
+        "Quick Terminal must draw its footer through the shared main-window footer slot"
     );
 }
 
@@ -149,7 +155,8 @@ fn quick_terminal_apply_keyboard_and_footer_share_visibility_predicate() {
         "Quick Terminal must expose one apply-back predicate"
     );
     assert!(
-        UI_WINDOW_SOURCE.contains("let can_apply = self.quick_terminal_can_apply_back();"),
+        UI_WINDOW_FOOTER_HELPERS_SOURCE
+            .contains("let can_apply = self.quick_terminal_can_apply_back();"),
         "Quick Terminal footer buttons must use the shared apply-back predicate"
     );
     assert!(
@@ -249,10 +256,10 @@ fn quick_terminal_context_capture_pumps_pending_pty_output_before_snapshot() {
 #[test]
 fn quick_terminal_footer_offers_agent_when_apply_unavailable() {
     assert!(
-        UI_WINDOW_SOURCE.contains("quick_terminal_can_attach_to_agent_chat")
-            && UI_WINDOW_SOURCE.contains("FooterAction::Ai")
-            && UI_WINDOW_SOURCE.contains("\"⌘↩\"")
-            && UI_WINDOW_SOURCE.contains("\"Agent\""),
+        UI_WINDOW_FOOTER_HELPERS_SOURCE.contains(
+            "let can_attach_to_agent = self.quick_terminal_can_attach_to_agent_chat();"
+        ) && UI_WINDOW_FOOTER_HELPERS_SOURCE
+            .contains("FooterButtonConfig::new(FooterAction::Ai, \"⌘↩\", \"Agent\")"),
         "Standalone Quick Terminal footer must expose Cmd+Enter Agent handoff when Apply is unavailable"
     );
 }

@@ -9,6 +9,30 @@ const BUILTIN_EXECUTION: &str = include_str!("../src/app_execute/builtin_executi
 const DICTATION_RUNTIME: &str = include_str!("../src/dictation/runtime.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 
+fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("missing function signature: {signature}"));
+    let after_start = &source[start..];
+    let open = after_start
+        .find('{')
+        .unwrap_or_else(|| panic!("missing function body for: {signature}"));
+    let mut depth = 0usize;
+    for (offset, ch) in after_start[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &after_start[..open + offset + 1];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unterminated function body: {signature}");
+}
+
 fn push_arm<'a>(source: &'a str, name: &str) -> &'a str {
     let arm_start = source
         .find("ExternalCommand::PushDictationResult {")
@@ -87,11 +111,10 @@ fn delivery_helper_preserves_active_session_target_without_ui_fallback() {
 
 #[test]
 fn explicit_push_dictation_target_is_fail_closed() {
-    let helper_start = BUILTIN_EXECUTION
-        .find("pub(crate) fn deliver_stdin_dictation_result(")
-        .expect("helper must exist");
-    let helper = &BUILTIN_EXECUTION
-        [helper_start..helper_start + 5000.min(BUILTIN_EXECUTION.len() - helper_start)];
+    let helper = function_body(
+        BUILTIN_EXECUTION,
+        "pub(crate) fn deliver_stdin_dictation_result(",
+    );
     assert!(
         helper.contains("resolve_delivery_target_request("),
         "synthetic delivery must use the dictation delivery actor"

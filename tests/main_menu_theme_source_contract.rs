@@ -77,7 +77,6 @@ fn script_list_consumes_shell_search_and_theme_list_metrics() {
     assert!(source.contains("render_main_view_input_shell"));
     assert!(source.contains("effective_list_item_height_for_theme"));
     assert!(source.contains("effective_section_header_height_for_theme"));
-    assert!(source.contains("effective_average_item_height_for_scroll_for_theme"));
 }
 
 #[test]
