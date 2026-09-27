@@ -83,8 +83,9 @@ fn prompt_handler_builds_snapshot_from_active_app_view_contract() {
     );
     assert!(
         snapshot.contains("let contract = self.current_view.surface_contract();")
-            && snapshot
-                .contains("surface_kind: format!(\"{:?}\", self.current_view.surface_kind())")
+            && snapshot.contains(
+                "let surface_kind = format!(\"{:?}\", self.current_view.surface_kind());"
+            )
             && snapshot.contains("focus_policy: format!(\"{:?}\", contract.focus_policy)")
             && snapshot.contains("keyboard_policy: format!(\"{:?}\", contract.keyboard_policy)")
             && snapshot.contains("actions_policy: format!(\"{:?}\", contract.actions_policy)")
@@ -114,7 +115,7 @@ fn prompt_handler_exposes_actions_popup_overlay_contract() {
 }
 
 #[test]
-fn main_get_state_includes_surface_contract_but_target_diagnostics_do_not() {
+fn main_get_state_includes_surface_contract_and_other_targets_delegate() {
     let get_state = source_between(
         PROMPT_HANDLER_SOURCE,
         "PromptMessage::GetState {",
@@ -122,31 +123,18 @@ fn main_get_state_includes_surface_contract_but_target_diagnostics_do_not() {
     );
     assert!(
         PROMPT_HANDLER_SOURCE
-            .contains("Some(self.current_surface_contract_snapshot(&main_target))"),
+            .contains("Some(self.current_surface_contract_snapshot(&main_target, cx))"),
         "main-window getState must include a surface contract snapshot"
     );
     assert!(
-        get_state.contains("\"unsupported\".to_string()")
-            && get_state.contains("target_unsupported:{:?}")
-            && get_state.contains("\"target_resolution_failed\".to_string()")
-            && get_state.contains("target_error:{}"),
-        "secondary-window diagnostics should keep the unsupported/target_resolution_failed paths"
+        get_state.contains("registered_surface_state_result(&request_id, &resolved, cx)"),
+        "non-main targets must answer from their registered surface, not the main AppView receipt"
     );
-    for field in [
-        "surface_kind: None,",
-        "app_view_variant: None,",
-        "native_footer_surface: None,",
-        "target_generation: None,",
-        "surface_generation: None,",
-        "data_generation: None,",
-        "title: None,",
-        "resolved_bounds: None,",
-    ] {
-        assert!(
-            get_state.contains(field),
-            "secondary-window diagnostics should omit surfaceContract because they are not main AppView receipts (missing `{field}`)"
-        );
-    }
+    assert!(
+        get_state.contains("\"target_resolution_failed\".to_string()")
+            && get_state.contains("target_error:{}"),
+        "getState must keep the target_resolution_failed diagnostic path"
+    );
 }
 
 #[test]
