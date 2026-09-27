@@ -115,19 +115,21 @@ fn kit_store_operation_failures_are_named_steps() {
 
 #[test]
 fn kit_store_git_storage_and_remove_paths_use_operation_steps() {
+    let squashed = |source: &str| -> String { source.split_whitespace().collect() };
+    let kit_store = squashed(KIT_STORE);
     for usage in [
         "KitStoreOperationStep::ReadGitHead.git_spawn_failure(error)",
         "KitStoreOperationStep::ReadGitHead.git_status_failure(output.status, &output.stderr)",
         "KitStoreOperationStep::ReadGitHead.empty_git_hash_message()",
         "KitStoreOperationStep::SaveInstalledRegistry.storage_failure(error)",
         "KitStoreOperationStep::PullRepository.git_spawn_failure(error)",
-        "KitStoreOperationStep::PullRepository\n                .git_status_failure(pull_output.status, &pull_output.stderr)",
+        "KitStoreOperationStep::PullRepository.git_status_failure(pull_output.status, &pull_output.stderr)",
         "KitStoreOperationStep::SaveUpdatedRegistry.storage_failure(error)",
         "KitStoreOperationStep::RemoveDirectory.remove_directory_failure(error)",
         "KitStoreOperationStep::RemoveRegistry.storage_failure(error)",
     ] {
         assert!(
-            KIT_STORE.contains(usage),
+            kit_store.contains(&squashed(usage)),
             "Kit Store operation path should route through named step: {usage}"
         );
     }

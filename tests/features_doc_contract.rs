@@ -26,7 +26,7 @@ fn features_doc_lists_active_qa_contracts_and_excludes_deferred_scope() {
 }
 
 #[test]
-fn features_doc_applies_agent_chat_pi_backend_terminology() {
+fn features_doc_applies_agent_chat_terminology() {
     let matrix_without_code = feature_matrix()
         .split('`')
         .enumerate()
@@ -34,8 +34,12 @@ fn features_doc_applies_agent_chat_pi_backend_terminology() {
         .collect::<String>();
 
     assert!(
-        matrix_without_code.contains("Agent Chat with Pi Backend"),
-        "Agent Chat with Pi Backend should be the user-facing terminology"
+        matrix_without_code.contains("Agent Chat"),
+        "Agent Chat should be the user-facing terminology"
+    );
+    assert!(
+        !matrix_without_code.contains("Pi Backend"),
+        "the retired Pi backend should not appear in user-facing feature prose"
     );
     assert!(
         !matrix_without_code.contains("AgentChat"),

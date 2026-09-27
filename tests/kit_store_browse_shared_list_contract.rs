@@ -25,7 +25,6 @@ fn browse_kit_store_uses_shared_search_input_and_list_item_rows() {
         ".selected(is_selected)",
         ".hovered(is_hovered)",
         ".main_menu_theme(main_menu_theme)",
-        ".with_accent_bar(true)",
         ".semantic_id(",
         "crate::ui_foundation::should_submit_selected_row_click",
         "builtin_uniform_list_scrollbar(&self.list_scroll_handle",

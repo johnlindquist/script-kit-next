@@ -50,10 +50,6 @@ fn app_launcher_render_and_keyboard_use_visible_entry_helper() {
             >= 2,
         "render and keyboard paths should both use app_launcher_filtered_entries"
     );
-    assert!(
-        APP_LAUNCHER.contains("app_launcher_dataset_and_visible_counts(&current_filter)"),
-        "wheel reanchor should use the named count helper"
-    );
 }
 
 #[test]

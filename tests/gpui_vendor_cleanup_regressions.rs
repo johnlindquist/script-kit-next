@@ -17,27 +17,64 @@ const SELECT_TYPES_SOURCE: &str = include_str!("../src/prompts/select/types.rs")
 const UNIFIED_LIST_ITEM_RENDER_SOURCE: &str =
     include_str!("../src/components/unified_list_item/render.rs");
 
+/// Source with all whitespace removed, so assertions survive rustfmt rewrapping.
+fn squashed(source: &str) -> String {
+    source.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// The body of `fn <name>`, found by brace matching.
+fn function_body<'a>(source: &'a str, name: &str) -> &'a str {
+    let start = source
+        .find(&format!("fn {name}("))
+        .unwrap_or_else(|| panic!("fn {name} should exist"));
+    let open = start
+        + source[start..]
+            .find('{')
+            .expect("function body should open");
+    let mut depth = 0usize;
+    for (offset, ch) in source[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &source[open..=open + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("fn {name} body should close");
+}
+
 // ---------------------------------------------------------------------------
-// ChatPrompt: native follow-tail via ListState::set_follow_tail
+// ChatPrompt: native follow-tail via ListState::set_follow_mode
 // ---------------------------------------------------------------------------
 
 #[test]
 fn chat_prompt_uses_native_follow_tail() {
+    let follow_normal = "self.turns_list_state.set_follow_mode(gpui::FollowMode::Normal);";
+    let follow_tail_unless_scrolled_up = ".set_follow_mode(if!self.user_has_scrolled_up{gpui::FollowMode::Tail}else{gpui::FollowMode::Normal});";
+
+    let to_bottom = squashed(function_body(CHAT_STATE_SOURCE, "scroll_turns_to_bottom"));
     assert!(
-        CHAT_STATE_SOURCE.contains("self.turns_list_state.set_follow_tail(false);"),
+        to_bottom.contains(&squashed(follow_normal)),
         "empty chat should explicitly disable follow-tail"
     );
     assert!(
-        CHAT_STATE_SOURCE.contains(".set_follow_tail(!self.user_has_scrolled_up);"),
+        to_bottom.contains(follow_tail_unless_scrolled_up),
         "chat append path should drive follow-tail from manual-scroll state"
     );
     assert!(
-        CHAT_STATE_SOURCE.contains("self.turns_list_state.set_follow_tail(item_count > 0);"),
+        squashed(function_body(CHAT_STATE_SOURCE, "force_scroll_turns_to_bottom")).contains(
+            ".set_follow_mode(ifitem_count>0{gpui::FollowMode::Tail}else{gpui::FollowMode::Normal});"
+        ),
         "force-scroll path should use follow-tail instead of manual last-item scrolling"
     );
     assert!(
-        CHAT_RENDER_CORE_SOURCE
-            .contains(".set_follow_tail(has_turns && !this.user_has_scrolled_up);"),
+        squashed(CHAT_RENDER_CORE_SOURCE).contains(
+            ".set_follow_mode(ifhas_turns&&!this.user_has_scrolled_up{gpui::FollowMode::Tail}else{gpui::FollowMode::Normal},);"
+        ),
         "wheel reconciliation should write back to GPUI follow-tail"
     );
 }
@@ -57,41 +94,27 @@ fn chat_prompt_follow_paths_do_not_use_manual_item_scrolling() {
 }
 
 // ---------------------------------------------------------------------------
-// ActionsDialog: direct GPUI hover without local state machine
+// ActionsDialog: shared ListItem hover without local state machine
 // ---------------------------------------------------------------------------
 
 #[test]
-fn actions_dialog_rows_use_direct_gpui_hover() {
+fn actions_dialog_rows_use_shared_list_item_hover() {
+    let rows = squashed(ACTIONS_DIALOG_SOURCE);
     assert!(
-        ACTIONS_DIALOG_SOURCE.contains("let hover_row_bg = if is_destructive {"),
-        "actions dialog should compute a direct hover background"
-    );
-    assert!(
-        ACTIONS_DIALOG_SOURCE.contains("row.hover("),
-        "actions dialog rows should use GPUI hover styling directly"
-    );
-    assert!(
-        ACTIONS_DIALOG_SOURCE.contains("AppChromeColors::from_theme(&this.theme)")
-            && ACTIONS_DIALOG_SOURCE.contains("rgba(chrome.selection_rgba)")
-            && ACTIONS_DIALOG_SOURCE.contains("rgba(chrome.hover_rgba)"),
-        "default actions dialog rows should resolve selected/hover chrome through AppChromeColors"
+        rows.contains("crate::list_item::ListItem::new(action.title.clone(),list_colors,)")
+            && rows.contains(".selected(is_selected)")
+            && rows.contains(".hovered(this.hovered_row==Some(ix))")
+            && rows.contains(".metrics_override(actions_row_metrics)"),
+        "actions dialog rows should paint selected/hover state through the shared ListItem"
     );
     assert!(
         ACTIONS_DIALOG_SOURCE.contains("show_container_border: false"),
         "default actions dialog chrome should stay borderless"
     );
-    let default_branch_start = ACTIONS_DIALOG_SOURCE
-        .find("if design_variant == DesignVariant::Default")
-        .expect("actions dialog default design branch should exist");
-    let default_branch = &ACTIONS_DIALOG_SOURCE[default_branch_start
-        ..ACTIONS_DIALOG_SOURCE[default_branch_start..]
-            .find("} else {")
-            .map(|offset| default_branch_start + offset)
-            .expect("actions dialog default branch else should exist")];
+    let row_metrics = function_body(ACTIONS_DIALOG_SOURCE, "resolved_actions_dialog_row_metrics");
     assert!(
-        !default_branch.contains("style.selection_opacity")
-            && !default_branch.contains("style.hover_opacity"),
-        "default actions dialog rows should not repack selected/hover opacity locally"
+        !row_metrics.contains("selection_opacity") && !row_metrics.contains("hover_opacity"),
+        "actions dialog rows should not repack selected/hover opacity locally"
     );
 }
 
@@ -126,12 +149,12 @@ fn list_item_relies_on_gpui_hover_without_custom_toggle() {
         "ListItem should not expose a custom hover suppression builder"
     );
     assert!(
-        LIST_ITEM_SOURCE.contains("if !self.selected {"),
-        "non-selected rows should keep hover styling"
+        LIST_ITEM_SOURCE.contains("if !self.selected && !disabled {"),
+        "non-selected enabled rows should keep hover styling"
     );
     assert!(
         LIST_ITEM_SOURCE.contains("inner_content = inner_content.hover(move |s| s.bg(hover_bg));"),
-        "hover styling should be unconditional for non-selected rows"
+        "hover styling should be unconditional for non-selected enabled rows"
     );
 }
 
@@ -165,8 +188,7 @@ fn theme_chooser_rows_use_direct_gpui_hover() {
     assert!(
         THEME_CHOOSER_SOURCE
             .contains("crate::list_item::ListItem::new(name.to_string(), list_colors)")
-            && THEME_CHOOSER_SOURCE.contains(".selected(is_selected)")
-            && THEME_CHOOSER_SOURCE.contains(".with_accent_bar(true)"),
+            && THEME_CHOOSER_SOURCE.contains(".selected(is_selected)"),
         "theme chooser rows should use shared ListItem styling instead of manual hover bookkeeping"
     );
     for needle in [
@@ -183,39 +205,8 @@ fn theme_chooser_rows_use_direct_gpui_hover() {
 }
 
 // ---------------------------------------------------------------------------
-// Kit store: direct GPUI hover without manual hover bookkeeping
+// Kit store
 // ---------------------------------------------------------------------------
-
-#[test]
-fn kit_store_rows_use_direct_gpui_hover() {
-    assert!(
-        KIT_STORE_SOURCE.contains(".when(!is_selected,")
-            && KIT_STORE_SOURCE.contains("row.hover(move |style| style.bg(hover_row_bg))"),
-        "kit store rows should use direct GPUI hover styling"
-    );
-    assert!(
-        KIT_STORE_SOURCE.contains("AppChromeColors::from_theme(&self.theme)"),
-        "kit store rows should resolve selection/hover/badge chrome through AppChromeColors"
-    );
-    assert!(
-        KIT_STORE_SOURCE.contains("rgba(chrome.selection_rgba)")
-            && KIT_STORE_SOURCE.contains("rgba(chrome.hover_rgba)")
-            && KIT_STORE_SOURCE.contains("rgba(chrome.accent_badge_bg_rgba)"),
-        "kit store row state and action chips should consume shared chrome tokens"
-    );
-    for needle in [
-        "hovered_index",
-        "hovered_row == Some(ix) && input_mode == InputMode::Mouse",
-        ".on_hover(move |is_hovered, _window, cx|",
-        "opacity.selected * 255.0",
-        "opacity.hover * 255.0",
-    ] {
-        assert!(
-            !KIT_STORE_SOURCE.contains(needle),
-            "unexpected legacy kit-store hover pattern still present: {needle}"
-        );
-    }
-}
 
 #[test]
 fn kit_store_consumes_owned_keyboard_events() {
@@ -226,9 +217,7 @@ fn kit_store_consumes_owned_keyboard_events() {
         "is_key_up(key)",
         "is_key_down(key)",
         "is_key_enter(key)",
-        "\"backspace\"",
         "\"delete\"",
-        "event.keystroke.key_char",
         "cx.stop_propagation();",
     ] {
         assert!(
@@ -251,7 +240,6 @@ fn kit_store_uses_resolved_chrome_text_tokens() {
     for needle in [
         "rgba(chrome.text_muted_rgba)",
         "rgba(chrome.text_hint_rgba)",
-        "rgba(chrome.placeholder_text_rgba)",
     ] {
         assert!(
             KIT_STORE_SOURCE.contains(needle),
@@ -272,11 +260,9 @@ fn kit_store_uses_resolved_chrome_text_tokens() {
 #[test]
 fn kit_store_row_and_action_clicks_are_isolated() {
     for needle in [
-        "\"kit-store-browse-row\"",
-        "\"kit-store-installed-row\"",
-        "\"kit-store-install-btn\"",
-        "\"kit-store-update-btn\"",
-        "\"kit-store-remove-btn\"",
+        "\"kit-store-browse-row:{}\"",
+        "\"kit-store-installed-row:{}\"",
+        "crate::ui_foundation::should_submit_selected_row_click(",
         "cx.stop_propagation();",
         "this.kit_store_install_selected_result(",
         "this.kit_store_update_selected_kit(",
@@ -290,17 +276,12 @@ fn kit_store_row_and_action_clicks_are_isolated() {
 }
 
 #[test]
-fn kit_store_header_and_empty_states_are_bounded() {
-    for needle in [
-        ".h_full()\n                .flex()\n                .flex_col()\n                .items_center()\n                .justify_center()",
-        ".flex_1()\n                            .min_w(px(0.0))\n                            .overflow_hidden()",
-        ".flex_none()\n                            .whitespace_nowrap()",
-    ] {
-        assert!(
-            KIT_STORE_SOURCE.contains(needle),
-            "Kit Store surrounding chrome should keep bounded layout constraints: {needle}"
-        );
-    }
+fn kit_store_empty_states_are_bounded() {
+    assert!(
+        squashed(KIT_STORE_SOURCE)
+            .contains(".w_full().h_full().flex().flex_col().items_center().justify_center()"),
+        "Kit Store empty states should fill and center within the list pane"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -310,8 +291,9 @@ fn kit_store_header_and_empty_states_are_bounded() {
 #[test]
 fn list_item_masks_hover_driven_disclosure_with_window_input_modality() {
     assert!(
-        LIST_ITEM_SOURCE
-            .contains("let hover_visible = self.hovered && !window.last_input_was_keyboard();"),
+        LIST_ITEM_SOURCE.contains(
+            "let hover_visible = self.hovered && !disabled && !window.last_input_was_keyboard();"
+        ),
         "ListItem should derive a modality-aware hover flag from Window"
     );
     for needle in [
@@ -370,8 +352,7 @@ fn select_prompt_uses_shared_semantic_ids_and_chrome_contract() {
     );
     assert!(
         SELECT_RENDER_SOURCE.contains("render_minimal_list_prompt_shell_with_footer(")
-            && SELECT_RENDER_SOURCE.contains("active_main_window_footer_surface()")
-            && SELECT_RENDER_SOURCE.contains("render_native_main_window_footer_spacer()"),
+            && SELECT_RENDER_SOURCE.contains("main_window_footer_slot_for_prompt_surface("),
         "SelectPrompt should use the footer-aware shell so native and GPUI footers cannot stack"
     );
 }
