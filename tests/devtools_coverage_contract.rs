@@ -135,7 +135,7 @@ fn coverage_pins_dictation_states_media_and_privacy_boundaries() {
         "src/dictation/runtime.rs",
         "src/dictation/types.rs",
         "src/dictation/setup.rs",
-        "src/main_entry/runtime_tray_hotkeys.rs",
+        "src/main_entry/app_run_setup.rs",
     ] {
         assert!(
             COVERAGE.contains(needle),
@@ -271,7 +271,7 @@ fn coverage_source_files_exist_for_notes_and_dictation() {
         "src/dictation/capture.rs",
         "src/dictation/device.rs",
         "src/dictation/transcription.rs",
-        "src/main_entry/runtime_tray_hotkeys.rs",
+        "src/main_entry/app_run_setup.rs",
         "src/ai/agent_chat/ui/ui_variant.rs",
         "src/ai/focused_text/platform_bridge.rs",
         "src/ai/agent_chat/launch.rs",
