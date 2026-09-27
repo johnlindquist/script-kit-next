@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 /**
- * Runtime proof for Day Page and Notes shared Markdown editor parity.
+ * Runtime proof that the Day Page uses the shared Markdown editor runtime.
  *
- * Proves the same user-facing editor runtime is observable from both windows:
+ * Proves the shared editor is observable from the Day Page (notes open under
+ * the main input, so there is no second editor window to compare against):
  * - shared component/style owner and render path
- * - shared Markdown highlighter registration/query fingerprints
+ * - Markdown highlighter registration and query fingerprints
  * - editable Markdown does not inject markdown_inline per inline node
- * - long Markdown is accepted by both editors
+ * - long Markdown is accepted
  * - editor scroll metrics are exposed and getElements remains fast
  */
 
@@ -22,7 +23,7 @@ const OUT_PATH = ".test-output/day-notes-preview-renderer-parity-probe.json";
 
 const checks: Array<{ name: string; ok: boolean; detail: Json }> = [];
 const failures: string[] = [];
-const timings: Record<string, number[]> = { notesGetElementsMs: [], dayGetElementsMs: [] };
+const timings: Record<string, number[]> = { dayGetElementsMs: [] };
 
 function check(name: string, ok: boolean, detail: Json = {}) {
   checks.push({ name, ok, detail });
@@ -87,7 +88,7 @@ function p95(values: number[]): number {
 
 async function timedGetElements(
   driver: Driver,
-  label: "notesGetElementsMs" | "dayGetElementsMs",
+  label: "dayGetElementsMs",
   request: Json,
 ): Promise<Json> {
   const start = performance.now();
@@ -110,14 +111,6 @@ async function gpuiKey(
   };
   if (target) payload.target = target;
   return driver.request(payload, { expect: "simulateGpuiEventResult", timeoutMs: 5000 });
-}
-
-async function notesState(driver: Driver): Promise<Json> {
-  const result = (await driver.request(
-    { type: "getState", target: { type: "kind", kind: "notes", index: 0 } },
-    { expect: "stateResult", timeoutMs: 5000 },
-  )) as Json;
-  return (result.notes ?? result) as Json;
 }
 
 async function currentState(driver: Driver): Promise<Json> {
@@ -331,89 +324,6 @@ try {
     bytes: new TextEncoder().encode(longMarkdown).length,
   });
 
-  driver.send({ type: "openNotes", requestId: `${runId}-open-notes` });
-  await Bun.sleep(700);
-
-  const setNotes = (await driver.request(
-    {
-      type: "batch",
-      requestId: `${runId}-set-notes-long-markdown`,
-      target: { type: "kind", kind: "notes", index: 0 },
-      commands: [{ type: "setInput", text: longMarkdown }],
-      options: { stopOnError: true, timeout: 10_000 },
-    },
-    { expect: "batchResult", timeoutMs: 11_000 },
-  )) as Json;
-  check("set_notes_long_markdown", setNotes.success === true, { batch: setNotes });
-
-  let notesElements = await timedGetElements(driver, "notesGetElementsMs", {
-    target: { type: "kind", kind: "notes", index: 0 },
-    limit: 100,
-  });
-  const notesEditor = findSemantic(notesElements, "input:notes-editor");
-  const notesRuntime = editorRuntime(notesEditor);
-  const notesScrollBefore = scrollMetrics(notesRuntime);
-
-  check("notes_editor_present", Boolean(notesEditor), { focusedSemanticId: notesElements.focusedSemanticId ?? null });
-  check("notes_long_markdown_echo_matches", notesEditor?.value === longMarkdown, {
-    expectedChars: longMarkdown.length,
-    actualChars: typeof notesEditor?.value === "string" ? notesEditor.value.length : null,
-  });
-  check("notes_scroll_metrics_available", notesScrollBefore?.available === true, { scroll: notesScrollBefore });
-  check("notes_editor_viewport_not_collapsed", Number(notesScrollBefore?.clientHeight ?? 0) >= 100, {
-    scroll: notesScrollBefore,
-  });
-  check("notes_scroll_can_scroll_y", Number(notesScrollBefore?.maxScrollTop ?? 0) > 0 || notesScrollBefore?.canScrollY === true, {
-    scroll: notesScrollBefore,
-  });
-  const notesLinkHighlights = markdownLinkHighlightRanges(notesRuntime);
-  check("notes_markdown_link_highlight_ranges_present", Number(notesLinkHighlights?.count ?? 0) > 0, {
-    ranges: notesLinkHighlights,
-  });
-
-  await gpuiKey(driver, "pageup", { type: "kind", kind: "notes", index: 0 });
-  await Bun.sleep(180);
-  notesElements = await timedGetElements(driver, "notesGetElementsMs", {
-    target: { type: "kind", kind: "notes", index: 0 },
-    limit: 100,
-  });
-  const notesScrollAfter = scrollMetrics(editorRuntime(findSemantic(notesElements, "input:notes-editor")));
-  check(
-    "notes_scroll_position_changed",
-    Number(notesScrollAfter?.scrollTop ?? 0) !== Number(notesScrollBefore?.scrollTop ?? 0),
-    { before: notesScrollBefore, after: notesScrollAfter },
-  );
-
-  await gpuiKey(driver, "p", { type: "kind", kind: "notes", index: 0 }, ["cmd", "shift"]);
-  await Bun.sleep(250);
-  const previewState = await notesState(driver);
-  const previewAnchor = (previewState.previewAnchor ?? {}) as Json;
-  check(
-    "notes_preview_enabled",
-    previewState.view?.previewEnabled === true || previewAnchor.previewEnabled === true,
-    { view: previewState.view ?? null, previewAnchor },
-  );
-  check("notes_preview_anchor_available", previewAnchor.available === true, { previewAnchor });
-  check("notes_preview_uses_shared_owner", previewAnchor.owner === "components.notes_editor", {
-    owner: previewAnchor.owner ?? null,
-    previewAnchor,
-  });
-  check(
-    "notes_preview_uses_shared_render_path",
-    previewAnchor.renderPath === "components.notes_editor.render_preview",
-    { renderPath: previewAnchor.renderPath ?? null, previewAnchor },
-  );
-  check(
-    "notes_preview_scroll_metrics_available",
-    previewAnchor.scrollMetricsAvailable === true && previewAnchor.scroll?.available === true,
-    { previewAnchor },
-  );
-  check(
-    "notes_preview_scroll_can_scroll_y",
-    Number(previewAnchor.scroll?.maxScrollTop ?? 0) > 0 || previewAnchor.scroll?.canScrollY === true,
-    { scroll: previewAnchor.scroll ?? null },
-  );
-
   const dayState = await openDayPage(driver, runId);
   check("opened_day_page", dayState.promptType === "dayPage", {
     promptType: dayState.promptType ?? null,
@@ -466,42 +376,28 @@ try {
     { before: dayScrollBefore, after: dayScrollAfter },
   );
 
-  const notesStyle = notesEditor?.style ?? null;
   const dayStyle = dayEditor?.style ?? null;
-  check("shared_style_owner_matches", notesStyle?.owner === dayStyle?.owner && dayStyle?.owner === "components.notes_editor", {
-    notes: notesStyle?.owner ?? null,
+  check("shared_style_owner_matches", dayStyle?.owner === "components.notes_editor", {
     day: dayStyle?.owner ?? null,
   });
-  check(
-    "shared_render_path_matches",
-    notesStyle?.inputRenderPath === dayStyle?.inputRenderPath &&
-      dayStyle?.inputRenderPath === "components.notes_editor.render_input",
-    { notes: notesStyle?.inputRenderPath ?? null, day: dayStyle?.inputRenderPath ?? null },
-  );
-  check("syntax_language_matches", notesRuntime?.language === "markdown" && dayRuntime?.language === "markdown", {
-    notes: notesRuntime?.language ?? null,
+  check("shared_render_path_matches", dayStyle?.inputRenderPath === "components.notes_editor.render_input", {
+    day: dayStyle?.inputRenderPath ?? null,
+  });
+  check("syntax_language_matches", dayRuntime?.language === "markdown", {
     day: dayRuntime?.language ?? null,
   });
-  check("markdown_highlighter_registered", notesRuntime?.markdownRegistered === true && dayRuntime?.markdownRegistered === true, {
-    notes: notesRuntime?.markdownRegistered ?? null,
+  check("markdown_highlighter_registered", dayRuntime?.markdownRegistered === true, {
     day: dayRuntime?.markdownRegistered ?? null,
   });
+  check("markdown_inline_highlighter_registered", dayRuntime?.markdownInlineRegistered === true, {
+    day: dayRuntime?.markdownInlineRegistered ?? null,
+  });
   check(
-    "markdown_inline_highlighter_registered",
-    notesRuntime?.markdownInlineRegistered === true && dayRuntime?.markdownInlineRegistered === true,
-    { notes: notesRuntime?.markdownInlineRegistered ?? null, day: dayRuntime?.markdownInlineRegistered ?? null },
-  );
-  check(
-    "markdown_query_fingerprint_matches",
-    notesRuntime?.highlightQueryFingerprint === dayRuntime?.highlightQueryFingerprint &&
-      notesRuntime?.injectionQueryFingerprint === dayRuntime?.injectionQueryFingerprint &&
-      notesRuntime?.inlineHighlightQueryFingerprint === dayRuntime?.inlineHighlightQueryFingerprint,
+    "markdown_query_fingerprints_present",
+    Boolean(dayRuntime?.highlightQueryFingerprint) &&
+      Boolean(dayRuntime?.injectionQueryFingerprint) &&
+      Boolean(dayRuntime?.inlineHighlightQueryFingerprint),
     {
-      notes: {
-        highlight: notesRuntime?.highlightQueryFingerprint ?? null,
-        injection: notesRuntime?.injectionQueryFingerprint ?? null,
-        inline: notesRuntime?.inlineHighlightQueryFingerprint ?? null,
-      },
       day: {
         highlight: dayRuntime?.highlightQueryFingerprint ?? null,
         injection: dayRuntime?.injectionQueryFingerprint ?? null,
@@ -511,18 +407,12 @@ try {
   );
   check(
     "markdown_injection_languages_match",
-    JSON.stringify(notesRuntime?.injectionLanguages ?? null) === JSON.stringify(["html", "toml", "yaml"]) &&
-      JSON.stringify(notesRuntime?.injectionLanguages ?? null) === JSON.stringify(dayRuntime?.injectionLanguages ?? null),
-    { notes: notesRuntime?.injectionLanguages ?? null, day: dayRuntime?.injectionLanguages ?? null },
+    JSON.stringify(dayRuntime?.injectionLanguages ?? null) === JSON.stringify(["html", "toml", "yaml"]),
+    { day: dayRuntime?.injectionLanguages ?? null },
   );
-  check(
-    "inline_markdown_injection_disabled",
-    notesRuntime?.inlineMarkdownInjectionDisabled === true && dayRuntime?.inlineMarkdownInjectionDisabled === true,
-    {
-      notes: notesRuntime?.inlineMarkdownInjectionDisabled ?? null,
-      day: dayRuntime?.inlineMarkdownInjectionDisabled ?? null,
-    },
-  );
+  check("inline_markdown_injection_disabled", dayRuntime?.inlineMarkdownInjectionDisabled === true, {
+    day: dayRuntime?.inlineMarkdownInjectionDisabled ?? null,
+  });
 
   const readModeMarkdown = [
     `# Day read mode ${runId}`,
@@ -576,15 +466,8 @@ try {
     dayPage: editModeState.dayPage ?? null,
   });
 
-  const notesP95 = p95(timings.notesGetElementsMs);
   const dayP95 = p95(timings.dayGetElementsMs);
-  const dayRatio = dayP95 / Math.max(1, notesP95);
-  check("scroll_responsiveness_under_budget", notesP95 <= 250 && dayP95 <= 250 && (dayP95 <= 25 || dayRatio <= 2.0), {
-    notesP95,
-    dayP95,
-    ratio: Number(dayRatio.toFixed(2)),
-    timings,
-  });
+  check("scroll_responsiveness_under_budget", dayP95 <= 250, { dayP95, timings });
 
   const appLog = existsSync(driver.logPath) ? readFileSync(driver.logPath, "utf8") : "";
   const unknownWarningCount = (appLog.match(/unknown_warning_count=[1-9][0-9]*/g) ?? []).length;

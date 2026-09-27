@@ -217,12 +217,11 @@ let closeError: string | null = null;
 let runtimeError: string | null = null;
 let runtimeStage = "launch";
 let settingsProof: Obj = {};
-let notesProof: Obj = {};
 let dayPageProof: Obj = {};
 let settingsObservation: RuntimeTargetObservation | null = null;
-let notesObservation: RuntimeTargetObservation | null = null;
+let dayPageObservation: RuntimeTargetObservation | null = null;
 let observedSettingsAnalysis: ReturnType<typeof analyzeLayout> | null = null;
-let observedNotesFits: TextFit[] = [];
+let observedDayPageFits: TextFit[] = [];
 
 try {
   driver = await Driver.launch({ immutableArtifact: runtimeArtifactFromEnvironment().reference, binary,
@@ -282,47 +281,6 @@ try {
   settingsObservation = await observeRuntimeTaskTarget(driver, binary, { type: "main" });
   observedSettingsAnalysis = settingsAnalysis;
 
-  runtimeStage = "notes-text-fit";
-  driver.send({ type: "openNotes", requestId: "pf006-open-notes" });
-  await poll(
-    "Notes target",
-    () => driver!.listAutomationWindows(),
-    (response) => asArray(asObj(response).windows).some((entry) => String(asObj(entry).kind ?? "").toLowerCase() === "notes"),
-  );
-  await driver.request({
-    type: "batch",
-    target: { type: "kind", kind: "notes", index: 0 },
-    commands: [{ type: "setInput", text: "# Capture heading\nBody line for shaped proof" }],
-    options: { stopOnError: true, rollbackOnError: false, timeout: 8_000 },
-  }, { expect: "batchResult", timeoutMs: 10_000 });
-  const notesLayout = await poll(
-    "Notes shaped text",
-    () => driver!.getLayoutInfo({ target: { type: "kind", kind: "notes", index: 0 } }, { timeoutMs: 5_000 }),
-    (layout) => textFitMeasurements(asObj(layout)).some((fit) => fit.semanticId === "input:notes-editor"),
-  );
-  const notesFits = textFitMeasurements(asObj(notesLayout)).filter(
-    (fit) => fit.semanticId === "input:notes-editor",
-  );
-  const notesSummary = fitSummary(notesFits);
-  assert(notesSummary.count >= 2, "Notes did not expose heading/body shaped lines");
-  assert(notesSummary.fullDisplayPass, "Notes shaped glyphs are clipped, occluded, stale, or font-pending");
-  assert(notesSummary.rawContentReturned === false, "Notes text proof returned raw content");
-  notesProof = notesSummary;
-  notesObservation = await observeRuntimeTaskTarget(driver, binary, {
-    type: "kind",
-    kind: "notes",
-    index: 0,
-  });
-  observedNotesFits = notesFits;
-
-  // Toggle the same owned Notes window closed before moving the main window to Today.
-  driver.send({ type: "openNotes", requestId: "pf006-close-notes" });
-  await poll(
-    "Notes cleanup before Today",
-    () => driver!.listAutomationWindows(),
-    (response) => !asArray(asObj(response).windows).some((entry) => String(asObj(entry).kind ?? "").toLowerCase() === "notes"),
-  );
-
   runtimeStage = "day-page-text-fit";
   await openDayPage(driver, `pf006-${process.pid}`);
   await driver.batch([
@@ -341,6 +299,8 @@ try {
   assert(daySummary.fullDisplayPass, "Day Page shaped glyphs are clipped, occluded, stale, or font-pending");
   assert(daySummary.rawContentReturned === false, "Day Page text proof returned raw content");
   dayPageProof = daySummary;
+  dayPageObservation = await observeRuntimeTaskTarget(driver, binary, { type: "main" });
+  observedDayPageFits = dayFits;
   runtimeStage = "complete";
 } catch (error) {
   runtimeError = error instanceof Error ? error.message : "UnknownError";
@@ -428,7 +388,7 @@ const layoutPrepared = runtimePassed && cleanupPassed && settingsObservation && 
       cleanup,
       controls: layoutNegativeControls,
     });
-const textPrepared = runtimePassed && cleanupPassed && notesObservation && observedNotesFits.length > 0 &&
+const textPrepared = runtimePassed && cleanupPassed && dayPageObservation && observedDayPageFits.length > 0 &&
     Object.values(textNegativeControls).every(Boolean)
   ? prepareRuntimeTaskProof("PF-006", {
       schemaVersion: 2,
@@ -436,21 +396,20 @@ const textPrepared = runtimePassed && cleanupPassed && notesObservation && obser
       command: "text.measure",
       classification: "ok",
       proofMode: "fit",
-      ...notesObservation,
+      ...dayPageObservation,
       textSummary: {
-        inputLength: observedNotesFits.reduce((count, fit) => count + Number(fit.graphemeCount), 0),
-        inputFingerprint: observedNotesFits[0].contentFingerprint,
+        inputLength: observedDayPageFits.reduce((count, fit) => count + Number(fit.graphemeCount), 0),
+        inputFingerprint: observedDayPageFits[0].contentFingerprint,
       },
-      rows: observedNotesFits.map((fit) => ({
+      rows: observedDayPageFits.map((fit) => ({
         semanticId: fit.semanticId,
         textLength: Number(fit.graphemeCount),
         fingerprint: fit.contentFingerprint,
       })),
-      textFits: observedNotesFits,
-      notes: notesProof,
+      textFits: observedDayPageFits,
       dayPage: dayPageProof,
       evidence: {
-        rendered: { notes: notesProof, dayPage: dayPageProof },
+        rendered: { dayPage: dayPageProof },
       },
       cleanup,
       missingPrimitives: [],

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Runtime proof for deeplink hover discoverability (Day Page + Notes window):
+ * Runtime proof for deeplink hover discoverability on the Day Page:
  * - Link highlight runtime info exposes pixel bounds for each link range.
  * - Moving the mouse over a kit:// link sets the hovered deeplink state
  *   (vendored input hover tracking → hoveredDeeplink href in runtime info).
@@ -97,7 +97,7 @@ async function mouseMove(driver: Driver, x: number, y: number, target?: Json) {
 
 async function probeSurface(opts: {
   driver: Driver;
-  surface: "dayPage" | "notes";
+  surface: "dayPage";
   target: Json | undefined;
   editorSemanticId: string;
   getElements: () => Promise<Json>;
@@ -180,47 +180,6 @@ try {
     getHoverHintReceipt: async () => {
       const state = asObj(await driver.getState({ timeoutMs: 8000 }));
       const hint = asObj(state.dayPage).deeplinkHoverHint;
-      return hint && typeof hint === "object" ? (hint as Obj) : null;
-    },
-  });
-
-  // --- Notes window ---
-  driver.send({ type: "openNotes" });
-  const notesOpen = await pollUntil("notes-open", async () => {
-    const res = asObj(await driver.listAutomationWindows({ timeoutMs: 8000 }));
-    const windows = (res.windows as Json[] | undefined) ?? [];
-    return windows.map(asObj).some((window) => String(window.kind) === "notes");
-  });
-  check("notes_window_opened", notesOpen);
-
-  const notesTarget: Json = { type: "kind", kind: "notes" };
-  const seedNotes = asObj(
-    await driver.request(
-      {
-        type: "batch",
-        target: notesTarget,
-        commands: [{ type: "setInput", text: LINK_MARKDOWN }],
-        options: { stopOnError: true, timeout: 8000 },
-      },
-      { expect: "batchResult", timeoutMs: 9000 },
-    ),
-  );
-  check("notes_link_seeded", seedNotes.success === true, { batch: seedNotes });
-
-  await probeSurface({
-    driver,
-    surface: "notes",
-    target: notesTarget,
-    editorSemanticId: "input:notes-editor",
-    getElements: () => driver.getElements({ target: notesTarget, limit: 300 }, { timeoutMs: 8000 }),
-    getHoverHintReceipt: async () => {
-      const res = asObj(
-        await driver.request(
-          { type: "getState", target: notesTarget },
-          { expect: "stateResult", timeoutMs: 8000 },
-        ),
-      );
-      const hint = asObj(res.notes).deeplinkHoverHint;
       return hint && typeof hint === "object" ? (hint as Obj) : null;
     },
   });

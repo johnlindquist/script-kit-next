@@ -159,7 +159,7 @@ function assertCleanup(cleanupValue: unknown): Obj {
 
 function assertTaskSpecificObservation(taskId: RuntimeTaskProofId, candidate: Obj) {
   if (taskId === "PF-006") {
-    for (const surface of ["notes", "dayPage"]) {
+    for (const surface of ["dayPage"]) {
       const summary = asObject(candidate[surface]);
       if (
         !Number.isSafeInteger(summary.count) || Number(summary.count) < 2 ||

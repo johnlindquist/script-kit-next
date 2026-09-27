@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Visual proof for the deeplink hover hint chip: hover a kit:// link in the
- * Day Page and the Notes window, screenshot each surface while hovered (and
- * once un-hovered for contrast). A human/agent reviews the PNGs to confirm
+ * Day Page, screenshot it while hovered (and once un-hovered for contrast). A human/agent reviews the PNGs to confirm
  * the chip paints; runtime state is asserted by deeplink-hover-hint-probe.ts.
  */
 import { join, resolve } from "node:path";
@@ -74,7 +73,7 @@ try {
   await driver.batch([{ type: "setInput", text: LINK_MARKDOWN }], { timeoutMs: 8000 });
   await Bun.sleep(400);
 
-  let elements = await driver.getElements({ target: { type: "main" }, limit: 300 }, { timeoutMs: 8000 });
+  const elements = await driver.getElements({ target: { type: "main" }, limit: 300 }, { timeoutMs: 8000 });
   const dayCenter = linkCenter(elements, "input:day-page-editor");
   results.dayCenter = dayCenter;
   if (dayCenter) {
@@ -90,42 +89,6 @@ try {
     await Bun.sleep(400);
     results.dayIdle = asObj(
       await driver.captureScreenshot({ savePath: join(OUT_DIR, "day-page-idle.png") }),
-    ).error ?? "saved";
-  }
-
-  driver.send({ type: "openNotes" });
-  await Bun.sleep(1200);
-  const notesTarget: Json = { type: "kind", kind: "notes" };
-  await driver.request(
-    {
-      type: "batch",
-      target: notesTarget,
-      commands: [{ type: "setInput", text: LINK_MARKDOWN }],
-      options: { stopOnError: true, timeout: 8000 },
-    },
-    { expect: "batchResult", timeoutMs: 9000 },
-  );
-  await Bun.sleep(400);
-
-  elements = await driver.getElements({ target: notesTarget, limit: 300 }, { timeoutMs: 8000 });
-  const notesCenter = linkCenter(elements, "input:notes-editor");
-  results.notesCenter = notesCenter;
-  if (notesCenter) {
-    await driver.simulateGpuiEvent(
-      { type: "mouseMove", x: notesCenter.x, y: notesCenter.y },
-      { target: notesTarget, timeoutMs: 8000 },
-    );
-    results.notesHoverReceipt = await pollHoverReceipt(async () => {
-      const res = asObj(
-        await driver.request(
-          { type: "getState", target: notesTarget },
-          { expect: "stateResult", timeoutMs: 8000 },
-        ),
-      );
-      return asObj(res.notes).deeplinkHoverHint ?? null;
-    });
-    results.notesHover = asObj(
-      await driver.captureScreenshot({ target: notesTarget, savePath: join(OUT_DIR, "notes-hovered.png") }),
     ).error ?? "saved";
   }
 } finally {
