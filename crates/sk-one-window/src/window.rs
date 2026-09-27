@@ -12,6 +12,7 @@ mod staging;
 mod tests;
 mod text;
 mod time;
+mod view_stage;
 mod views;
 
 use crate::Ms;
@@ -180,6 +181,13 @@ pub enum Event {
     /// Shows a line above the input until cleared; one a view set also goes when no view is open.
     Line(Option<SlotLine>),
     Tick,
+    /// ⌘K in a view: what it has focused, and the actions it lists for it.
+    Stage {
+        subject: Subject,
+        rows: Vec<Row>,
+    },
+    /// The view stopped acting on what it staged.
+    LetGo,
 }
 
 impl Event {
@@ -664,6 +672,11 @@ impl OneWindow {
                 true
             }
             Event::Tick => true,
+            Event::Stage { subject, rows } => {
+                self.stage_from_view(subject, rows);
+                true
+            }
+            Event::LetGo => self.let_go(),
         }
     }
 }
