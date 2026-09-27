@@ -1,0 +1,130 @@
+//! The main window's height: how tall the list wants it, and where the reducer's height
+//! decisions put it.
+
+use std::time::Duration;
+
+use gpui::{AppContext as _, Context};
+use sk_one_window::{HeightDecision, HeightMode};
+
+use crate::{AppView, MainWindowMode, ScriptListApp};
+
+/// How often a shrinking window is redrawn.
+const SHRINK_FRAME: Duration = Duration::from_millis(8);
+
+impl ScriptListApp {
+    /// How tall the launcher may get in its current mode.
+    fn one_window_height_ceiling(&self) -> f32 {
+        match self.main_window_mode {
+            MainWindowMode::Mini => crate::window_resize::main_window_full_height(),
+            MainWindowMode::Full => crate::window_resize::current_standard_height(),
+        }
+    }
+
+    /// The line above the input, the input, the list as drawn, and the floating footer's zone.
+    pub(super) fn one_window_natural_height(&self) -> f32 {
+        if self.one_window_work_view_open() {
+            return self.one_window_height_ceiling();
+        }
+        if let Some(px) = self.one_window_view_height() {
+            return px.min(self.one_window_height_ceiling());
+        }
+        let (grouped, _) = self.get_grouped_results_cached();
+        let heights = crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
+            self.current_main_menu_theme,
+        );
+        let list = crate::scrolling::list_geometry::content_height(grouped.len(), |ix| {
+            heights.row_height(&grouped[ix], ix)
+        });
+        let chrome = sk_one_window::contract::app::SLOT_LINE_PX
+            + f32::from(crate::main_list_header_overlay_height(
+                self.current_main_menu_theme.def(),
+            ))
+            + crate::footer_popup::main_window_footer_reservation_height();
+        (chrome + list + self.one_window_view_extra_height()).min(self.one_window_height_ceiling())
+    }
+
+    pub(super) fn one_window_apply_height(
+        &mut self,
+        decision: HeightDecision,
+        cx: &mut Context<Self>,
+    ) {
+        self.one_window_host.height_generation += 1;
+        let generation = self.one_window_host.height_generation;
+        if decision.mode != HeightMode::Shrink {
+            self.one_window_set_height(decision.px, cx);
+            return;
+        }
+        let (from, to) = (decision.from, decision.px);
+        let span = Duration::from_millis(decision.anim_ms.max(1));
+        self.one_window_set_height(from, cx);
+        cx.spawn(async move |this, cx| {
+            let start = cx.background_executor().now();
+            loop {
+                cx.background_executor().timer(SHRINK_FRAME).await;
+                let t = (cx
+                    .background_executor()
+                    .now()
+                    .saturating_duration_since(start)
+                    .as_secs_f32()
+                    / span.as_secs_f32())
+                .min(1.0);
+                let height = from + (to - from) * sk_one_window::contract::shrink_ease(t);
+                let drawing = this
+                    .update(cx, |app, cx| {
+                        let current = app.one_window_host.height_generation == generation;
+                        if current {
+                            app.one_window_set_height(height, cx);
+                        }
+                        current
+                    })
+                    .unwrap_or(false);
+                if !drawing || t >= 1.0 {
+                    break;
+                }
+            }
+        })
+        .detach();
+    }
+
+    fn one_window_set_height(&mut self, height: f32, cx: &mut Context<Self>) {
+        self.one_window_host.height = Some(height);
+        crate::window_resize::set_main_window_height(height);
+        let Some(handle) = self.one_window_host.window else {
+            return;
+        };
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return;
+        }
+        let height = height.min(self.one_window_height_ceiling());
+        cx.defer(move |cx| {
+            let _ = cx.update_window(handle, |_, window, cx| {
+                if crate::runtime_policy::is_owned_evaluation() {
+                    // The owned window is hidden and has no screen edge to keep.
+                    let width = window.viewport_size().width;
+                    window.resize(gpui::size(width, gpui::px(height)));
+                } else {
+                    // The native path keeps the top edge, so the input never moves.
+                    crate::window_ops::queue_resize_with_width(
+                        height,
+                        Some(crate::window_resize::MAIN_WINDOW_WIDTH),
+                        window,
+                        cx,
+                    );
+                }
+            });
+        });
+    }
+
+    /// The window the main list draws in, where its height is applied. A height the reducer
+    /// placed before the window first drew is applied now, or the first key would snap to it.
+    pub(crate) fn one_window_rendered_in(&mut self, window: &gpui::Window, cx: &mut Context<Self>) {
+        let handle = window.window_handle();
+        if self.one_window_host.window == Some(handle) {
+            return;
+        }
+        self.one_window_host.window = Some(handle);
+        if let Some(height) = self.one_window_host.height {
+            self.one_window_set_height(height, cx);
+        }
+    }
+}

@@ -1,8 +1,7 @@
-//! Contract tests for forced-route dictation builtins and overlay route badges.
+//! Contract tests for forced-route dictation builtins.
 
 const BUILTIN_EXECUTION_SOURCE: &str = include_str!("../../src/app_execute/builtin_execution.rs");
 const BUILTINS_SOURCE: &str = include_str!("../../src/builtins/mod.rs");
-const OVERLAY_SOURCE: &str = include_str!("../../src/dictation/window.rs");
 const TYPES_SOURCE: &str = include_str!("../../src/dictation/types.rs");
 const EXECUTION_SCRIPTS_SOURCE: &str = include_str!("../../src/app_impl/execution_scripts.rs");
 
@@ -37,14 +36,6 @@ fn forced_route_builtins_are_no_main_window() {
 }
 
 #[test]
-fn overlay_state_carries_target() {
-    assert!(
-        OVERLAY_SOURCE.contains("pub target: crate::dictation::DictationTarget")
-            || OVERLAY_SOURCE.contains("pub target: DictationTarget")
-    );
-}
-
-#[test]
 fn dictation_target_exposes_overlay_labels() {
     assert!(TYPES_SOURCE.contains("pub fn overlay_label(self) -> &'static str"));
     assert!(TYPES_SOURCE.contains(r#""Script Kit""#));
@@ -52,27 +43,6 @@ fn dictation_target_exposes_overlay_labels() {
     assert!(TYPES_SOURCE.contains(r#""Notes""#));
     assert!(TYPES_SOURCE.contains(r#""Agent""#));
     assert!(TYPES_SOURCE.contains(r#""App""#));
-}
-
-#[test]
-fn overlay_renders_target_badge() {
-    assert!(OVERLAY_SOURCE.contains("render_target_badge"));
-    assert!(OVERLAY_SOURCE.contains("TARGET_BADGE_SLOT_WIDTH_PX"));
-}
-
-#[test]
-fn overlay_target_badge_preserves_full_label_for_accessibility() {
-    assert!(
-        OVERLAY_SOURCE.contains("let target_label = target_badge_label(self.state.target);")
-            && OVERLAY_SOURCE.contains("Tooltip::new(target_label.clone())"),
-        "fixed-width dictation target badge must expose the full label even when the visible text is clipped"
-    );
-    assert!(
-        OVERLAY_SOURCE.contains(".max_w(px(TARGET_BADGE_SLOT_WIDTH_PX - 18.0))")
-            && OVERLAY_SOURCE.contains(".text_ellipsis()")
-            && OVERLAY_SOURCE.contains(".whitespace_nowrap()"),
-        "dictation target badge text must clip predictably inside the fixed overlay width"
-    );
 }
 
 #[test]

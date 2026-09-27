@@ -753,12 +753,11 @@ async function main() {
       "main-entry",
       "notes-entry",
       "notes-close-before-settle-reopen",
-      "dictation-exit-reopen",
     ],
   );
   const rapidComplete = exactSet(
     Object.keys(rapidToggle?.receipt?.phases ?? {}),
-    ["actions", "notes", "dictation"],
+    ["actions", "notes"],
   );
   const evidenceComplete = mode === "all"
     ? mainVisualMatrixComplete
@@ -932,7 +931,6 @@ async function main() {
         "main-entry",
         "notes-entry",
         "notes-close-before-settle-reopen",
-        "dictation-exit-reopen",
       ],
     },
     executedScenarios: {

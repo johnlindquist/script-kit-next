@@ -11,7 +11,6 @@ const HISTORY_COMPACT_LIMIT: usize = 200;
 const RESOURCE_ITEMS_LIMIT: usize = 10;
 const ROOT_DICTATION_HISTORY_REFRESH_LABEL: &str = "root-dictation-history-cache";
 pub const DICTATION_HISTORY_ENTRY_VERSION: u32 = 2;
-pub const DICTATION_HISTORY_PAGE_SIZE: usize = 100;
 pub const DICTATION_HISTORY_LEGACY_UNKNOWN_TARGET_ID: &str = "legacy-unknown";
 
 fn dictation_history_entry_version() -> u32 {
@@ -126,60 +125,6 @@ impl DictationHistoryEntry {
 
     pub fn resource_uri(&self) -> String {
         format!("kit://dictation-history?id={}", self.id)
-    }
-}
-
-/// Reconcile target-scoped semantic projection with the exact entry owner
-/// used by the actual painted row and the active scroll receipt.
-pub fn apply_dictation_history_row_identities(
-    elements: &mut [crate::protocol::ElementInfo],
-    entries: &[DictationHistoryEntry],
-) {
-    let rows = elements
-        .iter_mut()
-        .filter(|element| element.element_type == crate::protocol::ElementType::Choice);
-    for (element, entry) in rows.zip(entries) {
-        element.semantic_id = entry.semantic_id();
-        element.source = Some("dictationHistory".to_string());
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DictationHistoryPage {
-    pub total_matches: usize,
-    pub visible_count: usize,
-    pub offset: usize,
-    pub rows: Vec<DictationHistoryEntry>,
-    pub has_more: bool,
-}
-
-impl DictationHistoryPage {
-    pub fn count_label(&self) -> String {
-        format!("Showing {} of {}", self.visible_count, self.total_matches)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DictationHistoryViewState {
-    Loading {
-        previous: Option<DictationHistoryPage>,
-    },
-    Failed {
-        message: String,
-        previous: Option<DictationHistoryPage>,
-    },
-    NoSavedDictation,
-    NoFilteredMatches,
-    Ready(DictationHistoryPage),
-}
-
-impl DictationHistoryViewState {
-    pub fn page(&self) -> Option<&DictationHistoryPage> {
-        match self {
-            Self::Loading { previous } | Self::Failed { previous, .. } => previous.as_ref(),
-            Self::Ready(page) => Some(page),
-            Self::NoSavedDictation | Self::NoFilteredMatches => None,
-        }
     }
 }
 
@@ -636,49 +581,6 @@ pub fn search_history(query: &str, limit: usize) -> Vec<DictationHistorySearchHi
         hit_count = hits.len(),
     );
     hits
-}
-
-pub fn search_history_page(
-    query: &str,
-    offset: usize,
-    visible_limit: usize,
-) -> std::io::Result<DictationHistoryPage> {
-    let entries = load_history_result()?;
-    let hits = rank_history_entries(entries, query, usize::MAX);
-    let total_matches = hits.len();
-    let end = offset.saturating_add(visible_limit).min(total_matches);
-    let rows = if offset >= total_matches {
-        Vec::new()
-    } else {
-        hits[offset..end]
-            .iter()
-            .map(|hit| hit.entry.clone())
-            .collect()
-    };
-    let visible_count = offset.saturating_add(rows.len()).min(total_matches);
-    Ok(DictationHistoryPage {
-        total_matches,
-        visible_count,
-        offset,
-        rows,
-        has_more: end < total_matches,
-    })
-}
-
-pub fn dictation_history_view_state(
-    query: &str,
-    visible_limit: usize,
-    previous: Option<DictationHistoryPage>,
-) -> DictationHistoryViewState {
-    match search_history_page(query, 0, visible_limit) {
-        Ok(page) if page.total_matches > 0 => DictationHistoryViewState::Ready(page),
-        Ok(_) if query.trim().is_empty() => DictationHistoryViewState::NoSavedDictation,
-        Ok(_) => DictationHistoryViewState::NoFilteredMatches,
-        Err(error) => DictationHistoryViewState::Failed {
-            message: format!("Dictation History could not be loaded: {error}"),
-            previous,
-        },
-    }
 }
 
 fn dictation_history_cache_is_fresh(cache: &DictationHistoryIndexCache) -> bool {
@@ -1177,68 +1079,6 @@ mod tests {
     }
 
     #[test]
-    fn dictation_history_semantic_projection_uses_stable_renderer_and_scroll_identity() {
-        fn entry(id: &str, transcript: &str) -> DictationHistoryEntry {
-            DictationHistoryEntry {
-                version: DICTATION_HISTORY_ENTRY_VERSION,
-                id: id.to_string(),
-                timestamp: "2026-08-22T12:00:00Z".to_string(),
-                transcript: transcript.to_string(),
-                preview: transcript.to_string(),
-                target_id: "notes".to_string(),
-                target_label_snapshot: "Notes".to_string(),
-                audio_duration_ms: 1000,
-            }
-        }
-
-        let first = entry("saved-entry-1", "first private spoken transcript");
-        let second = entry("saved-entry-2", "second private spoken transcript");
-        let mut elements = vec![
-            crate::protocol::ElementInfo::input(
-                "dictation-history-filter",
-                Some("private query"),
-                true,
-            ),
-            crate::protocol::ElementInfo::list("dictation-history", 2),
-            crate::protocol::ElementInfo::redacted_choice(
-                0,
-                &first.preview,
-                &first.preview,
-                false,
-                crate::protocol::ElementContentKind::UserContent,
-            ),
-            crate::protocol::ElementInfo::redacted_choice(
-                1,
-                &second.preview,
-                &second.preview,
-                true,
-                crate::protocol::ElementContentKind::UserContent,
-            ),
-        ];
-
-        apply_dictation_history_row_identities(&mut elements, &[first.clone(), second.clone()]);
-
-        assert_eq!(elements[2].semantic_id, first.semantic_id());
-        assert_eq!(elements[3].semantic_id, second.semantic_id());
-        assert_eq!(elements[3].selected, Some(true));
-        assert_eq!(elements[3].source.as_deref(), Some("dictationHistory"));
-        let serialized = serde_json::to_string(&elements).unwrap();
-        assert!(!serialized.contains("first private spoken transcript"));
-        assert!(!serialized.contains("second private spoken transcript"));
-        assert!(!serialized.contains("private query"));
-
-        let mut reordered = vec![crate::protocol::ElementInfo::redacted_choice(
-            0,
-            &second.preview,
-            &second.preview,
-            true,
-            crate::protocol::ElementContentKind::UserContent,
-        )];
-        apply_dictation_history_row_identities(&mut reordered, &[second.clone()]);
-        assert_eq!(reordered[0].semantic_id, second.semantic_id());
-    }
-
-    #[test]
     fn dictation_history_integrity_repairs_legacy_jsonl_record_boundaries() {
         let directory = tempfile::tempdir().expect("isolated legacy JSONL fixture");
         let path = directory.path().join("dictation-history.jsonl");
@@ -1730,42 +1570,6 @@ mod tests {
     }
 
     #[test]
-    fn history_pages_report_visible_and_total_counts_without_reordering() {
-        let _env = TestEnv::new();
-        let entries = (0..125)
-            .map(|index| {
-                build_history_entry(
-                    &format!("history page transcript {index:03}"),
-                    Duration::from_secs(1),
-                    DictationTarget::NotesEditor,
-                )
-            })
-            .collect::<Vec<_>>();
-        write_history(&entries).expect("seed 125 rows");
-
-        let first = search_history_page("", 0, DICTATION_HISTORY_PAGE_SIZE).expect("first page");
-        assert_eq!(first.total_matches, 125);
-        assert_eq!(first.visible_count, 100);
-        assert_eq!(first.rows.len(), 100);
-        assert!(first.has_more);
-        assert_eq!(first.count_label(), "Showing 100 of 125");
-        let selected_id = first.rows[63].id.clone();
-
-        let expanded = search_history_page("", 0, 200).expect("expanded page");
-        assert_eq!(expanded.total_matches, 125);
-        assert_eq!(expanded.visible_count, 125);
-        assert_eq!(expanded.rows.len(), 125);
-        assert!(!expanded.has_more);
-        assert_eq!(expanded.count_label(), "Showing 125 of 125");
-        assert_eq!(expanded.rows[63].id, selected_id);
-
-        let tail = search_history_page("", 100, 100).expect("tail page");
-        assert_eq!(tail.offset, 100);
-        assert_eq!(tail.rows.len(), 25);
-        assert_eq!(tail.visible_count, 125);
-    }
-
-    #[test]
     fn legacy_targets_migrate_to_canonical_ids_without_guessing_unknown_labels() {
         let legacy = r#"{"id":"legacy-ai","timestamp":"2026-07-01T00:00:00Z","transcript":"one","preview":"one","target":"AI Chat","audio_duration_ms":1000}
 {"id":"legacy-unknown","timestamp":"2026-07-02T00:00:00Z","transcript":"two","preview":"two","target":"Studio Console","audio_duration_ms":1000}"#;
@@ -1787,36 +1591,6 @@ mod tests {
             .expect("legacy AI entry");
         assert_eq!(ai.target_id, DictationTarget::TabAiHarness.sticky_label());
         assert_eq!(ai.display_target_label(), "Agent Chat");
-    }
-
-    #[test]
-    fn view_state_distinguishes_empty_no_match_and_failure_with_prior_rows() {
-        let _env = TestEnv::new();
-        assert!(matches!(
-            dictation_history_view_state("", 100, None),
-            DictationHistoryViewState::NoSavedDictation
-        ));
-        assert!(matches!(
-            dictation_history_view_state("missing", 100, None),
-            DictationHistoryViewState::NoFilteredMatches
-        ));
-
-        let prior = DictationHistoryPage {
-            total_matches: 1,
-            visible_count: 1,
-            offset: 0,
-            rows: vec![build_history_entry(
-                "retained row",
-                Duration::from_secs(1),
-                DictationTarget::MainWindowPrompt,
-            )],
-            has_more: false,
-        };
-        std::fs::create_dir_all(history_path()).expect("make history path unreadable as a file");
-        invalidate_history_cache();
-        let failed = dictation_history_view_state("", 100, Some(prior.clone()));
-        assert!(matches!(failed, DictationHistoryViewState::Failed { .. }));
-        assert_eq!(failed.page(), Some(&prior));
     }
 
     #[test]

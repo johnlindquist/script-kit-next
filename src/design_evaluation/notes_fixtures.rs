@@ -120,24 +120,6 @@ fn require_fixture_parent(
     Ok(generation)
 }
 
-fn mounted_command_bar_target(
-    parent: &crate::protocol::AutomationWindowInfo,
-    dialog: Entity<crate::actions::ActionsDialog>,
-    cx: &App,
-) -> Result<crate::protocol::AutomationWindowInfo> {
-    crate::windows::list_automation_windows()
-        .into_iter()
-        .find(|child| {
-            child.parent_window_id.as_deref() == Some(parent.id.as_str())
-                && child.parent_window_generation == parent.generation
-                && crate::windows::automation_surface_collector::exact_actions_dialog_entity(
-                    child, cx,
-                )
-                .is_some_and(|actual| actual.entity_id() == dialog.entity_id())
-        })
-        .context("fixture_command_bar_not_registered")
-}
-
 pub(crate) fn mount_day_page_fixture_presentation(
     fixture_id: &str,
     entity: &Entity<crate::DayPageView>,
@@ -170,11 +152,9 @@ pub(crate) fn mount_day_page_fixture_presentation(
     parent_handle.update(cx, |_, window, cx| {
         entity.update(cx, |day, cx| day.open_day_switcher(window, cx))
     })?;
-    let dialog = entity
-        .read(cx)
-        .note_switcher
-        .dialog()
-        .cloned()
-        .context("day_fixture_switcher_not_open")?;
-    mounted_command_bar_target(parent, dialog, cx)
+    anyhow::ensure!(
+        entity.read(cx).note_switcher.dialog().is_some(),
+        "day_fixture_switcher_not_open"
+    );
+    Ok(parent.clone())
 }

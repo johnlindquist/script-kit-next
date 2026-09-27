@@ -83,6 +83,33 @@ pub enum TalkEvent {
     Unread { words: String },
     /// The voice key came up: Enter for the final words.
     Release,
+    /// Talking to one place: letting go sends the words there, with no reading to pick.
+    StartTo { dest: Dest },
+}
+
+/// Where a session started for one place sends the words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dest {
+    /// The model's chat opens with the words as its first message.
+    Chat,
+    /// The words go at the end of today's note.
+    Note,
+}
+
+impl Dest {
+    fn id(self) -> &'static str {
+        match self {
+            Dest::Chat => "chat",
+            Dest::Note => "note",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Dest::Chat => talk_words::SEND_TO_MODEL,
+            Dest::Note => talk_words::ADD_TO_NOTE,
+        }
+    }
 }
 
 /// What letting go does, once Jev has read the final words.
@@ -91,6 +118,8 @@ pub enum Decision {
     Act(Reading),
     AskOnce,
     Drop,
+    /// A session for one place sends the words there.
+    Deliver(Dest),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -113,6 +142,8 @@ pub struct Talk {
     pub unread: bool,
     /// What the request reading would run.
     pub ask_row: Option<Row>,
+    /// Set when the session talks to one place.
+    pub dest: Option<Dest>,
 }
 
 pub fn word_count(text: &str) -> usize {
@@ -135,6 +166,15 @@ impl Talk {
             last: None,
             unread: false,
             ask_row: None,
+            dest: None,
+        }
+    }
+
+    /// A session whose words go to `dest` when the key comes up.
+    pub fn to_dest(n: u64, dest: Dest) -> Self {
+        Self {
+            dest: Some(dest),
+            ..Self::new(n, String::new(), String::new(), None)
         }
     }
 
@@ -147,6 +187,12 @@ impl Talk {
     /// words: while talking, the fourth word and each clause end after it; after letting go, the
     /// transcription catching up replaces the final words.
     pub fn hear(&mut self, text: &str) -> Option<(String, bool)> {
+        if self.dest.is_some() {
+            if self.phase != Phase::Asking {
+                self.heard = text.to_string();
+            }
+            return None;
+        }
         match self.phase {
             Phase::Asking => return None,
             Phase::Releasing => {
@@ -215,6 +261,9 @@ impl Talk {
             return None;
         }
         self.phase = Phase::Releasing;
+        if self.dest.is_some() {
+            return None;
+        }
         let read = self
             .answer
             .as_ref()
@@ -237,6 +286,9 @@ impl Talk {
         if self.heard.trim().is_empty() {
             return Some(Decision::Drop);
         }
+        if let Some(dest) = self.dest {
+            return Some(Decision::Deliver(dest));
+        }
         if let Some(locked) = self.locked {
             return Some(Decision::Act(locked));
         }
@@ -256,6 +308,9 @@ impl Talk {
 
     /// ⌘1 or ⌘2: while asking it decides; while talking it locks the reading.
     pub fn pick(&mut self, reading: Reading) -> Option<Reading> {
+        if self.dest.is_some() {
+            return None;
+        }
         if self.phase == Phase::Asking {
             return Some(reading);
         }
@@ -264,6 +319,9 @@ impl Talk {
     }
 
     pub fn header(&self) -> String {
+        if let Some(dest) = self.dest {
+            return talk_words::talking_to(dest == Dest::Chat).into();
+        }
         if self.phase == Phase::Asking {
             return talk_words::TOO_CLOSE.into();
         }
@@ -284,6 +342,9 @@ impl Talk {
     }
 
     pub fn enter(&self) -> EnterTarget {
+        if let Some(dest) = self.dest {
+            return EnterTarget::new(format!("voice:{}:{}", self.n, dest.id()), dest.label());
+        }
         let (id, label) = match (self.phase, self.current()) {
             (Phase::Asking, _) => ("pick", talk_words::PICK_ONE.to_string()),
             (_, Some(Reading::Type)) => ("type", talk_words::type_into(&self.app)),
@@ -293,8 +354,20 @@ impl Talk {
         EnterTarget::new(format!("voice:{}:{id}", self.n), label)
     }
 
-    /// The two readings in their fixed order, each with Jev's likelihood.
-    pub fn rows(&self) -> [Row; 2] {
+    /// The two readings in their fixed order, each with Jev's likelihood; a session for one
+    /// place lists only that place.
+    pub fn rows(&self) -> Vec<Row> {
+        if let Some(dest) = self.dest {
+            let icon = match dest {
+                Dest::Chat => "ask",
+                Dest::Note => "append",
+            };
+            return vec![
+                Row::new(format!("talk:{}", dest.id()), dest.label())
+                    .with_icon(icon)
+                    .with_sub(talk_words::WHEN_YOU_LET_GO),
+            ];
+        }
         let p = |r: Reading| {
             self.answer.as_ref().map(|a| match r {
                 Reading::Type => a.type_p,
@@ -321,11 +394,14 @@ impl Talk {
                     .unwrap_or_else(|| talk_words::LIKE_ONE_YOU_TYPE.into()),
             );
         asking.p = p(Reading::Ask);
-        [typing, asking]
+        vec![typing, asking]
     }
 
     /// Which row is highlighted; none while the window asks.
     pub fn selected(&self) -> Option<usize> {
+        if self.dest.is_some() {
+            return Some(0);
+        }
         if self.phase == Phase::Asking {
             return None;
         }
@@ -494,6 +570,26 @@ mod tests {
     }
 
     #[test]
+    fn a_session_for_one_place_lists_it_and_delivers_without_reading() {
+        let mut t = Talk::to_dest(3, Dest::Note);
+        assert_eq!(
+            t.hear("pick up milk on the way home"),
+            None,
+            "Jev isn't asked"
+        );
+        assert_eq!(t.rows().len(), 1);
+        assert_eq!(t.rows()[0].title, talk_words::ADD_TO_NOTE);
+        assert_eq!(t.selected(), Some(0));
+        assert!(t.line().is_none());
+        assert_eq!(t.pick(Reading::Type), None);
+        assert_eq!(t.release(), None);
+        assert_eq!(t.decision(), Some(Decision::Deliver(Dest::Note)));
+        let mut empty = Talk::to_dest(4, Dest::Chat);
+        empty.release();
+        assert_eq!(empty.decision(), Some(Decision::Drop));
+    }
+
+    #[test]
     fn a_locked_reading_acts_without_asking() {
         let mut t = talk();
         t.hear("whatever this is");
@@ -529,7 +625,7 @@ mod tests {
         assert!(t.line().is_none());
         t.hear("Hi Sarah thanks for");
         t.answered(answer("Hi Sarah thanks for", 0.85), None);
-        let [typing, asking] = t.rows();
+        let [typing, asking] = <[Row; 2]>::try_from(t.rows()).unwrap();
         assert_eq!(typing.title, "Type it into Mail");
         assert_eq!(typing.p, Some(0.85));
         assert_eq!(asking.title, talk_words::DO_IT_AS_REQUEST);

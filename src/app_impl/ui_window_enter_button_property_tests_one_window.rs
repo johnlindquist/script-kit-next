@@ -175,3 +175,51 @@ fn cmd_k_stages_the_row_and_lists_its_actions_in_place() {
     assert_eq!(windows_after, windows_before, "no popup window opened");
     assert!(unstaged, "Esc lets go");
 }
+
+#[test]
+fn esc_after_cmd_k_highlights_the_reducers_row() {
+    let (highlighted, sel) = in_launcher("cmd_k_esc_highlight", 0, |cx| {
+        let (app, window) = launcher(cx, Jev::Off);
+        type_into_launcher(cx, window, &app, "play");
+        wait(cx, 20);
+        app.update(cx, |app, cx| app.one_window_stage(cx));
+        wait(cx, 20);
+        key(&app, cx, Key::Escape);
+        wait(cx, 20);
+        app.update(cx, |app, _| {
+            let highlighted = app
+                .main_menu_committed_rows()
+                .iter()
+                .find(|row| row.grouped_index == app.selected_index)
+                .and_then(|row| row.selectable_ordinal);
+            (highlighted, app.one_window.list().sel)
+        })
+    });
+    assert_eq!(
+        highlighted,
+        Some(sel),
+        "after Esc the list highlights the row Enter runs, not nothing"
+    );
+}
+
+#[test]
+fn typing_give_a_script_a_shortcut_ends_on_record_a_shortcut() {
+    let label = in_launcher("shortcut_sentence", 0, |cx| {
+        let (app, window) = launcher(cx, Jev::Off);
+        app.update(cx, |app, _| {
+            app.scripts.push(fixture_command("Launch Alpha", "Launch"));
+        });
+        let mut text = String::new();
+        for ch in "give launch alpha a shortcut".chars() {
+            text.push(ch);
+            type_into_launcher(cx, window, &app, &text);
+            wait(cx, TYPING_GAP_MS);
+        }
+        wait(cx, 1_000);
+        enter_capsule(&app, cx)
+    });
+    assert!(
+        label.contains("Record a shortcut"),
+        "the shortcut row owns ↵ at the end of the sentence, got {label:?}"
+    );
+}

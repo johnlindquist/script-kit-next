@@ -273,7 +273,7 @@ impl ScriptListApp {
 
         // Close child windows FIRST if open (they are children of main window)
         // Actions window
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.clear_actions_popup_state();
             cx.spawn(async move |_this, cx| {
                 cx.update(move |cx| {
@@ -696,7 +696,6 @@ impl ScriptListApp {
             && script_kit_gpui::is_main_window_visible()
             && !self.is_pinned
             && !ai::agent_chat::ui::chat_window::is_chat_window_open()
-            && !crate::dictation::is_dictation_overlay_open()
             && !crate::dictation::is_dictation_recording()
             && self.tab_ai_save_offer_state.is_none()
             && self.shortcut_recorder_state.is_none()
@@ -807,9 +806,6 @@ impl ScriptListApp {
             }
             AppView::BrowserHistoryView { filter, .. } if !filter.is_empty() => {
                 Some("BrowserHistory filter")
-            }
-            AppView::DictationHistoryView { filter, .. } if !filter.is_empty() => {
-                Some("DictationHistory filter")
             }
             AppView::NotesBrowseView { search } if !search.query.is_empty() => {
                 Some("NotesBrowse filter")
@@ -939,17 +935,6 @@ impl ScriptListApp {
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.browser_history_scroll_handle.scroll_to_top_of_item(0);
-            }
-            AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                visible_limit,
-            } => {
-                Self::clear_builtin_query_state(filter, selected_index);
-                *visible_limit = crate::dictation::DICTATION_HISTORY_PAGE_SIZE;
-                self.dictation_history_previous_page = None;
-                self.dictation_history_scroll_handle
-                    .scroll_to_top_of_item(0);
             }
             AppView::NotesBrowseView { search } => {
                 search.refresh(String::new(), &crate::notes::notes_brain_days_dir());

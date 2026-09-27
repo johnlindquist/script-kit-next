@@ -13,7 +13,6 @@ import { PRODUCTION_STORIES, CORE_JOURNEYS, STORY_TEST_PREFIX, selectStoryTests,
 import { prepareValidatedReceipt, validateReceiptFile, RECEIPT_SCHEMA_VERSION } from "./lib/receipt-schema.ts";
 import { diagnostic, filePath, productStatic } from "./lib/privacy.ts";
 import { runSdkJourney } from "./sdk-journey.ts";
-import { runFooterOwnershipJourney } from "./footer-journey.ts";
 
 const ROOT = resolve(import.meta.dir, "../..");
 export interface LibraryStoryResult {
@@ -133,7 +132,6 @@ export async function runStories(argv: string[]): Promise<void> {
       const journey = await runRuntimeJourney(id, app!, claim); journeys.push(journey);
     }
     const sdk = await runSdkJourney(app!, claim); journeys.push(sdk);
-    const footer = await runFooterOwnershipJourney(app!, claim); journeys.push(footer);
   }
   let cleanup = aggregateCleanup([library.cleanup, ...journeys.map(journey => journey.cleanup)]);
   try { cleanup = finalizeManagedTask(task, cleanup).cleanup; } catch { cleanup = { ...cleanup, closed: false, referencesFinalized: false, failureCodes: [...cleanup.failureCodes, "evidence_finalization_failed"] }; }

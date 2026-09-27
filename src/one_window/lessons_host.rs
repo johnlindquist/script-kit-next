@@ -104,6 +104,32 @@ impl ScriptListApp {
             &super::saved_scripts::entry_source(name, said, &body),
             &[],
         );
+        let microphone =
+            |id: &str, name: &str, is_default: bool| crate::dictation::DictationDeviceInfo {
+                id: crate::dictation::DictationDeviceId(id.to_string()),
+                name: name.to_string(),
+                is_default,
+                transport: crate::dictation::DictationDeviceTransport::BuiltIn,
+            };
+        learns.fixture_microphones = Some(vec![
+            microphone("fixture-built-in", "MacBook Pro Microphone", true),
+            microphone("fixture-studio", "Studio Display Microphone", false),
+        ]);
+        let dictations = [
+            "move the design review to thursday afternoon",
+            "remind me to send the invoice before friday",
+            "the beta ships in two weeks",
+        ]
+        .map(|words| {
+            crate::dictation::build_history_entry(
+                words,
+                std::time::Duration::from_secs(3),
+                crate::dictation::DictationTarget::MainWindowFilter,
+            )
+        });
+        if let Err(error) = crate::dictation::seed_owned_dictation_history(&dictations) {
+            tracing::warn!(target: "script_kit::one_window", %error, "fixture_history_not_seeded");
+        }
     }
 
     pub(super) fn one_window_run_learned(

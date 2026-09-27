@@ -72,9 +72,9 @@ pub use batch_wait::{
 pub use chat::{ChatMessagePosition, ChatMessageRole, ChatPromptConfig, ChatPromptMessage};
 #[cfg(any(test, feature = "owned-ui-evaluation"))]
 pub use design_evaluation::{
-    AgentChatFixtureCommand, DesignCommand, DictationFixtureCommand, DictationFixtureDestination,
-    EvaluationLimits, FixtureControl, FixtureDescriptor, FlowFixtureCommand, NativeSafetyProbe,
-    NotesFixtureCommand, ObservedEffect, OwnedFileSearchPreviewCondition,
+    AgentChatFixtureCommand, DesignCommand, EvaluationLimits, FixtureControl, FixtureDescriptor,
+    FlowFixtureCommand, NativeSafetyProbe, NotesFixtureCommand, ObservedEffect,
+    OneWindowFixtureCommand, OneWindowTalkDestination, OwnedFileSearchPreviewCondition,
     OwnedFileSearchStreamCondition, OwnedFrameCursor, OwnedResponseCodec, OwnedResponseEncoding,
     OwnedRuntimeIdentity, OwnedSearchProviderCondition, OwnedSearchProviderSource,
     OwnedSearchQueryStamp, ScheduledFrameRequirement, ScopedActionReceipt, SdkChatFixtureCommand,

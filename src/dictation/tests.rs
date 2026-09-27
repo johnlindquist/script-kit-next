@@ -9,7 +9,6 @@ use crate::dictation::types::{
     DictationDestination, RawAudioChunk,
 };
 use crate::dictation::visualizer::{silent_bars, AudioVisualiser};
-use crate::dictation::DictationOverlayState;
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde_json::json;
@@ -701,50 +700,6 @@ fn runtime_drops_capture_handle_before_draining_events() {
 }
 
 // ---------------------------------------------------------------------------
-// Dictation goal critical paths (regression guard)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn dictation_goal_critical_paths_exist() {
-    let mod_rs = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
-    let builtin =
-        std::fs::read_to_string("src/app_execute/builtin_execution.rs").expect("read builtin");
-    let hotkeys = std::fs::read_to_string("src/hotkeys/mod.rs").expect("read hotkeys");
-    let window = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    let transcription =
-        std::fs::read_to_string("src/dictation/transcription.rs").expect("read transcription.rs");
-
-    assert!(
-        mod_rs.contains("toggle_dictation"),
-        "mod.rs must export toggle_dictation"
-    );
-    assert!(
-        builtin.contains("dictation_toggle") || builtin.contains("toggle_dictation"),
-        "builtin_execution.rs must call dictation toggle"
-    );
-    assert!(
-        !builtin.contains("dictation_stub"),
-        "builtin_execution.rs must not contain 'dictation_stub'"
-    );
-    assert!(
-        !hotkeys.contains("TODO: wire dictation"),
-        "hotkeys/mod.rs must not contain 'TODO: wire dictation'"
-    );
-    assert!(
-        window.contains("WindowKind::PopUp"),
-        "window.rs must use WindowKind::PopUp"
-    );
-    assert!(
-        transcription.contains("WhisperDictationEngine"),
-        "transcription.rs must define WhisperDictationEngine"
-    );
-    assert!(
-        transcription.contains("ParakeetDictationEngine"),
-        "transcription.rs must define ParakeetDictationEngine"
-    );
-}
-
-// ---------------------------------------------------------------------------
 // Mic preference resolution source audit
 // ---------------------------------------------------------------------------
 
@@ -763,31 +718,6 @@ fn runtime_resolves_mic_preference_from_settings() {
     assert!(
         runtime_src.contains("resolve_selected_input_device"),
         "runtime must delegate selection to resolve_selected_input_device"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Regression: overlay window uses PopUp + Blurred + vibrancy
-// ---------------------------------------------------------------------------
-
-#[test]
-fn dictation_overlay_uses_popup_blur_and_vibrancy() {
-    let source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
-    assert!(
-        source.contains("WindowKind::PopUp"),
-        "overlay must use WindowKind::PopUp"
-    );
-    assert!(
-        source.contains("WindowBackgroundAppearance::Blurred"),
-        "overlay must support blurred background"
-    );
-    // 81e23d77c gave the overlay its own platform wrapper
-    // (configure_dictation_overlay_window) which routes through the same
-    // configure_window_vibrancy_common path as other secondary windows.
-    assert!(
-        source.contains("crate::platform::configure_dictation_overlay_window"),
-        "overlay must configure vibrancy via platform helper"
     );
 }
 
@@ -976,91 +906,6 @@ fn transcribe_captured_audio_returns_none_for_silent_input_without_model() {
 }
 
 // ---------------------------------------------------------------------------
-// Mic selection wiring regression tests
-// ---------------------------------------------------------------------------
-
-#[test]
-fn builtin_microphone_selection_command_is_wired() {
-    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    assert!(
-        builtin_src.contains("SettingsCommandType::SelectMicrophone"),
-        "builtin settings command must expose SelectMicrophone"
-    );
-    assert!(
-        builtin_src.contains("crate::dictation::list_input_device_menu_items("),
-        "SelectMicrophone must load rows from the shared menu-item helper"
-    );
-    assert!(
-        builtin_src.contains("BUILTIN_MIC_SELECT_PROMPT_ID"),
-        "SelectMicrophone must open a dedicated synthetic prompt"
-    );
-    assert!(
-        builtin_src.contains("BUILTIN_MIC_DEFAULT_VALUE"),
-        "SelectMicrophone must include a system-default choice value"
-    );
-    assert!(
-        builtin_src.contains("AppView::MiniPrompt"),
-        "SelectMicrophone must open a MiniPrompt"
-    );
-    assert!(
-        builtin_src.contains("Select microphone..."),
-        "SelectMicrophone prompt placeholder must stay user-facing"
-    );
-}
-
-#[test]
-fn builtin_microphone_submit_handler_persists_or_clears_preference() {
-    let helpers_src =
-        std::fs::read_to_string("src/render_prompts/arg/helpers.rs").expect("read arg helpers");
-    let config_src = std::fs::read_to_string("src/config/types.rs").expect("read config types");
-
-    assert!(
-        helpers_src.contains("fn is_valid_builtin_mic_selection(&self, value: &str) -> bool"),
-        "arg helpers must validate built-in microphone selections"
-    );
-    assert!(
-        helpers_src.contains("value == BUILTIN_MIC_DEFAULT_VALUE"),
-        "submit handling must accept the synthetic system-default value"
-    );
-    assert!(
-        helpers_src.contains("crate::dictation::apply_device_selection(&action)"),
-        "submit handling must persist choices through the shared apply_device_selection helper"
-    );
-    assert!(
-        config_src.contains("pub selected_device_id: Option<String>"),
-        "config-backed preferences must persist dictation.selected_device_id"
-    );
-}
-
-#[test]
-fn builtin_microphone_prompt_labels_current_and_preselects() {
-    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    assert!(
-        builtin_src.contains("format!(\"{} (current)\", item.title)"),
-        "prompt must label the selected microphone as current"
-    );
-}
-
-#[test]
-fn builtin_microphone_prompt_delegates_to_shared_menu_items() {
-    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    assert!(
-        builtin_src.contains("crate::dictation::list_input_device_menu_items("),
-        "SelectMicrophone must delegate to the shared menu-item builder"
-    );
-    assert!(
-        builtin_src.contains("item.is_selected"),
-        "SelectMicrophone must use the shared is_selected flag for stale-device fallback"
-    );
-}
-
-// ---------------------------------------------------------------------------
 // Delivery contract tests: prompt-first, frontmost-app-second
 // ---------------------------------------------------------------------------
 
@@ -1144,8 +989,8 @@ fn delivery_frontmost_app_sets_correct_destination() {
 }
 
 /// Prove that paste failures are surfaced (logged + toast) and not silently
-/// dropped.  The overlay is closed before pasting (for focus handoff), so
-/// failures cannot use the overlay — they show a toast instead.
+/// dropped.  The main window hides before pasting (for focus handoff), so
+/// failures show a toast.
 #[test]
 fn delivery_paste_failure_surfaces_error() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
@@ -1172,11 +1017,11 @@ fn delivery_paste_failure_surfaces_error() {
     );
 }
 
-/// Prove that the frontmost-app paste path hides the main window and closes
-/// the dictation overlay BEFORE pasting, so macOS returns keyboard focus to
+/// Prove that the frontmost-app paste path hides the main window BEFORE
+/// pasting, so macOS returns keyboard focus to
 /// the target app before the CGEvent Cmd+V fires.
 ///
-/// The close + hide logic now lives inside `yield_focus_for_dictation_paste`,
+/// The hide logic lives inside `yield_focus_for_dictation_paste`,
 /// which the frontmost branch calls before `paste_text`.
 #[test]
 fn delivery_frontmost_app_hides_window_before_paste() {
@@ -1203,15 +1048,11 @@ fn delivery_frontmost_app_hides_window_before_paste() {
         "yield_focus_for_dictation_paste (byte {yield_pos}) must appear before paste_text (byte {paste_pos})"
     );
 
-    // The helper itself must close the overlay and hide the main window.
+    // The helper itself must hide the main window.
     let helper_start = src
         .find("fn yield_focus_for_dictation_paste")
         .expect("helper must exist");
     let helper_src = &src[helper_start..helper_start + 1200.min(src.len() - helper_start)];
-    assert!(
-        helper_src.contains("close_dictation_overlay"),
-        "helper must close dictation overlay"
-    );
     assert!(
         helper_src.contains("defer_hide_main_window"),
         "helper must call defer_hide_main_window"
@@ -1229,7 +1070,7 @@ fn delivery_transcription_error_surfaces_as_failed_phase() {
         .expect("handler must exist");
     let handler_src = &src[handler_start..];
 
-    // The Err(error) arm must show Failed overlay.
+    // The handler must have an Err(error) arm.
     assert!(
         handler_src.contains("Err(error)"),
         "handler must match on Err(error) for transcription failures"
@@ -1295,8 +1136,8 @@ fn try_set_prompt_input_covers_key_prompt_views() {
     );
 }
 
-/// Prove that the silent-audio path (Ok(None)) does not show an error and
-/// closes the overlay quickly without surfacing a failure.
+/// Prove that the silent-audio path (Ok(None)) ends quietly without
+/// surfacing a failure.
 #[test]
 fn delivery_silent_audio_closes_without_error() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
@@ -1544,17 +1385,8 @@ fn dictation_hotkey_channel_not_dead_code() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Finished-label formatting tests
-// ---------------------------------------------------------------------------
-
 #[test]
-fn finished_label_always_returns_done() {
-    assert_eq!(super::window::finished_label().to_string(), "Done");
-}
-
-#[test]
-fn frontmost_app_delivery_closes_overlay_before_paste() {
+fn frontmost_app_delivery_yields_focus_before_paste() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -1563,15 +1395,9 @@ fn frontmost_app_delivery_closes_overlay_before_paste() {
         .expect("handler must exist");
     let handler_src = &src[handler_start..];
 
-    assert!(
-        src.contains("fn complete_internal_dictation_delivery")
-            && src.contains("DictationSessionPhase::Finished"),
-        "internal dictation delivery must show the Finished confirmation pill"
-    );
-
     let yield_offset = handler_src
         .find("yield_focus_for_dictation_paste")
-        .expect("frontmost-app delivery must yield focus (close overlay) before paste");
+        .expect("frontmost-app delivery must yield focus before paste");
     let paste_offset = handler_src
         .find("paste_text")
         .expect("frontmost-app delivery must paste after yielding focus");
@@ -1607,7 +1433,7 @@ fn delivery_frontmost_app_yields_focus_before_paste() {
 
     let yield_pos = frontmost_src
         .find("yield_focus_for_dictation_paste")
-        .expect("frontmost-app branch must yield focus (close overlay + hide)");
+        .expect("frontmost-app branch must yield focus (hide main) before paste");
     let paste_pos = frontmost_src
         .find("paste_text")
         .expect("frontmost-app branch must paste transcript");
@@ -1631,7 +1457,7 @@ fn delivery_frontmost_app_waits_for_focus_before_pasting() {
 
     let yield_pos = frontmost_src
         .find("yield_focus_for_dictation_paste")
-        .expect("frontmost-app branch must yield focus (close overlay + hide)");
+        .expect("frontmost-app branch must yield focus (hide main) before paste");
     let focus_timer_pos = frontmost_src
         .find("dictation_focus_settle_duration")
         .expect("frontmost-app branch must wait for focus to settle");
@@ -1688,297 +1514,6 @@ fn delivery_frontmost_app_aborts_paste_on_focus_yield_failure() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Overlay contract: behavioral tests for helpers & constants
-// ---------------------------------------------------------------------------
-
-#[test]
-fn overlay_elapsed_formatter_uses_mm_ss() {
-    assert_eq!(
-        super::window::format_elapsed(Duration::from_secs(0)).to_string(),
-        "0:00"
-    );
-    assert_eq!(
-        super::window::format_elapsed(Duration::from_secs(65)).to_string(),
-        "1:05"
-    );
-    assert_eq!(
-        super::window::format_elapsed(Duration::from_secs(600)).to_string(),
-        "10:00"
-    );
-}
-
-#[test]
-fn overlay_waveform_height_matches_compact_contract() {
-    assert!(
-        (super::window::waveform_bar_height(0.0) - 4.0).abs() < 0.001,
-        "silent bar height must be 4.0"
-    );
-    assert!(
-        (super::window::waveform_bar_height(1.0) - 18.0).abs() < 0.001,
-        "peak bar height must be 18.0"
-    );
-    let mid = super::window::waveform_bar_height(0.5);
-    assert!(
-        mid > 4.0 && mid < 18.0,
-        "mid-level bar height must stay inside compact overlay bounds, got {mid}"
-    );
-}
-
-#[test]
-fn overlay_waveform_opacity_stays_clamped() {
-    assert!(
-        (super::window::waveform_bar_opacity(0.0) - 0.3).abs() < 0.001,
-        "silent bar opacity must be 0.3"
-    );
-    assert!(
-        (super::window::waveform_bar_opacity(1.0) - 1.0).abs() < 0.001,
-        "peak bar opacity must be 1.0"
-    );
-    let mid = super::window::waveform_bar_opacity(0.5);
-    assert!(
-        (0.3..=1.0).contains(&mid),
-        "bar opacity must remain between 0.3 and 1.0, got {mid}"
-    );
-}
-
-#[test]
-fn overlay_dot_and_window_constants_match_target_contract() {
-    use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
-
-    // 2026-07-06 caption redesign: 560×100 fits the header row (timer +
-    // destination chips + target badge), the enlarged caption band, and the
-    // native footer rail at one constant height for every phase.
-    assert_eq!(super::window::OVERLAY_WIDTH_PX, 560.0);
-    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 100.0);
-    // 562fb2964 (Liquid Glass): the radius derives from the shared panel
-    // token so the overlay stays in lockstep with other glass panels.
-    assert_eq!(
-        super::window::OVERLAY_RADIUS_PX,
-        crate::ui::chrome::LIQUID_GLASS_PANEL_RADIUS_PX
-    );
-    assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
-    // The caption line matches the main-menu footer label size so the live
-    // transcript reads from a distance.
-    assert_eq!(super::window::TRANSCRIPT_TEXT_SIZE_PX, 13.0);
-    assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
-    assert_eq!(super::window::WAVEFORM_BAR_WIDTH_PX, 3.0);
-    assert_eq!(super::window::WAVEFORM_BAR_GAP_PX, 3.0);
-    assert_eq!(super::window::WAVEFORM_BAR_MAX_HEIGHT_PX, 18.0);
-    assert_eq!(super::window::TRANSCRIBING_DOT_COUNT, 3);
-    // Reduced-motion (static) fallback matches the original contract.
-    assert_eq!(
-        super::window::transcribing_dot_opacities_static(),
-        [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED]
-    );
-}
-
-#[test]
-fn transcribing_dot_pulse_varies_over_time() {
-    // At t=0, all dots are at the same phase point.
-    let at_zero = super::window::transcribing_dot_opacities_at(0.0);
-    // At t=0.3 (past one stagger cycle), dots should differ.
-    let at_stagger = super::window::transcribing_dot_opacities_at(0.3);
-
-    // All opacities must stay within [0.3, 1.0].
-    for &arr in &[at_zero, at_stagger] {
-        for &v in &arr {
-            assert!(
-                (0.29..=1.01).contains(&v),
-                "dot opacity {v} out of [0.3, 1.0] range"
-            );
-        }
-    }
-
-    // At t=0.3 the stagger should cause visible differences between dots.
-    let spread = at_stagger
-        .iter()
-        .copied()
-        .fold(0.0_f32, |acc, v| acc.max(v))
-        - at_stagger
-            .iter()
-            .copied()
-            .fold(1.0_f32, |acc, v| acc.min(v));
-    assert!(
-        spread > 0.01,
-        "dots should have visible spread at t=0.3, got {spread}"
-    );
-}
-
-#[test]
-fn transcribing_dot_pulse_is_periodic() {
-    let period = super::window::TRANSCRIBING_PULSE_PERIOD_SECS;
-    let at_t = super::window::transcribing_dot_opacities_at(0.5);
-    let at_t_plus_period = super::window::transcribing_dot_opacities_at(0.5 + period);
-
-    for (a, b) in at_t.iter().zip(at_t_plus_period.iter()) {
-        assert!((a - b).abs() < 0.001, "pulse must be periodic: {a} vs {b}");
-    }
-}
-
-#[test]
-fn transcribing_dot_pulse_constants_match_vercel_voice() {
-    assert!(
-        (super::window::TRANSCRIBING_PULSE_PERIOD_SECS - 1.4).abs() < f64::EPSILON,
-        "pulse period must be 1.4s (vercel-voice reference)"
-    );
-    assert!(
-        (super::window::TRANSCRIBING_PULSE_STAGGER_SECS - 0.2).abs() < f64::EPSILON,
-        "pulse stagger must be 0.2s (vercel-voice reference)"
-    );
-}
-
-#[test]
-fn reduced_motion_fallback_is_static() {
-    use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
-
-    let static_opacities = super::window::transcribing_dot_opacities_static();
-    assert_eq!(
-        static_opacities,
-        [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED],
-        "reduced-motion fallback must return static staggered opacities"
-    );
-}
-
-#[test]
-fn overlay_has_sound_detects_active_audio() {
-    let silent = [0.0_f32; super::window::WAVEFORM_BAR_COUNT];
-    assert!(
-        !super::window::has_sound(&silent),
-        "all-zero bars must be silent"
-    );
-
-    let mut loud = [0.0_f32; super::window::WAVEFORM_BAR_COUNT];
-    loud[4] = 0.11;
-    assert!(
-        super::window::has_sound(&loud),
-        "bar just above the lowered threshold must count as sound"
-    );
-}
-
-#[test]
-fn dictation_overlay_derives_colors_from_theme_and_compact_capsule_chrome() {
-    let source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
-    let visual_source = std::fs::read_to_string("src/dictation/window_visual_primitives.rs")
-        .expect("read dictation visual primitives");
-
-    // 81e23d77c moved the rail chrome contract into the shared footer_chrome
-    // layer, and the glass in-window rail now composes the shared button
-    // frames (render_footer_hint_action_button_frame delegates to the hint
-    // renderer in FooterHintKeyMode::Shortcut — locked by footer_chrome's own
-    // frame contract test), so the overlay and the native main-menu footer
-    // share one source of truth.
-    assert!(
-        source.contains("footer_chrome::footer_rail_chrome"),
-        "overlay surface must use the shared footer chrome (AppChromeColors) tokens"
-    );
-    assert!(
-        source.contains("render_footer_hint_action_button_frame"),
-        "overlay action rail buttons must use the shared footer button frame"
-    );
-    assert!(
-        source.contains("render_glass_signal_band"),
-        "overlay must render the launcher-style selected signal band"
-    );
-    assert!(
-        source.contains("render_footer_action_rail"),
-        "overlay action rail must use the shared tokenized footer rail geometry"
-    );
-    // Rendering primitives own waveform colors; the window owns composition.
-    let waveform = compact_delta_contract(extract_delta_contract_section(
-        &visual_source,
-        "fn render_waveform_bars(",
-        "fn render_transcribing_dots(",
-    ));
-    assert!(
-        waveform.contains(
-            "letbar_hex=ifactive{theme.colors.ui.success}else{theme.colors.text.primary};"
-        ) && waveform.contains("theme.get_opacity().text_hint"),
-        "active waveform uses theme success; inactive waveform uses muted primary text"
-    );
-    let dots = extract_delta_contract_section(
-        &visual_source,
-        "fn render_transcribing_dots(",
-        "impl DictationOverlay",
-    );
-    assert!(
-        dots.contains("theme.colors.ui.success.with_opacity(opacity)"),
-        "transcribing dots must use theme success at their animated opacity"
-    );
-    assert!(
-        source.contains("include!(\"window_visual_primitives.rs\")")
-            && source.contains("theme.colors.text.primary.with_opacity")
-            && source.contains("theme.colors.text.muted.with_opacity"),
-        "the composed overlay must include the primitives and retain themed transcript/timer colors"
-    );
-}
-
-#[test]
-fn dictation_overlay_close_handles_dead_windows_gracefully() {
-    let source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
-
-    let close_src = extract_delta_contract_section(
-        &source,
-        "pub fn close_dictation_overlay",
-        "pub(crate) fn dictation_window_lifecycle_receipt",
-    );
-
-    assert!(
-        close_src.contains("handle.update(cx"),
-        "close_dictation_overlay must call handle.update"
-    );
-    // Dead windows are not errors — the close function must log a warning
-    // but not propagate as Err, since the window is already gone.
-    assert!(
-        close_src.contains("Overlay window already gone when close was called")
-            && close_src.trim_end().ends_with("Ok(())\n}"),
-        "closing an already-dead window must warn and still succeed"
-    );
-    // The interactive exit preserves its live handle through the calibrated
-    // tail; the owned-hidden host has no native animation to wait for.
-    let exit = extract_delta_contract_section(close_src, "if let Some(ticket)", ".detach();");
-    for required in [
-        "glass_exit_remove_delay()",
-        "if !pending_matches",
-        "glass_exit_ticket_is_current(ticket)",
-        "record_glass_exit_commit(ticket)",
-    ] {
-        assert!(exit.contains(required), "exit contract missing {required}");
-    }
-    let remove_pos = exit
-        .find("window.remove_window()")
-        .expect("exit must remove the native window");
-    let clear_pos = exit
-        .find("clear_dictation_overlay_registration(any_handle)")
-        .expect("exit must clear registration through its owner");
-    assert!(
-        remove_pos < clear_pos,
-        "native removal must precede exit cleanup"
-    );
-
-    let registration = compact_delta_contract(extract_delta_contract_section(
-        &source,
-        "fn clear_dictation_overlay_registration(",
-        "pub fn open_dictation_overlay(",
-    ));
-    assert!(
-        registration.contains(
-            ".is_some_and(|current|gpui::AnyWindowHandle::from(*current)==handle){slot.take();}"
-        ) && registration.contains(
-            "get_runtime_window_handle_for_generation(&info.id,generation)==Some(handle)"
-        ) && registration.contains("remove_runtime_window_instance(&info.id,generation)"),
-        "cleanup must clear only the matching singleton and generation-owned registry instance"
-    );
-    assert!(
-        compact_delta_contract(close_src).contains(
-            "ifwindow.is_owned_hidden(){clear_dictation_overlay_registration(window.window_handle());window.remove_window();return;}"
-        ),
-        "owned-hidden windows must close immediately without starting a native exit"
-    );
-}
-
 #[test]
 fn delivery_frontmost_app_uses_error_propagating_focus_helper() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
@@ -1989,11 +1524,6 @@ fn delivery_frontmost_app_uses_error_propagating_focus_helper() {
         .expect("builtin_execution.rs must define yield_focus_for_dictation_paste");
     let helper_src = &src[helper_start..helper_start + 1200.min(src.len() - helper_start)];
 
-    assert!(
-        helper_src.contains("close_dictation_overlay(cx)")
-            && helper_src.contains("failed to close dictation overlay before paste"),
-        "focus helper must propagate close_dictation_overlay failure with context"
-    );
     assert!(
         helper_src.contains("platform::defer_hide_main_window(cx)"),
         "focus helper must still hide the main window before frontmost-app paste"
@@ -2015,17 +1545,6 @@ fn delivery_frontmost_app_uses_error_propagating_focus_helper() {
         ),
         "frontmost-app delivery must call yield_focus_for_dictation_paste with tracked app identity"
     );
-
-    // Scope to the async block that does close+paste (up to paste_text) to
-    // avoid matching `let _ =` in unrelated arms like Stopped(None).
-    let paste_pos = frontmost_src
-        .find("paste_text")
-        .expect("frontmost branch must paste");
-    let pre_paste = &frontmost_src[..paste_pos];
-    assert!(
-        !pre_paste.contains("let _ = crate::dictation::close_dictation_overlay(cx)"),
-        "frontmost-app delivery must not discard close_dictation_overlay errors before paste"
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2041,14 +1560,14 @@ fn dictation_handler_source(src: &str) -> &str {
 }
 
 /// Extract the body of `yield_focus_for_dictation_paste` from the source text.
-/// Uses `schedule_dictation_overlay_close` as the end boundary.
+/// Uses `activate_tracked_app_for_dictation_paste` as the end boundary.
 fn dictation_yield_focus_helper_source(src: &str) -> &str {
     let start = src
         .find("fn yield_focus_for_dictation_paste(")
         .expect("yield_focus_for_dictation_paste must exist");
     let tail = &src[start..];
-    let end = tail.find("fn schedule_dictation_overlay_close(").expect(
-        "yield_focus_for_dictation_paste must be followed by schedule_dictation_overlay_close",
+    let end = tail.find("fn activate_tracked_app_for_dictation_paste(").expect(
+        "yield_focus_for_dictation_paste must be followed by activate_tracked_app_for_dictation_paste",
     );
     &tail[..end]
 }
@@ -2065,27 +1584,6 @@ fn dictation_frontmost_paste_source(src: &str) -> &str {
         .find("Ok(None)")
         .expect("frontmost-app else branch must end before the Ok(None) arm");
     &tail[..end]
-}
-
-#[test]
-fn delivery_focus_helper_closes_overlay_before_hiding_main_window() {
-    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    let helper_src = dictation_yield_focus_helper_source(&src);
-
-    let close_pos = helper_src
-        .find("close_dictation_overlay")
-        .expect("focus helper must close dictation overlay");
-    let hide_pos = helper_src
-        .find("defer_hide_main_window")
-        .expect("focus helper must defer main-window hide");
-
-    assert!(
-        close_pos < hide_pos,
-        "close_dictation_overlay (byte {close_pos}) must appear before \
-         defer_hide_main_window (byte {hide_pos}) inside yield_focus_for_dictation_paste"
-    );
 }
 
 #[test]
@@ -2751,165 +2249,6 @@ fn toggle_cycle_produces_transcribable_capture() -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Overlay state transition coverage
-// ---------------------------------------------------------------------------
-
-/// Prove that the overlay states follow the expected progression for a
-/// successful dictation session: Recording → Transcribing → Finished.
-#[test]
-fn overlay_state_transitions_recording_to_transcribing_to_finished() {
-    use crate::dictation::DictationSessionPhase;
-
-    let recording = DictationOverlayState {
-        phase: DictationSessionPhase::Recording,
-        elapsed: Duration::from_secs(2),
-        bars: [0.1, 0.2, 0.5, 0.8, 1.0, 0.8, 0.5, 0.2, 0.1],
-        transcript: "".into(),
-        ..Default::default()
-    };
-    assert_eq!(recording.phase, DictationSessionPhase::Recording);
-    assert!(recording.transcript.is_empty());
-
-    let transcribing = DictationOverlayState {
-        phase: DictationSessionPhase::Transcribing,
-        elapsed: recording.elapsed,
-        bars: [0.0; 9],
-        transcript: "".into(),
-        ..Default::default()
-    };
-    assert_eq!(transcribing.phase, DictationSessionPhase::Transcribing);
-    assert!(transcribing.transcript.is_empty());
-
-    let finished = DictationOverlayState {
-        phase: DictationSessionPhase::Finished,
-        elapsed: recording.elapsed,
-        bars: [0.0; 9],
-        transcript: "hello world".into(),
-        ..Default::default()
-    };
-    assert_eq!(finished.phase, DictationSessionPhase::Finished);
-    assert_eq!(finished.transcript.as_ref(), "hello world");
-}
-
-/// Prove that the overlay states follow the expected progression for a
-/// failed dictation session: Recording → Transcribing → Failed.
-#[test]
-fn overlay_state_transitions_recording_to_transcribing_to_failed() {
-    use crate::dictation::DictationSessionPhase;
-
-    let recording = DictationOverlayState {
-        phase: DictationSessionPhase::Recording,
-        elapsed: Duration::from_secs(1),
-        bars: [0.5; 9],
-        transcript: "".into(),
-        ..Default::default()
-    };
-    assert_eq!(recording.phase, DictationSessionPhase::Recording);
-
-    let transcribing = DictationOverlayState {
-        phase: DictationSessionPhase::Transcribing,
-        elapsed: recording.elapsed,
-        ..Default::default()
-    };
-    assert_eq!(transcribing.phase, DictationSessionPhase::Transcribing);
-
-    let failed = DictationOverlayState {
-        phase: DictationSessionPhase::Failed(super::runtime::dictation_pipeline_failure_state(
-            1,
-            super::types::DictationTarget::ExternalApp,
-            "model load error",
-        )),
-        elapsed: recording.elapsed,
-        ..Default::default()
-    };
-    assert!(matches!(
-        failed.phase,
-        DictationSessionPhase::Failed(ref state)
-            if state.failure.failure.diagnostic.is_some()
-                && state.failure.primary_message() != "model load error"
-    ));
-}
-
-/// Prove that overlay state for a silent/empty recording closes without
-/// reaching Finished or Failed (silent path produces no overlay transition
-/// beyond the initial Recording phase).
-#[test]
-fn overlay_state_silent_recording_skips_finished_and_failed() {
-    use crate::dictation::DictationSessionPhase;
-
-    // Silent recording: the runtime returns Stopped(None), so the caller
-    // never transitions to Transcribing/Finished/Failed — just closes.
-    let recording = DictationOverlayState {
-        phase: DictationSessionPhase::Recording,
-        elapsed: Duration::from_millis(500),
-        bars: [0.0; 9],
-        transcript: "".into(),
-        ..Default::default()
-    };
-    assert_eq!(recording.phase, DictationSessionPhase::Recording);
-    assert!(!crate::dictation::window::has_sound(&recording.bars));
-}
-
-/// Prove that the Transcribing → Finished transition carries the transcript
-/// text, which is then used by the delivery path to inject into the prompt
-/// or paste to the frontmost app.
-#[test]
-fn overlay_finished_state_carries_transcript_for_delivery() {
-    use crate::dictation::DictationSessionPhase;
-
-    let transcript_text = "the quick brown fox";
-    let finished = DictationOverlayState {
-        phase: DictationSessionPhase::Finished,
-        elapsed: Duration::from_secs(3),
-        bars: [0.0; 9],
-        transcript: transcript_text.into(),
-        ..Default::default()
-    };
-
-    assert_eq!(finished.phase, DictationSessionPhase::Finished);
-    assert_eq!(finished.transcript.as_ref(), transcript_text);
-    assert!(!finished.transcript.is_empty());
-}
-
-/// Verify that the overlay update path in builtin_execution transitions
-/// through Recording → Transcribing → Finished (or Failed) in order,
-/// matching the acceptance criteria.
-#[test]
-fn builtin_dictation_overlay_transitions_are_ordered_correctly() {
-    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    let recording_owner = src
-        .find("fn start_dictation_overlay_session")
-        .expect("recording overlay owner must exist");
-    let transcribing_owner = src
-        .find("fn request_active_dictation_stop")
-        .expect("transcribing overlay owner must exist");
-
-    assert!(
-        recording_owner < transcribing_owner,
-        "recording setup must remain upstream of the stop/transcribing owner"
-    );
-
-    let handler_src = dictation_handler_source(&src);
-    assert!(
-        src.contains("fn complete_internal_dictation_delivery")
-            && src.contains("DictationSessionPhase::Finished"),
-        "the delivery completion owner must render a brief Finished confirmation before the overlay closes"
-    );
-    assert!(
-        src.contains("schedule_dictation_overlay_close(cx, Self::DICTATION_FINISHED_LINGER)"),
-        "handler must schedule the overlay close after the Finished linger"
-    );
-
-    // Transcription error: overlay shows Failed.
-    assert!(
-        handler_src.contains("DictationSessionPhase::Failed"),
-        "handler must show Failed on transcription error"
-    );
-}
-
-// ---------------------------------------------------------------------------
 // Dictation start-edge preflight & helper parity tests
 // ---------------------------------------------------------------------------
 
@@ -3008,56 +2347,6 @@ fn can_accept_dictation_into_prompt_stays_aligned_with_direct_delivery_views() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Overlay: bottom-center positioning
-// ---------------------------------------------------------------------------
-
-#[test]
-fn overlay_positioned_bottom_center_of_screen() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    assert!(
-        window_src.contains("calculate_overlay_bottom_center_bounds()"),
-        "overlay must use bottom-center positioning function"
-    );
-    assert!(
-        window_src.contains("OVERLAY_BOTTOM_OFFSET_PX"),
-        "overlay must define a bottom offset constant"
-    );
-    assert!(
-        window_src.contains("const OVERLAY_BOTTOM_OFFSET_PX: f32 = 15.0"),
-        "bottom offset must be 15px matching vercel-voice"
-    );
-    assert!(
-        !window_src.contains("y: px(80.)"),
-        "overlay must NOT use the old top-of-screen y=80 position"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Overlay: active-display selection (not mouse-based)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn overlay_uses_mouse_display_alignment() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    // Must use get_global_mouse_position() and display_for_point() for display selection (matching the main window)
-    assert!(
-        window_src.contains("get_global_mouse_position()"),
-        "overlay must use get_global_mouse_position() for display selection"
-    );
-    assert!(
-        window_src.contains("display_for_point("),
-        "overlay must use display_for_point() for display selection"
-    );
-    // Must NOT use the key-window get_active_display() heuristic
-    assert!(
-        !window_src.contains("get_active_display()"),
-        "overlay must NOT resolve display via get_active_display()"
-    );
-}
-
 #[test]
 fn active_display_api_exists_in_platform() {
     let display_src = std::fs::read_to_string("src/platform/display.rs").expect("read display.rs");
@@ -3092,176 +2381,6 @@ fn overlay_has_confirming_phase_in_session_phase_enum() {
     );
 }
 
-#[test]
-fn overlay_handles_escape_key_for_confirmation() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    assert!(
-        window_src.contains("handle_key_down"),
-        "overlay must have a key-down handler"
-    );
-    assert!(
-        window_src.contains("is_key_escape"),
-        "overlay must check for Escape key"
-    );
-    assert!(
-        window_src.contains("DictationSessionPhase::Confirming"),
-        "overlay must transition to Confirming phase"
-    );
-    assert!(
-        window_src.contains("on_key_down"),
-        "overlay must register the key-down handler in render"
-    );
-    assert!(
-        window_src.contains("track_focus"),
-        "overlay must track focus for key event delivery"
-    );
-}
-
-#[test]
-fn overlay_abort_confirmation_wires_runtime_abort() {
-    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
-
-    assert!(
-        builtin_src.contains("set_overlay_abort_callback"),
-        "dictation start path must register an overlay abort callback"
-    );
-    assert!(
-        builtin_src.contains("crate::dictation::abort_dictation()"),
-        "overlay abort callback must discard the active recording"
-    );
-    assert!(
-        runtime_src.contains("pub fn abort_dictation() -> Result<()>"),
-        "dictation runtime must expose an explicit abort API"
-    );
-}
-
-#[test]
-fn overlay_confirming_phase_renders_stop_continue() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    // Source file contains unicode escapes, so match those literally.
-    assert!(
-        window_src.contains("ACTION_STOP_LABEL") && window_src.contains("ENTER_KEYCAP"),
-        "confirming phase must show Stop affordance"
-    );
-    assert!(
-        window_src.contains("ACTION_CONTINUE_LABEL") && window_src.contains("ESC_KEYCAP"),
-        "confirming phase must show Continue affordance"
-    );
-    assert!(
-        window_src.contains("Stop dictation?"),
-        "confirming phase must show Stop dictation? prompt"
-    );
-    assert!(
-        !window_src.contains(r#""Abort""#),
-        "old Abort label should be removed"
-    );
-    assert!(
-        !window_src.contains(r#""Resume Esc""#),
-        "old Resume label should be removed"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Overlay: glass bar styling
-// ---------------------------------------------------------------------------
-
-#[test]
-fn overlay_uses_glass_bar_styling() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    // 81e23d77c moved the glass bar / action rail chrome contract into the
-    // shared footer_chrome layer (footer_rail_chrome derives from
-    // AppChromeColors::from_theme), so both the native main-menu footer and
-    // this overlay consume one rail surface, hover/active, and keycap source.
-    assert!(
-        window_src.contains("footer_chrome::footer_rail_chrome"),
-        "overlay must derive glass surface from the shared footer rail chrome"
-    );
-    assert!(
-        window_src.contains("render_footer_hint_action_button_frame"),
-        "overlay must use the shared footer button frame for action buttons"
-    );
-    let rail_start = window_src
-        .find("fn render_static_action_rail")
-        .expect("action rail renderer must exist");
-    let rail_src = &window_src[rail_start..rail_start + 900.min(window_src.len() - rail_start)];
-    assert!(
-        !rail_src.contains(".bg(rgba(rail_chrome.surface_rgba))"),
-        "action rail must inherit the overlay surface instead of stacking a darker background"
-    );
-    assert!(
-        window_src.contains("render_glass_signal_band"),
-        "must render glass signal band"
-    );
-    assert!(
-        window_src.contains("wrap_dictation_overlay_action_rail"),
-        "action rail must sit on window surface without stacking under the signal band"
-    );
-    assert!(
-        !window_src.contains("FONT_MONO"),
-        "dictation overlay chrome must use the system UI font, not monospace"
-    );
-    assert!(
-        window_src.contains("footer_chrome::footer_rail_chrome")
-            && window_src.contains("render_footer_hint_action_button_frame"),
-        "dictation action buttons must match main menu footer hover, active, font, and shortcut rendering (the shared frame pins FooterHintKeyMode::Shortcut via footer_chrome's own contract test)"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Overlay: glass bar dimension contract
-// ---------------------------------------------------------------------------
-
-#[test]
-fn overlay_dimensions_match_glass_bar_contract() {
-    assert_eq!(
-        super::window::OVERLAY_WIDTH_PX,
-        560.0,
-        "overlay width must match the glass bar direction"
-    );
-    assert_eq!(
-        super::window::OVERLAY_HEIGHT_PX,
-        100.0,
-        "overlay height must fit header row + caption band + footer rail"
-    );
-    // 562fb2964 moved the radius from a local 12.0 to the shared Liquid
-    // Glass panel token (16.0) so the overlay matches other glass panels.
-    assert_eq!(
-        super::window::OVERLAY_RADIUS_PX,
-        16.0,
-        "overlay radius must match the adopted Liquid Glass panel shape"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Overlay: focus enabled for key events
-// ---------------------------------------------------------------------------
-
-#[test]
-fn overlay_window_opens_without_app_activation() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    // The overlay window must be created with focus: false to avoid
-    // activating the app (which would surface the main window).  Key
-    // events are delivered via orderFrontRegardless + makeKeyWindow.
-    assert!(
-        window_src.contains("focus: false"),
-        "overlay window must open with focus: false to avoid app activation"
-    );
-    assert!(
-        window_src.contains("orderFrontRegardless"),
-        "overlay must use orderFrontRegardless for non-activating front"
-    );
-    assert!(
-        window_src.contains("makeKeyWindow"),
-        "overlay must use makeKeyWindow for key event delivery"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Runtime session owns overlay phase (confirm/resume/abort contract)
 // ---------------------------------------------------------------------------
@@ -3273,120 +2392,6 @@ fn runtime_session_has_overlay_phase_field() {
     assert!(
         runtime_src.contains("overlay_phase: DictationSessionPhase"),
         "DictationSession must own overlay_phase field"
-    );
-}
-
-#[test]
-fn snapshot_overlay_state_reads_session_phase_not_hardcoded() {
-    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
-
-    // The old bug: snapshot_overlay_state() hardcoded `phase: Recording`.
-    // Verify it now reads from `session.overlay_phase`.
-    assert!(
-        runtime_src.contains("session.overlay_phase.clone()"),
-        "snapshot_overlay_state must read phase from session.overlay_phase, not hardcode it"
-    );
-    assert!(
-        !runtime_src.contains("phase: crate::dictation::DictationSessionPhase::Recording"),
-        "snapshot_overlay_state must not hardcode DictationSessionPhase::Recording"
-    );
-}
-
-#[test]
-fn set_overlay_phase_is_exported() {
-    let mod_src = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
-
-    assert!(
-        mod_src.contains("set_overlay_phase"),
-        "set_overlay_phase must be re-exported from dictation module"
-    );
-}
-
-#[test]
-fn overlay_key_handler_writes_through_to_runtime_phase() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    // Every non-destructive dismissal route delegates to the phase-only ladder.
-    assert!(
-        window_src.contains("overlay_escape_action(&self.state.phase)"),
-        "overlay routes must delegate to the phase-only dismissal ladder"
-    );
-
-    // Explicit Discard still owns the stored abort callback.
-    assert!(
-        window_src.contains("OVERLAY_ABORT_CALLBACK"),
-        "explicit Discard must retain the stored abort callback"
-    );
-
-    // Local Escape/Command+W, the global Escape monitor, and native footer
-    // Close must resolve the same phase action and apply the same effect owner.
-    let local_start = window_src
-        .find("fn handle_key_down")
-        .expect("overlay must have a key-down handler");
-    let local_end = window_src[local_start..]
-        .find("impl crate::actions::prelude::CommandBarHost")
-        .map(|offset| local_start + offset)
-        .expect("key handler must end before the command-bar host");
-    let local = &window_src[local_start..local_end];
-
-    let global_start = window_src
-        .find("fn process_global_keys_if_requested")
-        .expect("overlay must process global Escape");
-    let global_end = window_src[global_start..]
-        .find("pub fn set_state")
-        .map(|offset| global_start + offset)
-        .expect("global key handler must end before set_state");
-    let global = &window_src[global_start..global_end];
-
-    let footer_start = window_src
-        .find("fn handle_native_footer_action")
-        .expect("overlay must route native footer actions");
-    let footer_end = window_src[footer_start..]
-        .find("fn enter_confirming")
-        .map(|offset| footer_start + offset)
-        .expect("footer handler must end before confirming transition");
-    let footer = &window_src[footer_start..footer_end];
-
-    for (route, body) in [("local", local), ("global", global), ("native", footer)] {
-        assert!(
-            body.contains("overlay_escape_action(&self.state.phase)")
-                && body.contains("self.apply_dismiss_action(action, window, cx)"),
-            "{route} dismissal must resolve and apply the shared ladder"
-        );
-    }
-}
-
-#[test]
-fn builtin_microphone_submit_handler_accepts_mini_prompt_choices() {
-    let helpers_src =
-        std::fs::read_to_string("src/render_prompts/arg/helpers.rs").expect("read arg helpers");
-
-    // Validation must match both ArgPrompt and MiniPrompt variants.
-    assert!(
-        helpers_src.contains("AppView::MiniPrompt { choices, .. }"),
-        "builtin microphone submit handling must validate MiniPrompt choices"
-    );
-
-    // The validation function must appear and reference MiniPrompt.
-    let valid_fn_start = helpers_src
-        .find("fn is_valid_builtin_mic_selection")
-        .expect("is_valid_builtin_mic_selection must exist");
-    let valid_fn_body =
-        &helpers_src[valid_fn_start..valid_fn_start + 400.min(helpers_src.len() - valid_fn_start)];
-    assert!(
-        valid_fn_body.contains("MiniPrompt"),
-        "is_valid_builtin_mic_selection must handle MiniPrompt variant"
-    );
-
-    // The label resolution in handle_builtin_mic_selection must also match MiniPrompt.
-    let handle_fn_start = helpers_src
-        .find("fn handle_builtin_mic_selection")
-        .expect("handle_builtin_mic_selection must exist");
-    let handle_fn_body = &helpers_src
-        [handle_fn_start..handle_fn_start + 1600.min(helpers_src.len() - handle_fn_start)];
-    assert!(
-        handle_fn_body.contains("MiniPrompt"),
-        "handle_builtin_mic_selection label resolution must handle MiniPrompt variant"
     );
 }
 
@@ -3432,24 +2437,6 @@ fn active_recording_microphone_is_captured_at_session_start() {
 }
 
 #[test]
-fn overlay_microphone_control_is_labeled_as_next_recording_preference() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    assert!(
-        window_src.contains("const ACTION_MIC_LABEL: &str = \"Select Mic\""),
-        "overlay mic action must open the microphone picker without rendering as a keycap"
-    );
-    assert!(
-        window_src.contains("The current recording keeps using the device it opened with"),
-        "overlay source contract must document that cycling only changes the next recording"
-    );
-    assert!(
-        window_src.contains("persisted preference used by the next dictation capture"),
-        "overlay mic picker source must state the preference applies to the next capture"
-    );
-}
-
-#[test]
 fn start_recording_initialises_overlay_phase_to_recording() {
     let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
@@ -3464,8 +2451,8 @@ fn start_recording_initialises_overlay_phase_to_recording() {
 // ---------------------------------------------------------------------------
 
 /// When `transcribe_captured_audio` returns an `Err` (e.g. missing Whisper
-/// model), `handle_dictation_transcript` must show a toast and update the
-/// overlay to `Failed` — but it must **never** call `paste_text` or
+/// model), `handle_dictation_transcript` must show a toast — but it must
+/// **never** call `paste_text` or
 /// `try_set_prompt_input`, because there is no transcript to deliver.
 ///
 /// This test structurally verifies the error arm to prevent accidental
@@ -3499,18 +2486,10 @@ fn missing_model_error_path_never_attempts_paste_or_prompt_delivery() {
          — there is no transcript to deliver when transcription fails"
     );
 
-    // Confirm the error arm DOES show a toast and update overlay to Failed.
+    // Confirm the error arm DOES show the failure's safe message.
     assert!(
-        err_arm_src.contains("notice_failed"),
-        "Err arm must surface the error to the user via toast"
-    );
-    assert!(
-        err_arm_src.contains("DictationSessionPhase::Failed"),
-        "Err arm must update overlay to Failed phase"
-    );
-    assert!(
-        err_arm_src.contains("schedule_dictation_overlay_close"),
-        "Err arm must schedule overlay close after showing the error"
+        err_arm_src.contains("failure.failure.primary_message(),"),
+        "Err arm must surface the classified failure to the user in the line above the input"
     );
 }
 
@@ -3545,12 +2524,8 @@ fn silent_audio_path_never_attempts_paste_or_prompt_delivery() {
         "Ok(None) arm must NEVER open Agent Chat — no transcript exists to seed or submit"
     );
     assert!(
-        none_arm_src.contains("WindowEvent::AbortDictation"),
-        "Ok(None) arm must abort the dictation session so Agent Chat-targeted silence does not reveal ScriptList"
-    );
-    assert!(
-        !none_arm_src.contains("WindowEvent::FinishDictation"),
-        "Ok(None) arm must not finish successfully because Agent Chat finish reveals a transcript-backed chat"
+        none_arm_src.contains("one_window_talk_final(String::new(), None, cx)"),
+        "Ok(None) arm must end the voice view with no words and nothing to paste"
     );
 }
 
@@ -3594,58 +2569,6 @@ fn orchestrator_focus_main_commands_queue_app_focus_after_reveal() {
     assert!(
         bridge_src.contains("FocusToken::ChatComposer => Some(FocusTarget::AgentChat)"),
         "Agent Chat dictation's ChatComposer token must map to the dedicated AgentChat focus target"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Regression: Escape → Escape abort must NEVER deliver a transcript
-// ---------------------------------------------------------------------------
-
-/// The overlay abort callback registered at dictation start must call
-/// `abort_dictation()` + `close_dictation_overlay()` and must NOT invoke
-/// `handle_dictation_transcript` or any delivery function.  This verifies
-/// the structural separation between abort and delivery paths.
-#[test]
-fn abort_callback_never_invokes_transcript_delivery() {
-    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    // Extract the abort callback body: from `set_overlay_abort_callback` to
-    // the closing `});` before `open_dictation_overlay`.
-    let callback_start = src
-        .find("set_overlay_abort_callback")
-        .expect("dictation start path must register an abort callback");
-    let callback_tail = &src[callback_start..];
-
-    // The callback is a closure — find its extent up to the next overlay call.
-    let callback_end = callback_tail
-        .find("open_dictation_overlay")
-        .expect("abort callback must be followed by overlay open");
-    let callback_src = &callback_tail[..callback_end];
-
-    assert!(
-        callback_src.contains("request_active_dictation_stop(")
-            && callback_src.contains("DictationStopReason::OverlayAbort")
-            && callback_src.contains("false"),
-        "abort callback must request a non-transcribing stop so the recording is discarded off the UI path"
-    );
-    assert!(
-        !callback_src.contains("handle_dictation_transcript"),
-        "abort callback must NEVER invoke handle_dictation_transcript — \
-         the user chose to discard the recording"
-    );
-    assert!(
-        !callback_src.contains("paste_text"),
-        "abort callback must NEVER call paste_text"
-    );
-    assert!(
-        !callback_src.contains("try_set_prompt_input"),
-        "abort callback must NEVER call try_set_prompt_input"
-    );
-    assert!(
-        !callback_src.contains("transcribe_captured_audio"),
-        "abort callback must NEVER invoke transcription — \
-         the recording is discarded, not transcribed"
     );
 }
 
@@ -3710,56 +2633,6 @@ fn abort_dictation_clears_session_state() {
         stop_src.contains(".take()"),
         "stop_recording must take() the session from the global mutex, \
          clearing it so is_dictation_recording() returns false"
-    );
-}
-
-/// Non-destructive dismissal must confirm or hide; only the explicit Discard
-/// branch may invoke the abort callback, and no key route delivers directly.
-#[test]
-fn dismissal_never_reaches_transcript_handler_or_elapsed_abort() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    let handler_start = window_src
-        .find("fn handle_key_down")
-        .expect("overlay must have a key-down handler");
-    let handler_end = handler_start + 3000.min(window_src.len() - handler_start);
-    let handler_src = &window_src[handler_start..handler_end];
-
-    // The explicit Backspace/Delete Discard branch still owns abort.
-    assert!(
-        window_src.contains("Backspace pressed during confirmation, discarding dictation session")
-            && window_src.contains("self.abort_overlay_session(window, cx)"),
-        "explicit Discard must invoke the stored abort callback"
-    );
-
-    assert!(
-        window_src.contains(
-            "DictationSessionPhase::Recording => OverlayEscapeAction::TransitionToConfirming"
-        ),
-        "recording dismissal must always map to confirmation"
-    );
-    assert!(
-        !window_src.contains("ESCAPE_CONFIRM_THRESHOLD"),
-        "dismissal safety must not depend on elapsed recording time"
-    );
-    assert!(
-        window_src
-            .contains("DictationSessionPhase::Confirming => OverlayEscapeAction::ResumeRecording"),
-        "overlay_escape_action must map Confirming to ResumeRecording"
-    );
-
-    // The key handler must NEVER invoke transcript delivery functions.
-    assert!(
-        !handler_src.contains("handle_dictation_transcript"),
-        "overlay key handler must never call handle_dictation_transcript"
-    );
-    assert!(
-        !handler_src.contains("paste_text"),
-        "overlay key handler must never call paste_text"
-    );
-    assert!(
-        !handler_src.contains("transcribe_captured_audio"),
-        "overlay key handler must never invoke transcription"
     );
 }
 
@@ -4101,34 +2974,6 @@ fn downloading_prompt_includes_eta_and_cancel_action() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Source-contract regression tests
-// ---------------------------------------------------------------------------
-
-/// Ensure the overlay window opens without activating the app and receives
-/// key events (Escape) via orderFrontRegardless + makeKeyWindow + GPUI focus.
-/// These invariants protect the hotkey-only overlay goal and the Escape-confirm flow.
-#[test]
-fn overlay_requests_key_delivery_without_app_activation() {
-    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    assert!(
-        src.contains("focus: false"),
-        "overlay must not activate the app when it opens"
-    );
-    assert!(
-        src.contains("orderFrontRegardless"),
-        "overlay must raise itself without activating the app"
-    );
-    assert!(
-        src.contains("makeKeyWindow"),
-        "overlay must request key-window status so Escape is delivered"
-    );
-    assert!(
-        src.contains("view.focus_handle.focus(window, cx);"),
-        "overlay must focus the GPUI focus handle after opening"
-    );
-}
-
 /// Ensure the transcription pipeline logs model resolution details so that
 /// second-hotkey failures are diagnosable from logs alone.
 #[test]
@@ -4145,81 +2990,6 @@ fn dictation_transcription_logs_model_resolution_details() {
     assert!(
         src.contains("model not downloaded"),
         "runtime must bail with a clear message when the selected model is missing"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Overlay lifecycle regression tests
-// ---------------------------------------------------------------------------
-
-#[test]
-fn overlay_generation_is_bumped_from_started_path_not_window_creation() {
-    let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    let builtin_source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-
-    assert!(
-        window_source.contains("pub fn begin_overlay_session()"),
-        "dictation overlay must expose a session-scoped generation bump"
-    );
-    assert!(
-        builtin_source.contains("begin_overlay_session()"),
-        "dictation start path must bump generation before opening/reusing the overlay"
-    );
-}
-
-#[test]
-fn open_dictation_overlay_does_not_bump_generation_itself() {
-    let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    // Extract just the open_dictation_overlay function body to check it
-    // doesn't contain its own generation bump.
-    let fn_start = window_source
-        .find("pub fn open_dictation_overlay(")
-        .expect("open_dictation_overlay must exist");
-    let fn_body = &window_source[fn_start..];
-    // Take up to the next top-level `pub fn` after the opening one.
-    let fn_end = fn_body[1..].find("\npub fn ").unwrap_or(fn_body.len() - 1);
-    let fn_text = &fn_body[..fn_end + 1];
-
-    assert!(
-        !fn_text.contains("OVERLAY_GENERATION.fetch_add"),
-        "open_dictation_overlay must not bump generation — \
-         that is begin_overlay_session's job"
-    );
-}
-
-#[test]
-fn hidden_app_dictation_overlay_always_keys_overlay() {
-    let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    let entry = extract_delta_contract_section(
-        &window_source,
-        "pub fn open_dictation_overlay(",
-        "pub(crate) fn open_dictation_overlay_with_policy(",
-    );
-    assert!(
-        entry.contains("crate::runtime_policy::WindowHostPolicy::Interactive"),
-        "user dictation must use the interactive host even when the launcher is hidden"
-    );
-    let open = compact_delta_contract(extract_delta_contract_section(
-        &window_source,
-        "pub(crate) fn open_dictation_overlay_with_policy(",
-        "pub fn update_dictation_overlay(",
-    ));
-    assert!(
-        open.contains("letshould_key_overlay=!host_policy.is_hidden();")
-            && open.contains("ifshould_key_overlay{let()=msg_send![ns_window,makeKeyWindow];}"),
-        "interactive overlays must receive native keys independently of launcher visibility; owned-hidden hosts must not"
-    );
-    let focus = extract_delta_contract_section(
-        &window_source,
-        "// Focus the GPUI focus handle",
-        "// Store handle.",
-    );
-    assert!(
-        focus.contains("if should_key_overlay {")
-            && focus.contains("view.focus_handle.focus(window, cx)"),
-        "GPUI focus must follow the same policy as native key-window delivery"
     );
 }
 
@@ -4246,22 +3016,6 @@ fn dictation_builtin_does_not_set_opened_from_main_menu() {
     );
 }
 
-#[test]
-fn overlay_render_uses_outer_wrapper_for_full_bounds() {
-    let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    // The render must have a dedicated outer root div that claims full bounds
-    // with overflow hidden and the one-window composition as a child.
-    let compact: String = window_source
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect();
-    assert!(
-        compact.contains(".w_full().h_full().overflow_hidden().child(composition)"),
-        "overlay render must use an outer wrapper div with w_full().h_full().overflow_hidden().child(composition)"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Source-contract coverage: singleton, non-activating, edge-to-edge fill,
 // and generation guards
@@ -4284,322 +3038,11 @@ fn compact_delta_contract(s: &str) -> String {
 }
 
 #[test]
-fn dictation_overlay_singleton_nonactivating_contract() {
-    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    let section = extract_delta_contract_section(
-        &src,
-        "pub(crate) fn open_dictation_overlay_with_policy(",
-        "pub fn update_dictation_overlay(",
-    );
-    let body = compact_delta_contract(section);
-
-    // Live-handle reuse: probe handle liveness before reuse. A reopen may
-    // also cancel a still-pending calibrated exit on that same native window.
-    assert!(
-        body.contains("letalive=handle.update(cx") && body.contains(".is_ok();"),
-        "overlay open path must probe handle liveness before reuse"
-    );
-    assert!(
-        body.contains("cancel_gpui_window_exit_dematerialize(window)"),
-        "reopening during the exit tail must cancel dematerialization before reuse"
-    );
-
-    // Singleton reuse: the live-handle branch must return the existing
-    // handle before any window creation. A tracing call sits between the
-    // check and the return, so anchor on ordering rather than exact text.
-    let alive_branch_pos = section
-        .find("if alive {")
-        .expect("overlay open path must branch on handle liveness");
-    let reuse_return_pos = section
-        .find("return Ok(handle);")
-        .expect("overlay must early-return the existing live handle");
-    let open_window_anchor_pos = section
-        .find(".open_window(window_options")
-        .expect("overlay must create the native window through GPUI open_window");
-    assert!(
-        alive_branch_pos < reuse_return_pos && reuse_return_pos < open_window_anchor_pos,
-        "overlay must reuse the live singleton window instead of spawning duplicates"
-    );
-
-    // Stale-handle clearing
-    assert!(
-        body.contains(&compact_delta_contract("*guard = None;")),
-        "stale overlay handles must be cleared before recreation"
-    );
-
-    // Non-activating open: focus: false
-    assert!(
-        body.contains(&compact_delta_contract(
-            "let main_was_visible = !host_policy.is_hidden() && crate::is_main_window_visible();"
-        )),
-        "overlay open path must snapshot main visibility before native window creation"
-    );
-    let visibility_snapshot_pos = section
-        .find("let main_was_visible = !host_policy.is_hidden() && crate::is_main_window_visible();")
-        .expect("overlay must snapshot main visibility before native window creation");
-    let open_window_pos = section
-        .find(".open_window(window_options")
-        .expect("overlay must create the native window through GPUI open_window");
-    assert!(
-        visibility_snapshot_pos < open_window_pos,
-        "main visibility must be captured before opening the overlay window"
-    );
-
-    assert!(
-        body.contains(&compact_delta_contract("focus: false,")),
-        "overlay window must stay non-activating on open"
-    );
-    assert!(
-        body.contains(&compact_delta_contract("show: false,")),
-        "overlay must be created hidden so GPUI does not surface sibling launcher panels"
-    );
-    assert!(
-        body.contains(&compact_delta_contract("kind: gpui::WindowKind::PopUp,")),
-        "overlay must remain a PopUp so makeKeyWindow does not activate or reveal main"
-    );
-    assert!(
-        body.contains(&compact_delta_contract("is_resizable: false,")),
-        "overlay window must not be resizable"
-    );
-
-    // Order front without activating
-    assert!(
-        body.contains(&compact_delta_contract(
-            "let () = msg_send![ns_window, orderFrontRegardless];"
-        )),
-        "overlay must order front without activating the app"
-    );
-
-    // Re-hide main window when Script Kit was hidden
-    assert!(
-        body.contains(&compact_delta_contract("if !main_was_visible {")),
-        "overlay open path must check main window visibility and re-hide when it was hidden"
-    );
-    let order_out_pos = section
-        .find("msg_send![main_window, orderOut: cocoa::base::nil]")
-        .expect("overlay must order out the hidden main window before surfacing");
-    let order_front_pos = section
-        .find("msg_send![ns_window, orderFrontRegardless]")
-        .expect("overlay must order itself front without activation");
-    assert!(
-        order_out_pos < order_front_pos,
-        "hidden-main orderOut must happen before overlay orderFrontRegardless"
-    );
-
-    // Singleton slot storage
-    assert!(
-        body.contains(&compact_delta_contract("*guard = Some(handle);")),
-        "overlay handle must be stored into the singleton slot"
-    );
-}
-
-#[test]
-fn dictation_overlay_claims_full_popup_bounds_contract() {
-    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    let body = compact_delta_contract(extract_delta_contract_section(
-        &src,
-        "let surface = div()",
-        "pub(crate) fn finished_label",
-    ));
-
-    // The bounded pill surface owns the full width and clips its content. In
-    // glass mode its height is the main-content region; the footer and exact
-    // 8pt gutter live below it in the same physical window.
-    let surface = extract_delta_contract_section(&body, "letsurface=div()", "letcomposition=");
-    // Selectors may decorate the builder without changing any geometry.
-    for required in [
-        ".flex().flex_row().items_center().justify_center().w_full()",
-        ".when(glass_in_window_footer,|d|{d.h(px(detached_regions.main_content.height)).min_h(px(detached_regions.main_content.height))})",
-        ".when(!glass_in_window_footer,|d|d.h_full())",
-        ".relative().overflow_hidden()",
-    ] {
-        assert!(
-            surface.contains(required),
-            "bounded content surface contract missing {required}"
-        );
-    }
-    assert!(
-        body.contains(".h(px(detached_regions.transparent_gap.height))")
-            && body.contains(".child(footer_rail)"),
-        "the footer and transparent gutter must remain in the same composition"
-    );
-
-    // Root overlay node must own focus, keyboard routing, and the full
-    // edge-to-edge clipped popup bounds. Option/modifier tracking is
-    // deliberately absent because destination chips are selection-only.
-    let root_start = body
-        .find(".track_focus(&self.focus_handle)")
-        .expect("root overlay must own the focus handle");
-    let root = &body[root_start..];
-    for required in [
-        ".on_key_down(cx.listener(Self::handle_key_down))",
-        ".w_full().h_full().overflow_hidden().child(composition)",
-    ] {
-        assert!(
-            root.contains(required),
-            "root overlay contract missing {required}"
-        );
-    }
-}
-
-#[test]
-fn dictation_overlay_generation_guards_pump_and_delayed_close_contract() {
-    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("read builtin_execution.rs");
-    let body = compact_delta_contract(&src);
-
-    // Session start must bump generation
-    assert!(
-        body.contains(&compact_delta_contract(
-            "let _ = crate::dictation::begin_overlay_session();"
-        )),
-        "dictation start edge must bump overlay generation"
-    );
-
-    // Overlay pump and delayed close must bail on generation mismatch
-    assert!(
-        body.contains(&compact_delta_contract(
-            "if crate::dictation::overlay_generation() != gen {"
-        )),
-        "overlay pump and delayed close must bail when a newer session exists"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Overlay safe dismissal ladder
-// ---------------------------------------------------------------------------
-
-#[test]
-fn overlay_dismissal_always_confirms_recording_without_elapsed_time() {
-    use super::types::DictationSessionPhase;
-    use super::window::{overlay_escape_action, OverlayEscapeAction};
-
-    assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Recording),
-        OverlayEscapeAction::TransitionToConfirming
-    );
-}
-
-#[test]
-fn overlay_dismissal_resumes_from_confirming() {
-    use super::types::DictationSessionPhase;
-    use super::window::{overlay_escape_action, OverlayEscapeAction};
-
-    assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Confirming),
-        OverlayEscapeAction::ResumeRecording
-    );
-}
-
-#[test]
-fn overlay_dismissal_hides_processing_and_closes_terminal_phases() {
-    use super::types::DictationSessionPhase;
-    use super::window::{overlay_escape_action, OverlayEscapeAction};
-
-    for phase in [
-        DictationSessionPhase::Transcribing,
-        DictationSessionPhase::Delivering,
-    ] {
-        assert_eq!(
-            overlay_escape_action(&phase),
-            OverlayEscapeAction::HideOverlay
-        );
-    }
-    for phase in [
-        DictationSessionPhase::Finished,
-        DictationSessionPhase::Failed(super::runtime::dictation_pipeline_failure_state(
-            1,
-            super::types::DictationTarget::ExternalApp,
-            "boom",
-        )),
-    ] {
-        assert_eq!(
-            overlay_escape_action(&phase),
-            OverlayEscapeAction::CloseOverlay
-        );
-    }
-}
-
-#[test]
-fn overlay_dismissal_propagates_only_when_idle() {
-    use super::types::DictationSessionPhase;
-    use super::window::{overlay_escape_action, OverlayEscapeAction};
-
-    assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Idle),
-        OverlayEscapeAction::Propagate
-    );
-}
-
-#[test]
-fn confirming_ui_uses_stop_continue_copy_and_timer() {
-    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    assert!(src.contains("Stop dictation?"));
-    assert!(
-        src.contains("format_elapsed(self.state.elapsed)")
-            || src.contains("format_elapsed(state.elapsed)")
-    );
-    assert!(
-        !src.contains(r#""Abort \u{21b5}""#),
-        "old Abort label should be removed"
-    );
-    assert!(
-        !src.contains(r#""Resume Esc""#),
-        "old Resume label should be removed"
-    );
-}
-
-#[test]
-fn confirming_state_no_longer_resumes_on_unrelated_keys() {
-    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    assert!(
-        !src.contains("Key pressed during confirmation, resuming recording"),
-        "confirming state must swallow unrelated keys instead of resuming recording"
-    );
-}
-
-#[test]
 fn dictation_elapsed_is_exported() {
     let mod_src = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
     assert!(
         mod_src.contains("dictation_elapsed"),
         "dictation_elapsed must be re-exported from dictation module"
-    );
-}
-
-#[test]
-fn overlay_phase_copy_confirming_explains_live_recording_and_resume() {
-    use super::types::DictationSessionPhase;
-    use super::window::overlay_phase_copy;
-
-    let (headline, action_label) = overlay_phase_copy(&DictationSessionPhase::Confirming);
-    assert_eq!(headline, "Recording is still live · Stop or discard?");
-    assert_eq!(action_label, "Resume Recording");
-}
-
-#[test]
-fn confirming_render_shows_stop_and_continue_buttons() {
-    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    // Stop button with Enter key hint (↵ = \u{21b5})
-    assert!(
-        src.contains("ACTION_STOP_LABEL"),
-        "confirming UI must render Stop button"
-    );
-    assert!(
-        src.contains("ACTION_CONTINUE_LABEL"),
-        "confirming UI must render Continue button"
-    );
-}
-
-#[test]
-fn confirming_render_uses_error_and_success_colors() {
-    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    // 81e23d77c: button hover/active colors now come from the shared
-    // footer_rail_chrome (which derives from AppChromeColors::from_theme)
-    // instead of a local PromptFooterColors copy.
-    assert!(
-        src.contains("footer_chrome::footer_rail_chrome"),
-        "buttons must use standard shared footer chrome colors"
     );
 }
 
@@ -4918,14 +3361,14 @@ fn handle_dictation_transcript_accepts_target_parameter() {
     );
     assert!(
         compact_delta_contract(handler)
-            .contains("letDictationDeliveryTiming{audio_duration,target,}=timing;")
+            .contains("letDictationDeliveryTiming{audio_duration,target,record_history,}=timing;")
             && handler.contains("Some(selection) if selection.is_compatible_with(target)"),
         "the target carried by timing must be checked against the frozen selection"
     );
 }
 
 #[test]
-fn a_stored_notes_editor_target_is_refused_because_notes_take_dictation_in_the_input() {
+fn a_notes_editor_target_adds_the_words_to_todays_note() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -4940,8 +3383,8 @@ fn a_stored_notes_editor_target_is_refused_because_notes_take_dictation_in_the_i
         "crate::dictation::DictationTarget::AiChatComposer =>",
     ));
     assert!(
-        notes.contains("Err(NOTES_TAKE_DICTATION_IN_THE_INPUT.to_string())"),
-        "there is no Notes window to type into; a note's line is the main input"
+        notes.contains("append_dictation_to_captured_day("),
+        "there is no Notes window to type into; dictated words become a line in today's note"
     );
     assert!(
         dictation_handler_source(&src)
@@ -5133,40 +3576,6 @@ fn dictation_target_descriptors_are_exhaustive_unique_and_action_safe() {
 }
 
 #[test]
-fn dictation_actions_project_every_selectable_descriptor() {
-    let descriptors = crate::dictation::DictationTarget::action_descriptors().collect::<Vec<_>>();
-    let actions = super::window::dictation_target_actions();
-
-    assert_eq!(actions.len(), descriptors.len());
-    for (action, descriptor) in actions.iter().zip(descriptors) {
-        assert_eq!(
-            action.id,
-            format!("dictation_target:{}", descriptor.stable_id)
-        );
-        assert_eq!(action.title, descriptor.selector_label);
-        assert_eq!(
-            action.description.as_deref(),
-            Some(format!("{} — {}", descriptor.delivery_verb, descriptor.description).as_str())
-        );
-        assert!(action.icon.is_some(), "Actions target must keep an icon");
-        assert_eq!(action.section.as_deref(), Some("Destination"));
-        assert_eq!(
-            super::window::dictation_target_from_action_id(&action.id),
-            Some(descriptor.target),
-            "Actions activation must route back to its descriptor target"
-        );
-    }
-    assert!(actions
-        .iter()
-        .all(|action| action.id != "dictation_target:aichat"));
-    assert_eq!(
-        super::window::dictation_target_from_action_id("dictation_target:aichat"),
-        None,
-        "legacy AI target must not reactivate through a forged action id"
-    );
-}
-
-#[test]
 fn legacy_ai_chat_labels_migrate_to_agent_chat_with_receipt() {
     for label in ["aichat", "AiChatComposer", "legacy-ai"] {
         let resolution = crate::dictation::resolve_dictation_target_label(label)
@@ -5184,234 +3593,6 @@ fn legacy_ai_chat_labels_migrate_to_agent_chat_with_receipt() {
         crate::dictation::DictationTarget::TabAiHarness
     );
     assert!(!current.migrated_legacy_ai_chat);
-}
-
-#[test]
-fn overlay_destination_chip_click_behavior_matches_armed_option_matrix() {
-    use super::types::DictationSessionPhase;
-    use super::window::{chip_click_behavior, ChipClickBehavior};
-
-    let interactive = [
-        DictationSessionPhase::Recording,
-        DictationSessionPhase::Confirming,
-    ];
-    for phase in interactive {
-        for armed in [false, true] {
-            for option_held in [false, true] {
-                assert_eq!(
-                    chip_click_behavior(&phase, armed, option_held),
-                    ChipClickBehavior::Retarget,
-                    "{phase:?} must only retarget regardless of armed/Option state"
-                );
-            }
-        }
-    }
-
-    let non_interactive = [
-        DictationSessionPhase::Idle,
-        DictationSessionPhase::Transcribing,
-        DictationSessionPhase::Delivering,
-        DictationSessionPhase::Finished,
-        DictationSessionPhase::Failed(super::runtime::dictation_pipeline_failure_state(
-            1,
-            super::types::DictationTarget::ExternalApp,
-            "boom",
-        )),
-    ];
-    for phase in non_interactive {
-        for armed in [false, true] {
-            for option_held in [false, true] {
-                assert_eq!(
-                    chip_click_behavior(&phase, armed, option_held),
-                    ChipClickBehavior::Ignore,
-                    "{phase:?} should ignore chips regardless of armed/Option state"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn dictation_footer_stop_button_tracks_armed_state() {
-    use super::types::DictationSessionPhase;
-    use crate::footer_popup::FooterAction;
-
-    let has_stop = |phase, armed| {
-        super::window::dictation_native_footer_config(
-            &phase,
-            armed,
-            crate::dictation::DictationTarget::ExternalApp,
-        )
-        .buttons
-        .iter()
-        .any(|button| button.action == FooterAction::Stop)
-    };
-
-    assert!(!has_stop(DictationSessionPhase::Recording, false));
-    assert!(has_stop(DictationSessionPhase::Recording, true));
-    assert!(!has_stop(DictationSessionPhase::Confirming, false));
-    assert!(has_stop(DictationSessionPhase::Confirming, true));
-
-    let recording_footer = super::window::dictation_native_footer_config(
-        &DictationSessionPhase::Recording,
-        true,
-        crate::dictation::DictationTarget::ExternalApp,
-    );
-    let destination_action = recording_footer
-        .buttons
-        .iter()
-        .find(|button| button.action == FooterAction::Actions)
-        .expect("recording footer must expose all destinations");
-    assert_eq!(destination_action.key.as_ref(), "⌘K");
-    assert_eq!(destination_action.label.as_ref(), "Actions");
-    assert_eq!(recording_footer.buttons.len(), 3);
-    assert!(!recording_footer
-        .buttons
-        .iter()
-        .any(|button| button.action == FooterAction::Ai));
-
-    let confirming_footer = super::window::dictation_native_footer_config(
-        &DictationSessionPhase::Confirming,
-        true,
-        crate::dictation::DictationTarget::ExternalApp,
-    );
-    let discard_action = confirming_footer
-        .buttons
-        .iter()
-        .find(|button| button.action == FooterAction::Actions)
-        .expect("confirming footer must expose explicit Discard");
-    assert_eq!(discard_action.label.as_ref(), "Discard");
-
-    for target in [
-        crate::dictation::DictationTarget::ExternalApp,
-        crate::dictation::DictationTarget::DayPageToday,
-        crate::dictation::DictationTarget::QuickAiQuestion,
-        crate::dictation::DictationTarget::TabAiHarness,
-    ] {
-        let recording = super::window::dictation_native_footer_config(
-            &DictationSessionPhase::Recording,
-            true,
-            target,
-        );
-        let confirming = super::window::dictation_native_footer_config(
-            &DictationSessionPhase::Confirming,
-            true,
-            target,
-        );
-        let recording_primary = recording
-            .buttons
-            .iter()
-            .find(|button| button.action == FooterAction::Stop)
-            .expect("recording primary");
-        let confirming_primary = confirming
-            .buttons
-            .iter()
-            .find(|button| button.action == FooterAction::Stop)
-            .expect("confirming primary");
-        assert_eq!(
-            recording_primary.label.as_ref(),
-            format!(
-                "Stop & {}",
-                match target {
-                    crate::dictation::DictationTarget::DayPageToday => "Save to Today",
-                    crate::dictation::DictationTarget::QuickAiQuestion => "Ask",
-                    _ => target.descriptor().delivery_verb,
-                }
-            )
-        );
-        assert_eq!(
-            confirming_primary.label.as_ref(),
-            match target {
-                crate::dictation::DictationTarget::DayPageToday => "Save to Today",
-                crate::dictation::DictationTarget::QuickAiQuestion => "Ask",
-                _ => target.descriptor().delivery_verb,
-            }
-        );
-    }
-}
-
-#[test]
-fn dictation_chip_tooltips_describe_selection_without_delivery() {
-    use super::window::chip_tooltip_label;
-    use crate::dictation::DictationTarget;
-
-    let external = chip_tooltip_label(DictationTarget::ExternalApp);
-    assert!(
-        external.as_ref().contains("frontmost app")
-            || external.as_ref().starts_with("Dictate into "),
-        "external app tooltip should name the selection target"
-    );
-    for target in [
-        DictationTarget::DayPageToday,
-        DictationTarget::QuickAiQuestion,
-        DictationTarget::TabAiHarness,
-    ] {
-        assert_eq!(
-            chip_tooltip_label(target).as_ref(),
-            format!(
-                "Destination: {} · delivered only when you choose Stop",
-                target.descriptor().description
-            )
-        );
-    }
-}
-
-#[test]
-fn overlay_destination_chip_icons_resolve_to_lucide_assets() {
-    // Each chip carries an icon matching how its concept is drawn elsewhere
-    // in the app (paste/clipboard, day/calendar, ask/sparkles, Agent
-    // Chat/bot). Resolution must succeed so the chips never render blank
-    // icon slots.
-    for descriptor in crate::dictation::DictationTarget::quick_chip_descriptors() {
-        assert!(
-            super::window::chip_icon_path(descriptor.icon).is_some(),
-            "chip {} ({:?}) icon {:?} must resolve to a Lucide asset path",
-            descriptor.delivery_verb,
-            descriptor.target,
-            descriptor.icon,
-        );
-    }
-}
-
-#[test]
-fn overlay_timer_and_target_badge_use_readable_primary_text() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-
-    // 2026-07-06 caption redesign: the timer reads active primary while the
-    // session is live and intentionally grays out (muted) once processing
-    // locks the duration in — the header holds its layout instead of
-    // vanishing into a progress indicator.
-    assert!(
-        window_src.contains("let timer_color = if interactive {")
-            && window_src.contains("theme.colors.text.primary.with_opacity(OPACITY_ACTIVE)"),
-        "live timer must use active primary text, graying only during processing"
-    );
-    assert!(
-        window_src.contains("render_target_badge_content(self.state.target)")
-            && window_src.contains("target_badge_label(target)"),
-        "target badge must render through the shared content helper with text fallback"
-    );
-}
-
-#[test]
-fn external_app_badge_uses_the_frozen_selection_not_live_focus() {
-    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    let label_start = window_src
-        .find("pub(crate) fn target_badge_label(")
-        .expect("badge label helper");
-    let icon_start = window_src
-        .find("pub(crate) fn target_badge_frontmost_app_icon(")
-        .expect("badge icon helper");
-    let badge_helpers = &window_src[label_start..icon_start + 900];
-
-    assert!(
-        badge_helpers.contains("get_dictation_target_selection()")
-            && badge_helpers.contains("selection.display_label")
-            && badge_helpers.contains("icon_identity")
-            && badge_helpers.contains("crate::app_launcher::cached_app_icon_for_bundle")
-            && !badge_helpers.contains("get_last_real_app()"),
-        "external-app badge label and icon must project the frozen selection rather than current focus"
-    );
 }
 
 #[test]
@@ -5554,7 +3735,7 @@ fn dictation_start_preflight_requests_mic_access_and_uses_real_model_status() {
 // ---------------------------------------------------------------------------
 
 /// When transcription fails because the Parakeet model is missing, the
-/// handler must close the overlay and open the rich download prompt so the
+/// handler must open the rich download prompt so the
 /// user can immediately start the download — rather than showing a
 /// dead-end toast that requires them to guess the next step.
 #[test]
@@ -5572,12 +3753,6 @@ fn missing_model_transcription_recovery_opens_download_prompt() {
     // including the early return after cleanup / prompt dispatch.
     let branch_src = &handler_src[parakeet_branch_start
         ..parakeet_branch_start + 900.min(handler_src.len() - parakeet_branch_start)];
-
-    // Must close the dictation overlay before opening the prompt.
-    assert!(
-        branch_src.contains("close_dictation_overlay"),
-        "Parakeet-missing branch must close the dictation overlay"
-    );
 
     // Must open the rich download prompt.
     assert!(
@@ -5753,32 +3928,6 @@ fn preflight_accepts_launcher_without_tracked_frontmost_app() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Live transcript preview + dictation preference defaults
-// ---------------------------------------------------------------------------
-
-#[test]
-fn estimate_caption_lines_wraps_words_greedily() {
-    use super::window::estimate_caption_lines;
-
-    // Empty and single-word text is one line.
-    assert_eq!(estimate_caption_lines("", 10), 1);
-    assert_eq!(estimate_caption_lines("hello", 10), 1);
-
-    // "hello world" at width 8: "hello" (5) + " world" would need 11 > 8.
-    assert_eq!(estimate_caption_lines("hello world", 8), 2);
-    // At width 11 the two words fit one line exactly.
-    assert_eq!(estimate_caption_lines("hello world", 11), 1);
-
-    // A word longer than the line width still counts one line (the text
-    // system will break it; the estimate stays conservative).
-    assert_eq!(estimate_caption_lines(&"a".repeat(30), 10), 1);
-
-    // Steady prose grows roughly linearly.
-    let prose = "one two three four five six seven eight nine ten".repeat(3);
-    assert!(estimate_caption_lines(&prose, 20) >= 6);
-}
-
 #[test]
 fn chunked_transcription_reserved_for_long_audio() {
     use super::transcription::should_use_chunked_transcription;
@@ -5789,19 +3938,6 @@ fn chunked_transcription_reserved_for_long_audio() {
     // A five-minute recording must go through the chunked path — one giant
     // encoder pass is quadratic in audio length and can drop trailing speech.
     assert!(should_use_chunked_transcription(300 * rate as usize, rate));
-}
-
-#[test]
-fn overlay_growth_constants_bound_the_pill() {
-    use super::window::{
-        OVERLAY_HEIGHT_PX, OVERLAY_MAX_EXTRA_CAPTION_LINES, TRANSCRIPT_LINE_HEIGHT_PX,
-    };
-    let max_height =
-        OVERLAY_HEIGHT_PX + OVERLAY_MAX_EXTRA_CAPTION_LINES as f32 * TRANSCRIPT_LINE_HEIGHT_PX;
-    assert!(
-        max_height <= 200.0,
-        "fully grown dictation pill must stay a compact bottom-edge overlay, got {max_height}"
-    );
 }
 
 #[test]

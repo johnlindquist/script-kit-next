@@ -25,7 +25,6 @@ pub(crate) const FOOTER_KEY_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 pub(crate) const FOOTER_RETURN_GLYPH_NUDGE_Y_PX: f32 = 1.0;
 #[allow(dead_code)]
 pub(crate) const FOOTER_SEMICOLON_GLYPH_NUDGE_Y_PX: f32 = -1.0;
-pub(crate) const FOOTER_BUTTON_VERTICAL_INSET_PX: f32 = 2.0;
 // Inter-item gap for footer hint chips. Kept compact now that only actual
 // keycaps carry borders; label text no longer needs the wider bordered-chip
 // spacing rhythm.
@@ -205,13 +204,10 @@ pub(crate) fn glass_capsule(
     )
 }
 
-pub(crate) fn remove_glass_capsule_group(window: &Window, group: &'static str) {
-    #[cfg(target_os = "macos")]
-    crate::platform::glass_button_host::remove_group(window, group);
-    #[cfg(not(target_os = "macos"))]
-    let _ = (window, group);
-}
-
+#[allow(
+    dead_code,
+    reason = "the separately compiled application binary draws the main window that calls this"
+)]
 pub(crate) fn remove_glass_capsule_window(window: &Window) {
     #[cfg(target_os = "macos")]
     crate::platform::glass_button_host::remove_for_window(window);
@@ -1045,44 +1041,6 @@ pub(crate) fn render_footer_hint_content(
     )
 }
 
-/// Flexbox-native footer hint content. Instead of estimating text width in
-/// Rust and truncating against a precomputed slot width, the label is a
-/// shrinkable flex item that ellipsizes under real layout pressure while the
-/// keycaps keep their intrinsic size. Callers control overall pressure with
-/// `min_w`/`max_w` on the button container; no slot math is required.
-pub(crate) fn render_footer_hint_content_flex(
-    label: SharedString,
-    key: SharedString,
-    mode: FooterHintKeyMode,
-    theme: &Theme,
-    key_first: bool,
-    justify: FooterHintContentJustify,
-) -> AnyElement {
-    render_footer_hint_content_flex_for_state(label, key, mode, theme, key_first, justify, false)
-}
-
-pub(crate) fn render_footer_hint_content_flex_for_state(
-    label: SharedString,
-    key: SharedString,
-    mode: FooterHintKeyMode,
-    theme: &Theme,
-    key_first: bool,
-    justify: FooterHintContentJustify,
-    selected: bool,
-) -> AnyElement {
-    render_footer_hint_content_flex_with_layout(
-        label,
-        key,
-        mode,
-        theme,
-        key_first,
-        justify,
-        FooterHintButtonLayoutOverrides::default(),
-        selected,
-        None,
-    )
-}
-
 #[allow(clippy::too_many_arguments)]
 fn render_footer_hint_content_flex_with_layout(
     label: SharedString,
@@ -1300,8 +1258,10 @@ pub(crate) fn render_footer_hint_action_button_frame(
     };
 
     let hug_frame = spec.layout.hug_frame_to_content;
+    let selector = spec.id.to_string();
     div()
         .id(spec.id)
+        .debug_selector(move || selector)
         .when(!hug_frame, |style| style.w(px(spec.slot_width_px)))
         // Hug mode: intrinsic content width that never shrinks or truncates —
         // a footer button that ellipsizes its label or keycap is useless.

@@ -124,14 +124,14 @@ pub use types::{
 
 #[cfg(any(test, feature = "owned-ui-evaluation"))]
 pub use types::{
-    AgentChatFixtureCommand, DesignCommand, DictationFixtureCommand, DictationFixtureDestination,
-    EvaluationLimits, FixtureControl, FixtureDescriptor, FlowFixtureCommand, NativeSafetyProbe,
-    NotesFixtureCommand, ObservedEffect, OwnedFileSearchPreviewCondition,
-    OwnedFileSearchStreamCondition, OwnedFrameCursor, OwnedResponseCodec, OwnedResponseEncoding,
-    OwnedRuntimeIdentity, OwnedSearchProviderCondition, OwnedSearchProviderSource,
-    OwnedSearchQueryStamp, ScheduledFrameRequirement, ScopedActionReceipt, SdkChatFixtureCommand,
-    SdkCompletionChannel, SdkPromptCommand, SdkPromptFixtureId, SearchFixtureCommand,
-    ThemeFaultOperation, ThemeFixtureCommand, OWNED_RESPONSE_CODEC,
+    AgentChatFixtureCommand, DesignCommand, EvaluationLimits, FixtureControl, FixtureDescriptor,
+    FlowFixtureCommand, NativeSafetyProbe, NotesFixtureCommand, ObservedEffect,
+    OneWindowFixtureCommand, OneWindowTalkDestination, OwnedFileSearchPreviewCondition,
+    OwnedFileSearchStreamCondition, OwnedFrameCursor, OwnedResponseEncoding, OwnedRuntimeIdentity,
+    OwnedSearchProviderCondition, OwnedSearchQueryStamp, ScheduledFrameRequirement,
+    ScopedActionReceipt, SdkChatFixtureCommand, SdkCompletionChannel, SdkPromptCommand,
+    SdkPromptFixtureId, SearchFixtureCommand, ThemeFaultOperation, ThemeFixtureCommand,
+    OWNED_RESPONSE_CODEC,
 };
 pub use types::{
     CompletedFrameIdentity, LiveThemeEdit, ThemeInvalidation, ThemeInvalidationCause,

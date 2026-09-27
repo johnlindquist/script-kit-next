@@ -164,7 +164,7 @@ impl ScriptListApp {
                     // Close actions popup when main input receives focus
                     // This ensures consistent behavior: clicking the input closes actions
                     // just like pressing Cmd+K would
-                    if this.show_actions_popup || is_actions_window_open() {
+                    if this.show_actions_popup {
                         logging::log(
                             "FOCUS",
                             "Main input focused while actions open - closing actions via shared close path",
@@ -261,7 +261,7 @@ impl ScriptListApp {
                     }
 
                     if matches!(this.current_view, AppView::ThemeChooserView { .. }) {
-                        if !this.show_actions_popup && !actions::is_actions_window_open() {
+                        if !this.show_actions_popup {
                             this.submit_theme_chooser_from_input_enter(window, cx);
                         } else {
                             logging::log(
@@ -540,8 +540,6 @@ impl ScriptListApp {
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),
-            dictation_history_scroll_handle: ScrollHandle::new(),
-            dictation_history_previous_page: None,
             notes_browse_scroll_handle: ScrollHandle::new(),
             tracked_builtin_list_states: std::collections::HashMap::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
@@ -842,13 +840,11 @@ impl ScriptListApp {
                 // GLOBAL and fire for ALL windows.  Secondary windows own
                 // their own Tab/Cmd+Enter handling.
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                if is_detached_agent_chat || is_actions {
+                if is_detached_agent_chat {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
                         is_detached_agent_chat,
-                        is_actions,
                     );
                     return;
                 }
@@ -1273,9 +1269,7 @@ impl ScriptListApp {
                             if let AppView::AgentChatView { entity, .. } = &this.current_view {
                                 if has_shift {
                                     cx.stop_propagation();
-                                    if this.show_actions_popup
-                                        || crate::actions::is_actions_window_open()
-                                    {
+                                    if this.show_actions_popup {
                                         return;
                                     }
                                     tracing::info!(
@@ -1359,7 +1353,6 @@ impl ScriptListApp {
                             }
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !this.show_actions_popup
-                                && !crate::actions::is_actions_window_open()
                             {
                                 this.set_main_menu_dispatch_observation(None);
                                 this.flush_pending_main_menu_query(cx);
@@ -1392,7 +1385,6 @@ impl ScriptListApp {
                                 }
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !this.show_actions_popup
-                                && !crate::actions::is_actions_window_open()
                             {
                                 if this.should_consume_script_list_enter_after_submit(
                                     "global_plain_enter_script_list",
@@ -1443,13 +1435,11 @@ impl ScriptListApp {
                 // Keep main list arrow routing scoped to the main window so AI/actions
                 // windows receive their own navigation key events.
                 if crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
-                    || crate::actions::is_actions_window(window)
                 {
                     return;
                 }
 
                 let key = event.keystroke.key.as_str();
-                let key_char = event.keystroke.key_char.as_deref();
                 let is_up = crate::ui_foundation::is_key_up(key);
                 let is_down = crate::ui_foundation::is_key_down(key);
                 let is_left = crate::ui_foundation::is_key_left(key);
@@ -1523,7 +1513,6 @@ impl ScriptListApp {
                         app.update(cx, |this, cx| {
                             if this.route_day_page_note_switcher_key(
                                 key,
-                                key_char,
                                 &event.keystroke.modifiers,
                                 window,
                                 cx,
@@ -1542,7 +1531,6 @@ impl ScriptListApp {
                                     } else if is_down {
                                         dialog.update(cx, |d, cx| d.move_down(cx));
                                     }
-                                    crate::actions::notify_actions_window(cx);
                                 }
                                 cx.stop_propagation();
                                 return;
@@ -1565,7 +1553,6 @@ impl ScriptListApp {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
-                                            crate::actions::notify_actions_window(cx);
                                         }
                                         cx.stop_propagation();
                                         return;
@@ -1630,7 +1617,6 @@ impl ScriptListApp {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
-                                            crate::actions::notify_actions_window(cx);
                                         }
                                         cx.stop_propagation();
                                         return;
@@ -1835,36 +1821,6 @@ impl ScriptListApp {
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
                                         this.browser_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    }
-                                    cx.stop_propagation();
-                                }
-                                AppView::DictationHistoryView {
-                                    selected_index,
-                                    filter,
-                                    visible_limit,
-                                } => {
-                                    let retained_len = this
-                                        .dictation_history_previous_page
-                                        .as_ref()
-                                        .map(|page| page.rows.len())
-                                        .unwrap_or(0);
-                                    let filtered_len = crate::dictation::search_history_page(
-                                        filter,
-                                        0,
-                                        *visible_limit,
-                                    )
-                                    .map(|page| page.rows.len())
-                                    .unwrap_or(retained_len);
-                                    if is_up && *selected_index > 0 {
-                                        *selected_index -= 1;
-                                        this.dictation_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    } else if is_down && *selected_index + 1 < filtered_len {
-                                        *selected_index += 1;
-                                        this.dictation_history_scroll_handle
                                             .scroll_to_item(*selected_index);
                                         cx.notify();
                                     }
@@ -2091,7 +2047,6 @@ impl ScriptListApp {
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
-                                            crate::actions::notify_actions_window(cx);
                                         }
                                         cx.stop_propagation();
                                         return;
@@ -2303,9 +2258,7 @@ impl ScriptListApp {
                 }
 
                 // Skip processing if this keystroke is from a secondary window
-                if crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
-                    || crate::actions::is_actions_window(window)
-                {
+                if crate::ai::agent_chat::ui::chat_window::is_chat_window(window) {
                     return;
                 }
 
@@ -2361,18 +2314,8 @@ impl ScriptListApp {
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
-                let is_actions = crate::actions::is_actions_window(window);
                 let secondary_window = SecondarySurfaceWindowState::inspect(window);
                 let is_secondary_surface_window = secondary_window.is_secondary();
-                let actions_open_for_main = crate::actions::is_actions_window_open_for_main();
-
-                // A detached actions popup hosted by a secondary window (Notes,
-                // detached Agent Chat) owns its keys via ActionsWindow::on_key_down.
-                // Routing them through the main app's dialog router would land on
-                // the wrong (or absent) dialog entity and swallow every keystroke.
-                if is_actions && !actions_open_for_main {
-                    return;
-                }
 
                 let key = event.keystroke.key.as_str();
                 let key_lower = key.to_ascii_lowercase();
@@ -2387,33 +2330,14 @@ impl ScriptListApp {
                 // The global interceptor sees every app window. Secondary parent
                 // surfaces own their own Cmd+K/Escape routing; do not lease the
                 // main ScriptListApp before their host callbacks can handle it.
-                if !is_actions && is_secondary_surface_window {
+                if is_secondary_surface_window {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
                         is_detached_agent_chat = secondary_window.is_detached_agent_chat,
-                        is_actions,
                         key = %key,
                         is_actions_close_key,
                     );
-                    return;
-                }
-
-                if is_actions {
-                    let routed = crate::actions::route_key_to_detached_actions_window(
-                        key,
-                        key_char,
-                        &event.keystroke.modifiers,
-                        cx,
-                    );
-                    if routed {
-                        tracing::debug!(
-                            target: "script_kit::actions",
-                            event = "actions_interceptor_routed_from_actions_window_owner",
-                            key = %key,
-                        );
-                        cx.stop_propagation();
-                    }
                     return;
                 }
 
@@ -2425,10 +2349,7 @@ impl ScriptListApp {
                     let mut close_key_routed = false;
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            if !is_actions
-                                && !this.show_actions_popup
-                                && !actions_open_for_main
-                            {
+                            if !this.show_actions_popup {
                                 return;
                             }
                             let Some(host) = this.current_actions_host() else {
@@ -2446,11 +2367,7 @@ impl ScriptListApp {
                                 ActionsRoute::Handled | ActionsRoute::Execute { .. } => {
                                     tracing::info!(
                                         target: "script_kit::actions",
-                                        event = if is_actions {
-                                            "actions_interceptor_routed_from_actions_window"
-                                        } else {
-                                            "actions_interceptor_routed_close_before_visibility_guard"
-                                        },
+                                        event = "actions_interceptor_routed_close_before_visibility_guard",
                                         host = ?host,
                                         key = %key,
                                     );
@@ -2472,7 +2389,6 @@ impl ScriptListApp {
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_main_window_hidden",
                         is_detached_agent_chat = secondary_window.is_detached_agent_chat,
-                        is_actions,
                     );
                     return;
                 }
@@ -2520,7 +2436,6 @@ impl ScriptListApp {
                         // key intents run only after the dialog declines the key.
                         if this.route_day_page_note_switcher_key(
                             key,
-                            key_char,
                             &event.keystroke.modifiers,
                             window,
                             cx,

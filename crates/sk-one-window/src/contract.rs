@@ -253,6 +253,18 @@ pub mod talk_words {
     pub const AT_YOUR_CURSOR: &str = "at your cursor";
     pub const TYPING_INTO: &str = "Typing into";
     pub const VIEW_LABEL: &str = "Listening";
+    pub const SEND_TO_MODEL: &str = "Send it to the model";
+    pub const ADD_TO_NOTE: &str = "Add it to today's note";
+    pub const WHEN_YOU_LET_GO: &str = "what you say, when you let go of the key";
+
+    /// "Talking to the model" or "Talking to today's note".
+    pub fn talking_to(model: bool) -> &'static str {
+        if model {
+            "Talking to the model"
+        } else {
+            "Talking to today's note"
+        }
+    }
 
     /// "Sounds like you're writing to Sarah".
     pub fn writing_to(to: Option<&str>) -> String {

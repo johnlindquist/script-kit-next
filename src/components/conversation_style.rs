@@ -498,6 +498,7 @@ mod conversation_style_contract_tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings, clippy::mistyped_literal_suffixes)]
     fn resolved_transcript_bytes_match_renderer_packing() {
         let theme = stock_theme();
         let style = production_conversation_style();
@@ -526,6 +527,7 @@ mod conversation_style_contract_tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn send_state_chrome_covers_all_four_states() {
         let accent = 0xFBBF24;
         let text = 0xFFFFFF;

@@ -17,6 +17,8 @@ pub(crate) struct PromptInstance {
 pub(crate) enum PromptOutcome {
     Submitted(SubmitValue),
     Cancelled,
+    // The library's test build has no prompt handler to confirm.
+    #[cfg_attr(test, allow(dead_code))]
     Confirmed(bool),
     ChatSubmitted(String),
 }
@@ -39,6 +41,8 @@ pub(crate) enum SubmissionError {
     Disconnected,
     Poisoned,
     InvalidInput,
+    // Only the binary's webcam and recorder saves fail storage.
+    #[cfg_attr(test, allow(dead_code))]
     StorageFailure,
 }
 impl std::fmt::Display for SubmissionError {

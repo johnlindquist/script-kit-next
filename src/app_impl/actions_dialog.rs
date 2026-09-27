@@ -42,7 +42,6 @@ impl ScriptListApp {
         match view {
             AppView::ScriptList | AppView::DayPage { .. } => Some(ActionsDialogHost::MainList),
             AppView::ClipboardHistoryView { .. } => Some(ActionsDialogHost::ClipboardHistory),
-            AppView::DictationHistoryView { .. } => Some(ActionsDialogHost::DictationHistory),
             AppView::FavoritesBrowseView { .. } => Some(ActionsDialogHost::Favorites),
             AppView::ThemeChooserView { .. } => Some(ActionsDialogHost::ThemeChooser),
             AppView::EmojiPickerView { .. } => Some(ActionsDialogHost::EmojiPicker),
@@ -111,20 +110,6 @@ impl ScriptListApp {
         self.current_actions_host().is_some()
     }
 
-    pub(crate) fn make_actions_dialog_activation_callback(
-        app_entity: Entity<Self>,
-        host: ActionsDialogHost,
-    ) -> crate::actions::ActivationCallback {
-        std::sync::Arc::new(move |activation, window, cx| {
-            let app_entity = app_entity.clone();
-            window.defer(cx, move |window, cx| {
-                app_entity.update(cx, |app, cx| {
-                    app.handle_actions_dialog_activation(host, activation.clone(), window, cx);
-                });
-            });
-        })
-    }
-
     pub(crate) fn handle_actions_dialog_activation(
         &mut self,
         host: ActionsDialogHost,
@@ -136,7 +121,6 @@ impl ScriptListApp {
             crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
                 // Agent & Model picker: provider ("Agent") rows are drill-only;
                 // nothing persists until a model is chosen.
-                crate::actions::notify_actions_window(cx);
                 if let Some(dialog) = self.actions_dialog.as_ref() {
                     let (route_id, search_placeholder, route_depth, escape_hint) = {
                         let dialog_ref = dialog.read(cx);
@@ -483,18 +467,7 @@ impl ScriptListApp {
                 if let Some(entry) = self.selected_clipboard_entry() {
                     self.toggle_clipboard_actions(entry, window, cx);
                     true
-                } else if self.show_actions_popup || crate::actions::is_actions_window_open() {
-                    self.toggle_actions(cx, window);
-                    true
-                } else {
-                    false
-                }
-            }
-            ActionsDialogHost::DictationHistory => {
-                if let Some(entry) = self.selected_dictation_history_entry() {
-                    self.toggle_dictation_history_actions(entry, window, cx);
-                    true
-                } else if self.show_actions_popup || crate::actions::is_actions_window_open() {
+                } else if self.show_actions_popup {
                     self.toggle_actions(cx, window);
                     true
                 } else {
@@ -502,10 +475,7 @@ impl ScriptListApp {
                 }
             }
             ActionsDialogHost::Favorites => {
-                if self.selected_favorite_id().is_some()
-                    || self.show_actions_popup
-                    || crate::actions::is_actions_window_open()
-                {
+                if self.selected_favorite_id().is_some() || self.show_actions_popup {
                     self.toggle_favorites_actions(window, cx);
                     true
                 } else {
@@ -545,7 +515,7 @@ impl ScriptListApp {
                 true
             }
             ActionsDialogHost::BuiltinList => {
-                if self.show_actions_popup || crate::actions::is_actions_window_open() {
+                if self.show_actions_popup {
                     self.close_actions_popup(host, window, cx);
                     true
                 } else {
@@ -933,21 +903,13 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> ActionsRoute {
-        // Not open - let caller handle the key. Detached actions popups keep
-        // parent focus, so the parent router must stay active while their
-        // native child window is open even if the inline flag has already been
-        // cleared. Only a MAIN-hosted detached popup counts: a popup hosted by
-        // a secondary window (Notes, etc.) belongs to that window's router and
-        // must not pull this one into swallowing keys against the wrong dialog.
-        if !self.show_actions_popup && !crate::actions::is_actions_window_open_for_main() {
+        if !self.show_actions_popup {
             return ActionsRoute::NotHandled;
         }
 
         // A main-window CommandBar hosted by a child surface (Day Page Cmd+P)
-        // uses the shared detached actions window without storing its dialog
-        // in ScriptListApp.actions_dialog. Let that popup/window or the child
-        // view handle keys instead of swallowing them through the stale
-        // shared-actions route.
+        // keeps its dialog out of ScriptListApp.actions_dialog; the child view
+        // handles its keys.
         let Some(ref dialog) = self.actions_dialog else {
             return ActionsRoute::NotHandled;
         };
@@ -970,13 +932,11 @@ impl ScriptListApp {
 
         if is_key_up(key) {
             dialog.update(cx, |d, cx| d.move_up(cx));
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
         if is_key_down(key) {
             dialog.update(cx, |d, cx| d.move_down(cx));
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -1021,7 +981,6 @@ impl ScriptListApp {
                     }
                 }
             });
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -1066,7 +1025,6 @@ impl ScriptListApp {
                     // Agent & Model picker: a provider ("Agent") row is drill-only
                     // — nothing persists until a model is chosen, because the
                     // provider is encoded in the namespaced model id.
-                    crate::actions::notify_actions_window(cx);
                     let (route_id, search_placeholder, route_depth, escape_hint) = {
                         let dialog_ref = dialog.read(cx);
                         (
@@ -1117,7 +1075,6 @@ impl ScriptListApp {
                     dialog.update(cx, |d, cx| {
                         d.sync_search_input_from_model(window, cx);
                     });
-                    crate::actions::notify_actions_window(cx);
                     let (route_id, search_placeholder, route_depth, escape_hint) = {
                         let dialog_ref = dialog.read(cx);
                         (
@@ -1153,14 +1110,12 @@ impl ScriptListApp {
                 dialog.update(cx, |d, cx| {
                     d.delete_previous_search_word(window, cx);
                 });
-                crate::actions::notify_actions_window(cx);
                 return ActionsRoute::Handled;
             }
             if !modifiers.platform && !modifiers.control {
                 dialog.update(cx, |d, cx| {
                     d.backspace_search_input(window, cx);
                 });
-                crate::actions::notify_actions_window(cx);
                 return ActionsRoute::Handled;
             }
         }
@@ -1173,7 +1128,6 @@ impl ScriptListApp {
                     d.delete_search_input(window, cx);
                 }
             });
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -1185,7 +1139,6 @@ impl ScriptListApp {
             dialog.update(cx, |d, cx| {
                 d.move_search_cursor_left(modifiers.shift, window, cx);
             });
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
         if key.eq_ignore_ascii_case("right")
@@ -1196,7 +1149,6 @@ impl ScriptListApp {
             dialog.update(cx, |d, cx| {
                 d.move_search_cursor_right(modifiers.shift, window, cx);
             });
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -1207,7 +1159,6 @@ impl ScriptListApp {
                 dialog.update(cx, |d, cx| {
                     d.insert_search_text(ch.to_string(), window, cx);
                 });
-                crate::actions::notify_actions_window(cx);
                 return ActionsRoute::Handled;
             }
         }
@@ -1239,7 +1190,6 @@ impl ScriptListApp {
                     dialog.update(cx, |d, cx| {
                         d.sync_search_input_from_model(window, cx);
                     });
-                    crate::actions::notify_actions_window(cx);
                     let (route_id, search_placeholder, route_depth, escape_hint) = {
                         let dialog_ref = dialog.read(cx);
                         (
@@ -1288,7 +1238,6 @@ impl ScriptListApp {
             dialog.update(cx, |d, cx| {
                 d.paste_search_input(window, cx);
             });
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -1301,7 +1250,6 @@ impl ScriptListApp {
             dialog.update(cx, |d, cx| {
                 d.select_all_search_input(window, cx);
             });
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -1317,7 +1265,6 @@ impl ScriptListApp {
                     d.undo_search_input(window, cx);
                 }
             });
-            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -1400,7 +1347,6 @@ impl ScriptListApp {
             ActionsDialogHost::MainList
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory
-            | ActionsDialogHost::DictationHistory
             | ActionsDialogHost::Favorites
             | ActionsDialogHost::ThemeChooser
             | ActionsDialogHost::EmojiPicker
@@ -1472,11 +1418,6 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let closing_from_actions_window = crate::actions::is_actions_window(window);
-        if closing_from_actions_window {
-            crate::platform::activate_main_window();
-        }
-
         let overlay_depth_before_on_close = self.focus_coordinator.overlay_depth();
         let on_close_callback = self
             .actions_dialog
@@ -1498,19 +1439,8 @@ impl ScriptListApp {
         let callback_restored_focus = overlay_depth_after_on_close < overlay_depth_before_on_close;
 
         self.mark_actions_popup_closed();
+        self.one_window_let_go_in_view(cx);
         self.resync_filter_input_after_actions_if_needed(window, cx);
-
-        // Close the separate actions window if open
-        // This ensures consistent behavior whether closing via Cmd+K, Escape, backdrop click,
-        // or any other close mechanism
-        if is_actions_window_open() {
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    close_actions_window(cx);
-                });
-            })
-            .detach();
-        }
 
         // Use coordinator to pop overlay and restore previous focus.
         // Skip pop when the dialog callback already restored focus to avoid double-pop.
@@ -1523,13 +1453,7 @@ impl ScriptListApp {
 
         // Apply restored focus immediately rather than deferring to next render.
         // pop_focus_overlay sets pending_focus to the saved target (e.g. ChatPrompt).
-        // Applying it now avoids race conditions with the async window close.
-        if closing_from_actions_window {
-            logging::log(
-                "FOCUS",
-                "Actions popup closed from actions window; pending focus will apply on the main window",
-            );
-        } else if !self.apply_pending_focus(window, cx) {
+        if !self.apply_pending_focus(window, cx) {
             // Fallback: focus app root if no pending focus was applied
             window.focus(&self.focus_handle, cx);
         }
@@ -1542,9 +1466,8 @@ impl ScriptListApp {
         );
         cx.notify();
 
-        // Check for a pending Agent Chat handoff target enqueued by the detached
-        // actions window's Cmd+Enter handler. The slot is only populated
-        // when a secondary surface explicitly requested the handoff.
+        // Check for a pending Agent Chat handoff target a secondary surface
+        // enqueued for the main window.
         if let Some(target) = crate::ai::take_pending_explicit_agent_chat_target() {
             if matches!(self.current_view, AppView::DayPage { .. }) {
                 tracing::info!(
@@ -1589,10 +1512,8 @@ impl ScriptListApp {
         );
 
         self.mark_actions_popup_closed();
+        self.one_window_let_go_in_view(cx);
         self.mark_filter_resync_after_actions_if_needed();
-        if is_actions_window_open() {
-            close_actions_window(cx);
-        }
         self.pop_focus_overlay(cx);
         cx.notify();
     }

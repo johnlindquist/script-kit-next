@@ -1,9 +1,4 @@
-use gpui::{
-    div, prelude::FluentBuilder, px, rgba, svg, AnyElement, AnyWindowHandle, App, AppContext,
-    Bounds, Context, DisplayId, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement, Pixels, Render, SharedString, StatefulInteractiveElement, Styled, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
-};
+use gpui::{AnyWindowHandle, App, Bounds, Pixels, SharedString, Window};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, OnceLock};
 
@@ -434,8 +429,7 @@ pub(crate) struct FooterLeftInfo {
     /// Optional accent-colored braille spinner glyph rendered before the
     /// label (loading states, e.g. "Fetching tabs"). The caller re-syncs the
     /// footer config with the current frame each render tick; only the GPUI
-    /// overlay renders it — main-window surfaces always own their glyphs
-    /// there, and no detached-footer surface sets it.
+    /// footer rail renders it, and no detached-footer surface sets it.
     pub spinner_glyph: Option<String>,
     /// Optional action dispatched when the merged left marker is clicked.
     pub action: Option<FooterAction>,
@@ -714,11 +708,6 @@ struct MainWindowFooterRefreshSignature {
     /// current theme (not threaded through `config`), so the discriminant is
     /// folded into the signature to force a rebuild on cycle.
     main_menu_theme: u8,
-    /// Whether the GPUI overlay owns the glyphs for this refresh (main window)
-    /// or AppKit renders them natively (detached Agent Chat / dictation).
-    /// Folded in so alternating refreshes across hosts with otherwise
-    /// identical configs still rebuild the hint subviews.
-    gpui_overlay_owns_glyphs: bool,
     /// Per-button leading-dot colors (parallel to `config.buttons`). A theme
     /// change can recolor a button's status dot without changing the config, and
     /// the AppKit dot layer is created inside the content rebuild, so this is
@@ -731,7 +720,6 @@ fn native_footer_refresh_signature(
     config: &MainWindowFooterConfig,
     snapshot: &crate::theme::live_edit::PublishedTheme,
     content_width: f64,
-    gpui_overlay_owns_glyphs: bool,
 ) -> MainWindowFooterRefreshSignature {
     let theme = snapshot.theme.as_ref();
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
@@ -764,7 +752,6 @@ fn native_footer_refresh_signature(
         .signature,
         native_visual_theme: resolve_native_footer_visual_theme(theme),
         main_menu_theme: crate::designs::current_main_menu_theme() as u8,
-        gpui_overlay_owns_glyphs,
         button_leading_dot_hexes: config
             .buttons
             .iter()
@@ -833,539 +820,6 @@ fn native_footer_visual_theme_from_parts(
 include!("footer_popup_ownership.rs");
 
 include!("footer_popup_fidelity.rs");
-include!("footer_popup_overlay.rs");
-include!("footer_popup_adapters.rs");
-
-struct GpuiFooterOverlay {
-    config: MainWindowFooterConfig,
-    binding: FooterBinding,
-    overlay_width_px: f32,
-    last_reported_row_palette: Option<crate::theme::MainMenuRowStatePalette>,
-    close_subscription: Option<gpui::Subscription>,
-    painted_binding: Option<FooterBinding>,
-    painted_frame_generation: u64,
-}
-
-impl GpuiFooterOverlay {
-    fn new(config: MainWindowFooterConfig, binding: FooterBinding, overlay_width_px: f32) -> Self {
-        Self {
-            config,
-            binding,
-            overlay_width_px,
-            last_reported_row_palette: None,
-            close_subscription: None,
-            painted_binding: None,
-            painted_frame_generation: 0,
-        }
-    }
-
-    fn set_config(
-        &mut self,
-        config: MainWindowFooterConfig,
-        binding: FooterBinding,
-        overlay_width_px: f32,
-    ) {
-        self.config = config;
-        self.binding = binding;
-        self.overlay_width_px = overlay_width_px;
-    }
-
-    fn render_left_info(
-        &self,
-        left_info: Option<&FooterLeftInfo>,
-        theme: &crate::theme::Theme,
-    ) -> AnyElement {
-        let Some(info) = left_info else {
-            return div().into_any_element();
-        };
-
-        let row_id = if info.action.is_some() {
-            "agent-chat-profile-display"
-        } else {
-            "footer-left-info"
-        };
-        let interactive = info.action.is_some();
-        let row_states =
-            crate::components::footer_chrome::resolved_footer_button_visual_colors(theme)
-                .row_states;
-        let base_state = if interactive && info.selected {
-            row_states.active
-        } else {
-            row_states.rest
-        };
-        let hover_state = if interactive && info.selected {
-            row_states.active
-        } else {
-            row_states.hover
-        };
-        let base_foreground = rgba(base_state.primary_foreground_rgba);
-        let hover_foreground: gpui::Hsla = rgba(hover_state.primary_foreground_rgba).into();
-        let mut row = div()
-            .id(row_id)
-            .debug_selector(|| "agent-chat.footer-overlay.profile".to_string())
-            .flex()
-            .items_center()
-            .gap(px(FOOTER_LEFT_DOT_LABEL_GAP as f32))
-            .min_w(px(0.0))
-            .overflow_hidden();
-
-        if let Some(action) = info.action {
-            let binding = self.binding.clone();
-            // Clickable left-info markers (footer tip, Agent Chat profile)
-            // are real footer buttons: same hover pill, radius, and pressed
-            // fill as the trailing action buttons, with label/keycap/glyph
-            // brightening through the shared footer-action-button group.
-            let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
-            let hover_bg = rgba(row_states.hover.background_rgba.unwrap_or_default());
-            let active_bg = rgba(row_states.active.background_rgba.unwrap_or_default());
-            row = row
-                .h(px(crate::components::footer_chrome::footer_button_height(
-                    crate::components::footer_chrome::current_main_menu_footer_height(),
-                )))
-                .px(px(
-                    crate::components::footer_chrome::footer_centered_action_edge_padding_x(),
-                ))
-                .rounded(px(metrics.button_radius))
-                .group("footer-action-button")
-                .cursor_pointer()
-                .when(!info.selected, |style| {
-                    style.hover(move |style| style.bg(hover_bg))
-                })
-                .active(move |style| style.bg(active_bg))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    move |_event: &MouseDownEvent, _window, cx| {
-                        cx.stop_propagation();
-                        if record_footer_held_action(&binding, Some(action)) {
-                            _window.refresh();
-                        }
-                        dispatch_bound_footer_action(&binding, action);
-                    },
-                );
-        } else {
-            row = row.flex_1();
-        }
-
-        if info.selected && interactive {
-            row = row.bg(rgba(row_states.active.background_rgba.unwrap_or_default()));
-        } else if info.selected {
-            let accent = theme.colors.accent.selected;
-            row = row.bg(rgba((accent << 8) | 0x18));
-            row = row.rounded(px(4.0)).px(px(4.0)).py(px(1.0));
-        }
-
-        if info.icon_token.is_none() && !matches!(info.dot_status, FooterDotStatus::Hidden) {
-            row = row.child(
-                div()
-                    .size(px(FOOTER_STREAMING_DOT_SIZE as f32))
-                    .rounded(px((FOOTER_STREAMING_DOT_SIZE / 2.0) as f32))
-                    .bg(rgba(
-                        (footer_dot_hex(
-                            info.dot_status,
-                            theme,
-                            info.prefer_accent_for_active_states,
-                        ) << 8)
-                            | 0xff,
-                    )),
-            );
-        }
-
-        if let Some(glyph) = info
-            .spinner_glyph
-            .as_ref()
-            .filter(|glyph| !glyph.trim().is_empty())
-        {
-            let accent = theme.colors.accent.selected;
-            row = row.child(
-                div()
-                    .id("footer-braille-spinner")
-                    .debug_selector(|| "agent-chat.footer-overlay.spinner".to_string())
-                    .w(px(FOOTER_BRAILLE_SPINNER_LANE_PX))
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .font_family(crate::list_item::FONT_MONO)
-                    .text_size(px(FOOTER_BRAILLE_SPINNER_FONT_PX))
-                    .text_color(rgba((accent << 8) | 0xff))
-                    .child(glyph.clone()),
-            );
-        }
-
-        if let Some(path) = info
-            .icon_token
-            .as_deref()
-            .and_then(crate::components::footer_chrome::footer_icon_path)
-        {
-            row = row.child(
-                svg()
-                    .path(path)
-                    .size(px(13.0))
-                    .flex_shrink_0()
-                    .text_color(base_foreground)
-                    .group_hover("footer-action-button", move |style| {
-                        style.text_color(hover_foreground)
-                    }),
-            );
-        }
-
-        if let Some(keycap) = info.keycap.as_ref().filter(|key| !key.trim().is_empty()) {
-            row = row.child(
-                crate::components::footer_chrome::render_footer_shortcut_keycaps_for_state(
-                    keycap.clone(),
-                    theme,
-                    interactive && info.selected,
-                ),
-            );
-        }
-
-        if !info.model_name.trim().is_empty() {
-            let metrics = crate::components::footer_chrome::current_main_menu_footer_metrics();
-            let label_weight = if info.bold_label {
-                gpui::FontWeight::SEMIBOLD
-            } else {
-                metrics.font_weight
-            };
-            row = row.child(
-                div()
-                    .id("agent_chat-model-display")
-                    .debug_selector(|| "agent-chat.footer-overlay.model".to_string())
-                    .min_w(px(0.0))
-                    .font_family(crate::list_item::FONT_SYSTEM_UI)
-                    .font_weight(label_weight)
-                    .text_size(px(metrics.label_font_size))
-                    .text_color(base_foreground)
-                    .group_hover("footer-action-button", move |style| {
-                        style.text_color(hover_foreground)
-                    })
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
-                    .child(info.model_name.clone()),
-            );
-        }
-
-        if interactive {
-            // The button pill hugs its content inside the left lane instead
-            // of stretching a hover highlight across the empty footer.
-            div()
-                .flex_1()
-                .min_w(px(0.0))
-                .overflow_hidden()
-                .flex()
-                .items_center()
-                .justify_start()
-                .child(row)
-                .into_any_element()
-        } else {
-            row.into_any_element()
-        }
-    }
-
-    fn render_button(
-        &self,
-        button: FooterButtonConfig,
-        theme: &crate::theme::Theme,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let row_states =
-            crate::components::footer_chrome::resolved_footer_button_visual_colors(theme)
-                .row_states;
-        let action = button.action;
-        let descriptor_id = button.id.clone();
-        let key_is_icon =
-            crate::components::footer_chrome::is_footer_icon_token(button.key.as_ref());
-        let displayed_key = if key_is_icon || button.shortcut_routable {
-            button.key.clone()
-        } else {
-            SharedString::from("")
-        };
-        let selected_bg = rgba(row_states.active.background_rgba.unwrap_or_default());
-        let hover_bg = rgba(row_states.hover.background_rgba.unwrap_or_default());
-        let active_bg = selected_bg;
-        let item_height = crate::components::footer_chrome::footer_button_height(
-            crate::components::footer_chrome::current_main_menu_footer_height(),
-        );
-        let key_first = is_footer_left_pinned_button(&button)
-            && !matches!(action, FooterAction::Cwd | FooterAction::AgentModel);
-        let justify = if matches!(action, FooterAction::Cwd | FooterAction::AgentModel) || key_first
-        {
-            crate::components::footer_chrome::FooterHintContentJustify::Start
-        } else if matches!(action, FooterAction::Run) {
-            crate::components::footer_chrome::FooterHintContentJustify::KeyAnchored
-        } else {
-            crate::components::footer_chrome::FooterHintContentJustify::Center
-        };
-
-        // Flexbox-native sizing: each button takes its intrinsic content
-        // width (GPUI measures the real text), floored at the action's slot
-        // minimum and capped for the Run slot so long script names shrink and
-        // ellipsize under real layout pressure instead of against estimated
-        // character widths.
-        let min_width = footer_hint_slot_width(action) as f32;
-        let fidelity_id = format!("agent-chat.footer-overlay.{}", descriptor_id);
-        let mut item = div()
-            .id(descriptor_id)
-            .debug_selector(move || fidelity_id.clone())
-            .min_w(px(min_width))
-            .when(matches!(action, FooterAction::Run), |style| {
-                style.max_w(px(
-                    crate::components::footer_chrome::FOOTER_RUN_SLOT_MAX_WIDTH_PX,
-                ))
-            })
-            .h(px(item_height))
-            .rounded(px(
-                crate::components::footer_chrome::FOOTER_ACTION_BUTTON_RADIUS_PX,
-            ))
-            .overflow_hidden()
-            .flex()
-            .items_center()
-            .justify_center()
-            .group("footer-action-button")
-            .when(button.selected, |style| style.bg(selected_bg))
-            .child(if button.selected {
-                crate::components::footer_chrome::render_footer_hint_content_flex_for_state(
-                    button.label.clone(),
-                    displayed_key.clone(),
-                    crate::components::footer_chrome::FooterHintKeyMode::Shortcut,
-                    theme,
-                    key_first,
-                    justify,
-                    button.selected,
-                )
-            } else {
-                crate::components::footer_chrome::render_footer_hint_content_flex(
-                    button.label.clone(),
-                    displayed_key.clone(),
-                    crate::components::footer_chrome::FooterHintKeyMode::Shortcut,
-                    theme,
-                    key_first,
-                    justify,
-                )
-            });
-
-        if button.enabled {
-            item = item
-                .cursor_pointer()
-                .when(!button.selected, |style| {
-                    style.hover(move |style| style.bg(hover_bg))
-                })
-                .active(move |style| style.bg(active_bg))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |_this, _event: &MouseDownEvent, _window, cx| {
-                        cx.stop_propagation();
-                        if record_footer_held_action(&_this.binding, Some(action)) {
-                            cx.notify();
-                        }
-                        dispatch_bound_footer_action(&_this.binding, action);
-                    }),
-                );
-        } else {
-            item = item.opacity(0.45).cursor_default();
-        }
-
-        item.into_any_element()
-    }
-}
-
-impl Render for GpuiFooterOverlay {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(parent) = prepare_footer_overlay_render(self, window) else {
-            window.defer(cx, |window, _| window.remove_window());
-            return div().into_any_element();
-        };
-        let parent_id = self.binding.window_id.clone();
-        let painted_binding = self.binding.clone();
-        let overlay = cx.entity().downgrade();
-        window.defer(cx, move |window, cx| {
-            let _ = overlay.update(cx, |overlay, _| {
-                overlay.painted_binding = Some(painted_binding);
-                overlay.painted_frame_generation = window.rendered_frame_generation();
-            });
-        });
-        if window.fidelity_capture_active() {
-            // App effects flush after this draw completes, so the deferred
-            // callback observes the completed frame rendered below. This is
-            // also deterministic on GPUI's test platform, whose platform
-            // frame callback is intentionally inert.
-            window.defer(cx, move |window, _cx| {
-                if !window.fidelity_capture_active() {
-                    return;
-                }
-                let snapshot = crate::fidelity_capture::paint_target_snapshot(
-                    window,
-                    GPUI_FOOTER_OVERLAY_FIDELITY_TARGET_ID,
-                    "footerOverlay",
-                    Some(parent_id),
-                );
-                store_footer_overlay_fidelity_snapshot(parent, snapshot);
-            });
-        } else {
-            clear_footer_overlay_fidelity_snapshot(parent);
-        }
-
-        let theme = crate::theme::get_cached_theme();
-        let row_palette =
-            crate::components::footer_chrome::resolved_footer_button_visual_colors(&theme)
-                .row_states;
-        if self.last_reported_row_palette != Some(row_palette) {
-            tracing::info!(
-                target: "script_kit::footer_popup",
-                event = "gpui_footer_row_palette_resolved",
-                rest_background_rgba = row_palette.rest.background_rgba.unwrap_or_default(),
-                rest_has_background = row_palette.rest.background_rgba.is_some(),
-                rest_foreground_rgba = row_palette.rest.primary_foreground_rgba,
-                hover_background_rgba = row_palette.hover.background_rgba.unwrap_or_default(),
-                hover_foreground_rgba = row_palette.hover.primary_foreground_rgba,
-                active_background_rgba = row_palette.active.background_rgba.unwrap_or_default(),
-                active_foreground_rgba = row_palette.active.primary_foreground_rgba,
-                "Resolved GPUI footer controls from the canonical main-menu row palette"
-            );
-            self.last_reported_row_palette = Some(row_palette);
-        }
-        let left_pinned_buttons: Vec<_> = self
-            .config
-            .buttons
-            .iter()
-            .filter(|button| is_footer_left_pinned_button(button))
-            .cloned()
-            .collect();
-        let trailing_buttons: Vec<_> = self
-            .config
-            .buttons
-            .iter()
-            .filter(|button| !is_footer_left_pinned_button(button))
-            .cloned()
-            .collect();
-
-        // Pure flexbox layout: the left group absorbs spare space and shrinks
-        // first (flex_1 + min_w 0); the trailing group keeps intrinsic width,
-        // with each button able to shrink to its slot minimum, so the two
-        // groups can never overlap regardless of window width.
-        div()
-            .id(GPUI_FOOTER_OVERLAY_FIDELITY_TARGET_ID)
-            .debug_selector(|| GPUI_FOOTER_OVERLAY_FIDELITY_TARGET_ID.to_string())
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|overlay, _, _, cx| {
-                    if record_footer_held_action(&overlay.binding, None) {
-                        cx.notify();
-                    }
-                }),
-            )
-            .on_mouse_up_out(
-                MouseButton::Left,
-                cx.listener(|overlay, _, _, cx| {
-                    if record_footer_held_action(&overlay.binding, None) {
-                        cx.notify();
-                    }
-                }),
-            )
-            .w_full()
-            .h_full()
-            .px(px(crate::window_resize::main_layout::HINT_STRIP_PADDING_X))
-            .py(px(
-                crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
-            ))
-            .flex()
-            .items_center()
-            .gap(px(
-                crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
-            ))
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .items_center()
-                    .gap(px(
-                        crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
-                    ))
-                    .min_w(px(0.0))
-                    .overflow_hidden()
-                    .children(
-                        left_pinned_buttons
-                            .into_iter()
-                            .map(|button| self.render_button(button, &theme, cx)),
-                    )
-                    .child(self.render_left_info(self.config.left_info.as_ref(), &theme)),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(px(
-                        crate::components::footer_chrome::FOOTER_ACTION_ITEM_GAP_PX,
-                    ))
-                    .children(
-                        trailing_buttons
-                            .into_iter()
-                            .map(|button| self.render_button(button, &theme, cx)),
-                    ),
-            )
-            .into_any_element()
-    }
-}
-
-/// The GPUI flexbox footer overlay is the default main-window footer
-/// renderer: AppKit keeps only the vibrancy material + divider sandwich
-/// underneath while GPUI owns the glyphs in a child overlay window.
-/// Set `SCRIPT_KIT_GPUI_FOOTER_OVERLAY=0` to fall back to native AppKit
-/// glyph rendering for the main window.
-fn gpui_footer_overlay_enabled() -> bool {
-    std::env::var("SCRIPT_KIT_GPUI_FOOTER_OVERLAY")
-        .map(|value| !matches!(value.as_str(), "0" | "false" | "FALSE" | "no" | "NO"))
-        .unwrap_or(true)
-}
-
-fn should_use_gpui_footer_overlay(glass_mode: bool, overlay_enabled: bool) -> bool {
-    !glass_mode && overlay_enabled
-}
-
-fn main_footer_gpui_overlay_active() -> bool {
-    should_use_gpui_footer_overlay(glass_scroll_bands_active(), gpui_footer_overlay_enabled())
-}
-
-pub(crate) fn main_footer_gpui_overlay_visible() -> bool {
-    main_footer_handle().is_some_and(|handle| {
-        FOOTER_HOSTS
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .get(&handle.window_id())
-            .is_some_and(|host| host.overlay.is_some())
-    })
-}
-
-fn gpui_footer_overlay_bounds(parent_bounds: Bounds<Pixels>) -> Bounds<Pixels> {
-    let footer_height = crate::components::footer_chrome::current_main_menu_footer_height();
-    Bounds {
-        origin: gpui::point(
-            parent_bounds.origin.x,
-            parent_bounds.origin.y + parent_bounds.size.height - px(footer_height),
-        ),
-        size: gpui::size(parent_bounds.size.width, px(footer_height)),
-    }
-}
-
-fn gpui_footer_overlay_window_options(
-    bounds: Bounds<Pixels>,
-    display_id: Option<DisplayId>,
-) -> WindowOptions {
-    WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(bounds)),
-        titlebar: None,
-        window_background: WindowBackgroundAppearance::Transparent,
-        focus: false,
-        show: true,
-        kind: WindowKind::PopUp,
-        is_movable: false,
-        is_resizable: false,
-        is_minimizable: false,
-        display_id,
-        ..Default::default()
-    }
-}
 
 fn clear_main_window_footer_refresh_signature() {
     if let Some(handle) = main_footer_handle() {
@@ -1386,57 +840,6 @@ pub(crate) unsafe fn refresh_main_window_footer_from_last_config(ns_window: id) 
         let _ = refresh_main_footer_host(ns_window, config);
     } else {
         remove_main_window_footer_host(ns_window);
-    }
-}
-
-fn close_gpui_footer_overlay(cx: &mut App) {
-    if let Some(handle) = main_footer_handle() {
-        close_footer_overlay_for_parent(handle, cx);
-    }
-}
-
-/// While a main-window glass morph is in flight, park the overlay at alpha 0
-/// and fade it back in once the morph settles. The overlay is a separate
-/// NSWindow tracking the main window's bounds — without this it appears
-/// instantly at full alpha and visibly chases the animating frame.
-fn park_overlay_during_glass_morph(handle: gpui::WindowHandle<GpuiFooterOverlay>, cx: &mut App) {
-    let parked = handle
-        .update(cx, |_overlay, window, _cx| {
-            crate::platform::park_gpui_window_alpha_if_morphing(window)
-        })
-        .ok()
-        .flatten();
-    let Some(delay) = parked else {
-        return;
-    };
-    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-        cx.background_executor().timer(delay).await;
-        let _ = handle.update(cx, |_overlay, window, _cx| {
-            crate::platform::restore_gpui_window_alpha_animated(window);
-        });
-    })
-    .detach();
-}
-
-fn sync_gpui_footer_overlay(
-    cx: &mut App,
-    parent_window_handle: AnyWindowHandle,
-    parent_bounds: Bounds<Pixels>,
-    display_id: Option<DisplayId>,
-    _config: MainWindowFooterConfig,
-) {
-    if !main_footer_gpui_overlay_active() {
-        close_footer_overlay_for_parent(parent_window_handle, cx);
-        return;
-    }
-    if let Err(error) = open_or_sync_footer_overlay(
-        parent_window_handle,
-        parent_bounds,
-        display_id,
-        crate::runtime_policy::WindowHostPolicy::Interactive,
-        cx,
-    ) {
-        tracing::warn!(%error, "Failed to synchronize footer overlay");
     }
 }
 
@@ -1484,12 +887,10 @@ pub(crate) unsafe fn native_footer_host_attached(ns_window: cocoa::base::id) -> 
 pub(crate) fn sync_main_footer_popup(
     window: &mut Window,
     config: Option<&MainWindowFooterConfig>,
-    cx: &mut App,
+    _cx: &mut App,
 ) {
     sync_footer_owner(window, config);
-    notify_changed_footer_overlay(window.window_handle(), cx);
     if window.is_owned_hidden() {
-        // The evaluator mounts the same overlay factory explicitly; no native material claims.
         return;
     }
     // Logical visibility flips before the native exit fade begins so rapid
@@ -1498,7 +899,6 @@ pub(crate) fn sync_main_footer_popup(
     // footer inside the stage for one frame. The native-hidden completion
     // path owns teardown for this case.
     if config.is_none() && !crate::is_main_window_visible() {
-        close_gpui_footer_overlay(cx);
         tracing::info!(
             target: "script_kit::footer_popup",
             event = "main_footer_preserved_for_native_exit",
@@ -1507,9 +907,8 @@ pub(crate) fn sync_main_footer_popup(
         return;
     }
 
-    // The in-window AppKit host rides the main NSWindow's frame morph. The
-    // separate GPUI overlay NSWindow does not, so glass mode keeps only the
-    // native host active and always closes the overlay.
+    // Without native glass the main window draws the footer config rail itself
+    // (`ScriptListApp::main_window_footer_slot`); only glass installs a native host.
     let requested_surface = config.map(|cfg| cfg.surface);
     // Record which surface's footer is actually drawn (a config with nothing
     // to show, e.g. the focused-text mini before a result, reserves no zone)
@@ -1520,9 +919,6 @@ pub(crate) fn sync_main_footer_popup(
             .map(|cfg| cfg.surface),
     );
     update_main_window_footer_host_state(requested_surface, None, false);
-    let parent_window_handle = window.window_handle();
-    let parent_bounds = window.bounds();
-    let display_id = window.display(cx).as_ref().map(|display| display.id());
 
     #[cfg(target_os = "macos")]
     {
@@ -1538,7 +934,7 @@ pub(crate) fn sync_main_footer_popup(
         // SAFETY: `ns_window` comes from the live GPUI main window currently
         // being rendered/observed on the AppKit thread.
         unsafe {
-            if let Some(config) = config {
+            if let Some(config) = config.filter(|_| glass_scroll_bands_active()) {
                 let existed = find_subview_by_identifier(
                     main_window_footer_search_root(ns_window),
                     FOOTER_EFFECT_ID,
@@ -1564,38 +960,8 @@ pub(crate) fn sync_main_footer_popup(
         }
     }
 
-    defer_gpui_footer_overlay_sync(cx, parent_window_handle, parent_bounds, display_id, config);
-
     #[cfg(not(target_os = "macos"))]
     let _ = (window, config);
-}
-
-/// Sync the GPUI footer overlay child window OUTSIDE the caller's draw.
-///
-/// `sync_main_footer_popup` is called from the main
-/// window's `render()`. Opening or drawing another window mid-draw allocates
-/// into — and `open_window` then clears — the shared per-App element arena,
-/// dangling every element of the in-progress draw (real SIGSEGV: dangling
-/// `Rc<InspectorElementPath>` drop in `Drawable::request_layout` on the first
-/// hotkey show). Deferring runs the overlay sync after the current update
-/// cycle, when no draw is in progress.
-fn defer_gpui_footer_overlay_sync(
-    cx: &mut App,
-    parent_window_handle: AnyWindowHandle,
-    parent_bounds: Bounds<Pixels>,
-    display_id: Option<DisplayId>,
-    config: Option<&MainWindowFooterConfig>,
-) {
-    let config = config.cloned();
-    cx.defer(move |cx| {
-        if !main_footer_gpui_overlay_active() {
-            close_gpui_footer_overlay(cx);
-        } else if let Some(config) = config {
-            sync_gpui_footer_overlay(cx, parent_window_handle, parent_bounds, display_id, config);
-        } else {
-            close_gpui_footer_overlay(cx);
-        }
-    });
 }
 
 pub(crate) fn sync_window_footer_popup(
@@ -1604,7 +970,6 @@ pub(crate) fn sync_window_footer_popup(
     _cx: &mut App,
 ) {
     sync_footer_owner(window, Some(config));
-    notify_changed_footer_overlay(window.window_handle(), _cx);
     if window.is_owned_hidden() {
         return;
     }
@@ -1633,8 +998,7 @@ pub(crate) fn sync_window_footer_popup(
 /// It is a no-op when no host is installed on this window (`remove_reusable_window_footer_host`
 /// finds no matching subview and returns), so callers may invoke it defensively
 /// on any non-native owner.
-pub(crate) fn clear_window_footer_popup(window: &mut Window, cx: &mut App) {
-    close_footer_overlay_for_parent(window.window_handle(), cx);
+pub(crate) fn clear_window_footer_popup(window: &mut Window, _cx: &mut App) {
     sync_footer_owner(window, None);
     if window.is_owned_hidden() {
         return;
@@ -1651,7 +1015,6 @@ pub(crate) fn clear_window_footer_popup(window: &mut Window, cx: &mut App) {
 pub(crate) fn close_main_footer_popup(cx: &mut App) {
     clear_main_window_footer_refresh_signature();
     update_main_window_footer_host_state(None, None, false);
-    close_gpui_footer_overlay(cx);
 
     let Some(window_handle) = crate::get_main_window_handle() else {
         return;
@@ -1730,85 +1093,6 @@ pub(crate) fn close_main_footer_popup_after_hidden_settle(
         });
     })
     .detach();
-}
-
-fn set_gpui_footer_overlay_window_bounds(
-    window: &mut Window,
-    bounds: Bounds<Pixels>,
-    cx: &mut App,
-) {
-    crate::components::inline_popup_window::set_inline_popup_window_bounds(window, bounds, cx);
-}
-
-fn configure_gpui_footer_overlay_window<T: 'static>(
-    handle: &WindowHandle<T>,
-    cx: &mut App,
-    parent_window_handle: AnyWindowHandle,
-) -> anyhow::Result<()> {
-    #[cfg(target_os = "macos")]
-    {
-        handle
-            .update(cx, move |_overlay, window, cx| {
-                window.defer(cx, move |window, cx| {
-                    if let Some(ns_window) =
-                        crate::components::inline_popup_window::inline_popup_ns_window(window)
-                    {
-                        // SAFETY: `ns_window` is the live GPUI overlay NSWindow.
-                        // The overlay is visual-only; mouse and key focus
-                        // must continue to belong to the main launcher window.
-                        unsafe {
-                            configure_gpui_footer_overlay_ns_window(ns_window);
-                        }
-                        crate::components::inline_popup_window::attach_inline_popup_to_parent_window(
-                            cx,
-                            parent_window_handle,
-                            ns_window,
-                        );
-                    }
-                });
-            })
-            .map_err(|_| anyhow::anyhow!("failed to configure GPUI footer overlay window"))?;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    let _ = (handle, cx, parent_window_handle);
-
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-unsafe fn configure_gpui_footer_overlay_ns_window(ns_window: id) {
-    use cocoa::base::NO;
-    use objc::{class, msg_send, sel, sel_impl};
-
-    if ns_window == nil {
-        return;
-    }
-
-    let clear_color: id = msg_send![class!(NSColor), clearColor];
-    if clear_color != nil {
-        let _: () = msg_send![ns_window, setBackgroundColor: clear_color];
-    }
-    let _: () = msg_send![ns_window, setOpaque: NO];
-    let _: () = msg_send![ns_window, setHasShadow: NO];
-    let _: () = msg_send![ns_window, setIgnoresMouseEvents: NO];
-    let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: YES];
-    let _: () = msg_send![ns_window, setMovable: NO];
-    let _: () = msg_send![ns_window, setMovableByWindowBackground: NO];
-    let _: () = msg_send![ns_window, setAnimationBehavior: 2isize];
-    let _: () = msg_send![ns_window, setRestorable: NO];
-
-    // SAFETY: `ns_window` is a live NSWindow owned by the GPUI footer overlay.
-    // collectionBehavior / setCollectionBehavior are standard NSWindow accessors.
-    let current_collection_behavior: u64 = msg_send![ns_window, collectionBehavior];
-    let desired_collection_behavior =
-        crate::platform::main_panel_collection_behavior(current_collection_behavior);
-    let _: () = msg_send![ns_window, setCollectionBehavior: desired_collection_behavior];
-
-    let title = ns_string(GPUI_FOOTER_OVERLAY_WINDOW_TITLE);
-    if title != nil {
-        let _: () = msg_send![ns_window, setTitle: title];
-    }
 }
 
 /// True when the main window should use the Tahoe above-Metal scroll bands.
@@ -2055,23 +1339,15 @@ fn footer_divider_rgba(theme: &crate::theme::Theme, default_rgba: u32) -> u32 {
     }
 }
 
-/// Refresh the main-window footer host. When the GPUI footer overlay is
-/// enabled (the default), AppKit keeps only the material/divider and the
-/// overlay child window owns the glyphs.
+/// Refresh the main-window footer host (native glass only).
 #[cfg(target_os = "macos")]
 unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfig) -> bool {
     sync_main_window_glass_scroll_bands(ns_window);
-    refresh_footer_host_impl(
-        ns_window,
-        main_window_footer_search_root(ns_window),
-        config,
-        gpui_footer_overlay_enabled() && !glass_scroll_bands_active(),
-    )
+    refresh_footer_host_impl(ns_window, main_window_footer_search_root(ns_window), config)
 }
 
-/// Refresh a reusable (non-main) window footer host — detached Agent Chat and
-/// the dictation overlay. These windows have no GPUI overlay child, so AppKit
-/// always renders the glyphs natively.
+/// Refresh a reusable (non-main) window footer host — detached Agent Chat;
+/// AppKit renders the glyphs natively.
 #[cfg(target_os = "macos")]
 unsafe fn refresh_window_footer_host(ns_window: id, config: &MainWindowFooterConfig) -> bool {
     sync_float_footer_child_frame(ns_window);
@@ -2079,7 +1355,6 @@ unsafe fn refresh_window_footer_host(ns_window: id, config: &MainWindowFooterCon
         ns_window,
         reusable_window_footer_search_root(ns_window),
         config,
-        false,
     )
 }
 
@@ -2110,7 +1385,6 @@ unsafe fn refresh_footer_host_impl(
     ns_window: id,
     search_root: id,
     config: &MainWindowFooterConfig,
-    gpui_overlay_owns_glyphs: bool,
 ) -> bool {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
@@ -2207,15 +1481,11 @@ unsafe fn refresh_footer_host_impl(
             crate::platform::ns_visual_effect_material::CONTENT_BACKGROUND
         }
     };
-    // The overlay host is narrower than the window; all footer lanes must
+    // The footer host is narrower than the window; all footer lanes must
     // resolve against that host so the trailing capsule keeps its edge inset.
     let content_bounds: NSRect = msg_send![footer_host, bounds];
-    let signature = native_footer_refresh_signature(
-        config,
-        &theme_snapshot,
-        content_bounds.size.width,
-        gpui_overlay_owns_glyphs,
-    );
+    let signature =
+        native_footer_refresh_signature(config, &theme_snapshot, content_bounds.size.width);
     let native_visual_theme = signature.native_visual_theme;
     let (
         footer_geometry_changed,
@@ -2251,7 +1521,6 @@ unsafe fn refresh_footer_host_impl(
             .map(|previous| {
                 previous.config != signature.config
                     || previous.content_width_bits != signature.content_width_bits
-                    || previous.gpui_overlay_owns_glyphs != signature.gpui_overlay_owns_glyphs
                     || previous.button_leading_dot_hexes != signature.button_leading_dot_hexes
                     // Theme cycling must fully rebuild the hint buttons so the
                     // keycap borders and label text pick up the new tokens (the
@@ -2342,16 +1611,13 @@ unsafe fn refresh_footer_host_impl(
     }
 
     if divider_view != nil {
-        // The GPUI overlay supplies the visible footer controls above this
-        // native material host. Hide only the hard divider in that mode so
-        // the controls read as floating, while keeping the identified view
-        // installed for fidelity inspection and the native-only fallback.
-        let divider_hidden =
-            if gpui_overlay_owns_glyphs || footer_is_glass || glass_scroll_bands_active() {
-                YES
-            } else {
-                NO
-            };
+        // Glass capsules float, so the hard divider stays hidden there while
+        // the identified view remains installed for fidelity inspection.
+        let divider_hidden = if footer_is_glass || glass_scroll_bands_active() {
+            YES
+        } else {
+            NO
+        };
         let _: () = msg_send![divider_view, setHidden: divider_hidden];
 
         if footer_geometry_changed {
@@ -2385,15 +1651,8 @@ unsafe fn refresh_footer_host_impl(
     if hints_view != nil {
         if footer_content_changed {
             let _: () = msg_send![hints_view, setFrame: default_hints_frame];
-            if gpui_overlay_owns_glyphs {
-                // Sandwich layering: AppKit keeps only the material/divider
-                // while GPUI owns the footer glyphs in a child overlay window
-                // above this footer host.
-                native_footer_lanes = layout_footer_hints(hints_view, text_color, &[], theme);
-            } else {
-                native_footer_lanes =
-                    layout_footer_hints(hints_view, text_color, &config.buttons, theme);
-            }
+            native_footer_lanes =
+                layout_footer_hints(hints_view, text_color, &config.buttons, theme);
         } else if footer_visuals_changed {
             recolor_footer_hint_subviews_with_visual_theme(hints_view, theme, native_visual_theme);
             native_footer_lanes = measure_native_footer_lanes(hints_view, &config.buttons);
@@ -2415,11 +1674,7 @@ unsafe fn refresh_footer_host_impl(
             ];
         }
         if footer_content_changed || (footer_visuals_changed && config.left_info.is_some()) {
-            if gpui_overlay_owns_glyphs {
-                layout_footer_left_info(left_info_view, None, text_color);
-            } else {
-                layout_footer_left_info(left_info_view, config.left_info.as_ref(), text_color);
-            }
+            layout_footer_left_info(left_info_view, config.left_info.as_ref(), text_color);
             refresh_footer_button_visual_states_with_theme(left_info_view, native_visual_theme);
         }
         if footer_content_changed || footer_visuals_changed || effect_theme_changed {

@@ -101,7 +101,6 @@ export function stableWindowKind(value: unknown) {
   if (value === "actionsDialog") return "ActionsDialog";
   if (value === "promptPopup") return "PromptPopup";
   if (value === "agentChatDetached") return "AgentChatDetached";
-  if (value === "dictation") return "Dictation";
   if (value === "miniAi") return "MiniAi";
   if (value === "ai") return "Ai";
   if (value === "main") return "Main";

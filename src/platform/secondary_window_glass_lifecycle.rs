@@ -3,6 +3,10 @@ static GLASS_EXIT_GENERATIONS: std::sync::Mutex<Vec<(usize, u64)>> =
     std::sync::Mutex::new(Vec::new());
 
 #[cfg(target_os = "macos")]
+#[allow(
+    dead_code,
+    reason = "no window reads a glass exit receipt or cancels an exit any more; the calibrated lifecycle is kept whole"
+)]
 #[derive(Clone, Debug)]
 struct GlassExitLifecycle {
     window_key: usize,
@@ -37,6 +41,10 @@ pub(crate) struct GlassExitTicket {
 }
 
 impl GlassExitTicket {
+    #[allow(
+        dead_code,
+        reason = "no window reads a glass exit receipt or cancels an exit any more; the calibrated lifecycle is kept whole"
+    )]
     pub(crate) fn generation(self) -> u64 {
         self.generation
     }
@@ -127,6 +135,10 @@ pub(crate) fn record_glass_exit_commit(ticket: GlassExitTicket) {
 pub(crate) fn record_glass_exit_commit(_ticket: GlassExitTicket) {}
 
 #[cfg(target_os = "macos")]
+#[allow(
+    dead_code,
+    reason = "no window reads a glass exit receipt or cancels an exit any more; the calibrated lifecycle is kept whole"
+)]
 pub(crate) fn glass_exit_lifecycle_receipt(window_name: &str) -> serde_json::Value {
     use cocoa::foundation::NSRect;
     let record = GLASS_EXIT_LIFECYCLES
@@ -257,6 +269,10 @@ unsafe fn ns_window_from_gpui_window(window: &gpui::Window) -> Option<id> {
 }
 
 #[cfg(target_os = "macos")]
+#[allow(
+    dead_code,
+    reason = "no window reads a glass exit receipt or cancels an exit any more; the calibrated lifecycle is kept whole"
+)]
 pub(crate) fn cancel_gpui_window_exit_dematerialize(window: &gpui::Window) -> bool {
     if require_main_thread("cancel_gpui_window_exit_dematerialize") {
         return false;
@@ -320,6 +336,10 @@ unsafe fn cancel_pending_glass_window_selectors(window: id) {
 }
 
 #[cfg(target_os = "macos")]
+#[allow(
+    dead_code,
+    reason = "no window reads a glass exit receipt or cancels an exit any more; the calibrated lifecycle is kept whole"
+)]
 unsafe fn cancel_ns_window_exit_dematerialize(window: id) -> bool {
     cancel_ns_window_exit_dematerialize_impl(window, true)
 }

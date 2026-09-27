@@ -1,103 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BuiltInActionsWindowFeedback {
-    FileSearch,
-    ClipboardHistory,
-}
-
-impl BuiltInActionsWindowFeedback {
-    fn opened_log(self) -> &'static str {
-        match self {
-            Self::FileSearch => "File search actions popup window opened",
-            Self::ClipboardHistory => "Clipboard actions popup window opened",
-        }
-    }
-
-    fn failure_log(self, error: impl std::fmt::Display) -> String {
-        match self {
-            Self::FileSearch | Self::ClipboardHistory => {
-                format!("Failed to open actions window: {error}")
-            }
-        }
-    }
-}
-
 impl ScriptListApp {
-    fn dictation_history_actions_dialog_config(
-        placeholder: String,
-    ) -> crate::actions::ActionsDialogConfig {
-        crate::actions::ActionsDialogConfig {
-            search_position: crate::actions::SearchPosition::Top,
-            section_style: crate::actions::SectionStyle::Headers,
-            anchor: crate::actions::AnchorPosition::Top,
-            show_icons: true,
-            search_placeholder: Some(placeholder),
-            show_context_header: false,
-            ..crate::actions::ActionsDialogConfig::default()
-        }
-    }
-
-    fn dictation_history_actions_for_dialog(in_portal: bool) -> Vec<crate::actions::Action> {
-        use crate::actions::{Action, ActionCategory};
-        use crate::designs::icon_variations::IconName;
-
-        let mut actions = Vec::new();
-        if !in_portal {
-            actions.push(
-                Action::new(
-                    "dictation_history_paste",
-                    "Paste to Frontmost App",
-                    Some(
-                        "Hide Script Kit and paste this transcript into the active app".to_string(),
-                    ),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("↵")
-                .with_section("Reuse")
-                .with_icon(IconName::ArrowRight),
-            );
-            actions.push(
-                Action::new(
-                    "dictation_history_add_to_agent_chat",
-                    "Add to Agent Chat",
-                    Some("Stage this transcript as context without sending a turn".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌃⌘A")
-                .with_section("Reuse")
-                .with_icon(IconName::MessageCircle),
-            );
-        }
-        actions.extend([
-            Action::new(
-                "dictation_history_save_note",
-                "Save as Note",
-                Some("Create a new note pre-filled with this transcript".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_section("Reuse")
-            .with_icon(IconName::Plus),
-            Action::new(
-                "dictation_history_copy",
-                "Copy Transcript",
-                Some("Copy this transcript to the clipboard".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘↵")
-            .with_section("Reuse")
-            .with_icon(IconName::Copy),
-            Action::new(
-                "dictation_history_delete",
-                "Delete from History",
-                Some("Confirm removal of this saved transcript".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⌫")
-            .with_section("Manage")
-            .with_icon(IconName::Trash),
-        ]);
-        actions
-    }
-
     fn favorites_actions_for_dialog() -> Vec<crate::actions::Action> {
         use crate::actions::{Action, ActionCategory};
         use crate::designs::icon_variations::IconName;
@@ -359,16 +260,10 @@ impl ScriptListApp {
     fn toggle_theme_chooser_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         logging::log("KEY", "Toggling theme chooser actions popup");
 
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.close_actions_popup(ActionsDialogHost::ThemeChooser, window, cx);
             return;
         }
-
-        self.mark_actions_popup_opening();
-        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-        self.focus_handle.focus(window, cx);
-        self.gpui_input_focused = false;
-        self.focused_input = FocusedInput::ActionsSearch;
 
         let theme_arc = std::sync::Arc::clone(&self.theme);
         let actions = Self::theme_chooser_actions_for_dialog();
@@ -393,45 +288,20 @@ impl ScriptListApp {
             dialog
         });
 
-        self.actions_dialog = Some(dialog.clone());
-
-        let app_entity = cx.entity().clone();
-        dialog.update(cx, |d, _cx| {
-            d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                app_entity.clone(),
-                ActionsDialogHost::ThemeChooser,
-            ));
-            d.set_on_close(Self::make_actions_window_on_close_callback(
-                app_entity,
-                ActionsDialogHost::ThemeChooser,
-                "Theme chooser actions closed via escape, focus restored via coordinator",
-            ));
-        });
-
-        let parent_window_handle = window.window_handle();
-        let main_bounds = window.bounds();
-        let display_id = window.display(cx).map(|d| d.id());
-
-        Self::spawn_open_actions_window(
-            cx,
-            crate::actions::ActionsWindowPlacement {
-                parent_window_handle,
-                main_bounds,
-                display_id,
-            },
+        self.one_window_stage_in_view(
+            ActionsDialogHost::ThemeChooser,
             dialog,
-            crate::actions::WindowPosition::TopCenter,
-            "Theme chooser actions popup window opened",
-            "Failed to open theme chooser actions window",
+            Some("Theme".to_string()),
+            window,
+            cx,
         );
-
         cx.notify();
     }
 
     fn toggle_favorites_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         logging::log("KEY", "Toggling favorites actions popup");
 
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.close_actions_popup(ActionsDialogHost::Favorites, window, cx);
             return;
         }
@@ -441,14 +311,9 @@ impl ScriptListApp {
             return;
         };
 
-        self.mark_actions_popup_opening();
-        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-        self.focus_handle.focus(window, cx);
-        self.gpui_input_focused = false;
-        self.focused_input = FocusedInput::ActionsSearch;
-
         let theme_arc = std::sync::Arc::clone(&self.theme);
         let actions = Self::favorites_actions_for_dialog();
+        let title = selected_id.clone();
         let dialog = cx.new(move |cx| {
             let focus_handle = cx.focus_handle();
             let mut dialog = ActionsDialog::with_config(
@@ -470,108 +335,13 @@ impl ScriptListApp {
             dialog
         });
 
-        self.actions_dialog = Some(dialog.clone());
-
-        let app_entity = cx.entity().clone();
-        dialog.update(cx, |d, _cx| {
-            d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                app_entity.clone(),
-                ActionsDialogHost::Favorites,
-            ));
-            d.set_on_close(Self::make_actions_window_on_close_callback(
-                app_entity,
-                ActionsDialogHost::Favorites,
-                "Favorites actions closed via escape, focus restored via coordinator",
-            ));
-        });
-
-        let parent_window_handle = window.window_handle();
-        let main_bounds = window.bounds();
-        let display_id = window.display(cx).map(|d| d.id());
-
-        Self::spawn_open_actions_window(
-            cx,
-            crate::actions::ActionsWindowPlacement {
-                parent_window_handle,
-                main_bounds,
-                display_id,
-            },
+        self.one_window_stage_in_view(
+            ActionsDialogHost::Favorites,
             dialog,
-            crate::actions::WindowPosition::TopCenter,
-            "Favorites actions popup window opened",
-            "Failed to open favorites actions window",
-        );
-
-        cx.notify();
-    }
-
-    fn toggle_dictation_history_actions(
-        &mut self,
-        entry: crate::dictation::DictationHistoryEntry,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        logging::log("KEY", "Toggling dictation history actions popup");
-
-        if self.show_actions_popup || is_actions_window_open() {
-            self.close_actions_popup(ActionsDialogHost::DictationHistory, window, cx);
-            return;
-        }
-
-        self.mark_actions_popup_opening();
-        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-        self.focus_handle.focus(window, cx);
-        self.gpui_input_focused = false;
-        self.focused_input = FocusedInput::ActionsSearch;
-
-        let theme_arc = std::sync::Arc::clone(&self.theme);
-        let placeholder = entry.preview.clone();
-        let actions = Self::dictation_history_actions_for_dialog(self.is_in_attachment_portal());
-        let dialog = cx.new(move |cx| {
-            let focus_handle = cx.focus_handle();
-            let mut dialog = ActionsDialog::with_config(
-                focus_handle,
-                std::sync::Arc::new(|_action_id| {}),
-                actions,
-                theme_arc,
-                Self::dictation_history_actions_dialog_config(placeholder),
-            );
-            dialog.set_match_main_window_background(true);
-            dialog
-        });
-
-        self.actions_dialog = Some(dialog.clone());
-
-        let app_entity = cx.entity().clone();
-        dialog.update(cx, |d, _cx| {
-            d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                app_entity.clone(),
-                ActionsDialogHost::DictationHistory,
-            ));
-            d.set_on_close(Self::make_actions_window_on_close_callback(
-                app_entity,
-                ActionsDialogHost::DictationHistory,
-                "Dictation history actions closed via escape, focus restored via coordinator",
-            ));
-        });
-
-        let parent_window_handle = window.window_handle();
-        let main_bounds = window.bounds();
-        let display_id = window.display(cx).map(|d| d.id());
-
-        Self::spawn_open_actions_window(
+            Some(title),
+            window,
             cx,
-            crate::actions::ActionsWindowPlacement {
-                parent_window_handle,
-                main_bounds,
-                display_id,
-            },
-            dialog,
-            crate::actions::WindowPosition::TopCenter,
-            "Dictation history actions popup window opened",
-            "Failed to open dictation history actions window",
         );
-
         cx.notify();
     }
 
@@ -588,29 +358,9 @@ impl ScriptListApp {
     ) {
         logging::log("KEY", "Toggling file search actions popup");
 
-        if self.show_actions_popup || is_actions_window_open() {
-            // Close the actions popup
-            self.mark_actions_popup_closed();
+        if self.show_actions_popup {
             self.file_search_actions_path = None;
-
-            // Close the actions window via spawn
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    close_actions_window(cx);
-                });
-            })
-            .detach();
-
-            // Use coordinator to restore focus (will pop the overlay and set pending_focus)
-            self.pop_focus_overlay(cx);
-
-            // Also directly focus main filter for immediate feedback
-            self.focus_main_filter(window, cx);
-            logging::log(
-                "FOCUS",
-                "File search actions closed, focus restored via coordinator",
-            );
-            cx.notify();
+            self.close_actions_popup(ActionsDialogHost::FileSearch, window, cx);
             return;
         }
 
@@ -636,22 +386,15 @@ impl ScriptListApp {
         // actions block (Pass 3 of Run 13) so the user sees that Cmd+K
         // landed even when the file-search input is empty.
 
-        // Open actions popup
-        self.mark_actions_popup_opening();
-
-        // Use coordinator to push overlay - saves current focus state for restore
-        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-
-        // CRITICAL: Transfer focus from Input to main focus_handle
-        self.focus_handle.focus(window, cx);
-        self.gpui_input_focused = false;
-        self.focused_input = FocusedInput::ActionsSearch;
-
         // Store the file path for action handling
         self.file_search_actions_path = selected_file.map(|file| file.path.clone());
 
         // Create file info from the result
         let file_info = selected_file.map(file_search::FileInfo::from_result);
+        let title = file_info
+            .as_ref()
+            .map(|file| file.name.clone())
+            .or_else(|| dir_info.as_ref().map(|dir| dir.name.clone()));
 
         // Determine placeholder text — show both scopes when available
         let placeholder_text = match (file_info.as_ref(), dir_info.as_ref()) {
@@ -689,84 +432,15 @@ impl ScriptListApp {
             dialog
         });
 
-        // Store the dialog entity for keyboard routing
-        self.actions_dialog = Some(dialog.clone());
-
-        // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
-        // Match what close_actions_popup does for FileSearch host
-        let app_entity = cx.entity().clone();
-        dialog.update(cx, |d, _cx| {
-            d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                app_entity.clone(),
-                ActionsDialogHost::FileSearch,
-            ));
-            d.set_on_close(std::sync::Arc::new(move |cx| {
-                let app_entity = app_entity.clone();
-                cx.defer(move |cx| {
-                    app_entity.update(cx, |app, cx| {
-                        if !app.show_actions_popup && app.actions_dialog.is_none() {
-                            app.file_search_actions_path = None;
-                            return;
-                        }
-
-                        app.mark_actions_popup_closed();
-                        app.file_search_actions_path = None;
-                        // Use coordinator to pop overlay and restore previous focus
-                        app.pop_focus_overlay(cx);
-                        logging::log(
-                            "FOCUS",
-                            "File search actions closed via escape, focus restored via coordinator",
-                        );
-                    });
-                });
-            }));
-        });
-
-        // Get main window bounds and display_id for positioning
-        let parent_window_handle = window.window_handle();
-        let main_bounds = window.bounds();
-        let display_id = window.display(cx).map(|d| d.id());
         logging::log(
             "ACTIONS",
             &format!(
-                "Opening file search actions: file={}, dir={}",
+                "Staging file search actions: file={}, dir={}",
                 selected_file.map(|f| f.name.as_str()).unwrap_or("none"),
                 dir_info.as_ref().map(|d| d.name.as_str()).unwrap_or("none"),
             ),
         );
-
-        // Open the actions window — centered like the mini main menu
-        let host_policy = if window.is_owned_hidden() {
-            crate::runtime_policy::WindowHostPolicy::OwnedHidden
-        } else {
-            crate::runtime_policy::WindowHostPolicy::Interactive
-        };
-        let actions_window_feedback = BuiltInActionsWindowFeedback::FileSearch;
-        cx.spawn(async move |_this, cx| {
-            cx.update(|cx| {
-                match open_actions_window(
-                    cx,
-                    crate::actions::ActionsWindowPlacement {
-                        parent_window_handle,
-                        main_bounds,
-                        display_id,
-                    },
-                    dialog,
-                    crate::actions::WindowPosition::TopCenter,
-                    None,
-                    host_policy,
-                ) {
-                    Ok(_handle) => {
-                        logging::log("ACTIONS", actions_window_feedback.opened_log());
-                    }
-                    Err(e) => {
-                        logging::log("ERROR", &actions_window_feedback.failure_log(e));
-                    }
-                }
-            });
-        })
-        .detach();
-
+        self.one_window_stage_in_view(ActionsDialogHost::FileSearch, dialog, title, window, cx);
         cx.notify();
     }
 
@@ -779,39 +453,11 @@ impl ScriptListApp {
     ) {
         logging::log("KEY", "Toggling clipboard actions popup");
 
-        if self.show_actions_popup || is_actions_window_open() {
-            // Close the actions popup
-            self.mark_actions_popup_closed();
-
-            // Close the actions window via spawn
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    close_actions_window(cx);
-                });
-            })
-            .detach();
-
-            // Use coordinator to restore focus (will pop the overlay and set pending_focus)
-            self.pop_focus_overlay(cx);
-
-            // Also directly focus main filter for immediate feedback
-            self.focus_main_filter(window, cx);
-            logging::log(
-                "FOCUS",
-                "Clipboard actions closed, focus restored via coordinator",
-            );
+        if self.show_actions_popup {
+            self.close_actions_popup(ActionsDialogHost::ClipboardHistory, window, cx);
         } else {
-            // Open actions popup for the selected clipboard entry
-            self.mark_actions_popup_opening();
+            // Stage the selected clipboard entry
             self.focused_clipboard_entry_id = Some(entry.id.clone());
-
-            // Use coordinator to push overlay - saves current focus state for restore
-            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-
-            // Transfer focus from Input to main focus_handle for actions routing
-            self.focus_handle.focus(window, cx);
-            self.gpui_input_focused = false;
-            self.focused_input = FocusedInput::ActionsSearch;
 
             let entry_content_type = entry.content_type;
             let entry_info = crate::actions::ClipboardEntryInfo {
@@ -851,79 +497,21 @@ impl ScriptListApp {
                 dialog
             });
 
-            // Store the dialog entity for keyboard routing
-            self.actions_dialog = Some(dialog.clone());
-
-            // Set up the on_close callback to restore focus when escape is pressed
-            let app_entity = cx.entity().clone();
-            dialog.update(cx, |d, _cx| {
-                d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                    app_entity.clone(),
-                    ActionsDialogHost::ClipboardHistory,
-                ));
-                d.set_on_close(std::sync::Arc::new(move |cx| {
-                    let app_entity = app_entity.clone();
-                    cx.defer(move |cx| {
-                        app_entity.update(cx, |app, cx| {
-                            if !app.show_actions_popup && app.actions_dialog.is_none() {
-                                return;
-                            }
-
-                            app.mark_actions_popup_closed();
-                            // Use coordinator to pop overlay and restore previous focus
-                            app.pop_focus_overlay(cx);
-                            logging::log(
-                                "FOCUS",
-                                "Clipboard actions closed via escape, focus restored via coordinator",
-                            );
-                        });
-                    });
-                }));
-            });
-
-            // Get main window bounds and display_id for positioning
-            let parent_window_handle = window.window_handle();
-            let main_bounds = window.bounds();
-            let display_id = window.display(cx).map(|d| d.id());
             logging::log(
                 "ACTIONS",
                 &format!(
-                    "Opening clipboard actions for entry: {} (type={:?}, pinned={})",
+                    "Staging clipboard actions for entry: {} (type={:?}, pinned={})",
                     entry.id, entry_content_type, entry.pinned
                 ),
             );
-
-            // Open the actions window
-            let host_policy = if window.is_owned_hidden() {
-                crate::runtime_policy::WindowHostPolicy::OwnedHidden
-            } else {
-                crate::runtime_policy::WindowHostPolicy::Interactive
-            };
-            let actions_window_feedback = BuiltInActionsWindowFeedback::ClipboardHistory;
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    match open_actions_window(
-                        cx,
-                        crate::actions::ActionsWindowPlacement {
-                            parent_window_handle,
-                            main_bounds,
-                            display_id,
-                        },
-                        dialog,
-                        crate::actions::WindowPosition::TopCenter,
-                        None,
-                        host_policy,
-                    ) {
-                        Ok(_handle) => {
-                            logging::log("ACTIONS", actions_window_feedback.opened_log());
-                        }
-                        Err(e) => {
-                            logging::log("ERROR", &actions_window_feedback.failure_log(e));
-                        }
-                    }
-                });
-            })
-            .detach();
+            let title = entry_info.preview.clone();
+            self.one_window_stage_in_view(
+                ActionsDialogHost::ClipboardHistory,
+                dialog,
+                Some(title),
+                window,
+                cx,
+            );
         }
         cx.notify();
     }
@@ -1324,7 +912,7 @@ impl ScriptListApp {
     pub(crate) fn toggle_flow_desk_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         logging::log("KEY", "Toggling Flow Desk actions popup");
 
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.close_actions_popup(ActionsDialogHost::FlowDesk, window, cx);
             return;
         }
@@ -1333,12 +921,6 @@ impl ScriptListApp {
             logging::log("ACTIONS", "Flow Desk actions ignored: no subject");
             return;
         };
-
-        self.mark_actions_popup_opening();
-        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-        self.focus_handle.focus(window, cx);
-        self.gpui_input_focused = false;
-        self.focused_input = FocusedInput::ActionsSearch;
 
         let theme_arc = std::sync::Arc::clone(&self.theme);
         let actions = Self::flow_desk_actions_for_dialog(&subject);
@@ -1378,38 +960,7 @@ impl ScriptListApp {
             dialog
         });
 
-        self.actions_dialog = Some(dialog.clone());
-
-        let app_entity = cx.entity().clone();
-        dialog.update(cx, |d, _cx| {
-            d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                app_entity.clone(),
-                ActionsDialogHost::FlowDesk,
-            ));
-            d.set_on_close(Self::make_actions_window_on_close_callback(
-                app_entity,
-                ActionsDialogHost::FlowDesk,
-                "Flow Desk actions closed via escape, focus restored via coordinator",
-            ));
-        });
-
-        let parent_window_handle = window.window_handle();
-        let main_bounds = window.bounds();
-        let display_id = window.display(cx).map(|d| d.id());
-
-        Self::spawn_open_actions_window(
-            cx,
-            crate::actions::ActionsWindowPlacement {
-                parent_window_handle,
-                main_bounds,
-                display_id,
-            },
-            dialog,
-            crate::actions::WindowPosition::TopCenter,
-            "Flow Desk actions popup window opened",
-            "Failed to open Flow Desk actions window",
-        );
-
+        self.one_window_stage_in_view(ActionsDialogHost::FlowDesk, dialog, None, window, cx);
         cx.notify();
     }
 

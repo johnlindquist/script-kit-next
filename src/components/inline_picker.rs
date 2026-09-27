@@ -3,9 +3,8 @@
 //! Context for this module (Oracle iter 015 + iter 018):
 //!
 //! The shared **renderer** for dense inline pickers already lives in
-//! [`crate::components::inline_dropdown`] (see `InlineDropdown`,
-//! `render_soft_compact_picker_row`, `inline_dropdown_visible_range_from_start`,
-//! `InlineDropdownColors`, `InlineDropdownEmptyState`, `InlineDropdownSynopsis`).
+//! [`crate::components::inline_dropdown`] (see `render_soft_compact_picker_row`,
+//! `inline_dropdown_visible_range_from_start`, `InlineDropdownColors`).
 //! Agent Chat's slash/profile popups consume that renderer today.
 //!
 //! What this module adds is the neutral **data shape** that callers like

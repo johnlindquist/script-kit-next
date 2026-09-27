@@ -51,9 +51,8 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
     );
     assert!(
         platform.contains("configure_tahoe_window_backdrop(window, \"APPEARANCE\", &title_string)")
-            && platform.contains("\"Script Kit Dictation\"")
             && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
-        "Theme/appearance refresh must revisit existing secondary native backdrops, including Dictation"
+        "Theme/appearance refresh must revisit existing secondary native backdrops"
     );
     assert!(
         platform.contains("fn should_refresh_secondary_window_appearance(title: &str) -> bool")

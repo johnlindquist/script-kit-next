@@ -29,7 +29,7 @@ export interface ScopedActionReceipt {
 export interface FixtureDescriptor {
   readonly id: string;
   readonly family: string;
-  readonly root: "main" | "notes" | "agentChat" | "dictation" | "secondary";
+  readonly root: "main" | "notes" | "agentChat" | "secondary";
   readonly owner: string;
   readonly parentFixtureId?: string;
   readonly proofBoundary: "owned-production-runtime";
@@ -78,11 +78,8 @@ export type FixtureControl =
       { operation: "emitText"; messageId: string; text: string } |
       { operation: "complete" | "fail"; messageId: string } |
       { operation: "retry" | "stop" }))
-  | ({ family: "dictation" } & (
-      { operation: "begin" | "retarget"; destination: "mainFilter" | "mainPrompt" | "notes" | "agentChat" | "dayPage" } |
-      { operation: "recording"; text: string; bars: readonly [number, number, number, number, number, number, number, number, number] } |
-      { operation: "confirm" | "resume" | "transcribe" | "deliver" | "openMicrophonePicker" }))
   | { family: "notes"; operation: "toggleTask"; markerStart: number; markerEnd: number; checked: boolean }
+  | { family: "oneWindow"; operation: "talkTo"; destination: "chat" | "note" }
   | ({ family: "search" } & ({ operation: "prepare"; scenario: string } |
       { operation: "release"; runIds: readonly number[] } | { operation: "advance"; milliseconds: number }))
   | { family: "theme"; operation: "armSaveFailure" | "clearSaveFailure" | "malformedReload" }
@@ -93,7 +90,6 @@ export interface AgentChatFixtureObservation {
   localStreamCancelled: boolean; remoteCancelRequested: boolean; remoteCancelAcknowledged: boolean;
 }
 export interface FlowFixtureObservation { sessionId: number; draftText: string; expectedMessageId: string; status: string }
-export interface DictationFixtureObservation { phase: string; deliveryOutcome?: "delivered" | "staleTarget" | "refused"; generation: number }
 export interface ThemeFixtureObservation {
   family: "theme"; operation: "armSaveFailure" | "clearSaveFailure" | "malformedReload";
   path: "theme.json"; revision?: number; blockerPresent?: boolean;
@@ -267,7 +263,7 @@ export type DesignResult =
   | ThemePublication
   | { operation: "unmount"; ok: true; target: AutomationInstance; closed: boolean }
   | { operation: "fixtureControl"; ok: true; actionReceipt?: ScopedActionReceipt;
-      observation: AgentChatFixtureObservation | FlowFixtureObservation | DictationFixtureObservation | ThemeFixtureObservation | SearchFixtureObservation | { suppressed: AutomationInstance } }
+      observation: AgentChatFixtureObservation | FlowFixtureObservation | ThemeFixtureObservation | SearchFixtureObservation | { suppressed: AutomationInstance } }
   | SdkPromptResult
   | NativeSafetyProbeResult
   | { operation: "end"; ok: true; ownedWindowsClosed: boolean; remainingWindows: number }

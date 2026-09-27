@@ -224,3 +224,127 @@ fn cmd_enter_hands_the_note_to_the_model_under_the_same_input() {
     );
     assert_eq!(windows, 1, "no window opens");
 }
+
+/// Points the kit, and the notes brain the note view reads, at one temporary folder.
+struct OneBrain {
+    _lock: std::sync::MutexGuard<'static, ()>,
+    previous: [(&'static str, Option<String>); 2],
+    _dir: tempfile::TempDir,
+}
+
+impl OneBrain {
+    const NOTES_BRAIN: &'static str = "SCRIPT_KIT_TEST_NOTES_BRAIN_PATH";
+
+    fn new() -> Self {
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        let dir = tempfile::tempdir().expect("kit folder");
+        let previous = [crate::setup::SK_PATH_ENV, Self::NOTES_BRAIN]
+            .map(|name| (name, std::env::var(name).ok()));
+        std::env::set_var(crate::setup::SK_PATH_ENV, dir.path());
+        std::env::set_var(Self::NOTES_BRAIN, dir.path().join("brain"));
+        Self {
+            _lock: lock,
+            previous,
+            _dir: dir,
+        }
+    }
+}
+
+impl Drop for OneBrain {
+    fn drop(&mut self) {
+        for (name, value) in &self.previous {
+            match value {
+                Some(value) => std::env::set_var(name, value),
+                None => std::env::remove_var(name),
+            }
+        }
+    }
+}
+
+#[test]
+fn dictating_to_notes_lands_the_words_in_todays_note_under_the_input() {
+    let (frozen, line, rows, windows) = in_launcher("dictation_to_notes_editor", 0, |cx| {
+        let brain = OneBrain::new();
+        let (app, _) = launcher(cx, Jev::Off);
+        let frozen = app.update(cx, |app, cx| {
+            app.capture_dictation_target_selection(
+                crate::dictation::DictationTarget::NotesEditor,
+                cx,
+            )
+            .map(|selection| selection.destination)
+        });
+        app.update(cx, |app, cx| {
+            app.handle_dictation_started(
+                crate::DictationBuiltinAction::Notes,
+                crate::dictation::DictationTarget::NotesEditor,
+                cx,
+            )
+        });
+        wait(cx, 20);
+        app.update(cx, |app, cx| {
+            app.one_window_talk_final("pick up milk on the way home".into(), None, cx)
+        });
+        wait(cx, 20);
+        let line = app.update(cx, |app, _| {
+            app.one_window.slot_line(app.one_window_clock()).title
+        });
+        open(&app, cx, NoteTarget::Today);
+        let rows = note_rows(&app, cx);
+        let windows = cx.update(|cx| cx.windows().len());
+        drop(brain);
+        (frozen, line, rows, windows)
+    });
+    assert!(
+        matches!(
+            frozen,
+            Ok(crate::dictation::FrozenDictationDestination::DayPage { .. })
+        ),
+        "a Notes target freezes today's note: {frozen:?}"
+    );
+    assert_eq!(
+        line,
+        "Added to today's note: “pick up milk on the way home”"
+    );
+    assert_eq!(
+        rows,
+        ["pick up milk on the way home", "Write a line…"],
+        "the words are a line in today's note under the main input"
+    );
+    assert_eq!(windows, 1, "no window opens");
+}
+
+#[test]
+fn esc_from_a_note_found_by_name_goes_back_to_the_launcher_with_nothing_half_drawn() {
+    let (in_view, hosted, input) = in_launcher("notes_find_then_esc", 0, |cx| {
+        seed_note("Quarterly otter plan", &["- whiskers"]);
+        let (app, window) = launcher(cx, Jev::Off);
+        open(&app, cx, NoteTarget::New);
+        key(&app, cx, Key::Other(FIND_NOTE_KEY.into()));
+        wait(cx, 20);
+        type_into_launcher(cx, window, &app, "otter");
+        wait(cx, 20);
+        key(&app, cx, Key::Enter);
+        wait(cx, ENTER_GUARD_MS);
+        key(&app, cx, Key::Escape);
+        wait(cx, 20);
+        app.update(cx, |app, _| {
+            (
+                app.one_window.in_view(),
+                app.one_window_hosted_view().is_some(),
+                app.filter_text.clone(),
+            )
+        })
+    });
+    assert!(
+        !in_view,
+        "Esc leaves the note rather than a list nothing draws"
+    );
+    assert!(!hosted);
+    assert_eq!(
+        input, "",
+        "the input has the words from before the note opened"
+    );
+}

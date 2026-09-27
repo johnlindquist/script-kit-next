@@ -1157,7 +1157,11 @@ pub(crate) fn prompt_fixture_seed(
         template: None,
     };
     Ok(match fixture_id {
-        "prompt.arg" => PromptSeed::Arg(ChoicePromptSeed { common, placeholder: "Choose an item".into(), choices: choices(), input: String::new() }),
+        "prompt.arg" => {
+            let action = |name: &str, description: &str| ProtocolAction { description: Some(description.into()), ..ProtocolAction::new(name.into()) };
+            let common = PromptSeedCommon { actions: Some(vec![action("Copy Value", "Copies the highlighted choice"), action("Open Details", "Shows more about the choice"), action("Pin It", "Keeps the choice at the top")]), ..common };
+            PromptSeed::Arg(ChoicePromptSeed { common, placeholder: "Choose an item".into(), choices: choices(), input: String::new() })
+        }
         "prompt.mini" => PromptSeed::Mini(ChoicePromptSeed { common, placeholder: "Choose an item".into(), choices: choices(), input: String::new() }),
         "prompt.micro" => PromptSeed::Micro(ChoicePromptSeed { common, placeholder: "Type a value".into(), choices: choices(), input: String::new() }),
         "prompt.div" => PromptSeed::Div(DivPromptSeed { common, html: "<h2>Prompt document</h2><p>Production native content.</p><a href=\"submit:accepted\">Accept document</a>".into(), options: Default::default() }),

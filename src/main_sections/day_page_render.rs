@@ -220,10 +220,23 @@ impl Render for DayPageView {
             )
             .into_any_element();
 
-        let header = crate::components::main_view_chrome::MainViewHeaderChrome::context_only(
-            menu_def,
-            context_zone,
-        );
+        let switcher = self
+            .note_switcher
+            .dialog()
+            .filter(|_| self.note_switcher.is_open())
+            .cloned();
+        let (header, main) = match switcher {
+            Some(dialog) => {
+                self.render_note_switcher_in_place(dialog, context_zone, menu_def, &theme, cx)
+            }
+            None => (
+                crate::components::main_view_chrome::MainViewHeaderChrome::context_only(
+                    menu_def,
+                    context_zone,
+                ),
+                main,
+            ),
+        };
 
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {
             margin_x: shell.divider_margin_x,
@@ -293,6 +306,68 @@ impl Render for DayPageView {
                 footer,
                 overlays: Vec::new(),
             },
+        )
+    }
+}
+
+impl DayPageView {
+    /// The note switcher lists in the page's place under an input of its own, the way ⌘K
+    /// lists a view's actions; nothing opens.
+    fn render_note_switcher_in_place(
+        &self,
+        dialog: gpui::Entity<crate::actions::ActionsDialog>,
+        context_zone: AnyElement,
+        menu_def: crate::designs::MainMenuThemeDef,
+        theme: &crate::theme::Theme,
+        cx: &mut Context<Self>,
+    ) -> (
+        crate::components::main_view_chrome::MainViewHeaderChrome,
+        AnyElement,
+    ) {
+        use crate::components::main_view_chrome::{
+            render_prompt_search_input, MainViewHeaderChrome, PromptSearchInputChrome,
+        };
+        let (search, head) = {
+            let dialog = dialog.read(cx);
+            let search = match dialog.search_input.clone() {
+                Some(input) => PromptSearchInputChrome::entity_backed(
+                    gpui_component::input::Input::new(&input),
+                ),
+                None => PromptSearchInputChrome::controller_owned(
+                    "day-page-switcher-search",
+                    dialog.search_text.clone(),
+                    dialog
+                        .current_search_placeholder()
+                        .unwrap_or_default()
+                        .to_string(),
+                ),
+            };
+            (search, dialog.context_title.clone().unwrap_or_default())
+        };
+        let view = cx.entity().downgrade();
+        let list = crate::components::staged_actions::render_staged_actions(
+            &dialog,
+            &head,
+            theme,
+            move |action_id, window, cx| {
+                let _ = view.update(cx, |view, cx| {
+                    if let Some(dialog) = view.note_switcher.dialog().cloned() {
+                        dialog.update(cx, |dialog, cx| dialog.select_action_by_id(&action_id, cx));
+                    }
+                    if let Some(action_id) = view.note_switcher.execute_selected_action(cx) {
+                        view.execute_note_switcher_action(&action_id, window, cx);
+                    }
+                });
+            },
+            cx,
+        );
+        (
+            MainViewHeaderChrome::canonical(
+                menu_def,
+                context_zone,
+                render_prompt_search_input(theme, menu_def, search),
+            ),
+            list,
         )
     }
 }

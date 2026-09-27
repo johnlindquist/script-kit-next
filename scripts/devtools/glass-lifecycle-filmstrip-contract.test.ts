@@ -19,7 +19,7 @@ import {
 } from "./glass-lifecycle-filmstrip-contract.ts";
 
 describe("scenario profiles", () => {
-  test("full and extended resolve to the exact legacy five in order", () => {
+  test("full and extended resolve to the exact legacy four in order", () => {
     expect(resolveScenarioNames("full")).toEqual([
       ...LEGACY_FULL_SCENARIO_ORDER,
     ]);

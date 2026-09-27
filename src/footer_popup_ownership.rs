@@ -41,8 +41,6 @@ struct FooterHost {
     native_window: usize,
     native_token: u64,
     native_view: usize,
-    overlay: Option<GpuiFooterOverlaySlot>,
-    fidelity: Option<crate::protocol::FidelityPaintTargetSnapshot>,
 }
 
 static FOOTER_HOSTS: std::sync::LazyLock<Mutex<std::collections::HashMap<gpui::WindowId, FooterHost>>> =
@@ -59,7 +57,7 @@ impl FooterHost {
         Self {
             handle, binding: None, config: None, host_generation: next_footer_lifetime(),
             config_revision: 0, presentation_revision: 0, applied_theme_revision: 0,
-            refresh_signature: None, native_window: 0, native_view: 0, native_token: 0, overlay: None, fidelity: None,
+            refresh_signature: None, native_window: 0, native_view: 0, native_token: 0,
             sequence: 0, accepted_sequence: 0, completed_sequence: 0, completed_action_count: 0,
             snapshot: MainWindowFooterHostSnapshot::default(), sender, receiver,
             held_action: None, interaction_revision: 0,
@@ -174,6 +172,15 @@ fn enqueue_bound_footer_action(
     })
 }
 
+/// A capsule the main window drew itself was clicked: its action goes through the same queue as
+/// the native capsules' clicks.
+#[allow(dead_code, reason = "the binary's main window draws the capsules")]
+pub(crate) fn dispatch_main_window_footer_capsule(action: FooterAction) -> bool {
+    let Some(handle) = main_footer_handle() else { return false };
+    let binding = FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).get(&handle.window_id()).and_then(|host| host.binding.clone());
+    binding.is_some_and(|binding| dispatch_bound_footer_action(&binding, action))
+}
+
 pub(crate) fn footer_config_for_window(handle: AnyWindowHandle) -> Option<MainWindowFooterConfig> {
     FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).get(&handle.window_id())?.config.clone()
 }
@@ -189,14 +196,13 @@ pub(crate) fn footer_host_snapshot(handle: AnyWindowHandle) -> MainWindowFooterH
 pub(crate) fn footer_runtime_state(id: &str, generation: u64) -> Option<FooterRuntimeState> {
     let handle = crate::windows::get_runtime_window_handle_for_generation(id, generation)?;
     let hosts = FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner());
-    let host = hosts.values().find(|host| host.handle == handle || host.overlay.as_ref().is_some_and(|overlay| AnyWindowHandle::from(overlay.handle) == handle))?;
+    let host = hosts.values().find(|host| host.handle == handle)?;
     let binding = host.binding.clone()?;
     if !footer_binding_is_live(&binding, host.handle) { return None; }
-    let overlay = host.overlay.as_ref().filter(|overlay| AnyWindowHandle::from(overlay.handle) == handle);
     Some(FooterRuntimeState {
         semantic_revision: binding.config_revision,
-        presentation_revision: overlay.map_or(host.presentation_revision, |overlay| overlay.presentation_revision).saturating_add(host.interaction_revision),
-        applied_theme_revision: overlay.map_or(host.applied_theme_revision, |overlay| overlay.applied_theme_revision),
+        presentation_revision: host.presentation_revision.saturating_add(host.interaction_revision),
+        applied_theme_revision: host.applied_theme_revision,
         binding, config: host.config.clone()?, host: host.snapshot,
         completed_action_count: host.completed_action_count,
         held_action: host.held_action,
@@ -298,6 +304,27 @@ fn commit_footer_refresh(
     true
 }
 
+
+pub(crate) fn retire_footer_owner(parent: AnyWindowHandle, _cx: &mut App) {
+    #[cfg(target_os = "macos")]
+    if !crate::runtime_policy::is_owned_evaluation() {
+        let native = FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).get(&parent.window_id()).map_or(0, |host| host.native_window);
+        if native != 0 {
+            // Only retained footer peers / weak container owners are touched;
+            // the parent's NSWindow may already have been released.
+            unsafe {
+                remove_float_footer_child_window(native as id);
+                remove_main_window_footer_glass_container(native as id);
+            }
+        }
+    }
+    FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).remove(&parent.window_id());
+}
+
+pub(crate) fn retire_closed_footer_owner(window_id: gpui::WindowId, cx: &mut App) {
+    let parent = FOOTER_HOSTS.lock().unwrap_or_else(|p| p.into_inner()).get(&window_id).map(|host| host.handle);
+    if let Some(parent) = parent { retire_footer_owner(parent, cx); }
+}
 
 pub(crate) fn footer_owner_subscription(window: &Window, cx: &App) -> gpui::Subscription {
     let handle = window.window_handle();

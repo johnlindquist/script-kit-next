@@ -66,6 +66,10 @@ pub(crate) struct LearnsHost {
     pub(crate) shortcut: Option<super::shortcut_view::Recording>,
     pub(crate) script: Option<super::saved_scripts::Shown>,
     pub(crate) plans: super::lessons_host::LearnedPlans,
+    /// The saved dictations the history view lists, newest first.
+    pub(crate) history: Vec<crate::dictation::DictationHistoryEntry>,
+    /// The inputs the owned fixture lists; devices are never enumerated under evaluation.
+    pub(crate) fixture_microphones: Option<Vec<crate::dictation::DictationDeviceInfo>>,
     /// The final words of a voice session whose request Jev is reading.
     pub(crate) talk_request: Option<String>,
     /// saved.ts as this session knows it; written back only in production.
@@ -183,7 +187,10 @@ impl ScriptListApp {
         for mut row in rows {
             row.head = None;
             grouped.push(GroupedListItem::Item(flat.len()));
-            flat.push(own_result(row));
+            let result = self
+                .one_window_history_result(&row)
+                .unwrap_or_else(|| own_result(row));
+            flat.push(result);
         }
         Some((grouped, flat))
     }
@@ -212,12 +219,18 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// After a publication, the highlight sits where the voice view's reading is, and the ↵
-    /// button of a list view names the highlighted row. While talking the list stays at its top:
+    /// After a publication, the highlight sits where the voice view's reading is, a list view's
+    /// highlight lands on its first row, and the ↵ button of a list view names the highlighted
+    /// row. While talking the list stays at its top:
     /// the readings fill in place and never move.
     pub(crate) fn one_window_follow_own_selection(&mut self, cx: &mut Context<Self>) {
+        let on_a_row = self
+            .main_menu_committed_rows()
+            .iter()
+            .any(|row| row.grouped_index == self.selected_index && row.eligibility.selectable);
         let wanted = match (self.one_window.talk(), self.one_window_own_view()) {
             (Some(talk), _) => talk.selected(),
+            (None, Some(_)) if !on_a_row => Some(0),
             _ => None,
         };
         if let Some(ordinal) = wanted {
@@ -379,13 +392,17 @@ impl ScriptListApp {
     pub(crate) fn one_window_view_key(&mut self, key: Key, cx: &mut Context<Self>) {
         match self.one_window_own_view() {
             Some(OwnView::Shortcut) => self.one_window_shortcut_key(key, cx),
+            Some(OwnView::DictationHistory) => match key {
+                Key::Enter => self.one_window_history_enter(cx),
+                Key::CmdK => self.one_window_history_stage(cx),
+                _ => {}
+            },
             Some(view) if view.picks() && key == Key::Enter => {
                 if let Some(row) = self.one_window_selected_own_row() {
                     match view {
                         OwnView::Automations => self.one_window_automation_enter(&row, cx),
                         OwnView::Microphones => self.one_window_microphone_enter(&row, cx),
-                        OwnView::DictationHistory => self.one_window_history_enter(&row, cx),
-                        OwnView::Script | OwnView::Shortcut => {}
+                        OwnView::DictationHistory | OwnView::Script | OwnView::Shortcut => {}
                     }
                 }
             }
@@ -493,10 +510,11 @@ pub(crate) fn offered_rows(text: &str, saved: &[String], has_last: bool) -> Vec<
         ),
     ];
     for (key, title, sub, icon, words) in offers {
-        if words
+        let matched = words
             .iter()
-            .any(|w| w.starts_with(&t) || t.starts_with(w) || t.contains(w))
-        {
+            .filter(|w| w.starts_with(&t) || t.starts_with(**w) || t.contains(**w))
+            .max_by_key(|w| w.len());
+        if let Some(word) = matched {
             let enter = if key == "talk:start" {
                 "Start talking".to_string()
             } else {
@@ -507,7 +525,7 @@ pub(crate) fn offered_rows(text: &str, saved: &[String], has_last: bool) -> Vec<
                     .with_sub(sub)
                     .with_icon(icon)
                     .with_enter_label(enter)
-                    .with_score(92),
+                    .with_score(if word.contains(' ') { 93 } else { 92 }),
             );
         }
     }
@@ -521,10 +539,7 @@ pub(crate) fn offered_rows(text: &str, saved: &[String], has_last: bool) -> Vec<
         );
     }
     if let Some(rest) = t.strip_prefix("give ") {
-        let name = rest
-            .trim_end_matches(" a shortcut")
-            .trim_end_matches(" shortcut")
-            .trim();
+        let name = shortcut_subject(rest);
         if !name.is_empty() {
             if let Some(script) = saved
                 .iter()
@@ -544,6 +559,22 @@ pub(crate) fn offered_rows(text: &str, saved: &[String], has_last: bool) -> Vec<
         }
     }
     rows
+}
+
+/// The name in "give <name> a shortcut", also while " a shortcut" is half typed: the row must not
+/// drop out at "give launch alpha a" and come back, or it can't own Enter again.
+fn shortcut_subject(rest: &str) -> &str {
+    const TAILS: [&str; 2] = [" a shortcut", " shortcut"];
+    let cut = (1..=rest.len())
+        .filter(|&n| rest.is_char_boundary(rest.len() - n))
+        .filter(|&n| {
+            TAILS
+                .iter()
+                .any(|tail| tail.starts_with(&rest[rest.len() - n..]))
+        })
+        .max()
+        .unwrap_or(0);
+    rest[..rest.len() - cut].trim()
 }
 
 #[cfg(test)]
@@ -582,6 +613,24 @@ mod tests {
             false,
         );
         assert_eq!(rows[0].key, "shortcut-for:Tell Sarah + Post in #launcher");
+    }
+
+    #[test]
+    fn the_shortcut_row_stays_offered_while_the_sentence_is_typed() {
+        let saved = ["Launch Alpha".to_string(), "Launch Beta".to_string()];
+        let sentence = "give launch alpha a shortcut";
+        for end in "give l".len()..=sentence.len() {
+            let typed = &sentence[..end];
+            let keys: Vec<String> = offered_rows(typed, &saved, false)
+                .into_iter()
+                .map(|r| r.key)
+                .collect();
+            assert_eq!(keys, ["shortcut-for:Launch Alpha"], "typed {typed:?}");
+        }
+        assert_eq!(
+            offered_rows("give launch beta a", &saved, false)[0].key,
+            "shortcut-for:Launch Beta"
+        );
     }
 
     #[test]

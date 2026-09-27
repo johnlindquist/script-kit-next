@@ -344,7 +344,6 @@ fn deferred_sizing_keeps_preview_builtins_wide() {
         "AppView::ScriptTemplateCatalogView{",
         "AppView::AgentChatHistoryView{",
         "AppView::BrowserHistoryView{",
-        "AppView::DictationHistoryView{",
         "AppView::NotesBrowseView{",
     ] {
         let arm = compact_app_view_match_arm(&compacted, view);

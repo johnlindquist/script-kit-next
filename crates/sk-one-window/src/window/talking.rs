@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::contract::talk_words;
-use crate::talk::{Answer, Decision, Phase, Reading, Talk, TalkEvent};
+use crate::talk::{Answer, Decision, Dest, Phase, Reading, Talk, TalkEvent};
 
 impl OneWindow {
     /// The voice session, while the voice key is held or the window asks which reading.
@@ -12,14 +12,18 @@ impl OneWindow {
 
     pub(super) fn on_talk(&mut self, now: Ms, ev: TalkEvent, fx: &mut Vec<Effect>) -> bool {
         match ev {
-            TalkEvent::Start { app, field, to } => {
+            TalkEvent::Start { .. } | TalkEvent::StartTo { .. } => {
                 if self.talk.is_some() {
                     return false;
                 }
                 self.away = false;
                 self.staged = None;
                 self.talks += 1;
-                let talk = Talk::new(self.talks, app, field, to);
+                let talk = match ev {
+                    TalkEvent::StartTo { dest } => Talk::to_dest(self.talks, dest),
+                    TalkEvent::Start { app, field, to } => Talk::new(self.talks, app, field, to),
+                    _ => unreachable!("matched above"),
+                };
                 let enter = talk.enter();
                 self.talk = Some(talk);
                 self.on_view(
@@ -153,6 +157,7 @@ impl OneWindow {
         match decision {
             Decision::Act(reading) => self.talk_act(now, reading, fx),
             Decision::Drop => self.talk_drop(now, fx),
+            Decision::Deliver(dest) => self.talk_deliver(now, dest, fx),
             Decision::AskOnce => {
                 if let Some(talk) = self.talk.as_mut() {
                     talk.ask_once();
@@ -209,6 +214,28 @@ impl OneWindow {
     }
 
     /// Nothing is pasted and nothing runs; the window fades out as it is.
+    /// A session for one place: the model's chat opens with the words as its first message, or
+    /// the words go at the end of today's note.
+    fn talk_deliver(&mut self, now: Ms, dest: Dest, fx: &mut Vec<Effect>) {
+        let Some(talk) = self.talk_end() else {
+            return;
+        };
+        fx.push(Effect::TalkEnded);
+        self.home(now, String::new(), fx);
+        match dest {
+            Dest::Chat => {
+                self.on_work(
+                    now,
+                    crate::work::WorkEvent::AskModel {
+                        sentence: talk.heard,
+                    },
+                    fx,
+                );
+            }
+            Dest::Note => fx.push(Effect::AddToNote { text: talk.heard }),
+        }
+    }
+
     fn talk_drop(&mut self, now: Ms, fx: &mut Vec<Effect>) {
         let Some(talk) = self.talk_end() else {
             return;

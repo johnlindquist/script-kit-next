@@ -26,15 +26,6 @@ impl ScriptListApp {
                     "Run".to_string()
                 };
             }
-            AppView::DictationHistoryView { .. } => {
-                return if !has_selected_dictation_history_entry(self) {
-                    "Run".to_string()
-                } else if self.is_in_attachment_portal() {
-                    "Attach Transcript".to_string()
-                } else {
-                    paste_into_frontmost_app_label(frontmost_app_name.as_deref())
-                };
-            }
             AppView::ThemeChooserView { .. } => {
                 return "Apply".to_string();
             }
@@ -550,7 +541,7 @@ impl ScriptListApp {
                     "Opening Profile Switcher from footer chip"
                 );
                 if let AppView::AgentChatView { entity, .. } = &self.current_view {
-                    if self.show_actions_popup || crate::actions::is_actions_window_open() {
+                    if self.show_actions_popup {
                         tracing::info!(
                             target: "script_kit::footer_popup",
                             event = "main_window_footer_agent_model_chip_ignored_actions_open",
@@ -620,7 +611,7 @@ impl ScriptListApp {
         use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
         let footer_disabled = self.main_window_footer_buttons_blocked();
-        let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+        let actions_open = self.show_actions_popup;
         let run_label = self.main_window_primary_action_label();
 
         let mut buttons = Vec::new();
@@ -698,9 +689,6 @@ impl ScriptListApp {
     pub(crate) fn actions_toggle_dead_without_selection_reason(&self) -> Option<&'static str> {
         match &self.current_view {
             AppView::ClipboardHistoryView { .. } if !has_selected_clipboard_entry(self) => {
-                Some("Select an entry to see actions")
-            }
-            AppView::DictationHistoryView { .. } if !has_selected_dictation_history_entry(self) => {
                 Some("Select an entry to see actions")
             }
             AppView::FavoritesBrowseView { .. } if self.selected_favorite_id().is_none() => {
@@ -840,7 +828,7 @@ impl ScriptListApp {
         // by its GPUI hint strip through the persistent native footer.
         if matches!(self.current_view, AppView::TermPrompt { .. }) {
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let buttons = term_prompt_footer_buttons(!footer_disabled, actions_open);
             tracing::debug!(
                 target: "script_kit::footer_popup",
@@ -873,7 +861,7 @@ impl ScriptListApp {
         // Send + Actions, with Send honestly disabled while a turn runs.
         if let AppView::FlowSessionView { session_id } = self.current_view {
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let enabled = !footer_disabled;
             let working = self
                 .conversations
@@ -903,7 +891,7 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let enabled = !footer_disabled;
             let descriptor = self
                 .flow_desk_rows(filter)
@@ -968,7 +956,7 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let enabled = !footer_disabled;
             let buttons = vec![
                 FooterButtonConfig::new(FooterAction::Run, "↵", "Submit").enabled(enabled),
@@ -991,7 +979,7 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let enabled = !footer_disabled;
             let buttons = vec![
                 FooterButtonConfig::new(FooterAction::Run, "⌘↵", "Submit").enabled(enabled),
@@ -1068,7 +1056,7 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let enabled = !footer_disabled;
             let buttons = vec![
                 FooterButtonConfig::new(FooterAction::Run, "↵", "Capture Photo").enabled(enabled),
@@ -1090,7 +1078,7 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let enabled = !footer_disabled;
             let buttons = vec![
                 FooterButtonConfig::new(FooterAction::Run, "↵", "Select").enabled(enabled),
@@ -1112,7 +1100,7 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let has_files = match (&self.current_view, cx) {
                 (AppView::DropPrompt { entity, .. }, Some(cx)) => {
                     !entity.read(cx).dropped_files.is_empty()
@@ -1285,7 +1273,7 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let actions_open = self.show_actions_popup;
             let buttons = vec![
                 FooterButtonConfig::new(FooterAction::Run, "⌘↵", "Submit")
                     .enabled(!footer_disabled),
@@ -1322,7 +1310,7 @@ impl ScriptListApp {
         use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
         let footer_disabled = self.main_window_footer_buttons_blocked();
-        let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+        let actions_open = self.show_actions_popup;
         let enabled = !footer_disabled;
 
         if let Some(snapshot) = self.agent_chat_footer_snapshot.as_ref() {
@@ -1380,7 +1368,15 @@ impl ScriptListApp {
         }
 
         let surface = self.main_window_footer_surface()?;
-        let buttons = self.main_window_footer_buttons_for_current_view(cx);
+        let mut buttons = self.main_window_footer_buttons_for_current_view(cx);
+        if let Some(label) = self.one_window_staged_enter_label() {
+            for button in buttons
+                .iter_mut()
+                .filter(|button| button.action == crate::footer_popup::FooterAction::Run)
+            {
+                button.label = label.to_string().into();
+            }
+        }
 
         // debug!: resolved on every render frame and every state collection;
         // info-level logging here is per-frame I/O during arrow-key scroll.
@@ -1439,9 +1435,10 @@ impl ScriptListApp {
             })
     }
 
-    /// When the native main-window footer is active, replace the GPUI footer
-    /// with either the blur-era spacer or, in Tahoe glass mode, an absolute
-    /// hover blocker that lets scroll content continue beneath the glass band.
+    /// With Tahoe glass the native capsules float in the stage, so the footer
+    /// slot is only a hover blocker that lets scroll content continue beneath
+    /// them. Without glass the main window draws the same capsules itself from
+    /// the footer config; `gpui_footer` is for a view that has no config.
     pub(crate) fn main_window_footer_slot(
         &self,
         gpui_footer: gpui::AnyElement,
@@ -1454,20 +1451,21 @@ impl ScriptListApp {
         if !main_window_footer_chrome_should_render(is_agent_chat, agent_chat_controls_visible) {
             return None;
         }
-        if self.main_window_uses_native_footer() {
-            if crate::footer_popup::glass_scroll_bands_active() {
-                Some(
-                    crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
-                )
-            } else {
-                Some(
-                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
-                    ),
-                )
-            }
-        } else {
-            Some(gpui_footer)
+        if crate::footer_popup::glass_scroll_bands_active() && self.main_window_uses_native_footer()
+        {
+            return Some(
+                crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
+            );
         }
+        Some(match self.main_window_footer_config_with_cx(None) {
+            Some(config) => crate::components::footer_chrome::render_main_window_footer_config_rail(
+                config,
+                |action, _window, _cx| {
+                    crate::footer_popup::dispatch_main_window_footer_capsule(action);
+                },
+            ),
+            None => gpui_footer,
+        })
     }
 
     fn handle_main_footer_action(
@@ -1902,16 +1900,6 @@ impl ScriptListApp {
                     filter,
                 )
                 .len(),
-            )),
-            AppView::DictationHistoryView {
-                filter,
-                visible_limit,
-                ..
-            } => Some((
-                ViewType::MainWindow,
-                self.dictation_history_current_or_previous_page(filter, *visible_limit)
-                    .map(|page| page.visible_count)
-                    .unwrap_or(0),
             )),
             AppView::NotesBrowseView { search } => {
                 Some((ViewType::MainWindow, search.state.rows().len()))

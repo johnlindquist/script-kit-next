@@ -6,7 +6,7 @@ mod footer_layout_tests {
         footer_identifier_uses_keycap_border, main_window_detached_footer_regions_appkit,
         main_window_detached_footer_regions_gpui, native_footer_left_hit_target_flags,
         native_footer_visual_event_changed, native_footer_visual_root_state,
-        resolved_native_footer_button_state, should_use_gpui_footer_overlay, FooterAction,
+        resolved_native_footer_button_state, FooterAction,
         FooterButtonConfig, FooterDotStatus, NativeFooterLeftHitTargetFlags,
         FOOTER_HINT_KEY_LABEL_GAP, FOOTER_HINT_PADDING_X, FOOTER_RUN_HINT_PADDING_X,
     };
@@ -221,14 +221,6 @@ mod footer_layout_tests {
                 + allocation.primary_label_width
                 <= allocation.available_width + f64::EPSILON
         );
-    }
-
-    #[test]
-    fn native_glass_mode_always_owns_the_main_footer_without_an_overlay() {
-        assert!(!should_use_gpui_footer_overlay(true, true));
-        assert!(!should_use_gpui_footer_overlay(true, false));
-        assert!(should_use_gpui_footer_overlay(false, true));
-        assert!(!should_use_gpui_footer_overlay(false, false));
     }
 
     #[test]
@@ -456,146 +448,6 @@ mod footer_layout_tests {
         )
         .unwrap();
         (parent, info)
-    }
-
-    fn footer_test_overlay(
-        parent: gpui::WindowHandle<FooterTestParent>,
-        info: &crate::protocol::AutomationWindowInfo,
-        bounds: gpui::Bounds<gpui::Pixels>,
-        cx: &mut gpui::App,
-    ) -> crate::protocol::AutomationWindowInfo {
-        let state = super::footer_runtime_state(&info.id, info.generation.unwrap()).unwrap();
-        let bounds = super::gpui_footer_overlay_bounds(bounds);
-        let policy = crate::runtime_policy::WindowHostPolicy::Interactive;
-        // Exercise the production renderer and lifetime publication without
-        // configuring AppKit peers on GPUI's non-native test platform.
-        let handle = super::open_footer_overlay_window(
-            state.config,
-            state.binding,
-            bounds,
-            None,
-            policy,
-            cx,
-        )
-        .unwrap();
-        super::publish_footer_overlay(parent.into(), info, handle, bounds, policy, cx).unwrap()
-    }
-
-    #[gpui::test]
-    fn footer_overlay_fidelity_is_a_separate_paint_target(cx: &mut gpui::TestAppContext) {
-        let _theme_guard = crate::test_utils::lock_theme_cache_test();
-        let _registry_guard = crate::windows::automation_registry::tests::registry_guard();
-        let (parent, info, overlay) = cx.update(|cx| {
-            crate::theme::gpui_kit_bridge::init_component_libraries(cx);
-            let (parent, info) = footer_test_parent(cx);
-            let mut config = super::MainWindowFooterConfig::new(
-                "agent_chat",
-                vec![super::FooterButtonConfig::new(
-                    super::FooterAction::Run,
-                    "↵",
-                    "Send",
-                )],
-            );
-            config.left_info = Some(super::FooterLeftInfo {
-                model_name: "GPT-5.6 SOL".into(),
-                ..Default::default()
-            });
-            let bounds = parent
-                .update(cx, |_, window, _| {
-                    super::sync_footer_binding(window.window_handle(), Some(&config));
-                    window.bounds()
-                })
-                .unwrap();
-            let overlay = footer_test_overlay(parent, &info, bounds, cx);
-            (parent, info, overlay)
-        });
-        let handle = crate::windows::get_runtime_window_handle_for_generation(
-            &overlay.id,
-            overlay.generation.unwrap(),
-        )
-        .unwrap();
-        cx.update(|cx| {
-            handle
-                .update(cx, |_, window, _| {
-                    window.set_fidelity_capture_target_for_test(Some("agent-chat"));
-                    window.refresh();
-                })
-                .unwrap()
-        });
-        cx.run_until_parked();
-        let snapshot = super::FOOTER_HOSTS
-            .lock()
-            .unwrap()
-            .get(&parent.window_id())
-            .unwrap()
-            .fidelity
-            .clone()
-            .expect("completed footer frame");
-        assert_eq!(snapshot.target_id, "gpui-footer-overlay");
-        assert_eq!(snapshot.target_kind, "footerOverlay");
-        assert_eq!(snapshot.parent_target_id.as_deref(), Some(info.id.as_str()));
-        assert!(snapshot.frame_generation > 0);
-        assert!(snapshot.nodes.iter().any(|node| node.id
-            == "agent-chat.footer-overlay.footer-action:run"
-            && node.primitive_count > 0));
-        assert!(snapshot
-            .nodes
-            .iter()
-            .any(|node| node.id == "agent-chat.footer-overlay.model" && node.primitive_count > 0));
-        assert!(snapshot
-            .nodes
-            .iter()
-            .all(
-                |node| node.measurement_frame_generation == snapshot.frame_generation
-                    && node.measurement_provenance == "paint-time"
-            ));
-        cx.update(|cx| {
-            let elements =
-                super::footer_fixture_elements(&overlay.id, overlay.generation.unwrap(), cx)
-                    .unwrap();
-            assert_eq!(elements[0].semantic_id, "footer-action:run");
-            assert_eq!(elements[0].selectable, Some(true));
-            let layout =
-                super::footer_fixture_layout(&overlay.id, overlay.generation.unwrap(), cx).unwrap();
-            assert_eq!(layout.prompt_type, "footerOverlay");
-            for component in &layout.components {
-                let painted = snapshot
-                    .nodes
-                    .iter()
-                    .find(|node| node.id == component.name)
-                    .expect("actual painted selector");
-                assert_eq!(component.bounds, painted.bounds);
-                assert_eq!(
-                    component.measurement_frame_generation,
-                    Some(snapshot.frame_generation)
-                );
-            }
-            let changed = super::MainWindowFooterConfig::new(
-                "agent_chat",
-                vec![super::FooterButtonConfig::new(
-                    super::FooterAction::Run,
-                    "↵",
-                    "Send again",
-                )],
-            );
-            parent
-                .update(cx, |_, window, _| {
-                    super::sync_footer_binding(window.window_handle(), Some(&changed))
-                })
-                .unwrap();
-            assert!(
-                super::footer_fixture_elements(&overlay.id, overlay.generation.unwrap(), cx)
-                    .is_err()
-            );
-            assert!(
-                super::footer_fixture_layout(&overlay.id, overlay.generation.unwrap(), cx).is_err()
-            );
-            super::retire_footer_owner(parent.into(), cx);
-            crate::windows::remove_runtime_window_instance(&info.id, info.generation.unwrap());
-            parent
-                .update(cx, |_, window, _| window.remove_window())
-                .unwrap();
-        });
     }
 
     #[gpui::test]
@@ -850,7 +702,7 @@ mod footer_layout_tests {
             let secondary_binding =
                 super::sync_footer_binding(secondary.into(), Some(&config)).unwrap();
             let theme = crate::theme::get_theme_snapshot();
-            let signature = super::native_footer_refresh_signature(&config, &theme, 750.0, false);
+            let signature = super::native_footer_refresh_signature(&config, &theme, 750.0);
             assert!(!super::commit_footer_refresh(
                 main.into(),
                 &secondary_binding,
@@ -864,7 +716,7 @@ mod footer_layout_tests {
             // The real refresh failure path must not populate either cache.
             // SAFETY: nil is an Objective-C null receiver, never a fabricated live pointer.
             assert!(!unsafe {
-                super::refresh_footer_host_impl(cocoa::base::nil, cocoa::base::nil, &config, false)
+                super::refresh_footer_host_impl(cocoa::base::nil, cocoa::base::nil, &config)
             });
             {
                 let hosts = super::FOOTER_HOSTS
@@ -893,7 +745,7 @@ mod footer_layout_tests {
             changed.buttons[0].label = "Return".into();
             let next = super::sync_footer_binding(secondary.into(), Some(&changed)).unwrap();
             let changed_signature =
-                super::native_footer_refresh_signature(&changed, &theme, 750.0, false);
+                super::native_footer_refresh_signature(&changed, &theme, 750.0);
             assert!(!super::commit_footer_refresh(
                 secondary.into(),
                 &secondary_binding,
@@ -931,7 +783,7 @@ mod footer_layout_tests {
                 resolved: theme.resolved.clone(),
             };
             let next_signature =
-                super::native_footer_refresh_signature(&config, &next_theme, 750.0, false);
+                super::native_footer_refresh_signature(&config, &next_theme, 750.0);
             assert_ne!(signature, next_signature);
             assert!(!super::commit_footer_refresh(
                 main.into(),
@@ -1093,235 +945,6 @@ mod footer_layout_tests {
                 )
             );
         }
-    }
-
-    #[gpui::test]
-    fn equal_config_overlays_keep_independent_frames_and_parent_teardown(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        let _theme_guard = crate::test_utils::lock_theme_cache_test();
-        let _registry_guard = crate::windows::automation_registry::tests::registry_guard();
-        let (first, first_info, first_overlay, second, second_info, second_overlay) =
-            cx.update(|cx| {
-                crate::theme::gpui_kit_bridge::init_component_libraries(cx);
-                let (first, first_info) = footer_test_parent(cx);
-                let (second, second_info) = footer_test_parent(cx);
-                let config = super::MainWindowFooterConfig::new(
-                    "about",
-                    vec![super::FooterButtonConfig::new(
-                        super::FooterAction::Close,
-                        "Esc",
-                        "Back",
-                    )],
-                );
-                let first_bounds = first
-                    .update(cx, |_, window, _| {
-                        super::sync_footer_binding(window.window_handle(), Some(&config));
-                        window.bounds()
-                    })
-                    .unwrap();
-                let second_bounds = second
-                    .update(cx, |_, window, _| {
-                        super::sync_footer_binding(window.window_handle(), Some(&config));
-                        window.bounds()
-                    })
-                    .unwrap();
-                let first_overlay = footer_test_overlay(first, &first_info, first_bounds, cx);
-                let second_overlay = footer_test_overlay(second, &second_info, second_bounds, cx);
-                assert_ne!(first_overlay.id, second_overlay.id);
-                assert_ne!(
-                    crate::windows::get_runtime_window_handle(&first_overlay.id),
-                    crate::windows::get_runtime_window_handle(&second_overlay.id)
-                );
-                (
-                    first,
-                    first_info,
-                    first_overlay,
-                    second,
-                    second_info,
-                    second_overlay,
-                )
-            });
-        cx.run_until_parked();
-        let first_before =
-            super::footer_runtime_state(&first_overlay.id, first_overlay.generation.unwrap())
-                .unwrap();
-        let second_before =
-            super::footer_runtime_state(&second_overlay.id, second_overlay.generation.unwrap())
-                .unwrap();
-        assert_eq!(first_before.config, second_before.config);
-        assert_eq!(
-            first_before.applied_theme_revision,
-            crate::theme::get_theme_snapshot().revision
-        );
-        assert_eq!(
-            second_before.applied_theme_revision,
-            first_before.applied_theme_revision
-        );
-        cx.update(|cx| {
-            let changed = super::MainWindowFooterConfig::new(
-                "about",
-                vec![super::FooterButtonConfig::new(
-                    super::FooterAction::Close,
-                    "Esc",
-                    "Return",
-                )],
-            );
-            first
-                .update(cx, |_, window, cx| {
-                    super::sync_footer_binding(window.window_handle(), Some(&changed));
-                    super::notify_changed_footer_overlay(window.window_handle(), cx);
-                })
-                .unwrap();
-        });
-        cx.run_until_parked();
-        assert!(
-            super::footer_runtime_state(&first_overlay.id, first_overlay.generation.unwrap())
-                .unwrap()
-                .presentation_revision
-                > first_before.presentation_revision
-        );
-        assert_eq!(
-            super::footer_runtime_state(&second_overlay.id, second_overlay.generation.unwrap())
-                .unwrap()
-                .config,
-            second_before.config
-        );
-        cx.update(|cx| {
-            first
-                .update(cx, |_, window, _| window.remove_window())
-                .unwrap()
-        });
-        cx.run_until_parked();
-        assert!(crate::windows::get_runtime_window_handle_for_generation(
-            &first_overlay.id,
-            first_overlay.generation.unwrap()
-        )
-        .is_none());
-        assert!(crate::windows::get_runtime_window_handle_for_generation(
-            &second_overlay.id,
-            second_overlay.generation.unwrap()
-        )
-        .is_some());
-        cx.update(|cx| {
-            super::retire_footer_owner(second.into(), cx);
-            crate::windows::remove_runtime_window_instance(
-                &first_info.id,
-                first_info.generation.unwrap(),
-            );
-            crate::windows::remove_runtime_window_instance(
-                &second_info.id,
-                second_info.generation.unwrap(),
-            );
-            second
-                .update(cx, |_, window, _| window.remove_window())
-                .unwrap();
-        });
-    }
-
-    #[test]
-    fn footer_semantics_preserve_disabled_selected_and_held_states() {
-        let config = super::MainWindowFooterConfig::new(
-            "fixture",
-            vec![
-                FooterButtonConfig::new(FooterAction::Run, "↵", "Run")
-                    .disabled_reason("Choose an item"),
-                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions").selected(true),
-                FooterButtonConfig::new(FooterAction::Close, "Esc", "Close"),
-            ],
-        );
-        let elements = super::footer_elements(&config, Some(FooterAction::Close));
-        assert_eq!(
-            elements[0].action_disabled.as_deref(),
-            Some("Choose an item")
-        );
-        assert_eq!(elements[0].status_kind.as_deref(), Some("disabled"));
-        assert_eq!(elements[0].selectable, Some(false));
-        assert_eq!(elements[1].selected, Some(true));
-        assert_eq!(elements[1].status_kind.as_deref(), Some("selected"));
-        assert_eq!(elements[2].selected, Some(false));
-        assert_eq!(elements[2].status_kind.as_deref(), Some("held"));
-    }
-
-    #[gpui::test]
-    fn footer_completion_ticket_requires_its_exact_accepted_handler(cx: &mut gpui::TestAppContext) {
-        let _theme_guard = crate::test_utils::lock_theme_cache_test();
-        let _registry_guard = crate::windows::automation_registry::tests::registry_guard();
-        cx.update(|cx| {
-            let (parent, info) = footer_test_parent(cx);
-            let config = super::MainWindowFooterConfig::new(
-                "fixture",
-                vec![FooterButtonConfig::new(FooterAction::Close, "Esc", "Close")],
-            );
-            let (binding, events) = parent
-                .update(cx, |_, window, _| {
-                    (
-                        super::sync_footer_binding(window.window_handle(), Some(&config)).unwrap(),
-                        super::footer_action_receiver(window),
-                    )
-                })
-                .unwrap();
-            assert!(super::dispatch_bound_footer_action(
-                &binding,
-                FooterAction::Close
-            ));
-            let unrelated = events.try_recv().unwrap();
-            let (sender, receiver) = async_channel::bounded(1);
-            let ticket = super::FooterActionCompletion {
-                receiver,
-                completed: std::cell::Cell::new(false),
-            };
-            super::enqueue_bound_footer_action(&binding, FooterAction::Close, Some(sender))
-                .unwrap();
-            let selected = events.try_recv().unwrap();
-            assert!(!ticket.poll().unwrap());
-            parent
-                .update(cx, |_, window, _| {
-                    unrelated.accept(window).unwrap();
-                    unrelated.complete(window);
-                    assert!(
-                        !ticket.poll().unwrap(),
-                        "another event cannot complete this ticket"
-                    );
-                    selected.complete(window);
-                    assert!(!ticket.poll().unwrap(), "unaccepted events cannot complete");
-                    selected.accept(window).unwrap();
-                    assert!(
-                        !ticket.poll().unwrap(),
-                        "acceptance alone is not completion"
-                    );
-                    selected.complete(window);
-                })
-                .unwrap();
-            assert!(ticket.poll().unwrap());
-            assert!(ticket.poll().unwrap(), "completed ticket remains completed");
-            let (sender, receiver) = async_channel::bounded(1);
-            let stale_ticket = super::FooterActionCompletion {
-                receiver,
-                completed: std::cell::Cell::new(false),
-            };
-            super::enqueue_bound_footer_action(&binding, FooterAction::Close, Some(sender))
-                .unwrap();
-            let stale = events.try_recv().unwrap();
-            let disabled = super::MainWindowFooterConfig::new(
-                "fixture",
-                vec![FooterButtonConfig::new(FooterAction::Close, "Esc", "Close")
-                    .disabled_reason("Unavailable")],
-            );
-            parent
-                .update(cx, |_, window, _| {
-                    super::sync_footer_binding(window.window_handle(), Some(&disabled));
-                    assert!(stale.accept(window).is_none());
-                    stale.complete(window);
-                })
-                .unwrap();
-            assert!(stale_ticket.poll().is_err());
-            super::retire_footer_owner(parent.into(), cx);
-            crate::windows::remove_runtime_window_instance(&info.id, info.generation.unwrap());
-            parent
-                .update(cx, |_, window, _| window.remove_window())
-                .unwrap();
-        });
     }
 
     #[test]
@@ -1998,10 +1621,6 @@ mod footer_layout_tests {
 
     #[test]
     fn footer_buttons_keep_two_pixel_vertical_inset() {
-        assert_eq!(
-            crate::components::footer_chrome::FOOTER_BUTTON_VERTICAL_INSET_PX,
-            2.0
-        );
         assert_eq!(
             crate::components::footer_chrome::footer_button_height(32.0),
             28.0

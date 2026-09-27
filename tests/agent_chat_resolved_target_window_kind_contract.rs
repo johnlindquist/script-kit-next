@@ -67,7 +67,6 @@ fn as_camel_case_matches_serde_for_every_variant() {
         (AutomationWindowKind::Main, "main"),
         (AutomationWindowKind::Notes, "notes"),
         (AutomationWindowKind::AgentChatDetached, "agentChatDetached"),
-        (AutomationWindowKind::Dictation, "dictation"),
         (AutomationWindowKind::ActionsDialog, "actionsDialog"),
         (AutomationWindowKind::PromptPopup, "promptPopup"),
     ];

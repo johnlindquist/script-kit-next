@@ -366,12 +366,6 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Browsing saved dictation transcripts with search and preview
-    DictationHistoryView {
-        filter: String,
-        selected_index: usize,
-        visible_limit: usize,
-    },
     /// Browsing the canonical Notes search corpus standalone or as an Agent Chat portal.
     NotesBrowseView {
         search: crate::notes::search_model::NoteSearchHostState,
@@ -909,7 +903,6 @@ impl AppView {
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
             AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
-            AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
             AppView::AgentChatView { .. } => "AgentChatView",
             AppView::DayPage { .. } => "DayPage",
@@ -983,9 +976,9 @@ impl AppView {
             AppView::TipsView { .. } => SurfaceKind::Tips,
             AppView::ScriptTemplateCatalogView { .. } => SurfaceKind::ScriptTemplateCatalog,
             AppView::AgentChatHistoryView { .. } => SurfaceKind::AgentChatHistory,
-            AppView::BrowserHistoryView { .. }
-            | AppView::DictationHistoryView { .. }
-            | AppView::NotesBrowseView { .. } => SurfaceKind::AttachmentPortalBrowser,
+            AppView::BrowserHistoryView { .. } | AppView::NotesBrowseView { .. } => {
+                SurfaceKind::AttachmentPortalBrowser
+            }
             AppView::AgentChatView { .. } => SurfaceKind::AgentChat,
             AppView::DayPage { .. } => SurfaceKind::DayPage,
         }
@@ -1032,7 +1025,6 @@ impl AppView {
             | AppView::CurrentAppCommandsView { .. }
             | AppView::AgentChatHistoryView { .. }
             | AppView::BrowserHistoryView { .. }
-            | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. } => MainViewHeaderInputPolicy::ViewOwnedCanonicalInput,
             AppView::AgentChatView { .. } => {
                 MainViewHeaderInputPolicy::ViewOwnedCanonicalMultilineInput
@@ -1118,7 +1110,6 @@ impl AppView {
             AppView::EmojiPickerView { .. } => Some("emoji_picker"),
             AppView::AgentChatHistoryView { .. } => Some("agent_chat_history"),
             AppView::BrowserHistoryView { .. } => Some("browser_history"),
-            AppView::DictationHistoryView { .. } => Some("dictation_history"),
             AppView::AgentChatView { .. } => Some("agent_chat"),
             AppView::DayPage { .. } => Some("day_page"),
             AppView::ChatPrompt { .. } => Some("chat_prompt"),
@@ -1799,8 +1790,6 @@ enum ActionsDialogHost {
     FileSearch,
     /// Actions in clipboard history (restore focus to clipboard search input)
     ClipboardHistory,
-    /// Actions in dictation history (restore focus to dictation search input)
-    DictationHistory,
     /// Actions in favorites browser (restore focus to favorites search input)
     Favorites,
     /// Actions in theme chooser / theme designer (restore focus to theme search input)

@@ -758,8 +758,8 @@ mod main_menu_input_guard_tests {
             "physical plain Enter must keep ScriptIssues/menu-syntax Accept ahead of ScriptList submit, then Spine/canonical selected execution, and only later Agent Chat handling"
         );
         assert!(
-            physical_enter_section.contains("!crate::actions::is_actions_window_open()"),
-            "physical plain Enter must not steal Enter while the actions window owns it"
+            physical_enter_section.contains("!this.show_actions_popup"),
+            "physical plain Enter must not steal Enter while staged actions own it"
         );
         assert!(
             !physical_enter_section.contains("is_within_focus_grace_period"),

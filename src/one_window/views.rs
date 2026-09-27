@@ -91,6 +91,9 @@ impl ScriptListApp {
         text: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        // The host holds one view, so a view opened from another takes its place: Esc then
+        // goes back to where the first one was opened from, not to a view nothing can draw.
+        let replaces = self.one_window_hosted_view().is_some();
         self.one_window_host.view_text = Some(
             text.clone()
                 .unwrap_or_else(|| self.one_window.text().to_string()),
@@ -105,10 +108,12 @@ impl ScriptListApp {
         };
         self.one_window_host.view = Some(view);
         let px = self.one_window_natural_height();
-        self.one_window_handle_turn(
-            vec![Event::View(ViewOp::Open(spec)), Event::Content { px }],
-            cx,
-        );
+        let op = if replaces {
+            ViewOp::Replace(spec)
+        } else {
+            ViewOp::Open(spec)
+        };
+        self.one_window_handle_turn(vec![Event::View(op), Event::Content { px }], cx);
     }
 
     /// The view the reducer has on top, when it's one of these.

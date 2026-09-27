@@ -509,17 +509,13 @@ impl ScriptListApp {
                 self.open_clipboard_history_surface_with_filter(portal_query.clone(), cx);
             }
             ContextPortalKind::DictationHistory => {
-                self.open_builtin_filterable_view_with_filter(
-                    AppView::DictationHistoryView {
-                        filter: portal_query.clone(),
-                        selected_index: 0,
-                        visible_limit: crate::dictation::DICTATION_HISTORY_PAGE_SIZE,
-                    },
-                    &portal_query,
+                self.open_script_list_attachment_portal(
+                    kind,
+                    "",
                     "Search dictation history...",
-                    true,
                     cx,
                 );
+                self.one_window_open_dictation_history(cx);
             }
             ContextPortalKind::ScriptSearch => {
                 self.open_script_list_attachment_portal(
@@ -667,6 +663,9 @@ impl ScriptListApp {
             kind = ?portal_kind,
             focus_target = ?return_focus_target,
         );
+        if self.one_window_own_view().is_some() {
+            self.one_window_handle(sk_one_window::Event::View(sk_one_window::ViewOp::Park), cx);
+        }
 
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
         if matches!(self.current_view, AppView::ScriptList) {

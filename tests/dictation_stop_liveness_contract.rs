@@ -1,7 +1,6 @@
 const BUILTIN_EXECUTION: &str = include_str!("../src/app_execute/builtin_execution.rs");
 const DICTATION_CAPTURE: &str = include_str!("../src/dictation/capture.rs");
 const DICTATION_RUNTIME: &str = include_str!("../src/dictation/runtime.rs");
-const DICTATION_WINDOW: &str = include_str!("../src/dictation/window.rs");
 
 fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     let start_index = source
@@ -35,16 +34,6 @@ fn dictation_stop_paths_route_through_nonblocking_coordinator() {
             && builtin_stop.contains("finish_stop_capture"),
         "app stop helper must collect capture on a background executor and finish through the coordinator"
     );
-
-    let submit = section_between(
-        BUILTIN_EXECUTION,
-        "fn submit_active_dictation_from_overlay(",
-        "fn request_active_dictation_stop(",
-    );
-    assert!(
-        !submit.contains("toggle_dictation(") && submit.contains("request_active_dictation_stop("),
-        "overlay submit must request async stop instead of blocking toggle"
-    );
 }
 
 #[test]
@@ -64,29 +53,6 @@ fn capture_processor_and_drop_cannot_join_before_event_drain() {
             && DICTATION_CAPTURE.contains("try_send(DictationCaptureEvent::EndOfStream"),
         "processor sends must be nonblocking so a full UI event channel cannot deadlock shutdown"
     );
-}
-
-#[test]
-fn overlay_global_key_actions_skip_stale_pump_state() {
-    assert!(
-        DICTATION_WINDOW.contains("enum GlobalKeyProcessResult")
-            && DICTATION_WINDOW.contains("match view.process_global_keys_if_requested")
-            && DICTATION_WINDOW.contains("Skipped stale overlay pump state after global key action"),
-        "global Escape/Enter processing must prevent stale set_state from overwriting consumed actions"
-    );
-
-    let open = section_between(
-        DICTATION_WINDOW,
-        "pub fn open_dictation_overlay(",
-        "pub fn update_dictation_overlay(",
-    );
-    let close = section_between(
-        DICTATION_WINDOW,
-        "pub fn close_dictation_overlay(",
-        "pub fn is_dictation_overlay_open(",
-    );
-    assert!(open.contains("ENTER_REQUESTED.store(false"));
-    assert!(close.contains("ENTER_REQUESTED.store(false"));
 }
 
 #[test]

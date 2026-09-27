@@ -706,7 +706,7 @@ impl ScriptListApp {
     ) -> crate::window_orchestrator::interaction::LauncherEscapeDecision {
         crate::window_orchestrator::interaction::plan_launcher_escape(
             crate::window_orchestrator::interaction::LauncherEscapeFacts {
-                actions_open: self.show_actions_popup || crate::actions::is_actions_window_open(),
+                actions_open: self.show_actions_popup,
                 attachment_portal_open: self.is_in_attachment_portal(),
                 object_selector_open: self.menu_syntax_object_selector_owns_main_keyboard(),
                 trigger_picker_open: self.menu_syntax_trigger_picker_owns_main_keyboard(),

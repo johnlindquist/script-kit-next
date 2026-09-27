@@ -175,8 +175,3 @@ mod tests {
         assert_eq!(top_occlusion_alpha(tokens, 2.0), 0x2E);
     }
 }
-
-/// Use the scroll container's current geometry rather than a shadow follow flag.
-pub(crate) fn scroll_handle_is_at_bottom(handle: &gpui::ScrollHandle) -> bool {
-    handle.max_offset().y + handle.offset().y <= gpui::px(1.0)
-}

@@ -1605,7 +1605,6 @@ impl ScriptListApp {
                                 }
                             }
                             // Notify the actions window to re-render
-                            crate::actions::notify_actions_window(ctx);
                         }
                     } else {
                         // Route the same capability-derived conversation commands used by

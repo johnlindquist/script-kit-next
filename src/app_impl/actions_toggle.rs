@@ -245,7 +245,6 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
     match host {
         ActionsDialogHost::MainList => "MainList",
         ActionsDialogHost::ClipboardHistory => "ClipboardHistory",
-        ActionsDialogHost::DictationHistory => "DictationHistory",
         ActionsDialogHost::Favorites => "Favorites",
         ActionsDialogHost::ThemeChooser => "ThemeChooser",
         ActionsDialogHost::EmojiPicker => "EmojiPicker",
@@ -346,172 +345,6 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn make_actions_window_on_close_callback(
-        app_entity: Entity<Self>,
-        host: ActionsDialogHost,
-        log_message: &'static str,
-    ) -> std::sync::Arc<dyn Fn(&mut gpui::App) + Send + Sync> {
-        std::sync::Arc::new(move |cx| {
-            let app_entity = app_entity.clone();
-            cx.defer(move |cx| {
-                app_entity.update(cx, |app, cx| {
-                    if !app.show_actions_popup && app.actions_dialog.is_none() {
-                        return;
-                    }
-
-                    let should_hide_main_after_actions_focus_loss =
-                        matches!(host, ActionsDialogHost::MainList)
-                            && app.can_preserve_hide_script_list_on_passive_focus_loss()
-                            && !crate::platform::is_main_window_focused();
-
-                    app.mark_actions_popup_closed();
-                    // The Profile Switcher only ever owns the dialog while
-                    // open; refresh the footer labels from the just-persisted
-                    // selection, then clear its gate on any actions-popup close.
-                    if app.agent_model_picker_active {
-                        app.refresh_agent_model_footer_labels();
-                    }
-                    app.agent_model_picker_active = false;
-                    app.clear_actions_context_for_host(host);
-                    app.mark_filter_resync_after_actions_if_needed();
-                    app.pop_focus_overlay(cx);
-
-                    if should_hide_main_after_actions_focus_loss {
-                        logging::log(
-                            "FOCUS",
-                            "Actions popup closed after ScriptList focus loss - hiding main while preserving state",
-                        );
-                        app.hide_main_window_preserving_state_for_focus_loss(cx);
-                        cx.notify();
-                        return;
-                    }
-
-                    if !script_kit_gpui::is_main_window_visible() {
-                        logging::log(
-                            "FOCUS",
-                            "Actions popup closed after main was already hidden - skipping focus restoration",
-                        );
-                        cx.notify();
-                        return;
-                    }
-
-                    app.request_focus_restore_for_actions_host(host);
-                    logging::log("FOCUS", log_message);
-                    cx.notify();
-                });
-            });
-        })
-    }
-
-    pub(crate) fn spawn_open_actions_window(
-        cx: &mut Context<Self>,
-        placement: crate::actions::ActionsWindowPlacement,
-        dialog: Entity<ActionsDialog>,
-        position: crate::actions::WindowPosition,
-        opened_log: &'static str,
-        failed_prefix: &'static str,
-    ) {
-        Self::spawn_open_actions_window_with_parent_id(
-            cx,
-            placement,
-            dialog,
-            position,
-            opened_log,
-            failed_prefix,
-            None,
-        );
-    }
-
-    pub(crate) fn spawn_open_actions_window_with_parent_id(
-        cx: &mut Context<Self>,
-        placement: crate::actions::ActionsWindowPlacement,
-        dialog: Entity<ActionsDialog>,
-        position: crate::actions::WindowPosition,
-        opened_log: &'static str,
-        failed_prefix: &'static str,
-        parent_automation_id: Option<String>,
-    ) {
-        dialog.update(cx, |dialog, _cx| {
-            dialog.set_skip_track_focus(true);
-        });
-
-        cx.spawn(async move |this, cx| {
-            cx.update(|cx| {
-                let result = placement
-                    .parent_window_handle
-                    .update(cx, |_, window, _| {
-                        if window.is_owned_hidden() {
-                            crate::runtime_policy::WindowHostPolicy::OwnedHidden
-                        } else {
-                            crate::runtime_policy::WindowHostPolicy::Interactive
-                        }
-                    })
-                    .and_then(|host_policy| {
-                        open_actions_window(
-                            cx,
-                            placement,
-                            dialog,
-                            position,
-                            parent_automation_id.as_deref(),
-                            host_policy,
-                        )
-                    });
-                match result {
-                    Ok(_handle) => {
-                        logging::log("ACTIONS", opened_log);
-                    }
-                    Err(e) => {
-                        tracing::error!(error = %e, "{}", failed_prefix);
-                        crate::actions::emit_actions_popup_event(
-                            crate::actions::ActionsPopupEvent::OpenFailed,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                        );
-                        // Roll back popup state and show Toast on failure
-                        let _ = this.update(cx, |app, cx| {
-                            app.clear_actions_popup_state();
-                            app.pop_focus_overlay(cx);
-                            app.one_window_notice(
-                                crate::line_notice::FAILED,
-                                format!("{}: {}", failed_prefix, e),
-                                cx,
-                            );
-                            cx.notify();
-                        });
-                    }
-                }
-            });
-        })
-        .detach();
-    }
-
-    /// Resolve the actions popup window position based on the current window mode.
-    ///
-    /// Mini mode uses `TopCenter` to keep the popup integrated within the compact
-    /// 480px launcher panel.  Full mode uses the default `BottomRight` above the
-    /// footer, matching the existing Raycast-style layout.
-    pub(crate) fn main_list_actions_window_position(&self) -> crate::actions::WindowPosition {
-        match self.main_window_mode {
-            MainWindowMode::Mini => crate::actions::WindowPosition::TopCenter,
-            MainWindowMode::Full => crate::actions::WindowPosition::BottomRight,
-        }
-    }
-
-    pub(crate) fn begin_actions_popup_window_open(
-        &mut self,
-        cx: &mut Context<Self>,
-        window: &mut Window,
-    ) {
-        self.mark_actions_popup_opening();
-        self.hovered_index = None;
-        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-        self.focus_handle.focus(window, cx);
-        self.gpui_input_focused = false;
-    }
-
     fn actions_dialog_host_for_current_view(&self) -> Option<ActionsDialogHost> {
         self.current_actions_host()
     }
@@ -556,7 +389,6 @@ impl ScriptListApp {
             trigger = trigger,
             view = ?self.current_view,
             show_actions_popup = self.show_actions_popup,
-            actions_window_open = crate::actions::is_actions_window_open(),
             "Dispatching shared actions toggle for current view"
         );
 
@@ -600,7 +432,7 @@ impl ScriptListApp {
                 self.toggle_clipboard_actions(entry, window, cx);
                 return true;
             }
-            if self.show_actions_popup || crate::actions::is_actions_window_open() {
+            if self.show_actions_popup {
                 self.toggle_actions(cx, window);
                 return true;
             }
@@ -617,32 +449,8 @@ impl ScriptListApp {
             return false;
         }
 
-        if matches!(&self.current_view, AppView::DictationHistoryView { .. }) {
-            if let Some(entry) = self.selected_dictation_history_entry() {
-                self.toggle_dictation_history_actions(entry, window, cx);
-                return true;
-            }
-            if self.show_actions_popup || crate::actions::is_actions_window_open() {
-                self.toggle_actions(cx, window);
-                return true;
-            }
-            tracing::info!(
-                target: "script_kit::actions",
-                event = "actions_toggle_dispatch_ignored_no_dictation_selection",
-                trigger = trigger,
-                "Ignored shared actions toggle because dictation history has no selected entry"
-            );
-            if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
-                self.one_window_notice(crate::line_notice::INFO, reason.to_string(), cx);
-            }
-            return false;
-        }
-
         if matches!(&self.current_view, AppView::FavoritesBrowseView { .. }) {
-            if self.selected_favorite_id().is_some()
-                || self.show_actions_popup
-                || crate::actions::is_actions_window_open()
-            {
+            if self.selected_favorite_id().is_some() || self.show_actions_popup {
                 self.toggle_favorites_actions(window, cx);
                 return true;
             }
@@ -710,9 +518,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
         trigger: &'static str,
     ) -> bool {
-        let can_toggle = self.has_actions()
-            || self.show_actions_popup
-            || crate::actions::is_actions_window_open();
+        let can_toggle = self.has_actions() || self.show_actions_popup;
 
         if !can_toggle {
             tracing::info!(
@@ -721,7 +527,6 @@ impl ScriptListApp {
                 trigger = trigger,
                 view = ?self.current_view,
                 show_actions_popup = self.show_actions_popup,
-                actions_window_open = crate::actions::is_actions_window_open(),
                 "Ignored shared actions toggle because the current shared-dialog view has no actions"
             );
             return false;
@@ -734,7 +539,6 @@ impl ScriptListApp {
             trigger = trigger,
             view = ?self.current_view,
             show_actions_popup = self.show_actions_popup,
-            actions_window_open = crate::actions::is_actions_window_open(),
             "Routed shared actions toggle through generic shared-dialog fallback"
         );
         true
@@ -757,7 +561,6 @@ impl ScriptListApp {
             view = ?self.current_view,
             selected_index = self.selected_index,
             show_actions_popup = self.show_actions_popup,
-            actions_window_open = crate::actions::is_actions_window_open(),
             "Routed Cmd+K through shared actions dispatcher"
         );
         handled
@@ -784,11 +587,10 @@ impl ScriptListApp {
             host = host_label,
             view = ?self.current_view,
             show_actions_popup = self.show_actions_popup,
-            actions_window_open = is_actions_window_open(),
             "Routing actions toggle through canonical view host"
         );
 
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.close_actions_popup(host, window, cx);
         } else if recently_closed {
             // The activation-triggered close (focus_lost) already closed the dialog
@@ -803,24 +605,10 @@ impl ScriptListApp {
         } else {
             // Any view that reaches this point has passed the live-host
             // resolver. Selection-specific hosts such as File Search may still
-            // open with only global rows, but generic BuiltinList surfaces are
+            // stage with only global rows, but generic BuiltinList surfaces are
             // filtered out before this path so Theme Chooser cannot advertise
             // misleading launcher actions.
             let _ = self.has_actions();
-
-            let position = self.main_list_actions_window_position();
-            crate::actions::emit_actions_popup_event(
-                crate::actions::ActionsPopupEvent::OpenRequested,
-                Some(host_label),
-                Some(position),
-                None,
-                None,
-                None,
-            );
-
-            self.resync_filter_input_after_actions_if_needed(window, cx);
-            // Open actions as a separate window with vibrancy blur
-            self.begin_actions_popup_window_open(cx, window);
 
             let agent_chat_context = if let AppView::AgentChatView { ref entity } =
                 self.current_view
@@ -1114,60 +902,8 @@ impl ScriptListApp {
                 d.set_host_context(host_context);
             });
 
-            // Store the dialog entity for keyboard routing
-            self.actions_dialog = Some(dialog.clone());
-
-            // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
-            // This ensures the same cleanup happens whether closing via Cmd+K toggle or Escape
-            let app_entity = cx.entity().clone();
-            dialog.update(cx, |d, _cx| {
-                d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                    app_entity.clone(),
-                    host,
-                ));
-                d.set_on_close(Self::make_actions_window_on_close_callback(
-                    app_entity.clone(),
-                    host,
-                    "Actions closed via escape, focus restored via coordinator",
-                ));
-            });
-
-            // Get main window bounds and display_id for positioning the actions popup
-            //
-            // CRITICAL: We use GPUI's window.bounds() which returns SCREEN-RELATIVE coordinates
-            // (top-left origin, relative to the window's current screen). We also capture the
-            // display_id so the actions window is created on the SAME screen as the main window.
-            //
-            // This fixes multi-monitor issues where the actions popup would appear on the wrong
-            // screen or at wrong coordinates when the main window was on a secondary display.
-            let main_bounds = window.bounds();
-            let display_id = window.display(cx).map(|d| d.id());
-
-            logging::log(
-                "ACTIONS",
-                &format!(
-                    "Main window bounds (GPUI screen-relative): origin=({:?}, {:?}), size={:?}x{:?}, display_id={:?}",
-                    main_bounds.origin.x, main_bounds.origin.y,
-                    main_bounds.size.width, main_bounds.size.height,
-                    display_id
-                ),
-            );
-
-            // Open the actions window via spawn, passing the shared dialog entity and display_id
-            Self::spawn_open_actions_window(
-                cx,
-                crate::actions::ActionsWindowPlacement {
-                    parent_window_handle: window.window_handle(),
-                    main_bounds,
-                    display_id,
-                },
-                dialog,
-                position,
-                "Actions popup window opened",
-                "Failed to open actions window",
-            );
-
-            logging::log("FOCUS", "Actions opened, keyboard routing active");
+            let title = script_info.as_ref().map(|script| script.name.clone());
+            self.one_window_stage_in_view(host, dialog, title, window, cx);
         }
         cx.notify();
     }
@@ -1230,14 +966,8 @@ impl ScriptListApp {
         self.spine_provider_id = provider_id;
     }
 
-    /// Toggle actions dialog for arg prompts with SDK-defined actions.
-    ///
-    /// Opens the dialog inline (not as a separate window) since arg prompts
-    /// host the actions overlay within the main window. Uses the same
-    /// open/close state contract as other popup toggles:
-    /// - Sets `show_actions_popup` + pushes focus overlay on open
-    /// - Clears `gpui_input_focused` to prevent stale input routing
-    /// - Always ends with `cx.notify()` to flush UI state
+    /// ⌘K on an arg prompt with SDK actions: the highlighted choice (or the typed value) is
+    /// staged and the prompt's list becomes its actions.
     pub(crate) fn toggle_arg_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         logging::log(
             "KEY",
@@ -1248,7 +978,7 @@ impl ScriptListApp {
                 self.sdk_actions.is_some()
             ),
         );
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.close_actions_popup(ActionsDialogHost::ArgPrompt, window, cx);
         } else if self.was_actions_recently_closed() {
             logging::log(
@@ -1263,12 +993,6 @@ impl ScriptListApp {
             if let Some(sdk_actions) = sdk_actions_opt {
                 logging::log("KEY", &format!("SDK actions count: {}", sdk_actions.len()));
                 if !sdk_actions.is_empty() {
-                    self.resync_filter_input_after_actions_if_needed(window, cx);
-                    // Open - push overlay to save arg prompt focus state
-                    self.mark_actions_popup_opening();
-                    self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
-                    self.gpui_input_focused = false;
-
                     let theme_arc = std::sync::Arc::clone(&self.theme);
                     let dialog = cx.new(|cx| {
                         let focus_handle = cx.focus_handle();
@@ -1283,17 +1007,14 @@ impl ScriptListApp {
                         dialog
                     });
 
-                    // Focus the dialog's internal focus handle
-                    self.actions_dialog = Some(dialog.clone());
-                    let app_entity = cx.entity().clone();
-                    dialog.update(cx, |d, _cx| {
-                        d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                            app_entity,
-                            ActionsDialogHost::ArgPrompt,
-                        ));
-                    });
-                    let dialog_focus_handle = dialog.read(cx).focus_handle.clone();
-                    window.focus(&dialog_focus_handle, cx);
+                    let title = self.arg_prompt_staged_subject_title();
+                    self.one_window_stage_in_view(
+                        ActionsDialogHost::ArgPrompt,
+                        dialog,
+                        title,
+                        window,
+                        cx,
+                    );
                     logging::log(
                         "FOCUS",
                         &format!(
@@ -1311,7 +1032,18 @@ impl ScriptListApp {
         }
         cx.notify();
     }
-    /// Toggle actions dialog for webcam prompt (built-in command).
+    /// What ⌘K on an arg prompt acts on: the highlighted choice, else what's typed.
+    fn arg_prompt_staged_subject_title(&self) -> Option<String> {
+        self.filtered_arg_choices()
+            .get(self.arg_selected_index)
+            .map(|(_, choice)| choice.name.clone())
+            .or_else(|| {
+                let typed = self.arg_input.text();
+                (!typed.trim().is_empty()).then(|| typed.to_string())
+            })
+    }
+
+    /// ⌘K on the webcam prompt (built-in command).
     /// Opens as a separate window (same pattern as toggle_chat_actions).
     pub fn toggle_webcam_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         use crate::actions::{ActionsDialog, ActionsDialogConfig};
@@ -1319,20 +1051,15 @@ impl ScriptListApp {
         logging::log(
             "KEY",
             &format!(
-                "toggle_webcam_actions called: show_actions_popup={}, is_actions_window_open={}",
-                self.show_actions_popup,
-                is_actions_window_open()
+                "toggle_webcam_actions called: show_actions_popup={}",
+                self.show_actions_popup
             ),
         );
 
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             // Close — delegate to central close_actions_popup
             self.close_actions_popup(ActionsDialogHost::WebcamPrompt, window, cx);
         } else {
-            self.resync_filter_input_after_actions_if_needed(window, cx);
-            // Open actions as a separate window — same pattern as toggle_chat_actions
-            self.begin_actions_popup_window_open(cx, window);
-
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let webcam_actions = Self::webcam_actions_for_dialog();
 
@@ -1352,49 +1079,20 @@ impl ScriptListApp {
                 dialog
             });
 
-            self.actions_dialog = Some(dialog.clone());
-
-            // Set up on_close callback — same pattern as toggle_chat_actions
-            let app_entity = cx.entity().clone();
-            dialog.update(cx, |d, _cx| {
-                d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                    app_entity.clone(),
-                    ActionsDialogHost::WebcamPrompt,
-                ));
-                d.set_on_close(Self::make_actions_window_on_close_callback(
-                    app_entity.clone(),
-                    ActionsDialogHost::WebcamPrompt,
-                    "Webcam actions closed via escape, focus restored via coordinator",
-                ));
-            });
-
-            // Get main window bounds for positioning
-            let main_bounds = window.bounds();
-            let display_id = window.display(cx).map(|d| d.id());
-
-            // Open the actions window — same as toggle_chat_actions
-            Self::spawn_open_actions_window(
-                cx,
-                crate::actions::ActionsWindowPlacement {
-                    parent_window_handle: window.window_handle(),
-                    main_bounds,
-                    display_id,
-                },
+            self.one_window_stage_in_view(
+                ActionsDialogHost::WebcamPrompt,
                 dialog,
-                crate::actions::WindowPosition::BottomRight,
-                "Webcam actions popup window opened",
-                "Failed to open webcam actions window",
+                Some("Webcam".to_string()),
+                window,
+                cx,
             );
 
-            logging::log("FOCUS", "Webcam actions opened, keyboard routing active");
+            logging::log("FOCUS", "Webcam actions staged, keyboard routing active");
         }
         cx.notify();
     }
 
-    /// Toggle terminal command bar for built-in terminal
-    /// Shows common terminal actions (Clear, Copy, Paste, Scroll, etc.)
-    /// Opens as a separate vibrancy window for native macOS blur effect.
-    #[allow(dead_code)]
+    /// ⌘K on the built-in terminal: its commands (Clear, Copy, Paste, Scroll, etc.) in place.
     pub fn toggle_terminal_commands(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         use crate::actions::ActionsDialog;
 
@@ -1407,13 +1105,9 @@ impl ScriptListApp {
             ),
         );
 
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.close_actions_popup(ActionsDialogHost::TermPrompt, window, cx);
         } else {
-            self.resync_filter_input_after_actions_if_needed(window, cx);
-            // Open as a separate vibrancy window for native macOS blur
-            self.begin_actions_popup_window_open(cx, window);
-
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let actions = terminal_actions_for_dialog();
             let config = terminal_actions_dialog_config();
@@ -1434,58 +1128,17 @@ impl ScriptListApp {
                 d.set_context_title(Some("Terminal".to_string()));
             });
 
-            let app_entity = cx.entity().clone();
-            dialog.update(cx, |d, _cx| {
-                d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                    app_entity.clone(),
-                    ActionsDialogHost::TermPrompt,
-                ));
-                d.set_on_close(Self::make_actions_window_on_close_callback(
-                    app_entity,
-                    ActionsDialogHost::TermPrompt,
-                    "Terminal actions closed, focus restored via coordinator",
-                ));
-            });
-
-            self.actions_dialog = Some(dialog.clone());
-
-            let main_bounds = window.bounds();
-            let display_id = window.display(cx).map(|d| d.id());
-
-            Self::spawn_open_actions_window(
-                cx,
-                crate::actions::ActionsWindowPlacement {
-                    parent_window_handle: window.window_handle(),
-                    main_bounds,
-                    display_id,
-                },
+            self.one_window_stage_in_view(
+                ActionsDialogHost::TermPrompt,
                 dialog,
-                crate::actions::WindowPosition::BottomRight,
-                "Terminal actions popup window opened",
-                "Failed to open terminal actions window",
+                Some("Terminal".to_string()),
+                window,
+                cx,
             );
 
-            logging::log("FOCUS", "Terminal actions opened with vibrancy window");
+            logging::log("FOCUS", "Terminal actions staged in place");
         }
         cx.notify();
-    }
-
-    /// Resolve the chat actions popup window position based on the current window mode.
-    ///
-    /// Mini mode uses `TopCenter` to match the mini main launcher feel.
-    /// Full mode uses `BottomRight` (existing behavior).
-    fn chat_actions_window_position(&self) -> crate::actions::WindowPosition {
-        let position = match self.main_window_mode {
-            MainWindowMode::Mini => crate::actions::WindowPosition::TopCenter,
-            MainWindowMode::Full => crate::actions::WindowPosition::BottomRight,
-        };
-        tracing::info!(
-            event = "chat_actions_window_position.resolved",
-            mode = ?self.main_window_mode,
-            position = ?position,
-            "Resolved chat actions anchor position"
-        );
-        position
     }
 
     /// Toggle actions dialog for chat prompts
@@ -1502,7 +1155,7 @@ impl ScriptListApp {
             ),
         );
 
-        if self.show_actions_popup || is_actions_window_open() {
+        if self.show_actions_popup {
             self.close_actions_popup(ActionsDialogHost::ChatPrompt, window, cx);
         } else {
             // Get chat info from current ChatPrompt entity
@@ -1537,10 +1190,6 @@ impl ScriptListApp {
                     return;
                 };
 
-            self.resync_filter_input_after_actions_if_needed(window, cx);
-            // Open actions as a separate window with vibrancy blur
-            self.begin_actions_popup_window_open(cx, window);
-
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
             let dialog = cx.new(|cx| {
@@ -1568,54 +1217,10 @@ impl ScriptListApp {
                 dialog
             });
 
-            // Store the dialog entity for keyboard routing
-            self.actions_dialog = Some(dialog.clone());
+            let title = chat_info.current_model.clone();
+            self.one_window_stage_in_view(ActionsDialogHost::ChatPrompt, dialog, title, window, cx);
 
-            // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
-            let app_entity = cx.entity().clone();
-            dialog.update(cx, |d, _cx| {
-                d.set_on_activation(Self::make_actions_dialog_activation_callback(
-                    app_entity.clone(),
-                    ActionsDialogHost::ChatPrompt,
-                ));
-                d.set_on_close(Self::make_actions_window_on_close_callback(
-                    app_entity.clone(),
-                    ActionsDialogHost::ChatPrompt,
-                    "Chat actions closed via escape, focus restored via coordinator",
-                ));
-            });
-
-            // Get main window bounds and display_id for positioning
-            let main_bounds = window.bounds();
-            let display_id = window.display(cx).map(|d| d.id());
-
-            logging::log(
-                "ACTIONS",
-                &format!(
-                    "Chat actions: Main window bounds origin=({:?}, {:?}), size={:?}x{:?}, display_id={:?}",
-                    main_bounds.origin.x, main_bounds.origin.y,
-                    main_bounds.size.width, main_bounds.size.height,
-                    display_id
-                ),
-            );
-
-            let position = self.chat_actions_window_position();
-
-            // Open the actions window via spawn
-            Self::spawn_open_actions_window(
-                cx,
-                crate::actions::ActionsWindowPlacement {
-                    parent_window_handle: window.window_handle(),
-                    main_bounds,
-                    display_id,
-                },
-                dialog,
-                position,
-                "Chat actions popup window opened",
-                "Failed to open chat actions window",
-            );
-
-            logging::log("FOCUS", "Chat actions opened, keyboard routing active");
+            logging::log("FOCUS", "Chat actions staged, keyboard routing active");
         }
         cx.notify();
     }

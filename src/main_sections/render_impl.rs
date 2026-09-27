@@ -230,18 +230,8 @@ impl Render for ScriptListApp {
             }
 
             // Close popups when the main window regains focus (user clicked on it)
-            if actions::is_actions_window_open() {
-                logging::log(
-                    "FOCUS",
-                    "Main window regained focus - closing actions popup via canonical close path",
-                );
-                self.close_actions_popup_for_current_view(window, cx);
-            }
         }
         if self.was_window_focused && !is_window_focused {
-            let actions_popup_active_or_closing = self.show_actions_popup
-                || self.actions_dialog.is_some()
-                || actions::is_actions_window_open();
             if matches!(self.current_view, AppView::FileSearchView { .. }) {
                 logging::log(
                     "FOCUS",
@@ -255,13 +245,10 @@ impl Render for ScriptListApp {
             }
             // Window just lost focus (user clicked another window)
             // Only auto-dismiss if we're in a dismissable view AND window is visible AND not pinned
-            // AND the actions popup is not open (actions popup is a companion window, not "losing focus")
             if self.is_dismissable_view()
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
-                && !actions_popup_active_or_closing
                 && !ai::agent_chat::ui::chat_window::is_chat_window_open()
-                && !crate::dictation::is_dictation_overlay_open()
                 && !crate::dictation::is_dictation_recording()
                 && self.tab_ai_save_offer_state.is_none()
                 && self.shortcut_recorder_state.is_none()
@@ -279,11 +266,6 @@ impl Render for ScriptListApp {
                     );
                     self.close_and_reset_window(cx);
                 }
-            } else if actions_popup_active_or_closing {
-                logging::log(
-                    "FOCUS",
-                    "Main window lost focus but actions popup is open or closing - staying open",
-                );
             } else if self.shortcut_recorder_state.is_some() {
                 logging::log(
                     "FOCUS",
@@ -331,7 +313,6 @@ impl Render for ScriptListApp {
                 | AppView::FavoritesBrowseView { .. }
                 | AppView::AgentChatHistoryView { .. }
                 | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::TipsView { .. }
                 | AppView::MiniPrompt { .. }
@@ -735,19 +716,15 @@ impl Render for ScriptListApp {
             } => self
                 .render_browser_history(filter, selected_index, cx)
                 .into_any_element(),
-            AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                visible_limit,
-            } => self
-                .render_dictation_history(filter, selected_index, visible_limit, cx)
-                .into_any_element(),
             AppView::NotesBrowseView { search } => self
                 .render_notes_browse_portal(search, cx)
                 .into_any_element(),
             AppView::AgentChatView { entity } => entity.into_any_element(),
             AppView::DayPage { entity } => entity.into_any_element(),
         };
+        let main_content = self.one_window_staged_view(main_content, cx);
+        let view_owns_main_window_shell =
+            view_owns_main_window_shell || self.one_window_view_staged().is_some();
 
         // Wrap content in a container that can have the debug grid overlay
         let window_bounds = window.bounds();
@@ -852,32 +829,6 @@ impl Render for ScriptListApp {
 
         // Get themed border color with 25% opacity (0x40 = 64/255)
         let border_color = rgba((self.theme.colors.ui.border << 8) | 0x40);
-
-        let actions_window_open = actions::is_actions_window_open();
-        let actions_background_shield = if actions_window_open {
-            Some(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .occlude()
-                    .on_any_mouse_down(cx.listener(|this, _, window, cx| {
-                        logging::log(
-                            "FOCUS",
-                            "Main window shield clicked - closing actions popup via canonical close path",
-                        );
-                        this.close_actions_popup_for_current_view(window, cx);
-                        cx.stop_propagation();
-                    }))
-                    .on_mouse_move(cx.listener(|_this, _: &MouseMoveEvent, _window, cx| {
-                        cx.stop_propagation();
-                    }))
-                    .on_scroll_wheel(cx.listener(|_this, _event: &gpui::ScrollWheelEvent, _window, cx| {
-                        cx.stop_propagation();
-                    })),
-            )
-        } else {
-            None
-        };
 
         // Arg-family windows price rows before layout, but the root can also
         // contain intrinsically sized chrome (notably the missing-Bun warning).
@@ -1129,13 +1080,6 @@ impl Render for ScriptListApp {
                         ),
                     );
                 }
-                if actions::is_actions_window_open() {
-                    logging::log(
-                        "FOCUS",
-                        "Main window clicked - closing actions popup via canonical close path",
-                    );
-                    this.close_actions_popup_for_current_view(window, cx);
-                }
                 if this.shortcut_recorder_state.is_some() {
                     logging::log("SHORTCUT", "Main window clicked - closing shortcut recorder");
                     this.close_shortcut_recorder(cx);
@@ -1199,9 +1143,6 @@ impl Render for ScriptListApp {
                     // Main content takes remaining space
                     .child(main_content_container)
                     .when_some(main_window_modal_dim_layer, |container, overlay| {
-                        container.child(overlay)
-                    })
-                    .when_some(actions_background_shield, |container, overlay| {
                         container.child(overlay)
                     })
                     .when_some(grid_config, |container, config| {

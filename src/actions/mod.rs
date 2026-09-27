@@ -1,31 +1,26 @@
 //! Actions Dialog Module
 //!
-//! Provides a searchable action menu as a compact overlay popup for quick access
-//! to script management and global actions (edit, create, settings, quit, etc.)
-//!
-//! The dialog can be rendered in two ways:
-//! 1. As an inline overlay within the main window (legacy)
-//! 2. As a separate floating window with its own vibrancy blur (preferred)
+//! The source of every action: what can be done to a script, a file, a clipboard entry, a
+//! prompt's value. ⌘K stages the focused thing in the main window and lists these actions in
+//! place under the main input (`components::staged_actions`); nothing opens.
 //!
 //! ## Module Structure
 //! - `types`: Core types (Action, ActionCategory, ScriptInfo)
 //! - `builders`: Factory functions for creating action lists
 //! - `constants`: Popup dimensions and styling constants
 //! - `dialog`: ActionsDialog struct and implementation
-//! - `window`: Separate vibrancy window for actions panel
+//! - `in_place`: what the main window has staged, for surfaces that don't own it
 
 mod builders;
 mod command_bar;
 pub(crate) mod constants;
 mod dialog;
+mod in_place;
 mod types;
-pub(crate) mod window;
-pub(crate) use window::ActionsWindow;
 
 // Re-export only the public API that is actually used externally:
 // - ScriptInfo: used by main.rs for action context
 // - ActionsDialog: the main dialog component
-// - Window functions for separate vibrancy window
 
 #[allow(unused_imports)]
 // The binary's day page switcher uses this; the library has no caller.
@@ -81,28 +76,12 @@ pub use types::{
     SectionStyle,
 };
 
-/// Screen-relative parent geometry required to place a detached actions popup.
-pub struct ActionsWindowPlacement {
-    pub parent_window_handle: gpui::AnyWindowHandle,
-    pub main_bounds: gpui::Bounds<gpui::Pixels>,
-    pub display_id: Option<gpui::DisplayId>,
-}
-
-// Window functions for separate vibrancy window
-#[allow(
-    unused_imports,
-    reason = "the independently compiled application binary owns detached automation activation"
-)]
-pub(crate) use window::activate_detached_actions_window_action;
-pub(crate) use window::{actions_popup_automation_snapshot, set_actions_dialog_search_text};
-pub use window::{
-    close_actions_window, get_actions_dialog_entity, is_actions_window, is_actions_window_open,
-    is_actions_window_open_for_main, notify_actions_window, open_actions_window,
-    route_key_to_detached_actions_window, WindowPosition,
+pub(crate) use in_place::set_actions_dialog_search_text;
+#[allow(unused_imports)] // The binary's ScriptListApp stages and lets go.
+pub(crate) use in_place::{clear_in_place, stage_in_place, LetGo, RouteKey};
+pub use in_place::{
+    close_actions_window, is_actions_window_open, route_key_to_detached_actions_window,
 };
-#[allow(unused_imports)] // Used from include!()-ed code in app_impl/
-pub(crate) use window::{emit_actions_popup_event, ActionsPopupEvent};
-// get_actions_window_handle available but not re-exported (use window:: directly if needed)
 
 // Design-contract resolvers: shared between the dialog renderer and the token
 // exporter (src/design_contract) so the two can never drift.
@@ -110,11 +89,9 @@ pub(crate) use window::{emit_actions_popup_event, ActionsPopupEvent};
 pub(crate) use dialog::{
     resolved_actions_dialog_row_chrome, resolved_actions_dialog_row_metrics,
     resolved_actions_dialog_search_chrome, resolved_actions_dialog_section_chrome,
-    ResolvedActionsDialogRowChrome, ResolvedActionsDialogSearchChrome,
-    ResolvedActionsDialogSectionChrome,
+    resolved_actions_popup_height, ResolvedActionsDialogRowChrome,
+    ResolvedActionsDialogSearchChrome, ResolvedActionsDialogSectionChrome,
 };
-#[allow(unused_imports)]
-pub(crate) use window::resolved_actions_popup_height;
 
 pub mod prelude;
 

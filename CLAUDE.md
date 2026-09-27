@@ -142,9 +142,9 @@ the Actions menu, Notes, and every other window. The contract:
   stays alpha `0.0` via `GLASS_HIDDEN_PARK_ALPHA`; zero-alpha parking of a
   visible window is a contract violation (runtime tripwire
   `glass_hidden_park_on_visible_window`);
-- the Actions menu settles on the untinted popup material
-  (`NativeGlassSurfaceRole::PopupBackdrop`) over the already-tinted main
-  glass (confirm modals are retired); every other window uses the window material;
+- every window uses the window material; the untinted popup material
+  (`NativeGlassSurfaceRole::PopupBackdrop`) has no window left, since ⌘K acts
+  in place and confirm modals are retired;
 - the Notes window is retired (2026-09-27): notes open as a view under the main
   input, so there is no Notes reveal or resize unlock;
 - glass material: stability tint floor `0.35` and capsule veil `0.0`
@@ -289,7 +289,7 @@ everything that used to pop up now lands in the line above the input, which the
   "bun is not installed · Install from bun.sh"; Enter opens bun.sh). Nothing is drawn above the
   line and the input never moves.
 - Prove these with the reducer (`./scripts/agentic/agent-cargo.sh test -p sk-one-window`,
-  including `tests/replay.rs` and `tests/properties.rs`), the app tests in
+  including `tests/replay.rs` and `tests/properties/`), the app tests in
   `enter_button_property_tests::ledger`, and owned-evaluator frames
   (`scripts/agentic/one-window-frames.ts`) that show exactly one owned window.
 

@@ -969,59 +969,6 @@ pub(crate) unsafe fn configure_secondary_window_vibrancy_with_receipt(
     ))
 }
 
-/// Configure the live dictation overlay with the shared native material path.
-///
-/// The title is intentionally stable so appearance refresh can find the overlay
-/// without treating it as a main-window footer surface.
-///
-/// # Safety
-///
-/// - `window` must be a valid, non-null NSWindow pointer obtained from GPUI
-///   window creation. The pointer is checked for null at entry.
-/// - Must be called on the main thread because AppKit property setters are not
-///   thread-safe.
-#[cfg(target_os = "macos")]
-pub unsafe fn configure_dictation_overlay_window(window: id, is_dark: bool) {
-    if window.is_null() {
-        logging::log(
-            "DICTATION",
-            "WARNING: Cannot configure null Dictation overlay window vibrancy",
-        );
-        return;
-    }
-
-    tracing::info!(
-        category = "DICTATION",
-        is_dark,
-        "Configuring dictation overlay shared native material"
-    );
-    configure_window_vibrancy_common(
-        window,
-        "DICTATION",
-        "Dictation overlay",
-        is_dark,
-        NativeGlassSurfaceRole::WindowBackdrop,
-    );
-
-    let title: id = msg_send![
-        class!(NSString),
-        stringWithUTF8String: c"Script Kit Dictation".as_ptr()
-    ];
-    if title != nil {
-        let _: () = msg_send![window, setTitle: title];
-        tracing::info!(
-            category = "DICTATION",
-            title = "Script Kit Dictation",
-            "Set dictation overlay NSWindow title for material refresh"
-        );
-    } else {
-        tracing::warn!(
-            category = "DICTATION",
-            "Failed to allocate dictation overlay NSWindow title"
-        );
-    }
-}
-
 #[cfg(not(target_os = "macos"))]
 pub fn configure_secondary_window_vibrancy(
     _window: *mut std::ffi::c_void,
@@ -1032,10 +979,6 @@ pub fn configure_secondary_window_vibrancy(
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn configure_dictation_overlay_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
-    // No-op on non-macOS platforms
-}
-
 #[cfg(test)]
 mod secondary_window_config_tests {
     include!("secondary_window_config_behavior_tests.rs");
@@ -1069,7 +1012,6 @@ mod secondary_window_config_tests {
             "Script Kit Notes",
             "Actions",
             "Script Kit Footer",
-            "Script Kit Dictation",
         ] {
             assert!(
                 super::should_refresh_secondary_window_appearance(title),
@@ -1185,7 +1127,6 @@ fn should_refresh_secondary_window_appearance(title: &str) -> bool {
         "Script Kit Notes",
         "Actions",
         "Script Kit Footer",
-        "Script Kit Dictation",
     ];
 
     EXACT_SECONDARY_TITLES.contains(&title)

@@ -401,24 +401,6 @@ impl ScriptListApp {
     fn submit_arg_prompt_from_current_state(&mut self, prompt_id: &str, cx: &mut Context<Self>) {
         match self.resolve_current_arg_submit_outcome() {
             ArgSubmitOutcome::SubmitChoice(value) | ArgSubmitOutcome::SubmitText(value) => {
-                // Intercept built-in mic selection prompt — persist device and
-                // return to the script list instead of sending to a script.
-                if prompt_id == BUILTIN_MIC_SELECT_PROMPT_ID {
-                    if !self.is_valid_builtin_mic_selection(&value) {
-                        self.notice_failed("Select a microphone from the list", cx);
-                        return;
-                    }
-                    self.record_submit_diagnostic(
-                        "prompt",
-                        "submit_arg_prompt_from_current_state",
-                        Some(prompt_id),
-                        Some(value.as_str()),
-                        true,
-                    );
-                    self.handle_builtin_mic_selection(&value, cx);
-                    return;
-                }
-
                 // Intercept dictation model download consent prompt.
                 if prompt_id == BUILTIN_DICTATION_MODEL_PROMPT_ID {
                     if !matches!(
@@ -489,68 +471,6 @@ impl ScriptListApp {
                 );
             }
         }
-    }
-
-    fn is_valid_builtin_mic_selection(&self, value: &str) -> bool {
-        value == BUILTIN_MIC_DEFAULT_VALUE
-            || matches!(
-                &self.current_view,
-                AppView::ArgPrompt { choices, .. } | AppView::MiniPrompt { choices, .. }
-                    if choices.iter().any(|choice| choice.value == value)
-            )
-    }
-
-    /// Persist the microphone selection and return to the script list.
-    fn handle_builtin_mic_selection(&mut self, value: &str, cx: &mut Context<Self>) {
-        let action = if value == BUILTIN_MIC_DEFAULT_VALUE {
-            crate::dictation::DictationDeviceSelectionAction::UseSystemDefault
-        } else {
-            crate::dictation::DictationDeviceSelectionAction::UseDevice(
-                crate::dictation::DictationDeviceId(value.to_string()),
-            )
-        };
-
-        match crate::dictation::apply_device_selection(&action) {
-            Ok(()) => {
-                let label = match &action {
-                    crate::dictation::DictationDeviceSelectionAction::UseDevice(_) => {
-                        // Find the device name from the choices for a nicer HUD message.
-                        let choices_ref = match &self.current_view {
-                            AppView::ArgPrompt { ref choices, .. }
-                            | AppView::MiniPrompt { ref choices, .. } => Some(choices),
-                            _ => None,
-                        };
-                        if let Some(choices) = choices_ref {
-                            choices
-                                .iter()
-                                .find(|c| c.value == value)
-                                .map(|c| c.name.trim_end_matches(" (current)").to_string())
-                                .unwrap_or_else(|| "Selected".to_string())
-                        } else {
-                            "Selected".to_string()
-                        }
-                    }
-                    crate::dictation::DictationDeviceSelectionAction::UseSystemDefault => {
-                        "System Default".to_string()
-                    }
-                };
-                self.one_window_notice(
-                    crate::line_notice::INFO,
-                    format!("Microphone: {label}"),
-                    cx,
-                );
-            }
-            Err(error) => {
-                tracing::error!(
-                    category = "DICTATION",
-                    error = %error,
-                    "Failed to save microphone preference"
-                );
-                self.notice_failed(format!("Failed to save microphone: {error}"), cx);
-            }
-        }
-
-        BuiltinPromptSubmitTransition::ReturnToScriptList.apply(self, cx);
     }
 
     fn is_valid_builtin_snap_mode_selection(&self, value: &str) -> bool {

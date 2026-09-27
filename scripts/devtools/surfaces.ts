@@ -234,7 +234,7 @@ export const EXPECTED_CENSUS = {
 export const coverageSurfaceAliases = [
   { alias: "main", resolvesTo: { surfaceKind: "ScriptList" }, countsAsCoverage: false },
   { alias: "actions-dialog", resolvesTo: { surfaceKind: "ActionsDialog" }, countsAsCoverage: false },
-  { alias: "dictation-history", resolvesTo: { surfaceKind: "AttachmentPortalBrowser", appViewVariant: "DictationHistoryView" }, countsAsCoverage: false },
+  { alias: "dictation-history", resolvesTo: { surfaceKind: "ScriptList" }, countsAsCoverage: false },
   { alias: "notes-agent_chat", resolvesTo: { surfaceKind: "AgentChat", hostKind: "NotesWindow" }, countsAsCoverage: false },
   { alias: "confirm-prompt-popup", resolvesTo: { surfaceKind: "ConfirmPrompt", hostKind: "PromptPopup" }, countsAsCoverage: false },
 ] as const;

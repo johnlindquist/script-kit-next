@@ -275,14 +275,12 @@ pub enum SdkChatFixtureCommand {
     Fail { message_id: String },
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+/// Where a voice session started by the one-window fixture sends the words when it ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum DictationFixtureDestination {
-    MainFilter,
-    MainPrompt,
-    Notes,
-    AgentChat,
-    DayPage,
+pub enum OneWindowTalkDestination {
+    Chat,
+    Note,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -292,22 +290,12 @@ pub enum DictationFixtureDestination {
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
-pub enum DictationFixtureCommand {
-    Begin {
-        destination: DictationFixtureDestination,
+pub enum OneWindowFixtureCommand {
+    /// Starts the voice session "Start Dictation to Agent Chat/Notes" starts; the typed words
+    /// stand in for the heard ones because evaluation never opens a microphone.
+    TalkTo {
+        destination: OneWindowTalkDestination,
     },
-    Recording {
-        text: String,
-        bars: [f32; 9],
-    },
-    Confirm {},
-    Resume {},
-    Transcribe {},
-    Deliver {},
-    Retarget {
-        destination: DictationFixtureDestination,
-    },
-    OpenMicrophonePicker {},
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -543,10 +531,10 @@ pub enum FixtureControl {
     AgentChat(AgentChatFixtureCommand),
     Flow(FlowFixtureCommand),
     SdkChat(SdkChatFixtureCommand),
-    Dictation(DictationFixtureCommand),
     Notes(NotesFixtureCommand),
     Theme(ThemeFixtureCommand),
     Search(SearchFixtureCommand),
+    OneWindow(OneWindowFixtureCommand),
     Fault {
         operation: ThemeFaultOperation,
         target: super::AutomationWindowTarget,

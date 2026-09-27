@@ -84,18 +84,16 @@ fn test_setup_seeds_root_agent_workspace() {
         );
 
         // Example scripts seeded into examples plugin
-        for example in &["todo-app.ts"] {
-            let example_path = kit_root
-                .join("plugins")
-                .join("examples")
-                .join("scripts")
-                .join(example);
-            assert!(
-                example_path.exists(),
-                "plugins/examples/scripts/{example} must exist at {}",
-                example_path.display()
-            );
-        }
+        let example_path = kit_root
+            .join("plugins")
+            .join("examples")
+            .join("scripts")
+            .join("todo-app.ts");
+        assert!(
+            example_path.exists(),
+            "plugins/examples/scripts/todo-app.ts must exist at {}",
+            example_path.display()
+        );
         assert!(
             kit_root
                 .join("plugins")

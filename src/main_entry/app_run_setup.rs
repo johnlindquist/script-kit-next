@@ -2138,17 +2138,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // Pass #19 automation re-key fix without rendering a
                                 // visible ScriptList frame while AppKit is still
                                 // closing the panel.
-                                // Full teardown for actions-dialog
-                                // (`id: "actions-dialog"`). Pass #29 fix
-                                // (`cmd-k-on-unfocused-clipboard-pops-overlay-not-actions`):
-                                // upgraded from bare `remove_automation_window` to full
-                                // `close_actions_window`. Pass #23's bare registry op
-                                // left the `ACTIONS_WINDOW` static holding a stale handle;
-                                // a later `simulateKey cmd+k` on an unfocused window read
-                                // `is_actions_window_open()=true` and took the CLOSE branch,
-                                // popping whichever overlay was on top instead of opening
-                                // the actions dialog. `close_actions_window` clears the
-                                // static AND the registry; idempotent.
+                                // Hiding lets go of anything staged, like Esc would.
                                 crate::actions::close_actions_window(ctx);
 
                                 // CRITICAL: Always hide only the main panel. `ctx.hide()`
@@ -2309,13 +2299,13 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 host,
                                 request_id,
                             } => {
-                                // Fire an action by ID without driving the actions-dialog
-                                // popup through Cmd+K / arrow-nav / Enter. AFK harnesses and
+                                // Fire an action by ID without driving the staged actions
+                                // through Cmd+K / arrow-nav / Enter. AFK harnesses and
                                 // other agentic-testing clients discover valid ids via
-                                // `getElements` on the actions-dialog window, then fire via
-                                // this command to avoid flaky key simulation. When the detached
-                                // Actions dialog is live, route through its typed availability
-                                // guard instead of closing it and calling the host directly.
+                                // `getElements`, then fire via this command to avoid flaky key
+                                // simulation. While actions are staged, route through the
+                                // dialog's typed availability guard instead of calling the host
+                                // directly.
                                 let native_footer_activation =
                                     (host.as_deref() == Some("nativeFooter")).then(|| {
                                         crate::footer_popup::activate_native_main_footer_button(
@@ -2323,15 +2313,22 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             &action_id,
                                         )
                                     });
-                                let detached_window_open = crate::actions::is_actions_window_open();
-                                let actions_surface_open = native_footer_activation.is_none()
-                                    && (detached_window_open || view.show_actions_popup);
-                                let detached_activation = if native_footer_activation.is_none()
-                                    && detached_window_open
-                                {
-                                    crate::actions::activate_detached_actions_window_action(
-                                        action_id.clone(),
-                                        ctx,
+                                let actions_surface_open =
+                                    native_footer_activation.is_none() && view.show_actions_popup;
+                                let staged_activation = if actions_surface_open {
+                                    view.actions_dialog.clone().zip(view.current_actions_host()).map(
+                                        |(dialog, staged_host)| {
+                                            let activation = dialog.update(ctx, |dialog, cx| {
+                                                dialog.activate_action_id(action_id.clone(), cx)
+                                            });
+                                            view.handle_actions_dialog_activation(
+                                                staged_host,
+                                                activation.clone(),
+                                                window,
+                                                ctx,
+                                            );
+                                            activation
+                                        },
                                     )
                                 } else {
                                     None
@@ -2355,9 +2352,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         Some("fileSearch") => Some(ActionsDialogHost::FileSearch),
                                         Some("clipboardHistory") => {
                                             Some(ActionsDialogHost::ClipboardHistory)
-                                        }
-                                        Some("dictationHistory") => {
-                                            Some(ActionsDialogHost::DictationHistory)
                                         }
                                         Some("emojiPicker") => {
                                             Some(ActionsDialogHost::EmojiPicker)
@@ -2407,7 +2401,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     receipt_error_code = activation.error_code.clone();
                                 } else if actions_surface_open {
                                     receipt_host = Some("ActionsDialog".to_string());
-                                    match detached_activation {
+                                    match staged_activation {
                                         Some(crate::actions::ActionsDialogActivation::Executed {
                                             should_close, ..
                                         }) => {
@@ -2430,9 +2424,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             receipt_error_code = Some("action_not_found".to_string());
                                         }
                                         None => {
-                                            // Fail closed if the host still reports an Actions
-                                            // surface but no detached dialog handle can activate it.
-                                            // Falling through would bypass the availability guard.
+                                            // Fail closed if the host still reports staged actions
+                                            // but no dialog can activate them. Falling through would
+                                            // bypass the availability guard.
                                             receipt_error_code =
                                                 Some("actions_dialog_unavailable".to_string());
                                         }
@@ -3342,76 +3336,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     error_code = "ai_window_removed",
                                     "legacy AI window removed"
                                 );
-                            }
-                            ExternalCommand::OpenDictationOverlayFixture { ref request_id } => {
-                                let rid = request_id.as_ref().map(|id| id.as_str());
-                                crate::dictation::set_dictation_overlay_fixture_mode(true);
-                                match crate::dictation::open_dictation_overlay(ctx) {
-                                    Ok(handle) => {
-                                        let fixture_bounds = gpui::Bounds {
-                                            origin: gpui::point(gpui::px(585.0), gpui::px(177.0)),
-                                            size: gpui::size(gpui::px(560.0), gpui::px(100.0)),
-                                        };
-                                        let _ = handle.update(ctx, |_view, window, cx| {
-                                            crate::components::inline_popup_window::set_inline_popup_window_bounds(window, fixture_bounds, cx);
-                                        });
-                                        crate::windows::set_automation_bounds(
-                                            "dictation",
-                                            Some(crate::protocol::AutomationWindowBounds {
-                                                x: 585.0,
-                                                y: 177.0,
-                                                width: 560.0,
-                                                height: 100.0,
-                                            }),
-                                        );
-                                        let state = crate::dictation::DictationOverlayState {
-                                            phase: crate::dictation::DictationSessionPhase::Recording,
-                                            elapsed: std::time::Duration::from_secs(7),
-                                            bars: [0.12, 0.34, 0.62, 0.88, 0.55, 0.31, 0.74, 0.42, 0.18],
-                                            transcript: gpui::SharedString::default(),
-                                            target: crate::dictation::DictationTarget::ExternalApp,
-                                        };
-                                        let _ = crate::dictation::update_dictation_overlay(state, ctx);
-                                        tracing::info!(
-                                            category = "STDIN",
-                                            event = "dictation_overlay_fixture_opened",
-                                            command = "openDictationOverlayFixture",
-                                            request_id = ?rid,
-                                            "Dictation overlay fixture opened without media capture"
-                                        );
-                                    }
-                                    Err(error) => {
-                                        crate::dictation::set_dictation_overlay_fixture_mode(false);
-                                        tracing::error!(
-                                            category = "STDIN",
-                                            event = "dictation_overlay_fixture_failed",
-                                            command = "openDictationOverlayFixture",
-                                            request_id = ?rid,
-                                            error = %error,
-                                            "Dictation overlay fixture failed"
-                                        );
-                                    }
-                                }
-                            }
-                            ExternalCommand::OpenDictationMicrophonePopupFixture { ref request_id } => {
-                                let rid = request_id.as_ref().map(|id| id.as_str());
-                                match crate::dictation::open_dictation_microphone_popup_fixture(ctx) {
-                                    Ok(()) => tracing::info!(
-                                        category = "STDIN",
-                                        event = "dictation_microphone_popup_fixture_opened",
-                                        command = "openDictationMicrophonePopupFixture",
-                                        request_id = ?rid,
-                                        "Dictation microphone popup fixture opened without persistence"
-                                    ),
-                                    Err(error) => tracing::error!(
-                                        category = "STDIN",
-                                        event = "dictation_microphone_popup_fixture_failed",
-                                        command = "openDictationMicrophonePopupFixture",
-                                        request_id = ?rid,
-                                        error = %error,
-                                        "Dictation microphone popup fixture failed"
-                                    ),
-                                }
                             }
                             ExternalCommand::GetConfigFingerprint { ref request_id } => {
                                 let rid = request_id.as_ref().map(|id| id.as_str());

@@ -419,6 +419,10 @@ unsafe fn refresh_layer_contents_scale_recursive(view: id, backing_scale: f64) {
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "the separately compiled application binary draws the main window that calls this"
+)]
 pub(crate) fn remove_for_window(window: &gpui::Window) {
     let Some((_, ns_window)) = gpui_view_and_ns_window(window) else {
         return;

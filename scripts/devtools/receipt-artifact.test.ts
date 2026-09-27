@@ -36,7 +36,7 @@ function retained(input = candidate(), kind: "directory" | "receipt" = "director
 }
 
 function campaign(): Json {
-  const fixtures = Array.from({ length: 122 }, (_, index) => {
+  const fixtures = Array.from({ length: 113 }, (_, index) => {
     const descriptor = { id: `contract.${index}`, root: "main", family: "main", owner: "src/fixture.rs", factoryOwners: ["src/fixture.rs"],
       expectedSemanticSurface: "scriptList", requiredSemanticIds: ["input:filter"], appViewVariant: "ScriptList" };
     const identity = { windowId: "main", windowGeneration: 1, appViewVariant: "ScriptList", targetGeneration: 1, surfaceGeneration: 1,
@@ -52,7 +52,7 @@ function campaign(): Json {
     observation: annotateOwnedEvidence({ scenario: "production-family-matrix", catalogue: fixtures.map(value => value.binding.descriptor), fixtures }) };
 }
 
-test("122 detailed fixture effects are owned once; stdout, disk and validation stay compact", () => {
+test("113 detailed fixture effects are owned once; stdout, disk and validation stay compact", () => {
   const { claim, wire, detail, payloadPath, primitiveId } = retained(campaign());
   const persisted = readReceiptDocument(claim.receiptPath);
   expect(persisted).toEqual(wire);

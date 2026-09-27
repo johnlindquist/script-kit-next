@@ -150,36 +150,19 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             ("agentChatHistory", &["input:*", "list:agent-chat-history"])
         }
         Some("BrowserHistoryView") => ("browserHistory", &["input:*", "list:browser-history"]),
-        Some("DictationHistoryView") => {
-            ("dictationHistory", &["input:*", "list:dictation-history"])
-        }
         Some("NotesBrowseView") => ("notesBrowse", &["input:notes-browse-filter"]),
         Some("DayPage") => ("dayPage", &["input:day-page-editor"]),
         Some("AgentChatView") => ("agentChat", &["input:*"]),
         Some("FlowUxView") => ("flowDesk", &["input:flow-ux-filter", "flow-desk:state"]),
         Some("FlowSessionView") => ("flow-session", &["input:*"]),
         None => match id {
-            "day-page.switcher" | "secondary.actions" => {
-                ("actionsDialog", &["input:actions-search", "list:actions"])
-            }
+            "day-page.switcher" => ("actionsDialog", &["input:actions-search", "list:actions"]),
             "agent-chat.detached.retryable-failure" => ("agentChatChat", &["input:*"]),
             "agent-chat.popup.history" => (
                 "promptPopup",
                 &["panel:history-popup", "list:history-entries"],
             ),
-            "dictation.microphone-picker" => (
-                "dictationMicrophonePopup",
-                &[
-                    "choice:0:dictation-mic-row-0",
-                    "choice:1:dictation-mic-row-1",
-                ],
-            ),
             "secondary.snap" => ("snapOverlay", &["panel:snap-overlay", "snap:target:*"]),
-            "secondary.footer" => ("footerOverlay", &["footer-action:*"]),
-            id if fixture_ids::DICTATION_FIXTURE_IDS.contains(&id) => (
-                "dictation",
-                &["panel:dictation-overlay", "panel:dictation-signal-band"],
-            ),
             _ => panic!("missing fixture semantic contract: {id}"),
         },
         _ => panic!("missing fixture route contract: {id}"),
@@ -277,10 +260,6 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "BrowserHistoryView",
             "src/render_builtins/browser_history.rs",
         ),
-        "main.dictation-history" => (
-            "DictationHistoryView",
-            "src/render_builtins/dictation_history.rs",
-        ),
         "main.notes-browse"
         | "main.notes-browse-no-match"
         | "main.notes-browse-loading"
@@ -377,7 +356,7 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "day-page.switcher" => (
             "dayPageAuxiliary",
             "secondary",
-            "src/actions/window.rs",
+            "src/components/staged_actions.rs",
             "src/main_sections/day_page_switcher.rs::open_day_switcher",
             Some("day-page.today"),
         ),
@@ -395,45 +374,12 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "src/ai/agent_chat/ui/history_popup.rs::AgentChatHistoryPopupWindow",
             Some("agent-chat.standard.populated"),
         ),
-        "dictation.recording"
-        | "dictation.confirming"
-        | "dictation.transcribing"
-        | "dictation.delivering"
-        | "dictation.finished"
-        | "dictation.failed" => (
-            "dictation",
-            "dictation",
-            "src/dictation/window.rs",
-            "src/dictation/window.rs::DictationOverlay",
-            None,
-        ),
-        "dictation.microphone-picker" => (
-            "dictationMicrophone",
-            "secondary",
-            "src/dictation/microphone_popup_window.rs",
-            "src/dictation/microphone_popup_window.rs::DictationMicrophonePopupWindow",
-            Some("dictation.recording"),
-        ),
-        "secondary.actions" => (
-            "actions",
-            "secondary",
-            "src/actions/window.rs",
-            "src/actions/dialog.rs",
-            Some("main.script-list"),
-        ),
         "secondary.snap" => (
             "snap",
             "secondary",
             "src/window_control/snap_overlay.rs",
             "src/window_control/snap_overlay.rs::SnapOverlayView",
             None,
-        ),
-        "secondary.footer" => (
-            "footer",
-            "secondary",
-            "src/footer_popup.rs",
-            "src/footer_popup.rs::GpuiFooterOverlay",
-            Some("main.script-list"),
         ),
         _ => return None,
     };

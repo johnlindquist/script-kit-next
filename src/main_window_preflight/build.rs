@@ -587,7 +587,6 @@ pub(crate) fn build_main_window_preflight_receipt(
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }
             | AppView::AgentChatHistoryView { .. }
-            | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
     ) {
         return None;
