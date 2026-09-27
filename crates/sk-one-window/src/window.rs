@@ -4,6 +4,7 @@
 //! input says, which header leads the list, what Enter runs and when it is ignored, how the
 //! window's height moves, and what waits before it goes. Nothing here reads a clock.
 
+mod clipboard;
 mod finishing;
 mod keys;
 mod show;
@@ -178,13 +179,15 @@ pub enum Event {
     /// Shows a line above the input until cleared; one a view set also goes when no view is open.
     Line(Option<SlotLine>),
     Tick,
+    /// ⌘V with this text on the clipboard.
+    Paste(String),
 }
 
 impl Event {
     fn is_user(&self) -> bool {
         matches!(
             self,
-            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon
+            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon | Event::Paste(_)
         )
     }
 }
@@ -642,6 +645,7 @@ impl OneWindow {
                 true
             }
             Event::Tick => true,
+            Event::Paste(text) => self.on_paste(now, text, fx),
         }
     }
 }

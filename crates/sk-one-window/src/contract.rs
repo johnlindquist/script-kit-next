@@ -130,6 +130,8 @@ pub mod words {
     pub fn ask_again(title: &str) -> String {
         format!("{title} — ↵ again")
     }
+
+    pub const CLIPBOARD: &str = "Clipboard";
 }
 
 /// Icons whose runs can be undone (the rest either wait or just happen).
