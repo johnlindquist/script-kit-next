@@ -1211,13 +1211,7 @@ fn dictation_hotkey_never_shows_main_window() {
         "builtin/dictation must be listed in NO_MAIN_WINDOW_BUILTINS"
     );
 
-    for (label, path) in [
-        (
-            "runtime_tray_hotkeys.rs",
-            "src/main_entry/runtime_tray_hotkeys.rs",
-        ),
-        ("app_run_setup.rs", "src/main_entry/app_run_setup.rs"),
-    ] {
+    for (label, path) in [("app_run_setup.rs", "src/main_entry/app_run_setup.rs")] {
         let src = std::fs::read_to_string(path).unwrap_or_else(|_| panic!("read {label}"));
         let start = src
             .find("Dictation hotkey listener")
@@ -1302,17 +1296,11 @@ fn dictation_focus_settle_matches_reference_contract() {
 
 #[test]
 fn dictation_hotkey_routes_through_builtin_toggle_flow() {
-    // Verify both entry-point files have a dictation hotkey listener that
+    // Verify the entry point has a dictation hotkey listener that
     // routes through the config-governed dictation builtin (dictation.target
     // decides the destination) without introducing a duplicate dictation
     // implementation.
-    for (label, path) in [
-        (
-            "runtime_tray_hotkeys.rs",
-            "src/main_entry/runtime_tray_hotkeys.rs",
-        ),
-        ("app_run_setup.rs", "src/main_entry/app_run_setup.rs"),
-    ] {
+    for (label, path) in [("app_run_setup.rs", "src/main_entry/app_run_setup.rs")] {
         let src = std::fs::read_to_string(path).unwrap_or_else(|_| panic!("read {label}"));
 
         assert!(
@@ -1371,17 +1359,13 @@ fn generic_dictation_builtin_remains_contextual() {
 
 #[test]
 fn dictation_hotkey_channel_not_dead_code() {
-    // The hotkey channel must be consumed (receiver side) in at least one entry point.
-    let runtime = std::fs::read_to_string("src/main_entry/runtime_tray_hotkeys.rs")
-        .expect("read runtime_tray_hotkeys.rs");
+    // The hotkey channel must be consumed (receiver side) by the app's entry point.
     let setup =
         std::fs::read_to_string("src/main_entry/app_run_setup.rs").expect("read app_run_setup.rs");
 
-    let has_receiver = runtime.contains("dictation_hotkey_channel().1.recv()")
-        || setup.contains("dictation_hotkey_channel().1.recv()");
     assert!(
-        has_receiver,
-        "dictation hotkey channel receiver must be consumed in at least one entry point"
+        setup.contains("dictation_hotkey_channel().1.recv()"),
+        "dictation hotkey channel receiver must be consumed in the app's entry point"
     );
 }
 

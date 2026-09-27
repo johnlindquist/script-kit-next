@@ -367,7 +367,6 @@ const RENDER_IMPL_SOURCE: &str = include_str!("../../../main_sections/render_imp
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../../../main_sections/app_view_state.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../../../app_impl/ui_window.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../../../main_entry/app_run_setup.rs");
-const RUNTIME_STDIN_SOURCE: &str = include_str!("../../../main_entry/runtime_stdin.rs");
 const HANDLE_ACTION_SOURCE: &str = include_str!("../../../app_actions/handle_action/mod.rs");
 const REGISTRIES_STATE_SOURCE: &str = include_str!("../../../app_impl/registries_state.rs");
 const AGENT_CHAT_MOD_SOURCE: &str = include_str!("mod.rs");
