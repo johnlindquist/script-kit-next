@@ -949,6 +949,23 @@ impl ScriptListApp {
                     return;
                 }
 
+                {
+                    let mut taken = false;
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            taken = this.one_window_view_takes_key(
+                                key,
+                                &event.keystroke.modifiers,
+                                cx,
+                            );
+                        });
+                    }
+                    if taken {
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
+
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
                     && !event.keystroke.modifiers.platform

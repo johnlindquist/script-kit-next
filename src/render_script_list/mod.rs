@@ -1637,12 +1637,6 @@ impl ScriptListApp {
                     cx.stop_propagation();
                     return;
                 }
-                if !has_cmd
-                    && this.one_window_view_takes_key(key_str, &event.keystroke.modifiers, cx)
-                {
-                    cx.stop_propagation();
-                    return;
-                }
                 if sk_is_key_tab(key_str)
                     && !has_cmd
                     && !event.keystroke.modifiers.alt

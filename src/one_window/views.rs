@@ -296,15 +296,18 @@ impl ScriptListApp {
         (after != before).then_some(Event::ViewEnter(after))
     }
 
-    /// Tab and ← → belong to an open form: fields and their other values, not the input's caret.
-    /// Enter, Esc and the arrows up and down reach the reducer through the list's own paths.
+    /// Tab and ← → belong to an open form: fields and their other values, not the input's caret or
+    /// the launcher's Tab. Enter, Esc and the arrows up and down reach the reducer through the
+    /// list's own paths.
     pub(crate) fn one_window_view_takes_key(
         &mut self,
         key: &str,
         modifiers: &gpui::Modifiers,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !matches!(self.one_window_hosted_view(), Some(HostedView::Form(_)))
+        if !matches!(self.current_view, crate::AppView::ScriptList)
+            || !matches!(self.one_window_hosted_view(), Some(HostedView::Form(_)))
+            || modifiers.platform
             || modifiers.alt
             || modifiers.control
         {
