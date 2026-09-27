@@ -1686,122 +1686,6 @@
       ]
     },
     {
-      "id": "notes.editor",
-      "family": "notes",
-      "root": "notes",
-      "owner": "src/notes/window/window_ops.rs",
-      "factoryOwners": [
-        "src/notes/window/window_ops.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/notes/window/render.rs",
-      "expectedSemanticSurface": "notes",
-      "requiredSemanticIds": [
-        "input:notes-editor"
-      ]
-    },
-    {
-      "id": "notes.actions",
-      "family": "notesAuxiliary",
-      "root": "secondary",
-      "owner": "src/actions/window.rs",
-      "factoryOwners": [
-        "src/actions/window.rs"
-      ],
-      "parentFixtureId": "notes.editor",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/notes/window/panels.rs::open_actions_panel",
-      "expectedSemanticSurface": "actionsDialog",
-      "requiredSemanticIds": [
-        "input:actions-search",
-        "list:actions"
-      ]
-    },
-    {
-      "id": "notes.recent-switcher",
-      "family": "notesAuxiliary",
-      "root": "secondary",
-      "owner": "src/actions/window.rs",
-      "factoryOwners": [
-        "src/actions/window.rs"
-      ],
-      "parentFixtureId": "notes.editor",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/notes/window/panels.rs::open_browse_panel",
-      "expectedSemanticSurface": "actionsDialog",
-      "requiredSemanticIds": [
-        "input:actions-search",
-        "list:actions"
-      ]
-    },
-    {
-      "id": "notes.root-dialog",
-      "family": "notesAuxiliary",
-      "root": "notes",
-      "owner": "src/notes/window/window_ops.rs",
-      "factoryOwners": [
-        "src/notes/window/window_ops.rs"
-      ],
-      "parentFixtureId": "notes.editor",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
-      "expectedSemanticSurface": "notes",
-      "requiredSemanticIds": [
-        "root-dialog:*"
-      ]
-    },
-    {
-      "id": "notes.root-notification",
-      "family": "notesAuxiliary",
-      "root": "notes",
-      "owner": "src/notes/window/window_ops.rs",
-      "factoryOwners": [
-        "src/notes/window/window_ops.rs"
-      ],
-      "parentFixtureId": "notes.editor",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
-      "expectedSemanticSurface": "notes",
-      "requiredSemanticIds": [
-        "root-notification:*"
-      ]
-    },
-    {
       "id": "day-page.today",
       "family": "dayPage",
       "root": "main",
@@ -2686,29 +2570,6 @@
       "requiredSemanticIds": [
         "footer-action:*"
       ]
-    },
-    {
-      "id": "secondary.shortcut-recorder",
-      "family": "shortcutRecorder",
-      "root": "secondary",
-      "owner": "src/app_impl/shortcut_recorder.rs",
-      "factoryOwners": [
-        "src/app_impl/shortcut_recorder.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/components/shortcut_recorder.rs",
-      "expectedSemanticSurface": "shortcutRecorder",
-      "requiredSemanticIds": [
-        "shortcut-key-display"
-      ]
     }
   ],
   "mainRoutes": [
@@ -2733,15 +2594,12 @@
       "presentationOwners": [
         "src/app_impl/agent_handoff/mod.rs::open_tab_ai_save_offer",
         "src/app_impl/alias_input.rs::show_alias_input",
-        "src/app_impl/lifecycle_reset.rs::flush_pending_toasts",
         "src/components/braille_loading.rs::constellation_loading_layer",
         "src/debug_grid/mod.rs::render_grid_overlay",
         "src/effects.rs::background_effect_layer",
-        "src/main_sections/render_impl.rs::WarningBanner",
         "src/render_script_list",
         "src/render_script_list/mod.rs::log_panel",
-        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
-        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer"
+        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -3354,32 +3212,11 @@
       ],
       "fixtureIds": [
         "day-page.switcher",
-        "notes.actions",
-        "notes.recent-switcher",
         "secondary.actions"
       ],
       "presentationOwners": [
         "src/actions/dialog.rs",
-        "src/main_sections/day_page_switcher.rs::open_day_switcher",
-        "src/notes/window/panels.rs::open_actions_panel",
-        "src/notes/window/panels.rs::open_browse_panel"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "rootOwner": "NotesApp",
-      "factorySources": [
-        "src/notes/window/window_ops.rs"
-      ],
-      "fixtureIds": [
-        "notes.editor",
-        "notes.root-dialog",
-        "notes.root-notification"
-      ],
-      "presentationOwners": [
-        "src/notes/window/render.rs",
-        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
-        "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer"
+        "src/main_sections/day_page_switcher.rs::open_day_switcher"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -3450,19 +3287,6 @@
       ],
       "presentationOwners": [
         "src/footer_popup.rs::GpuiFooterOverlay"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "rootOwner": "ShortcutRecorder",
-      "factorySources": [
-        "src/app_impl/shortcut_recorder.rs"
-      ],
-      "fixtureIds": [
-        "secondary.shortcut-recorder"
-      ],
-      "presentationOwners": [
-        "src/components/shortcut_recorder.rs"
       ],
       "proofBoundary": "owned-production-runtime"
     },

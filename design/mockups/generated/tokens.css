@@ -3,7 +3,7 @@
  * and re-run the exporter; Rust is the single authority.
  */
 :root {
-  /* bundleHash: sha256:47751a0486b9697751b43f08bd01799ea0bdbe3880a7eab0add6a5c02c5d93e4 */
+  /* bundleHash: sha256:aa79f41c2370822cdc9cb3344dd76264cb08ebd161f86d0af2252a00421700dd */
   --sk-actions-dialog-list-padding-bottom: 6px;
   --sk-actions-dialog-list-padding-top: 0px;
   --sk-actions-dialog-row-height: 36px;
@@ -107,15 +107,6 @@
   --sk-chat-title-font-weight: 500;
   --sk-chat-turn-gap: 8px;
   --sk-chat-user-font-weight: 600;
-  --sk-confirm-body-font-size: 14px;
-  --sk-confirm-content-padding: 24px;
-  --sk-confirm-header-padding-x: 16px;
-  --sk-confirm-header-padding-y: 8px;
-  --sk-confirm-stack-gap: 12px;
-  --sk-confirm-stack-max-width: 560px;
-  --sk-confirm-title-font-size: 20px;
-  --sk-confirm-title-font-weight: 600;
-  --sk-confirm-window-height: 500px;
   --sk-day-page-editor-min-height: 180px;
   --sk-day-page-shelf-expanded-list-gap: 4px;
   --sk-day-page-shelf-row-slot-height: 24px;
@@ -190,15 +181,6 @@
   --sk-font-ui: ".AppleSystemUIFont";
   --sk-notes-editor-padding-x: 16px;
   --sk-notes-editor-padding-y: 12px;
-  --sk-notes-titlebar-height: 36px;
-  --sk-notes-titlebar-traffic-width: 60px;
-  --sk-notes-titlebar-padding-x: 12px;
-  --sk-notes-titlebar-title-rest-opacity: 0.699999988079071;
-  --sk-notes-traffic-x: 8px;
-  --sk-notes-traffic-y: 7px;
-  --sk-notes-titlebar-icons-width: 100px;
-  --sk-notes-window-height: 280px;
-  --sk-notes-window-width: 350px;
   --sk-actions-dialog-row-hover-background: rgb(255 255 255 / 0.0705882353);
   --sk-actions-dialog-row-inner-padding-x: 14px;
   --sk-actions-dialog-row-name-font-weight: 450;
@@ -275,13 +257,6 @@
   --sk-chrome-window-surface: rgb(15 15 15 / 0.4980392157);
   --sk-component-theme-foreground: rgb(255 255 255);
   --sk-component-theme-muted-foreground: rgb(255 255 255 / 0.4000000000);
-  --sk-confirm-body-line-height: 23px;
-  --sk-confirm-body-text: rgb(255 255 255);
-  --sk-confirm-footer-spacer-height: 32px;
-  --sk-confirm-header-height: 38px;
-  --sk-confirm-title-line-height: 32px;
-  --sk-confirm-title-danger: rgb(239 68 68);
-  --sk-confirm-title-default: rgb(255 255 255);
   --sk-starfield-color-a: rgb(235 184 52 / 0.5019607843);
   --sk-starfield-color-b: rgb(235 140 52 / 0.5019607843);
   --sk-footer-button-active: rgb(255 255 255 / 0.1254901961);
