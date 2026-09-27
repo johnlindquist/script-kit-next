@@ -186,8 +186,9 @@ impl OneWindow {
         }
     }
 
-    /// The chat Enter asked for is open again: it takes the place of the past chats, or of the
-    /// chat they were opened from.
+    /// A chat from before is open again: in place of the past chats it was picked from (or of
+    /// the chat they were opened from), or on top of whatever shows when it was asked for
+    /// elsewhere. While the past chats wait on a different chat, this one is stale.
     fn chat_reopened(
         &mut self,
         now: Ms,
@@ -195,20 +196,18 @@ impl OneWindow {
         turns: Vec<chat::Turn>,
         fx: &mut Vec<Effect>,
     ) -> bool {
-        let Some(p) = self.work.past.as_mut() else {
-            return false;
-        };
-        if p.opening.as_deref() != Some(id) {
+        let picked = self.past_chats().map(|p| p.opening.as_deref() == Some(id));
+        if picked == Some(false) {
             return false;
         }
         self.work.past = None;
         let chat = Chat::reopened(turns);
         let spec = chat.spec("");
         self.work.chat = Some(chat);
-        if self.views.below_named(chat::VIEW) {
-            self.on_view(now, ViewOp::Back, fx);
-        } else {
-            self.on_view(now, ViewOp::Replace(spec), fx);
+        match picked {
+            Some(_) if self.views.below_named(chat::VIEW) => self.on_view(now, ViewOp::Back, fx),
+            Some(_) => self.on_view(now, ViewOp::Replace(spec), fx),
+            None => self.on_view(now, ViewOp::Open(spec), fx),
         }
         true
     }
@@ -468,6 +467,24 @@ mod tests {
         assert_eq!(win.views().crumb(), "The model");
         assert_eq!(win.chat().map(|c| c.turns.len()), Some(2));
         assert_eq!(win.enter_target(1_300).label, "Copy it");
+    }
+
+    #[test]
+    fn a_chat_reopened_from_the_launcher_opens_on_top_with_its_turns() {
+        let mut win = OneWindow::default();
+        win.handle(0, Event::Text("launch".into()));
+        work(
+            &mut win,
+            10,
+            WorkEvent::ChatReopened {
+                id: "a".into(),
+                turns: vec![Turn::new(Who::You, "hi"), Turn::new(Who::Model, "Hello")],
+            },
+        );
+        assert_eq!(win.views().crumb(), chat::LABEL);
+        assert_eq!(win.text(), "", "the chat's input starts empty");
+        key(&mut win, 500, Key::Escape);
+        assert_eq!(win.text(), "launch", "Esc gives the words back");
     }
 
     #[test]
