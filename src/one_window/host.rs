@@ -283,6 +283,7 @@ impl ScriptListApp {
         }
         self.one_window_let_go(cx);
         self.one_window_views_follow(cx);
+        self.one_window_after_turn();
         cx.notify();
         handled
     }

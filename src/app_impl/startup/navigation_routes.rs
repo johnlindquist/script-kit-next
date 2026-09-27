@@ -1,18 +1,16 @@
 struct SecondarySurfaceWindowState {
     is_notes: bool,
-    is_detached_agent_chat: bool,
 }
 
 impl SecondarySurfaceWindowState {
     fn inspect(window: &Window) -> Self {
         Self {
             is_notes: crate::notes::is_notes_window(window),
-            is_detached_agent_chat: crate::ai::agent_chat::ui::chat_window::is_chat_window(window),
         }
     }
 
     fn is_secondary(&self) -> bool {
-        self.is_notes || self.is_detached_agent_chat
+        self.is_notes
     }
 }
 
@@ -186,16 +184,6 @@ impl ScriptListApp {
         match &self.current_view {
             AppView::QuickTerminalView { .. } => {
                 self.close_quick_terminal_main_window_state_first(cx);
-            }
-            AppView::AgentChatView { entity } => {
-                let entity = entity.clone();
-                entity.update(cx, |chat, cx| {
-                    let _ = chat.request_conversation_dismiss(
-                        crate::components::conversation_actions::ConversationDismissTrigger::CommandW,
-                        window,
-                        cx,
-                    );
-                });
             }
             AppView::ThemeChooserView { .. } => {
                 // Memory-only restore: a cancelled Theme Designer session never

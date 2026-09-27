@@ -109,7 +109,6 @@ pub(crate) fn decide_agent_chat_cwd_resolution(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentChatHostWindowKind {
     Main,
-    Detached,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -565,7 +564,7 @@ pub(crate) struct AgentChatThread {
     /// Monotonically increasing message ID counter.
     next_message_id: u64,
 
-    /// Host-window state last observed by the AgentChatView render/activation hooks.
+    /// Host-window state last observed by the host that shows this thread.
     host_window_state: Option<AgentChatHostWindowState>,
     /// Provider browser sign-in the current turn is waiting on, if any.
     sign_in_wait: Option<AgentChatSignInWait>,
@@ -1340,9 +1339,6 @@ impl AgentChatThread {
         };
         let visible = match state.kind {
             AgentChatHostWindowKind::Main => crate::is_main_window_visible(),
-            AgentChatHostWindowKind::Detached => {
-                crate::ai::agent_chat::ui::chat_window::is_chat_window_open()
-            }
         };
         if visible && state.key {
             AgentChatNotificationVisibility::VisibleAndKey

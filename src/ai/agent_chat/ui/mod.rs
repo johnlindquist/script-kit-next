@@ -17,21 +17,17 @@ use gpui::AppContext as _;
 
 pub(crate) mod capabilities;
 pub(crate) mod catalog;
-pub(crate) mod chat_window;
-pub(crate) mod components;
-pub(crate) mod composer_state;
 pub(crate) mod config;
 pub(crate) mod context;
 pub(crate) mod conversation_export;
+pub(crate) mod entry;
 pub(crate) mod events;
 pub(crate) mod export;
 pub(crate) mod favorite_models;
 pub(crate) mod history;
 pub(crate) mod history_attachment;
-pub(crate) mod history_popup;
 pub(crate) mod hosted;
 pub(crate) mod labels;
-pub(crate) mod layout;
 pub(crate) mod mock_fixture;
 pub(crate) mod notifications;
 pub(crate) mod permission_broker;
@@ -40,12 +36,10 @@ pub(crate) mod portal_contract;
 pub(crate) mod preflight;
 pub(crate) mod setup_state;
 pub(crate) mod streaming_buffer;
-pub(crate) mod surface_state;
 pub(crate) mod thread;
 pub(crate) mod tool_card;
 pub(crate) mod types;
 pub(crate) mod ui_variant;
-pub(crate) mod view;
 
 #[cfg(test)]
 mod tests;
@@ -85,79 +79,3 @@ pub(crate) use thread::{
     AgentChatContextBootstrapState, AgentChatThread, AgentChatThreadInit, AgentChatThreadMessage,
     AgentChatThreadStatus, AgentChatToolCallState,
 };
-pub(crate) use view::{
-    build_skill_context_part, build_skill_slash_command_text, build_staged_skill_prompt,
-    AgentChatHistoryResumeRequest, AgentChatRetryRequest, AgentChatSession, AgentChatThreadSummary,
-    AgentChatView,
-};
-
-pub(crate) fn open_or_focus_chat_with_input(
-    input: String,
-    cx: &mut gpui::App,
-) -> Result<(), String> {
-    if let Some(entity) = chat_window::get_detached_agent_chat_view_entity() {
-        entity
-            .update(cx, |chat, cx| {
-                if chat.is_setup_mode() {
-                    return Err("Agent Chat is in setup mode".to_string());
-                }
-                chat.set_input(input, cx);
-                Ok::<(), String>(())
-            })
-            .map_err(|error| error.to_string())?;
-        chat_window::activate_chat_window(cx);
-        return Ok(());
-    }
-
-    if chat_window::is_chat_window_open() {
-        chat_window::close_chat_window(cx);
-    }
-
-    let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
-    let ai_preferences = crate::config::load_user_preferences().ai;
-    let agent_launch =
-        crate::ai::agent_chat::launch::resolve_selected_launch(&ai_preferences, &profile_ctx)
-            .map_err(|error| error.to_string())?;
-    let warm_spec = agent_launch.warm_spec();
-    let manager = crate::ai::agent_chat::launch::warm_session_manager();
-    // Acquire without blocking the UI thread: a Ready slot is reused, an
-    // in-flight Preparing slot is joined, and only a true miss cold-spawns —
-    // the runtime boot then happens on the pi worker, not here. The old
-    // prepare_warm call blocked this thread for the full warm-up on a miss.
-    let (lease, _origin) = manager
-        .acquire_ready_or_spawn_cold(warm_spec)
-        .map_err(|error| format!("Failed to start Agent Chat session: {error}"))?;
-
-    let (_broker, permission_rx) = AgentChatPermissionBroker::new();
-    let thread = cx.new(|cx| {
-        AgentChatThread::new(
-            lease.connection.clone(),
-            permission_rx,
-            AgentChatThreadInit {
-                ui_thread_id: lease.ui_thread_id.clone(),
-                cwd: lease.cwd.clone(),
-                initial_input: Some(input),
-                initial_context_parts: Vec::new(),
-                display_name: agent_launch.profile.name.clone().into(),
-                profile_id: agent_launch.profile.id.clone(),
-                profile_display_name: Some(agent_launch.profile.name.clone().into()),
-                profile_icon_name: agent_launch.profile.icon_name.clone(),
-                selected_agent: None,
-                available_agents: Vec::new(),
-                launch_requirements: AgentChatLaunchRequirements::default(),
-                available_models: agent_launch.available_models.clone(),
-                selected_model_id: agent_launch.selected_model_id.clone(),
-                session_policy: capabilities::AgentChatSessionPolicy::Full,
-            },
-            cx,
-        )
-    });
-
-    thread.update(cx, |thread, cx| {
-        thread.mark_context_bootstrap_ready(cx);
-    });
-
-    chat_window::open_chat_window_with_thread(thread, None, cx)
-        .map_err(|error| error.to_string())?;
-    Ok(())
-}

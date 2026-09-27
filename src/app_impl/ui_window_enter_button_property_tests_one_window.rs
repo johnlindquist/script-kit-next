@@ -167,9 +167,10 @@ fn cmd_k_stages_the_row_and_lists_its_actions_in_place() {
     assert_eq!(header.as_deref(), Some(words::STAGED));
     assert!(
         !rows.is_empty()
-            && rows
-                .iter()
-                .all(|key| key.starts_with(crate::one_window::staging::ACTION_KEY)),
+            && rows.iter().all(|key| {
+                key.starts_with(crate::one_window::staging::ACTION_KEY)
+                    || key == crate::one_window::chat_entry::ABOUT_KEY
+            }),
         "the list is the row's actions: {rows:?}"
     );
     assert_eq!(windows_after, windows_before, "no popup window opened");

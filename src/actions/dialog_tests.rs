@@ -10,9 +10,7 @@ use super::dialog::{
     should_rebuild_grouped_items_for_config_change, ActionsRefreshSelectionPolicy,
     GroupedActionItem,
 };
-use super::types::{
-    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
-};
+use super::types::{Action, ActionCategory, ActionsDialogConfig, SectionStyle};
 
 // ============================================================
 // Helper
@@ -502,20 +500,6 @@ fn config_change_does_not_require_rebuild_when_section_style_same() {
 }
 
 #[test]
-fn agent_chat_dialog_config_matches_main_agent_chat_layout() {
-    let config = super::dialog::ActionsDialog::agent_chat_dialog_config();
-
-    assert_eq!(config.search_position, SearchPosition::Top);
-    assert_eq!(config.section_style, SectionStyle::Headers);
-    assert_eq!(config.anchor, AnchorPosition::Top);
-    assert!(config.show_icons);
-    assert!(
-        !config.show_context_header,
-        "Agent Chat actions should use the compact chrome without a duplicate context header"
-    );
-}
-
-#[test]
 fn selected_protocol_action_uses_visible_index_mapping() {
     // Visible action #1 should map to original protocol action index #3.
     let visible_to_protocol = vec![0, 3];
@@ -664,21 +648,6 @@ fn route_state_back_stack_restore_preserves_search_and_selection() {
     // Pop back to root — verify the saved state
     assert_eq!(root_state.search_text, "bc");
     assert_eq!(root_state.selected_action_id.as_deref(), Some("b"));
-}
-
-#[test]
-fn agent_chat_root_route_initial_selection_is_change_profile() {
-    // Verify the Agent Chat root route builder sets initial selection
-    // to the "Change Profile" action.
-    use super::builders::{get_agent_chat_root_route, AGENT_CHAT_CHANGE_PROFILE_ACTION_ID};
-
-    let models = vec![];
-    let route = get_agent_chat_root_route(&models, None);
-
-    assert_eq!(
-        route.initial_selected_action_id.as_deref(),
-        Some(AGENT_CHAT_CHANGE_PROFILE_ACTION_ID),
-    );
 }
 
 #[test]

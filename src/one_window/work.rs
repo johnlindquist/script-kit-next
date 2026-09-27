@@ -5,24 +5,31 @@
 //! for (a turn for the model, a step, a sign-in) and feeds back what happened.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpui::{ClipboardItem, Context, Entity, Subscription};
 use sk_one_window::steps::StepSpec;
 use sk_one_window::strip::TaskState;
 use sk_one_window::work::{WorkEffect, WorkEvent};
-use sk_one_window::{chat, connect, steps, strip, Done, Event, Risk, Row};
+use sk_one_window::{chat, connect, past_chats, steps, strip, Done, Event, Risk, Row};
 
-use crate::ai::agent_chat::events::AgentChatEvent;
 use crate::ai::agent_chat::ui::mock_fixture::AgentChatFixtureControl;
 use crate::ai::agent_chat::ui::thread::{
     AgentChatThread, AgentChatThreadMessageRole as Role, AgentChatThreadStatus as Status,
 };
-use crate::{MainServices, ScriptListApp};
+use crate::{AppView, FocusTarget, MainServices, ScriptListApp};
 
 /// The views whose keys the reducer hands back to this host.
-pub(crate) const WORK_VIEWS: [&str; 4] =
-    [chat::VIEW, steps::VIEW, connect::VIEW, strip::AGENT_VIEW];
+pub(crate) const WORK_VIEWS: [&str; 5] = [
+    chat::VIEW,
+    steps::VIEW,
+    connect::VIEW,
+    strip::AGENT_VIEW,
+    past_chats::VIEW,
+];
 const CHAT_THREAD: &str = "one-window-chat";
+/// Each fixture chat is its own conversation in history.
+static FIXTURE_CHATS: AtomicU64 = AtomicU64::new(1);
 /// What the owned-evaluation fixture model says; it never calls a provider.
 const FIXTURE_REPLY: &str = "Fixture Agent Chat response.";
 
@@ -32,6 +39,7 @@ pub(crate) struct ModelThread {
     pub(crate) thread: Entity<AgentChatThread>,
     fixture: Option<AgentChatFixtureControl>,
     heard: Option<(String, Status)>,
+    news: super::chat_host::Heard,
     _observer: Subscription,
 }
 
@@ -39,6 +47,13 @@ pub(crate) struct ModelThread {
 pub(crate) struct WorkHost {
     pub(crate) chat: Option<ModelThread>,
     pub(crate) agents: HashMap<String, ModelThread>,
+    /// What waits in the line for the chat's next turn, by the key its subject carries.
+    pub(crate) parts: HashMap<String, crate::ai::message_parts::AiContextPart>,
+    pub(crate) next_part: u64,
+    /// The view that stepped aside for the chat, and where its focus goes back.
+    pub(crate) return_to: Option<(AppView, FocusTarget)>,
+    /// What ⌘K staged, for "Ask the model about it".
+    pub(crate) about: Option<crate::ai::message_parts::AiContextPart>,
 }
 
 /// The words of the model's reply after the latest turn you wrote.
@@ -69,6 +84,9 @@ fn work_of_plan(plan: &crate::intent::Plan) -> Option<WorkEvent> {
             ..
         }] => Some(WorkEvent::AskModel {
             sentence: instruction.clone(),
+        }),
+        [Step::Recall { source, query }] if source == "history" => Some(WorkEvent::OpenPastChats {
+            query: query.clone().unwrap_or_default(),
         }),
         [Step::Delegate { task, project, .. }] => Some(WorkEvent::Agent {
             task: match project {
@@ -181,6 +199,15 @@ impl ScriptListApp {
             .intent_launcher
             .plan(self.one_window.text(), &row.key)
             .filter(|plan| plan.ready);
+        if row.key == super::chat_entry::ABOUT_KEY {
+            let entry = match self.one_window_host.work.about.take() {
+                Some(part) => super::chat_entry::ChatEntry::quick().with(part),
+                None => super::chat_entry::ChatEntry::quick()
+                    .capturing(crate::ai::TabAiCaptureKind::DefaultContext),
+            };
+            self.one_window_open_chat(entry, cx);
+            return true;
+        }
         let event = if row.key == steps::ROW_KEY {
             WorkEvent::OpenSteps { sentence: said }
         } else if row.key.starts_with("down:model") || row.key.starts_with("fallback-ai:") {
@@ -198,29 +225,33 @@ impl ScriptListApp {
     pub(crate) fn one_window_apply_work(&mut self, effect: WorkEffect, cx: &mut Context<Self>) {
         tracing::info!(target: "script_kit::one_window", event = "work", effect = ?effect);
         match effect {
-            WorkEffect::AskModel { text } => {
-                if self.one_window_host.work.chat.is_none() {
-                    match self.one_window_model_thread(CHAT_THREAD.to_string(), cx) {
-                        Ok(model) => self.one_window_host.work.chat = Some(model),
-                        Err(error) => {
-                            tracing::warn!(target: "script_kit::one_window", event = "model_unavailable", %error);
-                            self.one_window_work_later(
-                                WorkEvent::ModelFailed {
-                                    message: "The model couldn't start".into(),
-                                },
-                                cx,
-                            );
-                            return;
-                        }
-                    }
-                }
-                if let Some(model) = self.one_window_host.work.chat.as_ref() {
-                    submit(model, &text, cx);
+            WorkEffect::AskModel { text } => self.one_window_ask_model(text, Vec::new(), cx),
+            WorkEffect::AskModelWith { text, with } => self.one_window_ask_with(text, with, cx),
+            WorkEffect::AnswerModel { id, choice } => {
+                let allowed = choice.as_deref().is_some_and(|c| !c.starts_with("reject"));
+                self.one_window_answer_model(id, choice, cx);
+                if let Some(control) = self
+                    .one_window_host
+                    .work
+                    .chat
+                    .as_ref()
+                    .and_then(|m| m.fixture.as_ref())
+                {
+                    super::chat_host::fixture_answered(control, allowed);
                 }
             }
+            WorkEffect::ModelSignIn { approve } => self.one_window_model_sign_in(approve, cx),
+            WorkEffect::UseModel { id } => self.one_window_use_model(id, cx),
+            WorkEffect::ListPastChats => self.one_window_list_past_chats(cx),
+            WorkEffect::ReopenChat { id } => self.one_window_reopen_chat(id, cx),
+            WorkEffect::PastChat { id, act } => self.one_window_past_chat(id, act, cx),
             WorkEffect::ChatStep { row, reply } => {
                 let done = match row.key.as_str() {
-                    "chat:copy" => {
+                    chat::EXPORT_KEY => match self.one_window_export_chat(cx) {
+                        Some(done) => done,
+                        None => return,
+                    },
+                    chat::COPY_KEY => {
                         cx.write_to_clipboard(ClipboardItem::new_string(reply));
                         Done {
                             icon: "copy".into(),
@@ -363,6 +394,48 @@ impl ScriptListApp {
         .detach();
     }
 
+    /// A turn for the model, with what went with it; the chat's thread starts on the first one.
+    pub(crate) fn one_window_ask_model(
+        &mut self,
+        text: String,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.one_window_host.work.chat.is_none() {
+            match self.one_window_fresh_chat_thread(cx) {
+                Ok(model) => self.one_window_host.work.chat = Some(model),
+                Err(error) => {
+                    tracing::warn!(target: "script_kit::one_window", event = "model_unavailable", %error);
+                    self.one_window_work_later(
+                        WorkEvent::ModelFailed {
+                            message: "The model couldn't start".into(),
+                        },
+                        cx,
+                    );
+                    return;
+                }
+            }
+        }
+        if let Some(model) = self.one_window_host.work.chat.as_ref() {
+            if !parts.is_empty() {
+                model.thread.update(cx, |thread, cx| {
+                    for part in parts {
+                        thread.add_context_part(part, cx);
+                    }
+                });
+            }
+            submit(model, &text, cx);
+        }
+    }
+
+    /// A new thread for the model's chat.
+    pub(crate) fn one_window_fresh_chat_thread(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<ModelThread, String> {
+        self.one_window_model_thread(CHAT_THREAD.to_string(), cx)
+    }
+
     /// A thread for the model: the provider-free fixture in owned evaluation, Agent Chat's warm
     /// session otherwise.
     fn one_window_model_thread(
@@ -371,9 +444,17 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> Result<ModelThread, String> {
         let (thread, fixture) = if matches!(self.main_services, MainServices::OwnedFixtures(_)) {
+            let thread_id = if id == CHAT_THREAD {
+                format!(
+                    "{CHAT_THREAD}-{}",
+                    FIXTURE_CHATS.fetch_add(1, Ordering::Relaxed)
+                )
+            } else {
+                id.clone()
+            };
             let (thread, control) =
                 crate::ai::agent_chat::ui::mock_fixture::create_mock_fixture_thread(
-                    &id,
+                    &thread_id,
                     crate::ai::agent_chat::ui::capabilities::AgentChatSessionPolicy::Full,
                     cx,
                 );
@@ -394,6 +475,7 @@ impl ScriptListApp {
             thread,
             fixture,
             heard: None,
+            news: super::chat_host::Heard::default(),
             _observer: observer,
         })
     }
@@ -417,8 +499,16 @@ impl ScriptListApp {
         let Some(model) = model else {
             return;
         };
+        let news = if id == CHAT_THREAD {
+            model.news.news(thread.read(cx))
+        } else {
+            Vec::new()
+        };
         let heard = Some((reply.clone(), status));
         if model.heard == heard {
+            for event in news {
+                self.one_window_handle(Event::Work(event), cx);
+            }
             return;
         }
         model.heard = heard;
@@ -458,7 +548,7 @@ impl ScriptListApp {
                 approve: written.then(|| "Looks good".to_string()),
             }]
         };
-        for event in events {
+        for event in news.into_iter().chain(events) {
             self.one_window_handle(Event::Work(event), cx);
         }
     }
@@ -466,19 +556,22 @@ impl ScriptListApp {
 
 /// Sends a turn: the fixture answers from its queue, a live session from the provider.
 fn submit(model: &ModelThread, text: &str, cx: &mut Context<ScriptListApp>) {
-    if let Some(control) = &model.fixture {
-        let _ = control.queue_turn(vec![
-            AgentChatEvent::AgentMessageDelta(FIXTURE_REPLY.to_string()),
-            AgentChatEvent::completed("fixture"),
-        ]);
-    }
-    let text = text.to_string();
+    let asks = model
+        .fixture
+        .as_ref()
+        .and_then(|control| super::chat_host::fixture_turn(control, text, FIXTURE_REPLY));
+    let words = text.to_string();
     model.thread.update(cx, |thread, cx| {
-        thread.set_input(text, cx);
+        thread.set_input(words, cx);
         if let Err(error) = thread.submit_input(cx) {
             tracing::warn!(target: "script_kit::one_window", event = "model_submit_failed", %error);
         }
     });
+    if let (Some(control), Some(asks)) = (model.fixture.as_ref(), asks) {
+        if let Err(error) = control.request_permission(asks) {
+            tracing::warn!(target: "script_kit::one_window", event = "fixture_permission_failed", %error);
+        }
+    }
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 //!
 //! Phase 2 intentionally keeps the UI event stream Agent Chat-shaped. Future
 //! backends map their native events into these types at their adapter boundary,
-//! not inside `AgentChatThread` or `AgentChatView`.
+//! not inside `AgentChatThread`.
 
 pub(crate) type AgentChatEvent = crate::ai::agent_chat::ui::AgentChatEvent;
 pub(crate) type AgentChatEventRx = crate::ai::agent_chat::ui::AgentChatEventRx;

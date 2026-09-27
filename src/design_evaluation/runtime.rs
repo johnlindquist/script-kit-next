@@ -36,9 +36,7 @@ pub(super) const BATCH_STEP_REQUEST_ID_PREFIX: &str = "owned-evaluation:batch:";
 pub(super) enum RootOwner {
     Main(Entity<ScriptListApp>),
     Notes(Entity<crate::notes::NotesApp>),
-    AgentChat(Entity<crate::ai::agent_chat::ui::AgentChatView>),
     Secondary(Rc<secondary_fixtures::MountedSecondaryFixture>),
-    ConversationPopup,
     RegisteredChild,
 }
 
@@ -630,17 +628,6 @@ impl Evaluator {
                                 cx.notify();
                             });
                         }
-                        "agentChat" => {
-                            let view = conversation_fixtures::create_agent_chat_fixture(
-                                fixture_id, window, cx,
-                            )?;
-                            entity.update(cx, |app, cx| {
-                                app.transition_current_view_and_rekey_main_automation_surface(
-                                    AppView::AgentChatView { entity: view },
-                                );
-                                cx.notify();
-                            });
-                        }
                         "flow" => {
                             flow_control = entity
                                 .update(cx, |app, cx| app.mount_flow_fixture(fixture_id, cx))?;
@@ -717,25 +704,6 @@ impl Evaluator {
                     owner: RootOwner::Notes(entity),
                 }
             }
-            "agentChat" => {
-                let entity = conversation_fixtures::open_detached_agent_chat_fixture(
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                let id = format!("agentChatDetached:{fixture_id}");
-                let info = crate::windows::automation_window_by_id(&id)
-                    .context("detached_chat_registration_missing")?;
-                let handle = crate::windows::get_runtime_window_handle_for_generation(
-                    &id,
-                    info.generation.context("chat_generation_missing")?,
-                )
-                .context("chat_runtime_missing")?;
-                Mounted {
-                    fixture_id: fixture_id.into(),
-                    info,
-                    handle,
-                    owner: RootOwner::AgentChat(entity),
-                }
-            }
             "snap" => {
                 let fixture = Rc::new(secondary_fixtures::mount_secondary_fixture(
                     fixture_id,
@@ -749,9 +717,6 @@ impl Evaluator {
                     handle: fixture.handle,
                     owner: RootOwner::Secondary(fixture),
                 }
-            }
-            "footer" | "agentChatPopup" => {
-                self.mount_auxiliary(fixture_id, &descriptor.family, parent.as_ref())?
             }
             _ => anyhow::bail!("catalogue_root_owner_mismatch"),
         };
@@ -1396,7 +1361,6 @@ impl Evaluator {
                 | "getElements"
                 | "getLayoutInfo"
                 | "getLogs"
-                | "getAgentChatState"
                 | "listAutomationWindows"
                 | "waitFor" => self.query(request_id, &raw, QueryMode::Progress),
                 _ => anyhow::bail!("owned_operation_not_permitted"),

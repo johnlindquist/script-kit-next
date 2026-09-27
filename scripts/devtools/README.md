@@ -266,13 +266,6 @@ successful empty read replaces it. Unmount/remount creates a new lifetime.
 Already released old work can finish late but cannot mutate its successor;
 retired held work cannot be released again.
 
-The compiled `eligibility-portal` scenario initializes the real ScriptSearch
-attachment portal with a provider-free, hidden Chat return host. Releasing its
-owned script source exercises production grouping and the actual reserved slot,
-not injected rows. The recipe checks slot semantics, paint, refused selection,
-navigation and portal cancellation, then prepares the launcher for calculator
-submission. This is not proof of live Chat entry, goose transport or Chat dismissal.
-
 For sources advertised by `searchProviderWait`, use the existing `waitFor`
 transport with condition `{ type: "searchProvider", source, query, afterRunId }`.
 The query is the exact observed lifetime/revision/scope stamp. Its compact

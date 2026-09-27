@@ -948,42 +948,6 @@ pub(crate) fn publish_launcher_catalog(
     launcher_catalog_store().publish(scripts, scriptlets, skills);
 }
 
-/// Build the actual detached Agent Chat Spine attachment section from the
-/// host-owned immutable command snapshot, not from the retired picker.
-pub(crate) fn composer_catalog_subsearch_section(
-    source: crate::spine::catalog_subsearch::ContextSubsearchSource,
-    query: &str,
-    segment_index: usize,
-    segment_byte_range: std::ops::Range<usize>,
-) -> Option<crate::spine::attach::ComposerSubsearchSection> {
-    let snapshot = launcher_catalog_store().snapshot();
-    composer_catalog_subsearch_section_from_snapshot(
-        source,
-        query,
-        segment_index,
-        segment_byte_range,
-        &snapshot,
-    )
-}
-
-fn composer_catalog_subsearch_section_from_snapshot(
-    source: crate::spine::catalog_subsearch::ContextSubsearchSource,
-    query: &str,
-    segment_index: usize,
-    segment_byte_range: std::ops::Range<usize>,
-    snapshot: &LauncherCatalogSnapshot,
-) -> Option<crate::spine::attach::ComposerSubsearchSection> {
-    crate::spine::attach::composer_catalog_subsearch_section(
-        source,
-        query,
-        segment_index,
-        segment_byte_range,
-        &snapshot.scripts,
-        &snapshot.scriptlets,
-        &snapshot.skills,
-    )
-}
-
 fn collect_script_list_inline_items(
     inline_query: &InlinePortalQuery,
     items: &mut Vec<ContextSelectorRow>,

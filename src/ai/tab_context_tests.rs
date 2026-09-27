@@ -1732,24 +1732,6 @@ mod tab_ai_source_type_tests {
     }
 
     #[test]
-    fn deferred_capture_is_started_before_harness_open_call() {
-        let scoped_start = TAB_AI_MODE_SRC
-            .find("let capture_rx = if use_ask_anything_fallback && explicit_ambient_chip_label.is_none() {")
-            .expect("capture staging block");
-        let scoped = &TAB_AI_MODE_SRC[scoped_start..];
-        let spawn_idx = scoped
-            .find("self.spawn_tab_ai_pre_switch_capture(&request)")
-            .expect("capture spawn");
-        let open_idx = scoped
-            .find("self.open_tab_ai_agent_chat_view_from_request_impl(")
-            .expect("harness open");
-        assert!(
-            spawn_idx < open_idx,
-            "capture must be started before the harness open call"
-        );
-    }
-
-    #[test]
     fn pre_switch_capture_uses_immediate_thread_spawn() {
         let fn_start = TAB_AI_MODE_SRC
             .find("fn spawn_tab_ai_pre_switch_capture(")

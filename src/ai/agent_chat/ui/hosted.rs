@@ -1,15 +1,9 @@
-//! Host-neutral Agent Chat thread bootstrap.
-//!
-//! Extracts the warm goose connection/thread creation logic out of the
-//! detached-only `open_or_focus_chat_with_input` so a host surface can spawn
-//! a live Agent Chat thread without knowing the window ownership details.
-//! (The former `spawn_hosted_view` factory was removed with the Notes-hosted
-//! Agent Chat surface — the main window and detached chat own their views.)
+//! Agent Chat thread bootstrap for the main window's chat: the warm goose connection and a
+//! live thread, with no view of its own; the one-window work view draws it.
 
 use gpui::{App, AppContext as _, Entity};
 
 use super::thread::{AgentChatThread, AgentChatThreadInit};
-use super::view::AgentChatView;
 use super::{AgentChatLaunchRequirements, AgentChatPermissionBroker};
 
 /// Spawn a new `AgentChatThread` entity with the standard catalog/preflight/connection

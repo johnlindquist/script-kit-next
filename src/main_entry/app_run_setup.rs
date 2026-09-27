@@ -324,15 +324,8 @@ app.run(move |cx: &mut App| {
                 logging::log("APP", "Window opened, creating ScriptListApp wrapped in Root");
                 let view = cx.new(|cx| ScriptListApp::new(config_for_app, bun_available, window, cx));
                 let view_for_close = view.clone();
-                window.on_window_should_close(cx, move |window, cx| {
+                window.on_window_should_close(cx, move |_window, cx| {
                     view_for_close.update(cx, |this, cx| {
-                        if matches!(this.current_view, AppView::AgentChatView { .. }) {
-                            tracing::info!(
-                                target: "script_kit::keyboard",
-                                event = "embedded_agent_chat_native_close_window",
-                            );
-                            this.close_tab_ai_harness_terminal_with_window(window, cx);
-                        }
                         this.close_and_reset_window(cx);
                         this.dispatch_window_event(
                             crate::window_orchestrator::WindowEvent::SurfaceClosedBySystem(
@@ -773,7 +766,7 @@ app.run(move |cx: &mut App| {
                             show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
                             app_entity_inner.update(cx, |view, cx| {
                                 view.mark_opened_directly("tray");
-                                view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                                view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
                             });
                         });
                     }
@@ -972,16 +965,15 @@ app.run(move |cx: &mut App| {
                 cx.update(|cx: &mut gpui::App| {
                     app_entity_for_ai_hotkey.update(cx, |view, cx| {
                         view.mark_opened_directly("shortcut");
-                        view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                        view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
                     });
                 });
             }
             logging::log("HOTKEY", "AI hotkey listener exiting (channel closed)");
         }).detach();
 
-        // Inline AI text-edit listener. Capture happens inside the foreground
-        // update before any inline overlay window is opened, preserving the
-        // external app's focused text field as the accessibility target.
+        // Inline AI listener: the focused field or selection is read while its app still has
+        // focus, then waits in the chat's line above the input.
         let app_entity_for_inline_ai = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Inline AI hotkey listener started (event-driven)");
@@ -993,67 +985,15 @@ app.run(move |cx: &mut App| {
                 );
                 cx.update(|cx: &mut gpui::App| {
                     app_entity_for_inline_ai.update(cx, |view, cx| {
-                        view.dismiss_focused_text_agent_chat_before_recapture(cx);
+                        view.open_focused_text_in_chat("inline_ai_hotkey", None, cx);
                     });
-                    let capture_started = std::time::Instant::now();
-                    match crate::platform::accessibility::capture_focused_text_field(
-                        crate::platform::accessibility::CaptureFocusedTextOptions::default(),
-                    ) {
-                        Ok(snapshot) => {
-                            logging::log(
-                                "HOTKEY",
-                                &format!(
-                                    "Inline AI focused text captured before Agent Chat open (chars={}, elapsed_ms={})",
-                                    snapshot.metrics.chars,
-                                    capture_started.elapsed().as_millis()
-                                ),
-                            );
-                            tracing::info!(
-                                target: "script_kit::focused_text",
-                                event = "focused_text_capture_complete_before_agent_chat",
-                                source = "app_run_setup",
-                                session_id = %snapshot.session_id,
-                                app_name = %snapshot.app.name,
-                                chars = snapshot.metrics.chars,
-                                elapsed_ms = capture_started.elapsed().as_millis() as u64,
-                            );
-                            app_entity_for_inline_ai.update(cx, |view, cx| {
-                                view.open_focused_text_agent_chat_from_snapshot(
-                                    snapshot,
-                                    None,
-                                    "inline_ai_hotkey",
-                                    cx,
-                                );
-                            });
-                        }
-                        Err(error) => {
-                            logging::log(
-                                "HOTKEY",
-                                &format!("Failed to capture focused text for inline AI: {}", error),
-                            );
-                            tracing::warn!(
-                                target: "script_kit::focused_text",
-                                event = "focused_text_capture_failed",
-                                source = "app_run_setup",
-                                error = %error,
-                            );
-                            app_entity_for_inline_ai.update(cx, |view, cx| {
-                                view.open_focused_text_agent_chat_from_capture_failure(
-                                    error,
-                                    None,
-                                    "inline_ai_hotkey",
-                                    cx,
-                                );
-                            });
-                        }
-                    }
                 });
             }
             logging::log("HOTKEY", "Inline AI hotkey listener exiting (channel closed)");
         }).detach();
 
-        // Rewrite hotkey listener. Captures the focused field and immediately
-        // streams three rewrite variations in the mini UI (no typing needed).
+        // Rewrite hotkey listener: the focused field or selection goes to the chat with the
+        // default rewrite as its first turn.
         let app_entity_for_rewrite = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Rewrite hotkey listener started (event-driven)");
@@ -1065,7 +1005,11 @@ app.run(move |cx: &mut App| {
                 );
                 cx.update(|cx: &mut gpui::App| {
                     app_entity_for_rewrite.update(cx, |view, cx| {
-                        view.open_instant_rewrite_mini("rewrite_hotkey", cx);
+                        view.open_focused_text_in_chat(
+                            "rewrite_hotkey",
+                            Some(crate::ai::focused_text::DEFAULT_REWRITE_INSTRUCTION.to_string()),
+                            cx,
+                        );
                     });
                 });
             }
@@ -1198,7 +1142,7 @@ app.run(move |cx: &mut App| {
                     cx.update(move |cx: &mut gpui::App| {
                         app_entity_inner.update(cx, |view, cx| {
                             view.mark_opened_directly("deeplink");
-                            view.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+                            view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
                         });
                     });
                     continue;
@@ -2379,15 +2323,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         Some("webcamPrompt") => {
                                             Some(ActionsDialogHost::WebcamPrompt)
                                         }
-                                        Some("agentChatChat") => {
-                                            Some(ActionsDialogHost::AgentChat)
-                                        }
-                                        Some("agent_chatHistory") => {
-                                            Some(ActionsDialogHost::AgentChatHistory)
-                                        }
-                                        Some("agentChatDetached") => {
-                                            Some(ActionsDialogHost::AgentChatDetached)
-                                        }
                                         Some(other) => {
                                             logging::log(
                                                 "STDIN",
@@ -2640,32 +2575,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
                             ExternalCommand::OpenAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
-                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
-                            }
-                            ExternalCommand::OpenAgentChatDetachedFixture { ref request_id } => {
-                                let rid = request_id.as_ref().map(|id| id.as_str());
-                                let result = view.open_detached_agent_chat_mock_fixture(ctx);
-                                tracing::info!(
-                                    category = "STDIN",
-                                    event = "agent_chat_detached_fixture_opened",
-                                    command = "openAgentChatDetachedFixture",
-                                    request_id = ?rid,
-                                    ok = result.as_ref().map(|moved| *moved).unwrap_or(false),
-                                    error = result.err().map(|err| err.to_string()),
-                                    "Detached Agent Chat fixture open result"
-                                );
-                            }
-                            ExternalCommand::OpenAgentChatHistoryPopupFixture { ref request_id } => {
-                                let rid = request_id.as_ref().map(|id| id.as_str());
-                                let opened = crate::ai::agent_chat::ui::chat_window::open_agent_chat_history_popup_fixture(ctx);
-                                tracing::info!(
-                                    category = "STDIN",
-                                    event = "agent_chat_history_popup_fixture_opened",
-                                    command = "openAgentChatHistoryPopupFixture",
-                                    request_id = ?rid,
-                                    opened,
-                                    "Detached Agent Chat history popup fixture result"
-                                );
+                                view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), ctx);
                             }
                             ExternalCommand::OpenChatPromptFixture { ref request_id } => {
                                 let rid = request_id.as_ref().map(|id| id.as_str());
@@ -2716,161 +2626,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
                             ExternalCommand::OpenMiniAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openMiniAi compatibility alias");
-                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
-                            }
-                            ExternalCommand::OpenAiWithMockData => {
-                                logging::log("STDIN", "Opening standard Agent Chat mock fixture");
-                                view.open_standard_agent_chat_mock_fixture(ctx);
-                            }
-                            ExternalCommand::OpenMiniAiWithMockData => {
-                                logging::log(
-                                    "STDIN",
-                                    "Ignoring deprecated mini mock-data AI alias and opening Agent Chat",
-                                );
-                                view.open_tab_ai_agent_chat_with_entry_intent(None, ctx);
-                            }
-                            ExternalCommand::OpenFocusedTextAgentChatWithMockData { text, instruction, request_id } => {
-                                logging::log("STDIN", "Opening focused-text Agent Chat mock fixture");
-                                let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
-                                let instruction_length = instruction
-                                    .as_ref()
-                                    .map(|value| value.trim().len())
-                                    .unwrap_or(0);
-                                let requested_submit = instruction_length > 0;
-                                let result = view.open_focused_text_agent_chat_fixture(
-                                    text,
-                                    instruction,
-                                    "focused_text_mock_fixture",
-                                    ctx,
-                                );
-                                let ok = result.is_ok();
-                                if let Err(error) = result {
-                                    logging::log(
-                                        "STDIN",
-                                        &format!("Failed to open focused-text Agent Chat mock fixture: {error}"),
-                                    );
-                                }
-                                if let Some(rid) = request_id {
-                                    if let Some(ref sender) = view.default_response_sender {
-                                        let _ = sender.try_send(
-                                            crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
-                                                rid.to_string(),
-                                                "mock".to_string(),
-                                                ok,
-                                                ok && requested_submit,
-                                                text_length,
-                                                instruction_length,
-                                                if ok { None } else { Some("open_failed".to_string()) },
-                                                if ok {
-                                                    None
-                                                } else {
-                                                    Some("Focused-text Agent Chat mock fixture open failed".to_string())
-                                                },
-                                            ),
-                                        );
-                                    }
-                                }
-                            }
-                            ExternalCommand::OpenFocusedTextAgentChatFromFocusedFieldWithMockData { instruction, request_id } => {
-                                logging::log("STDIN", "Opening focused-text Agent Chat live mock fixture");
-                                let instruction_length = instruction
-                                    .as_ref()
-                                    .map(|value| value.trim().len())
-                                    .unwrap_or(0);
-                                let requested_submit = instruction_length > 0;
-                                let result = view.open_focused_text_agent_chat_from_focused_field_mock_fixture(
-                                    instruction,
-                                    ctx,
-                                );
-                                let (ok, text_length, error_code, error_message) = match result {
-                                    Ok(text_length) => (true, text_length, None, None),
-                                    Err(error) => {
-                                        logging::log(
-                                            "STDIN",
-                                            &format!("Failed to open focused-text Agent Chat live mock fixture: {error}"),
-                                        );
-                                        let error_code = if error.contains("SCRIPT_KIT_FOCUSED_TEXT_LIVE_FIXTURE") {
-                                            "gated_off"
-                                        } else {
-                                            "open_failed"
-                                        };
-                                        (
-                                            false,
-                                            0,
-                                            Some(error_code.to_string()),
-                                            Some("Focused-text Agent Chat live mock fixture open failed".to_string()),
-                                        )
-                                    }
-                                };
-                                if let Some(rid) = request_id {
-                                    if let Some(ref sender) = view.default_response_sender {
-                                        let _ = sender.try_send(
-                                            crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
-                                                rid.to_string(),
-                                                "live-mock".to_string(),
-                                                ok,
-                                                ok && requested_submit,
-                                                text_length,
-                                                instruction_length,
-                                                error_code,
-                                                error_message,
-                                            ),
-                                        );
-                                    }
-                                }
-                            }
-                            ExternalCommand::OpenFocusedTextAgentChatWithPiData { text, instruction, request_id } => {
-                                logging::log("STDIN", "Opening focused-text Agent Chat real goose fixture");
-                                let text_length = text.as_ref().map(|value| value.len()).unwrap_or("Hello world".len());
-                                let instruction_length = instruction
-                                    .as_ref()
-                                    .map(|value| value.trim().len())
-                                    .unwrap_or(0);
-                                let requested_submit = instruction_length > 0;
-                                let result = view.open_focused_text_agent_chat_fixture(
-                                    text,
-                                    instruction,
-                                    "focused_text_pi_fixture",
-                                    ctx,
-                                );
-                                let ok = result.is_ok();
-                                let (error_code, error_message) = match result {
-                                    Ok(()) => (None, None),
-                                    Err(error) => {
-                                        logging::log(
-                                            "STDIN",
-                                            &format!("Failed to open focused-text Agent Chat real goose fixture: {error}"),
-                                        );
-                                        let error_text = error.to_string();
-                                        if error_text.contains("SCRIPT_KIT_INLINE_AGENT_REAL_PI_FIXTURE") {
-                                            (
-                                                Some("gated_off".to_string()),
-                                                Some("Focused-text Agent Chat real goose fixture is gated off".to_string()),
-                                            )
-                                        } else {
-                                            (
-                                                Some("open_failed".to_string()),
-                                                Some("Focused-text Agent Chat real goose fixture open failed".to_string()),
-                                            )
-                                        }
-                                    }
-                                };
-                                if let Some(rid) = request_id {
-                                    if let Some(ref sender) = view.default_response_sender {
-                                        let _ = sender.try_send(
-                                            crate::protocol::Message::focused_text_agent_chat_fixture_open_result(
-                                                rid.to_string(),
-                                                "pi".to_string(),
-                                                ok,
-                                                ok && requested_submit,
-                                                text_length,
-                                                instruction_length,
-                                                error_code,
-                                                error_message,
-                                            ),
-                                        );
-                                    }
-                                }
+                                view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), ctx);
                             }
                             ExternalCommand::ShowAiCommandBar => {
                                 logging::log("STDIN", "Ignoring showAiCommandBar: legacy AI window removed");
@@ -3013,24 +2769,13 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     text_len = text.len(),
                                     "STDIN Agent Chat command received"
                                 );
-                                let result = match &view.current_view {
-                                    AppView::AgentChatView { entity } => {
-                                        let entity = entity.clone();
-                                        entity.update(ctx, |chat, cx| {
-                                            chat.set_input_in_window(text.clone(), window, cx);
-                                            if submit {
-                                                if chat.is_focused_text_mini() {
-                                                    let _ = chat.submit_focused_text_from_enter(cx);
-                                                } else if let Some(thread) = chat.thread() {
-                                                    let _ = thread
-                                                        .update(cx, |thread, cx| thread.submit_input(cx));
-                                                }
-                                            }
-                                        });
-                                        Ok(())
-                                    }
-                                    _ => Err("Agent Chat view is not active".to_string()),
+                                let entry = if submit {
+                                    crate::one_window::chat_entry::ChatEntry::sending(text)
+                                } else {
+                                    crate::one_window::chat_entry::ChatEntry::seeded(text)
                                 };
+                                view.one_window_open_chat(entry, ctx);
+                                let result: Result<(), String> = Ok(());
                                 match &result {
                                     Ok(()) => {
                                         tracing::info!(
@@ -3077,117 +2822,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
-                            ExternalCommand::SetAgentChatTestFixture {
-                                ref phase,
-                                ref user_text,
-                                ref assistant_text,
-                                ref message_count,
-                                ref request_id,
-                            } => {
-                                let request_id_value = request_id.clone();
-                                let request_id = request_id_value.as_deref();
-                                tracing::info!(
-                                    category = "STDIN",
-                                    event = "stdin_agent_chat_command_received",
-                                    command = "setAgentChatTestFixture",
-                                    request_id = ?request_id,
-                                    phase = %phase,
-                                    user_text_len = user_text.as_ref().map(|text| text.len()).unwrap_or(0),
-                                    assistant_text_len = assistant_text.as_ref().map(|text| text.len()).unwrap_or(0),
-                                    message_count = message_count.unwrap_or(0),
-                                    "STDIN Agent Chat command received"
-                                );
-                                let result = if let Some(origin) = phase.strip_prefix("c06AgentReturn:") {
-                                    view.set_agent_chat_return_route_fixture(origin, ctx)
-                                } else if let Some(origin) = phase.strip_prefix("c06FlowReturn:") {
-                                    view.set_flow_conversation_return_route_fixture(origin, ctx)
-                                } else {
-                                    match &view.current_view {
-                                    AppView::AgentChatView { entity } => {
-                                        let entity = entity.clone();
-                                        entity.update(ctx, |chat, cx| {
-                                            chat.apply_test_fixture(
-                                                phase,
-                                                user_text.clone(),
-                                                assistant_text.clone(),
-                                                *message_count,
-                                                cx,
-                                            )
-                                        })
-                                    }
-                                    AppView::FlowSessionView { .. } => view
-                                        .apply_flow_conversation_test_fixture(
-                                            phase,
-                                            user_text.clone(),
-                                            assistant_text.clone(),
-                                            ctx,
-                                        ),
-                                    AppView::ChatPrompt { entity, .. } => {
-                                        let entity = entity.clone();
-                                        entity.update(ctx, |chat, cx| {
-                                            chat.apply_transcript_geometry_fixture(
-                                                phase,
-                                                user_text.clone(),
-                                                assistant_text.clone(),
-                                                cx,
-                                            )
-                                        })
-                                    }
-                                    _ => crate::ai::agent_chat::ui::chat_window::apply_detached_agent_chat_test_fixture(
-                                        phase,
-                                        user_text.clone(),
-                                        assistant_text.clone(),
-                                        *message_count,
-                                        ctx,
-                                    ),
-                                    }
-                                };
-                                match &result {
-                                    Ok(()) => {
-                                        tracing::info!(
-                                            category = "STDIN",
-                                            event = "stdin_agent_chat_command_finished",
-                                            command = "setAgentChatTestFixture",
-                                            request_id = ?request_id,
-                                            phase = %phase,
-                                            status = "success",
-                                            "STDIN Agent Chat command finished"
-                                        );
-                                    }
-                                    Err(error) => {
-                                        logging::log(
-                                            "STDIN",
-                                            &format!("Failed to set Agent Chat test fixture: {}", error),
-                                        );
-                                        tracing::error!(
-                                            category = "STDIN",
-                                            event = "stdin_agent_chat_command_finished",
-                                            command = "setAgentChatTestFixture",
-                                            request_id = ?request_id,
-                                            phase = %phase,
-                                            status = "error",
-                                            error = %error,
-                                            "STDIN Agent Chat command finished"
-                                        );
-                                    }
-                                }
-                                if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.default_response_sender {
-                                        let _ = sender.try_send(
-                                            crate::protocol::Message::external_command_result(
-                                                rid.to_string(),
-                                                "setAgentChatTestFixture".to_string(),
-                                                result.is_ok(),
-                                                result
-                                                    .as_ref()
-                                                    .err()
-                                                    .map(|_| "agent_chat_inactive".to_string()),
-                                                result.as_ref().err().cloned(),
-                                            ),
-                                        );
-                                    }
-                                }
-                            }
                             ExternalCommand::SetAgentChatTranscriptScroll {
                                 item_ix,
                                 offset_px,
@@ -3195,12 +2829,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             } => {
                                 let request_id_value = request_id.clone();
                                 let result = match &view.current_view {
-                                    AppView::AgentChatView { entity } => {
-                                        let entity = entity.clone();
-                                        entity.update(ctx, |chat, cx| {
-                                            chat.scroll_test_transcript_to(item_ix, offset_px, cx)
-                                        })
-                                    }
                                     AppView::FlowSessionView { session_id } => view
                                         .conversations.flow_sessions
                                         .iter()
@@ -3242,19 +2870,15 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     request_id = ?request_id,
                                     "STDIN Agent Chat command received"
                                 );
-                                let result = match &view.current_view {
-                                    AppView::AgentChatView { entity } => {
-                                        let entity = entity.clone();
-                                        let pasted = entity
-                                            .update(ctx, |chat, cx| chat.paste_text_from_clipboard(cx));
-                                        if pasted {
-                                            Ok(())
-                                        } else {
-                                            Err("clipboard is empty or text fetch failed"
-                                                .to_string())
-                                        }
+                                let result = match ctx.read_from_clipboard().and_then(|item| item.text()) {
+                                    Some(text) => {
+                                        view.one_window_open_chat(
+                                            crate::one_window::chat_entry::ChatEntry::seeded(text),
+                                            ctx,
+                                        );
+                                        Ok(())
                                     }
-                                    _ => Err("Agent Chat view is not active".to_string()),
+                                    None => Err("clipboard is empty or text fetch failed".to_string()),
                                 };
                                 match result {
                                     Ok(()) => {
@@ -3406,105 +3030,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name, .. } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
                                 view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
-                            }
-                            ExternalCommand::SetAgentChatScopeInput { ref text, ref request_id } => {
-                                let request_id_value = request_id.clone();
-                                let result = match &view.current_view {
-                                    AppView::AgentChatView { entity } => {
-                                        let entity = entity.clone();
-                                        entity.update(ctx, |chat, cx| {
-                                            let was_visible = chat.scope_visible;
-                                            chat.scope_input = crate::ai::agent_chat::ui::view::AgentChatView::normalize_focused_text_scope_input_public(text);
-                                            chat.scope_visible = !chat.scope_input.is_empty();
-                                            if chat.scope_visible != was_visible {
-                                                chat.resize_focused_text_mini_for_scope_change_public(&*cx);
-                                            }
-                                            cx.notify();
-                                        });
-                                        Ok(())
-                                    }
-                                    _ => Err("Agent Chat view is not active".to_string()),
-                                };
-                                if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.default_response_sender {
-                                        let _ = sender.try_send(crate::protocol::Message::external_command_result(
-                                            rid.to_string(), "setAgentChatScopeInput".to_string(), result.is_ok(),
-                                            result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
-                                            result.as_ref().err().cloned(),
-                                        ));
-                                    }
-                                }
-                            }
-                            ExternalCommand::SelectAgentChatVariation { index, edit, ref request_id } => {
-                                let request_id_value = request_id.clone();
-                                let result = match &view.current_view {
-                                    AppView::AgentChatView { entity } => {
-                                        let entity = entity.clone();
-                                        entity.update(ctx, |chat, cx| {
-                                            chat.select_focused_text_variation(index, cx);
-                                            if edit {
-                                                let _ = chat.enter_focused_text_variation_editor(cx);
-                                            }
-                                        });
-                                        Ok(())
-                                    }
-                                    _ => Err("Agent Chat view is not active".to_string()),
-                                };
-                                if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.default_response_sender {
-                                        let _ = sender.try_send(crate::protocol::Message::external_command_result(
-                                            rid.to_string(), "selectAgentChatVariation".to_string(), result.is_ok(),
-                                            result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
-                                            result.as_ref().err().cloned(),
-                                        ));
-                                    }
-                                }
-                            }
-                            ExternalCommand::GetAgentChatVariations { ref request_id } => {
-                                let request_id_value = request_id.clone();
-                                let summary = match &view.current_view {
-                                    AppView::AgentChatView { entity } => {
-                                        let snapshots = entity.read(ctx).focused_text_variation_snapshots();
-                                        if snapshots.is_empty() {
-                                            "no_variations".to_string()
-                                        } else {
-                                            snapshots.iter().map(|s| {
-                                                let preview = crate::logging::truncate_for_log(&s.text, 100);
-                                                format!("[{}] {} ({}) sel={} len={}: {}", s.index, s.label, s.status.state_id(), s.selected, s.text.len(), preview)
-                                            }).collect::<Vec<_>>().join(" | ")
-                                        }
-                                    }
-                                    _ => "not_agent_chat".to_string(),
-                                };
-                                if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.default_response_sender {
-                                        let _ = sender.try_send(crate::protocol::Message::external_command_result(
-                                            rid.to_string(), "getAgentChatVariations".to_string(), true, None, Some(summary),
-                                        ));
-                                    }
-                                }
-                            }
-                            ExternalCommand::AgentChatEscape { ref request_id } => {
-                                let request_id_value = request_id.clone();
-                                let result = match &view.current_view {
-                                    AppView::AgentChatView { entity } => {
-                                        let entity = entity.clone();
-                                        entity.update(ctx, |chat, cx| {
-                                            chat.handle_protocol_escape(window, cx);
-                                        });
-                                        Ok(())
-                                    }
-                                    _ => Err("Agent Chat view is not active".to_string()),
-                                };
-                                if let Some(rid) = request_id_value {
-                                    if let Some(ref sender) = view.default_response_sender {
-                                        let _ = sender.try_send(crate::protocol::Message::external_command_result(
-                                            rid.to_string(), "agent_chatEscape".to_string(), result.is_ok(),
-                                            result.as_ref().err().map(|_| "agent_chat_inactive".to_string()),
-                                            result.as_ref().err().cloned(),
-                                        ));
-                                    }
-                                }
                             }
                         },
                         StdinCommand::Protocol(message) => {

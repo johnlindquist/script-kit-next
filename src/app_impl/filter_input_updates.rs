@@ -545,26 +545,6 @@ impl ScriptListApp {
 
         self.pending_menu_syntax_ai_proposal = None;
 
-        if let AppView::AgentChatView { entity } = &self.current_view {
-            self.suppress_filter_events = true;
-            self.filter_text = text.clone();
-            self.pending_programmatic_filter_echo = Some(text.clone());
-            self.gpui_input_state.update(cx, |state, cx| {
-                state.set_highlight_ranges_with_roles(Vec::new());
-                state.set_value(text.clone(), window, cx);
-                state.set_selection_focused(cursor, cursor, window, cx);
-            });
-            self.suppress_filter_events = false;
-            self.pending_filter_sync = false;
-            entity.update(cx, |chat, cx| {
-                chat.set_input(text.clone(), cx);
-                chat.refresh_agent_chat_spine_from_composer(cx);
-            });
-            self.note_main_input_changed(cx);
-            cx.notify();
-            return;
-        }
-
         let input_already_matches = self.gpui_input_state.read(cx).value() == text;
         let input_selection_matches =
             self.gpui_input_state.read(cx).selected_range() == (cursor..cursor);
@@ -917,16 +897,6 @@ impl ScriptListApp {
             } => {
                 if Self::sync_builtin_query_state(filter, selected_index, text) {
                     uniform_reset = Some(UniformReset::CurrentAppCommands);
-                }
-                true
-            }
-            AppView::AgentChatHistoryView {
-                filter,
-                selected_index,
-            } => {
-                if Self::sync_builtin_query_state(filter, selected_index, text) {
-                    self.agent_chat_history_scroll_handle.scroll_to_item(0);
-                    tracked_reset = true;
                 }
                 true
             }

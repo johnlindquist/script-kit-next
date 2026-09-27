@@ -6,10 +6,7 @@ mod row;
 mod tests;
 mod types;
 
-pub(crate) use component::{
-    inline_dropdown_clamp_selected_index, inline_dropdown_visible_range,
-    inline_dropdown_visible_range_from_start,
-};
+pub(crate) use component::inline_dropdown_visible_range_from_start;
 pub(crate) use row::{
     render_compact_synopsis_strip, render_dense_monoline_picker_row,
     render_dense_monoline_picker_row_with_accessory,

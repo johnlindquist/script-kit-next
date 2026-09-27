@@ -1,36 +1,13 @@
-const ACTION_HANDLER_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
 const ACTIONS_TOGGLE_SOURCE: &str = include_str!("../src/app_impl/actions_toggle.rs");
 const PROFILES_SOURCE: &str = include_str!("../src/ai/agent_chat/profiles.rs");
 const PROFILE_SEARCH_SOURCE: &str = include_str!("../src/profile_search.rs");
 const APP_IMPL_PROFILE_SEARCH_SOURCE: &str = include_str!("../src/app_impl/profile_search_view.rs");
 const RENDER_PROFILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/profile_search.rs");
-const RENDER_SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
 const COLLECT_ELEMENTS_SOURCE: &str = include_str!("../src/app_layout/collect_elements.rs");
 const ACT_TS: &str = include_str!("../scripts/devtools/act.ts");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
-const AGENT_CHAT_LAUNCH_SOURCE: &str =
-    include_str!("../src/app_impl/agent_handoff/agent_chat_launch.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
-const FILTER_INPUT_CORE_SOURCE: &str = include_str!("../src/app_impl/filter_input_core.rs");
 const FILTER_INPUT_UPDATES_SOURCE: &str = include_str!("../src/app_impl/filter_input_updates.rs");
-const AGENT_CHAT_VIEW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/view.rs");
-const AGENT_CHAT_THREAD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/thread.rs");
-const AGENT_CHAT_MOD_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/mod.rs");
-const CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/chat_window.rs");
-const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
-const CONTEXT_SELECTOR_TYPES_SOURCE: &str = include_str!("../src/ai/context_selector/types.rs");
-const CONTEXT_SELECTOR_SOURCE: &str = include_str!("../src/ai/context_selector/mod.rs");
-const CONFIG_TYPES_SOURCE: &str = include_str!("../src/config/types.rs");
-const AUTOMATION_COLLECTOR_SOURCE: &str =
-    include_str!("../src/windows/automation_surface_collector.rs");
-const DETACHED_TRANSACTION_PROVIDER_SOURCE: &str =
-    include_str!("../src/windows/automation_transaction_provider.rs");
-const FOOTER_CHROME_SOURCE: &str = include_str!("../src/components/footer_chrome.rs");
-const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
-const STDIN_COMMANDS_SOURCE: &str = include_str!("../src/stdin_commands/mod.rs");
-const SPINE_PROFILE_SOURCE: &str = include_str!("../src/spine/catalog_profile.rs");
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
-const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
 const SIMULATE_KEY_DISPATCH_SOURCE: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 
@@ -58,148 +35,10 @@ fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
 }
 
 #[test]
-fn profile_picker_is_main_menu_spine_not_deprecated_popup() {
-    assert!(SPINE_PROFILE_SOURCE.contains("agent_chat_profile_picker_entries"));
-    assert!(SPINE_PROFILE_SOURCE.contains("selected_agent_chat_profile_picker_id"));
-    assert!(SPINE_PROFILE_SOURCE.contains("SpineListRowKind::Profile"));
-    assert!(SPINE_PROFILE_SOURCE.contains("resolution_source: ss(\"profile\")"));
-
-    assert!(!AGENT_CHAT_MOD_SOURCE.contains("profile_selector_popup"));
-    assert!(!AGENT_CHAT_VIEW_SOURCE.contains("profile_selector_open"));
-    assert!(
-        !AGENT_CHAT_VIEW_SOURCE.contains("sync_profile_selector_popup_window_from_cached_parent")
-    );
-    assert!(!PROMPT_HANDLER_SOURCE.contains("batch_select_profile_by_value"));
-    assert!(!PROMPT_HANDLER_SOURCE.contains("batch_select_profile_by_semantic_id"));
-    assert!(!PROMPT_HANDLER_SOURCE.contains("is_profile_selector_popup_window_open"));
-    assert!(!AUTOMATION_COLLECTOR_SOURCE.contains("collect_profile_selector_snapshot"));
-    assert!(!DETACHED_TRANSACTION_PROVIDER_SOURCE.contains("batch_select_profile_by_value"));
-    assert!(!DETACHED_TRANSACTION_PROVIDER_SOURCE.contains("batch_select_profile_by_semantic_id"));
-    assert!(!STDIN_COMMANDS_SOURCE.contains("OpenAgentChatProfilePicker"));
-    assert!(!STDIN_COMMANDS_SOURCE.contains("\"openAgentChatProfilePicker\""));
-}
-
-#[test]
-fn agent_chat_spine_context_attacher_uses_main_menu_list_chrome() {
-    let body = fn_body(
-        AGENT_CHAT_VIEW_SOURCE,
-        "fn render_agent_chat_spine_projection_area(",
-    );
-
-    for required in [
-        "crate::list_item::render_section_header(",
-        "ListItemColors::from_theme(theme)",
-        "ListItem::new(title, list_colors)",
-        ".selected(selected)",
-        ".main_menu_theme(main_menu_theme)",
-        ".semantic_id(format!(\"agent_chat-spine-row-{row_id}\"",
-        ".description_opt(subtitle)",
-        ".source_hint_opt(source_hint)",
-        ".type_accessory_opt(Some(TypeAccessory",
-        "crate::list_item::effective_list_item_height_for_theme(main_menu_theme)",
-    ] {
-        assert!(
-            body.contains(required),
-            "Agent Chat context attacher must reuse main-menu list chrome: {required}"
-        );
-    }
-
-    for forbidden in [
-        "theme.colors.accent.selected << 8) | 0x22",
-        ".px(px(10.0))",
-        ".py(px(7.0))",
-        ".rounded(px(6.0))",
-        ".text_sm()",
-        ".justify_between()",
-    ] {
-        assert!(
-            !body.contains(forbidden),
-            "Agent Chat context attacher must not keep bespoke item row styling: {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn bare_pipe_stays_in_main_menu_search_for_profile_rows() {
-    assert!(!FILTER_INPUT_CORE_SOURCE.contains("AgentChatProfilePicker"));
-    assert!(!FILTER_INPUT_UPDATES_SOURCE.contains("open_tab_ai_agent_chat_with_profile_picker"));
-    assert!(!TAB_AI_MODE_SOURCE.contains("open_tab_ai_agent_chat_with_profile_picker"));
-    assert!(!CHAT_WINDOW_SOURCE.contains("open_detached_profile_picker"));
-}
-
-#[test]
-fn spine_profile_submission_persists_pi_profile_before_launch() {
-    let body = fn_body(
-        TAB_AI_MODE_SOURCE,
-        "pub(crate) fn try_submit_spine_prompt_plan_from_parse_with_aliases(",
-    );
-    assert!(body.contains("persist_agent_chat_profile_selection"));
-    assert!(body.contains("save_user_preferences(&prefs)"));
-    assert!(body.contains("Agent Chat profile: {profile_name}"));
-    assert!(PROFILES_SOURCE.contains("ai.selected_profile_id = Some(entry.id.clone());"));
-    assert!(PROFILES_SOURCE.contains("ai.selected_backend = Some(AgentChatBackend::Goose);"));
-}
-
-#[test]
-fn profile_selection_updates_live_agent_chat_footer_without_relaunch() {
-    assert!(ACTION_HANDLER_SOURCE.contains("agent_chat_switch_profile_id_from_action"));
-    assert!(ACTION_HANDLER_SOURCE.contains("persist_agent_chat_profile_selection"));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("set_on_profile_selected"));
-    assert!(AGENT_CHAT_THREAD_SOURCE.contains("pub(crate) fn set_profile_display("));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("pub(crate) fn set_profile_display("));
-    assert!(TAB_AI_MODE_SOURCE.contains("view.set_profile_display("));
-    assert!(TAB_AI_MODE_SOURCE.contains("select_agent_chat_profile_and_relaunch"));
-    let body = fn_body(
-        TAB_AI_MODE_SOURCE,
-        "fn select_agent_chat_profile_and_relaunch(",
-    );
-    assert!(
-        body.contains("refresh_agent_model_footer_labels")
-            && body.find("refresh_agent_model_footer_labels")
-                < body.find("view.set_profile_display("),
-        "live Agent Chat profile selection must refresh the shared main-menu header labels before updating the embedded view"
-    );
-}
-
-#[test]
-fn agent_chat_launch_uses_effective_profile_for_agent_chat_agent_and_model() {
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_selected_launch_with_cwd_override"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE.contains("resolve_focused_text_launch"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE
-        .contains("profile_display_name: Some(agent_launch.profile.name.clone().into())"));
-    assert!(AGENT_CHAT_LAUNCH_SOURCE
-        .contains("profile_icon_name: agent_launch.profile.icon_name.clone()"));
-}
-
-#[test]
 fn provider_scoped_pi_model_selection_is_split_before_launch() {
     assert!(PROFILES_SOURCE.contains("parse_provider_model_selection"));
     assert!(PROFILES_SOURCE.contains("profile.provider = Some(provider);"));
     assert!(PROFILES_SOURCE.contains("profile.model = Some(model);"));
-}
-
-#[test]
-fn profile_display_flows_through_thread_and_footer() {
-    assert!(AGENT_CHAT_THREAD_SOURCE.contains("profile_display_name"));
-    assert!(AGENT_CHAT_THREAD_SOURCE.contains("pub(crate) fn profile_display"));
-    assert!(
-        AGENT_CHAT_VIEW_SOURCE.contains("profile_display: thread.profile_display().to_string()")
-    );
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("profile_left_info"));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("profile_name: Some(self.profile_display.clone())"));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("agent-chat-profile-display"));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("snapshot.profile_display.clone()"));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains(".id(\"agent_chat-profile-display\")"));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains(".id(\"agent_chat-model-display\")"));
-}
-
-#[test]
-fn shift_tab_routes_to_profile_switcher_copy() {
-    assert!(APP_IMPL_PROFILE_SEARCH_SOURCE.contains("profile_switcher_open_shift_tab"));
-    assert!(STARTUP_SOURCE.contains("agent_chat_shift_tab_profile_switcher"));
-    assert!(STARTUP_NEW_TAB_SOURCE.contains("agent_chat_shift_tab_profile_switcher"));
-    assert!(!STARTUP_SOURCE.contains("Shift+Tab → Agent & Model picker"));
-    assert!(!STARTUP_NEW_TAB_SOURCE.contains("Shift+Tab → Agent & Model picker"));
 }
 
 #[test]
@@ -562,99 +401,4 @@ fn profile_search_selection_refreshes_header_labels_after_reset() {
         refresh_positions.iter().any(|pos| *pos > reset_pos),
         "ProfileSearch should refresh labels after reset so shared header cannot render stale profile text"
     );
-}
-
-/// The Enter that selects a profile must not execute a launcher item after
-/// returning. Check every live execution site inside the key handler, not an
-/// obsolete fallback helper or a pointer-click handler elsewhere in the render.
-#[test]
-fn script_list_enter_guard_runs_before_execute_selected_paths() {
-    let body = fn_body(RENDER_SCRIPT_LIST_SOURCE, "fn render_script_list(");
-    let key_handler = fn_body(body, "let handle_key = cx.listener(");
-    let guard_pos = key_handler
-        .find("consume_return_to_script_list_enter_guard")
-        .expect("ScriptList must consume return-to-list Enter guard");
-    let guard = fn_body(key_handler, "consume_return_to_script_list_enter_guard");
-    assert!(guard.contains("cx.stop_propagation();"));
-    assert!(guard.contains("return;"));
-    for needle in [
-        "try_apply_pending_menu_syntax_ai_proposal",
-        "try_handle_spine_enter",
-        "execute_selected(",
-    ] {
-        assert!(
-            key_handler.contains(needle),
-            "ScriptList Enter path missing {needle}"
-        );
-        for (pos, _) in key_handler.match_indices(needle) {
-            assert!(
-                guard_pos < pos,
-                "return-to-ScriptList guard must run before {needle}"
-            );
-        }
-    }
-}
-
-#[test]
-fn script_list_key_up_clears_return_to_script_list_enter_guard() {
-    assert!(
-        RENDER_SCRIPT_LIST_SOURCE.contains("clear_return_to_script_list_enter_guard_on_key_up"),
-        "ScriptList key-up must clear the ProfileSearch Enter transition guard"
-    );
-}
-
-/// Keep profile selection on the left status marker rather than duplicating
-/// a trailing action, and dispatch GPUI/native clicks through the owning binding.
-#[test]
-fn footer_profile_affordance_is_merged_into_left_status_marker() {
-    assert!(FOOTER_CHROME_SOURCE.contains("FOOTER_PROFILE_ICON_TOKEN"));
-    assert!(FOOTER_CHROME_SOURCE.contains("FOOTER_PROFILE_ICON_PATH"));
-
-    let footer_buttons = fn_body(AGENT_CHAT_VIEW_SOURCE, "fn footer_buttons_for_thread");
-    assert!(!footer_buttons.contains("FooterAction::Ai"));
-    assert!(!footer_buttons.contains("FOOTER_PROFILE_ICON_TOKEN"));
-
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("profile_left_info"));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("render_profile_status_marker_from_snapshot"));
-    assert!(AGENT_CHAT_VIEW_SOURCE
-        .contains("FooterAction::Ai => self.open_profile_trigger_picker_in_window"));
-
-    assert!(FOOTER_POPUP_SOURCE.contains("pub action: Option<FooterAction>"));
-    assert!(FOOTER_POPUP_SOURCE.contains("pub icon_token: Option<String>"));
-    let marker = fn_body(FOOTER_POPUP_SOURCE, "fn render_left_info(");
-    let marker_action = fn_body(marker, "if let Some(action) = info.action");
-    assert!(marker_action.contains("let binding = self.binding.clone();"));
-    assert!(marker_action.contains("dispatch_bound_footer_action(&binding, action)"));
-    let native_action = fn_body(FOOTER_POPUP_SOURCE, "fn send_footer_action_from_sender(");
-    assert!(native_action.contains("dispatch_bound_footer_action(&binding, action)"));
-}
-
-#[test]
-fn pipe_trigger_selects_agent_chat_profiles_without_context_attachment() {
-    assert!(CONTEXT_SELECTOR_TYPES_SOURCE.contains("Profile"));
-    assert!(CONTEXT_SELECTOR_TYPES_SOURCE.contains("PROFILE_TRIGGER_CHAR: char = '|'"));
-    assert!(CONTEXT_SELECTOR_TYPES_SOURCE.contains("AgentChatProfile"));
-    assert!(CONTEXT_SELECTOR_SOURCE.contains("b'|' => ContextSelectorTrigger::Profile"));
-    let accept_body = fn_body(
-        AGENT_CHAT_VIEW_SOURCE,
-        "fn accept_composer_picker_selection_impl(",
-    );
-    assert!(accept_body.contains("AgentChatComposerPickerTrigger::Profile"));
-    assert!(accept_body.contains("ContextSelectorRowKind::AgentChatProfile"));
-    assert!(accept_body.contains("Self::replace_text_in_char_range("));
-    assert!(accept_body.contains("session.trigger_range.clone()"));
-    assert!(accept_body.contains("thread.input.set_text(next_text)"));
-    assert!(accept_body.contains("self.select_profile_from_popup(&profile_id, cx);"));
-}
-
-fn config_profile_icon_name_flows_to_footer_marker() {
-    assert!(CONFIG_TYPES_SOURCE.contains("pub icon_name: Option<String>"));
-    assert!(PROFILES_SOURCE.contains("pub icon_name: Option<String>"));
-    assert!(PROFILES_SOURCE.contains("icon_name: profile.icon_name"));
-    assert!(AGENT_CHAT_THREAD_SOURCE.contains("profile_icon_name: Option<String>"));
-    assert!(AGENT_CHAT_THREAD_SOURCE.contains("pub(crate) fn profile_icon_name(&self)"));
-    assert!(AGENT_CHAT_VIEW_SOURCE
-        .contains("profile_icon_name: thread.profile_icon_name().map(str::to_string)"));
-    assert!(AGENT_CHAT_VIEW_SOURCE.contains("footer_icon_path_or_profile"));
-    assert!(FOOTER_POPUP_SOURCE.contains("pub icon_token: Option<String>"));
 }

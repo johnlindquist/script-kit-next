@@ -531,22 +531,6 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
-            AppView::AgentChatHistoryView {
-                filter,
-                selected_index,
-            } => {
-                self.filter_text = new_text.clone();
-                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.agent_chat_history_scroll_handle
-                        .scroll_to_top_of_item(0);
-                    self.begin_list_viewport_scroll(
-                        crate::scrolling::list_interaction::ListViewportInputSource::Filter,
-                        cx,
-                    );
-                    cx.notify();
-                }
-                return; // Don't run main menu filter logic
-            }
             AppView::BrowserHistoryView {
                 filter,
                 selected_index,

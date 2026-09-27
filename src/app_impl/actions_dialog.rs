@@ -54,8 +54,6 @@ impl ScriptListApp {
             AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
             AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
             AppView::WebcamView { .. } => Some(ActionsDialogHost::WebcamPrompt),
-            AppView::AgentChatView { .. } => Some(ActionsDialogHost::AgentChat),
-            AppView::AgentChatHistoryView { .. } => Some(ActionsDialogHost::AgentChatHistory),
             AppView::AppLauncherView { .. } => Some(ActionsDialogHost::AppLauncher),
             AppView::FlowUxView { .. } | AppView::FlowSessionView { .. } => {
                 Some(ActionsDialogHost::FlowDesk)
@@ -263,21 +261,6 @@ impl ScriptListApp {
 
         match host {
             ActionsDialogHost::MainList => {
-                // Agent & Model picker (Shift+Tab): persist the selected model
-                // or agent to user preferences instead of dispatching it as an
-                // ordinary launcher action. Gated so it only intercepts while
-                // the picker owns the dialog. Action IDs are globally unique.
-                if self.agent_model_picker_active {
-                    // The model row carries the namespaced "provider/model" id;
-                    // persisting it records both the agent and the model.
-                    if let Some(model_id) =
-                        crate::actions::agent_chat_switch_model_id_from_action(&action_id)
-                    {
-                        Self::persist_agent_model_picker_model(model_id);
-                        self.refresh_agent_model_footer_labels();
-                        return;
-                    }
-                }
                 if let Some(subject) = self.pending_root_unified_actions_subject.clone() {
                     if crate::root_unified_result_actions::execute_root_unified_result_action(
                         self, &action_id, &subject, window, cx,
@@ -325,18 +308,6 @@ impl ScriptListApp {
                     "webcam_action",
                     &outcome,
                     &start,
-                );
-            }
-            ActionsDialogHost::AgentChatDetached => {
-                let dispatched =
-                    crate::ai::agent_chat::ui::chat_window::dispatch_action_to_detached(
-                        &action_id, cx,
-                    );
-                tracing::info!(
-                    target: "script_kit::actions",
-                    event = "actions_host_execute_agent_chat_detached",
-                    action_id = %action_id,
-                    dispatched,
                 );
             }
             ActionsDialogHost::ThemeChooser => {
@@ -500,8 +471,6 @@ impl ScriptListApp {
             }
             ActionsDialogHost::EmojiPicker
             | ActionsDialogHost::AppLauncher
-            | ActionsDialogHost::AgentChat
-            | ActionsDialogHost::AgentChatHistory
             | ActionsDialogHost::DivPrompt
             | ActionsDialogHost::EditorPrompt
             | ActionsDialogHost::TemplatePrompt
@@ -528,15 +497,6 @@ impl ScriptListApp {
                     );
                     false
                 }
-            }
-            ActionsDialogHost::AgentChatDetached => {
-                // The detached window has its own Cmd+K handler
-                // (`toggle_detached_actions` in `src/ai/agent_chat/ui/chat_window.rs`).
-                // The main view never advertises AgentChatDetached via
-                // `current_actions_host()`, so this arm is defensive-only
-                // and should never run in practice; leave the main view
-                // untouched and report "not handled".
-                false
             }
         }
     }
@@ -747,34 +707,6 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        // The global actions interceptor runs before AgentChatView's focused
-        // key handler. When the embedded composer's Spine owns the list, bare
-        // Enter must reach that existing acceptance path before this helper's
-        // non-ScriptList inactive-context bypass returns control to a route
-        // that never delivers the key to the child view.
-        if !self.show_actions_popup
-            && !modifiers.platform
-            && !modifiers.control
-            && !modifiers.alt
-            && !modifiers.shift
-            && crate::ui_foundation::is_key_enter(key)
-        {
-            if let AppView::AgentChatView { entity } = &self.current_view {
-                let entity = entity.clone();
-                let spine_consumed = entity.update(cx, |chat, cx| {
-                    chat.agent_chat_spine_owns_list()
-                        && chat.accept_agent_chat_spine_projection_row(window, cx)
-                });
-                if spine_consumed {
-                    logging::log(
-                        "KEY_ROUTE",
-                        "Agent Chat Spine accepted Enter before main-list displayed shortcut routing",
-                    );
-                    return true;
-                }
-            }
-        }
-
         // Bare navigation keys can never be displayed action shortcuts: the
         // arrow/home-end interceptors consume them before the actions
         // interceptor on the live keyboard path. Skip the O(actions) routing
@@ -1014,7 +946,15 @@ impl ScriptListApp {
                     semantic_id = %target.semantic_id,
                 );
                 self.close_actions_popup(host, window, cx);
-                self.open_tab_ai_agent_chat_with_explicit_target_preserving_return(target, cx);
+                self.one_window_open_chat(
+                    crate::one_window::chat_entry::ChatEntry::quick().with(
+                        crate::ai::AiContextPart::FocusedTarget {
+                            label: crate::ai::format_explicit_target_chip_label(&target),
+                            target,
+                        },
+                    ),
+                    cx,
+                );
                 return ActionsRoute::Handled;
             }
         }
@@ -1336,7 +1276,6 @@ impl ScriptListApp {
             ActionsDialogHost::DivPrompt => FocusRequest::div_prompt(),
             ActionsDialogHost::TermPrompt => FocusRequest::term_prompt(),
             ActionsDialogHost::WebcamPrompt => FocusRequest::div_prompt(),
-            ActionsDialogHost::AgentChat => FocusRequest::agent_chat(),
             ActionsDialogHost::MainList if surface == SurfaceKind::DayPage => {
                 FocusRequest::editor_prompt()
             }
@@ -1352,9 +1291,7 @@ impl ScriptListApp {
             | ActionsDialogHost::EmojiPicker
             | ActionsDialogHost::AppLauncher
             | ActionsDialogHost::BuiltinList
-            | ActionsDialogHost::FlowDesk
-            | ActionsDialogHost::AgentChatHistory
-            | ActionsDialogHost::AgentChatDetached => FocusRequest::main_filter(),
+            | ActionsDialogHost::FlowDesk => FocusRequest::main_filter(),
         }
     }
 
@@ -1486,7 +1423,15 @@ impl ScriptListApp {
                 semantic_id = %target.semantic_id,
                 current_view = ?self.current_view,
             );
-            self.open_tab_ai_agent_chat_with_explicit_target_preserving_return(target, cx);
+            self.one_window_open_chat(
+                crate::one_window::chat_entry::ChatEntry::quick().with(
+                    crate::ai::AiContextPart::FocusedTarget {
+                        label: crate::ai::format_explicit_target_chip_label(&target),
+                        target,
+                    },
+                ),
+                cx,
+            );
         }
     }
 

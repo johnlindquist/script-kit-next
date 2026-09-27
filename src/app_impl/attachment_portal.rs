@@ -3,29 +3,6 @@ use super::*;
 const ATTACHMENT_PORTAL_WIDTH_RESTORE_EPSILON: f32 = 1.0;
 
 impl ScriptListApp {
-    fn open_script_list_attachment_portal(
-        &mut self,
-        kind: crate::ai::context_selector::types::ContextPortalKind,
-        query: &str,
-        placeholder: &str,
-        cx: &mut Context<Self>,
-    ) {
-        self.active_attachment_portal_kind = Some(kind);
-        self.filter_text = query.to_string();
-        self.computed_filter_text = query.to_string();
-        self.pending_filter_sync = true;
-        self.pending_placeholder = Some(placeholder.to_string());
-        self.show_script_list_with_main_filter_focus();
-        self.hovered_index = None;
-        self.selected_index = 0;
-        self.opened_from_main_menu = true;
-        self.invalidate_grouped_cache();
-        self.reset_main_menu_selection_intent();
-        self.flush_pending_main_menu_query(cx);
-        self.sync_list_state();
-        self.update_window_size();
-    }
-
     fn current_main_window_width() -> Option<f32> {
         crate::platform::get_main_window_bounds()
             .map(|(_, _, width, _)| width as f32)
@@ -147,20 +124,9 @@ impl ScriptListApp {
         }
     }
 
-    /// Whether the app is currently in an attachment portal (file search or
-    /// clipboard history opened from the Agent Chat chat context selector, or
-    /// file search opened from the main-menu `@file` spine flow).
-    ///
-    /// Agent-chat-hosted portals read from the app-owned
-    /// `agent_chat_surface_state` machine rather than probing
-    /// `attachment_portal_return_view.is_some()`. The Cmd+Enter launcher-entry
-    /// guard calls this, so a single source of truth prevents it from drifting
-    /// against the portal snapshot fields. ScriptList-hosted spine portals are
-    /// tracked by `spine_mention_portal_segment` because the agent-chat
-    /// machine deliberately rejects `PortalOpened` while `Hidden`.
+    /// Whether File Search is open for the main-menu `@file` spine segment.
     pub(crate) fn is_in_attachment_portal(&self) -> bool {
-        self.agent_chat_surface_state.is_attachment_portal()
-            || self.spine_mention_portal_segment.is_some()
+        self.spine_mention_portal_segment.is_some()
     }
 
     /// Consume Script List Escape while an attachment portal owns the main surface.
@@ -370,216 +336,7 @@ impl ScriptListApp {
         }
     }
 
-    /// Open a full built-in view as an attachment portal. The user browses
-    /// files or clipboard entries; Enter attaches the selection back to the
-    /// Agent Chat chat, Escape cancels and returns.
-    pub(crate) fn open_attachment_portal(
-        &mut self,
-        kind: crate::ai::context_selector::types::ContextPortalKind,
-        cx: &mut Context<Self>,
-    ) {
-        use crate::ai::context_selector::types::ContextPortalKind;
-
-        // Prevent nesting — only one portal at a time.
-        if self.is_in_attachment_portal() {
-            tracing::warn!(
-                target: "script_kit::agent_chat",
-                event = "attachment_portal_nested_prevented",
-            );
-            return;
-        }
-
-        // Save the current view and focus target for restoration on return.
-        // The portal is always opened from AgentChatView, so ChatPrompt is correct.
-        self.attachment_portal_return_view = Some(self.current_view.clone());
-        self.attachment_portal_return_focus_target = Some(FocusTarget::ChatPrompt);
-        self.attachment_portal_return_width = crate::platform::get_main_window_bounds()
-            .map(|(_, _, width, _)| width as f32)
-            .filter(|width| width.is_finite() && *width > 0.0);
-        self.attachment_portal_host_snapshot = Some(self.capture_attachment_portal_host_snapshot());
-        self.active_attachment_portal_kind = Some(kind);
-        self.transition_agent_chat_surface(
-            crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalOpened { kind },
-        );
-
-        tracing::info!(
-            target: "script_kit::agent_chat",
-            event = "attachment_portal_opened",
-            kind = ?kind,
-            return_width = ?self.attachment_portal_return_width,
-        );
-
-        let portal_query = if let Some(AppView::AgentChatView { entity }) =
-            self.attachment_portal_return_view.as_ref()
-        {
-            entity.update(cx, |view, _cx| {
-                view.portal_query_for(kind).unwrap_or_default()
-            })
-        } else {
-            String::new()
-        };
-
-        tracing::info!(
-            target: "script_kit::agent_chat",
-            event = "attachment_portal_query_seeded_from_contract",
-            kind = ?kind,
-            query_sha256 = %crate::logging::log_private_user_value(&portal_query),
-            query_bytes = portal_query.len(),
-        );
-
-        tracing::info!(
-            target: "script_kit::agent_chat",
-            event = "attachment_portal_picker_query_resolved",
-            kind = ?kind,
-            query_sha256 = %crate::logging::log_private_user_value(&portal_query),
-            query_bytes = portal_query.len(),
-        );
-
-        if let Some(AppView::AgentChatView { entity }) = self.attachment_portal_return_view.as_ref()
-        {
-            let entity = entity.clone();
-            entity.update(cx, |view, cx| {
-                view.prepare_for_attachment_portal_open(cx);
-            });
-        }
-
-        match kind {
-            ContextPortalKind::FileSearch => {
-                self.open_file_search(portal_query, cx);
-            }
-            ContextPortalKind::BrowserHistory => {
-                cx.spawn(async move |this, cx| {
-                    let result = crate::browser_history::list_recent_history(500);
-                    this.update(cx, |this, cx| {
-                        if let Ok(entries) = result {
-                            this.cached_browser_history = entries;
-                            cx.notify();
-                        }
-                    })
-                    .ok();
-                })
-                .detach();
-
-                self.open_builtin_filterable_view_with_filter(
-                    AppView::BrowserHistoryView {
-                        filter: portal_query.clone(),
-                        selected_index: 0,
-                    },
-                    &portal_query,
-                    "Search browser history...",
-                    true,
-                    cx,
-                );
-            }
-            ContextPortalKind::BrowserTabs => {
-                cx.spawn(async move |this, cx| {
-                    let result = crate::browser_tabs::list_open_tabs();
-                    this.update(cx, |this, cx| {
-                        match result {
-                            Ok(tabs) => {
-                                this.cached_browser_tabs = tabs;
-                            }
-                            Err(error) => {
-                                tracing::warn!(
-                                    target: "script_kit::agent_chat",
-                                    event = "browser_tabs_portal_load_failed",
-                                    error = %error,
-                                );
-                                this.cached_browser_tabs.clear();
-                            }
-                        }
-                        cx.notify();
-                    })
-                    .ok();
-                })
-                .detach();
-
-                self.open_builtin_filterable_view_with_filter(
-                    AppView::BrowserTabsView {
-                        filter: portal_query.clone(),
-                        selected_index: 0,
-                    },
-                    &portal_query,
-                    "Search open browser tabs...",
-                    true,
-                    cx,
-                );
-            }
-            ContextPortalKind::ClipboardHistory => {
-                self.open_clipboard_history_surface_with_filter(portal_query.clone(), cx);
-            }
-            ContextPortalKind::DictationHistory => {
-                self.open_script_list_attachment_portal(
-                    kind,
-                    "",
-                    "Search dictation history...",
-                    cx,
-                );
-                self.one_window_open_dictation_history(cx);
-            }
-            ContextPortalKind::ScriptSearch => {
-                self.open_script_list_attachment_portal(
-                    kind,
-                    &portal_query,
-                    "Search scripts...",
-                    cx,
-                );
-            }
-            ContextPortalKind::ScriptletSearch => {
-                self.open_script_list_attachment_portal(
-                    kind,
-                    &portal_query,
-                    "Search scriptlets...",
-                    cx,
-                );
-            }
-            ContextPortalKind::SkillSearch => {
-                self.open_script_list_attachment_portal(
-                    kind,
-                    &portal_query,
-                    "Search skills...",
-                    cx,
-                );
-            }
-            ContextPortalKind::NotesBrowse => {
-                self.open_builtin_filterable_view_with_filter(
-                    AppView::NotesBrowseView {
-                        search: crate::notes::search_model::NoteSearchHostState::load(
-                            portal_query.clone(),
-                            crate::notes::search_model::NoteSearchDestination::AttachNote,
-                            &crate::notes::notes_brain_days_dir(),
-                        ),
-                    },
-                    &portal_query,
-                    "Search notes...",
-                    true,
-                    cx,
-                );
-            }
-            ContextPortalKind::AgentChatHistory => {
-                self.open_builtin_filterable_view_with_filter(
-                    AppView::AgentChatHistoryView {
-                        filter: portal_query.clone(),
-                        selected_index: 0,
-                    },
-                    &portal_query,
-                    "Search conversation history...",
-                    true,
-                    cx,
-                );
-            }
-            ContextPortalKind::Terminal => {
-                self.open_quick_terminal(None, cx);
-            }
-        }
-
-        self.record_attachment_portal_open_width();
-        cx.notify();
-    }
-
-    /// Close the attachment portal and attach the selected part: to the Agent
-    /// Chat chat for agent-chat-hosted portals, or as a resolved compact
-    /// `@file:` token for ScriptList-hosted spine portals.
+    /// Close the portal and resolve the `@file` spine segment to the picked file's compact token.
     pub(crate) fn close_attachment_portal_with_part(
         &mut self,
         part: crate::ai::message_parts::AiContextPart,
@@ -603,50 +360,18 @@ impl ScriptListApp {
 
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
 
-        // ScriptList-hosted spine portal: resolve the `@file` segment in the
-        // restored filter and skip the agent-chat surface transitions — the
-        // agent-chat machine never entered its portal state for this host.
         if let Some(segment_byte_range) = spine_segment {
             self.resolve_spine_mention_from_portal_part(segment_byte_range, &part, cx);
-            self.flush_pending_main_menu_query(cx);
-            cx.notify();
-            return;
-        }
-        // Drive the placement machine back to Embedded when the portal
-        // is returning to the chat view, otherwise Hidden — the portal
-        // can only have been opened from an embedded Agent Chat host, so
-        // EmbeddedOpened from a non-chat return means host state has
-        // drifted; downgrade to Hidden rather than a silent no-op.
-        self.transition_agent_chat_surface(
-            crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalClosed,
-        );
-        if !matches!(return_view, AppView::AgentChatView { .. }) {
-            self.transition_agent_chat_surface(
-                crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,
-            );
-        }
-
-        // Stage the context part with an inline @mention token.
-        // Uses the canonical token format so the mention sync system can track
-        // it — deleting characters from the mention removes the part.
-        if let AppView::AgentChatView { entity } = &return_view {
-            let entity = entity.clone();
-            entity.update(cx, |view, cx| {
-                view.resume_after_attachment_portal_close(cx);
-                view.attach_portal_part(part.clone(), cx);
-                cx.notify();
-            });
         }
         if matches!(self.current_view, AppView::ScriptList) {
             self.flush_pending_main_menu_query(cx);
         }
-
         cx.notify();
     }
 
     /// Close the attachment portal without attaching anything (Escape).
     pub(crate) fn close_attachment_portal_cancel(&mut self, cx: &mut Context<Self>) {
-        let spine_segment = self.spine_mention_portal_segment.take();
+        self.spine_mention_portal_segment = None;
         let portal_kind = self.active_attachment_portal_kind;
         let return_view = self
             .attachment_portal_return_view
@@ -670,33 +395,6 @@ impl ScriptListApp {
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
         if matches!(self.current_view, AppView::ScriptList) {
             self.flush_pending_main_menu_query(cx);
-        }
-
-        // ScriptList-hosted spine portal: the snapshot restore already put the
-        // pre-portal `@file` filter text back; no agent-chat surface
-        // transitions or entity hooks apply to this host.
-        if spine_segment.is_some() {
-            cx.notify();
-            return;
-        }
-        // Same split as the accept path: PortalClosed first (the
-        // default return lands back in Embedded), then EmbeddedClosed
-        // if the restored view is not the Agent Chat chat.
-        self.transition_agent_chat_surface(
-            crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::PortalClosed,
-        );
-        if !matches!(return_view, AppView::AgentChatView { .. }) {
-            self.transition_agent_chat_surface(
-                crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,
-            );
-        }
-
-        if let (Some(kind), AppView::AgentChatView { entity }) = (portal_kind, &return_view) {
-            let entity = entity.clone();
-            entity.update(cx, |view, cx| {
-                view.resume_after_attachment_portal_close(cx);
-                view.cancel_pending_portal_session(kind, cx);
-            });
         }
 
         cx.notify();
@@ -741,28 +439,6 @@ mod tests {
     }
 
     #[test]
-    fn attachment_portal_open_captures_return_width() {
-        let source = attachment_portal_source();
-
-        assert!(
-            source.contains(
-                "self.attachment_portal_return_width = crate::platform::get_main_window_bounds()"
-            ),
-            "portal open should capture the pre-portal main-window width"
-        );
-    }
-
-    #[test]
-    fn attachment_portal_cancel_clears_agent_chat_portal_session() {
-        let source = attachment_portal_source();
-
-        assert!(
-            source.contains("view.cancel_pending_portal_session(kind, cx);"),
-            "cancel should clear any staged Agent Chat portal session after restoring the host view"
-        );
-    }
-
-    #[test]
     fn attachment_portal_open_captures_host_snapshot() {
         let source = attachment_portal_source();
 
@@ -781,20 +457,6 @@ mod tests {
         assert!(
             source.contains("attachment_portal_width_restore_skipped_user_resize"),
             "restore should log when it preserves a manual resize instead of snapping back"
-        );
-    }
-
-    #[test]
-    fn attachment_portal_calls_agent_chat_prepare_and_resume_hooks() {
-        let source = attachment_portal_source();
-
-        assert!(
-            source.contains("view.prepare_for_attachment_portal_open(cx);"),
-            "portal open should let Agent Chat dismiss popup/setup surfaces before the host switch"
-        );
-        assert!(
-            source.contains("view.resume_after_attachment_portal_close(cx);"),
-            "portal close should notify Agent Chat after the host view is restored"
         );
     }
 }

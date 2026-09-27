@@ -2,13 +2,20 @@
 //! their keys, and the strip.
 
 use super::*;
-use crate::chat::{self, Chat, ChatKey};
+use crate::chat::{self, Chat};
 use crate::connect::{self, Connecting, Opener};
+use crate::past_chats::{self, PastChats};
 use crate::steps::{self, Steps, StepsKey};
 use crate::strip::{self, Task};
 use crate::work::{Work, WorkEffect, WorkEvent};
 
-const WORK_VIEWS: [&str; 4] = [chat::VIEW, steps::VIEW, connect::VIEW, strip::AGENT_VIEW];
+const WORK_VIEWS: [&str; 5] = [
+    chat::VIEW,
+    steps::VIEW,
+    connect::VIEW,
+    strip::AGENT_VIEW,
+    past_chats::VIEW,
+];
 
 impl OneWindow {
     pub fn work(&self) -> &Work {
@@ -166,12 +173,13 @@ impl OneWindow {
                 }
                 self.work.strip.end(&id).is_some()
             }
+            ev => self.on_chat_work(now, ev, fx),
         };
         self.sync_work_enter(now, user);
         taken
     }
 
-    fn with_chat(&mut self, f: impl FnOnce(&mut Chat)) -> bool {
+    pub(super) fn with_chat(&mut self, f: impl FnOnce(&mut Chat)) -> bool {
         match self.work.chat.as_mut() {
             Some(c) => {
                 f(c);
@@ -185,6 +193,10 @@ impl OneWindow {
     /// agent's view into the strip, ⌘J opens what needs you, and ⌘↵ with nothing typed asks the
     /// model.
     pub(super) fn work_key(&mut self, now: Ms, key: &Key, fx: &mut Vec<Effect>) -> Option<bool> {
+        if *key == Key::Escape && self.let_go_in_view() {
+            self.sync_work_enter(now, true);
+            return Some(true);
+        }
         if self.in_view() {
             let parks = *key == Key::Escape
                 && self.views.depth() == 1
@@ -239,6 +251,11 @@ impl OneWindow {
     /// Typing in a work view: new words for the steps read them again; the chat and agent say
     /// what Enter will send.
     pub(super) fn work_text(&mut self, now: Ms, fx: &mut Vec<Effect>) {
+        if self.views.top().is_some_and(|f| f.name == past_chats::VIEW) {
+            if let Some(p) = self.work.past.as_mut() {
+                p.filter(&self.text);
+            }
+        }
         if self.views.top().is_some_and(|f| f.name == steps::VIEW) {
             if let Some(s) = self.work.steps.as_mut() {
                 if s.edit(&self.text) {
@@ -291,6 +308,7 @@ impl OneWindow {
             },
             connect::VIEW => self.connect_key(now, key, fx),
             strip::AGENT_VIEW => self.agent_key(key, fx),
+            past_chats::VIEW => self.past_chats_key(key, fx),
             _ => false,
         }
     }
@@ -299,23 +317,17 @@ impl OneWindow {
         let Some(c) = self.work.chat.as_mut() else {
             return false;
         };
-        match key {
-            Key::Up | Key::Down => c.move_sel(key == Key::Down),
-            Key::Enter => match c.press_enter(&self.text) {
-                ChatKey::Nothing | ChatKey::Moved => false,
-                ChatKey::Ask(text) => {
-                    fx.push(Effect::Work(WorkEffect::AskModel { text }));
-                    self.clear_view_input(now, fx);
-                    true
-                }
-                ChatKey::Step(row) => {
-                    let reply = c.reply().unwrap_or_default().to_string();
-                    fx.push(Effect::Work(WorkEffect::ChatStep { row, reply }));
-                    true
-                }
-            },
-            _ => false,
-        }
+        let pressed = match key {
+            Key::Up | Key::Down => return c.move_sel(key == Key::Down),
+            Key::CmdK => {
+                c.toggle_acting();
+                return true;
+            }
+            Key::CmdDigit(2) => c.say_no(),
+            Key::Enter => c.press_enter(&self.text),
+            _ => return false,
+        };
+        self.chat_pressed(now, pressed, fx)
     }
 
     /// Enter in the steps view, or the Enter that waited for the steps to be read.
@@ -446,7 +458,7 @@ impl OneWindow {
         false
     }
 
-    fn clear_view_input(&mut self, _now: Ms, fx: &mut Vec<Effect>) {
+    pub(super) fn clear_view_input(&mut self, _now: Ms, fx: &mut Vec<Effect>) {
         if !self.text.is_empty() {
             fx.push(Effect::SetInput(String::new()));
             self.text.clear();
@@ -477,6 +489,7 @@ impl OneWindow {
                     .as_ref()
                     .map(|s| s.enter(&self.work.connections)),
                 connect::VIEW => self.work.connecting.as_ref().map(Connecting::enter),
+                past_chats::VIEW => self.work.past.as_ref().map(PastChats::enter),
                 _ => self
                     .work
                     .agent

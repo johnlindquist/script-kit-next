@@ -281,9 +281,8 @@ fn delete_preset_at(path: &Path, id: &str) -> Result<bool> {
 
 /// A saved AI preset resolved for application to the current Agent Chat surface.
 ///
-/// This is the handoff payload `AgentChatView::apply_preset_by_id` consumes:
-/// the preset's system prompt is staged in the composer and the preferred
-/// model is selected through the thread's model-picker mutation.
+/// The preset's system prompt is staged for the chat and its preferred model is
+/// selected through the thread's model-picker mutation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentChatPresetPlan {
     /// System prompt staged into the Agent Chat composer.

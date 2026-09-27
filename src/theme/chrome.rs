@@ -447,45 +447,6 @@ pub(crate) struct SemanticChipColors {
     pub text_hex: u32,
 }
 
-/// Danger (destructive/deny) action colors layered over the theme's
-/// `ui.error` color with the shared `DANGER_ACTION_*` alphas, so no surface
-/// hardcodes a danger hue.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct DangerActionColors {
-    pub rest_rgba: u32,
-    pub hover_rgba: u32,
-    pub border_rgba: u32,
-}
-
-impl DangerActionColors {
-    pub(crate) fn from_theme(theme: &Theme) -> Self {
-        let error = theme.colors.ui.error;
-        // GOV-003: the DANGER_ACTION_* constants are authored bytes typed
-        // `u32` in a forbidden owner (`src/ui/chrome/tokens.rs`); wrap them
-        // at THIS owned packing boundary with a range assert instead of
-        // truncating silently. Typing the constants themselves is an
-        // integration request.
-        let danger_alpha = |value: u32| -> crate::theme::AlphaByte {
-            assert!(value <= 0xFF, "danger action alpha out of byte range");
-            crate::theme::AlphaByte::authored(value as u8)
-        };
-        Self {
-            rest_rgba: crate::theme::alpha::pack_rgb_alpha(
-                error,
-                danger_alpha(crate::ui::chrome::DANGER_ACTION_REST_ALPHA),
-            ),
-            hover_rgba: crate::theme::alpha::pack_rgb_alpha(
-                error,
-                danger_alpha(crate::ui::chrome::DANGER_ACTION_HOVER_ALPHA),
-            ),
-            border_rgba: crate::theme::alpha::pack_rgb_alpha(
-                error,
-                danger_alpha(crate::ui::chrome::DANGER_ACTION_BORDER_ALPHA),
-            ),
-        }
-    }
-}
-
 impl AppChromeColors {
     /// Resolve contrast-safe chip colors for a given semantic base color.
     #[allow(dead_code)] // used by binary target (theme_chooser.rs)

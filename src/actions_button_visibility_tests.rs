@@ -268,10 +268,6 @@ mod tests {
 
         let run_arm = match_arm_body(dispatcher, "crate::footer_popup::FooterAction::Run =>");
         assert!(
-            run_arm.contains("try_run_ready_agent_chat_script"),
-            "FooterAction::Run must check for a ready Agent Chat script before falling back"
-        );
-        assert!(
             run_arm.contains("execute_selected"),
             "FooterAction::Run must fall back to execute_selected() for non-Agent Chat views"
         );
@@ -299,8 +295,8 @@ mod tests {
 
         let ai_arm = match_arm_body(dispatcher, "crate::footer_popup::FooterAction::Ai =>");
         assert!(
-            ai_arm.contains("open_tab_ai_agent_chat_with_entry_intent"),
-            "FooterAction::Ai must dispatch to open_tab_ai_agent_chat_with_entry_intent()"
+            ai_arm.contains("self.one_window_open_chat("),
+            "FooterAction::Ai must open the one chat under the main input"
         );
     }
 
@@ -440,7 +436,7 @@ mod tests {
             .find("match this.route_key_to_actions_dialog(")
             .expect("startup.rs must route popup-owned keys through route_key_to_actions_dialog()");
         let intent_pos = content[route_pos..]
-            .find("main_window_actions_key_intent(&this.current_view, event)")
+            .find("main_window_actions_key_intent(event)")
             .map(|offset| route_pos + offset)
             .expect("startup.rs must classify local actions key intent after popup routing");
         let intent_section = &content[intent_pos..content.len().min(intent_pos + 500)];

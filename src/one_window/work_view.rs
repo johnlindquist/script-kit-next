@@ -5,6 +5,7 @@
 use gpui::{div, prelude::*, px, rgb, rgba, AnyElement, Context, SharedString};
 use sk_one_window::chat::{self, Phase as ChatPhase, Who};
 use sk_one_window::connect::{self, Phase as ConnectPhase};
+use sk_one_window::past_chats;
 use sk_one_window::steps::{self, Phase as StepsPhase, StepState};
 use sk_one_window::strip::{self, TaskState};
 
@@ -39,6 +40,7 @@ impl ScriptListApp {
             chat::VIEW => self.one_window_chat_rows(&mut rows, colors, head_h),
             steps::VIEW => self.one_window_steps_rows(&mut rows, colors),
             connect::VIEW => self.one_window_connect_rows(&mut rows, colors, head_h),
+            past_chats::VIEW => self.one_window_past_chat_rows(&mut rows, colors, head_h),
             _ => self.one_window_agent_rows(&mut rows, colors),
         }
         let _ = cx;
@@ -113,8 +115,20 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    /// One turn of the chat: yours on the user-message surface, the model's tagged as its own.
-    fn one_window_turn(&self, who: Who, text: &str) -> AnyElement {
+    /// One turn of the chat: yours on the user-message surface with what went with it, the
+    /// model's tagged as its own, and a tool it ran as a row with how it went.
+    fn one_window_turn(&self, ix: usize, who: Who, text: &str, sub: Option<&str>) -> AnyElement {
+        if who == Who::Tool {
+            let colors = ListItemColors::from_theme(&self.theme);
+            return self.one_window_row(
+                format!("chat:tool:{ix}"),
+                text.to_string(),
+                sub.map(str::to_string),
+                "terminal",
+                false,
+                colors,
+            );
+        }
         let def = self.current_main_menu_theme.def();
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let colors = &self.theme.colors;
@@ -135,8 +149,16 @@ impl ScriptListApp {
                 .py(px(def.slot_line.gap_px))
                 .rounded(px(def.slot_line.gap_px * 2.0))
                 .bg(rgba(chrome.chat_user_message_surface_rgba))
+                .when_some(sub, |turn, sub| {
+                    turn.child(
+                        div()
+                            .text_size(px(def.slot_line.label_font_size))
+                            .text_color(rgb(colors.text.muted))
+                            .child(sub.to_string()),
+                    )
+                })
                 .into_any_element(),
-            Who::Model => turn
+            Who::Model | Who::Tool => turn
                 .child(
                     div()
                         .text_size(px(def.slot_line.label_font_size))
@@ -156,27 +178,71 @@ impl ScriptListApp {
         let Some(c) = self.one_window.chat() else {
             return;
         };
-        for t in &c.turns {
-            rows.push(self.one_window_turn(t.who, &t.text));
+        for (ix, t) in c.turns.iter().enumerate() {
+            rows.push(self.one_window_turn(ix, t.who, &t.text, t.sub.as_deref()));
         }
-        match &c.phase {
-            ChatPhase::Idle => rows.push(self.one_window_note("Say what to ask the model")),
-            ChatPhase::Writing => rows.push(self.one_window_note("The model is writing…")),
-            ChatPhase::Ranking => rows.push(self.one_window_note("Jev is reading the draft…")),
-            ChatPhase::Ready => {
-                rows.push(self.one_window_header(1, chat::NEXT_HEAD, colors, head_h));
-                for (i, row) in c.next.iter().enumerate() {
+        if let Some(asks) = c.asks.as_ref().filter(|_| c.acting.is_none()) {
+            rows.push(
+                self.one_window_note(format!("The model asks to {}", lower_first(&asks.title))),
+            );
+        } else if let Some(provider) = c.sign_in.as_ref().filter(|_| c.acting.is_none()) {
+            rows.push(self.one_window_note(format!(
+                "The model needs you to sign in to {provider} before it can answer"
+            )));
+        }
+        let (head, next) = c.rows();
+        match head {
+            Some(head) => {
+                rows.push(self.one_window_header(1, head, colors, head_h));
+                for (i, row) in next.iter().enumerate() {
                     rows.push(self.one_window_row(
                         format!("chat-next:{}", row.key),
                         row.title.clone(),
-                        None,
+                        row.sub.clone(),
                         row.icon.as_deref().unwrap_or("sparkles"),
                         i == c.sel,
                         colors,
                     ));
                 }
             }
-            ChatPhase::Failed(message) => rows.push(self.one_window_note(message.clone())),
+            None => match &c.phase {
+                ChatPhase::Idle if !c.with.is_empty() => {
+                    rows.push(self.one_window_note("Say what to ask about it"))
+                }
+                ChatPhase::Idle => rows.push(self.one_window_note("Say what to ask the model")),
+                ChatPhase::Writing => rows.push(self.one_window_note("The model is writing…")),
+                ChatPhase::Ranking => rows.push(self.one_window_note("Jev is reading the draft…")),
+                ChatPhase::Ready => {}
+                ChatPhase::Failed(message) => rows.push(self.one_window_note(message.clone())),
+            },
+        }
+    }
+
+    fn one_window_past_chat_rows(
+        &self,
+        rows: &mut Vec<AnyElement>,
+        colors: ListItemColors,
+        head_h: f32,
+    ) {
+        let Some(p) = self.one_window.past_chats() else {
+            return;
+        };
+        if p.staged.is_some() {
+            rows.push(self.one_window_header(1, p.head(), colors, head_h));
+        }
+        let listed = p.rows();
+        if listed.is_empty() {
+            rows.push(self.one_window_note(p.enter().label));
+        }
+        for (i, row) in listed.iter().enumerate() {
+            rows.push(self.one_window_row(
+                row.key.clone(),
+                row.title.clone(),
+                row.sub.clone(),
+                row.icon.as_deref().unwrap_or("message"),
+                i == p.sel,
+                colors,
+            ));
         }
     }
 
@@ -272,7 +338,7 @@ impl ScriptListApp {
             colors,
         ));
         if let Some(reply) = self.one_window_agent_reply(&task.id) {
-            rows.push(self.one_window_turn(Who::Model, reply));
+            rows.push(self.one_window_turn(0, Who::Model, reply, None));
         }
         rows.push(self.one_window_note("Esc keeps it working in the strip · ⌘J brings it back"));
     }
@@ -426,13 +492,28 @@ impl ScriptListApp {
             ),
             header(0, &self.one_window.views().crumb()),
         ];
-        if let Some(c) = self.one_window.chat() {
-            for (i, t) in c.turns.iter().enumerate() {
-                out.push(yours(format!("chat-turn:{i}"), i, &t.text, false));
+        if let Some(p) = self.one_window.past_chats() {
+            if p.staged.is_some() {
+                out.push(header(1, p.head()));
             }
-            if c.phase == ChatPhase::Ready {
-                out.push(header(1, chat::NEXT_HEAD));
-                for (i, row) in c.next.iter().enumerate() {
+            for (i, row) in p.rows().iter().enumerate() {
+                out.push(ElementInfo {
+                    role: Some("row".into()),
+                    ..product(row.key.clone(), i, &row.title, i == p.sel)
+                });
+            }
+        } else if let Some(c) = self.one_window.chat() {
+            for (i, t) in c.turns.iter().enumerate() {
+                let id = match t.who {
+                    Who::Tool => format!("chat:tool:{i}"),
+                    _ => format!("chat-turn:{i}"),
+                };
+                out.push(yours(id, i, &t.text, false));
+            }
+            let (head, next) = c.rows();
+            if let Some(head) = head {
+                out.push(header(1, head));
+                for (i, row) in next.iter().enumerate() {
                     out.push(product(
                         format!("chat-next:{}", row.key),
                         i,
@@ -468,5 +549,14 @@ impl ScriptListApp {
         let total = out.len();
         out.truncate(limit);
         (out, total)
+    }
+}
+
+/// "Run rm -rf build" → "run rm -rf build", to follow "The model asks to".
+fn lower_first(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_lowercase().chain(chars).collect(),
+        None => String::new(),
     }
 }

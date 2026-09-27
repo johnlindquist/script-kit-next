@@ -26,7 +26,6 @@ include!("ai_presets.rs");
 include!("settings.rs");
 include!("permissions_wizard.rs");
 include!("favorites.rs");
-include!("agent_chat_history.rs");
 include!("browser_history.rs");
 include!("notes_browse.rs");
 include!("sdk_reference.rs");

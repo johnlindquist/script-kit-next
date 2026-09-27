@@ -154,63 +154,6 @@ fn builtin_actions_dialog_uses_builtin_default_action_text() {
 }
 
 #[test]
-fn agent_chat_history_text_names_agent_chat_conversations() {
-    let entries = get_builtin_entries(&BuiltInConfig::default());
-    let agent_chat_history = entries
-        .iter()
-        .find(|entry| entry.id == "builtin/agent_chat-history")
-        .expect("agent_chat-history entry should exist");
-    let root_actions = super::read_source("src/app_impl/root_unified_result_actions.rs");
-    let group_header = super::read_source("src/app_render/group_header_item.rs");
-    let script_context_actions = super::read_source("src/actions/builders/script_context.rs");
-    let payload = super::read_source("src/menu_syntax/payload.rs");
-    let action_helpers = super::read_source("src/action_helpers.rs");
-    let focused_info = super::read_source("src/app_render/focused_info.rs");
-
-    assert_eq!(agent_chat_history.name, "Agent Chat History");
-    assert_eq!(
-        agent_chat_history.default_action_text(),
-        "Open Agent Chat History"
-    );
-    assert_eq!(
-        agent_chat_history.description,
-        "Browse and manage past Agent Chat conversations"
-    );
-    assert!(
-        root_actions.contains("Self::AgentChatHistory(_) => \"Agent Chat Conversations\""),
-        "root-unified Agent Chat history action context should name Agent Chat conversations"
-    );
-    assert!(
-        group_header.contains("BuiltInFeature::AgentChatHistory => \"Agent Chat History\""),
-        "Agent Chat history group header should match the visible command name"
-    );
-    assert!(
-        script_context_actions.contains("\"agent_chat_show_history\"")
-            && script_context_actions.contains("\"Agent Chat History\"")
-            && script_context_actions.contains("Browse and manage past Agent Chat conversations"),
-        "Agent Chat actions should not expose generic conversation-history text"
-    );
-    assert!(
-        payload.contains("label: \"Agent Chat Conversations\"")
-            && payload.contains("Self::Conversations => \"Agent Chat Conversations\"")
-            && action_helpers.contains("Cannot edit Agent Chat conversations"),
-        "source filters and disabled action text should name Agent Chat conversations"
-    );
-    // Formatting-insensitive: rustfmt may wrap the call, so assert the label
-    // and the indicator helper separately instead of pinning one line shape.
-    assert!(
-        focused_info.contains("\"Agent Chat Conversation\"")
-            && focused_info.contains("focused_info_type_indicator("),
-        "Agent Chat history info panel type indicator should name Agent Chat"
-    );
-    assert!(
-        !agent_chat_history.description.contains("AI conversations")
-            && !root_actions.contains("Self::AgentChatHistory(_) => \"AI Conversations\""),
-        "Agent Chat history text should not use generic AI conversation wording"
-    );
-}
-
-#[test]
 fn permission_assistant_commands_do_not_claim_to_grant_permissions() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
     let settings = super::read_source("src/render_builtins/settings.rs");

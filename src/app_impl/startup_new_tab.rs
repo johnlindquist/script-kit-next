@@ -15,13 +15,11 @@
                 // GLOBAL and fire for ALL windows.  Secondary windows own
                 // their own Tab/Cmd+Enter handling.
                 let is_notes = crate::notes::is_notes_window(window);
-                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-                if is_notes || is_detached_agent_chat {
+                if is_notes {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
                         is_notes,
-                        is_detached_agent_chat,
                     );
                     return;
                 }
@@ -83,7 +81,6 @@
                         app.update(cx, |this, cx| {
                             let owner = match &this.current_view {
                                 AppView::ScriptList => "script_list",
-                                AppView::AgentChatView { .. } => "embedded_agent_chat",
                                 AppView::QuickTerminalView { .. } => "quick_terminal",
                                 AppView::FileSearchView { .. } => "file_search",
                                 AppView::ChatPrompt { .. } => "chat_prompt",
@@ -259,34 +256,6 @@
                             // Shift+Tab is the documented Profile Switcher
                             // shortcut, so route it to the in-chat Profile picker
                             // via the window-aware entry point.
-                            if let AppView::AgentChatView { entity, .. } = &this.current_view {
-                                if has_shift {
-                                    cx.stop_propagation();
-                                    // Preserve the prior swallow when another popup
-                                    // already owns keyboard input — don't open the
-                                    // picker underneath the Actions dialog.
-                                    if this.show_actions_popup {
-                                        return;
-                                    }
-                                    tracing::info!(
-                                        target: "script_kit::keyboard",
-                                        event = "agent_chat_shift_tab_profile_switcher",
-                                        "Opening Agent Chat Profile picker from Shift+Tab"
-                                    );
-                                    let entity = entity.clone();
-                                    entity.update(cx, |chat, cx| {
-                                        chat.open_profile_trigger_picker_in_window(window, cx);
-                                    });
-                                    return;
-                                }
-                                let handled = entity.update(cx, |chat, cx| {
-                                    chat.handle_tab_key(false, window, cx)
-                                });
-                                if handled {
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                            }
 
                             // Forward Tab/Shift+Tab directly to the harness
                             // terminal PTY.  We must NOT call cx.propagate()
@@ -370,13 +339,6 @@
                                     );
                                     cx.stop_propagation();
                                     return;
-                                }
-                            }
-                            if let AppView::AgentChatView { entity, .. } = &this.current_view {
-                                let handled =
-                                    entity.update(cx, |chat, cx| chat.handle_enter_key(cx));
-                                if handled {
-                                    cx.stop_propagation();
                                 }
                             }
                         });

@@ -1219,61 +1219,6 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn close_tab_ai_harness_terminal_clears_session_and_rewarms() {
-        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
-        let start = source
-            .find("fn close_tab_ai_harness_terminal_impl(")
-            .expect("close_tab_ai_harness_terminal_impl should exist");
-        let rest = &source[start..];
-        // Scope to the next function definition so we only audit the close fn.
-        let end = rest
-            .find("pub(crate) fn close_tab_ai_harness_terminal_with_window(")
-            .expect("close wrappers should follow close impl");
-        let body = compact(&rest[..end]);
-
-        // Close must still invalidate capture + clear apply-back for both paths.
-        for needle in [
-            "self.tab_ai_harness_capture_generation+=1;",
-            "self.tab_ai_harness_apply_back_route=None;",
-        ] {
-            assert!(
-                body.contains(&compact(needle)),
-                "close_tab_ai_harness_terminal must contain: {needle}"
-            );
-        }
-
-        // PTY teardown + prewarm are now conditional on QuickTerminalView.
-        assert!(
-            body.contains(&compact("if closing_quick_terminal {")),
-            "close must branch PTY teardown on closing_quick_terminal"
-        );
-        assert!(
-            body.contains("terminate_tab_ai_harness_session"),
-            "close must delegate PTY teardown to terminate_tab_ai_harness_session"
-        );
-        assert!(
-            body.contains(&compact(
-                "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
-            )),
-            "close must queue a silent fresh prewarm for the PTY path"
-        );
-    }
-
-    #[test]
-    fn selection_fallback_send_to_ai_opens_agent_chat() {
-        let source = compact(include_str!("../../app_impl/selection_fallback.rs"));
-
-        assert!(
-            source.contains(&compact("FallbackResult::SendToAiHarness { query } =>")),
-            "selection fallback must handle the harness-native send-to-ai result"
-        );
-        assert!(
-            source.contains(&compact("self.open_tab_ai_agent_chat_with_entry_intent(")),
-            "send-to-ai fallback must route to Agent Chat chat"
-        );
-    }
-
-    #[test]
     fn builtin_execution_routes_generate_script_to_harness() {
         let source = compact(include_str!("../../app_execute/builtin_execution.rs"));
 
@@ -1284,9 +1229,7 @@ mod cleanup_contract_audits {
         // The generate path was refactored into `AiGenerateBuiltinAction`,
         // which derives an entry intent and submits it through the harness.
         assert!(
-            source.contains(&compact(
-                "self.open_tab_ai_chat_with_entry_intent(intent, cx);"
-            )),
+            source.contains(&compact("self.open_chat_about_current_view(intent, cx);")),
             "GenerateScript should submit through the harness"
         );
         assert!(
@@ -1477,7 +1420,7 @@ mod cleanup_contract_audits {
         );
         assert!(
             source.contains(&compact(
-                "self.open_tab_ai_chat_with_entry_intent_suppressing_focused_part(Some(query), cx);"
+                "self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::sending(query), cx);"
             )),
             "dispatch_ai_script_generation_from_query must route to the harness"
         );
@@ -1606,30 +1549,6 @@ mod cleanup_contract_audits {
         assert!(
             body.contains(&compact("self.ensure_tab_ai_harness_terminal(false, cx)")),
             "silent prewarm helper must never force-fresh kill an existing live session"
-        );
-    }
-
-    #[test]
-    fn tab_ai_close_path_reseeds_future_prewarm_contract() {
-        let source = include_str!("../../app_impl/agent_handoff/mod.rs");
-        let body = compact(&extract_fn_body(
-            source,
-            "fn close_tab_ai_harness_terminal_impl(",
-        ));
-        assert!(
-            body.contains("terminate_tab_ai_harness_session"),
-            "close path must delegate PTY session teardown"
-        );
-        assert!(
-            body.contains(&compact(
-                "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
-            )),
-            "close path must schedule a fresh prewarm for the next Tab press"
-        );
-        // Agent Chat close must NOT schedule prewarm.
-        assert!(
-            body.contains(&compact("if closing_quick_terminal {")),
-            "prewarm must be conditional on closing_quick_terminal"
         );
     }
 

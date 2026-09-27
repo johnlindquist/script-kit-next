@@ -118,12 +118,6 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
                         "FocusSurface(Notes) — notes window self-manages key status"
                     );
                 }
-                SurfaceId::DetachedAiChat => {
-                    tracing::debug!(
-                        category = "ORCHESTRATOR",
-                        "FocusSurface(DetachedAiChat) — chat window self-manages key status"
-                    );
-                }
                 SurfaceId::Main => {
                     crate::set_main_window_visible(true);
                     crate::platform::ensure_main_panel_configured(
@@ -132,19 +126,6 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
                     crate::platform::show_main_window_without_activation();
                 }
             }
-        }
-
-        // -----------------------------------------------------------------
-        // Detached Agent Chat Chat
-        // -----------------------------------------------------------------
-        WindowCommand::OpenDetachedAiChatWindow => {
-            if let Err(e) = crate::ai::agent_chat::ui::chat_window::open_chat_window(cx) {
-                tracing::warn!(category = "ORCHESTRATOR", error = %e, "Failed to open detached AI chat window");
-            }
-        }
-
-        WindowCommand::CloseDetachedAiChatWindow => {
-            crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
-        }
+        } // -----------------------------------------------------------------
     }
 }

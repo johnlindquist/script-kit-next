@@ -260,9 +260,6 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
         ActionsDialogHost::AppLauncher => "AppLauncher",
         ActionsDialogHost::BuiltinList => "BuiltinList",
         ActionsDialogHost::FlowDesk => "FlowDesk",
-        ActionsDialogHost::AgentChat => "AgentChat",
-        ActionsDialogHost::AgentChatHistory => "AgentChatHistory",
-        ActionsDialogHost::AgentChatDetached => "AgentChatDetached",
     }
 }
 
@@ -479,11 +476,6 @@ impl ScriptListApp {
             return true;
         }
 
-        if matches!(&self.current_view, AppView::AgentChatView { .. }) {
-            self.toggle_actions(cx, window);
-            return true;
-        }
-
         if let AppView::PathPrompt { entity, .. } = &self.current_view {
             let entity = entity.clone();
             entity.update(cx, |prompt, cx| {
@@ -610,101 +602,6 @@ impl ScriptListApp {
             // misleading launcher actions.
             let _ = self.has_actions();
 
-            let agent_chat_context = if let AppView::AgentChatView { ref entity } =
-                self.current_view
-            {
-                // Trigger a preflight `session/new` so the agent re-advertises its
-                // model catalog before we snapshot `available_models` for the
-                // Change Model drill-down. Fire-and-forget: this dialog opening
-                // uses whatever the thread has right now; subsequent openings pick
-                // up whatever the agent just advertised.
-                let thread_for_refresh =
-                    if let crate::ai::agent_chat::ui::AgentChatSession::Live(ref thread) =
-                        entity.read(cx).session
-                    {
-                        Some(thread.clone())
-                    } else {
-                        None
-                    };
-                if let Some(thread) = thread_for_refresh {
-                    thread.update(cx, |thread, cx| thread.refresh_models(cx));
-                }
-
-                let (
-                    selected_model_id,
-                    available_models,
-                    focused_text,
-                    focused_text_expanded,
-                    standing_approval_count,
-                    thread_summaries,
-                    fork_points,
-                    recovery_actions,
-                    command_facts,
-                ) = {
-                    let view = entity.read(cx);
-                    let focused_text = view.has_focused_text_context();
-                    let focused_text_expanded = view.focused_text_actions_expanded();
-                    let thread_summaries = view.retained_thread_summaries(cx);
-                    let recovery_actions = view.ai_recovery_actions(cx);
-                    match &view.session {
-                            crate::ai::agent_chat::ui::AgentChatSession::Setup(_) => (
-                                None,
-                                Vec::new(),
-                                focused_text,
-                                focused_text_expanded,
-                                0,
-                                thread_summaries,
-                                Vec::new(),
-                                Vec::new(),
-                                crate::components::conversation_actions::AgentChatConversationCommandFacts {
-                                    response_in_progress: false,
-                                    waiting_for_permission: false,
-                                    context_preparing: false,
-                                    composer_has_text: false,
-                                    retry_available: false,
-                                    has_response: false,
-                                    ..Default::default()
-                                },
-                            ),
-                            crate::ai::agent_chat::ui::AgentChatSession::Live(thread) => {
-                                let thread = thread.read(cx);
-                                (
-                                    thread.selected_model_id().map(str::to_string),
-                                    thread.available_models().to_vec(),
-                                    focused_text,
-                                    focused_text_expanded,
-                                    thread.standing_approvals().len(),
-                                    thread_summaries,
-                                    thread.fork_points().to_vec(),
-                                    recovery_actions,
-                                    view.conversation_command_facts(cx),
-                                )
-                            }
-                        }
-                };
-
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "agent_chat_actions_context_built",
-                    selected_model_id = ?selected_model_id,
-                    model_count = available_models.len(),
-                    focused_text,
-                );
-
-                Some((
-                    selected_model_id,
-                    available_models,
-                    focused_text,
-                    focused_text_expanded,
-                    standing_approval_count,
-                    thread_summaries,
-                    fork_points,
-                    recovery_actions,
-                    command_facts,
-                ))
-            } else {
-                None
-            };
             // Defensive guard for any explicit BuiltinList host path: its
             // selected_index belongs to that built-in list, not the script list
             // cache read by `get_focused_script_info`.
@@ -780,58 +677,15 @@ impl ScriptListApp {
             // Create the dialog entity HERE in main app (for keyboard routing)
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
-            let is_agent_chat_actions_dialog = agent_chat_context.is_some();
-            let agent_chat_actions_host = if self
-                .tab_ai_harness_return_view
-                .as_ref()
-                .is_some_and(|view| matches!(view, AppView::DayPage { .. }))
-            {
-                crate::actions::AgentChatActionsDialogHost::DayPage
-            } else {
-                crate::actions::AgentChatActionsDialogHost::Shared
-            };
             // Create the dialog entity
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
-                let mut dialog = if let Some((
-                    ref selected_model_id,
-                    ref available_models,
-                    focused_text,
-                    focused_text_expanded,
-                    standing_approval_count,
-                    ref thread_summaries,
-                    ref fork_points,
-                    ref recovery_actions,
-                    command_facts,
-                )) = agent_chat_context
-                {
-                    // Agent Chat chat view: use route-based dialog with drill-down model/profile pickers
-                    let mut dialog = ActionsDialog::with_agent_chat_for_host(
-                        focus_handle,
-                        std::sync::Arc::new(|_action_id| {}),
-                        crate::actions::AgentChatActionsDialogContext {
-                            available_models,
-                            selected_model_id: selected_model_id.as_deref(),
-                            focused_text,
-                            focused_text_expanded,
-                            standing_approval_count,
-                            thread_summaries,
-                            fork_points,
-                            command_facts,
-                        },
-                        std::sync::Arc::clone(&theme_arc),
-                        agent_chat_actions_host,
-                    );
-                    dialog.prepend_root_route_actions(recovery_actions.clone());
-                    dialog
-                } else {
-                    ActionsDialog::with_script(
-                        focus_handle,
-                        std::sync::Arc::new(|_action_id| {}),
-                        script_info.clone(),
-                        theme_arc,
-                    )
-                };
+                let mut dialog = ActionsDialog::with_script(
+                    focus_handle,
+                    std::sync::Arc::new(|_action_id| {}),
+                    script_info.clone(),
+                    theme_arc,
+                );
 
                 if let Some(route) = &brain_inbox_route {
                     dialog.prepend_root_route_actions(vec![crate::actions::Action::new(
@@ -869,24 +723,15 @@ impl ScriptListApp {
                 }
 
                 // If we have a scriptlet with actions, pass it to the dialog.
-                // Agent Chat owns its route stack and action source; script/global
-                // rebuild hooks would replace Change Agent/Model with launcher
-                // actions.
-                if !is_agent_chat_actions_dialog {
-                    if let Some(ref scriptlet) = focused_scriptlet {
-                        dialog.set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
-                    }
+                if let Some(ref scriptlet) = focused_scriptlet {
+                    dialog.set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
                 }
 
                 // Run 12 Pass 7 — wire the cmdk-actions Power Syntax section.
                 // The owned section was computed BEFORE entering this closure
-                // (can't borrow `self` inside `cx.new`); push it now. Agent Chat uses
-                // its own route-backed actions, so skip the generic script/global
-                // action rebuild there.
-                if !is_agent_chat_actions_dialog {
-                    dialog.set_menu_syntax_section(power_syntax_section_for_dialog.clone());
-                    dialog.set_host_section(day_page_section.clone());
-                }
+                // (can't borrow `self` inside `cx.new`); push it now.
+                dialog.set_menu_syntax_section(power_syntax_section_for_dialog.clone());
+                dialog.set_host_section(day_page_section.clone());
 
                 // Skip track_focus so the parent window keeps keyboard routing
                 // (matches command_bar.rs pattern)
@@ -906,21 +751,6 @@ impl ScriptListApp {
             self.one_window_stage_in_view(host, dialog, title, window, cx);
         }
         cx.notify();
-    }
-
-    pub(crate) fn persist_agent_model_picker_model(model_id: &str) {
-        let mut prefs = crate::config::load_user_preferences();
-        if prefs.ai.selected_model_id.as_deref() == Some(model_id) {
-            return;
-        }
-        prefs.ai.selected_model_id = Some(model_id.to_string());
-        let persisted = crate::config::save_user_preferences(&prefs).is_ok();
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "agent_model_picker_model_persisted",
-            model_id = %model_id,
-            persisted,
-        );
     }
 
     /// Resolve the persisted Agent Chat profile/model into footer display

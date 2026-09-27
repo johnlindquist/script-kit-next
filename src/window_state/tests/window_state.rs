@@ -189,7 +189,10 @@ mod tests {
             for (line_num, line) in content.lines().enumerate() {
                 let trimmed = line.trim();
                 // Skip comments
-                if trimmed.starts_with("//") || trimmed.starts_with("///") || trimmed.starts_with("*") {
+                if trimmed.starts_with("//")
+                    || trimmed.starts_with("///")
+                    || trimmed.starts_with("*")
+                {
                     continue;
                 }
                 // Match direct sync call but not the deferred wrapper
@@ -263,7 +266,7 @@ mod tests {
             .nth(1)
             .and_then(|body| body.split("\n    }").next())
             .expect("reset_to_script_list should exist in app_impl/registries_state.rs");
-        assert!(entry.contains("self.reset_to_script_list_impl(false, cx)"));
+        assert!(entry.contains("self.reset_to_script_list_impl(cx)"));
         let body = content
             .split("fn reset_to_script_list_impl(")
             .nth(1)
@@ -286,7 +289,7 @@ mod tests {
         );
     }
 
-    /// Verify close_and_reset_window records Notes/AI state for diagnostics.
+    /// Verify close_and_reset_window records Notes state for diagnostics.
     #[test]
     fn test_close_and_reset_window_checks_secondary_windows() {
         let content = read_source_file("app_impl/lifecycle_reset.rs");
@@ -298,13 +301,12 @@ mod tests {
             .expect("close_and_reset_window should exist");
         let prepare_body = &content[prepare_start..close_start];
         assert!(
-            prepare_body.contains("notes::is_notes_window_open()")
-                && prepare_body.contains("agent_chat_open"),
-            "the shared main-window close preparation must inspect Notes and Agent Chat window state"
+            prepare_body.contains("notes::is_notes_window_open()"),
+            "the shared main-window close preparation must inspect Notes window state"
         );
 
         let close_body = content[close_start..]
-            .split("/// Agent Chat's strict close barrier")
+            .split("\n    fn ")
             .next()
             .expect("close_and_reset_window body should have a boundary");
         assert!(
@@ -349,7 +351,12 @@ mod tests {
             .split("fn hide_main_window_helper")
             .nth(1)
             .and_then(|rest| rest.split("/// Handle window resize events").next())
-            .unwrap_or_else(|| visibility.split("fn hide_main_window_helper").nth(1).unwrap());
+            .unwrap_or_else(|| {
+                visibility
+                    .split("fn hide_main_window_helper")
+                    .nth(1)
+                    .unwrap()
+            });
         assert!(
             helper_chunk.contains("defer_calibrated_main_window_hide("),
             "shared hide helper must route through the shared calibrated main-only hide owner"
@@ -408,7 +415,8 @@ mod tests {
     #[test]
     fn test_simulate_key_escape_delegates_shared_plan_before_calibrated_hide() {
         let content = read_source_file("app_impl/simulate_key_dispatch.rs");
-        let anchor = "SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide";
+        let anchor =
+            "SimulateKey: Escape - close menu-syntax picker, clear filter, go back, or hide";
         let branch = content
             .split(anchor)
             .nth(1)
@@ -430,7 +438,10 @@ mod tests {
         let hide = branch
             .find("view.defer_calibrated_main_window_hide(")
             .expect("Escape dismissal must retain the calibrated main-only hide owner");
-        assert!(decision < hide, "shared escape handling must precede main-window hide");
+        assert!(
+            decision < hide,
+            "shared escape handling must precede main-window hide"
+        );
         assert!(
             branch.contains("MainWindowPostHide::PreserveState"),
             "simulated Escape must preserve the calibrated hide's post-hide state contract"

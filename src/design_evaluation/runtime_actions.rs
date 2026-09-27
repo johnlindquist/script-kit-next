@@ -1,12 +1,11 @@
 use super::conversation_fixtures as chat;
 use super::runtime::{Evaluator, Mounted, RootOwner, BATCH_STEP_REQUEST_ID_PREFIX};
 use crate::protocol::{
-    AgentChatFixtureCommand, AutomationTargetIdentitySnapshot, AutomationWindowTarget,
-    FixtureControl, FlowFixtureCommand, SdkChatFixtureCommand,
+    AutomationTargetIdentitySnapshot, AutomationWindowTarget, FixtureControl, FlowFixtureCommand,
+    SdkChatFixtureCommand,
 };
 use crate::AppView;
 use anyhow::{ensure, Context as _, Result};
-use gpui::Entity;
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -103,73 +102,6 @@ impl Evaluator {
         match control {
             FixtureControl::Search(command) => {
                 explicit_observation = Some(self.search_fixture_control(&mounted, command)?);
-            }
-            FixtureControl::AgentChat(command) => {
-                let view = self.agent_chat_owner(&mounted)?;
-                if let AgentChatFixtureCommand::MutateInputBeforePaint { text } = command {
-                    let before = self.identity(target)?;
-                    view.update(&mut **self.cx.app.borrow_mut(), |view, cx| {
-                        view.set_input(text, cx)
-                    });
-                    let after = self.identity(target)?;
-                    let request = crate::computer_use::runtime_bridge::ComputerUseCaptureRenderWindowRequest {
-                        target: target.clone(), expected: Some(before.clone()), hi_dpi: true,
-                        include_image: false, correlation_id: request_id.into(),
-                        probes: Vec::new(),
-                    };
-                    let capture = match crate::computer_use::gpui_runtime_bridge::capture_render_window_on_gpui_thread(&request, &mut self.cx.app.borrow_mut()) {
-                        Ok(snapshot) => serde_json::to_value(snapshot)?,
-                        Err(error) => json!({"errorCode":error.error_code()}),
-                    };
-                    explicit_observation =
-                        Some(json!({"before":before,"after":after,"oldCapture":capture,
-                        "owner":self.fixture_observation(&mounted)?}));
-                } else {
-                    let action = match command {
-                        AgentChatFixtureCommand::Submit { text } => {
-                            chat::AgentChatFixtureAction::Submit { text }
-                        }
-                        AgentChatFixtureCommand::Retry {} => chat::AgentChatFixtureAction::Retry,
-                        AgentChatFixtureCommand::Stop {} => chat::AgentChatFixtureAction::Stop,
-                        AgentChatFixtureCommand::EmitText {
-                            turn_generation,
-                            text,
-                        } => chat::AgentChatFixtureAction::EmitText {
-                            turn_generation,
-                            text,
-                        },
-                        AgentChatFixtureCommand::Complete { turn_generation } => {
-                            chat::AgentChatFixtureAction::Complete { turn_generation }
-                        }
-                        AgentChatFixtureCommand::Fail { turn_generation } => {
-                            chat::AgentChatFixtureAction::Fail { turn_generation }
-                        }
-                        AgentChatFixtureCommand::OpenHistory {} => {
-                            chat::AgentChatFixtureAction::OpenHistory
-                        }
-                        AgentChatFixtureCommand::OpenSlashPicker {} => {
-                            chat::AgentChatFixtureAction::OpenSlashPicker
-                        }
-                        AgentChatFixtureCommand::OpenProfilePicker {} => {
-                            chat::AgentChatFixtureAction::OpenProfilePicker
-                        }
-                        AgentChatFixtureCommand::HoldDrain {} => {
-                            chat::AgentChatFixtureAction::HoldDrain
-                        }
-                        AgentChatFixtureCommand::RetainDrain {} => {
-                            chat::AgentChatFixtureAction::RetainDrain
-                        }
-                        AgentChatFixtureCommand::ReleaseDrain { turn_generation } => {
-                            chat::AgentChatFixtureAction::ReleaseDrain { turn_generation }
-                        }
-                        AgentChatFixtureCommand::MutateInputBeforePaint { .. } => unreachable!(),
-                    };
-                    mounted
-                        .handle
-                        .update(&mut **self.cx.app.borrow_mut(), |_, window, cx| {
-                            chat::drive_agent_chat_fixture(&view, action, window, cx)
-                        })??;
-                }
             }
             FixtureControl::Notes(crate::protocol::NotesFixtureCommand::ToggleTask {
                 marker_start,
@@ -716,84 +648,5 @@ impl Evaluator {
             was_deferred: false,
             effect,
         })
-    }
-
-    pub(super) fn agent_chat_owner(
-        &self,
-        mounted: &Mounted,
-    ) -> Result<Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-        match &mounted.owner {
-            RootOwner::AgentChat(view) => Ok(view.clone()),
-            RootOwner::Main(main) => match &main.read(&self.cx.app.borrow()).current_view {
-                AppView::AgentChatView { entity } => Ok(entity.clone()),
-                _ => anyhow::bail!("agent_chat_not_mounted"),
-            },
-            _ => anyhow::bail!("agent_chat_host_required"),
-        }
-    }
-
-    pub(super) fn mount_auxiliary(
-        &mut self,
-        fixture_id: &str,
-        family: &str,
-        parent: Option<&AutomationWindowTarget>,
-    ) -> Result<Mounted> {
-        let mut parent = match parent {
-            Some(target) => self.resolve(target)?.clone(),
-            None => self.ensure_main()?,
-        };
-        if family == "agentChatPopup" {
-            if self.agent_chat_owner(&parent).is_err() {
-                let RootOwner::Main(main) = &parent.owner else {
-                    anyhow::bail!("agent_chat_popup_parent_required");
-                };
-                parent.handle.update(
-                    &mut **self.cx.app.borrow_mut(),
-                    |_, window, cx| -> Result<()> {
-                        let view = chat::create_agent_chat_fixture(
-                            "agent-chat.standard.populated",
-                            window,
-                            cx,
-                        )?;
-                        main.update(cx, |main, cx| {
-                            main.transition_current_view_and_rekey_main_automation_surface(
-                                AppView::AgentChatView { entity: view },
-                            );
-                            main.bind_owned_surface_revision_observers(cx);
-                            cx.notify();
-                        });
-                        Ok(())
-                    },
-                )??;
-            }
-            let view = self.agent_chat_owner(&parent)?;
-            parent
-                .handle
-                .update(&mut **self.cx.app.borrow_mut(), |_, window, cx| {
-                    chat::open_agent_chat_popup_fixture(fixture_id, &view, window, cx)
-                })??;
-            self.tick(true)?;
-            if fixture_id != "agent-chat.popup.history" {
-                parent.fixture_id = fixture_id.into();
-                return Ok(parent);
-            }
-            let info = crate::windows::list_automation_windows().into_iter().find(|info| {
-                info.parent_window_id.as_deref() == Some(&parent.info.id)
-                    && info.parent_window_generation == parent.info.generation
-                    && info.id == crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID
-            }).context("history_popup_registration_missing")?;
-            let handle = crate::windows::get_runtime_window_handle_for_generation(
-                &info.id,
-                info.generation.context("popup_generation_missing")?,
-            )
-            .context("popup_runtime_missing")?;
-            return Ok(Mounted {
-                fixture_id: fixture_id.into(),
-                info,
-                handle,
-                owner: RootOwner::ConversationPopup,
-            });
-        }
-        anyhow::bail!("unknown_auxiliary_family")
     }
 }

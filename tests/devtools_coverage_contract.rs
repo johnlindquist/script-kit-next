@@ -198,47 +198,6 @@ fn coverage_pins_dictation_states_media_and_privacy_boundaries() {
 }
 
 #[test]
-fn coverage_pins_focused_text_mini_agent_chat_and_missing_runtime_proof() {
-    for needle in [
-        "Focused-text mini Agent Chat",
-        "whole focused-field capture before main-window focus",
-        "main-window mini Agent Chat mode",
-        "prompt placeholder Edit, refine, ask...",
-        "Thinking... processing state",
-        "Replace, Append, Copy, and Chat actions",
-        "expanded same-session Agent Chat panel",
-        "Cue - N turns header",
-        "Stop and Retry controls",
-        "Agent Chat Pi Text profile executor",
-        "isolated focused-text Pi cwd",
-        "warm Pi session prepare/acquire/dismiss-reset",
-        "no Agent Chat backend fallback for focused-text mini",
-        "privacy-safe prompt and output logging",
-        "getAgentChatState(target main) uiVariant focused-text-mini",
-        "getAgentChatState(target main) redacted focusedText char count, capabilities, output-ready, and last-apply envelope",
-        "getElements(target main) focused-text-mini-root, focused-text-input, focused-text-preview semantic ids",
-        "getElements(target main) focused-text Replace, Append, Copy, Expand, Stop, Retry semantic action ids",
-        "openFocusedTextAgentChatWithMockData stdin fixture for mock focused text and deterministic Agent Chat output",
-        "openFocusedTextAgentChatWithPiData stdin fixture for real warm Pi Text-profile stream proof",
-        "TextEdit capture/replace/append receipts",
-        "native double-Command trigger delivery proof",
-        "src/app_impl/agent_handoff/focused_text_entry.rs",
-        "src/ai/agent_chat/ui/view.rs",
-        "src/ai/agent_chat/ui/ui_variant.rs",
-        "src/ai/focused_text/platform_bridge.rs",
-        "src/ai/agent_chat/launch.rs",
-        "src/ai/agent_chat/profiles.rs",
-        "src/platform/accessibility/focused_text.rs",
-        "src/app_layout/collect_elements.rs",
-    ] {
-        assert!(
-            COVERAGE.contains(needle),
-            "coverage CLI must keep focused-text mini Agent Chat coverage explicit: {needle}"
-        );
-    }
-}
-
-#[test]
 fn main_cli_reports_open_close_freshness_proof() {
     for needle in [
         "--prove-open-close-freshness",
@@ -371,8 +330,6 @@ fn coverage_source_files_exist_for_notes_and_dictation() {
         "src/dictation/device.rs",
         "src/dictation/transcription.rs",
         "src/main_entry/runtime_tray_hotkeys.rs",
-        "src/app_impl/agent_handoff/focused_text_entry.rs",
-        "src/ai/agent_chat/ui/view.rs",
         "src/ai/agent_chat/ui/ui_variant.rs",
         "src/ai/focused_text/platform_bridge.rs",
         "src/ai/agent_chat/launch.rs",

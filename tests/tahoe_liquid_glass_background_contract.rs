@@ -22,7 +22,6 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
     let ui_foundation = read_source("src/ui_foundation/mod.rs");
     let actions_dialog = read_source("src/actions/dialog.rs");
     let terminal_command_bar = read_source("src/terminal/command_bar_ui/render.rs");
-    let agent_chat_window = read_source("src/ai/agent_chat/ui/chat_window.rs");
     let file_search = read_source("src/file_search/mod.rs");
 
     assert!(
@@ -86,12 +85,6 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
         terminal_command_bar.contains("AppChromeColors::from_theme(&self.theme).popup_surface_rgba")
             && !terminal_command_bar.contains("let opacity = if self.theme.is_vibrancy_enabled()"),
         "Terminal command bar must share AppChromeColors popup_surface_rgba instead of hardcoded 0.50/0.95 alpha"
-    );
-    assert!(
-        agent_chat_window.contains("theme::get_cached_theme().is_vibrancy_enabled()")
-            && agent_chat_window.contains("WindowBackgroundAppearance::Opaque")
-            && agent_chat_window.contains("crate::platform::vibrancy_window_background()"),
-        "Detached Agent Chat window background appearance must honor vibrancy-disabled opaque mode"
     );
     assert!(
         file_search.contains("AppChromeColors::from_theme(&theme)")
@@ -214,94 +207,6 @@ fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
         assert!(
             platform.contains(needle),
             "standalone footer popup configuration/refresh must preserve marker: {needle}"
-        );
-    }
-}
-
-#[test]
-fn agent_chat_detached_chat_window_uses_default_vibrancy_native_backdrop_and_runtime_identity() {
-    let chat_window = read_source("src/ai/agent_chat/ui/chat_window.rs");
-    let platform = read_source("src/platform/secondary_window_config.rs");
-    let devtools_agent_chat = read_source("scripts/devtools/agent_chat.ts");
-
-    let options = chat_window
-        .split("fn chat_window_options(")
-        .nth(1)
-        .and_then(|tail| tail.split("pub fn open_chat_window(").next())
-        .expect("chat_window_options should be present");
-    for needle in [
-        "theme::get_cached_theme().is_vibrancy_enabled()",
-        "crate::platform::vibrancy_window_background()",
-        "gpui::WindowBackgroundAppearance::Opaque",
-        "kind: WindowKind::PopUp",
-    ] {
-        assert!(
-            options.contains(needle),
-            "Agent Chat detached chat options must preserve background/window marker: {needle}"
-        );
-    }
-
-    for needle in [
-        "AutomationWindowKind::AgentChatDetached",
-        "semantic_surface: Some(\"agentChatChat\".to_string())",
-    ] {
-        assert!(
-            chat_window.contains(needle),
-            "Agent Chat detached automation identity must preserve marker: {needle}"
-        );
-    }
-    assert!(
-        !chat_window.contains("surfaceKind: Some(\"AgentChat\""),
-        "Agent Chat detached runtime identity should use semanticSurface agentChatChat instead of inventing a surfaceKind field"
-    );
-
-    let placeholder = chat_window
-        .split("pub fn open_chat_window(")
-        .nth(1)
-        .and_then(|tail| tail.split("pub fn open_chat_window_with_thread(").next())
-        .expect("open_chat_window placeholder body should be present");
-    assert!(
-        placeholder.contains("upsert_agent_chat_detached_automation_window(&automation_id, automation_bounds);")
-            && placeholder.contains("configure_agent_chat_vibrancy(cx);"),
-        "Agent Chat detached placeholder fixture must configure native vibrancy/backdrop after automation registration"
-    );
-
-    let with_thread = chat_window
-        .split("pub fn open_chat_window_with_thread(")
-        .nth(1)
-        .and_then(|tail| {
-            tail.split("pub fn get_detached_agent_chat_view_entity(")
-                .next()
-        })
-        .expect("open_chat_window_with_thread body should be present");
-    assert!(
-        with_thread.contains("configure_agent_chat_vibrancy(cx);"),
-        "Agent Chat detached live-thread path must configure native vibrancy/backdrop"
-    );
-
-    for needle in [
-        "\"Script Kit Agent Chat\"",
-        "configure_secondary_window_vibrancy(",
-        "configure_window_vibrancy_common(",
-        "configure_tahoe_window_backdrop(window, log_target, window_name)",
-        "should_refresh_secondary_window_appearance(&title_string)",
-    ] {
-        assert!(
-            platform.contains(needle),
-            "Agent Chat detached native backdrop refresh path must preserve marker: {needle}"
-        );
-    }
-
-    for needle in [
-        "open-detached-placeholder",
-        "openAgentChatDetachedFixture",
-        "targets.inspect.agentChatDetached",
-        "AgentChat",
-        "providerRequired: false",
-    ] {
-        assert!(
-            devtools_agent_chat.contains(needle),
-            "Agent Chat DevTools opener must preserve no-provider detached placeholder marker: {needle}"
         );
     }
 }

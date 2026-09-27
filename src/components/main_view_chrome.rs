@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use crate::designs::{MainMenuSearchTokens, MainMenuThemeDef};
 
+#[allow(dead_code)] // The binary's main render tags its shell with this id.
 pub(crate) const MAIN_VIEW_SHELL_ID: &str = "main-view-shell";
 pub(crate) const MAIN_VIEW_INPUT_SHELL_ID: &str = "main-view-input-shell";
 pub(crate) const MAIN_VIEW_INPUT_BODY_ID: &str = "main-view-input-body";
@@ -199,6 +200,7 @@ impl SemanticChipSpec {
         })
     }
 
+    #[allow(dead_code)] // The binary's context chips build this chip.
     pub(crate) fn context_attachment(
         semantic_id: impl Into<SharedString>,
         label: impl Into<SharedString>,
@@ -293,6 +295,7 @@ pub(crate) struct MainViewContextZoneSpec {
 }
 
 impl MainViewContextZoneSpec {
+    #[allow(dead_code)] // The binary's context chips build this zone.
     pub(crate) fn try_new(
         leading_identity: SemanticChipSpec,
         context_attachment: Option<SemanticChipSpec>,
@@ -433,9 +436,6 @@ impl MainViewInputShellIds {
         shell: MAIN_VIEW_INPUT_SHELL_ID,
         body: MAIN_VIEW_INPUT_BODY_ID,
     };
-    pub(crate) const fn new(shell: &'static str, body: &'static str) -> Self {
-        Self { shell, body }
-    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PromptSearchInputKind {
@@ -827,6 +827,7 @@ pub(crate) struct MainViewColumnMetrics {
     pub(crate) top_inset_y: f32,
 }
 
+#[allow(dead_code)] // The binary's views render through this shell.
 pub(crate) fn render_main_view_shell() -> gpui::Stateful<gpui::Div> {
     div()
         .id(MAIN_VIEW_SHELL_ID)
@@ -1597,49 +1598,8 @@ pub(crate) fn render_main_view_text_plane(
         .child(content)
         .into_any_element()
 }
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct MainViewInputHorizontalMetrics {
-    pub(crate) shell_x: f32,
-    pub(crate) shell_width: f32,
-    pub(crate) text_inset_left: f32,
-    pub(crate) text_inset_right: f32,
-}
-impl MainViewInputHorizontalMetrics {
-    #[cfg(test)]
-    pub(crate) fn text_width_after_trailing(self, trailing_width: f32) -> f32 {
-        (self.shell_width - self.text_inset_left - self.text_inset_right - trailing_width).max(1.0)
-    }
-}
 pub(crate) fn main_view_input_text_inset_left(def: MainMenuThemeDef) -> f32 {
     def.search.text_inset_x
-}
-pub(crate) fn main_view_input_horizontal_metrics(
-    def: MainMenuThemeDef,
-    window_width: f32,
-) -> MainViewInputHorizontalMetrics {
-    let shell_x = def.shell.header_padding_x;
-    MainViewInputHorizontalMetrics {
-        shell_x,
-        shell_width: (window_width - shell_x * 2.0).max(0.0),
-        text_inset_left: main_view_input_text_inset_left(def),
-        text_inset_right: def.search.text_inset_x * 0.5,
-    }
-}
-pub(crate) fn render_main_view_input_slot(def: MainMenuThemeDef, input: AnyElement) -> AnyElement {
-    render_main_view_input_slot_with_inset_x(def.shell.header_padding_x, input)
-}
-
-pub(crate) fn render_main_view_input_slot_with_inset_x(
-    inset_x: f32,
-    input: AnyElement,
-) -> AnyElement {
-    div()
-        .w_full()
-        .px(px(inset_x))
-        .flex()
-        .items_center()
-        .child(input)
-        .into_any_element()
 }
 
 pub(crate) fn main_view_row_leading_x(def: MainMenuThemeDef) -> f32 {

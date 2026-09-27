@@ -55,7 +55,6 @@ fn kind_rank(kind: AutomationWindowKind) -> u8 {
     match kind {
         AutomationWindowKind::Main => 0,
         AutomationWindowKind::Notes => 1,
-        AutomationWindowKind::AgentChatDetached => 4,
         AutomationWindowKind::ActionsDialog => 7,
         AutomationWindowKind::PromptPopup => 8,
         AutomationWindowKind::SnapOverlay => 10,
@@ -753,35 +752,35 @@ pub(crate) mod tests {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
-        let mut agent_chat0 = make_info(&p, "agent_chat0", AutomationWindowKind::AgentChatDetached);
+        let mut agent_chat0 = make_info(&p, "agent_chat0", AutomationWindowKind::Notes);
         agent_chat0.title = Some("Agent Chat Thread 0".into());
         upsert_automation_window(agent_chat0);
 
-        let mut agent_chat1 = make_info(&p, "agent_chat1", AutomationWindowKind::AgentChatDetached);
+        let mut agent_chat1 = make_info(&p, "agent_chat1", AutomationWindowKind::Notes);
         agent_chat1.title = Some("Agent Chat Thread 1".into());
         upsert_automation_window(agent_chat1);
 
         // Kind without index → first
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::Notes,
             index: None,
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve kind index 0");
-        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::Notes);
 
         // Kind with index 1 → second
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::Notes,
             index: Some(1),
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve kind index 1");
-        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::Notes);
         // The two should have different IDs
         assert_ne!(
             resolve_automation_window(Some(&AutomationWindowTarget::Kind {
-                kind: AutomationWindowKind::AgentChatDetached,
+                kind: AutomationWindowKind::Notes,
                 index: Some(0),
             }))
             .expect("idx 0")
@@ -791,7 +790,7 @@ pub(crate) mod tests {
 
         // Kind with out-of-range index → error
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::Notes,
             index: Some(99),
         };
         assert!(resolve_automation_window(Some(&target)).is_err());
@@ -878,7 +877,7 @@ pub(crate) mod tests {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
-        let info = make_info(&p, "ai", AutomationWindowKind::AgentChatDetached);
+        let info = make_info(&p, "ai", AutomationWindowKind::Notes);
         upsert_automation_window(info);
 
         set_automation_visibility(&format!("{p}:ai"), false);
@@ -908,7 +907,7 @@ pub(crate) mod tests {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
-        let mut info = make_info(&p, "agent_chat", AutomationWindowKind::AgentChatDetached);
+        let mut info = make_info(&p, "agent_chat", AutomationWindowKind::Notes);
         info.title = Some(format!("{p} Script Kit Agent Chat"));
         upsert_automation_window(info);
 
@@ -917,7 +916,7 @@ pub(crate) mod tests {
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should match title substring");
-        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::Notes);
 
         // Non-matching title
         let target = AutomationWindowTarget::TitleContains {
@@ -974,7 +973,7 @@ pub(crate) mod tests {
 
         upsert_automation_window(make_info(&p, "main", AutomationWindowKind::Main));
         upsert_automation_window(make_info(&p, "notes", AutomationWindowKind::Notes));
-        upsert_automation_window(make_info(&p, "ai", AutomationWindowKind::AgentChatDetached));
+        upsert_automation_window(make_info(&p, "ai", AutomationWindowKind::Notes));
 
         let all = list_automation_windows();
         let our_windows: Vec<_> = all.iter().filter(|w| w.id.starts_with(&p)).collect();
@@ -1055,7 +1054,7 @@ pub(crate) mod tests {
     /// Proves that targeting a detached Agent Chat window resolves to a distinct
     /// window with its own ID and kind, suitable for screenshot routing.
     #[test]
-    fn targeted_capture_screenshot_routes_detached_agent_chat() {
+    fn targeted_capture_screenshot_routes_a_detached_window() {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
@@ -1064,11 +1063,7 @@ pub(crate) mod tests {
         main.focused = false;
         upsert_automation_window(main);
 
-        let mut agent_chat = make_info(
-            &p,
-            "agent_chat-thread-1",
-            AutomationWindowKind::AgentChatDetached,
-        );
+        let mut agent_chat = make_info(&p, "agent_chat-thread-1", AutomationWindowKind::Notes);
         agent_chat.title = Some("Script Kit Agent Chat".into());
         agent_chat.focused = true;
         agent_chat.semantic_surface = Some("agentChatChat".into());
@@ -1076,12 +1071,12 @@ pub(crate) mod tests {
 
         // Target by kind → Agent Chat
         let target = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::AgentChatDetached,
+            kind: AutomationWindowKind::Notes,
             index: Some(0),
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve detached Agent Chat");
-        assert_eq!(resolved.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved.kind, AutomationWindowKind::Notes);
         assert_eq!(resolved.title.as_deref(), Some("Script Kit Agent Chat"));
         // The screenshot function would use this title to find the OS window
         assert_ne!(
@@ -1096,7 +1091,7 @@ pub(crate) mod tests {
         };
         let resolved_by_id =
             resolve_automation_window(Some(&target_id)).expect("should resolve by ID");
-        assert_eq!(resolved_by_id.kind, AutomationWindowKind::AgentChatDetached);
+        assert_eq!(resolved_by_id.kind, AutomationWindowKind::Notes);
 
         remove_automation_window(&format!("{p}:main"));
         remove_automation_window(&format!("{p}:agent_chat-thread-1"));
@@ -1444,7 +1439,7 @@ pub(crate) mod tests {
         let _registry_guard = registry_guard();
         let p = test_prefix();
 
-        let mut agent_chat = make_info(&p, "agent_chat-1", AutomationWindowKind::AgentChatDetached);
+        let mut agent_chat = make_info(&p, "agent_chat-1", AutomationWindowKind::Notes);
         agent_chat.focused = true;
         upsert_automation_window(agent_chat);
 
@@ -1467,10 +1462,7 @@ pub(crate) mod tests {
             resolved.parent_window_id.as_deref(),
             Some(format!("{p}:agent_chat-1").as_str())
         );
-        assert_eq!(
-            resolved.parent_kind,
-            Some(AutomationWindowKind::AgentChatDetached)
-        );
+        assert_eq!(resolved.parent_kind, Some(AutomationWindowKind::Notes));
 
         remove_automation_window(&popup_id);
         remove_automation_window(&format!("{p}:agent_chat-1"));

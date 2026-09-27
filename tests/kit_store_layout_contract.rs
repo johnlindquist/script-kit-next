@@ -33,7 +33,7 @@ fn kit_store_custom_lists_use_liquid_glass_panel_radius() {
 #[test]
 fn kit_store_browse_layout_receipt_uses_shared_chrome_and_content_nodes() {
     for needle in [
-        "resolved_main_view_header_input_policy",
+        "main_view_header_input_policy()",
         "main_view_header_metrics(menu_def, input_height)",
         "MainViewHeader",
         "MainViewContextZone",

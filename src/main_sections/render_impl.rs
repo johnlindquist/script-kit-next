@@ -248,7 +248,6 @@ impl Render for ScriptListApp {
             if self.is_dismissable_view()
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
-                && !ai::agent_chat::ui::chat_window::is_chat_window_open()
                 && !crate::dictation::is_dictation_recording()
                 && self.tab_ai_save_offer_state.is_none()
                 && self.shortcut_recorder_state.is_none()
@@ -290,7 +289,7 @@ impl Render for ScriptListApp {
         // Focus is applied exactly once when pending_focus is set, then cleared.
         self.apply_pending_focus(window, cx);
 
-        self.sync_main_window_resize_lock(window, cx);
+        self.sync_main_window_resize_lock(window);
 
         // Sync filter input if needed (views that use shared input)
         if matches!(
@@ -311,7 +310,6 @@ impl Render for ScriptListApp {
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::FavoritesBrowseView { .. }
-                | AppView::AgentChatHistoryView { .. }
                 | AppView::BrowserHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::TipsView { .. }
@@ -344,7 +342,7 @@ impl Render for ScriptListApp {
         // The clone is unavoidable due to borrow checker: we need &mut self for render methods
         // but also need to match on self.current_view. Future optimization: refactor render
         // methods to take &str/&[T] references instead of owned values.
-        let view_owns_main_window_shell = self.current_view.uses_view_owned_main_window_shell(&*cx);
+        let view_owns_main_window_shell = self.current_view.uses_view_owned_main_window_shell();
         let current_view = self.current_view.clone();
         let main_window_modal_dim_active = false;
         let main_window_modal_dim_layer =
@@ -704,12 +702,6 @@ impl Render for ScriptListApp {
             } => self
                 .render_favorites_browse(filter, selected_index, cx)
                 .into_any_element(),
-            AppView::AgentChatHistoryView {
-                filter,
-                selected_index,
-            } => self
-                .render_agent_chat_history(filter, selected_index, cx)
-                .into_any_element(),
             AppView::BrowserHistoryView {
                 filter,
                 selected_index,
@@ -719,7 +711,6 @@ impl Render for ScriptListApp {
             AppView::NotesBrowseView { search } => self
                 .render_notes_browse_portal(search, cx)
                 .into_any_element(),
-            AppView::AgentChatView { entity } => entity.into_any_element(),
             AppView::DayPage { entity } => entity.into_any_element(),
         };
         let main_content = self.one_window_staged_view(main_content, cx);

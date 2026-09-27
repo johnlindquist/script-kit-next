@@ -6,9 +6,7 @@
 //! `ensure_dictation_delivery_target_available_for(target)`.
 
 const BUILTIN_EXECUTION_SOURCE: &str = include_str!("../src/app_execute/builtin_execution.rs");
-const BUILTINS_SOURCE: &str = include_str!("../src/builtins/mod.rs");
 const DICTATION_TYPES_SOURCE: &str = include_str!("../src/dictation/types.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 
 fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source
@@ -41,26 +39,6 @@ fn compact(source: &str) -> String {
 // =========================================================================
 // Built-in variant exists
 // =========================================================================
-
-#[test]
-fn dictation_to_ai_harness_variant_exists_in_builtin_feature() {
-    assert!(
-        BUILTINS_SOURCE.contains("DictationToAiHarness"),
-        "BuiltInFeature must include a DictationToAiHarness variant"
-    );
-}
-
-#[test]
-fn dictation_to_ai_harness_entry_registered() {
-    assert!(
-        BUILTINS_SOURCE.contains("builtin/dictation-to-ai"),
-        "A built-in entry with id 'builtin-dictation-to-ai' must be registered"
-    );
-    assert!(
-        BUILTINS_SOURCE.contains("Dictate to Agent Chat"),
-        "The entry must have a user-facing name 'Dictate to Agent Chat'"
-    );
-}
 
 // =========================================================================
 // Target override wiring
@@ -159,94 +137,6 @@ fn dictation_target_enum_has_tab_ai_harness_variant() {
 // =========================================================================
 // Dictation delivery handler routes TabAiHarness to Agent Chat entry intent
 // =========================================================================
-
-/// When dictation finishes with target=TabAiHarness, the transcript must
-/// open Agent Chat as the initial submitted prompt.
-#[test]
-fn dictation_transcript_delivery_routes_tab_ai_harness() {
-    let fn_start = BUILTIN_EXECUTION_SOURCE
-        .find("fn mutate_internal_dictation_request")
-        .expect("mutate_internal_dictation_request must exist");
-    let fn_body = &BUILTIN_EXECUTION_SOURCE[fn_start..];
-    let fn_end = fn_body[1..]
-        .find("\n    fn ")
-        .or_else(|| fn_body[1..].find("\n    pub"))
-        .unwrap_or(fn_body.len());
-    let fn_body = &fn_body[..fn_end];
-
-    assert!(
-        fn_body.contains("DictationTarget::TabAiHarness"),
-        "mutate_internal_dictation_request must have a TabAiHarness arm"
-    );
-    assert!(
-        fn_body.contains("dispatch_dictation_to_frozen_agent_chat"),
-        "TabAiHarness delivery must use the frozen thread policy and suppress launcher context"
-    );
-}
-
-#[test]
-fn tab_ai_harness_delivery_distinguishes_existing_and_fresh_policy() {
-    let fn_body = function_body(
-        BUILTIN_EXECUTION_SOURCE,
-        "fn mutate_internal_dictation_request",
-    );
-    let arm_start = fn_body
-        .find("DictationTarget::TabAiHarness => {")
-        .expect("mutate_internal_dictation_request must have a TabAiHarness arm");
-    let arm = &fn_body[arm_start..];
-    let arm_end = arm
-        .find("DictationTarget::DayPageToday")
-        .expect("TabAiHarness arm must be followed by Day Page");
-    let arm = &arm[..arm_end];
-
-    assert!(
-        arm.contains("FrozenAgentChatPolicy::ExistingThread")
-            && arm.contains("dispatch_dictation_to_frozen_agent_chat")
-            && arm.contains("false")
-            && arm.contains("true"),
-        "existing-thread delivery must stay on that thread while fresh delivery creates a new embedded thread"
-    );
-}
-
-#[test]
-fn tab_ai_harness_delivery_preserves_detached_agent_chat() {
-    let fn_body = function_body(
-        BUILTIN_EXECUTION_SOURCE,
-        "fn mutate_internal_dictation_request",
-    );
-    let arm_start = fn_body
-        .find("DictationTarget::TabAiHarness => {")
-        .expect("mutate_internal_dictation_request must have a TabAiHarness arm");
-    let arm = &fn_body[arm_start..];
-    let arm_end = arm
-        .find("DictationTarget::DayPageToday")
-        .expect("TabAiHarness arm must be followed by Day Page");
-    let arm = &arm[..arm_end];
-
-    assert!(
-        !arm.contains("close_chat_window") && !arm.contains("is_chat_window_open"),
-        "Agent Chat dictation must preserve the independent detached workspace"
-    );
-    assert!(
-        arm.contains("dispatch_dictation_to_frozen_agent_chat"),
-        "Agent Chat dictation must route through the exact existing/fresh host policy"
-    );
-}
-
-#[test]
-fn dictation_return_origin_helper_targets_script_list_main_filter() {
-    let helper = function_body(
-        TAB_AI_MODE_SOURCE,
-        "pub(crate) fn seed_agent_chat_dictation_return_origin",
-    );
-
-    assert!(
-        helper.contains("self.seed_agent_chat_return_origin_for_view(&AppView::ScriptList, cx)")
-            && helper.contains("self.tab_ai_harness_script_list_trigger = None")
-            && helper.contains("return_focus_target = \"MainFilter\""),
-        "Agent Chat dictation must use the shared ScriptList/MainFilter return owner and clear stale launcher trigger state"
-    );
-}
 
 // =========================================================================
 // Stop edge defaults to TabAiHarness (not ExternalApp) for this handler

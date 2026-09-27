@@ -14,16 +14,13 @@
                 // Keep main list arrow routing scoped to the main window so notes/AI/actions
                 // windows receive their own navigation key events.
                 let is_notes = crate::notes::is_notes_window(window);
-                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-                let skip_secondary = is_notes || is_detached_agent_chat;
+                let skip_secondary = is_notes;
                 if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "arrow_interceptor_skipped_secondary_window",
                         is_notes,
-                        is_detached_agent_chat,
                         skip_secondary,
-                        detached_agent_chat_explicit_skip = is_detached_agent_chat,
                     );
                     return;
                 }
@@ -431,51 +428,6 @@
                                     }
                                     cx.stop_propagation();
                                 }
-                                AppView::AgentChatHistoryView {
-                                    selected_index,
-                                    filter,
-                                } => {
-                                    let filtered_len = if filter.is_empty() {
-                                        crate::ai::agent_chat::ui::history::load_history().len()
-                                    } else {
-                                        let filter_lower = filter.to_lowercase();
-                                        crate::ai::agent_chat::ui::history::load_history()
-                                            .into_iter()
-                                            .filter(|entry| {
-                                                entry.first_message
-                                                    .to_lowercase()
-                                                    .contains(&filter_lower)
-                                                    || entry
-                                                        .timestamp
-                                                        .to_lowercase()
-                                                        .contains(&filter_lower)
-                                            })
-                                            .count()
-                                    };
-
-                                    if filtered_len == 0 {
-                                        *selected_index = 0;
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-
-                                    if *selected_index >= filtered_len {
-                                        *selected_index = filtered_len - 1;
-                                    }
-
-                                    if is_up && *selected_index > 0 {
-                                        *selected_index -= 1;
-                                        this.agent_chat_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    } else if is_down && *selected_index + 1 < filtered_len {
-                                        *selected_index += 1;
-                                        this.agent_chat_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    }
-                                    cx.stop_propagation();
-                                }
                                 AppView::BrowserHistoryView {
                                     selected_index,
                                     filter,
@@ -762,16 +714,13 @@
 
                 // Skip processing if this keystroke is from a secondary window.
                 let is_notes = crate::notes::is_notes_window(window);
-                let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
-                let skip_secondary = is_notes || is_detached_agent_chat;
+                let skip_secondary = is_notes;
                 if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "home_end_interceptor_skipped_secondary_window",
                         is_notes,
-                        is_detached_agent_chat,
                         skip_secondary,
-                        detached_agent_chat_explicit_skip = is_detached_agent_chat,
                     );
                     return;
                 }

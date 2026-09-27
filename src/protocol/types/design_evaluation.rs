@@ -204,29 +204,6 @@ pub struct FixtureDescriptor {
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
-pub enum AgentChatFixtureCommand {
-    Submit { text: String },
-    MutateInputBeforePaint { text: String },
-    Retry {},
-    Stop {},
-    HoldDrain {},
-    RetainDrain {},
-    ReleaseDrain { turn_generation: u64 },
-    EmitText { turn_generation: u64, text: String },
-    Complete { turn_generation: u64 },
-    Fail { turn_generation: u64 },
-    OpenHistory {},
-    OpenSlashPicker {},
-    OpenProfilePicker {},
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(
-    tag = "operation",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase",
-    deny_unknown_fields
-)]
 pub enum FlowFixtureCommand {
     Submit {
         session_id: u64,
@@ -528,7 +505,6 @@ pub struct ScheduledFrameRequirement {
     deny_unknown_fields
 )]
 pub enum FixtureControl {
-    AgentChat(AgentChatFixtureCommand),
     Flow(FlowFixtureCommand),
     SdkChat(SdkChatFixtureCommand),
     Notes(NotesFixtureCommand),

@@ -260,32 +260,6 @@ fn get_layout_info_actions_dialog_target_round_trip() {
 }
 
 #[test]
-fn get_layout_info_actions_dialog_routes_to_runtime_layout_model() {
-    let prompt_handler = include_str!("../../src/prompt_handler/mod.rs");
-    let actions_dialog = include_str!("../../src/actions/dialog.rs");
-
-    assert!(
-        prompt_handler.contains("AutomationWindowKind::ActionsDialog")
-            && prompt_handler.contains("automation_layout_info(&resolved)"),
-        "getLayoutInfo must route ActionsDialog targets to the live runtime layout model"
-    );
-    for needle in [
-        "pub(crate) fn automation_layout_info",
-        "ActionsDialog",
-        "ActionsSearchInput",
-        "ActionsList",
-        "ActionsRow[",
-        "ActionsShortcut[",
-        "runtime ActionsDialog row geometry",
-    ] {
-        assert!(
-            actions_dialog.contains(needle),
-            "ActionsDialog layout model must expose {needle}"
-        );
-    }
-}
-
-#[test]
 fn get_elements_with_actions_dialog_target_round_trip() {
     // getElements with an ActionsDialog target should parse correctly.
     let json = serde_json::json!({
@@ -386,16 +360,6 @@ fn actions_dialog_fallback_preserves_panel_only_warning() {
 }
 
 #[test]
-fn prompt_popup_collector_tries_known_popup_types() {
-    // The PromptPopup collector must try the history popup.
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("collect_history_popup_snapshot"),
-        "PromptPopup collector must try history popup"
-    );
-}
-
-#[test]
 fn prompt_popup_fallback_preserves_panel_only_warning() {
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
@@ -473,50 +437,6 @@ fn batch_actions_dialog_select_by_semantic_id_parses() {
     }
 }
 
-#[test]
-fn actions_dialog_batch_handler_has_direct_mutation_path() {
-    let source = include_str!("../../src/prompt_handler/mod.rs");
-    // Must have direct entity mutation, not raw key injection
-    assert!(
-        source.contains("dialog.set_search_text("),
-        "ActionsDialog batch must use direct set_search_text mutation, not key injection"
-    );
-    assert!(
-        source.contains("dialog.select_action_by_id("),
-        "ActionsDialog batch must use direct select_action_by_id mutation"
-    );
-    assert!(
-        source.contains("dialog.select_action_by_semantic_id("),
-        "ActionsDialog batch must use direct select_action_by_semantic_id mutation"
-    );
-}
-
-#[test]
-fn actions_dialog_batch_unsupported_commands_fail_closed_with_structured_error() {
-    let source = include_str!("../../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("UnsupportedCommand"),
-        "ActionsDialog batch must use UnsupportedCommand error code for rejected commands"
-    );
-    assert!(
-        source.contains("ActionsDialog batch supports:"),
-        "ActionsDialog batch error must list supported commands"
-    );
-}
-
-#[test]
-fn prompt_popup_batch_target_fails_closed() {
-    // PromptPopup should fail at resolve_automation_read_target (unsupported kind).
-    // This proves it does NOT silently fall back to raw key injection.
-    let source = include_str!("../../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains(
-            "supports Main, Ai, AgentChatDetached, Notes, ActionsDialog, and PromptPopup targets"
-        ),
-        "unsupported kind error message must list all supported targets including PromptPopup"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Attached popup parent identity contract tests
 // ---------------------------------------------------------------------------
@@ -559,49 +479,6 @@ fn actions_dialog_records_parent_identity_from_main() {
     );
     assert_eq!(resolved.parent_kind, Some(AutomationWindowKind::Main));
     cleanup(&p, &["main", "actions-parent"]);
-}
-
-#[test]
-fn actions_dialog_records_parent_identity_from_non_main_host() {
-    let p = prefix();
-    let agent_chat = AutomationWindowInfo {
-        id: format!("{p}:agent_chat"),
-        kind: AutomationWindowKind::AgentChatDetached,
-        title: Some("Agent Chat".into()),
-        focused: true,
-        visible: true,
-        semantic_surface: Some("agentChatChat".into()),
-        bounds: None,
-        parent_window_id: None,
-        parent_window_generation: None,
-        parent_kind: None,
-        pid: None,
-        generation: None,
-    };
-    script_kit_gpui::windows::upsert_automation_window(agent_chat);
-    script_kit_gpui::windows::register_attached_popup(
-        format!("{p}:agent_chat-actions"),
-        AutomationWindowKind::ActionsDialog,
-        Some("Actions".into()),
-        Some("actionsDialog".into()),
-        None,
-        Some(&format!("{p}:agent_chat")),
-    )
-    .expect("should register with Agent Chat parent");
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Id {
-            id: format!("{p}:agent_chat-actions"),
-        }))
-        .expect("should resolve");
-    assert_eq!(
-        resolved.parent_window_id.as_deref(),
-        Some(format!("{p}:agent_chat").as_str()),
-    );
-    assert_eq!(
-        resolved.parent_kind,
-        Some(AutomationWindowKind::AgentChatDetached)
-    );
-    cleanup(&p, &["agent_chat", "agent_chat-actions"]);
 }
 
 #[test]
@@ -723,23 +600,6 @@ fn notes_collector_never_returns_non_main_pending_warning() {
 }
 
 #[test]
-fn supported_non_main_kinds_all_have_panel_only_fallbacks() {
-    // Every supported non-main kind must have a panel_only fallback, not None.
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    for (kind, expected_warning) in [
-        ("Notes", "panel_only_notes"),
-        ("AgentChatDetached", "panel_only_agent_chat_detached"),
-        ("ActionsDialog", "panel_only_actions_dialog"),
-        ("PromptPopup", "panel_only_prompt_popup"),
-    ] {
-        assert!(
-            source.contains(&format!("\"{expected_warning}\"")),
-            "{kind} must define {expected_warning} fallback warning"
-        );
-    }
-}
-
-#[test]
 fn actions_dialog_inspect_result_with_panel_only_quality() {
     let snapshot = AutomationInspectSnapshot {
         schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
@@ -795,6 +655,7 @@ fn prompt_popup_inspect_result_with_full_quality() {
             element_type: script_kit_gpui::protocol::ElementType::Button,
             text: Some("Confirm".into()),
             value: Some("confirm".into()),
+            content: None,
             selected: None,
             focused: Some(true),
             index: Some(0),

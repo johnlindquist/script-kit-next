@@ -4,14 +4,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{ensure, Context as _, Result};
 use gpui::{
-    div, img, point, prelude::*, px, size, svg, App, Bounds, Context, Entity, IntoElement, Render,
-    Window, WindowBounds, WindowHandle, WindowKind,
+    div, img, point, prelude::*, px, size, svg, Bounds, Context, IntoElement, Render, Window,
+    WindowBounds, WindowHandle, WindowKind,
 };
 use serde_json::{json, Value};
 
 use super::runtime::{Evaluator, Mounted};
-use crate::ai::agent_chat::ui::components::setup_card::AgentChatSetupCard;
-use crate::ai::agent_chat::ui::setup_state::{AgentChatInlineSetupState, AgentChatSetupAction};
 use crate::computer_use::gpui_runtime_bridge::{
     capture_render_window_on_gpui_thread, forget_owned_render_frame,
 };
@@ -24,18 +22,21 @@ use crate::runtime_policy::WindowHostPolicy;
 
 const MISSING_IMAGE: &str = "__owned_negative_only_missing_required_image__.png";
 const MISSING_SVG: &str = "__owned_negative_only_missing_required_svg__.svg";
+const DUPLICATE_IDENTITY: &str = "negative-only-duplicate-identity";
 
-/// Uses actual GPUI assets and production setup cards/buttons, with deliberately
-/// invalid inputs/composition. Never registered in the production target catalogue.
+/// Uses actual GPUI assets and production list rows, with deliberately invalid
+/// inputs/composition. Never registered in the production target catalogue.
 enum NegativeRoot {
     MissingImage,
     MissingSvg,
     OversizedImage(std::sync::Arc<gpui::RenderImage>),
-    Cards(Vec<Entity<AgentChatSetupCard>>),
+    /// Two real list rows that deliberately share one semantic and measurement identity.
+    DuplicateRows,
+    Empty,
 }
 
 impl NegativeRoot {
-    fn new(probe: NativeSafetyProbe, cx: &mut App) -> Self {
+    fn new(probe: NativeSafetyProbe) -> Self {
         match probe {
             NativeSafetyProbe::MissingRequiredImage => Self::MissingImage,
             NativeSafetyProbe::MissingRequiredSvg => Self::MissingSvg,
@@ -47,25 +48,8 @@ impl NegativeRoot {
                 )))
             }
             NativeSafetyProbe::DuplicateSemanticIdentity
-            | NativeSafetyProbe::DuplicateMeasurementIdentity => Self::Cards(
-                (0..2)
-                    .map(|_| {
-                        cx.new(|cx| {
-                            AgentChatSetupCard::new(AgentChatInlineSetupState {
-                reason_code: "negative_only_duplicate_identity",
-                title: "Negative-only identity fixture".into(),
-                body: "Two real setup cards deliberately share control identities.".into(),
-                primary_action: AgentChatSetupAction::Retry,
-                secondary_action: None,
-                selected_agent: None,
-                catalog_entries: Vec::new(),
-                launch_requirements: Default::default(),
-            }, None, cx)
-                        })
-                    })
-                    .collect(),
-            ),
-            _ => Self::Cards(Vec::new()),
+            | NativeSafetyProbe::DuplicateMeasurementIdentity => Self::DuplicateRows,
+            _ => Self::Empty,
         }
     }
 }
@@ -87,7 +71,22 @@ impl Render for NegativeRoot {
                     .h(px(48.)),
             ),
             Self::OversizedImage(image) => root.child(img(image.clone()).w(px(48.)).h(px(48.))),
-            Self::Cards(cards) => root.children(cards.iter().cloned()),
+            Self::DuplicateRows => {
+                let colors =
+                    crate::list_item::ListItemColors::from_theme(&crate::theme::get_cached_theme());
+                root.children((0..2).map(|_| {
+                    div()
+                        .debug_selector(|| DUPLICATE_IDENTITY.to_string())
+                        .child(
+                            crate::list_item::ListItem::new(
+                                "Negative-only identity fixture",
+                                colors,
+                            )
+                            .semantic_id(DUPLICATE_IDENTITY.to_string()),
+                        )
+                }))
+            }
+            Self::Empty => root,
         }
     }
 }
@@ -549,7 +548,7 @@ impl Evaluator {
         let opened = self
             .cx
             .open_owned_hidden_window_fallible(options, |window, cx| {
-                let view = cx.new(|cx| NegativeRoot::new(probe, cx));
+                let view = cx.new(|_| NegativeRoot::new(probe));
                 root = Some(view.clone());
                 Ok(cx.new(|cx| gpui_component::Root::new(view, window, cx)))
             });
@@ -588,8 +587,10 @@ impl Evaluator {
                         };
                         crate::windows::automation_surface_collector::append_window_paint_measurements(&mut layout, window);
                         let elements: Vec<_> = match root.read(cx) {
-                            NegativeRoot::Cards(cards) => cards.iter()
-                                .flat_map(|card| card.read(cx).collect_semantic_elements()).collect(),
+                            NegativeRoot::DuplicateRows => (0..2).map(|ix| crate::protocol::ElementInfo {
+                                semantic_id: DUPLICATE_IDENTITY.into(),
+                                ..crate::protocol::ElementInfo::product_static_choice(ix, "Negative-only identity fixture", DUPLICATE_IDENTITY, false)
+                            }).collect(),
                             _ => Vec::new(),
                         };
                         let fault_image = if let NegativeRoot::OversizedImage(image) = root.read(cx) {

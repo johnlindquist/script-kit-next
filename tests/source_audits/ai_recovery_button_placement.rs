@@ -64,31 +64,3 @@ fn the_card_no_longer_takes_action_handlers() {
          must not be able to reach an action handler at all."
     );
 }
-
-#[test]
-fn every_surface_that_shows_a_card_also_mounts_its_actions() {
-    // The dangerous half of this change: if a surface renders the (now
-    // action-free) card without mounting the plan, its recovery actions become
-    // unreachable — and nothing turns red, because an error card that shows
-    // the right message still looks correct.
-    for surface in [
-        "src/ai/agent_chat/ui/view.rs",
-        "src/prompts/chat/render_turns.rs",
-        "src/render_builtins/flow_ux.rs",
-    ] {
-        let source = read(surface);
-        if !source.contains("render_ai_recovery_card(") {
-            continue;
-        }
-        assert!(
-            source.contains("plan_recovery_presentation("),
-            "{surface} renders the recovery card but never plans its actions, \
-             so its Retry and Copy details are unreachable"
-        );
-        assert!(
-            source.contains("render_ai_recovery_footer("),
-            "{surface} plans recovery actions but never mounts the footer that \
-             shows them"
-        );
-    }
-}

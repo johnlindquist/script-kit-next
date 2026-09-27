@@ -32,7 +32,6 @@ pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
         "main.permissions-wizard",
         "main.favorites-browse",
         "main.current-app-commands",
-        "main.agent-chat-history",
         "main.browser-history",
         "main.notes-browse",
         "main.notes-browse-no-match",
@@ -95,23 +94,6 @@ pub(crate) const DAY_PAGE_FIXTURE_IDS: &[&str] = &[
     "day-page.switcher",
 ];
 
-pub(crate) const AGENT_CHAT_FIXTURE_IDS: &[&str] = &[
-    "agent-chat.standard.empty",
-    "agent-chat.standard.populated",
-    "agent-chat.user-bold.awaiting-first-text",
-    "agent-chat.role-split.streaming",
-    "agent-chat.bottom-dock.stopped",
-    "agent-chat.dense-log.retryable-failure",
-    "agent-chat.sidecar.permission-pending",
-    "agent-chat.focused-text-mini.populated",
-    "agent-chat.quick-ai.empty",
-    "agent-chat.standard.queued",
-    "agent-chat.standard.picker-open",
-    "agent-chat.initial-setup",
-    "agent-chat.runtime-setup",
-    "agent-chat.detached.retryable-failure",
-];
-
 pub(crate) const FLOW_FIXTURE_IDS: &[&str] = &[
     "flow.desk.flash",
     "flow.desk.dispatch",
@@ -125,12 +107,6 @@ pub(crate) const SDK_CHAT_FIXTURE_IDS: &[&str] = &[
     "sdk-chat.retryable-failure",
 ];
 
-pub(crate) const AGENT_CHAT_POPUP_FIXTURE_IDS: &[&str] = &[
-    "agent-chat.popup.history",
-    "agent-chat.popup.slash",
-    "agent-chat.popup.profile",
-];
-
 pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &["secondary.snap"];
 
 pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
@@ -142,9 +118,7 @@ pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
         .chain(NOTES_FIXTURE_IDS.iter().copied())
         .chain(NOTES_AUXILIARY_FIXTURE_IDS.iter().copied())
         .chain(DAY_PAGE_FIXTURE_IDS.iter().copied())
-        .chain(AGENT_CHAT_FIXTURE_IDS.iter().copied())
         .chain(FLOW_FIXTURE_IDS.iter().copied())
         .chain(SDK_CHAT_FIXTURE_IDS.iter().copied())
-        .chain(AGENT_CHAT_POPUP_FIXTURE_IDS.iter().copied())
         .chain(SECONDARY_FIXTURE_IDS.iter().copied())
 }

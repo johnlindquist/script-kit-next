@@ -123,10 +123,7 @@ pub(crate) use info_state::{
     InfoTextMetric, InfoTonePresentation, InfoTypeScale, INFO_SPACING, INFO_TYPE_SCALE,
 };
 #[allow(unused_imports)]
-pub(crate) use inline_dropdown::{
-    inline_dropdown_clamp_selected_index, inline_dropdown_visible_range,
-    inline_dropdown_visible_range_from_start, InlineDropdownColors,
-};
+pub(crate) use inline_dropdown::{inline_dropdown_visible_range_from_start, InlineDropdownColors};
 #[allow(unused_imports)]
 pub use inline_prompt_input::InlinePromptInput;
 #[allow(unused_imports)]

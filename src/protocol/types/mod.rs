@@ -70,20 +70,19 @@ pub use batch_wait::{
     WaitNamedCondition, WaitPollObservation, TRANSACTION_TRACE_SCHEMA_VERSION,
 };
 pub use chat::{ChatMessagePosition, ChatMessageRole, ChatPromptConfig, ChatPromptMessage};
-#[cfg(any(test, feature = "owned-ui-evaluation"))]
-pub use design_evaluation::{
-    AgentChatFixtureCommand, DesignCommand, EvaluationLimits, FixtureControl, FixtureDescriptor,
-    FlowFixtureCommand, NativeSafetyProbe, NotesFixtureCommand, ObservedEffect,
-    OneWindowFixtureCommand, OneWindowTalkDestination, OwnedFileSearchPreviewCondition,
-    OwnedFileSearchStreamCondition, OwnedFrameCursor, OwnedResponseCodec, OwnedResponseEncoding,
-    OwnedRuntimeIdentity, OwnedSearchProviderCondition, OwnedSearchProviderSource,
-    OwnedSearchQueryStamp, ScheduledFrameRequirement, ScopedActionReceipt, SdkChatFixtureCommand,
-    SdkCompletionChannel, SdkPromptCommand, SdkPromptFixtureId, SearchFixtureCommand,
-    ThemeFaultOperation, ThemeFixtureCommand, OWNED_RESPONSE_CODEC,
-};
 pub use design_evaluation::{
     CompletedFrameIdentity, LiveThemeEdit, ThemeInvalidation, ThemeInvalidationCause,
     MAX_LIVE_THEME_EDITS, OWNED_EVALUATION_LIMITS,
+};
+#[cfg(any(test, feature = "owned-ui-evaluation"))]
+pub use design_evaluation::{
+    DesignCommand, EvaluationLimits, FixtureControl, FixtureDescriptor, FlowFixtureCommand,
+    NativeSafetyProbe, NotesFixtureCommand, ObservedEffect, OneWindowFixtureCommand,
+    OneWindowTalkDestination, OwnedFileSearchPreviewCondition, OwnedFileSearchStreamCondition,
+    OwnedFrameCursor, OwnedResponseEncoding, OwnedRuntimeIdentity, OwnedSearchProviderCondition,
+    OwnedSearchQueryStamp, ScheduledFrameRequirement, ScopedActionReceipt, SdkChatFixtureCommand,
+    SdkCompletionChannel, SdkPromptCommand, SdkPromptFixtureId, SearchFixtureCommand,
+    ThemeFaultOperation, ThemeFixtureCommand, OWNED_RESPONSE_CODEC,
 };
 pub use elements_actions_scriptlets::{
     ConversationSemanticAction, ConversationSemanticRole, ElementContentDescriptor,

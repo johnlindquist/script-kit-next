@@ -76,10 +76,8 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "settings",
             AppView::PermissionsWizardView { .. } => "permissionsWizard",
             AppView::FavoritesBrowseView { .. } => "favoritesBrowse",
-            AppView::AgentChatHistoryView { .. } => "agent_chatHistory",
             AppView::BrowserHistoryView { .. } => "browserHistory",
             AppView::NotesBrowseView { .. } => "notesBrowse",
-            AppView::AgentChatView { .. } => "agentChatChat",
             AppView::DayPage { .. } => "dayPage",
             AppView::ScriptIssuesView { .. } => "scriptIssues",
             AppView::SdkReferenceView { .. } => "sdkReference",
@@ -158,80 +156,12 @@ impl ScriptListApp {
         // Layout constants (same as build_component_bounds)
         use crate::ui::chrome as chrome_tokens;
         const BUTTON_HEIGHT: f32 = 28.0;
-        let header_policy = self
-            .current_view
-            .resolved_main_view_header_input_policy(&*cx);
-        if header_policy == MainViewHeaderInputPolicy::ViewOwnedIntentionalCompact {
-            let AppView::AgentChatView { entity } = &self.current_view else {
-                unreachable!("Focused Text Mini is the only intentional compact main-window view")
-            };
-            let entity = entity.clone();
-            let target = protocol::AutomationWindowInfo {
-                id: "main".to_string(),
-                kind: protocol::AutomationWindowKind::Main,
-                title: None,
-                focused: true,
-                visible: true,
-                semantic_surface: Some("FocusedTextMini".to_string()),
-                bounds: Some(protocol::AutomationWindowBounds {
-                    x: 0.0,
-                    y: 0.0,
-                    width: window_width as f64,
-                    height: window_height as f64,
-                }),
-                parent_window_id: None,
-                parent_window_generation: None,
-                parent_kind: None,
-                pid: None,
-                generation: None,
-            };
-            return entity.read(cx).automation_layout_info(&target, &*cx);
-        }
+        let header_policy = self.current_view.main_view_header_input_policy();
         let shell_horizontal_padding = shell.header_padding_x;
         let input_height = match header_policy {
             MainViewHeaderInputPolicy::ViewOwnedCanonicalInput => Some(search.height),
-            MainViewHeaderInputPolicy::ViewOwnedCanonicalMultilineInput => {
-                let AppView::AgentChatView { entity } = &self.current_view else {
-                    unreachable!("canonical multiline main input is owned only by Agent Chat")
-                };
-                let agent_chat_baseline_input_height = search.height;
-                let target = protocol::AutomationWindowInfo {
-                    id: "main".to_string(),
-                    kind: protocol::AutomationWindowKind::Main,
-                    title: None,
-                    focused: true,
-                    visible: true,
-                    semantic_surface: Some("AgentChat".to_string()),
-                    bounds: Some(protocol::AutomationWindowBounds {
-                        x: 0.0,
-                        y: 0.0,
-                        width: window_width as f64,
-                        height: window_height as f64,
-                    }),
-                    parent_window_id: None,
-                    parent_window_generation: None,
-                    parent_kind: None,
-                    pid: None,
-                    generation: None,
-                };
-                let agent_chat_runtime_input_height = entity
-                    .read(cx)
-                    .automation_layout_info(&target, cx)
-                    .components
-                    .into_iter()
-                    .find(|component| component.name == "AgentChatComposerBar")
-                    .map(|component| component.bounds.height);
-                // Prefer the live wrapped composer measurement. If the nested
-                // receipt is temporarily unavailable, report the explicitly
-                // named canonical one-line baseline rather than implying the
-                // fallback is an exact multiline measurement.
-                Some(agent_chat_runtime_input_height.unwrap_or(agent_chat_baseline_input_height))
-            }
             MainViewHeaderInputPolicy::ViewOwnedContextOnly
             | MainViewHeaderInputPolicy::RootContextOnly => None,
-            MainViewHeaderInputPolicy::ViewOwnedIntentionalCompact => {
-                unreachable!("compact main-window layout returns before canonical header metrics")
-            }
         };
         let header_metrics =
             crate::components::main_view_chrome::main_view_header_metrics(menu_def, input_height);

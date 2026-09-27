@@ -189,41 +189,20 @@ impl ScriptListApp {
         ))
     }
 
-    /// Whether a saved dictation is already waiting to go to Agent Chat as context.
+    /// Whether the entry waits in the line to go with the chat's next turn.
     pub(crate) fn dictation_history_attachment_is_pending(
         &self,
         entry_id: &str,
-        cx: &Context<Self>,
+        _cx: &Context<Self>,
     ) -> bool {
         let uri = format!("kit://dictation-history?id={entry_id}");
-        let entity = match &self.current_view {
-            crate::AppView::AgentChatView { entity } => Some(entity.clone()),
-            _ => self
-                .attachment_portal_return_view
-                .as_ref()
-                .and_then(|view| match view {
-                    crate::AppView::AgentChatView { entity } => Some(entity.clone()),
-                    _ => None,
-                })
-                .or_else(
-                    crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity,
-                ),
-        };
-        let Some(entity) = entity else {
-            return false;
-        };
-        let thread = entity.read(cx).live_thread().clone();
-        thread
-            .read(cx)
-            .pending_context_parts_cloned()
-            .iter()
-            .any(|part| {
-                matches!(
-                    part,
-                    crate::ai::AiContextPart::ResourceUri { uri: pending_uri, .. }
-                        if pending_uri == &uri
-                )
-            })
+        self.one_window_host.work.parts.values().any(|part| {
+            matches!(
+                part,
+                crate::ai::AiContextPart::ResourceUri { uri: pending_uri, .. }
+                    if *pending_uri == uri
+            )
+        })
     }
 
     /// Deletes a saved dictation; the history view, when open, lists what's left.

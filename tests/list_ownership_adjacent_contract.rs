@@ -3,7 +3,6 @@
 const CLIPBOARD: &str = include_str!("../src/render_builtins/clipboard.rs");
 const BROWSER_TABS: &str = include_str!("../src/render_builtins/browser_tabs.rs");
 const NOTES_BROWSE: &str = include_str!("../src/render_builtins/notes_browse.rs");
-const AGENT_CHAT_HISTORY: &str = include_str!("../src/render_builtins/agent_chat_history.rs");
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const APP_VIEW_STATE: &str = include_str!("../src/main_sections/app_view_state.rs");
@@ -38,15 +37,6 @@ fn adjacent_surfaces_define_visible_row_helper_families() {
                 "notes_browse_visible_row_labels",
             ],
         ),
-        (
-            AGENT_CHAT_HISTORY,
-            [
-                "agent_chat_history_visible_rows",
-                "agent_chat_history_selected_visible_row",
-                "agent_chat_history_dataset_and_visible_counts",
-                "agent_chat_history_visible_row_labels",
-            ],
-        ),
     ] {
         for helper in helpers {
             assert!(source.contains(helper), "missing helper {helper}");
@@ -63,8 +53,6 @@ fn adjacent_get_state_paths_use_visible_row_helpers() {
         "browser_tabs_selected_visible_row",
         "notes_browse_dataset_and_visible_counts",
         "notes_browse_selected_visible_row",
-        "agent_chat_history_dataset_and_visible_counts",
-        "agent_chat_history_selected_visible_row",
     ] {
         assert!(
             PROMPT_HANDLER.contains(helper),
@@ -79,7 +67,6 @@ fn adjacent_get_elements_paths_use_visible_row_label_helpers() {
         "clipboard_history_visible_row_labels",
         "browser_tabs_visible_row_labels",
         "notes_browse_visible_row_labels",
-        "agent_chat_history_visible_row_labels",
     ] {
         assert!(
             COLLECT_ELEMENTS.contains(helper),

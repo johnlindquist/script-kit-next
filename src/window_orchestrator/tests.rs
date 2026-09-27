@@ -8,7 +8,6 @@ fn default_state_is_correct() {
     assert_eq!(state.main.return_focus, FocusToken::MainFilter);
     assert!(!state.main.actions_open);
     assert!(!state.notes.visible);
-    assert!(!state.detached_ai.visible);
     assert_eq!(state.key_surface, Some(SurfaceId::Main));
 }
 
@@ -134,21 +133,6 @@ fn open_close_notes_focus_transitions() {
 }
 
 #[test]
-fn open_close_detached_ai() {
-    let mut state = OrchestratorState::default();
-
-    let cmds = state.dispatch(WindowEvent::OpenDetachedAiChat);
-    assert!(state.detached_ai.visible);
-    assert_eq!(state.key_surface, Some(SurfaceId::DetachedAiChat));
-    assert!(cmds.contains(&WindowCommand::OpenDetachedAiChatWindow));
-
-    let cmds = state.dispatch(WindowEvent::CloseDetachedAiChat);
-    assert!(!state.detached_ai.visible);
-    assert_eq!(state.key_surface, Some(SurfaceId::Main));
-    assert!(cmds.contains(&WindowCommand::CloseDetachedAiChatWindow));
-}
-
-#[test]
 fn surface_closed_by_system_resyncs_main() {
     let mut state = OrchestratorState::default();
     state.main.content = MainContentKind::AgentChat;
@@ -180,20 +164,6 @@ fn surface_closed_by_system_resyncs_notes() {
 }
 
 #[test]
-fn surface_closed_by_system_resyncs_detached_ai() {
-    let mut state = OrchestratorState::default();
-    state.detached_ai.visible = true;
-    state.key_surface = Some(SurfaceId::DetachedAiChat);
-
-    state.dispatch(WindowEvent::SurfaceClosedBySystem(
-        SurfaceId::DetachedAiChat,
-    ));
-
-    assert!(!state.detached_ai.visible);
-    assert_eq!(state.key_surface, Some(SurfaceId::Main));
-}
-
-#[test]
 fn main_content_changed_updates_content_and_focus() {
     let mut state = OrchestratorState::default();
 
@@ -214,9 +184,6 @@ fn current_return_focus_reflects_key_surface() {
 
     state.key_surface = Some(SurfaceId::Notes);
     assert_eq!(current_return_focus(&state), FocusToken::NotesEditor);
-
-    state.key_surface = Some(SurfaceId::DetachedAiChat);
-    assert_eq!(current_return_focus(&state), FocusToken::DetachedAiComposer);
 
     state.key_surface = None;
     assert_eq!(current_return_focus(&state), FocusToken::None);
