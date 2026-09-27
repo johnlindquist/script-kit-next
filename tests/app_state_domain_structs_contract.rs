@@ -4,7 +4,6 @@
 //! move into named owner structs when that makes intent clearer for agents.
 
 const APP_STATE: &str = include_str!("../src/main_sections/app_state.rs");
-const APP_STATE_DIAGNOSTICS: &str = include_str!("../src/main_sections/app_state_diagnostics.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 const RENDER_SCRIPT_LIST: &str = include_str!("../src/render_script_list/mod.rs");
 const PREVIEW_PANEL: &str = include_str!("../src/app_render/preview_panel.rs");
@@ -23,24 +22,6 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
 
 #[test]
 fn main_menu_render_diagnostics_have_a_named_domain_owner() {
-    let diagnostics_body = source_between(
-        APP_STATE_DIAGNOSTICS,
-        "struct MainMenuRenderDiagnosticsState {",
-        "\n}\n",
-    );
-    for field in [
-        "last_render_log_filter: String,",
-        "last_render_log_selection: usize,",
-        "last_render_log_item_count: usize,",
-        "log_this_render: bool,",
-        "filter_perf_start: Option<std::time::Instant>,",
-    ] {
-        assert!(
-            diagnostics_body.contains(field),
-            "MainMenuRenderDiagnosticsState must own {field}"
-        );
-    }
-
     let app_body = source_between(
         APP_STATE,
         "struct ScriptListApp {",
@@ -70,17 +51,6 @@ fn live_startup_initializes_the_diagnostics_owner_from_its_default_contract() {
         STARTUP
             .contains("main_menu_render_diagnostics: MainMenuRenderDiagnosticsState::default(),"),
         "Live startup must initialize the diagnostics owner through its named default."
-    );
-    let default_body = source_between(
-        APP_STATE_DIAGNOSTICS,
-        "impl Default for MainMenuRenderDiagnosticsState {",
-        "\n}\n",
-    );
-    assert!(
-        default_body.contains("last_render_log_selection: usize::MAX,")
-            && default_body.contains("log_this_render: true,")
-            && default_body.contains("filter_perf_start: None,"),
-        "The default contract must preserve first-render logging and empty filter timing."
     );
 }
 

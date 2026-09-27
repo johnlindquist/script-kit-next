@@ -209,6 +209,12 @@ pub mod menu_syntax_main_list_rows;
 #[path = "app_impl/simulate_key_routes.rs"]
 pub mod simulate_key_routes;
 
+// The launcher's render-diagnostics owner and its first-render defaults. The
+// binary pulls this file into its crate root via the `app_state.rs` include
+// chain; the lib carries it so the defaults' tests run under `cargo test --lib`.
+#[path = "main_sections/main_menu_render_diagnostics.rs"]
+pub mod main_menu_render_diagnostics;
+
 // Pure adapter that bridges `menu_syntax::current_actions` (pure spec) into
 // the Cmd+K actions-dialog (live UI). Same `#[path]` re-export pattern as
 // `path_action` / `routes` / `menu_syntax_trigger_picker` so unit tests for
