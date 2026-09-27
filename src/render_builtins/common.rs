@@ -1709,7 +1709,6 @@ mod builtin_browser_consistency_audit {
             "current_app_commands.rs",
             include_str!("current_app_commands.rs"),
         ),
-        ("design_picker.rs", include_str!("design_picker.rs")),
         ("emoji_picker.rs", include_str!("emoji_picker.rs")),
         ("favorites.rs", include_str!("favorites.rs")),
         ("file_search.rs", include_str!("file_search.rs")),

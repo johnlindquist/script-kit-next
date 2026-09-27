@@ -43,10 +43,6 @@ const ALLOWLIST: &[(&str, &str)] = &[
         "pre-policy survivor: floor over stable call token (render + keyboard paths)",
     ),
     (
-        "tests/actions_dialog_batch_setinput_resize_parity_contract.rs",
-        "exactly-once on a single-line comment anchor; comments survive rustfmt",
-    ),
-    (
         "tests/agent_chat_conversation_export_single_path_contract.rs",
         "singleton on `pub(crate) fn export_conversation` signature",
     ),
@@ -94,16 +90,8 @@ const ALLOWLIST: &[(&str, &str)] = &[
         "pre-policy survivor: floor over stable JS error-bridge token",
     ),
     (
-        "tests/agent_chat_markdown_blocked_reason_contract.rs",
-        "pre-policy survivor: floor over stable call token",
-    ),
-    (
         "tests/current_app_commands_visible_rows_contract.rs",
         "pre-policy survivor: exact counts over stable call tokens",
-    ),
-    (
-        "tests/design_picker_actions_contract.rs",
-        "pre-policy survivor: count over stable enum-variant token",
     ),
     (
         "tests/filter_input_preflight_contract.rs",
