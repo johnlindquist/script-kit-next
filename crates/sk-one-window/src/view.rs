@@ -81,4 +81,19 @@ impl ViewStack {
             .collect::<Vec<_>>()
             .join(" › ")
     }
+
+    /// Whether a view named `name` is open under the top one.
+    pub fn below_named(&self, name: &str) -> bool {
+        let n = self.frames.len().saturating_sub(1);
+        self.frames[..n].iter().any(|f| f.name == name)
+    }
+
+    /// The view `i` steps from the bottom.
+    pub fn frame(&self, i: usize) -> Option<&ViewFrame> {
+        self.frames.get(i)
+    }
+
+    pub fn frame_mut(&mut self, i: usize) -> Option<&mut ViewFrame> {
+        self.frames.get_mut(i)
+    }
 }

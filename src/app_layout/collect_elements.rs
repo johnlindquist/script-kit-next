@@ -197,10 +197,14 @@ impl ScriptListApp {
             AppView::ScriptList => {
                 let context = vec![self.main_view_slot_line_element()];
                 let context_count = context.len();
-                let (list_elements, list_total) = self.collect_script_list_elements(
-                    limit.saturating_sub(context_count),
-                    include_headers,
-                );
+                let (list_elements, list_total) = if self.one_window_work_view_open() {
+                    self.collect_one_window_work_elements(limit.saturating_sub(context_count))
+                } else {
+                    self.collect_script_list_elements(
+                        limit.saturating_sub(context_count),
+                        include_headers,
+                    )
+                };
                 let elements = context
                     .into_iter()
                     .chain(list_elements)

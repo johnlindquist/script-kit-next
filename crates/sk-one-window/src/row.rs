@@ -70,6 +70,9 @@ pub struct Row {
     /// The sentence Jev read the words as.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fill: Option<String>,
+    /// The service (`connect::INTEGRATIONS` key) the reading needs to run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub needs: Option<String>,
 }
 
 fn full_score() -> u8 {

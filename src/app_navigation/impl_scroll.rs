@@ -756,7 +756,7 @@ impl ScriptListApp {
             "safeViewportHeight": geometry.safe_viewport_height,
             "maxScrollTop": geometry.max_scroll_top,
             "selectedIndex": self.selected_index,
-            "selectedSemanticId": selected_semantic_id,
+            "selectedSemanticId": selected_semantic_id.filter(|_| !self.one_window_work_view_open()),
             "selectedStableKey": selected_stable_key,
             "selectedRowTop": selected_row_top_in_view,
             "selectedRowBottom": selected_row_bottom_in_view,

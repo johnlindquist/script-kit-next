@@ -49,13 +49,14 @@ pub(crate) struct OneWindowHost {
     last_run: Option<Row>,
     /// What was highlighted when ⌘K staged something.
     pub(super) staged_from: Option<super::staging::StagedFrom>,
+    pub(crate) work: super::work::WorkHost,
 }
 
 /// What the reducer did with one event.
 #[derive(Default)]
 pub(crate) struct Handled {
     pub(crate) consumed: bool,
-    /// The key goes to the list's old default (Esc hides the window, ⌘↵ opens Agent Chat).
+    /// The key goes to the list's old default (Esc hides the window).
     pub(crate) passed: bool,
     pub(crate) ignored: bool,
     pub(crate) ran: bool,
@@ -114,7 +115,10 @@ fn offered_fallback(result: &SearchResult) -> Option<&'static str> {
 fn jev_rows(readings: &[JevRow]) -> Vec<Row> {
     readings
         .iter()
-        .map(|reading| Row::new(reading.key.clone(), reading.plan.title.clone()))
+        .map(|reading| Row {
+            needs: super::work::needs_of(&reading.plan),
+            ..Row::new(reading.key.clone(), reading.plan.title.clone())
+        })
         .collect()
 }
 
@@ -184,6 +188,7 @@ impl ScriptListApp {
         let mut queue = VecDeque::from(events);
         let mut handled = Handled::default();
         let mut runs = Vec::new();
+        let mut works = Vec::new();
         let mut first = true;
         let now = self.one_window_now(cx);
         while let Some(event) = queue.pop_front() {
@@ -194,6 +199,14 @@ impl ScriptListApp {
             for effect in outcome.effects {
                 match effect {
                     Effect::Run { row, .. } => runs.push(row),
+                    Effect::PassKey(sk_one_window::Key::Tab)
+                        if self.one_window_tab_hands_to_agent() =>
+                    {
+                        handled.consumed = true;
+                        queue.push_back(Event::Work(sk_one_window::work::WorkEvent::Agent {
+                            task: self.one_window.text().trim().to_string(),
+                        }));
+                    }
                     Effect::PassKey(_) => handled.passed = true,
                     Effect::EnterIgnored => {
                         handled.ignored = true;
@@ -209,8 +222,20 @@ impl ScriptListApp {
                     Effect::ActionsFor(subject) => {
                         queue.push_back(self.one_window_actions_for(&subject));
                     }
-                    effect @ (Effect::ViewKey(_)
-                    | Effect::Held { .. }
+                    Effect::ViewKey(key) => match self.one_window.views().top() {
+                        Some(top) if super::work::WORK_VIEWS.contains(&top.name.as_str()) => {
+                            queue.push_back(Event::Work(sk_one_window::work::WorkEvent::ViewKey(
+                                key,
+                            )));
+                        }
+                        _ => tracing::info!(
+                            target: "script_kit::one_window",
+                            event = "effect_not_hosted",
+                            effect = ?Effect::ViewKey(key),
+                        ),
+                    },
+                    Effect::Work(work) => works.push(work),
+                    effect @ (Effect::Held { .. }
                     | Effect::Undo { .. }
                     | Effect::Again { .. }
                     | Effect::OpenScript { .. }
@@ -227,6 +252,9 @@ impl ScriptListApp {
             if let Err(error) = self.one_window_run(row, cx) {
                 handled.run_error = Some(error);
             }
+        }
+        for work in works {
+            self.one_window_apply_work(work, cx);
         }
         cx.notify();
         handled
@@ -462,6 +490,7 @@ impl ScriptListApp {
         let mut rows = Vec::new();
         let mut fallbacks = Vec::new();
         let mut results = HashMap::new();
+        super::work::steps_row(text, &mut rows, &mut results);
         for item in grouped {
             let GroupedListItem::Item(index) = item else {
                 continue;
@@ -557,8 +586,10 @@ impl ScriptListApp {
             Some((row, stale)) => {
                 let plan = self.intent_launcher.plan(text, &row.key);
                 IntentMatch {
+                    subtitle: super::work::needs_subtitle(&row, self.one_window.work())
+                        .or_else(|| plan.as_deref().map(jev_row_subtitle))
+                        .unwrap_or_default(),
                     title: row.title,
-                    subtitle: plan.as_deref().map(jev_row_subtitle).unwrap_or_default(),
                     verb: plan.as_deref().map_or("Run", crate::intent::plan_verb),
                     reading: false,
                     stale,
@@ -595,6 +626,9 @@ impl ScriptListApp {
 
     /// The line above the input, the input, the list as drawn, and the floating footer's zone.
     fn one_window_natural_height(&self) -> f32 {
+        if self.one_window_work_view_open() {
+            return self.one_window_height_ceiling();
+        }
         let (grouped, _) = self.get_grouped_results_cached();
         let heights = crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
             self.current_main_menu_theme,
@@ -799,6 +833,9 @@ impl ScriptListApp {
     /// launcher row the list shows for it.
     fn one_window_run(&mut self, row: Row, cx: &mut Context<Self>) -> anyhow::Result<()> {
         tracing::info!(target: "script_kit::one_window", event = "run", key = %row.key);
+        if self.one_window_route_work(&row, cx) {
+            return Ok(());
+        }
         self.one_window_host.last_run = Some(row.clone());
         self.one_window_host.finishing = Some(row.clone());
         if let Some(id) = row.key.strip_prefix(super::staging::ACTION_KEY) {
@@ -900,6 +937,9 @@ impl ScriptListApp {
             "jevSettled": list.jev.settled_for(&list.text),
             "heightPx": self.one_window_host.height,
             "sinceTypedMs": self.one_window.height().typed_at().map(|at| now.saturating_sub(at)),
+            "view": self.one_window.views().top().map(|top| top.name.as_str()),
+            "crumb": self.one_window.views().crumb(),
+            "strip": super::work_view::strip_snapshot(self),
             "lastRun": self.one_window_last_run().map(|row| serde_json::json!({
                 "key": row.key,
                 "title": row.title,

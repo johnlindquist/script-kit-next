@@ -5,6 +5,8 @@
 //! Enter never runs something that changed under the key. The host feeds [`window::Event`]s with
 //! the current time and applies the [`window::Effect`]s it gets back.
 
+pub mod chat;
+pub mod connect;
 pub mod contract;
 pub mod enter;
 pub mod height;
@@ -16,9 +18,12 @@ pub mod row;
 pub mod slot;
 pub mod stage;
 pub mod steady;
+pub mod steps;
+pub mod strip;
 pub mod trace;
 pub mod view;
 pub mod window;
+pub mod work;
 
 /// Milliseconds of the host's clock.
 pub type Ms = u64;

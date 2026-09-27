@@ -8,6 +8,7 @@ impl OneWindow {
             if let Some(top) = self.views.top() {
                 if top.takes_input {
                     self.text = text;
+                    self.work_text(now, fx);
                     return;
                 }
                 self.views.home();

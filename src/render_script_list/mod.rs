@@ -1023,7 +1023,9 @@ impl ScriptListApp {
 
         let main_hint_list_tokens = self.current_main_menu_theme.def().list;
         let active_filter_empty_copy = "There are no search results with this filter applied.";
-        let list_element: AnyElement = if menu_syntax_owns_main_list
+        let list_element: AnyElement = if let Some(view) = self.render_one_window_work_view(cx) {
+            view
+        } else if menu_syntax_owns_main_list
             && !trigger_picker_owns_main_list_for_render
             && !object_selector_owns_main_list_for_render
         {
@@ -1734,6 +1736,12 @@ impl ScriptListApp {
                             cx.stop_propagation();
                             return;
                         }
+                        "j" if !has_shift && this.one_window_owns_list() => {
+                            if this.one_window_key(sk_one_window::Key::CmdJ, cx).taken() {
+                                cx.stop_propagation();
+                                return;
+                            }
+                        }
                         "z" if !has_shift && this.one_window_owns_list() => {
                             if this.one_window_key(sk_one_window::Key::CmdZ, cx).taken() {
                                 cx.stop_propagation();
@@ -1990,6 +1998,7 @@ impl ScriptListApp {
         let search = menu_def.search;
 
         self.sync_main_list_displayed_action_shortcut_keybindings(cx);
+        let list_element = self.with_one_window_strip(list_element);
 
         let root = crate::components::main_view_chrome::render_main_view_shell()
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy

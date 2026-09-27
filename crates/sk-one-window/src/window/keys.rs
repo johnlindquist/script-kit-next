@@ -4,6 +4,9 @@ use super::*;
 
 impl OneWindow {
     pub(super) fn on_key(&mut self, now: Ms, key: Key, fx: &mut Vec<Effect>) -> bool {
+        if let Some(taken) = self.work_key(now, &key, fx) {
+            return taken;
+        }
         let armed = self.guard.armed(now);
         self.list.steady.key();
         if self.in_view() {
@@ -141,6 +144,9 @@ impl OneWindow {
 
     pub(super) fn run(&mut self, now: Ms, row: Row, how: RunHow, fx: &mut Vec<Effect>) {
         self.picked = Some((row.clone(), how));
+        if self.work_run(now, &row, fx) {
+            return;
+        }
         let staged_entry = self.staged.as_ref().and_then(|s| s.subject.entry);
         let from_staged = self
             .staged
