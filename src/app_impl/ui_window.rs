@@ -343,7 +343,7 @@ impl ScriptListApp {
                 } else if let AppView::FormPrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |form, cx| form.focus_next(window, cx));
-                } else if self.cmd_enter_runs_intent()
+                } else if self.one_window_owns_list()
                     && self
                         .one_window_key(sk_one_window::Key::CmdEnter, cx)
                         .taken()

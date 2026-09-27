@@ -917,3 +917,6 @@ fn without_a_sentence_cmd_enter_stays_agent() {
     assert_eq!(empty.as_deref(), Some("Agent"));
     assert_eq!(typed.as_deref(), Some("Do It"));
 }
+
+#[path = "ui_window_one_window_work_tests.rs"]
+mod work;

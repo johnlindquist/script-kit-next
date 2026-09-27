@@ -176,9 +176,9 @@ impl ScriptListApp {
             || self.try_route_global_cmd_enter_to_agent_chat_context_capture(cx)
     }
 
-    /// Whether ⌘↵ goes to the one window (the words, or the model's chat), for the footer.
+    /// Whether ⌘↵ runs the words rather than asking the model, for the footer.
     pub(crate) fn cmd_enter_runs_intent(&self) -> bool {
-        self.one_window_owns_list()
+        self.one_window_owns_list() && !self.filter_text.trim().is_empty()
     }
 
     /// Runs a plan's steps in order. Launcher lines (captures, searches) run through the
