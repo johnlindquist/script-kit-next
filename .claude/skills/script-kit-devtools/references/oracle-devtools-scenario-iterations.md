@@ -1,5 +1,7 @@
 # Oracle DevTools Scenario Iterations
 
+> Written before the one-window builds (2026-09-26/27). The Notes window, the Actions popup, prompt popups, the confirm window and the detached Agent Chat window it names are gone: notes, chat and questions open under the main input, and Cmd+K stages actions in the line above it. Read those entries as history, not as current targets.
+
 This artifact records the corrected 50 Oracle-planned scenario iterations for Script Kit DevTools. Each batch was produced by Oracle browser mode using the remote ~/.oracle configuration.
 
 ## Session Provenance
