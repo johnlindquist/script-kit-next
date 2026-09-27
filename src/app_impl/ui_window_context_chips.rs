@@ -15,14 +15,17 @@ impl ScriptListApp {
         let source_app = crate::frontmost_app_tracker::get_last_real_app();
         let source_pid = source_app.as_ref().map(|app| app.pid);
         if let Some(app) = &source_app {
-            self.focus_slot_line(sk_one_window::Subject {
-                kind: sk_one_window::SubjectKind::Window,
-                label: "Front window".into(),
-                title: app.name.clone(),
-                sub: app.window_title.clone().unwrap_or_default(),
-                icon: "window".into(),
-                ..Default::default()
-            });
+            self.focus_slot_line(
+                sk_one_window::Subject {
+                    kind: sk_one_window::SubjectKind::Window,
+                    label: "Front window".into(),
+                    title: app.name.clone(),
+                    sub: app.window_title.clone().unwrap_or_default(),
+                    icon: "window".into(),
+                    ..Default::default()
+                },
+                cx,
+            );
         }
         let source_name = source_app.map(|app| app.name);
         cx.spawn(async move |this, cx| {
@@ -81,7 +84,7 @@ impl ScriptListApp {
                             .unwrap_or_default(),
                         icon: "selection".into(),
                         ..Default::default()
-                    });
+                    }, cx);
                 }
                 app.spine_live_preview_cache.seed_selection_preview(
                     selection,
@@ -95,11 +98,8 @@ impl ScriptListApp {
     }
 
     /// What "this" means in the line above the input.
-    fn focus_slot_line(&mut self, subject: sk_one_window::Subject) {
-        self.one_window.handle(
-            crate::one_window::slot_line::now_ms(),
-            sk_one_window::Event::Focused(subject),
-        );
+    fn focus_slot_line(&mut self, subject: sk_one_window::Subject, cx: &mut Context<Self>) {
+        self.one_window_handle(sk_one_window::Event::Focused(subject), cx);
     }
 
     /// Header hint chip shown only while the main menu is up AND the passive

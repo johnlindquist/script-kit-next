@@ -1135,6 +1135,15 @@ impl ScriptListApp {
         }
         self.flush_pending_main_menu_query(cx);
         self.enter_keyboard_mode(cx);
+        if delta.abs() == 1 && self.one_window_owns_list() {
+            let key = if delta < 0 {
+                sk_one_window::Key::Up
+            } else {
+                sk_one_window::Key::Down
+            };
+            self.one_window_key(key, cx);
+            return;
+        }
         let unarmed = self.spine_empty_subsearch_selection_suppressed();
         let target = crate::scrolling::list_interaction::main_menu_navigation_target(
             self.main_menu_committed_rows()

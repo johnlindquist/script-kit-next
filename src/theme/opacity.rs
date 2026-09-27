@@ -72,6 +72,8 @@ pub const OPACITY_DISABLED: f32 = 0.40;
 pub const OPACITY_BORDER: f32 = 0.45;
 /// Selected/highlighted state.
 pub const OPACITY_SELECTED: f32 = 0.50;
+/// A list row read from older words than the input has now (one of Jev's rows while typing).
+pub const OPACITY_STALE_ROW: f32 = 0.50;
 /// Main-window content dim layer while a modal surface is open above it.
 pub const OPACITY_MODAL_DIM: f32 = 0.52;
 /// Secondary icon emphasis.

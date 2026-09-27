@@ -182,7 +182,7 @@ impl ScriptListApp {
         self.record_submit_diagnostic("launcher", route, None, Some(value.as_str()), true);
     }
 
-    fn update_main_menu_dispatch_status(
+    pub(crate) fn update_main_menu_dispatch_status(
         &mut self,
         status: &'static str,
         reason: Option<&'static str>,
@@ -329,14 +329,9 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn execute_selected(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> anyhow::Result<MainMenuDispatchResult> {
-        if matches!(self.current_view, AppView::ScriptList) {
-            self.flush_pending_main_menu_query(cx);
-        }
-        let observation = self.resolved_main_menu_selected_subject().map(|subject| {
+    /// What dispatching the highlighted row is about to act on.
+    pub(crate) fn selected_row_dispatch_observation(&self) -> Option<MainMenuDispatchObservation> {
+        self.resolved_main_menu_selected_subject().map(|subject| {
             let row = match subject {
                 ResolvedMainMenuSelection::SearchResult { row, .. }
                 | ResolvedMainMenuSelection::Calculator { row, .. } => row,
@@ -348,7 +343,19 @@ impl ScriptListApp {
                 status: "dispatchRequested",
                 reason: None,
             }
-        });
+        })
+    }
+
+    /// Enter on the main list. The one-window reducer decides what a list it owns runs;
+    /// launcher syntax and pickers keep their own Enter.
+    pub(crate) fn execute_selected(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<MainMenuDispatchResult> {
+        if matches!(self.current_view, AppView::ScriptList) {
+            self.flush_pending_main_menu_query(cx);
+        }
+        let observation = self.selected_row_dispatch_observation();
         self.set_main_menu_dispatch_observation(observation.clone());
         if !self.root_search.query_is_current() {
             self.record_blocked_script_list_submit("main_menu_query_pending");
@@ -458,10 +465,18 @@ impl ScriptListApp {
             anyhow::bail!("main_menu_command_input_missing");
         }
 
-        if self.hold_enter_for_intent_reading(cx) {
-            self.update_main_menu_dispatch_status("pendingIntentReading", None);
-            return Ok(MainMenuDispatchResult::PendingConfirmation);
+        if self.one_window_owns_list() {
+            return self.one_window_enter(cx);
         }
+        self.run_selected_row(observation, cx)
+    }
+
+    /// Runs the highlighted row.
+    pub(crate) fn run_selected_row(
+        &mut self,
+        observation: Option<MainMenuDispatchObservation>,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<MainMenuDispatchResult> {
         if let Err(reason) = self.authorize_main_menu_selected_effect() {
             self.update_main_menu_dispatch_status("refused", Some(reason));
             self.record_blocked_script_list_submit(reason);
@@ -780,7 +795,9 @@ impl ScriptListApp {
                         self.update_main_menu_dispatch_status("completed", None);
                     }
                     scripts::SearchResult::App(app_match) => {
-                        self.execute_app(&app_match.app, cx);
+                        if self.execute_app(&app_match.app, cx) {
+                            self.one_window_app_launched(&app_match.app.name, cx);
+                        }
                     }
                     scripts::SearchResult::Window(window_match) => {
                         self.execute_window_focus(&window_match.window, cx);
@@ -926,19 +943,8 @@ impl ScriptListApp {
                     scripts::SearchResult::ScriptIssue(_) => {
                         self.open_script_issues_view(cx);
                     }
-                    scripts::SearchResult::Intent(intent_match) => {
-                        let Some(plan) = intent_match.plan else {
-                            self.update_main_menu_dispatch_status(
-                                "refused",
-                                Some("intent_row_not_ready"),
-                            );
-                            anyhow::bail!("intent_row_not_ready");
-                        };
-                        self.set_main_menu_dispatch_observation(observation.clone());
-                        if let Err(reason) = self.execute_intent_plan(&plan, cx) {
-                            self.update_main_menu_dispatch_status("refused", Some(reason));
-                            anyhow::bail!(reason);
-                        }
+                    scripts::SearchResult::Intent(_) => {
+                        anyhow::bail!("main_menu_jev_row_runs_through_one_window");
                     }
                     scripts::SearchResult::SpineProjection(_) => {
                         anyhow::bail!("main_menu_spine_action_requires_live_window");

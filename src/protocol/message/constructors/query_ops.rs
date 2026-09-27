@@ -162,6 +162,7 @@ impl Message {
             flow_ux,
             backgrounded_sessions,
             main_window_animation: None,
+            one_window: None,
         }
     }
 

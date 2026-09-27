@@ -192,7 +192,7 @@ pub(crate) fn mini_prompt_view_type() -> ViewType {
     ViewType::MiniPrompt
 }
 
-fn footer_frontmost_app_name() -> Option<String> {
+pub(crate) fn footer_frontmost_app_name() -> Option<String> {
     crate::frontmost_app_tracker::get_last_real_app().and_then(|app| {
         let trimmed = app.name.trim();
         if trimmed.is_empty() {
@@ -213,7 +213,7 @@ fn paste_into_frontmost_app_label(frontmost_app_name: Option<&str>) -> String {
     }
 }
 
-fn main_window_result_action_label(
+pub(crate) fn main_window_result_action_label(
     result: &crate::scripts::SearchResult,
     frontmost_app_name: Option<&str>,
 ) -> String {

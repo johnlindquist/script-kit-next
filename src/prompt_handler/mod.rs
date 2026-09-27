@@ -1731,6 +1731,7 @@ impl ScriptListApp {
                 if let Some(binding) = &self.prompt_completion {
                     binding.retire();
                 }
+                self.one_window_done(cx);
                 if crate::runtime_policy::is_owned_evaluation() {
                     self.reset_to_script_list(cx);
                     return;
@@ -3465,6 +3466,7 @@ impl ScriptListApp {
                 );
                 if let Message::StateResult {
                     main_window_animation,
+                    one_window,
                     ..
                 } = &mut response
                 {
@@ -3473,6 +3475,7 @@ impl ScriptListApp {
                     animation["nativeLifecycle"] =
                         crate::platform::main_glass_entry_lifecycle_receipt();
                     *main_window_animation = Some(animation);
+                    *one_window = Some(self.one_window_automation_snapshot());
                 }
 
                 tracing::info!(

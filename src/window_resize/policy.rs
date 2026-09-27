@@ -37,14 +37,15 @@ pub(crate) struct WindowResizePolicy {
 }
 
 impl WindowResizePolicy {
-    /// A shell locked to one app-owned size (the main launcher).
-    pub(crate) const fn fixed(width: f64, height: f64) -> Self {
+    /// A shell the app sizes itself within bounds (the main launcher: one width, a height
+    /// that follows its list).
+    pub(crate) const fn app_sized(width: f64, min_height: f64, max_height: f64) -> Self {
         Self {
             user_resizable: false,
             min_content_width: width,
-            min_content_height: height,
+            min_content_height: min_height,
             max_content_width: Some(width),
-            max_content_height: Some(height),
+            max_content_height: Some(max_height),
         }
     }
 
@@ -69,9 +70,10 @@ impl WindowResizePolicy {
 /// (see the Notes chrome contract).
 pub(crate) const fn resize_policy(kind: WindowShellKind) -> WindowResizePolicy {
     match kind {
-        WindowShellKind::MainLauncher => WindowResizePolicy::fixed(
+        WindowShellKind::MainLauncher => WindowResizePolicy::app_sized(
             super::MAIN_WINDOW_WIDTH as f64,
             super::MAIN_WINDOW_MIN_HEIGHT as f64,
+            super::MAIN_WINDOW_MAX_HEIGHT as f64,
         ),
         WindowShellKind::Notes => WindowResizePolicy {
             user_resizable: true,
@@ -140,11 +142,15 @@ mod tests {
     }
 
     #[test]
-    fn main_launcher_remains_fixed() {
+    fn main_launcher_keeps_its_width_and_sizes_its_own_height() {
         let policy = resize_policy(WindowShellKind::MainLauncher);
         assert!(!policy.user_resizable);
         assert_eq!(policy.min_content_width, 750.0);
-        assert_eq!(policy.min_content_height, 480.0);
+        assert_eq!(
+            policy.min_content_height,
+            super::super::MAIN_WINDOW_MIN_HEIGHT as f64
+        );
+        assert!(policy.min_content_height < 480.0);
         assert_eq!(policy.max_content_width, Some(750.0));
         assert_eq!(policy.max_content_height, Some(480.0));
     }
@@ -177,7 +183,7 @@ mod tests {
             (900.0, 1200.0)
         );
 
-        // Fixed shells clamp both directions to their single size.
+        // The launcher clamps a restored size into its width and height range.
         let launcher = resize_policy(WindowShellKind::MainLauncher);
         assert_eq!(
             clamp_restored_content_size(900.0, 1200.0, &launcher),

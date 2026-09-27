@@ -60,6 +60,11 @@ pub(crate) use match_contract::{
     score_from_tier, TextMatch, TextMatchKind, MIN_BODY_EXACT_QUERY_LEN, TIER_ALIAS, TIER_BODY,
     TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
 };
+#[allow(unused_imports, reason = "the binary's one-window host ranks by these")]
+pub(crate) use match_contract::{
+    TIER_ACRONYM_PRIMARY, TIER_COMPACT_FUZZY_PRIMARY, TIER_EXACT_PRIMARY, TIER_PATH,
+    TIER_PREFIX_PRIMARY, TIER_SUBSTRING_PRIMARY, TIER_WORD_BOUNDARY_PRIMARY,
+};
 
 // `is_fuzzy_match` is shared with the spine catalogs so sigil filtering
 // behaves like main-list search.

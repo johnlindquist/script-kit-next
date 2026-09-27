@@ -4,8 +4,7 @@
 //! only its strength eases.
 
 use std::cell::Cell;
-use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use gpui::{div, prelude::*, px, rgb, rgba, svg, Animation, AnimationExt as _, AnyElement};
 use sk_one_window::{SlotKind, SlotLine, SlotStyle};
@@ -59,8 +58,11 @@ pub(crate) struct SlotLineView {
 
 impl SlotLineView {
     #[allow(dead_code, reason = "the binary's ScriptListApp owns the reducer")]
-    pub(crate) fn of(window: &sk_one_window::OneWindow, dimmer: &SlotDimmer) -> Self {
-        let now = now_ms();
+    pub(crate) fn of(
+        window: &sk_one_window::OneWindow,
+        dimmer: &SlotDimmer,
+        now: sk_one_window::Ms,
+    ) -> Self {
         let style = window.slot_style(now);
         Self {
             line: window.slot_line(now),
@@ -180,13 +182,6 @@ impl SlotLineView {
         )
         .into_any_element()
     }
-}
-
-/// The reducer's clock: monotonic milliseconds since the app started.
-#[allow(dead_code, reason = "the binary's ScriptListApp owns the reducer")]
-pub(crate) fn now_ms() -> sk_one_window::Ms {
-    static START: OnceLock<Instant> = OnceLock::new();
-    START.get_or_init(Instant::now).elapsed().as_millis() as sk_one_window::Ms
 }
 
 fn render_hint(

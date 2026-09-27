@@ -63,7 +63,10 @@ pub mod list_item;
 pub mod logging;
 pub mod menu_syntax;
 pub mod navigation;
-pub(crate) mod one_window;
+// `one_window::host` needs the binary's `ScriptListApp`; the library builds the slot line only.
+pub(crate) mod one_window {
+    pub(crate) mod slot_line;
+}
 pub mod panel;
 pub mod pasted_image;
 pub mod pasted_text;

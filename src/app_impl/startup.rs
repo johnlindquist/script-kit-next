@@ -474,6 +474,8 @@ impl ScriptListApp {
             ghost_llm_generation: 0,
             ghost_llm_cancel: None,
             intent_launcher: crate::intent::IntentLauncher::default(),
+            one_window: sk_one_window::OneWindow::default(),
+            one_window_host: crate::one_window::host::OneWindowHost::default(),
             ghost_llm_cache: std::collections::VecDeque::new(),
             launcher_context,
             launcher_context_generation: 0,
@@ -597,7 +599,6 @@ impl ScriptListApp {
             spine_live_preview_cache: Default::default(),
             shown_selection_hint_text: None,
             shown_selection_hint_token: 0,
-            one_window: sk_one_window::OneWindow::default(),
             slot_dimmer: Default::default(),
             menu_syntax_trigger_picker_state:
                 crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState::default(),
@@ -2088,6 +2089,15 @@ impl ScriptListApp {
                                         return;
                                     }
                                     this.flush_pending_main_menu_query(cx);
+                                    if this.one_window_owns_list() {
+                                        if is_up {
+                                            this.move_selection_up(cx);
+                                        } else {
+                                            this.move_selection_down(cx);
+                                        }
+                                        cx.stop_propagation();
+                                        return;
+                                    }
 
                                     // Main menu: handle list navigation + input history
                                     const HISTORY: &str = "HISTORY";

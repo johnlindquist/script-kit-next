@@ -459,7 +459,7 @@ impl MainMenuResultCacheState {
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "Commit the existing query, rows, calculator, and ranking evidence together."
+        reason = "Commit the existing query, rows, calculator, ranking evidence, and placement together."
     )]
     fn store_grouped_results(
         &mut self,
@@ -470,6 +470,7 @@ impl MainMenuResultCacheState {
         query: RootSearchQueryStamp,
         query_text: &str,
         mut ranking_evidence: scripts::command_contract::MainMenuRankingEvidenceMap,
+        keep_displayed_rows: bool,
     ) -> Result<(), String> {
         let mut display_items = Vec::with_capacity(grouped_items.len());
         let mut source_statuses = Vec::new();
@@ -497,7 +498,7 @@ impl MainMenuResultCacheState {
             calculator.as_ref(),
             query_text,
         )?;
-        if self.committed_query == Some(query) {
+        if keep_displayed_rows && self.committed_query == Some(query) {
             scripts::main_menu_rows::preserve_displayed_main_menu_rows(
                 &self.cached_grouped_items,
                 &self.committed_rows,
@@ -859,7 +860,7 @@ impl ScriptListApp {
         &mut self,
         grouped_index: usize,
         origin: MainMenuSelectionOrigin,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> bool {
         if !matches!(self.current_view, AppView::ScriptList)
             || !self.root_search.query_is_current()
@@ -923,6 +924,7 @@ impl ScriptListApp {
             self.invalidate_preview_cache();
             self.invalidate_main_window_preflight();
             self.mark_main_data_changed();
+            self.one_window_follow_host_selection(cx);
         }
         true
     }
@@ -1379,8 +1381,12 @@ pub(crate) struct ScriptListApp {
     /// Cancel flag for the in-flight LLM ghost request (best-effort: set before
     /// dispatch; stale responses are always discarded by generation compare).
     ghost_llm_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-    /// Jev's reading of the committed query and the plan pinned for it.
+    /// Jev's oracle, catalog and the plans behind its rows for the current words.
     pub(crate) intent_launcher: crate::intent::IntentLauncher,
+    /// Every rule about the main window's line, list, Enter and height.
+    pub(crate) one_window: sk_one_window::OneWindow,
+    /// What the host keeps to feed and apply `one_window`: its clock, timers and the height.
+    pub(crate) one_window_host: crate::one_window::host::OneWindowHost,
     /// LRU cache of LLM ghost predictions keyed by (query, cwd, context_rev, model).
     ghost_llm_cache: std::collections::VecDeque<(
         crate::scripts::search::ghost::GhostLlmCacheKey,
@@ -1660,7 +1666,6 @@ pub(crate) struct ScriptListApp {
     pub(crate) shown_selection_hint_text: Option<String>,
     /// Monotonic token guarding stale async sniff results (bumped per show).
     pub(crate) shown_selection_hint_token: u64,
-    pub(crate) one_window: sk_one_window::OneWindow,
     pub(crate) slot_dimmer: crate::one_window::slot_line::SlotDimmer,
     /// Cached state for the menu-syntax trigger picker. `filter_input_change` runs
     /// `plan_trigger_picker_transition` on every filter update and keeps this

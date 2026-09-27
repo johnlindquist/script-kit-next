@@ -57,6 +57,10 @@ impl ScriptListApp {
             return label.to_string();
         }
 
+        if self.one_window_owns_list() {
+            return self.one_window_enter_label();
+        }
+
         // The label describes the highlighted row, including while a newer
         // query waits to be filtered; Enter finishes that query before running.
         match self.painted_main_menu_selected_subject() {
@@ -339,7 +343,11 @@ impl ScriptListApp {
                 } else if let AppView::FormPrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |form, cx| form.focus_next(window, cx));
-                } else if self.run_intent_for_current_input(cx) {
+                } else if self.cmd_enter_runs_intent()
+                    && self
+                        .one_window_key(sk_one_window::Key::CmdEnter, cx)
+                        .taken()
+                {
                 } else {
                     self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
                 }
@@ -615,11 +623,19 @@ impl ScriptListApp {
 
         let mut buttons = Vec::new();
 
-        buttons.push(main_window_run_footer_button(
-            run_label,
-            footer_disabled,
-            self.main_window_selected_command_block_reason(),
-        ));
+        let one_window =
+            matches!(self.current_view, AppView::ScriptList) && self.one_window_owns_list();
+        let run = if one_window {
+            main_window_run_footer_button(run_label, footer_disabled, None)
+                .selected(self.one_window_enter_arming())
+        } else {
+            main_window_run_footer_button(
+                run_label,
+                footer_disabled,
+                self.main_window_selected_command_block_reason(),
+            )
+        };
+        buttons.push(run);
 
         if self.current_view_supports_shared_actions() {
             let chip = FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
@@ -1560,7 +1576,11 @@ impl ScriptListApp {
     }
 
     pub(crate) fn prompt_header_context(&self) -> crate::one_window::slot_line::SlotLineView {
-        crate::one_window::slot_line::SlotLineView::of(&self.one_window, &self.slot_dimmer)
+        crate::one_window::slot_line::SlotLineView::of(
+            &self.one_window,
+            &self.slot_dimmer,
+            self.one_window_clock(),
+        )
     }
 
     pub(crate) fn render_main_view_slot_line(

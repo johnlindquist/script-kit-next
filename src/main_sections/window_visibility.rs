@@ -390,6 +390,7 @@ fn show_main_window_helper(
         } else {
             view.ensure_selection_at_first_item(ctx);
         }
+        view.one_window_summon(ctx);
 
         if matches!(view.current_view, AppView::ScriptList)
             && view.main_window_mode == MainWindowMode::Mini

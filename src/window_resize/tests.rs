@@ -1,14 +1,14 @@
 use super::*;
 
 #[test]
-fn height_empty_state_clamps_to_min_height() {
+fn height_is_full_until_the_one_window_reducer_places_it() {
     let height = f32::from(height_for_main_window(MainWindowSizing {
         selectable_items: 0,
         visible_section_headers: 0,
         is_empty: true,
     }));
 
-    assert_eq!(height, MAIN_WINDOW_MIN_HEIGHT);
+    assert_eq!(height, MAIN_WINDOW_MAX_HEIGHT);
 }
 
 #[test]
@@ -19,7 +19,7 @@ fn height_returns_fixed_height_regardless_of_content() {
         is_empty: false,
     }));
 
-    // Fixed height to prevent resize jank
+    // Content doesn't size the window; the one-window reducer does
     assert_eq!(height, MAIN_WINDOW_MAX_HEIGHT);
 }
 

@@ -155,9 +155,7 @@ impl ScriptListApp {
     }
 
     fn main_view_slot_line_element(&self) -> protocol::ElementInfo {
-        let line = self
-            .one_window
-            .slot_line(crate::one_window::slot_line::now_ms());
+        let line = self.one_window.slot_line(self.one_window_clock());
         protocol::ElementInfo {
             semantic_id: crate::one_window::slot_line::SLOT_LINE_ID.to_string(),
             element_type: protocol::ElementType::Panel,

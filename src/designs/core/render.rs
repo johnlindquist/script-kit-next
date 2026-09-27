@@ -427,9 +427,9 @@ pub fn render_design_item(
                 ),
                 SearchResult::Intent(m) => (
                     m.title.clone(),
-                    Some(m.subtitle.clone()),
+                    (!m.subtitle.is_empty()).then(|| m.subtitle.clone()),
                     None,
-                    Some(IconKind::Svg("sparkles".to_string())),
+                    (!m.title.is_empty()).then(|| IconKind::Svg("sparkles".to_string())),
                 ),
                 SearchResult::SpineProjection(row) => (
                     row.title.to_string(),

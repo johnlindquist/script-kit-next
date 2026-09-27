@@ -144,7 +144,7 @@ impl ScriptListApp {
                         logging::log("UI", &format!("Moved to trash: {}", path_str));
                         self.last_output =
                             Some(SharedString::from(format!("Moved to Trash: {}", name)));
-                        Self::refresh_path_prompt(&path_prompt_entity, cx);
+                        Self::refresh_path_prompt(path_prompt_entity, cx);
 
                         let owner = cx.entity().downgrade();
                         let path_prompt_entity = path_prompt_entity.clone();
@@ -161,7 +161,10 @@ impl ScriptListApp {
                                 owner.update(cx, |this, cx| match restored {
                                     Ok(()) => {
                                         Self::refresh_path_prompt(&path_prompt_entity, cx);
-                                        this.show_success_toast(format!("Restored \"{}\"", name), cx);
+                                        this.show_success_toast(
+                                            format!("Restored \"{}\"", name),
+                                            cx,
+                                        );
                                     }
                                     Err(e) => this
                                         .show_error_toast(format!("Couldn't restore: {}", e), cx),

@@ -778,6 +778,13 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.one_window_owns_list()
+            && !self.show_actions_popup
+            && !crate::actions::is_actions_window_open()
+            && self.one_window_key(sk_one_window::Key::CmdK, cx).taken()
+        {
+            return true;
+        }
         let handled = self.dispatch_actions_toggle_for_current_view(window, cx, "cmd_k");
         tracing::info!(
             target: "script_kit::actions",
