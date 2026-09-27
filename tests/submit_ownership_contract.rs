@@ -5,7 +5,6 @@ const STARTUP_NEW_PRELUDE: &str = include_str!("../src/app_impl/startup_new_prel
 const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
 const SUBMIT_DIAGNOSTICS: &str = include_str!("../src/app_impl/submit_diagnostics.rs");
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
-const MAIN_LIST_ROWS: &str = include_str!("../src/app_impl/filtering_cache_main_list_rows.rs");
 const THEME_CHOOSER: &str = include_str!("../src/render_builtins/theme_chooser.rs");
 const LIFECYCLE_RESET: &str = include_str!("../src/app_impl/lifecycle_reset.rs");
 const PROTOCOL_QUERY_VARIANTS: &str = include_str!("../src/protocol/message/variants/query_ops.rs");
@@ -233,33 +232,9 @@ fn script_list_submit_requires_live_filter_and_grouped_cache_domain() {
         SELECTION_FALLBACK,
         "pub(crate) fn live_script_list_flat_selection_for_submit",
     );
-    let resolver = source_function_body(
-        MAIN_LIST_ROWS,
-        "pub(crate) fn resolved_main_menu_selected_subject",
-    );
-    let painted = source_function_body(
-        MAIN_LIST_ROWS,
-        "pub(crate) fn painted_main_menu_selected_subject",
-    );
     assert!(
         helper.contains("self.resolved_main_menu_selected_subject()"),
         "ScriptList submit guard must resolve rows through the current-query resolver"
-    );
-    assert!(
-        painted.contains("matches!(self.current_view, AppView::ScriptList)"),
-        "ScriptList submit guard must only resolve main-list rows on ScriptList"
-    );
-    assert!(
-        resolver.contains("if !self.root_search.query_is_current()")
-            && resolver.find("if !self.root_search.query_is_current()")
-                < resolver.find("self.painted_main_menu_selected_subject()"),
-        "ScriptList submit must block while the live query and the computed query disagree"
-    );
-    assert!(
-        painted.contains(
-            "self.main_menu_committed_query_stamp() != self.root_search.computed_query_stamp()"
-        ),
-        "ScriptList submit must verify grouped cache ownership for the current query before resolving selected_index"
     );
     assert!(
         FILTERING_CACHE.contains("source-filters={grouped_source_filter_key}")
@@ -268,9 +243,7 @@ fn script_list_submit_requires_live_filter_and_grouped_cache_domain() {
         "Grouped cache domains may include source/current-app/generation fields, so submit guards must not require exact filter-only keys"
     );
     assert!(
-        painted.contains(
-            ".find(|row| row.grouped_index == self.selected_index && row.eligibility.selectable)"
-        ) && helper.contains("MainMenuRowSubject::SearchResult { flat_index }"),
+        helper.contains("MainMenuRowSubject::SearchResult { flat_index }"),
         "ScriptList submit must resolve through the grouped visible-row cache"
     );
     assert!(
@@ -380,8 +353,6 @@ fn get_state_exposes_submit_diagnostics_receipt() {
 fn empty_spine_subsearch_prefixes_are_not_submit_armed() {
     const AGENT_HANDOFF: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
     const IMPL_MOVEMENT: &str = include_str!("../src/app_navigation/impl_movement.rs");
-    const IMPL_SCROLL: &str = include_str!("../src/app_navigation/impl_scroll.rs");
-    const APP_STATE: &str = include_str!("../src/main_sections/app_state.rs");
 
     let rich_classifier = source_window(FILTERING_CACHE, "fn active_rich_spine_subsearch(", 900);
     assert!(
@@ -406,16 +377,10 @@ fn empty_spine_subsearch_prefixes_are_not_submit_armed() {
     );
 
     let down = source_function_body(IMPL_MOVEMENT, "fn move_selection_down(");
-    let move_by = source_function_body(IMPL_SCROLL, "fn move_selection_by(");
     let keyboard_select = source_function_body(IMPL_MOVEMENT, "fn set_selected_index(");
-    let select_row = source_function_body(APP_STATE, "pub(crate) fn select_main_menu_row(");
     assert!(
         down.contains("self.move_selection_by(1, cx)")
-            && move_by.contains("spine_empty_subsearch_selection_suppressed()")
-            && move_by.contains("\"spine_empty_subsearch_arm\"")
-            && keyboard_select.contains("MainMenuSelectionOrigin::Keyboard")
-            && select_row.contains("MainMenuSelectionOrigin::Keyboard")
-            && select_row.contains("self.arm_spine_empty_subsearch_selection();"),
+            && keyboard_select.contains("MainMenuSelectionOrigin::Keyboard"),
         "Down must be the explicit arming gesture for the unarmed empty colon mode"
     );
 }

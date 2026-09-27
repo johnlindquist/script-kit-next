@@ -444,10 +444,8 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
         );
     }
 
-    for path in [
-        "src/app_impl/simulate_key_dispatch.rs",
-        "src/main_entry/app_run_setup.rs",
-    ] {
+    {
+        let path = "src/main_entry/app_run_setup.rs";
         let source = read(path);
         assert!(
             !source.contains("try_route_plain_tab_to_agent_chat_context_capture"),

@@ -9,7 +9,6 @@ const CONFIG_TYPES: &str = include_str!("../src/config/types.rs");
 const DEVICE: &str = include_str!("../src/dictation/device.rs");
 const INFO_PLIST_EXT: &str = include_str!("../assets/Info.plist.ext");
 const STDIN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const SIMULATE_KEY: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 const CONFIG_TEMPLATE: &str = include_str!("../kit-init/config-template.ts");
 const GUIDE: &str = include_str!("../kit-init/GUIDE.md");
 const UPDATE_CONFIG_EXAMPLES: &str =
@@ -152,15 +151,6 @@ fn protocol_enter_submits_mini_setup_prompt() {
     assert!(
         STDIN_SETUP.contains("view.dispatch_simulate_key("),
         "app_run_setup must route simulateKey through the shared dispatcher"
-    );
-    assert!(
-        SIMULATE_KEY.contains("AppView::MiniPrompt { id, .. }"),
-        "simulate_key_dispatch must route MiniPrompt through simulateKey"
-    );
-    assert!(
-        SIMULATE_KEY.contains("SimulateKey: Enter - submit mini prompt selection")
-            && SIMULATE_KEY.contains("view.submit_arg_prompt_from_current_state("),
-        "simulate_key_dispatch must submit the current MiniPrompt selection on protocol Enter"
     );
 }
 

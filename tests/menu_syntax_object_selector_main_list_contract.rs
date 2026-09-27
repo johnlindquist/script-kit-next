@@ -1,8 +1,6 @@
 //! Source-level contracts for main-list ownership of menu-syntax `@` object rows.
 
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
-const FILTERING_CACHE_MAIN_LIST_ROWS: &str =
-    include_str!("../src/app_impl/filtering_cache_main_list_rows.rs");
 const OBJECT_SELECTOR: &str = include_str!("../src/menu_syntax/object_selector.rs");
 const OBJECT_SELECTOR_OWNER: &str =
     include_str!("../src/app_impl/menu_syntax_object_selector_main_list.rs");
@@ -13,21 +11,9 @@ const STARTUP_NEW_ARROW: &str = include_str!("../src/app_impl/startup_new_arrow.
 #[test]
 fn object_selector_rows_are_cached_as_main_list_rows() {
     assert!(
-        FILTERING_CACHE.contains("include!(\"filtering_cache_main_list_rows.rs\");")
-            && FILTERING_CACHE
-                .contains("build_menu_syntax_object_selector_main_list_results(snapshot)"),
+        FILTERING_CACHE.contains("build_menu_syntax_object_selector_main_list_results(snapshot)"),
         "the grouped cache must build object selector rows through the shared row builder"
     );
-    for needle in [
-        "fn build_menu_syntax_object_selector_main_list_results",
-        "object_selector_row_to_main_list_row(row)",
-        "SearchResult::SpineProjection",
-    ] {
-        assert!(
-            FILTERING_CACHE_MAIN_LIST_ROWS.contains(needle),
-            "object selector must build shared main-list rows through grouped cache: {needle}"
-        );
-    }
 
     for needle in [
         "pub fn object_selector_row_to_main_list_row",

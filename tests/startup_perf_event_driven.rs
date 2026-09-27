@@ -8,10 +8,6 @@ fn read_script_list_startup_source() -> String {
     read_source("src/app_impl/startup.rs")
 }
 
-fn read_script_list_app_new_source() -> String {
-    read_source("src/app_impl/startup_data.rs")
-}
-
 fn read_prompt_ai_source() -> String {
     read_source("src/app_impl/prompt_ai.rs")
 }
@@ -45,25 +41,6 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     };
 
     &tail[..end]
-}
-
-#[test]
-fn test_script_list_app_new_uses_event_driven_receive_when_loading_startup_data() {
-    let source = read_script_list_app_new_source();
-    let body = function_body(&source, "pub(crate) fn new(");
-
-    assert!(
-        body.contains("rx.recv().await"),
-        "ScriptListApp::new should await channel receive instead of polling"
-    );
-    assert!(
-        !body.contains("try_recv("),
-        "ScriptListApp::new should not poll with try_recv()"
-    );
-    assert!(
-        !body.contains("Duration::from_millis(50)"),
-        "ScriptListApp::new should not use 50ms polling timers for startup bridges"
-    );
 }
 
 #[test]

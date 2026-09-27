@@ -1,20 +1,4 @@
-/// Render and filter-performance diagnostics owned by the main script list surface.
-#[derive(Debug)]
-struct MainMenuRenderDiagnosticsState {
-    /// Last filter value that produced render diagnostics.
-    last_render_log_filter: String,
-    /// Last selection index that produced render diagnostics.
-    last_render_log_selection: usize,
-    /// Last item count that produced render diagnostics.
-    last_render_log_item_count: usize,
-    /// True when the current render changed enough to log preview diagnostics.
-    log_this_render: bool,
-    /// Start time for the current input-to-grouped-results performance sample.
-    filter_perf_start: Option<std::time::Instant>,
-    /// Cache fields for highlighting
-    last_input_highlight_text: String,
-    last_input_highlight_ranges: Vec<(std::ops::Range<usize>, gpui::Hsla, String)>,
-}
+include!("main_menu_render_diagnostics.rs");
 
 #[derive(Clone, Debug)]
 struct SubmitDiagnosticEvent {
@@ -33,20 +17,6 @@ struct SubmitDiagnosticsState {
     generation: u64,
     last: Option<SubmitDiagnosticEvent>,
     pending_enter_consumed_at: Option<std::time::Instant>,
-}
-
-impl Default for MainMenuRenderDiagnosticsState {
-    fn default() -> Self {
-        Self {
-            last_render_log_filter: String::new(),
-            last_render_log_selection: usize::MAX,
-            last_render_log_item_count: usize::MAX,
-            log_this_render: true,
-            filter_perf_start: None,
-            last_input_highlight_text: String::new(),
-            last_input_highlight_ranges: Vec::new(),
-        }
-    }
 }
 
 /// Environment-gated proxy timing from main-list wheel events to GPUI's next
