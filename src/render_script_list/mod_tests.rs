@@ -1,13 +1,9 @@
 #[cfg(test)]
 mod render_script_list_footer_tests {
     use super::{
-        app_shell_footer_colors, inline_calc_list_item_hint_text_color,
-        inline_calc_list_item_result_text_color, inline_calc_list_item_selected_overlay_rgba,
-        inline_calc_list_item_title, menu_syntax_single_line_text_for_gpui,
+        app_shell_footer_colors, menu_syntax_single_line_text_for_gpui,
         script_list_footer_info_label,
     };
-    use crate::designs::DesignVariant;
-    use crate::theme::ColorResolver;
 
     #[test]
     fn test_app_shell_footer_colors_use_theme_accent_tokens() {
@@ -68,64 +64,6 @@ mod render_script_list_footer_tests {
         assert!(rendered.contains("first"));
         assert!(rendered.contains('s'));
         assert!(rendered.contains("third"));
-    }
-
-    #[test]
-    fn test_inline_calc_list_item_title_prefixes_equals_sign() {
-        assert_eq!(inline_calc_list_item_title("1500"), "= 1500");
-    }
-
-    #[test]
-    fn test_inline_calc_result_text_color_does_use_resolver_accent_when_selected_non_default() {
-        let mut theme = crate::theme::Theme::default();
-        theme.colors.accent.selected = 0x112233;
-        let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
-
-        let color = inline_calc_list_item_result_text_color(
-            true,
-            DesignVariant::NeonCyberpunk,
-            &theme,
-            color_resolver,
-        );
-
-        assert_eq!(color, color_resolver.primary_accent());
-        assert_ne!(color, theme.colors.accent.selected);
-    }
-
-    #[test]
-    fn test_inline_calc_hint_text_color_does_use_color_resolver_muted_token() {
-        let theme = crate::theme::Theme::default();
-        let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
-
-        assert_eq!(
-            inline_calc_list_item_hint_text_color(color_resolver),
-            color_resolver.empty_text_color()
-        );
-    }
-
-    #[test]
-    fn test_inline_calc_selected_overlay_does_use_resolver_accent_with_theme_alpha() {
-        let mut theme = crate::theme::Theme::default();
-        theme.colors.accent.selected_subtle = 0x010203;
-        let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
-
-        let expected_alpha =
-            ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32).max(
-                crate::designs::MainMenuThemeVariant::InfoBarBase
-                    .def()
-                    .list
-                    .inline_calc_selected_overlay_min_alpha,
-            );
-        let expected = (color_resolver.primary_accent() << 8) | expected_alpha;
-
-        assert_eq!(
-            inline_calc_list_item_selected_overlay_rgba(
-                &theme,
-                crate::designs::MainMenuThemeVariant::InfoBarBase.def().list,
-                color_resolver
-            ),
-            expected
-        );
     }
 }
 

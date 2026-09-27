@@ -5,10 +5,13 @@
 //! Enter never runs something that changed under the key. The host feeds [`window::Event`]s with
 //! the current time and applies the [`window::Effect`]s it gets back.
 
+pub mod answer;
 pub mod chat;
+pub mod clipboard;
 pub mod connect;
 pub mod contract;
 pub mod enter;
+pub mod form;
 pub mod height;
 pub mod history;
 pub mod hold;

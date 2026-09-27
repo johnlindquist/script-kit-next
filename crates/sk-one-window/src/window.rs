@@ -4,6 +4,7 @@
 //! input says, which header leads the list, what Enter runs and when it is ignored, how the
 //! window's height moves, and what waits before it goes. Nothing here reads a clock.
 
+mod clipboard;
 mod finishing;
 mod keys;
 mod learning;
@@ -194,6 +195,8 @@ pub enum Event {
     Irreversible(crate::notice::Irreversible),
     /// A view put something in the line (history's Enter stages the entry it's on).
     Stage(Subject),
+    /// ⌘V with this text on the clipboard.
+    Paste(String),
 }
 
 impl Event {
@@ -211,7 +214,7 @@ impl Event {
     fn is_user(&self) -> bool {
         matches!(
             self,
-            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon
+            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon | Event::Paste(_)
         )
     }
 }
@@ -721,6 +724,7 @@ impl OneWindow {
                 self.stage(now, subject, None, words::STAGED, fx);
                 true
             }
+            Event::Paste(text) => self.on_paste(now, text, fx),
         }
     }
 }

@@ -140,6 +140,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> Option<Result<(), &'static str>> {
         if let Some(plan) = self.intent_launcher.plan(text, key) {
+            if self.one_window_open_plan(&plan, cx) {
+                return Some(Ok(()));
+            }
             if !plan.ready {
                 self.explain_unready_plan(&plan, cx);
                 return Some(Err("intent_plan_not_ready"));
@@ -147,9 +150,10 @@ impl ScriptListApp {
             return Some(self.execute_intent_plan(&plan, cx));
         }
         match key {
-            "down:note" => Some(append_capture_to_day("note", text, None).map(|()| {
-                self.one_window_ran_here(cx);
-            })),
+            "down:note" => {
+                self.one_window_open_note(text.to_string(), cx);
+                Some(Ok(()))
+            }
             _ => None,
         }
     }

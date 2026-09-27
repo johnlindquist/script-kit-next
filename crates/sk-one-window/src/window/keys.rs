@@ -164,6 +164,7 @@ impl OneWindow {
             .is_some_and(|s| s.rows.iter().any(|r| r.key == row.key));
         if from_staged && row.act != RowAct::Share {
             self.staged = None;
+            self.list.sel = 0;
             self.refresh_rows();
         }
         if row.takes_back_last() && self.take_back(now, row.target.as_deref(), fx) {

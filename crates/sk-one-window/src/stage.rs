@@ -23,6 +23,8 @@ pub enum SubjectKind {
     Answer,
     #[default]
     Thing,
+    /// Something copied, pasted into the empty input.
+    Clipboard,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -130,7 +132,7 @@ pub fn row_subject(row: &Row) -> Subject {
 }
 
 /// A row that acts on the staged subject. `say` is the sentence that does the same thing.
-fn act(icon: &str, title: &str, say: &str, act: RowAct) -> Row {
+pub(crate) fn act(icon: &str, title: &str, say: &str, act: RowAct) -> Row {
     let row = Row::new(format!("act:{title}"), title)
         .with_enter_label(title)
         .with_icon(icon)
@@ -272,6 +274,7 @@ pub fn default_actions(subject: &Subject) -> Vec<Row> {
                 act("check", "Mark it done", "mark it done", RowAct::Host),
             ]
         }
+        SubjectKind::Clipboard => crate::clipboard::actions(subject),
         SubjectKind::Entry | SubjectKind::Script | SubjectKind::Answer | SubjectKind::Thing => {
             vec![
                 act("open", "Open it", "open it", RowAct::Host),

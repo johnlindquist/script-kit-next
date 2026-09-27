@@ -929,3 +929,6 @@ mod work;
 
 #[path = "ui_window_one_window_learns_tests.rs"]
 mod learns;
+
+#[path = "ui_window_enter_button_property_tests_views.rs"]
+mod views;

@@ -138,6 +138,8 @@ pub mod words {
 
     /// Jev's first reserved row while it reads the words.
     pub const UNDERSTANDING: &str = "Understanding…";
+
+    pub const CLIPBOARD: &str = "Clipboard";
 }
 
 /// Icons whose runs can be undone (the rest either wait or just happen).

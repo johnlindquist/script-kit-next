@@ -67,7 +67,9 @@ impl ScriptListApp {
             Some(ResolvedMainMenuSelection::SearchResult { result, .. }) => {
                 main_window_result_action_label(result, frontmost_app_name.as_deref())
             }
-            Some(ResolvedMainMenuSelection::Calculator { .. }) => "Copy".to_string(),
+            Some(ResolvedMainMenuSelection::Calculator { result, .. }) => {
+                format!("Show {}", result.formatted)
+            }
             None => "Run".to_string(),
         }
     }
