@@ -86,7 +86,7 @@ Shared UI entry points to check first:
 - Footer and hint strips: `src/components/hint_strip.rs`, `src/components/footer_chrome.rs`, `src/footer_popup.rs`, and native footer handling in `src/app_impl/ui_window.rs`.
 - Main-window chrome/layout: `src/components/main_view_chrome.rs`, `src/main_sections/**`, `src/render_script_list/**`, and `src/app_layout/**`.
 - Empty/info/non-list states: `src/components/info_state.rs` and `src/components/non_list_state.rs`.
-- Forms/buttons/toasts/shortcuts: `src/components/form_fields/**`, `src/components/button.rs`, `src/components/toast/**`, and `src/components/shortcut_recorder.rs`.
+- Forms/buttons/shortcuts: `src/components/form_fields/**`, `src/components/button.rs`, and `src/components/shortcut_recorder.rs`.
 
 Theme and visual values must be tokenized:
 
