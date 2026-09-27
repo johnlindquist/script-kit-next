@@ -759,12 +759,7 @@ impl ScriptListApp {
                 }
             }));
         }
-        // The detached chat window code is compiled into the lib, which
-        // cannot name ScriptListApp; register the binary-side reattach hook
-        // it dispatches through.
-        crate::ai::agent_chat::ui::chat_window::register_reattach_into_main_hook(
-            Self::reattach_detached_chat_hook,
-        );
+        crate::one_window::chat_entry::register_chat_host();
         // Load apps in background thread to avoid blocking startup
         let app_launcher_enabled = self.config.get_builtins().app_launcher;
         if app_launcher_enabled {
@@ -989,7 +984,7 @@ impl ScriptListApp {
                     return;
                 };
                 app.update(cx, |this, cx| {
-                    this.warm_agent_chat_on_startup(cx);
+                    this.prewarm_agent_chat_for_spine_cwd(cx);
                     this.warm_tab_ai_harness_on_startup(cx);
                     this.warm_quick_terminal_pty(cx);
                 });

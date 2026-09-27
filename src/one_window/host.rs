@@ -256,6 +256,7 @@ impl ScriptListApp {
         for work in works {
             self.one_window_apply_work(work, cx);
         }
+        self.one_window_after_turn();
         cx.notify();
         handled
     }

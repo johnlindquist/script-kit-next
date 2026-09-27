@@ -8,15 +8,6 @@ fn valid_fixture_controls() -> Vec<Value> {
         json!({"family":"search","operation":"release","runIds":[42]}),
         json!({"family":"search","operation":"release","runIds":[42,43]}),
         json!({"family":"search","operation":"advance","milliseconds":16}),
-        json!({"family": "agentChat", "operation": "submit", "text": "fixture request"}),
-        json!({"family": "agentChat", "operation": "retry"}),
-        json!({"family": "agentChat", "operation": "stop"}),
-        json!({"family": "agentChat", "operation": "emitText", "turnGeneration": 7, "text": "response"}),
-        json!({"family": "agentChat", "operation": "complete", "turnGeneration": 7}),
-        json!({"family": "agentChat", "operation": "fail", "turnGeneration": 7}),
-        json!({"family": "agentChat", "operation": "openHistory"}),
-        json!({"family": "agentChat", "operation": "openSlashPicker"}),
-        json!({"family": "agentChat", "operation": "openProfilePicker"}),
         json!({"family": "flow", "sessionId": 11, "operation": "submit", "text": "fixture request"}),
         json!({"family": "flow", "sessionId": 11, "operation": "retry"}),
         json!({"family": "flow", "sessionId": 11, "operation": "stop"}),
@@ -78,7 +69,6 @@ fn fixture_controls_reject_unknown_fields_families_and_operations() {
     }))
     .is_err());
     assert!(serde_json::from_value::<FixtureControl>(json!({"operation": "retry"})).is_err());
-    assert!(serde_json::from_value::<FixtureControl>(json!({"family": "agentChat"})).is_err());
 }
 
 #[test]

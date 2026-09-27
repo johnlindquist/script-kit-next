@@ -95,16 +95,10 @@ enum AgentChatReadTarget {
     Main {
         info: Option<crate::protocol::AutomationWindowInfo>,
     },
-    /// Read from the detached Agent Chat chat window's entity.
-    Detached {
-        info: crate::protocol::AutomationWindowInfo,
-        entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PromptPopupSubtype {
-    AgentChatHistory,
     DictationMicrophone,
     Confirm,
 }
@@ -113,9 +107,6 @@ fn resolve_prompt_popup_subtype(
     resolved: &crate::protocol::AutomationWindowInfo,
 ) -> Result<PromptPopupSubtype, crate::protocol::TransactionError> {
     let subtype = match resolved.id.as_str() {
-        crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => {
-            PromptPopupSubtype::AgentChatHistory
-        }
         crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
             PromptPopupSubtype::DictationMicrophone
         }
@@ -128,10 +119,6 @@ fn resolve_prompt_popup_subtype(
     };
 
     let is_open = match subtype {
-        PromptPopupSubtype::AgentChatHistory => {
-            resolved.generation.is_some()
-                && crate::ai::agent_chat::ui::history_popup::is_history_popup_window_open()
-        }
         PromptPopupSubtype::DictationMicrophone => {
             resolved.generation.is_some()
                 && crate::dictation::is_dictation_microphone_popup_window_open()
@@ -192,7 +179,6 @@ enum AutomationReadTarget {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AutomationBatchTargetKind {
     Main,
-    AgentChatDetached,
     Dictation,
     Notes,
     ActionsDialog,
@@ -223,12 +209,6 @@ impl BatchTargetCapabilities {
                     "filterAndSelect",
                     "typeAndSubmit",
                 ],
-                concise_unsupported_message: true,
-            },
-            AutomationBatchTargetKind::AgentChatDetached => Self {
-                display_name: "Detached Agent Chat",
-                unsupported_target_name: "detached Agent Chat",
-                supported_commands: &["setInput", "waitFor", "selectByValue", "selectBySemanticId"],
                 concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::Dictation => Self {
@@ -276,9 +256,6 @@ fn registered_batch_target_kind(
 ) -> AutomationBatchTargetKind {
     match target.kind {
         protocol::AutomationWindowKind::Main => AutomationBatchTargetKind::Main,
-        protocol::AutomationWindowKind::AgentChatDetached => {
-            AutomationBatchTargetKind::AgentChatDetached
-        }
         protocol::AutomationWindowKind::Notes => AutomationBatchTargetKind::Notes,
         protocol::AutomationWindowKind::Dictation => AutomationBatchTargetKind::Dictation,
         protocol::AutomationWindowKind::ActionsDialog => AutomationBatchTargetKind::ActionsDialog,
@@ -433,44 +410,6 @@ fn resolve_agent_chat_read_target(
                 info: Some(resolved),
             })
         }
-        crate::protocol::AutomationWindowKind::AgentChatDetached => {
-            registered_surface_target(&resolved).map_err(registered_surface_transaction_error)?;
-            match resolved.generation.and_then(|generation| {
-                crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
-                    &resolved.id,
-                    generation,
-                )
-            }) {
-                Some(entity) => {
-                    tracing::info!(
-                        target: "script_kit::automation",
-                        request_id = %request_id,
-                        op = op,
-                        window_id = %resolved.id,
-                        kind = ?resolved.kind,
-                        "automation.agent_chat_target.detached_resolved"
-                    );
-                    Ok(AgentChatReadTarget::Detached {
-                        info: resolved,
-                        entity,
-                    })
-                }
-                None => {
-                    tracing::warn!(
-                        target: "script_kit::automation",
-                        request_id = %request_id,
-                        op = op,
-                        window_id = %resolved.id,
-                        "automation.agent_chat_target.detached_no_entity"
-                    );
-                    Err(crate::protocol::TransactionError::action_failed(format!(
-                        "{op} resolved detached Agent Chat target {} but no live view entity is available \
-                         (window may be a placeholder or closed)",
-                        resolved.id
-                    )))
-                }
-            }
-        }
         crate::protocol::AutomationWindowKind::Notes => {
             // The Notes window no longer hosts an Agent Chat surface: every
             // notes→AI affordance stages into the MAIN window's Agent Chat.
@@ -528,11 +467,6 @@ fn build_agent_chat_resolved_target(
                 )
             }
         }
-        AgentChatReadTarget::Detached { info, .. } => (
-            info.id.clone(),
-            info.kind.as_camel_case().to_string(),
-            info.title.clone(),
-        ),
     };
 
     tracing::info!(
@@ -1758,8 +1692,7 @@ impl ScriptListApp {
                 );
 
                 let keep_tab_ai_save_offer_open = self.tab_ai_save_offer_state.is_some();
-                let keep_agent_chat_open =
-                    matches!(self.current_view, AppView::AgentChatView { .. });
+                let keep_agent_chat_open = self.one_window.chat().is_some();
 
                 if keep_tab_ai_save_offer_open {
                     tracing::info!(
@@ -2421,26 +2354,6 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
-                    AppView::AgentChatHistoryView {
-                        filter,
-                        selected_index,
-                    } => {
-                        let (dataset_count, visible_count) =
-                            Self::agent_chat_history_dataset_and_visible_counts(filter);
-                        let selected_value =
-                            Self::agent_chat_history_selected_visible_row(filter, *selected_index)
-                                .map(|entry| entry.title_display().to_string());
-                        (
-                            "agent_chatHistory".to_string(),
-                            None,
-                            None,
-                            filter.clone(),
-                            dataset_count,
-                            visible_count,
-                            *selected_index as i32,
-                            selected_value,
-                        )
-                    }
                     AppView::BrowserHistoryView {
                         filter,
                         selected_index,
@@ -2944,16 +2857,6 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
-                    AppView::AgentChatView { .. } => (
-                        "agentChatChat".to_string(),
-                        None,
-                        None,
-                        String::new(),
-                        0,
-                        0,
-                        -1,
-                        None,
-                    ),
                     AppView::DayPage { entity } => {
                         let content = entity.read(cx).notes_editor.read(cx).content(cx);
                         ("dayPage".to_string(), None, None, content, 0, 0, -1, None)
@@ -3546,17 +3449,12 @@ impl ScriptListApp {
 
                 let mut state = match &agent_chat_target {
                     AgentChatReadTarget::Main { .. } => self.collect_agent_chat_state(cx),
-                    AgentChatReadTarget::Detached { entity, .. } => {
-                        let view = entity.read(cx);
-                        view.collect_agent_chat_state_snapshot(cx)
-                    }
                 };
                 state.resolved_target = resolved_target;
                 let reliability_window_id = match &agent_chat_target {
                     AgentChatReadTarget::Main { info } => {
                         info.as_ref().map(|info| info.id.as_str()).unwrap_or("main")
                     }
-                    AgentChatReadTarget::Detached { info, .. } => info.id.as_str(),
                 };
                 if let Some(fixture) =
                     crate::ai::reliability::ai_reliability_fixture_for_target(reliability_window_id)
@@ -3684,31 +3582,11 @@ impl ScriptListApp {
                     }
                 };
 
-                // For Main targets, verify the main window is actually showing AgentChatView.
-                if matches!(agent_chat_target, AgentChatReadTarget::Main { .. })
-                    && !matches!(self.current_view, AppView::AgentChatView { .. })
-                {
-                    tracing::warn!(
-                        target: "script_kit::automation",
-                        request_id = %request_id,
-                        "automation.agent_chat_action_target_main_view_missing"
-                    );
-                    let response = Message::agent_chat_setup_action_result_error(
-                            request_id.clone(),
-                            "performAgentChatSetupAction resolved the main Agent Chat target but the main window is not currently showing AgentChatView".to_string(),
-                        );
-                    if let Some(ref sender) = self.response_sender {
-                        let _ = sender.try_send(response);
-                    }
-                    return;
-                }
-
                 tracing::info!(
                     target: "script_kit::automation",
                     request_id = %request_id,
                     resolved_target = match &agent_chat_target {
                         AgentChatReadTarget::Main { .. } => "main",
-                        AgentChatReadTarget::Detached { .. } => "detached",
                     },
                     "automation.agent_chat_action_target_resolved"
                 );
@@ -3719,27 +3597,12 @@ impl ScriptListApp {
                     &agent_chat_target,
                 );
 
-                // Dispatch the action to the resolved Agent Chat view.
-                let result = match agent_chat_target.clone() {
-                    AgentChatReadTarget::Main { .. } => match &self.current_view {
-                        AppView::AgentChatView { entity } => entity.update(cx, |view, cx| {
-                            view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
-                        }),
-                        _ => Err("current main view is not AgentChatView".to_string()),
-                    },
-                    AgentChatReadTarget::Detached { entity, .. } => {
-                        entity.update(cx, |view, cx| {
-                            view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
-                        })
-                    }
-                };
+                // The chat has no setup card: signing in is a row under the main input.
+                let result: Result<(), String> =
+                    Err("the chat has no setup card; sign-in is a row under the input".to_string());
 
                 let mut state = match &agent_chat_target {
                     AgentChatReadTarget::Main { .. } => self.collect_agent_chat_state(cx),
-                    AgentChatReadTarget::Detached { entity, .. } => {
-                        let view = entity.read(cx);
-                        view.collect_agent_chat_state_snapshot(cx)
-                    }
                 };
                 state.resolved_target = resolved_target;
 
@@ -3912,27 +3775,12 @@ impl ScriptListApp {
                     &agent_chat_target,
                 );
 
-                match &agent_chat_target {
-                    AgentChatReadTarget::Main { .. } => {
-                        self.reset_agent_chat_test_probe(cx);
-                    }
-                    AgentChatReadTarget::Detached { entity, .. } => {
-                        entity.update(cx, |view, _cx| {
-                            view.reset_test_probe();
-                        });
-                    }
-                };
-
                 // Respond with the current (now-empty) probe snapshot.
                 let mut probe = match &agent_chat_target {
                     AgentChatReadTarget::Main { .. } => self.collect_agent_chat_test_probe(
                         protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS,
                         cx,
                     ),
-                    AgentChatReadTarget::Detached { entity, .. } => {
-                        let view = entity.read(cx);
-                        view.test_probe_snapshot(protocol::AGENT_CHAT_TEST_PROBE_MAX_EVENTS, cx)
-                    }
                 };
                 probe.state.resolved_target = resolved_target;
                 let response = Message::agent_chat_test_probe_result(request_id.clone(), probe);
@@ -4005,10 +3853,6 @@ impl ScriptListApp {
                 let mut probe = match &agent_chat_target {
                     AgentChatReadTarget::Main { .. } => {
                         self.collect_agent_chat_test_probe(tail, cx)
-                    }
-                    AgentChatReadTarget::Detached { entity, .. } => {
-                        let view = entity.read(cx);
-                        view.test_probe_snapshot(tail, cx)
                     }
                 };
                 probe.state.resolved_target = resolved_target;
@@ -5865,9 +5709,8 @@ impl ScriptListApp {
                         if let Err(error) =
                             binding.try_complete(PromptOutcome::Confirmed(confirmed))
                         {
-                            let _ = app.update(cx, |app, cx| {
-                                app.show_error_toast(error.to_string(), cx)
-                            });
+                            let _ = app
+                                .update(cx, |app, cx| app.show_error_toast(error.to_string(), cx));
                         }
                     },
                     cx,
@@ -6340,27 +6183,6 @@ impl ScriptListApp {
                     "AiStartChat request"
                 );
 
-                // Open Agent Chat (creates new if not open, brings to front if open)
-                if let Err(e) = crate::ai::agent_chat::ui::chat_window::open_chat_window(cx) {
-                    tracing::error!(
-                        category = "ERROR",
-                        error = %e,
-                        "Failed to open Agent Chat for AiStartChat"
-                    );
-                    // Still send response so SDK doesn't hang
-                    if let Some(ref sender) = self.response_sender {
-                        let _ = sender.try_send(Message::AiChatCreated {
-                            request_id,
-                            chat_id: String::new(),
-                            title: String::new(),
-                            model_id: model_id.unwrap_or_default(),
-                            provider: String::new(),
-                            streaming_started: false,
-                        });
-                    }
-                    return;
-                }
-
                 // Pre-generate a real ChatId so the SDK gets an actual persistent ID
                 let chat_id = crate::ai::ChatId::new();
                 let should_submit = !no_response;
@@ -6399,63 +6221,15 @@ impl ScriptListApp {
                         request_id = %request_id,
                         has_system_prompt = system_prompt.is_some(),
                         has_image = image.is_some(),
-                        "AiStartChat system prompt and image are not carried into Agent Chat"
+                        "AiStartChat system prompt and image are not carried into the chat"
                     );
                 }
-
-                // Stage the message in the Agent Chat composer once the view is
-                // ready, then optionally submit it as the first turn.
-                let message_for_chat = message.clone();
-                cx.spawn(async move |_this, cx| {
-                    let mut waits_completed = 0usize;
-                    loop {
-                        let ready = cx.update(|_cx| {
-                            crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
-                                .is_some()
-                        });
-                        if ready || waits_completed >= 8 {
-                            break;
-                        }
-                        waits_completed += 1;
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_millis(16))
-                            .await;
-                    }
-                    cx.update(|cx| {
-                        let Some(entity) = crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity() else {
-                            tracing::error!(
-                                category = "ERROR",
-                                "Agent Chat view unavailable for AiStartChat handoff"
-                            );
-                            return;
-                        };
-                        entity.update(cx, |chat, cx| {
-                            if chat.is_setup_mode() {
-                                tracing::error!(
-                                    category = "ERROR",
-                                    "Agent Chat is in setup mode; cannot start chat"
-                                );
-                                return;
-                            }
-                            chat.live_thread().update(cx, |thread, cx| {
-                                for part in context_parts {
-                                    thread.add_context_part(part, cx);
-                                }
-                                thread.set_input(message_for_chat, cx);
-                                if should_submit {
-                                    if let Err(error) = thread.submit_input(cx) {
-                                        tracing::error!(
-                                            category = "ERROR",
-                                            error = %error,
-                                            "AiStartChat submit failed"
-                                        );
-                                    }
-                                }
-                            });
-                        });
-                    });
-                })
-                .detach();
+                let words = if should_submit {
+                    crate::one_window::chat_entry::ChatEntry::sending(message.clone())
+                } else {
+                    crate::one_window::chat_entry::ChatEntry::seeded(message.clone())
+                };
+                self.one_window_open_chat(words.with_parts(context_parts), cx);
 
                 // Build title from message content
                 let title = if message.trim().is_empty() && image.is_some() {
@@ -6504,24 +6278,14 @@ impl ScriptListApp {
             PromptMessage::AiFocus { request_id } => {
                 tracing::info!(category = "AI", request_id = %request_id, "AiFocus request");
 
-                // Check if the chat window was already open before we open/focus it
-                let was_open = crate::ai::agent_chat::ui::chat_window::is_chat_window_open();
-
-                // Open Agent Chat (creates new if not open, brings to front if open)
-                let success = match crate::ai::agent_chat::ui::chat_window::open_chat_window(cx) {
-                    Ok(()) => {
-                        tracing::info!(category = "AI", "Agent Chat focused successfully");
-                        true
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            category = "ERROR",
-                            error = %e,
-                            "Failed to focus Agent Chat"
-                        );
-                        false
-                    }
-                };
+                let was_open = self.one_window.chat().is_some();
+                if !was_open {
+                    self.one_window_open_chat(
+                        crate::one_window::chat_entry::ChatEntry::quick(),
+                        cx,
+                    );
+                }
+                let success = true;
 
                 // Send AiFocusResult response back to SDK
                 if let Some(ref sender) = self.response_sender {
@@ -6673,17 +6437,12 @@ impl ScriptListApp {
         let header = view.main_view_header_input_policy();
         let (shell_owner, intentional_divergence) = match header {
             crate::MainViewHeaderInputPolicy::ViewOwnedCanonicalInput
-            | crate::MainViewHeaderInputPolicy::ViewOwnedCanonicalMultilineInput
             | crate::MainViewHeaderInputPolicy::ViewOwnedContextOnly => {
                 ("components::main_view_chrome", None)
             }
             crate::MainViewHeaderInputPolicy::RootContextOnly => {
                 ("components::prompt_layout_shell", None)
             }
-            crate::MainViewHeaderInputPolicy::ViewOwnedIntentionalCompact => (
-                "focused_text::compact_shell",
-                Some("Focused Text Mini intentionally owns a compact 44px input shell."),
-            ),
         };
         let input_owner = match contract.vocabulary.input_ownership {
             crate::LauncherSurfaceInputOwnership::LauncherFilter => "components::text_input",
@@ -6693,9 +6452,9 @@ impl ScriptListApp {
         };
         let row_primitive = match view {
             AppView::SelectPrompt { .. } => SurfaceRowPrimitive::UnifiedListItem,
-            AppView::AgentChatView { .. }
-            | AppView::ChatPrompt { .. }
-            | AppView::FlowSessionView { .. } => SurfaceRowPrimitive::ConversationTurn,
+            AppView::ChatPrompt { .. } | AppView::FlowSessionView { .. } => {
+                SurfaceRowPrimitive::ConversationTurn
+            }
             AppView::ScriptList | AppView::ActionsDialog | AppView::ArgPrompt { .. } => {
                 SurfaceRowPrimitive::LegacyListItem
             }
@@ -6916,9 +6675,6 @@ impl ScriptListApp {
         let native_ready = expected_surface.is_some()
             && host.native_host_installed
             && host.installed_surface == expected_surface;
-        let agent_chat_footer_hidden = matches!(self.current_view, AppView::AgentChatView { .. })
-            && expected_surface.is_some()
-            && config.is_none();
 
         let prompt_owned = matches!(
             self.current_view,
@@ -6929,8 +6685,6 @@ impl ScriptListApp {
         let content_owned = matches!(self.current_view, AppView::About { .. });
         let owner = if popup_open {
             "popup"
-        } else if agent_chat_footer_hidden {
-            "none"
         } else if native_ready {
             "native"
         } else if expected_surface.is_some() || prompt_owned {
@@ -7122,82 +6876,42 @@ impl ScriptListApp {
         }
     }
 
-    /// Collect a machine-readable Agent Chat state snapshot.
-    ///
-    /// Returns a default (idle, empty) snapshot when the current view is not
-    /// `AgentChatView` — callers should check `status == "notAgentChat"` to detect this.
+    /// The main window's chat as automation reads it; `status == "notAgentChat"` while no chat
+    /// is open under the input.
     fn collect_agent_chat_state(&self, cx: &Context<Self>) -> protocol::AgentChatStateSnapshot {
-        let entity = match &self.current_view {
-            AppView::AgentChatView { entity } => entity,
-            _ => {
-                return protocol::AgentChatStateSnapshot {
-                    status: "notAgentChat".to_string(),
-                    ..Default::default()
-                };
-            }
+        let (Some(_), Some(model)) = (
+            self.one_window.chat(),
+            self.one_window_host.work.chat.as_ref(),
+        ) else {
+            return protocol::AgentChatStateSnapshot {
+                status: "notAgentChat".to_string(),
+                ..Default::default()
+            };
         };
-
-        let view = entity.read(cx);
-
-        // Extract state from the Agent Chat view's public API.
-        view.collect_agent_chat_state_snapshot(cx)
-    }
-
-    /// Collect Agent Chat state from the given detached entity, or fall through to main.
-    fn collect_agent_chat_state_for_target(
-        &self,
-        detached_entity: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
-        cx: &Context<Self>,
-    ) -> protocol::AgentChatStateSnapshot {
-        match detached_entity {
-            Some(entity) => entity.read(cx).collect_agent_chat_state_snapshot(cx),
-            None => self.collect_agent_chat_state(cx),
+        let thread = model.thread.read(cx);
+        protocol::AgentChatStateSnapshot {
+            status: format!("{:?}", thread.status()).to_lowercase(),
+            input_text: self.filter_text.clone(),
+            cursor_index: self.filter_text.chars().count(),
+            message_count: thread.messages.len(),
+            awaiting_first_assistant_text: thread.awaiting_first_assistant_text(),
+            sign_in: thread
+                .sign_in_state()
+                .map(|state| state.as_str().to_string()),
+            ..Default::default()
         }
     }
 
-    /// Collect Agent Chat test probe from the given detached entity, or fall through to main.
-    fn collect_agent_chat_test_probe_for_target(
-        &self,
-        detached_entity: Option<&gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>>,
-        tail: usize,
-        cx: &Context<Self>,
-    ) -> protocol::AgentChatTestProbeSnapshot {
-        match detached_entity {
-            Some(entity) => entity.read(cx).test_probe_snapshot(tail, cx),
-            None => self.collect_agent_chat_test_probe(tail, cx),
-        }
-    }
-
-    /// Reset the Agent Chat test probe ring buffer.
-    fn reset_agent_chat_test_probe(&mut self, cx: &mut Context<Self>) {
-        if let AppView::AgentChatView { entity } = &self.current_view {
-            entity.update(cx, |view, _cx| {
-                view.reset_test_probe();
-            });
-        }
-    }
-
-    /// Collect a bounded Agent Chat test probe snapshot.
+    /// The chat has no key-route telemetry of its own; the probe carries its state.
     fn collect_agent_chat_test_probe(
         &self,
-        tail: usize,
+        _tail: usize,
         cx: &Context<Self>,
     ) -> protocol::AgentChatTestProbeSnapshot {
-        let entity = match &self.current_view {
-            AppView::AgentChatView { entity } => entity,
-            _ => {
-                return protocol::AgentChatTestProbeSnapshot {
-                    state: protocol::AgentChatStateSnapshot {
-                        status: "notAgentChat".to_string(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                };
-            }
-        };
-
-        let view = entity.read(cx);
-        view.test_probe_snapshot(tail, cx)
+        protocol::AgentChatTestProbeSnapshot {
+            state: self.collect_agent_chat_state(cx),
+            ..Default::default()
+        }
     }
 
     fn set_input_text_in_window(
@@ -7259,11 +6973,6 @@ impl ScriptListApp {
                 self.filter_text = text.clone();
                 self.selected_index = 0;
                 self.queue_filter_compute(text, cx);
-                cx.notify();
-            }
-            AppView::AgentChatView { entity } => {
-                let entity = entity.clone();
-                entity.update(cx, |view, cx| view.set_input(text.to_string(), cx));
                 cx.notify();
             }
             AppView::ChatPrompt { entity, .. } => {

@@ -1,19 +1,9 @@
 use super::*;
 
-const TRANSFER_TO_AGENT_CHAT_READY_RETRY_DELAY_MS: u64 = 16;
-const TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS: usize = 8;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ChatPromptDismissalKind {
     CloseInline,
     TransferToAgentChat,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TransferToAgentChatReadyBarrierStep {
-    Ready,
-    Wait,
-    TimedOut,
 }
 
 fn should_persist_chat_before_prompt_dismissal(
@@ -21,19 +11,6 @@ fn should_persist_chat_before_prompt_dismissal(
     dismissal_kind: ChatPromptDismissalKind,
 ) -> bool {
     save_history && dismissal_kind == ChatPromptDismissalKind::CloseInline
-}
-
-fn next_transfer_to_agent_chat_ready_barrier_step(
-    is_ready: bool,
-    waits_completed: usize,
-) -> TransferToAgentChatReadyBarrierStep {
-    if is_ready {
-        TransferToAgentChatReadyBarrierStep::Ready
-    } else if waits_completed < TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS {
-        TransferToAgentChatReadyBarrierStep::Wait
-    } else {
-        TransferToAgentChatReadyBarrierStep::TimedOut
-    }
 }
 
 impl ChatPrompt {
@@ -374,115 +351,23 @@ impl ChatPrompt {
             "BEACHBALL TRACE: dismiss done, spawning async open"
         );
 
-        // Defer Agent Chat open so the inline prompt dismisses first,
-        // avoiding synchronous transcript work on the original prompt path.
+        // The prompt dismisses first; its transcript then waits in the chat's input.
         cx.spawn(async move |_this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(1))
                 .await;
-
-            let open_start = std::time::Instant::now();
-            tracing::info!(
-                action = "transfer_to_agent_chat",
-                "BEACHBALL TRACE: async open starting"
-            );
-
-            let open_result = cx.update(|cx| {
-                crate::ai::agent_chat::ui::chat_window::open_chat_window(cx).map_err(|error| {
-                    format!("failed to open Agent Chat for chat transfer: {error}")
-                })
+            let opened = cx.update(|cx| {
+                crate::ai::agent_chat::ui::entry::open_chat(
+                    crate::ai::agent_chat::ui::entry::ChatEntry::seeded(transcript),
+                    cx,
+                )
             });
-
             tracing::info!(
                 action = "transfer_to_agent_chat",
-                open_elapsed_ms = open_start.elapsed().as_millis(),
-                "BEACHBALL TRACE: Agent Chat open complete"
+                opened,
+                message_count,
+                image_count,
             );
-
-            let handoff_result = match open_result {
-                Ok(()) => {
-                    tracing::info!(
-                        action = "transfer_to_agent_chat",
-                        max_waits = TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS,
-                        retry_delay_ms = TRANSFER_TO_AGENT_CHAT_READY_RETRY_DELAY_MS,
-                        "Waiting for Agent Chat readiness before transcript handoff"
-                    );
-
-                    let mut waits_completed = 0usize;
-                    loop {
-                        let ready_now = cx.update(|_cx| {
-                            crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
-                                .is_some()
-                        });
-                        match next_transfer_to_agent_chat_ready_barrier_step(
-                            ready_now,
-                            waits_completed,
-                        ) {
-                            TransferToAgentChatReadyBarrierStep::Ready => {
-                                break cx.update(|cx| {
-                                    let Some(entity) = crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity() else {
-                                        return Err(
-                                            "Agent Chat view unavailable after ready barrier"
-                                                .to_string(),
-                                        );
-                                    };
-                                    entity.update(cx, |chat, cx| {
-                                        if chat.is_setup_mode() {
-                                            return Err(
-                                                "Agent Chat is in setup mode".to_string()
-                                            );
-                                        }
-                                        chat.set_input(transcript.clone(), cx);
-                                        Ok::<(), String>(())
-                                    })
-                                });
-                            }
-                            TransferToAgentChatReadyBarrierStep::Wait => {
-                                waits_completed += 1;
-                                tracing::debug!(
-                                    action = "transfer_to_agent_chat",
-                                    waits_completed,
-                                    max_waits = TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS,
-                                    retry_delay_ms = TRANSFER_TO_AGENT_CHAT_READY_RETRY_DELAY_MS,
-                                    "Agent Chat not ready yet; retrying transcript handoff"
-                                );
-                                cx.background_executor()
-                                    .timer(std::time::Duration::from_millis(
-                                        TRANSFER_TO_AGENT_CHAT_READY_RETRY_DELAY_MS,
-                                    ))
-                                    .await;
-                            }
-                            TransferToAgentChatReadyBarrierStep::TimedOut => {
-                                break Err(format!(
-                                    "Agent Chat not ready after open; cannot hand off transcript (waits_completed={waits_completed}, max_waits={}, retry_delay_ms={}, message_count={message_count}, image_count={image_count})",
-                                    TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS,
-                                    TRANSFER_TO_AGENT_CHAT_READY_RETRY_DELAY_MS,
-                                ));
-                            }
-                        }
-                    }
-                }
-                Err(error) => Err(error),
-            };
-
-            match handoff_result {
-                Ok(()) => {
-                    tracing::info!(
-                        action = "transfer_to_agent_chat",
-                        message_count,
-                        image_count,
-                        "Agent Chat opened with staged transcript"
-                    );
-                }
-                Err(error) => {
-                    tracing::error!(
-                        error = %error,
-                        message_count,
-                        image_count,
-                        "Failed to open Agent Chat for chat transfer"
-                    );
-                }
-            }
         })
         .detach();
     }
@@ -626,11 +511,7 @@ impl ChatPrompt {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        next_transfer_to_agent_chat_ready_barrier_step,
-        should_persist_chat_before_prompt_dismissal, ChatPromptDismissalKind,
-        TransferToAgentChatReadyBarrierStep, TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS,
-    };
+    use super::{should_persist_chat_before_prompt_dismissal, ChatPromptDismissalKind};
 
     #[test]
     fn test_should_persist_chat_before_prompt_dismissal_when_closing_inline_with_history_enabled() {
@@ -654,42 +535,5 @@ mod tests {
             false,
             ChatPromptDismissalKind::CloseInline
         ));
-    }
-
-    #[test]
-    fn test_next_transfer_to_agent_chat_ready_barrier_step_returns_ready_immediately() {
-        assert_eq!(
-            next_transfer_to_agent_chat_ready_barrier_step(true, 0),
-            TransferToAgentChatReadyBarrierStep::Ready
-        );
-        assert_eq!(
-            next_transfer_to_agent_chat_ready_barrier_step(
-                true,
-                TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS
-            ),
-            TransferToAgentChatReadyBarrierStep::Ready
-        );
-    }
-
-    #[test]
-    fn test_next_transfer_to_agent_chat_ready_barrier_step_retries_before_timeout() {
-        assert_eq!(
-            next_transfer_to_agent_chat_ready_barrier_step(false, 0),
-            TransferToAgentChatReadyBarrierStep::Wait
-        );
-        assert_eq!(
-            next_transfer_to_agent_chat_ready_barrier_step(
-                false,
-                TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS - 1
-            ),
-            TransferToAgentChatReadyBarrierStep::Wait
-        );
-        assert_eq!(
-            next_transfer_to_agent_chat_ready_barrier_step(
-                false,
-                TRANSFER_TO_AGENT_CHAT_READY_MAX_WAITS
-            ),
-            TransferToAgentChatReadyBarrierStep::TimedOut
-        );
     }
 }

@@ -36,33 +36,13 @@ fn sanitize_script_error_context_name(value: &str, fallback: &str) -> String {
     }
 }
 
-fn build_script_error_agent_chat_prompt(
-    script_path: &str,
-    error_message: &str,
-    exit_code: Option<i32>,
-    suggestions: &[String],
-) -> String {
+/// The question that waits in the input: one line, since the report goes with it.
+fn build_script_error_agent_chat_prompt(script_path: &str) -> String {
     let script_name = std::path::Path::new(script_path)
         .file_name()
         .and_then(|value| value.to_str())
-        .unwrap_or("script");
-
-    let mut prompt = format!(
-        "The script `{script_name}` just failed when I ran it. Use the attached script snapshot and error report as context, diagnose the root cause, fix it, and verify the fix by rerunning the script or giving the exact verification result.\n\nError summary: {error_message}"
-    );
-
-    if let Some(code) = exit_code {
-        prompt.push_str(&format!("\nExit code: {code}"));
-    }
-
-    if !suggestions.is_empty() {
-        prompt.push_str("\nSuggested clues:");
-        for suggestion in suggestions {
-            prompt.push_str(&format!("\n- {suggestion}"));
-        }
-    }
-
-    prompt
+        .unwrap_or("the script");
+    format!("Why did {script_name} fail? Fix it and check that it runs")
 }
 
 fn build_script_error_report_markdown(
@@ -320,34 +300,8 @@ fn build_script_error_toast(
 }
 
 impl ScriptListApp {
-    fn script_error_agent_chat_view_entity(
-        &self,
-    ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-        crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity()
-            .or_else(|| self.embedded_agent_chat_automation_entity())
-    }
-
-    fn embedded_agent_chat_automation_entity(
-        &self,
-    ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-        match &self.current_view {
-            AppView::AgentChatView { entity } => Some(entity.clone()),
-            _ => None,
-        }
-    }
-
-    fn ensure_script_error_agent_chat_view(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> Option<gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>> {
-        if let Some(entity) = self.script_error_agent_chat_view_entity() {
-            return Some(entity);
-        }
-
-        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
-        self.script_error_agent_chat_view_entity()
-    }
-
+    /// A failed script opens the chat with its snapshot and error report waiting in the line
+    /// above the input and a question about them in the input; Enter asks it.
     fn route_script_error_to_agent_chat(
         &mut self,
         context: ScriptErrorAgentChatContext<'_>,
@@ -384,85 +338,19 @@ impl ScriptListApp {
                 return;
             }
         };
-
-        let Some(view_entity) = self.ensure_script_error_agent_chat_view(cx) else {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "script_error_agent_chat_view_unavailable",
-                script_path = %script_path,
-            );
-            return;
-        };
-
-        let prompt = build_script_error_agent_chat_prompt(
-            script_path,
-            error_message,
-            exit_code,
-            suggestions,
+        let prompt = build_script_error_agent_chat_prompt(script_path);
+        self.one_window_open_chat(
+            crate::one_window::chat_entry::ChatEntry::seeded(prompt)
+                .with(crate::ai::AiContextPart::FilePath {
+                    path: bundle.error_report_path,
+                    label: bundle.error_report_label,
+                })
+                .with(crate::ai::AiContextPart::FilePath {
+                    path: bundle.script_snapshot_path,
+                    label: bundle.script_snapshot_label,
+                }),
+            cx,
         );
-        if let Err(error) =
-            Self::stage_script_error_context_on_agent_chat_view(view_entity, bundle, prompt, cx)
-        {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "script_error_agent_chat_stage_failed",
-                script_path = %script_path,
-                error = %error,
-            );
-        }
-    }
-
-    fn stage_script_error_context_on_agent_chat_view(
-        view_entity: gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-        bundle: ScriptErrorAgentChatContextBundle,
-        prompt: String,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        let script_part = crate::ai::AiContextPart::FilePath {
-            path: bundle.script_snapshot_path.clone(),
-            label: bundle.script_snapshot_label.clone(),
-        };
-        let report_part = crate::ai::AiContextPart::FilePath {
-            path: bundle.error_report_path.clone(),
-            label: bundle.error_report_label.clone(),
-        };
-        let parts = vec![script_part, report_part];
-        let mention_tokens = parts
-            .iter()
-            .filter_map(crate::ai::context_mentions::part_to_inline_token)
-            .collect::<Vec<_>>();
-        let composer_text = if mention_tokens.is_empty() {
-            prompt
-        } else {
-            format!("{}\n\n{}", mention_tokens.join(" "), prompt)
-        };
-
-        let mut stage_result: Result<(), String> = Ok(());
-        view_entity.update(cx, |view, cx| {
-            let Some(thread_entity) = view.thread() else {
-                stage_result = Err("Agent Chat is in setup mode".to_string());
-                return;
-            };
-
-            for part in &parts {
-                if let Some(token) = crate::ai::context_mentions::part_to_inline_token(part) {
-                    view.register_typed_alias(token.clone(), part.clone());
-                    view.register_inline_owned_token(token);
-                }
-            }
-
-            thread_entity.update(cx, |thread, cx| {
-                for part in &parts {
-                    thread.add_context_part(part.clone(), cx);
-                }
-                thread.set_input(composer_text.clone(), cx);
-                if let Err(error) = thread.submit_input(cx) {
-                    stage_result = Err(error);
-                }
-            });
-        });
-
-        stage_result
     }
 }
 

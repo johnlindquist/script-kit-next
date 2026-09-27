@@ -507,18 +507,7 @@ pub(crate) fn collect_semantic_chip_element(
     semantic_chip_action_element(chip, chip.body_action, false)
 }
 
-/// Project every executable region of a chip. Context attachments may expose
-/// both body details and a separately-addressable trailing remove action.
-pub(crate) fn collect_semantic_chip_elements(
-    chip: &crate::components::main_view_chrome::SemanticChipSpec,
-) -> Vec<ElementInfo> {
-    let mut elements = vec![collect_semantic_chip_element(chip)];
-    if let Some(action) = chip.trailing_action {
-        elements.push(semantic_chip_action_element(chip, Some(action), true));
-    }
-    elements
-}
-
+#[allow(dead_code)] // The binary's element collectors project conversation commands with this.
 pub(crate) fn collect_conversation_command_elements<Handler>(
     commands: &[crate::components::conversation_actions::BoundConversationCommand<Handler>],
 ) -> Vec<ElementInfo> {
@@ -554,149 +543,6 @@ pub(crate) fn collect_conversation_command_elements<Handler>(
             }
         })
         .collect()
-}
-
-fn cancellation_semantic_kind(
-    kind: sk_protocol::ai_reliability::CancellationKind,
-) -> (&'static str, &'static str) {
-    use sk_protocol::ai_reliability::CancellationKind;
-    match kind {
-        CancellationKind::UserStopped => ("userStopped", "Stopped"),
-        CancellationKind::UserCancelled => ("userCancelled", "Cancelled"),
-        CancellationKind::AppShutdown => ("appShutdown", "Stopped when the app closed"),
-    }
-}
-
-fn project_agent_chat_conversation_elements(
-    assistant_messages: &[(u64, &str)],
-    cancellation: Option<sk_protocol::ai_reliability::CancellationKind>,
-    command_status: Option<&str>,
-) -> Vec<ElementInfo> {
-    let mut elements = Vec::new();
-    if let Some(status) = command_status {
-        elements.push(ElementInfo {
-            semantic_id: "conversation.commandStatus".to_string(),
-            element_type: ElementType::Panel,
-            text: Some(status.to_string()),
-            value: None,
-            content: None,
-            selected: Some(false),
-            focused: Some(false),
-            index: None,
-            role: Some("conversationCommandStatus".to_string()),
-            kind: Some("disabledAcknowledgement".to_string()),
-            source: Some("ConversationCommandExecution".to_string()),
-            source_name: None,
-            selectable: Some(false),
-            status_kind: Some("disabled".to_string()),
-            action_disabled: Some(status.to_string()),
-            style: None,
-        });
-    }
-
-    for (message_id, _) in assistant_messages
-        .iter()
-        .filter(|(_, body)| !body.trim().is_empty())
-    {
-        elements.push(ElementInfo {
-            semantic_id: format!("conversation.copyTurn:{message_id}"),
-            element_type: ElementType::Button,
-            text: Some("Copy Response".to_string()),
-            value: None,
-            content: None,
-            selected: Some(false),
-            focused: Some(false),
-            index: None,
-            role: Some("conversationCommand".to_string()),
-            kind: Some("copyTurn".to_string()),
-            source: Some("AgentChatThreadMessage".to_string()),
-            source_name: Some(message_id.to_string()),
-            selectable: Some(true),
-            status_kind: None,
-            action_disabled: None,
-            style: None,
-        });
-    }
-
-    if let Some(cancellation) = cancellation {
-        let (kind, text) = cancellation_semantic_kind(cancellation);
-        let turn_id = assistant_messages
-            .last()
-            .map(|(message_id, _)| message_id.to_string())
-            .unwrap_or_else(|| "latest".to_string());
-        elements.push(ElementInfo {
-            semantic_id: format!("conversation.turnStatus:{turn_id}"),
-            element_type: ElementType::Panel,
-            text: Some(text.to_string()),
-            value: None,
-            content: None,
-            selected: Some(false),
-            focused: Some(false),
-            index: None,
-            role: Some("conversationTurnStatus".to_string()),
-            kind: Some(kind.to_string()),
-            source: Some("AiOperationState".to_string()),
-            source_name: None,
-            selectable: Some(false),
-            status_kind: Some("cancelled".to_string()),
-            action_disabled: None,
-            style: None,
-        });
-    }
-
-    elements
-}
-
-fn collect_agent_chat_thread_conversation_elements(
-    thread: &crate::ai::agent_chat::ui::thread::AgentChatThread,
-    command_status: Option<&str>,
-) -> Vec<ElementInfo> {
-    use crate::ai::agent_chat::ui::thread::AgentChatThreadMessageRole;
-    use sk_protocol::ai_reliability::AiPhase;
-
-    let assistant_messages: Vec<_> = thread
-        .messages
-        .iter()
-        .filter(|message| matches!(message.role, AgentChatThreadMessageRole::Assistant))
-        .map(|message| (message.id, message.body.as_ref()))
-        .collect();
-    let cancellation = match &thread.reliability_state().phase {
-        AiPhase::Cancelled { kind, .. } => Some(*kind),
-        _ => None,
-    };
-    project_agent_chat_conversation_elements(&assistant_messages, cancellation, command_status)
-}
-
-pub(crate) fn collect_agent_chat_conversation_elements(
-    entity: &gpui::Entity<crate::ai::agent_chat::ui::view::AgentChatView>,
-    cx: &gpui::App,
-) -> Vec<ElementInfo> {
-    let view = entity.read(cx);
-    let command_status = view.command_status_text();
-    match &view.session {
-        crate::ai::agent_chat::ui::AgentChatSession::Live(thread) if !view.shows_setup_card(cx) => {
-            let mut elements =
-                collect_agent_chat_thread_conversation_elements(thread.read(cx), command_status);
-            elements.extend(view.spine_hint_semantic_elements());
-            elements.extend(view.queue_semantic_elements(cx));
-            elements
-        }
-        _ => {
-            let mut elements = view.setup_semantic_elements(cx);
-            if let Some(status) = command_status {
-                let mut element = ElementInfo::panel("conversation.commandStatus");
-                element.text = Some(status.to_string());
-                element.role = Some("conversationCommandStatus".to_string());
-                element.kind = Some("disabledAcknowledgement".to_string());
-                element.source = Some("ConversationCommandExecution".to_string());
-                element.selectable = Some(false);
-                element.status_kind = Some("disabled".to_string());
-                element.action_disabled = Some(status.to_string());
-                elements.push(element);
-            }
-            elements
-        }
-    }
 }
 
 /// Resolve only the requested runtime lifetime, never a singleton replacement.
@@ -893,13 +739,6 @@ fn collect_registered_surface_layout_inner(
             required.extend(["notes-window-root".into(), "notes-titlebar".into()]);
             entity.read(cx).automation_layout_info(&target)
         }
-        AutomationWindowKind::AgentChatDetached => {
-            let entity = crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
-                &target.id, generation,
-            )
-            .ok_or_else(|| anyhow::anyhow!("chat_layout_owner_missing"))?;
-            entity.read(cx).automation_layout_info(&target, cx)
-        }
         AutomationWindowKind::ActionsDialog => {
             let entity = exact_actions_dialog_entity(&target, cx)
                 .ok_or_else(|| anyhow::anyhow!("actions_layout_owner_missing"))?;
@@ -956,18 +795,39 @@ fn collect_registered_surface_layout_inner(
         AutomationWindowKind::PromptPopup => {
             match target.id.as_str() {
                 "confirm-popup" => {
-                    let snapshot = crate::confirm::get_confirm_popup_snapshot(cx, generation, None).ok_or_else(|| anyhow::anyhow!("confirm_layout_owner_missing"))?;
-                    required.extend(["confirm-popup-root", "confirm-modal-header", "confirm-modal-stack", "confirm-modal-action-row", "confirm-ok-button", "confirm-cancel-button"].into_iter().map(str::to_string));
-                    if snapshot.secondary_text.is_some() { required.push("confirm-secondary-button".into()); }
-                    if !snapshot.body.trim().is_empty() { required.push("confirm-modal-body".into()); }
-                }
-                crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => {
-                    anyhow::ensure!(crate::ai::agent_chat::ui::history_popup::get_history_popup_snapshot_for_generation(generation, cx).is_some(), "history_layout_owner_missing");
-                    required.extend(["agent_chat-history-popup", "agent_chat-history-popup-header", "agent_chat-history-popup-list"].into_iter().map(str::to_string));
+                    let snapshot = crate::confirm::get_confirm_popup_snapshot(cx, generation, None)
+                        .ok_or_else(|| anyhow::anyhow!("confirm_layout_owner_missing"))?;
+                    required.extend(
+                        [
+                            "confirm-popup-root",
+                            "confirm-modal-header",
+                            "confirm-modal-stack",
+                            "confirm-modal-action-row",
+                            "confirm-ok-button",
+                            "confirm-cancel-button",
+                        ]
+                        .into_iter()
+                        .map(str::to_string),
+                    );
+                    if snapshot.secondary_text.is_some() {
+                        required.push("confirm-secondary-button".into());
+                    }
+                    if !snapshot.body.trim().is_empty() {
+                        required.push("confirm-modal-body".into());
+                    }
                 }
                 crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
-                    anyhow::ensure!(crate::dictation::dictation_microphone_popup_revision_facts(generation, None, cx).is_some(), "microphone_layout_owner_missing");
-                    required.extend(["dictation-microphone-popup".into(), "dictation-microphone-popup-list".into()]);
+                    anyhow::ensure!(
+                        crate::dictation::dictation_microphone_popup_revision_facts(
+                            generation, None, cx
+                        )
+                        .is_some(),
+                        "microphone_layout_owner_missing"
+                    );
+                    required.extend([
+                        "dictation-microphone-popup".into(),
+                        "dictation-microphone-popup-list".into(),
+                    ]);
                 }
                 _ => anyhow::bail!("surface_layout_owner_unknown"),
             }
@@ -1056,16 +916,6 @@ pub fn surface_revision_facts(
                 view.applied_theme_revision(),
             ))
         }
-        AutomationWindowKind::AgentChatDetached => {
-            let entity = crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
-                &resolved.id,
-                generation,
-            )?;
-            let view = entity.read(cx);
-            let theme = view.applied_theme_revision()?;
-            let revision = view.semantic_revision(cx);
-            Some((revision, revision, theme, theme))
-        }
         AutomationWindowKind::Dictation => {
             crate::dictation::dictation_overlay_revision_facts(generation, window, cx)
         }
@@ -1101,9 +951,14 @@ pub fn surface_revision_facts(
                 ));
             }
             match resolved.id.as_str() {
-                "confirm-popup" => Some(crate::confirm::get_confirm_popup_snapshot(cx, generation, window)?.revisions),
-                crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => crate::ai::agent_chat::ui::history_popup::history_popup_revision_facts(generation, window, cx),
-                crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => crate::dictation::dictation_microphone_popup_revision_facts(generation, window, cx),
+                "confirm-popup" => Some(
+                    crate::confirm::get_confirm_popup_snapshot(cx, generation, window)?.revisions,
+                ),
+                crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
+                    crate::dictation::dictation_microphone_popup_revision_facts(
+                        generation, window, cx,
+                    )
+                }
                 _ => None,
             }
         }
@@ -1135,17 +990,6 @@ pub fn close_owned_registered_surface(
         AutomationWindowKind::Notes => {
             crate::notes::close_owned_notes_window(generation, cx).map_err(anyhow::Error::msg)?
         }
-        AutomationWindowKind::AgentChatDetached => {
-            anyhow::ensure!(
-                crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
-                    &resolved.id,
-                    generation
-                )
-                .is_some(),
-                "chat_target_stale"
-            );
-            crate::ai::agent_chat::ui::chat_window::close_chat_window(cx);
-        }
         AutomationWindowKind::Dictation => {
             anyhow::ensure!(
                 crate::dictation::get_dictation_overlay_state_for_instance(generation, cx)
@@ -1172,12 +1016,6 @@ pub fn close_owned_registered_surface(
         }
         AutomationWindowKind::PromptPopup => match resolved.id.as_str() {
             "confirm-popup" => crate::confirm::close_owned_confirm_window(generation, cx)?,
-            crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => {
-                anyhow::ensure!(crate::ai::agent_chat::ui::history_popup::get_history_popup_snapshot_for_generation(generation, cx).is_some(), "history_target_stale");
-                crate::ai::agent_chat::ui::history_popup::close_history_popup_window_for_owner_loss(
-                    cx,
-                );
-            }
             crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
                 crate::dictation::close_dictation_microphone_popup_window_for_owner_loss(cx)
             }
@@ -1202,9 +1040,6 @@ pub fn collect_surface_snapshot(
     let resolved = &current;
     let mut snapshot = match resolved.kind {
         AutomationWindowKind::Notes => collect_notes_snapshot(resolved, cx)?,
-        AutomationWindowKind::AgentChatDetached => {
-            collect_agent_chat_detached_snapshot(resolved, cx)?
-        }
         AutomationWindowKind::ActionsDialog => collect_actions_dialog_snapshot(resolved, cx)?,
         AutomationWindowKind::PromptPopup => collect_exact_prompt_popup_snapshot(resolved, cx)?,
         AutomationWindowKind::Dictation => collect_dictation_snapshot(resolved, cx)?,
@@ -1488,132 +1323,6 @@ pub(crate) fn collect_notes_elements(
 // Detached Agent Chat collector
 // ---------------------------------------------------------------------------
 
-fn collect_agent_chat_detached_snapshot(
-    resolved: &AutomationWindowInfo,
-    cx: &gpui::App,
-) -> Option<SurfaceElementSnapshot> {
-    let entity = crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
-        &resolved.id,
-        resolved.generation?,
-    )?;
-    Some(collect_agent_chat_detached_elements(
-        &entity,
-        usize::MAX,
-        cx,
-    ))
-}
-
-/// Collect semantic elements from a live detached Agent Chat entity.
-///
-/// Shared by the surface snapshot path (`getElements`) and the
-/// [`DetachedAgentChatTransactionProvider`](super::automation_transaction_provider::DetachedAgentChatTransactionProvider)
-/// so both see the same semantic model.
-pub(crate) fn collect_agent_chat_detached_elements(
-    entity: &gpui::Entity<crate::ai::agent_chat::ui::view::AgentChatView>,
-    limit: usize,
-    cx: &gpui::App,
-) -> SurfaceElementSnapshot {
-    if entity.read(cx).shows_setup_card(cx) {
-        let mut elements = collect_agent_chat_conversation_elements(entity, cx);
-        let total_count = elements.len();
-        elements.truncate(limit);
-        return SurfaceElementSnapshot {
-            total_count,
-            elements,
-            focused_semantic_id: None,
-            selected_semantic_id: None,
-            warnings: Vec::new(),
-            quality: SnapshotQuality::Full,
-        };
-    }
-
-    let state = entity.read(cx).collect_agent_chat_state_snapshot(cx);
-
-    let picker_open = state.picker.as_ref().map(|p| p.open).unwrap_or(false);
-
-    let mut elements = vec![
-        element(
-            "panel:agent_chat-detached",
-            ElementType::Panel,
-            None,
-            None,
-            None,
-            None,
-            None,
-        ),
-        element(
-            "input:agent_chat-composer",
-            ElementType::Input,
-            None,
-            Some(state.input_text.clone()),
-            None,
-            Some(true),
-            None,
-        )
-        .redact_content(crate::protocol::ElementContentKind::UserContent),
-        element(
-            "list:agent_chat-messages",
-            ElementType::List,
-            Some(format!("{} messages", state.message_count)),
-            None,
-            None,
-            None,
-            None,
-        ),
-    ];
-
-    if let Some(session) = &entity.read(cx).composer_picker_session {
-        for (index, item) in session.items.iter().enumerate() {
-            elements.push(element(
-                &format!("choice:{index}:{}", item.id),
-                ElementType::Choice,
-                Some(item.label.to_string()),
-                Some(item.id.to_string()),
-                Some(index == session.selected_index),
-                None,
-                Some(index),
-            ));
-        }
-    }
-    if picker_open {
-        elements.push(element(
-            "panel:agent_chat-picker",
-            ElementType::Panel,
-            Some("open".to_string()),
-            None,
-            None,
-            None,
-            None,
-        ));
-    }
-
-    elements.extend(
-        entity
-            .read(cx)
-            .conversation_semantic_chip_specs(cx)
-            .iter()
-            .flat_map(collect_semantic_chip_elements),
-    );
-    elements.extend(collect_conversation_command_elements(
-        &entity.read(cx).conversation_command_bindings(cx),
-    ));
-    elements.extend(collect_agent_chat_conversation_elements(entity, cx));
-
-    let total_count = elements.len();
-    if elements.len() > limit {
-        elements.truncate(limit);
-    }
-
-    SurfaceElementSnapshot {
-        total_count,
-        elements,
-        focused_semantic_id: Some("input:agent_chat-composer".to_string()),
-        selected_semantic_id: None,
-        warnings: Vec::new(),
-        quality: SnapshotQuality::Full,
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Actions dialog collector
 // ---------------------------------------------------------------------------
@@ -1770,82 +1479,10 @@ pub(crate) fn collect_actions_dialog_elements(
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_semantic_chip_element, collect_semantic_chip_elements,
-        project_agent_chat_conversation_elements, prompt_popup_semantic_cache,
+        collect_semantic_chip_element, prompt_popup_semantic_cache,
         remove_dictation_microphone_prompt_popup_snapshot_if_generation,
         PromptPopupElementSnapshot,
     };
-
-    #[test]
-    fn conversation_semantic_projection_exposes_every_role_safe_action() {
-        use crate::components::main_view_chrome::{SemanticChipAction, SemanticChipSpec};
-
-        let context = SemanticChipSpec::context_attachment("context:one", "File", true);
-        let context_elements = collect_semantic_chip_elements(&context);
-        assert_eq!(context_elements.len(), 2);
-        assert_eq!(context_elements[0].role.as_deref(), Some("contextChip"));
-        assert_eq!(
-            context_elements[0].kind.as_deref(),
-            Some("openContextDetails")
-        );
-        assert_eq!(context_elements[1].kind.as_deref(), Some("removeContext"));
-        assert_ne!(
-            context_elements[0].semantic_id,
-            context_elements[1].semantic_id
-        );
-
-        let identity = SemanticChipSpec::enabled_identity(
-            "identity:one",
-            "Agent",
-            SemanticChipAction::OpenSelector,
-            "⇧⇥",
-        );
-        let identity = collect_semantic_chip_element(&identity);
-        assert_eq!(identity.role.as_deref(), Some("identityBadge"));
-        assert_eq!(identity.kind.as_deref(), Some("openIdentitySelector"));
-
-        let destination = SemanticChipSpec::destination_selector("destination:one", "Today");
-        let destination = collect_semantic_chip_element(&destination);
-        assert_eq!(destination.role.as_deref(), Some("destinationSelector"));
-        assert_eq!(destination.kind.as_deref(), Some("selectDestination"));
-    }
-
-    #[test]
-    fn agent_chat_conversation_projection_exposes_safe_status_and_copy_eligibility() {
-        use sk_protocol::ai_reliability::CancellationKind;
-
-        let elements = project_agent_chat_conversation_elements(
-            &[(7, "  exact bytes  "), (8, " \n\t ")],
-            Some(CancellationKind::UserStopped),
-            Some("Stop the current response first"),
-        );
-
-        let copy = elements
-            .iter()
-            .filter(|element| element.kind.as_deref() == Some("copyTurn"))
-            .collect::<Vec<_>>();
-        assert_eq!(copy.len(), 1, "whitespace-only turns expose no copy action");
-        assert_eq!(copy[0].semantic_id, "conversation.copyTurn:7");
-        assert_eq!(copy[0].source.as_deref(), Some("AgentChatThreadMessage"));
-
-        let status = elements
-            .iter()
-            .find(|element| element.semantic_id == "conversation.commandStatus")
-            .expect("blocked command acknowledgement");
-        assert_eq!(status.status_kind.as_deref(), Some("disabled"));
-        assert_eq!(
-            status.action_disabled.as_deref(),
-            Some("Stop the current response first")
-        );
-
-        let cancellation = elements
-            .iter()
-            .find(|element| element.status_kind.as_deref() == Some("cancelled"))
-            .expect("safe cancellation status");
-        assert_eq!(cancellation.kind.as_deref(), Some("userStopped"));
-        assert_eq!(cancellation.semantic_id, "conversation.turnStatus:8");
-        assert!(cancellation.value.is_none());
-    }
 
     #[test]
     fn prompt_popup_cache_cleanup_requires_exact_generation() {

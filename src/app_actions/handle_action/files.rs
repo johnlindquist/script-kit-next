@@ -886,7 +886,7 @@ impl ScriptListApp {
                         FileSearchHandlerAction::OpenWith => crate::file_search::open_with(&path),
                         FileSearchHandlerAction::ShowInfo => crate::file_search::show_info(&path),
                         FileSearchHandlerAction::AttachToAi => {
-                            self.open_agent_chat_after_main_hide(
+                            self.open_chat_for_action(
                                 action_id,
                                 &dctx.trace_id,
                                 DeferredAgentChatAction::AddAttachment { path: path.clone() },

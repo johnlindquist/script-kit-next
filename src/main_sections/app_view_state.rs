@@ -356,11 +356,6 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Browsing Agent Chat conversation history with search and preview
-    AgentChatHistoryView {
-        filter: String,
-        selected_index: usize,
-    },
     /// Browsing recent browser history as an Agent Chat attachment portal
     BrowserHistoryView {
         filter: String,
@@ -376,18 +371,6 @@ enum AppView {
     NotesBrowseView {
         search: crate::notes::search_model::NoteSearchHostState,
     },
-    /// Showing the Agent Chat surface for the default Tab path.
-    ///
-    /// The `AgentChatView` variant name and `"agent_chat"` serialized id are kept
-    /// for launcher surface-contract compatibility; the entity now flows
-    /// through the canonical `agent_chat::ui` boundary.
-    ///
-    /// Verification-bearing new-script requests deliberately route to
-    /// `QuickTerminalView` so the agent can run Bun verification inside the
-    /// live harness terminal session before reporting success.
-    AgentChatView {
-        entity: Entity<crate::ai::agent_chat::ui::AgentChatView>,
-    },
     /// Today's brain day page in the main launcher window (same frame as ScriptList).
     DayPage { entity: Entity<DayPageView> },
 }
@@ -402,21 +385,10 @@ enum AppView {
 pub(crate) enum MainViewHeaderInputPolicy {
     /// The view renders the shared context zone and one-line main input.
     ViewOwnedCanonicalInput,
-    /// The view renders the shared context zone and a multiline input whose
-    /// first line exactly matches the canonical one-line input geometry.
-    /// Agent Chat may add its trailing Send action inside that shared shell;
-    /// the action never changes the shell, leading inset, or text baseline.
-    ViewOwnedCanonicalMultilineInput,
     /// The view renders only the shared context zone. Day Page intentionally
     /// keeps its editor in the main slot instead of pretending it is a search
     /// input.
     ViewOwnedContextOnly,
-    /// The view deliberately owns a compact, non-canonical full-window shell.
-    /// Focused Text Mini's input row is only 44px tall, so it cannot
-    /// contain the canonical 58px header anatomy without defeating its purpose.
-    /// It must expose its own honest layout receipt and reserve any native
-    /// footer safe area instead of emitting fake MainViewHeader/Input nodes.
-    ViewOwnedIntentionalCompact,
     /// The root renders only the shared context zone above a legacy, prompt,
     /// or child surface whose editable controls belong to its body.
     RootContextOnly,
@@ -426,18 +398,12 @@ impl MainViewHeaderInputPolicy {
     pub(crate) const fn view_owns_main_window_shell(self) -> bool {
         matches!(
             self,
-            Self::ViewOwnedCanonicalInput
-                | Self::ViewOwnedCanonicalMultilineInput
-                | Self::ViewOwnedContextOnly
-                | Self::ViewOwnedIntentionalCompact
+            Self::ViewOwnedCanonicalInput | Self::ViewOwnedContextOnly
         )
     }
 
     pub(crate) const fn has_main_input(self) -> bool {
-        matches!(
-            self,
-            Self::ViewOwnedCanonicalInput | Self::ViewOwnedCanonicalMultilineInput
-        )
+        matches!(self, Self::ViewOwnedCanonicalInput)
     }
 }
 
@@ -489,9 +455,7 @@ pub(crate) enum SurfaceKind {
     SdkReference,
     Tips,
     ScriptTemplateCatalog,
-    AgentChatHistory,
     AttachmentPortalBrowser,
-    AgentChat,
     DayPage,
 }
 
@@ -907,11 +871,9 @@ impl AppView {
             AppView::SdkReferenceView { .. } => "SdkReferenceView",
             AppView::TipsView { .. } => "TipsView",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
-            AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
             AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
-            AppView::AgentChatView { .. } => "AgentChatView",
             AppView::DayPage { .. } => "DayPage",
         }
     }
@@ -982,11 +944,9 @@ impl AppView {
             AppView::SdkReferenceView { .. } => SurfaceKind::SdkReference,
             AppView::TipsView { .. } => SurfaceKind::Tips,
             AppView::ScriptTemplateCatalogView { .. } => SurfaceKind::ScriptTemplateCatalog,
-            AppView::AgentChatHistoryView { .. } => SurfaceKind::AgentChatHistory,
             AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. } => SurfaceKind::AttachmentPortalBrowser,
-            AppView::AgentChatView { .. } => SurfaceKind::AgentChat,
             AppView::DayPage { .. } => SurfaceKind::DayPage,
         }
     }
@@ -1030,13 +990,9 @@ impl AppView {
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }
             | AppView::CurrentAppCommandsView { .. }
-            | AppView::AgentChatHistoryView { .. }
             | AppView::BrowserHistoryView { .. }
             | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. } => MainViewHeaderInputPolicy::ViewOwnedCanonicalInput,
-            AppView::AgentChatView { .. } => {
-                MainViewHeaderInputPolicy::ViewOwnedCanonicalMultilineInput
-            }
             AppView::DayPage { .. } => MainViewHeaderInputPolicy::ViewOwnedContextOnly,
             AppView::About { .. }
             | AppView::ActionsDialog
@@ -1061,24 +1017,9 @@ impl AppView {
         }
     }
 
-    /// Resolve stateful sub-variants that cannot be classified from the
-    /// `AppView` discriminant alone. Standard Agent Chat owns the canonical
-    /// multiline header; Focused Text Mini intentionally owns compact chrome.
-    pub(crate) fn resolved_main_view_header_input_policy(
-        &self,
-        cx: &gpui::App,
-    ) -> MainViewHeaderInputPolicy {
-        match self {
-            AppView::AgentChatView { entity } if entity.read(cx).is_focused_text_mini() => {
-                MainViewHeaderInputPolicy::ViewOwnedIntentionalCompact
-            }
-            _ => self.main_view_header_input_policy(),
-        }
-    }
-
     /// True when the active view renderer owns the entire main-window shell.
-    pub(crate) fn uses_view_owned_main_window_shell(&self, cx: &gpui::App) -> bool {
-        self.resolved_main_view_header_input_policy(cx)
+    pub(crate) fn uses_view_owned_main_window_shell(&self) -> bool {
+        self.main_view_header_input_policy()
             .view_owns_main_window_shell()
     }
 
@@ -1116,10 +1057,8 @@ impl AppView {
             AppView::ScriptIssuesView { .. } => Some("script_issues"),
             AppView::ArgPrompt { .. } => Some("arg_prompt"),
             AppView::EmojiPickerView { .. } => Some("emoji_picker"),
-            AppView::AgentChatHistoryView { .. } => Some("agent_chat_history"),
             AppView::BrowserHistoryView { .. } => Some("browser_history"),
             AppView::DictationHistoryView { .. } => Some("dictation_history"),
-            AppView::AgentChatView { .. } => Some("agent_chat"),
             AppView::DayPage { .. } => Some("day_page"),
             AppView::ChatPrompt { .. } => Some("chat_prompt"),
             AppView::QuickTerminalView { .. } => Some("quick_terminal"),
@@ -1642,21 +1581,6 @@ impl SurfaceKind {
                 explicit,
                 "scriptTemplateCatalog",
             ),
-
-            SurfaceKind::AgentChatHistory => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(
-                    AssistantWorkspace,
-                    LauncherFilter,
-                    RequiredSplitPreview,
-                ),
-                LauncherFilterFocus,
-                LauncherListKeyboard,
-                HostRowActions,
-                StateAndElementsProof,
-                SplitPreviewVisual,
-                standard,
-                "scriptList",
-            ),
             SurfaceKind::AttachmentPortalBrowser => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     AttachmentPortal,
@@ -1670,16 +1594,6 @@ impl SurfaceKind {
                 SplitPreviewVisual,
                 standard,
                 "scriptList",
-            ),
-            SurfaceKind::AgentChat => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(AssistantWorkspace, ChildView, ContentPane),
-                ChildViewFocus,
-                ChildViewKeyboard,
-                ChildViewActions,
-                ChildViewStateProof,
-                ContentPaneVisual,
-                explicit,
-                "agentChatChat",
             ),
             SurfaceKind::DayPage => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(AssistantWorkspace, ChildView, ContentPane),
@@ -1816,14 +1730,6 @@ enum ActionsDialogHost {
     FlowDesk,
     /// Actions in webcam prompt (restore focus to None - webcam has no input)
     WebcamPrompt,
-    /// Actions in Agent Chat chat (restore focus to Agent Chat chat input)
-    AgentChat,
-    /// Actions in Agent Chat history browser (restore focus to history search input)
-    AgentChatHistory,
-    /// Actions in the detached Agent Chat chat window (routes to the detached
-    /// window's own dispatcher via `dispatch_action_to_detached`; focus
-    /// restoration is handled by the detached window, not the main view)
-    AgentChatDetached,
 }
 
 /// Input mode for list navigation - tracks whether user is using keyboard or mouse.

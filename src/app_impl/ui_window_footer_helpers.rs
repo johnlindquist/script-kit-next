@@ -20,20 +20,6 @@ pub(super) fn script_list_footer_info_label(
     }
 }
 
-/// Agent Chat's contextual footer controls may disappear while its content is
-/// unavailable, but that state must not remove the main window's persistent
-/// footer chrome.
-fn main_window_footer_chrome_should_render(
-    is_agent_chat: bool,
-    agent_chat_controls_visible: Option<bool>,
-) -> bool {
-    // This value controls Agent Chat's contextual buttons, not the chrome
-    // around the main window. Keep it observable without coupling it to
-    // whether the persistent footer exists.
-    let _contextual_controls_hidden = is_agent_chat && agent_chat_controls_visible == Some(false);
-    true
-}
-
 fn term_prompt_footer_buttons(
     enabled: bool,
     actions_open: bool,
@@ -437,27 +423,8 @@ impl ScriptListApp {
         true
     }
 
-    fn try_run_ready_agent_chat_script(&mut self, cx: &mut Context<Self>) -> bool {
-        if !matches!(self.current_view, AppView::AgentChatView { .. }) {
-            return false;
-        }
-        let Some(path) = self.agent_chat_ready_script_path.clone() else {
-            return false;
-        };
-        let path_str = path.to_string_lossy().to_string();
-        tracing::info!(
-            target: "script_kit::footer_popup",
-            event = "agent_chat_footer_run_dispatched",
-            path = %path_str,
-        );
-        self.execute_script_by_path(&path_str, cx);
-        true
-    }
-
-    /// Paste assistant output into the frontmost app. When `text_override` is
-    /// `Some`, that text is pasted directly. Otherwise the current Agent Chat view
-    /// resolves pastable text (selected focused-text variation when present,
-    /// else the latest assistant message).
+    /// Paste assistant output into the frontmost app: `text_override` when given, otherwise the
+    /// chat's latest reply.
     pub(crate) fn paste_latest_agent_chat_response_to_frontmost(
         &mut self,
         text_override: Option<String>,
@@ -528,11 +495,10 @@ impl ScriptListApp {
         buttons
     }
 
-    fn latest_agent_chat_assistant_response(&self, cx: &App) -> Option<String> {
-        let AppView::AgentChatView { entity } = &self.current_view else {
-            return None;
-        };
-
-        entity.read(cx).pastable_response_text(cx)
+    fn latest_agent_chat_assistant_response(&self, _cx: &App) -> Option<String> {
+        self.one_window
+            .chat()
+            .and_then(|chat| chat.reply())
+            .map(str::to_string)
     }
 }

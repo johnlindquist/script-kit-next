@@ -320,35 +320,6 @@ mod flow_desk_create_discoverability_tests {
         );
     }
 
-    /// Agent Chat has had "New Conversation" on ⌘L; Flow's only way to start
-    /// over was Terminate, which permanently destroys the conversation. A user
-    /// who wanted a clean slate had to pick the destructive verb.
-    ///
-    /// The literals are asserted deliberately: this action exists to be the
-    /// SAME action on both surfaces, so a renamed or rebound twin is exactly
-    /// the drift being prevented. The expected values are read from Agent
-    /// Chat's own builder rather than typed twice, so a change on that side
-    /// fails here instead of quietly splitting the two again.
-    #[test]
-    fn flow_sessions_start_a_new_conversation_the_same_way_agent_chat_does() {
-        let agent_chat = crate::actions::get_agent_chat_actions();
-        let reference = agent_chat
-            .iter()
-            .find(|action| action.id == "agent_chat_new_conversation")
-            .expect("Agent Chat owns the reference New Conversation action");
-
-        let actions = ScriptListApp::flow_desk_actions_for_dialog(&session_subject(false));
-        let flow = actions
-            .iter()
-            .find(|action| action.id == "flow_desk_session_new_conversation")
-            .expect("an idle flow session must offer New Conversation");
-
-        assert_eq!(flow.title, reference.title);
-        assert_eq!(flow.shortcut, reference.shortcut);
-        assert_eq!(flow.section, reference.section);
-        assert_eq!(flow.icon, reference.icon);
-    }
-
     /// A temporarily unavailable command remains visible with a typed reason,
     /// so the Actions menu explains the stable command vocabulary without
     /// allowing a running turn to be orphaned.

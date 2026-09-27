@@ -101,8 +101,6 @@ mod tests {
                 cancel_text: None,
                 request_id: None,
             },
-            ExternalCommand::OpenAgentChatDetachedFixture { request_id: None },
-            ExternalCommand::OpenAgentChatHistoryPopupFixture { request_id: None },
             ExternalCommand::OpenChatPromptFixture { request_id: None },
             ExternalCommand::ClosePromptPopupNatively {
                 target: crate::protocol::AutomationWindowTarget::Instance {
@@ -113,22 +111,6 @@ mod tests {
             },
             ExternalCommand::OpenAi,
             ExternalCommand::OpenMiniAi,
-            ExternalCommand::OpenAiWithMockData,
-            ExternalCommand::OpenMiniAiWithMockData,
-            ExternalCommand::OpenFocusedTextAgentChatWithMockData {
-                text: None,
-                instruction: None,
-                request_id: None,
-            },
-            ExternalCommand::OpenFocusedTextAgentChatFromFocusedFieldWithMockData {
-                instruction: None,
-                request_id: None,
-            },
-            ExternalCommand::OpenFocusedTextAgentChatWithPiData {
-                text: None,
-                instruction: None,
-                request_id: None,
-            },
             ExternalCommand::ShowAiCommandBar,
             ExternalCommand::SimulateAiKey {
                 key: String::new(),
@@ -152,24 +134,6 @@ mod tests {
             ExternalCommand::SetAgentChatInput {
                 text: String::new(),
                 submit: false,
-                request_id: None,
-            },
-            ExternalCommand::SetAgentChatScopeInput {
-                text: String::new(),
-                request_id: None,
-            },
-            ExternalCommand::SelectAgentChatVariation {
-                index: 0,
-                edit: false,
-                request_id: None,
-            },
-            ExternalCommand::GetAgentChatVariations { request_id: None },
-            ExternalCommand::AgentChatEscape { request_id: None },
-            ExternalCommand::SetAgentChatTestFixture {
-                phase: "awaitingFirstAssistantText".to_string(),
-                user_text: None,
-                assistant_text: None,
-                message_count: None,
                 request_id: None,
             },
             ExternalCommand::GetAiWindowState { request_id: None },
@@ -940,62 +904,6 @@ mod tests {
     }
 
     #[test]
-    fn test_external_command_open_ai_with_mock_data_deserialization() -> anyhow::Result<()> {
-        let json = r#"{"type": "openAiWithMockData"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json)?;
-        assert!(matches!(cmd, ExternalCommand::OpenAiWithMockData));
-        Ok(())
-    }
-
-    #[test]
-    fn test_external_command_open_mini_ai_with_mock_data_deserialization() -> anyhow::Result<()> {
-        let json = r#"{"type": "openMiniAiWithMockData"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json)?;
-        assert!(matches!(cmd, ExternalCommand::OpenMiniAiWithMockData));
-        Ok(())
-    }
-
-    #[test]
-    fn test_external_command_open_focused_text_agent_chat_with_mock_data_deserialization(
-    ) -> anyhow::Result<()> {
-        let json = r#"{"type":"openFocusedTextAgentChatWithMockData","text":"Hello world","instruction":"Translate","requestId":"ft-mock"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json)?;
-        match cmd {
-            ExternalCommand::OpenFocusedTextAgentChatWithMockData {
-                text,
-                instruction,
-                request_id,
-            } => {
-                assert_eq!(text.as_deref(), Some("Hello world"));
-                assert_eq!(instruction.as_deref(), Some("Translate"));
-                assert_eq!(request_id.as_deref(), Some("ft-mock"));
-            }
-            other => panic!("Expected OpenFocusedTextAgentChatWithMockData, got {other:?}"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_external_command_open_focused_text_agent_chat_with_pi_data_deserialization(
-    ) -> anyhow::Result<()> {
-        let json = r#"{"type":"openFocusedTextAgentChatWithPiData","text":"Hello world","instruction":"Translate","requestId":"ft-pi"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json)?;
-        match cmd {
-            ExternalCommand::OpenFocusedTextAgentChatWithPiData {
-                text,
-                instruction,
-                request_id,
-            } => {
-                assert_eq!(text.as_deref(), Some("Hello world"));
-                assert_eq!(instruction.as_deref(), Some("Translate"));
-                assert_eq!(request_id.as_deref(), Some("ft-pi"));
-            }
-            other => panic!("Expected OpenFocusedTextAgentChatWithPiData, got {other:?}"),
-        }
-        Ok(())
-    }
-
-    #[test]
     fn test_external_command_get_ai_window_state_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "getAiWindowState"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
@@ -1041,30 +949,6 @@ mod tests {
             r#"{"type": "setAgentChatInput", "text": "hello", "requestId": "req-agent_chat"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert_eq!(cmd.request_id(), Some("req-agent_chat"));
-        Ok(())
-    }
-
-    #[test]
-    fn test_external_command_set_agent_chat_test_fixture_deserialization() -> anyhow::Result<()> {
-        let json = r#"{"type": "setAgentChatTestFixture", "phase": "awaitingFirstAssistantText", "userText": "hello", "requestId": "req-fixture"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json)?;
-        assert_eq!(cmd.command_type(), "setAgentChatTestFixture");
-        assert_eq!(cmd.request_id(), Some("req-fixture"));
-        match cmd {
-            ExternalCommand::SetAgentChatTestFixture {
-                phase,
-                user_text,
-                assistant_text,
-                message_count,
-                ..
-            } => {
-                assert_eq!(phase, "awaitingFirstAssistantText");
-                assert_eq!(user_text.as_deref(), Some("hello"));
-                assert!(assistant_text.is_none());
-                assert_eq!(message_count, None);
-            }
-            _ => panic!("Expected SetAgentChatTestFixture command"),
-        }
         Ok(())
     }
 
@@ -1296,26 +1180,6 @@ mod tests {
     #[cfg(windows)]
     fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
         std::os::windows::fs::symlink_dir(target, link).context("create symlink")?;
-        Ok(())
-    }
-
-    #[test]
-    fn test_external_command_open_focused_text_agent_chat_from_focused_field_with_mock_data_deserialization(
-    ) -> anyhow::Result<()> {
-        let json = r#"{"type":"openFocusedTextAgentChatFromFocusedFieldWithMockData","instruction":"Translate","requestId":"ft-live"}"#;
-        let cmd: ExternalCommand = serde_json::from_str(json)?;
-        match cmd {
-            ExternalCommand::OpenFocusedTextAgentChatFromFocusedFieldWithMockData {
-                instruction,
-                request_id,
-            } => {
-                assert_eq!(instruction.as_deref(), Some("Translate"));
-                assert_eq!(request_id.as_deref(), Some("ft-live"));
-            }
-            other => panic!(
-                "Expected OpenFocusedTextAgentChatFromFocusedFieldWithMockData, got {other:?}"
-            ),
-        }
         Ok(())
     }
 }

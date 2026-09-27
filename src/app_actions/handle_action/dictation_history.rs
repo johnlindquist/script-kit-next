@@ -30,7 +30,7 @@ impl DictationHistoryHandlerAction {
     fn user_message(self) -> Option<&'static str> {
         match self {
             Self::Paste => Some("Pasting to frontmost app…"),
-            Self::AddToAgentChat => Some("Opening Agent Chat..."),
+            Self::AddToAgentChat => Some("Asking the model about it"),
             Self::SaveNote | Self::Copy | Self::Delete => None,
         }
     }
@@ -82,36 +82,20 @@ impl ScriptListApp {
         }
     }
 
+    /// Whether the entry waits in the line to go with the chat's next turn.
     pub(crate) fn dictation_history_attachment_is_pending(
         &self,
         entry_id: &str,
-        cx: &Context<Self>,
+        _cx: &Context<Self>,
     ) -> bool {
         let uri = format!("kit://dictation-history?id={entry_id}");
-        let entity = match &self.current_view {
-            AppView::AgentChatView { entity } => Some(entity.clone()),
-            _ => self
-                .attachment_portal_return_view
-                .as_ref()
-                .and_then(|view| match view {
-                    AppView::AgentChatView { entity } => Some(entity.clone()),
-                    _ => None,
-                })
-                .or_else(crate::ai::agent_chat::ui::chat_window::get_detached_agent_chat_view_entity),
-        };
-        let Some(entity) = entity else {
-            return false;
-        };
-        let thread = entity.read(cx).live_thread().clone();
-        thread
-            .read(cx)
-            .pending_context_parts_cloned()
-            .iter()
-            .any(|part| matches!(
+        self.one_window_host.work.parts.values().any(|part| {
+            matches!(
                 part,
                 crate::ai::AiContextPart::ResourceUri { uri: pending_uri, .. }
-                    if pending_uri == &uri
-            ))
+                    if *pending_uri == uri
+            )
+        })
     }
 
     pub(crate) fn delete_dictation_history_entry_confirmed(
@@ -177,12 +161,13 @@ impl ScriptListApp {
                     return DispatchOutcome::success();
                 };
 
-                self.open_tab_ai_agent_chat_with_context_part(
-                    crate::ai::AiContextPart::ResourceUri {
-                        uri: entry.resource_uri(),
-                        label: format!("Dictation: {}", entry.preview),
-                    },
-                    "dictation_history_add",
+                self.one_window_open_chat(
+                    crate::one_window::chat_entry::ChatEntry::quick().with(
+                        crate::ai::AiContextPart::ResourceUri {
+                            uri: entry.resource_uri(),
+                            label: format!("Dictation: {}", entry.preview),
+                        },
+                    ),
                     cx,
                 );
 

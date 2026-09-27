@@ -15,7 +15,7 @@ pub struct AutomationSurfaceSnapshot {
     pub schema_version: u32,
     /// Canonical surface name (e.g. `"agent_chat"`, `"main"`).
     pub surface: String,
-    /// The `AppView` variant currently active (e.g. `"AgentChatView"`).
+    /// The `AppView` variant currently active (e.g. `"ScriptList"`).
     pub view: String,
     /// Whether the main window is visible.
     pub window_visible: bool,

@@ -68,9 +68,11 @@ pub(crate) const FOOTER_SHORTCUT_LAYOUT_MEASUREMENT_SOURCE: &str =
 /// Escape's own behavior is untouched by this constant; only the advertised
 /// chord converges. Surfaces name the chord here rather than inlining the
 /// glyphs, so the two footers cannot drift apart again one literal at a time.
+#[allow(dead_code)] // The binary's Flow footer names this Stop chord.
 pub(crate) const FOOTER_AI_STOP_KEY: &str = "⌘.";
 
 /// Label paired with [`FOOTER_AI_STOP_KEY`].
+#[allow(dead_code)] // The binary's Flow footer names this Stop chord.
 pub(crate) const FOOTER_AI_STOP_LABEL: &str = "Stop";
 
 /// The default radius for every shared native glass capsule opt-in.
@@ -1628,10 +1630,6 @@ pub(crate) fn footer_icon_path(token: &str) -> Option<String> {
             crate::utils::assets::embedded_asset_exists(&path).then_some(path)
         }
     }
-}
-
-pub(crate) fn footer_icon_path_or_profile(token: &str) -> String {
-    footer_icon_path(token).unwrap_or_else(|| FOOTER_PROFILE_ICON_PATH.to_string())
 }
 
 fn render_footer_labelcap(

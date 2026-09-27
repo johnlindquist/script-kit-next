@@ -32,7 +32,6 @@ const SCENARIOS: &[&str] = &[
     "cohort-removal-replacement",
     "owner-retirement",
     "eligibility",
-    "eligibility-portal",
 ];
 
 #[derive(serde::Deserialize)]
@@ -146,7 +145,7 @@ pub(crate) fn source_plans(scenario: &str) -> Result<Vec<SourcePlan>> {
                 "brain-inbox" => (String::new(), "root", "synchronous"),
                 "windows" => ("windows: example.invalid".into(), "root", "query-bound"),
                 "icons" => ("windows: example.invalid".into(), "root", "catalogue"),
-                "scripts" if matches!(scenario, "eligibility" | "eligibility-portal") => {
+                "scripts" if scenario == "eligibility" => {
                     (OWNED_SLOT_INPUT.into(), "root", "catalogue")
                 }
                 "scripts" | "apps" | "skills" | "validation" | "flow-roster" => {
@@ -1472,9 +1471,7 @@ pub(crate) fn script_catalog(
                     plugin_title: Some("Owned Search Contract".into()),
                     alias: if run.gate.scenario == "empty" {
                         Some("owned-validation-collision".into())
-                    } else if matches!(run.gate.scenario, "eligibility" | "eligibility-portal")
-                        && index == 0
-                    {
+                    } else if run.gate.scenario == "eligibility" && index == 0 {
                         Some(OWNED_SLOT_INPUT.into())
                     } else {
                         None
@@ -1877,38 +1874,6 @@ pub(crate) fn prepare(
     // parser/coalescer ownership and reconcile that empty query.
     app.pending_filter_sync = true;
     app.set_filter_text_immediate(String::new(), window, cx);
-    if scenario == "eligibility-portal" {
-        ensure!(
-            matches!(app.current_view, crate::AppView::ScriptList)
-                && !app.is_in_attachment_portal(),
-            "search_portal_fixture_requires_launcher"
-        );
-        // The real Chat host owns both return layers; no picker or result rows are injected.
-        app.opened_from_main_menu = true;
-        app.open_standard_agent_chat_mock_fixture(cx);
-        ensure!(
-            matches!(app.current_view, crate::AppView::AgentChatView { .. }),
-            "search_portal_fixture_chat_unavailable"
-        );
-        app.open_attachment_portal(
-            crate::ai::context_selector::types::ContextPortalKind::ScriptSearch,
-            cx,
-        );
-        ensure!(
-            matches!(app.current_view, crate::AppView::ScriptList)
-                && app.is_in_attachment_portal()
-                && matches!(
-                    app.active_attachment_portal_kind,
-                    Some(crate::ai::context_selector::types::ContextPortalKind::ScriptSearch)
-                )
-                && matches!(
-                    app.attachment_portal_return_view,
-                    Some(crate::AppView::AgentChatView { .. })
-                ),
-            "search_portal_fixture_initialization_failed"
-        );
-        app.set_filter_text_immediate(OWNED_SLOT_INPUT.into(), window, cx);
-    }
     cx.notify();
     Ok(gate)
 }
@@ -1924,7 +1889,6 @@ pub(crate) fn suggested_input(scenario: &str) -> String {
     match scenario {
         "files-explicit" => "files: example.invalid".into(),
         "brain-replacement" => "brain: example.invalid".into(),
-        "eligibility-portal" => OWNED_SLOT_INPUT.into(),
         "directory-browse" => format!(
             "{}/",
             owned_source_root()

@@ -195,7 +195,6 @@ fn automation_kind_to_window_role(
     match kind {
         AutomationWindowKind::Main => Some(WindowRole::Main),
         AutomationWindowKind::Notes => Some(WindowRole::Notes),
-        AutomationWindowKind::AgentChatDetached => Some(WindowRole::AgentChat),
         // Attached surfaces and popup-only windows use exact runtime handles
         // when available and do not map to the shared role registry.
         AutomationWindowKind::ActionsDialog
@@ -1164,7 +1163,7 @@ mod deferred_dispatch_tests {
         });
         let mut windows = vec![main];
         for kind in [
-            AutomationWindowKind::AgentChatDetached,
+            AutomationWindowKind::Notes,
             AutomationWindowKind::Dictation,
             AutomationWindowKind::PromptPopup,
             AutomationWindowKind::ActionsDialog,
@@ -1242,7 +1241,7 @@ mod deferred_dispatch_tests {
         let mut registrations = TestWindowRegistrations::default();
         for kind in [
             AutomationWindowKind::Main,
-            AutomationWindowKind::AgentChatDetached,
+            AutomationWindowKind::Notes,
             AutomationWindowKind::Dictation,
             AutomationWindowKind::PromptPopup,
             AutomationWindowKind::ActionsDialog,

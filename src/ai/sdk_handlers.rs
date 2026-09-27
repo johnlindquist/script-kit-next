@@ -94,9 +94,7 @@ fn parse_message_role(request_id: &str, role: &str) -> std::result::Result<Messa
 
 /// Handle AiIsOpen request - check if a chat surface is open
 pub fn handle_ai_is_open(request_id: String) -> Message {
-    // The legacy AI window is gone; the detached Agent Chat window is the
-    // remaining standalone chat surface.
-    let is_open = crate::ai::agent_chat::ui::chat_window::is_chat_window_open();
+    let is_open = crate::ai::agent_chat::ui::entry::chat_showing();
     let active_chat_id = None;
 
     info!(

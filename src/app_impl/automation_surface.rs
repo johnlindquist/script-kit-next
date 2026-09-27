@@ -24,7 +24,6 @@ impl ScriptListApp {
             AppView::ScratchPadView { entity, .. } => ("", Some(entity.entity_id()), 0),
             AppView::QuickTerminalView { entity } => ("", Some(entity.entity_id()), 0),
             AppView::WebcamView { entity } => ("", Some(entity.entity_id()), 0),
-            AppView::AgentChatView { entity } => ("", Some(entity.entity_id()), 0),
             AppView::DayPage { entity } => ("", Some(entity.entity_id()), 0),
             AppView::FlowSessionView { session_id } => ("", None, *session_id),
             _ => ("", None, 0),
@@ -130,10 +129,6 @@ impl ScriptListApp {
                 selected_index,
             }
             | AppView::CurrentAppCommandsView {
-                filter,
-                selected_index,
-            }
-            | AppView::AgentChatHistoryView {
                 filter,
                 selected_index,
             }

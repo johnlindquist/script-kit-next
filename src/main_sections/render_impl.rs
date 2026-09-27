@@ -273,7 +273,6 @@ impl Render for ScriptListApp {
                 && !self.is_pinned
                 && !actions_popup_active_or_closing
                 && !confirm::is_confirm_window_open()
-                && !ai::agent_chat::ui::chat_window::is_chat_window_open()
                 && !crate::dictation::is_dictation_overlay_open()
                 && !crate::dictation::is_dictation_recording()
                 && self.tab_ai_save_offer_state.is_none()
@@ -326,7 +325,7 @@ impl Render for ScriptListApp {
         // Focus is applied exactly once when pending_focus is set, then cleared.
         self.apply_pending_focus(window, cx);
 
-        self.sync_main_window_resize_lock(window, cx);
+        self.sync_main_window_resize_lock(window);
 
         // Sync filter input if needed (views that use shared input)
         if matches!(
@@ -347,7 +346,6 @@ impl Render for ScriptListApp {
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::FavoritesBrowseView { .. }
-                | AppView::AgentChatHistoryView { .. }
                 | AppView::BrowserHistoryView { .. }
                 | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
@@ -384,7 +382,7 @@ impl Render for ScriptListApp {
         //
         // HUD is now handled by hud_manager as a separate floating window
         // No need to render it as part of this view
-        let view_owns_main_window_shell = self.current_view.uses_view_owned_main_window_shell(&*cx);
+        let view_owns_main_window_shell = self.current_view.uses_view_owned_main_window_shell();
         let current_view = self.current_view.clone();
         let main_window_modal_dim_active = confirm::is_confirm_window_open()
             || self.shortcut_recorder_state.is_some()
@@ -746,12 +744,6 @@ impl Render for ScriptListApp {
             } => self
                 .render_favorites_browse(filter, selected_index, cx)
                 .into_any_element(),
-            AppView::AgentChatHistoryView {
-                filter,
-                selected_index,
-            } => self
-                .render_agent_chat_history(filter, selected_index, cx)
-                .into_any_element(),
             AppView::BrowserHistoryView {
                 filter,
                 selected_index,
@@ -768,7 +760,6 @@ impl Render for ScriptListApp {
             AppView::NotesBrowseView { search } => self
                 .render_notes_browse_portal(search, cx)
                 .into_any_element(),
-            AppView::AgentChatView { entity } => entity.into_any_element(),
             AppView::DayPage { entity } => entity.into_any_element(),
         };
 

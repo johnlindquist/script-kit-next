@@ -652,8 +652,10 @@ impl ScriptListApp {
             }
             "ask_ai_settings" => {
                 tracing::info!(category = "UI", "ask AI to change settings action");
-                self.open_tab_ai_agent_chat_with_entry_intent(
-                    Some("Update my Script Kit settings in ~/.scriptkit/config.ts: ".to_string()),
+                self.one_window_open_chat(
+                    crate::one_window::chat_entry::ChatEntry::seeded(
+                        "Update my Script Kit settings in ~/.scriptkit/config.ts: ",
+                    ),
                     cx,
                 );
                 DispatchOutcome::success()

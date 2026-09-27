@@ -8,7 +8,6 @@ fn default_state_is_correct() {
     assert_eq!(state.main.return_focus, FocusToken::MainFilter);
     assert!(!state.main.actions_open);
     assert!(!state.notes.visible);
-    assert!(!state.detached_ai.visible);
     assert_eq!(state.dictation, DictationSurfaceState::Hidden);
     assert_eq!(state.key_surface, Some(SurfaceId::Main));
 }
@@ -132,21 +131,6 @@ fn open_close_notes_focus_transitions() {
     assert_eq!(state.key_surface, Some(SurfaceId::Main));
     assert!(cmds.contains(&WindowCommand::CloseNotesWindow));
     assert!(cmds.contains(&WindowCommand::FocusSurface(SurfaceId::Main)));
-}
-
-#[test]
-fn open_close_detached_ai() {
-    let mut state = OrchestratorState::default();
-
-    let cmds = state.dispatch(WindowEvent::OpenDetachedAiChat);
-    assert!(state.detached_ai.visible);
-    assert_eq!(state.key_surface, Some(SurfaceId::DetachedAiChat));
-    assert!(cmds.contains(&WindowCommand::OpenDetachedAiChatWindow));
-
-    let cmds = state.dispatch(WindowEvent::CloseDetachedAiChat);
-    assert!(!state.detached_ai.visible);
-    assert_eq!(state.key_surface, Some(SurfaceId::Main));
-    assert!(cmds.contains(&WindowCommand::CloseDetachedAiChatWindow));
 }
 
 #[test]
@@ -319,31 +303,6 @@ fn finish_tab_ai_dictation_does_not_return_focus_to_notes() {
 }
 
 #[test]
-fn finish_tab_ai_dictation_does_not_return_focus_to_detached_ai() {
-    let mut state = OrchestratorState::default();
-    state.main.visibility = MainVisibility::Hidden(HiddenReason::Dismissed);
-    state.detached_ai.visible = true;
-    state.key_surface = Some(SurfaceId::DetachedAiChat);
-
-    state.dispatch(WindowEvent::StartDictation {
-        target: DictationTarget::TabAiHarness,
-    });
-    let cmds = state.dispatch(WindowEvent::FinishDictation);
-
-    assert_eq!(state.dictation, DictationSurfaceState::Hidden);
-    assert_eq!(state.main.visibility, MainVisibility::Visible);
-    assert_eq!(state.main.content, MainContentKind::AgentChat);
-    assert_eq!(state.main.return_focus, FocusToken::ChatComposer);
-    assert_eq!(state.key_surface, Some(SurfaceId::Main));
-    assert!(cmds.contains(&WindowCommand::RevealMain {
-        activate_app: false,
-        make_key: true,
-    }));
-    assert!(cmds.contains(&WindowCommand::FocusMain(FocusToken::ChatComposer)));
-    assert!(!cmds.contains(&WindowCommand::FocusSurface(SurfaceId::DetachedAiChat,)));
-}
-
-#[test]
 fn abort_tab_ai_dictation_keeps_main_hidden() {
     let mut state = OrchestratorState::default();
 
@@ -509,20 +468,6 @@ fn surface_closed_by_system_resyncs_notes() {
 }
 
 #[test]
-fn surface_closed_by_system_resyncs_detached_ai() {
-    let mut state = OrchestratorState::default();
-    state.detached_ai.visible = true;
-    state.key_surface = Some(SurfaceId::DetachedAiChat);
-
-    state.dispatch(WindowEvent::SurfaceClosedBySystem(
-        SurfaceId::DetachedAiChat,
-    ));
-
-    assert!(!state.detached_ai.visible);
-    assert_eq!(state.key_surface, Some(SurfaceId::Main));
-}
-
-#[test]
 fn main_content_changed_updates_content_and_focus() {
     let mut state = OrchestratorState::default();
 
@@ -543,9 +488,6 @@ fn current_return_focus_reflects_key_surface() {
 
     state.key_surface = Some(SurfaceId::Notes);
     assert_eq!(current_return_focus(&state), FocusToken::NotesEditor);
-
-    state.key_surface = Some(SurfaceId::DetachedAiChat);
-    assert_eq!(current_return_focus(&state), FocusToken::DetachedAiComposer);
 
     state.key_surface = None;
     assert_eq!(current_return_focus(&state), FocusToken::None);

@@ -31,23 +31,15 @@ pub(crate) use builders::get_canonical_note_search_actions;
 pub(crate) use builders::get_notes_command_bar_actions_for_context;
 #[allow(unused_imports)] // used by binary target via include!() in main.rs
 pub(crate) use builders::resolve_file_search_secondary_action_id;
-pub(crate) use builders::AgentChatActionsDialogHost;
-#[allow(unused_imports)]
-pub(crate) use builders::{
-    agent_chat_fork_edit_entry_from_action, agent_chat_receipt_history_request_id_from_action,
-    agent_chat_switch_model_id_from_action, agent_chat_switch_profile_id_from_action,
-    agent_chat_switch_thread_id_from_action, get_agent_chat_actions, get_agent_chat_history_route,
-    get_agent_chat_model_picker_route, get_agent_chat_receipt_history_route,
-    get_agent_chat_root_route_for_host, get_global_actions, get_script_context_actions,
-    get_scriptlet_context_actions_with_custom, AGENT_CHAT_HISTORY_SELECT_ACTION_PREFIX,
-    AGENT_CHAT_RECEIPT_HISTORY_COPY_ACTION_PREFIX, AGENT_CHAT_RECEIPT_HISTORY_ROUTE_ID,
-    AGENT_CHAT_SHOW_RECEIPT_HISTORY_ACTION_ID,
-};
 #[allow(unused_imports)]
 // Used by actions builder tests; the legacy AI window consumer is gone.
 pub use builders::{
     get_ai_command_bar_actions, get_day_note_switcher_actions, get_new_chat_actions,
     get_note_switcher_actions, get_notes_command_bar_actions,
+};
+#[allow(unused_imports)]
+pub(crate) use builders::{
+    get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
 };
 #[allow(unused_imports)]
 // Used by actions builder tests; the legacy AI window consumer is gone.
@@ -62,7 +54,6 @@ pub(crate) use dialog::matching_filtered_action_id_for_keystroke;
 pub(crate) use dialog::ActionsHostContextSnapshot;
 #[allow(unused_imports)] // The binary's app implementation owns activation callback creation.
 pub(crate) use dialog::ActivationCallback;
-pub(crate) use dialog::AgentChatActionsDialogContext;
 pub(crate) use dialog::GroupedActionItem;
 #[allow(unused_imports)] // Used by binary target through include!()-ed render/app_impl code.
 pub(crate) use dialog::{

@@ -12,7 +12,6 @@ pub(crate) const DAY_PAGE_ASK_AGENT_CHAT_CURRENT_LINE_ACTION_ID: &str =
     "day_page:ask_agent_chat_current_line";
 pub(crate) const DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_today";
 pub(crate) const DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_current_line";
-pub(crate) const DAY_PAGE_PREVIEW_AGENT_CHAT_CONTEXT_SOURCE: &str = "day_page_kit_resource_preview";
 pub(crate) const DAY_PAGE_PREVIEW_ADD_TO_AGENT_CHAT_ACTION_ID: &str =
     "day_page:kit_preview_add_to_agent_chat";
 pub(crate) const DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID: &str = "day_page:kit_preview_copy_uri";
@@ -427,7 +426,6 @@ impl DayPageView {
                 parts: vec![part],
                 receipt,
             },
-            DAY_PAGE_PREVIEW_AGENT_CHAT_CONTEXT_SOURCE,
             window,
             cx,
         );
@@ -666,12 +664,7 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.dispatch_agent_chat_packet(
-            self.build_whole_day_agent_chat_packet(cx),
-            DAY_PAGE_AGENT_CHAT_CONTEXT_SOURCE,
-            window,
-            cx,
-        );
+        self.dispatch_agent_chat_packet(self.build_whole_day_agent_chat_packet(cx), window, cx);
     }
 
     pub(crate) fn open_agent_chat_about_current_line(
@@ -679,12 +672,7 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.dispatch_agent_chat_packet(
-            self.build_current_line_agent_chat_packet(cx),
-            DAY_PAGE_CURRENT_LINE_AGENT_CHAT_CONTEXT_SOURCE,
-            window,
-            cx,
-        );
+        self.dispatch_agent_chat_packet(self.build_current_line_agent_chat_packet(cx), window, cx);
     }
 
     // Carries the full AppFailureRecord (rules/AI_RELIABILITY.md); do not box/downgrade.
@@ -692,7 +680,6 @@ impl DayPageView {
     fn dispatch_agent_chat_packet(
         &mut self,
         packet: DayPageAgentHandoffPacket,
-        source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -737,34 +724,24 @@ impl DayPageView {
                         )),
                     );
                 }
-                let Some(part) = packet.parts.first().cloned() else {
+                if packet.parts.is_empty() {
                     return (
                         false,
                         Err(crate::ai::reliability::context_unavailable_failure(
                             "Day Page handoff contains no context",
                         )),
                     );
-                };
+                }
                 app.clear_actions_popup_state();
                 if crate::actions::is_actions_window_open() {
                     crate::actions::close_actions_window(cx);
                 }
-                app.open_tab_ai_agent_chat_with_context_part(part, source, cx);
-                let AppView::AgentChatView { entity } = &app.current_view else {
-                    return (
-                        false,
-                        Err(crate::ai::reliability::context_unavailable_failure(
-                            "Agent Chat did not open for the Day Page handoff",
-                        )),
-                    );
-                };
-                let result = entity.clone().update(cx, |chat, cx| {
-                    chat.stage_inline_context_parts_from_host(packet.parts.clone(), source, cx)
-                        .map_err(|detail| {
-                            crate::ai::reliability::context_unavailable_failure(&detail)
-                        })
-                });
-                (true, result)
+                app.one_window_open_chat(
+                    crate::one_window::chat_entry::ChatEntry::quick()
+                        .with_parts(packet.parts.clone()),
+                    cx,
+                );
+                (true, Ok(()))
             });
             origin.update(cx, |view, cx| {
                 if view.agent_chat_handoff_generation != generation {

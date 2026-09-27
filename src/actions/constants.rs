@@ -22,6 +22,7 @@ pub const NOTES_RECENT_POPUP_MAX_HEIGHT: f32 = 560.0;
 pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
 
 /// Fixed height for the search input row
+#[cfg(test)]
 pub const SEARCH_INPUT_HEIGHT: f32 = 40.0;
 
 /// Height for the header row showing context title (matches section header style)

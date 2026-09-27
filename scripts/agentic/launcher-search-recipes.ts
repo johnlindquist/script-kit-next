@@ -1689,33 +1689,6 @@ async function calculatorRecipe(recipe: SearchRecipe): Promise<void> {
     recipe.assert("navigation-count-preflight-paint-submit-agree", recipe.latest.search.selectedOrdinal === index &&
       recipe.latest.state.mainWindowPreflight.selectedResultKey === selected(recipe.latest.search)?.stableKey && selected(recipe.latest.search)?.selectable === true);
   }
-  await recipe.prepare("eligibility-portal");
-  await recipe.input(recipe.prepared.suggestedInput, "gpui-keyboard");
-  await recipe.release([await awaitWork(recipe, "scripts")], "reserved-slot-portal");
-  const chrome = await recipe.request(() => recipe.client.query(recipe.target, "elements", { includeHeaders: true }));
-  const slot = chrome.elements.find((node: Json) => node.semanticId === "main-list-reserved-slot" && node.kind === "reservedSectionSlot");
-  const slotPaint = recipe.lastFrame?.frameEvidence?.paintBindings?.find((binding: Json) => binding.kind === "mainSearchReservedSlot" && binding.id === "main-list-reserved-slot");
-  if (!slot || typeof slot.value !== "string" || !slotPaint) throw new EvaluationContractError("missing-capability:actual-reserved-section-slot");
-  const slotMetadata: Json = JSON.parse(slot.value);
-  const expectedSlot = { groupedIndex: 0, selectableOrdinal: null, selectable: false, activatable: false, selected: false };
-  recipe.assert("reserved-slots-inert", slot.type === "panel" && slot.role === "presentation" && slot.selectable === false && slot.selected === false &&
-    slot.index == null && slot.actionDisabled === "presentationOnly" &&
-    Object.entries(expectedSlot).every(([key, value]) => slotMetadata?.[key] === value && slotPaint.metadata?.[key] === value) && slotPaint.visibleBounds?.width > 0 && slotPaint.visibleBounds?.height > 0 &&
-    !recipe.latest.search.committedRows.some(row => row.semanticId === slot.semanticId) && selected(recipe.latest.search)?.groupedIndex === 1 && recipe.latest.search.selectedOrdinal === 0);
-  recipe.record("observed-reserved-section-slot", { element: slot, paint: slotPaint });
-  const slotSelection = selectionFingerprint(recipe.latest.search); let slotRefusal: string | undefined;
-  try { await recipe.action({ type: "select", semanticId: slot.semanticId }); }
-  catch (error) { if (!(error instanceof DriverCommandRefused)) throw error; slotRefusal = error.code; }
-  await recipe.observe("reserved-slot-action-refused");
-  recipe.assert("reserved-slots-inert", !!slotRefusal && selectionFingerprint(recipe.latest.search) === slotSelection);
-  await recipe.action({ type: "key", key: "up" }); await recipe.observe("reserved-slot-navigation-skipped");
-  recipe.assert("navigation-count-preflight-paint-submit-agree", recipe.latest.search.selectedOrdinal === 0 && selected(recipe.latest.search)?.groupedIndex === 1 &&
-    selected(recipe.latest.search)?.activatable === true && recipe.latest.state.mainWindowPreflight.selectedResultKey === selected(recipe.latest.search)?.stableKey);
-  await recipe.action({ type: "key", key: "escape" });
-  const portalState = await recipe.inspect("reserved-slot-portal-cancelled");
-  if (identity(portalState).appViewVariant !== "AgentChatView" || portalState.windowVisible !== false)
-    throw new EvaluationContractError("context-portal-return-host-required");
-  // Chat dismissal is not a search contract; restore the launcher through the owned fixture.
   await recipe.prepare("eligibility");
   await recipe.input("2+2", "gpui-keyboard");
   const calculator = selected(recipe.latest.search);

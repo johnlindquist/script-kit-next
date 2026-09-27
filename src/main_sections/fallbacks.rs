@@ -205,13 +205,10 @@ fn execute_fallback_action(
 
                 FallbackResult::SendToAiHarness { query } => {
                     logging::log("FALLBACK", &format!("SendToAiHarness: {}", query));
-                    let normalized = query.trim().to_string();
-                    let intent = if normalized.is_empty() {
-                        None
-                    } else {
-                        Some(normalized)
-                    };
-                    app.open_tab_ai_agent_chat_with_entry_intent(intent, cx);
+                    app.one_window_open_chat(
+                        crate::one_window::chat_entry::ChatEntry::seeded(query.trim()),
+                        cx,
+                    );
                 }
             }
         }

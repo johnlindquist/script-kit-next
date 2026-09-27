@@ -203,31 +203,18 @@ impl ScriptListApp {
     /// Reset all state and return to the script list view.
     /// This clears all prompt state and resizes the window appropriately.
     pub(crate) fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
-        self.reset_to_script_list_impl(false, cx);
+        self.reset_to_script_list_impl(cx);
     }
 
-    pub(crate) fn reset_to_script_list_after_agent_chat_prepared(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        self.reset_to_script_list_impl(true, cx);
-    }
-
-    fn reset_to_script_list_impl(
-        &mut self,
-        agent_chat_already_prepared: bool,
-        cx: &mut Context<Self>,
-    ) {
+    fn reset_to_script_list_impl(&mut self, cx: &mut Context<Self>) {
         self.reset_main_list_boundary_affordance(
             crate::scrolling::boundary_affordance::SettleReason::Reset,
         );
         clear_main_state_restore_after_focus_loss();
-        // Any detached floating popups (Agent Chat composer picker state / history popup /
-        // menu-syntax trigger picker) are owned by the
+        // Any floating popups (the menu-syntax trigger picker) are owned by the
         // outgoing view. Returning to the script list abandons that owner,
         // so make sure none of them survive past the transition.
-        self.close_floating_popups_for_owner_loss("reset_to_script_list", cx);
-        let closing_agent_chat = matches!(self.current_view, AppView::AgentChatView { .. });
+        self.close_floating_popups_for_owner_loss("reset_to_script_list");
         let old_view = match &self.current_view {
             AppView::ScriptList => "ScriptList",
             AppView::About { .. } => "About",
@@ -271,11 +258,9 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "SettingsView",
             AppView::PermissionsWizardView { .. } => "PermissionsWizardView",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
-            AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
             AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
-            AppView::AgentChatView { .. } => "AgentChatView",
             AppView::DayPage { .. } => "DayPage",
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView",
             AppView::SdkReferenceView { .. } => "SdkReferenceView",
@@ -328,18 +313,6 @@ impl ScriptListApp {
             });
         }
 
-        // If reset bypasses the normal Agent Chat close button/Escape route, still
-        // hide Agent Chat-owned popups before the view is dropped. This covers
-        // window hide/reset paths after launcher-triggered "/" opens.
-        if !agent_chat_already_prepared {
-            if let AppView::AgentChatView { entity } = &self.current_view {
-                self.embedded_agent_chat = Some(entity.clone());
-                entity.update(cx, |view, cx| {
-                    view.prepare_for_host_hide(cx);
-                });
-            }
-        }
-
         // Reset view
         self.profile_search_return_input = None;
         self.editor_escape_armed_at = None;
@@ -367,22 +340,6 @@ impl ScriptListApp {
             tracing::info!(
                 target: "script_kit::spine",
                 event = "spine_attachment_portal_force_reset",
-            );
-        }
-
-        if closing_agent_chat {
-            self.agent_chat_ready_script_path = None;
-            self.agent_chat_footer_dot_status = None;
-            self.agent_chat_footer_model_display = None;
-            self.agent_chat_footer_snapshot = None;
-            self.tab_ai_harness_return_view = None;
-            self.tab_ai_harness_return_focus_target = None;
-            crate::windows::update_automation_semantic_surface(
-                "main",
-                Some("scriptList".to_string()),
-            );
-            self.transition_agent_chat_surface(
-                crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceEvent::EmbeddedClosed,
             );
         }
 

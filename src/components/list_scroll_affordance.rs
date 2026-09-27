@@ -56,9 +56,6 @@ pub(crate) fn render_top_occlusion_at(
 
 // ── Jump-to-latest affordance ─────────────────────────────────────────────
 
-/// Semantic id for Agent Chat's jump-to-latest control.
-pub(crate) const AGENT_CHAT_JUMP_TO_LATEST_ID: &str = "agent-chat-jump-to-latest";
-
 /// Should a transcript show a "jump to latest" affordance?
 ///
 /// Pure, and deliberately derived from only two facts:

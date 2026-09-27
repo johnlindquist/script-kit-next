@@ -937,7 +937,10 @@ impl ScriptListApp {
             warning_count = report.warning_count,
             "Submitting script issues diagnostics to Agent Chat"
         );
-        self.ask_agent_chat_suppressing_focused_part(prompt, cx);
+        self.one_window_open_chat(
+            crate::one_window::chat_entry::ChatEntry::sending(prompt),
+            cx,
+        );
     }
 
     pub(crate) fn render_creation_feedback(

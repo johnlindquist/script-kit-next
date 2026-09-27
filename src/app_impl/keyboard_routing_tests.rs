@@ -284,23 +284,4 @@ mod tests {
             "Arrow key handlers must call stop_propagation after routing to actions dialog"
         );
     }
-
-    /// Verify launcher Agent Chat focus restore uses a dedicated host-specific target.
-    ///
-    /// This guards the close path against flattening embedded Agent Chat back into the
-    /// generic chat prompt restore target.
-    #[test]
-    fn test_launcher_agent_chat_actions_restore_uses_dedicated_focus_target() {
-        let content = read_app_impl_sources();
-
-        assert!(
-            content.contains("ActionsDialogHost::AgentChat => FocusRequest::agent_chat()"),
-            "launcher Agent Chat actions close should map to FocusRequest::agent_chat()"
-        );
-        assert!(
-            content.contains("FocusTarget::AgentChat => {")
-                && content.contains("AppView::AgentChatView { entity }"),
-            "pending focus application should restore launcher Agent Chat via AgentChatView"
-        );
-    }
 }

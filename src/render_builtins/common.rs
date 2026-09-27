@@ -1271,22 +1271,6 @@ impl ScriptListApp {
                     "input:dictation-history-filter",
                 ))
             }
-            AppView::AgentChatHistoryView {
-                filter,
-                selected_index,
-            } => {
-                let ids = Self::agent_chat_history_visible_rows(filter)
-                    .into_iter()
-                    .map(|entry| format!("agent-chat-history:{}", entry.session_id))
-                    .collect();
-                Some(self.active_tracked_list_scroll_receipt(
-                    "agent_chat_history",
-                    &self.agent_chat_history_scroll_handle,
-                    ids,
-                    *selected_index,
-                    "input:agent_chat-history-filter",
-                ))
-            }
             _ => None,
         }
     }
@@ -1735,10 +1719,6 @@ mod builtin_browser_consistency_audit {
     /// this table must move together).
     const BUILTIN_BROWSER_SOURCES: &[(&str, &str)] = &[
         ("actions.rs", include_str!("actions.rs")),
-        (
-            "agent_chat_history.rs",
-            include_str!("agent_chat_history.rs"),
-        ),
         ("ai_presets.rs", include_str!("ai_presets.rs")),
         ("app_launcher.rs", include_str!("app_launcher.rs")),
         ("browser_history.rs", include_str!("browser_history.rs")),

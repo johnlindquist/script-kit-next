@@ -1646,7 +1646,6 @@ pub(crate) struct ScriptListApp {
     /// actions dialog. Gates the MainList activation path so agent/model
     /// selections persist to user preferences instead of dispatching as
     /// ordinary launcher actions. Cleared when the picker closes.
-    pub(crate) agent_model_picker_active: bool,
     /// Resolved display name of the globally-selected Agent Chat agent (e.g.
     /// "Claude Code"), shown in the footer marker. Sourced from
     /// `ai.selectedAgentChatAgentId` via the agent catalog; refreshed on startup and
@@ -1899,33 +1898,6 @@ pub(crate) struct ScriptListApp {
     pub(crate) tab_ai_harness_script_list_trigger: Option<char>,
     /// Pending explicit apply-back route for the active Tab AI harness session.
     pub(crate) tab_ai_harness_apply_back_route: Option<crate::ai::TabAiApplyBackRoute>,
-    /// Persistent embedded Agent Chat chat entity so repeated Tab opens can reuse
-    /// the same live Agent Chat connection instead of cold-starting a new one.
-    pub(crate) embedded_agent_chat: Option<Entity<crate::ai::agent_chat::ui::view::AgentChatView>>,
-    /// Cached focus handle for the embedded Agent Chat chat. Focus restoration happens
-    /// from parent render paths, so it must not read the child while Agent Chat is
-    /// updating its picker/composer state.
-    pub(crate) embedded_agent_chat_focus_handle: Option<gpui::FocusHandle>,
-    /// Hidden, never-shown Agent Chat chat entity warmed at startup. It is consumed
-    /// by the first compatible Agent Chat open so prompt submit avoids initialization.
-    pub(crate) prewarmed_agent_chat: Option<Entity<crate::ai::agent_chat::ui::view::AgentChatView>>,
-    /// Active goose-backed Agent Chat warm lease, reset on chat dismissal so the
-    /// next Agent Chat open starts from a fresh warm session.
-    pub(crate) active_agent_chat_warm_lease:
-        Option<crate::ai::agent_chat::warm_session::AgentChatWarmSessionLease>,
-    /// Cached ready script path from the Agent Chat `SCRIPT_READY` receipt. Updated
-    /// whenever the Agent Chat observer fires. Used by footer button resolution
-    /// (which only has `&self`) without needing a `cx` to read the Agent Chat entity.
-    pub(crate) agent_chat_ready_script_path: Option<std::path::PathBuf>,
-    /// Cached Agent Chat footer dot status so child Agent Chat notifications only repaint
-    /// the parent-owned native footer when the visible footer state changes.
-    pub(crate) agent_chat_footer_dot_status: Option<crate::footer_popup::FooterDotStatus>,
-    /// Cached Agent Chat model label paired with `agent_chat_footer_dot_status`.
-    pub(crate) agent_chat_footer_model_display: Option<String>,
-    /// Cached Agent Chat footer state so native footer labels refresh when composer
-    /// or response-derived actions change.
-    pub(crate) agent_chat_footer_snapshot:
-        Option<crate::ai::agent_chat::ui::view::AgentChatFooterSnapshot>,
     /// Snapshot of shared launcher host state while an attachment portal owns
     /// the main window.
     pub(crate) attachment_portal_host_snapshot: Option<AttachmentPortalHostSnapshot>,
@@ -1946,7 +1918,6 @@ pub(crate) struct ScriptListApp {
     pub(crate) spine_mention_portal_segment: Option<std::ops::Range<usize>>,
     /// Session alias registry for compact spine mention tokens inserted into
     /// the main filter (`@file:basename` → full `AiContextPart::FilePath`).
-    /// The launcher-side mirror of `AgentChatView::typed_mention_aliases`.
     pub(crate) spine_mention_aliases:
         std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
     /// Pending Today → main-menu `@context` round trip. `Some` while the user
@@ -1954,12 +1925,6 @@ pub(crate) struct ScriptListApp {
     /// a context row returns to the held Day Page entity with the resolved
     /// token spliced into the originating line. Escape cancels back to Today.
     pub(crate) day_page_context_return: Option<DayPageContextReturn>,
-    /// App-owned placement machine for the Agent Chat surface. Source of
-    /// truth for the `blocks_launcher_ai_entry` and
-    /// `is_attachment_portal` predicates. Written only through
-    /// `transition_agent_chat_surface`; do not mutate directly.
-    pub(crate) agent_chat_surface_state:
-        crate::ai::agent_chat::ui::surface_state::AgentChatSurfaceState,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

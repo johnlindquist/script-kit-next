@@ -2922,7 +2922,7 @@ impl ScriptListApp {
                     "{}",
                     action.log_message()
                 );
-                self.open_tab_ai_agent_chat_with_entry_intent_variant(None, variant, cx);
+                self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
             }
             SurfaceOpenBuiltinAction::EmojiPicker => {
                 tracing::info!(
@@ -2989,15 +2989,7 @@ impl ScriptListApp {
                     "{}",
                     action.log_message()
                 );
-                self.open_builtin_filterable_view(
-                    AppView::AgentChatHistoryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search conversation history...",
-                    true,
-                    cx,
-                );
+                self.one_window_open_past_chats(String::new(), cx);
             }
             SurfaceOpenBuiltinAction::AiVault => {
                 tracing::info!(
@@ -3436,9 +3428,9 @@ impl ScriptListApp {
         let request = action.normalized_request(query);
         let intent = action.entry_intent(request);
         if intent.is_none() && action.opens_agent_chat_when_request_empty() {
-            self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
+            self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
         } else {
-            self.open_tab_ai_chat_with_entry_intent(intent, cx);
+            self.open_chat_about_current_view(intent, cx);
         }
 
         Self::builtin_success(dctx, action.success_detail())
@@ -3469,12 +3461,15 @@ impl ScriptListApp {
         dctx: &crate::action_helpers::DispatchContext,
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
-        self.open_tab_ai_agent_chat_with_entry_intent(None, cx);
         if action.starts_new_conversation() {
-            if let Some(entity) = self.active_agent_chat_entity() {
-                entity.update(cx, |chat, cx| chat.start_new_thread(cx));
-            }
+            self.one_window_handle(
+                sk_one_window::Event::View(sk_one_window::ViewOp::Home {
+                    text: String::new(),
+                }),
+                cx,
+            );
         }
+        self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
         Self::builtin_success(dctx, action.success_detail())
     }
 
@@ -5014,26 +5009,9 @@ impl ScriptListApp {
                 }
             }
             DictationTarget::TabAiHarness => {
-                let policy = match &self.current_view {
-                    AppView::AgentChatView { entity } => entity
-                        .read(cx)
-                        .thread()
-                        .map(|thread| FrozenAgentChatPolicy::ExistingThread {
-                            thread_id: thread.read(cx).ui_thread_id().to_string(),
-                            generation: self.tab_ai_harness_capture_generation,
-                            composer_semantic_token: Some(entity.read(cx).semantic_token(cx)),
-                            chat_entity_id: Some(entity.entity_id().as_u64()),
-                            data_generation: Some(revisions.data_generation),
-                            main_owner: owner,
-                        })
-                        .unwrap_or(FrozenAgentChatPolicy::FreshStandard {
-                            host_generation: self.tab_ai_harness_capture_generation,
-                            main_owner: owner,
-                        }),
-                    _ => FrozenAgentChatPolicy::FreshStandard {
-                        host_generation: self.tab_ai_harness_capture_generation,
-                        main_owner: owner,
-                    },
+                let policy = FrozenAgentChatPolicy::FreshStandard {
+                    host_generation: self.tab_ai_harness_capture_generation,
+                    main_owner: owner,
                 };
                 FrozenDictationDestination::AgentChat { policy }
             }
@@ -5858,12 +5836,8 @@ impl ScriptListApp {
         request: &crate::dictation::DictationDeliveryRequest,
         mut owned_window: Option<&mut Window>,
         cx: &mut Context<Self>,
-    ) -> (
-        Result<Option<serde_json::Value>, String>,
-        Option<crate::agent_handoff::AgentChatEntryDispatch>,
-    ) {
+    ) -> Result<Option<serde_json::Value>, String> {
         let target = request.selection.target;
-        let mut pending_agent_chat_entry = None;
         let internal_result: Result<Option<serde_json::Value>, String> =
             (|| -> Result<Option<serde_json::Value>, String> {
                 match target {
@@ -5972,82 +5946,23 @@ impl ScriptListApp {
                                 "Frozen destination type does not match its target".to_string()
                             );
                         };
-                        if let FrozenAgentChatPolicy::ExistingThread {
-                            thread_id,
-                            composer_semantic_token,
-                            ..
-                        } = policy
-                        {
-                            if let Some(window) = owned_window.as_deref_mut() {
-                                let AppView::AgentChatView { entity } = &self.current_view else {
-                                    return Err("The frozen Agent Chat host is unavailable".into());
-                                };
-                                let token = composer_semantic_token.ok_or_else(|| {
-                                    "Missing frozen composer revision".to_string()
-                                })?;
-                                let (start, end) = entity.clone().update(cx, |chat, cx| {
-                                    chat.insert_owned_dictation_text(
-                                        thread_id,
-                                        token,
-                                        request.transcript.text(),
-                                        window,
-                                        cx,
-                                    )
-                                })?;
-                                Ok(Some(serde_json::json!({
-                                    "available": true, "unit": "unicodeScalars", "start": start, "end": end,
-                                    "insertedLength": end - start, "operation": "replaceFrozenSelection",
-                                    "source": "deliveryCoordinator", "redacted": true,
-                                })))
-                            } else {
-                                crate::runtime_policy::check(
-                                    crate::runtime_policy::ExternalEffect::Provider,
-                                )
-                                .map_err(|error| error.to_string())?;
-                                match self.dispatch_dictation_to_frozen_agent_chat(
-                                    request.transcript.text().to_string(),
-                                    false,
-                                    crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
-                                    cx,
-                                ).map_err(str::to_string)? {
-                                    crate::agent_handoff::AgentChatEntryDispatch::Complete(outcome) => {
-                                        if outcome.source_consumed() {
-                                            Ok(None)
-                                        } else {
-                                            Err("Agent Chat refused the Dictation turn".to_string())
-                                        }
-                                    }
-                                    crate::agent_handoff::AgentChatEntryDispatch::Pending(ticket) => {
-                                        pending_agent_chat_entry = Some(crate::agent_handoff::AgentChatEntryDispatch::Pending(ticket));
-                                        Ok(None)
-                                    }
-                                }
-                            }
+                        let FrozenAgentChatPolicy::FreshStandard { .. } = policy else {
+                            return Err("The frozen chat destination is unavailable".to_string());
+                        };
+                        // The chat's input is the main input: words for an open chat wait
+                        // there, words for a new one are its first turn.
+                        let words = request.transcript.text().to_string();
+                        let entry = if self.one_window.chat().is_some() {
+                            crate::one_window::chat_entry::ChatEntry::seeded(words)
                         } else {
                             crate::runtime_policy::check(
                                 crate::runtime_policy::ExternalEffect::Provider,
                             )
                             .map_err(|error| error.to_string())?;
-                            self.seed_agent_chat_dictation_return_origin(cx);
-                            match self.dispatch_dictation_to_frozen_agent_chat(
-                                request.transcript.text().to_string(),
-                                true,
-                                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
-                                cx,
-                            ).map_err(str::to_string)? {
-                                crate::agent_handoff::AgentChatEntryDispatch::Complete(outcome) => {
-                                    if outcome.source_consumed() {
-                                        Ok(None)
-                                    } else {
-                                        Err("Agent Chat refused the Dictation turn".to_string())
-                                    }
-                                }
-                                crate::agent_handoff::AgentChatEntryDispatch::Pending(ticket) => {
-                                    pending_agent_chat_entry = Some(crate::agent_handoff::AgentChatEntryDispatch::Pending(ticket));
-                                    Ok(None)
-                                }
-                            }
-                        }
+                            crate::one_window::chat_entry::ChatEntry::sending(words)
+                        };
+                        self.one_window_open_chat(entry, cx);
+                        Ok(None)
                     }
                     crate::dictation::DictationTarget::DayPageToday => {
                         let crate::dictation::FrozenDictationDestination::DayPage {
@@ -6121,37 +6036,20 @@ impl ScriptListApp {
                             crate::runtime_policy::ExternalEffect::Provider,
                         )
                         .map_err(|error| error.to_string())?;
-                        self.seed_agent_chat_dictation_return_origin(cx);
-                        match self
-                            .dispatch_dictation_to_frozen_agent_chat(
+                        self.one_window_open_chat(
+                            crate::one_window::chat_entry::ChatEntry::sending(
                                 request.transcript.text().to_string(),
-                                true,
-                                crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::QuickAi,
-                                cx,
-                            )
-                            .map_err(str::to_string)?
-                        {
-                            crate::agent_handoff::AgentChatEntryDispatch::Complete(outcome) => {
-                                if outcome.source_consumed() {
-                                    Ok(None)
-                                } else {
-                                    Err("Quick AI refused the Dictation turn".to_string())
-                                }
-                            }
-                            crate::agent_handoff::AgentChatEntryDispatch::Pending(ticket) => {
-                                pending_agent_chat_entry = Some(
-                                    crate::agent_handoff::AgentChatEntryDispatch::Pending(ticket),
-                                );
-                                Ok(None)
-                            }
-                        }
+                            ),
+                            cx,
+                        );
+                        Ok(None)
                     }
                     crate::dictation::DictationTarget::ExternalApp => {
                         Err("external delivery is handled by the frozen external actor".to_string())
                     }
                 }
             })();
-        (internal_result, pending_agent_chat_entry)
+        internal_result
     }
 
     fn complete_internal_dictation_delivery(
@@ -6374,8 +6272,7 @@ impl ScriptListApp {
                     return;
                 }
 
-                let (internal_result, pending_agent_chat_entry) =
-                    self.mutate_internal_dictation_request(&request, None, cx);
+                let internal_result = self.mutate_internal_dictation_request(&request, None, cx);
 
                 if !matches!(target, crate::dictation::DictationTarget::ExternalApp) {
                     let delivery_insertion_range = match internal_result {
@@ -6429,75 +6326,6 @@ impl ScriptListApp {
                     };
                     // The delivery id was claimed before validation, so every
                     // success, refusal, or uncertain result remains single-shot.
-                    // Agent Chat and Quick AI are only complete once their entry
-                    // ticket reports that the exact turn was accepted.
-                    if let Some(crate::agent_handoff::AgentChatEntryDispatch::Pending(ticket)) =
-                        pending_agent_chat_entry
-                    {
-                        cx.spawn(async move |this, cx| {
-                            let completion = ticket.completion.recv().await;
-                            let _ = this.update(cx, |this, cx| match completion {
-                                Ok(outcome) if outcome.source_consumed() => {
-                                    this.complete_internal_dictation_delivery(
-                                        request,
-                                        audio_duration,
-                                        target,
-                                        delivery_insertion_range,
-                                        cx,
-                                    );
-                                }
-                                Ok(outcome) => {
-                                    let detail = format!(
-                                        "Dictation turn was not accepted: {:?}",
-                                        outcome.submission
-                                    );
-                                    let failure = crate::ai::reliability::destination_failure(
-                                        true,
-                                        &detail,
-                                    );
-                                    tracing::warn!(
-                                        category = "DICTATION",
-                                        delivery_id,
-                                        failure_code = ?failure.failure.code,
-                                        error_fingerprint = %crate::dictation::redacted_transcript_fingerprint(&detail),
-                                        "Agent Chat Dictation delivery was refused"
-                                    );
-                                    this.present_dictation_delivery_failure(
-                                        request,
-                                        timing,
-                                        failure,
-                                        crate::dictation::DictationDeliveryFailureReason::DestinationStale,
-                                        sk_protocol::ai_reliability::RetrySafety::ExplicitUserConfirmation,
-                                        cx,
-                                    );
-                                }
-                                Err(_) => {
-                                    let detail = "Agent Chat entry completion channel closed";
-                                    let failure = crate::ai::reliability::destination_failure(
-                                        false,
-                                        detail,
-                                    );
-                                    tracing::warn!(
-                                        category = "DICTATION",
-                                        delivery_id,
-                                        failure_code = ?failure.failure.code,
-                                        error_fingerprint = %crate::dictation::redacted_transcript_fingerprint(detail),
-                                        "Agent Chat Dictation delivery outcome is unavailable"
-                                    );
-                                    this.present_dictation_delivery_failure(
-                                        request,
-                                        timing,
-                                        failure,
-                                        crate::dictation::DictationDeliveryFailureReason::MutationOutcomeUnknown,
-                                        sk_protocol::ai_reliability::RetrySafety::Never,
-                                        cx,
-                                    );
-                                }
-                            });
-                        })
-                        .detach();
-                        return;
-                    }
                     self.complete_internal_dictation_delivery(
                         request,
                         audio_duration,
@@ -8278,7 +8106,7 @@ impl ScriptListApp {
     /// Determine the delivery target for a new dictation session based on
     /// which Script Kit surface is currently active.
     ///
-    /// Priority: notes editor > Agent Chat composer > active prompt >
+    /// Priority: notes editor > the chat's input > active prompt >
     /// tracked frontmost app > launcher main filter fallback > external app.
     fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
         let has_frontmost_app_target = Self::has_dictation_frontmost_target();
@@ -8286,8 +8114,8 @@ impl ScriptListApp {
             crate::dictation::DictationTarget::TabAiHarness
         } else if notes::is_notes_window_open() {
             crate::dictation::DictationTarget::NotesEditor
-        } else if self.agent_chat_dictation_target_active() {
-            crate::dictation::DictationTarget::AiChatComposer
+        } else if self.one_window.chat().is_some() {
+            crate::dictation::DictationTarget::MainWindowFilter
         } else if self.can_accept_dictation_into_prompt() {
             crate::dictation::DictationTarget::MainWindowPrompt
         } else if has_frontmost_app_target {
@@ -8302,20 +8130,13 @@ impl ScriptListApp {
             ?target,
             current_view = ?std::mem::discriminant(&self.current_view),
             notes_open = notes::is_notes_window_open(),
-            agent_chat_open = self.agent_chat_dictation_target_active(),
+            agent_chat_open = self.one_window.chat().is_some(),
             has_frontmost_app_target,
             accepts_main_filter = self.can_accept_dictation_into_main_filter(),
             accepts_prompt = self.can_accept_dictation_into_prompt(),
             "Resolved dictation target"
         );
         target
-    }
-
-    /// Whether dictation can deliver into an Agent Chat composer: the detached
-    /// chat window is open or the embedded Agent Chat view is active.
-    fn agent_chat_dictation_target_active(&self) -> bool {
-        ai::agent_chat::ui::chat_window::is_chat_window_open()
-            || matches!(self.current_view, AppView::AgentChatView { .. })
     }
 
     /// Close the dictation overlay, hide Script Kit, and activate the tracked

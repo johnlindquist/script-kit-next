@@ -2,7 +2,7 @@ use super::AppView;
 
 /// Convert an `AppView` variant to the prompt-type string that the canonical
 /// source-type detector in `crate::ai` understands.
-pub(super) fn app_view_to_prompt_type_str(view: &AppView) -> &'static str {
+fn app_view_to_prompt_type_str(view: &AppView) -> &'static str {
     match view {
         AppView::ScriptList => "ScriptList",
         AppView::ClipboardHistoryView { .. } => "ClipboardHistory",

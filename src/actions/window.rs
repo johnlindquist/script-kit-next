@@ -1422,7 +1422,6 @@ fn record_actions_popup_automation_snapshot(
         "host": match parent_kind {
             AutomationWindowKind::Notes => "notes.actions",
             AutomationWindowKind::Main => "main.actions",
-            AutomationWindowKind::AgentChatDetached => "agentChatDetached.actions",
             AutomationWindowKind::Dictation => "dictation.actions",
             AutomationWindowKind::ActionsDialog => "actionsDialog.actions",
             AutomationWindowKind::PromptPopup => "promptPopup.actions",

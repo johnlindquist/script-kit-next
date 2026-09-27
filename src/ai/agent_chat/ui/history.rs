@@ -723,7 +723,7 @@ fn parse_prompt_history_lines(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum AgentChatConversationPersistenceError {
+pub(crate) enum AgentChatConversationPersistenceError {
     InvalidSessionId,
     UnsafeConversationDirectory,
     UnsafeFileTarget,
@@ -980,7 +980,7 @@ pub(crate) fn seed_owned_history(conversations: &[SavedConversation]) -> anyhow:
 }
 
 /// Save a complete turn and its searchable index as one serialized transaction.
-pub(super) fn save_completed_conversation(
+pub(crate) fn save_completed_conversation(
     conversation: &SavedConversation,
     entry: &AgentChatHistoryEntry,
 ) -> Result<(), AgentChatConversationPersistenceError> {

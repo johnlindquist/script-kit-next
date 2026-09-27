@@ -274,15 +274,6 @@ fn collect_exact_prompt_popup_snapshot(
         return Some(footer);
     }
     match resolved.id.as_str() {
-        crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => {
-            let generation = resolved.generation?;
-            if crate::ai::agent_chat::ui::history_popup::history_popup_generation()
-                != Some(generation)
-            {
-                return None;
-            }
-            collect_history_popup_snapshot(cx, generation)
-        }
         crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => {
             collect_cached_prompt_popup_snapshot(&resolved.id, resolved.generation?)
         }
@@ -306,65 +297,6 @@ fn collect_cached_prompt_popup_snapshot(
         elements: cached.elements,
         focused_semantic_id: cached.focused_semantic_id,
         selected_semantic_id: cached.selected_semantic_id,
-        warnings: Vec::new(),
-        quality: SnapshotQuality::Full,
-    })
-}
-
-fn collect_history_popup_snapshot(
-    cx: &gpui::App,
-    generation: u64,
-) -> Option<SurfaceElementSnapshot> {
-    let snap = crate::ai::agent_chat::ui::history_popup::get_history_popup_snapshot_for_generation(
-        generation, cx,
-    )?;
-
-    let mut elements = vec![element(
-        "panel:history-popup",
-        ElementType::Panel,
-        Some(snap.title.to_string()),
-        Some(snap.query.to_string()),
-        None,
-        None,
-        None,
-    )];
-
-    let entry_count = snap.entries.len();
-    elements.push(element(
-        "list:history-entries",
-        ElementType::List,
-        Some(format!("{entry_count} sessions")),
-        None,
-        None,
-        None,
-        None,
-    ));
-
-    let mut selected_semantic_id = None;
-    for (idx, entry) in snap.entries.iter().enumerate() {
-        let is_selected = idx == snap.selected_index;
-        let semantic_id = format!("choice:{}:{}", idx, entry.hit.entry.session_id);
-
-        if is_selected {
-            selected_semantic_id = Some(semantic_id.clone());
-        }
-
-        elements.push(element(
-            &semantic_id,
-            ElementType::Choice,
-            Some(entry.title.to_string()),
-            Some(entry.hit.entry.session_id.clone()),
-            Some(is_selected),
-            None,
-            Some(idx),
-        ));
-    }
-
-    Some(SurfaceElementSnapshot {
-        total_count: elements.len(),
-        elements,
-        focused_semantic_id: selected_semantic_id.clone(),
-        selected_semantic_id,
         warnings: Vec::new(),
         quality: SnapshotQuality::Full,
     })

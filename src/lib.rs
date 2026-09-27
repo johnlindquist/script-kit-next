@@ -754,17 +754,14 @@ mod main_menu_input_guard_tests {
         let execute_pos = physical_enter_section
             .find("this.execute_selected(cx);")
             .expect("physical Enter must execute selected ScriptList rows");
-        let agent_chat_pos = physical_enter_section
-            .find("if let AppView::AgentChatView")
-            .expect("physical Enter Agent Chat fallback not found");
 
         assert!(
             script_issues_pos < object_popup_pos
                 && object_popup_pos < trigger_picker_pos
                 && trigger_picker_pos < script_list_pos
                 && script_list_pos < spine_pos
-                && execute_pos < agent_chat_pos,
-            "physical plain Enter must keep ScriptIssues/menu-syntax Accept ahead of ScriptList submit, then Spine/canonical selected execution, and only later Agent Chat handling"
+                && spine_pos < execute_pos,
+            "physical plain Enter must keep ScriptIssues/menu-syntax Accept ahead of ScriptList submit, then Spine/canonical selected execution"
         );
         assert!(
             physical_enter_section.contains("!crate::actions::is_actions_window_open()"),

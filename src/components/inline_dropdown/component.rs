@@ -46,6 +46,7 @@ impl InlineDropdown {
 
 /// Clamp `selected_index` to a valid position within `item_count` items.
 /// Returns `0` if the list is empty.
+#[cfg(test)]
 pub(crate) fn inline_dropdown_clamp_selected_index(
     selected_index: usize,
     item_count: usize,
@@ -80,6 +81,7 @@ pub(crate) fn inline_dropdown_select_next(selected_index: usize, item_count: usi
 }
 
 /// Compute the visible row range without scrolling the first page early.
+#[cfg(test)]
 pub(crate) fn inline_dropdown_visible_range(
     selected_index: usize,
     item_count: usize,

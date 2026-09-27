@@ -285,7 +285,8 @@ impl ScriptListApp {
 
         debug!(target: "FOCUS", focus_target = ?target, "Applying pending focus");
         match target {
-            FocusTarget::MainFilter => {
+            // The chat's input is the main input.
+            FocusTarget::MainFilter | FocusTarget::AgentChat => {
                 let input_state = self.gpui_input_state.clone();
                 input_state.update(cx, |state, cx| {
                     state.focus(window, cx);
@@ -378,19 +379,9 @@ impl ScriptListApp {
             FocusTarget::ChatPrompt => {
                 let entity = match &self.current_view {
                     AppView::ChatPrompt { entity, .. } => Some(entity.read(cx).focus_handle(cx)),
-                    AppView::AgentChatView { .. } => self.embedded_agent_chat_focus_handle.clone(),
                     _ => None,
                 };
                 if let Some(fh) = entity {
-                    window.focus(&fh, cx);
-                    self.focused_input = FocusedInput::None;
-                }
-            }
-            FocusTarget::AgentChat => {
-                if matches!(self.current_view, AppView::AgentChatView { .. }) {
-                    let Some(fh) = self.embedded_agent_chat_focus_handle.clone() else {
-                        return false;
-                    };
                     window.focus(&fh, cx);
                     self.focused_input = FocusedInput::None;
                 }
@@ -411,33 +402,5 @@ impl ScriptListApp {
         }
 
         true
-    }
-}
-
-#[cfg(test)]
-mod focus_restore_regression_tests {
-    use std::fs;
-
-    #[test]
-    fn apply_pending_focus_restores_launcher_agent_chat_via_dedicated_target() {
-        let source = fs::read_to_string("src/app_impl/theme_focus.rs")
-            .expect("Failed to read src/app_impl/theme_focus.rs");
-
-        assert!(
-            source.contains("focus_coordinator::FocusTarget::AgentChat => FocusTarget::AgentChat"),
-            "coordinator sync should preserve the AgentChat target through the legacy bridge"
-        );
-        assert!(
-            source
-                .contains("AppView::AgentChatView { .. } => self.embedded_agent_chat_focus_handle.clone()")
-                && source.contains("FocusTarget::AgentChat => {")
-                && source.contains("matches!(self.current_view, AppView::AgentChatView { .. })"),
-            "launcher Agent Chat focus should work through cached focus handles for both the legacy ChatPrompt compatibility path and the dedicated AgentChat target"
-        );
-        assert!(
-            source.contains("FocusTarget::AgentChat => {")
-                && source.contains("self.embedded_agent_chat_focus_handle.clone()"),
-            "apply_pending_focus should restore launcher Agent Chat via the cached AgentChatView focus handle"
-        );
     }
 }

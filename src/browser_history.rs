@@ -326,6 +326,7 @@ pub(crate) fn search_root_browser_history_meta_cached(
         .collect()
 }
 
+#[allow(dead_code)] // The binary's root search cache calls this.
 pub(crate) fn search_root_browser_history_meta_direct(
     query: &str,
     options: RootBrowserHistorySectionOptions,

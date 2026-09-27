@@ -42,10 +42,15 @@ impl ScriptListApp {
         self.one_window_key(Key::CmdK, cx).taken()
     }
 
-    /// The staged subject's actions, as rows. A row the list still highlights is the subject.
+    /// The staged subject's actions, as rows: asking the model about it first, then what
+    /// `crate::actions` offers. A row the list still highlights is the subject.
     pub(super) fn one_window_actions_for(&mut self, subject: &Subject) -> Event {
         self.pending_root_unified_actions_subject = None;
         self.pending_root_file_actions_file = None;
+        self.one_window_host.work.about = subject
+            .row_key
+            .as_ref()
+            .and_then(|_| self.one_window_highlighted_part());
         let result = subject
             .row_key
             .as_ref()
@@ -82,17 +87,23 @@ impl ScriptListApp {
             None => crate::actions::get_global_actions(),
         };
         Event::Actions(
-            actions
-                .iter()
-                .filter(|action| action.is_enabled())
-                .map(action_row)
+            std::iter::once(super::chat_entry::about_row())
+                .chain(
+                    actions
+                        .iter()
+                        .filter(|action| action.is_enabled())
+                        .map(action_row),
+                )
                 .collect(),
         )
     }
 
     /// A row that acts on what's staged, as the list draws it.
     pub(super) fn one_window_action_result(row: &Row) -> Option<SearchResult> {
-        let id = row.key.strip_prefix(ACTION_KEY)?;
+        let id = row
+            .key
+            .strip_prefix(ACTION_KEY)
+            .or((row.key == super::chat_entry::ABOUT_KEY).then_some(row.key.as_str()))?;
         Some(SearchResult::BuiltIn(crate::scripts::BuiltInMatch {
             entry: crate::builtins::BuiltInEntry {
                 id: row.key.clone(),
@@ -112,6 +123,10 @@ impl ScriptListApp {
     /// subject's words and row are the list again while the action runs; the input goes back
     /// to what the reducer shows if the action left the window as it was.
     pub(crate) fn one_window_run_action(&mut self, id: String, cx: &mut Context<Self>) {
+        if id == super::chat_entry::ABOUT_KEY {
+            self.one_window_route_work(&super::chat_entry::about_row(), cx);
+            return;
+        }
         let Some(handle) = self.one_window_host.window else {
             tracing::warn!(target: "script_kit::one_window", event = "action_without_window", id = %id);
             return;

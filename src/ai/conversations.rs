@@ -267,9 +267,9 @@ impl<E> ConversationLedger<E> {
 /// surface that knows how to resume it.
 #[derive(Clone)]
 pub(crate) enum SessionEntity {
-    AgentChat(gpui::Entity<crate::ai::agent_chat::ui::view::AgentChatView>),
+    AgentChat(gpui::Entity<crate::ai::agent_chat::ui::thread::AgentChatThread>),
     Flow(gpui::Entity<crate::prompts::ChatPrompt>),
-    QuickAi(gpui::Entity<crate::ai::agent_chat::ui::view::AgentChatView>),
+    QuickAi(gpui::Entity<crate::ai::agent_chat::ui::thread::AgentChatThread>),
 }
 
 impl SessionEntity {

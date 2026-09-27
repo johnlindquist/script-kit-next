@@ -1,16 +1,6 @@
 impl ScriptListApp {
-    pub(crate) fn sync_main_window_resize_lock(
-        &self,
-        window: &mut gpui::Window,
-        cx: &Context<Self>,
-    ) {
-        let should_lock = match &self.current_view {
-            AppView::AgentChatView { entity } => {
-                entity.read_with(cx, |view, _cx| view.locks_main_window_resize())
-            }
-            _ => false,
-        };
-        crate::platform::set_window_resizable(window, !should_lock);
+    pub(crate) fn sync_main_window_resize_lock(&self, window: &mut gpui::Window) {
+        crate::platform::set_window_resizable(window, true);
     }
 
     /// Hide the mouse cursor while typing.
