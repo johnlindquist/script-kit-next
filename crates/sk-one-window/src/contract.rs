@@ -154,6 +154,15 @@ pub const SAVED_SCRIPT_FILE_NAME: &str = "saved.ts";
 /// sentence still being typed, and a reading of part of it never shows on the button.
 pub const READING_SETTLE_MS: u64 = 200;
 
+/// The colors of the words under the sentence (the spec's vocabulary), 0xRRGGBB.
+pub mod marks {
+    pub const SUBJECT: u32 = 0xFF_B8_6B;
+    pub const ACTION: u32 = 0xF5_C5_42;
+    pub const TARGET: u32 = 0x6F_DC_9B;
+    pub const DETAILS: u32 = 0x8F_B8_FF;
+    pub const OWNER: u32 = 0xC9_A7_FF;
+}
+
 /// Rounds a prototype length to the app's scale.
 pub fn to_app_px(prototype_px: f32) -> f32 {
     (prototype_px * GEOMETRY_SCALE).round()

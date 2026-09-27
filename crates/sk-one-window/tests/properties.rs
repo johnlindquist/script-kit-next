@@ -43,6 +43,7 @@ const WORDS: &[&str] = &[
     "tell sarah hi",
     "lunch",
     "when does lebron james play next",
+    "summarize @selection for >:dev",
 ];
 const NAMES: &[&str] = &[
     "Slack", "Safari", "Launcher", "Linear", "Sarah", "WhatsApp", "Weather", "Webex",
@@ -599,6 +600,43 @@ proptest! {
                 Some(&row.title),
                 "once the keys pause, ↵ says the reading Enter runs: {:?}",
                 t.labels
+            );
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 512, ..ProptestConfig::default() })]
+
+    #[test]
+    fn marks_never_guess_and_never_overlap(
+        pick in 0..sentences().len(),
+        typed in 0usize..48,
+        reads in prop::collection::vec((0usize..5, 0usize..8, 1usize..4), 0..4),
+    ) {
+        use sk_one_window::marks::{Word, marks_for};
+        let sentence = sentences()[pick];
+        let words: Vec<&str> = sentence.split(' ').collect();
+        let kinds = [Word::Subject, Word::Action, Word::Target, Word::Details, Word::Owner];
+        let phrases: Vec<(Word, String)> = reads
+            .iter()
+            .filter(|(_, from, _)| *from < words.len())
+            .map(|(k, from, n)| (kinds[*k], words[*from..(*from + n).min(words.len())].join(" ")))
+            .collect();
+        let read: Vec<(Word, &str)> = phrases.iter().map(|(w, p)| (*w, p.as_str())).collect();
+        let end = sentence.char_indices().nth(typed).map_or(sentence.len(), |(i, _)| i);
+        let text = &sentence[..end];
+        let marks = marks_for(text, &read);
+        for pair in marks.windows(2) {
+            prop_assert!(pair[0].range.end <= pair[1].range.start, "marks overlap: {marks:?}");
+        }
+        for mark in &marks {
+            let marked = &text[mark.range.clone()];
+            let symbol = marked.starts_with('@') || marked.starts_with(">:") || marked.starts_with('/') || marked.ends_with(';');
+            prop_assert!(
+                symbol || read.iter().any(|(w, p)| *w == mark.word && p.eq_ignore_ascii_case(marked)),
+                "{marked:?} in {text:?} is marked though Jev didn't read it as {:?}",
+                mark.word
             );
         }
     }
