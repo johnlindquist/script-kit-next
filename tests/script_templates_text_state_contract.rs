@@ -19,8 +19,10 @@ fn script_template_catalog_copy_promises_local_creation() {
 #[test]
 fn script_template_catalog_keeps_shared_surface_contract() {
     assert!(
-        SCRIPT_TEMPLATES.contains("render_expanded_view_scaffold_with_footer"),
-        "Script Template Catalog should stay on the shared expanded view scaffold"
+        SCRIPT_TEMPLATES.contains("crate::components::main_view_chrome::render_main_view_chrome")
+            && SCRIPT_TEMPLATES
+                .contains("crate::components::main_view_chrome::render_main_view_shell()"),
+        "Script Template Catalog should stay on the shared main view chrome and shell"
     );
     assert!(
         SCRIPT_TEMPLATES.contains("render_simple_hint_strip"),

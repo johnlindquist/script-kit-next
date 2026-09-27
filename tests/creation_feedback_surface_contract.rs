@@ -1,6 +1,7 @@
 const BUTTON_TYPES_SOURCE: &str = include_str!("../src/components/button/types.rs");
 const LAYOUT_SOURCE: &str = include_str!("../src/app_layout/build_layout_info.rs");
 const STDIN_SOURCE: &str = include_str!("../src/stdin_commands/mod.rs");
+const STDIN_TESTS_SOURCE: &str = include_str!("../src/stdin_commands/mod_tests.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 
 fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
@@ -98,7 +99,7 @@ fn open_creation_feedback_stdin_fixture_is_registered() {
         "openCreationFeedback should be registered as a deterministic DevTools fixture opener"
     );
     assert!(
-        STDIN_SOURCE.contains("test_external_command_open_creation_feedback_deserialization"),
+        STDIN_TESTS_SOURCE.contains("test_external_command_open_creation_feedback_deserialization"),
         "openCreationFeedback should have a parser contract"
     );
     assert!(

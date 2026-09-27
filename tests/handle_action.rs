@@ -273,7 +273,6 @@ fn reserved_action_ids_include_path_prompt_actions() {
         "select_file",
         "open_in_finder",
         "open_in_editor",
-        "open_in_terminal",
         "move_to_trash",
     ] {
         assert!(

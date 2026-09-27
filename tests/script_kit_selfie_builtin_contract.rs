@@ -3,6 +3,8 @@ const TRIGGER_REGISTRY: &str = include_str!("../src/builtins/trigger_registry.rs
 const TRIGGER_RESOLVE: &str = include_str!("../src/builtins/trigger_resolve.rs");
 const ROUTES: &str = include_str!("../src/app_impl/routes.rs");
 const EXECUTION: &str = include_str!("../src/app_execute/builtin_execution.rs");
+const UTILITY_ACTIONS: &str =
+    include_str!("../src/app_execute/builtin_execution_utility_actions.rs");
 const HOTKEYS: &str = include_str!("../src/hotkeys/mod.rs");
 const SELFIE_CAPTURE: &str = include_str!("../src/platform/selfie_capture.rs");
 
@@ -80,6 +82,13 @@ fn script_kit_selfie_execution_uses_named_action_copy() {
         "fn starting_hud(self, state: &str) -> String",
         "fn saved_hud(self, receipt: &crate::platform::ScriptKitSelfieReceipt) -> String",
         "fn failure_message(self, error: &dyn std::fmt::Display) -> String",
+    ] {
+        assert!(
+            UTILITY_ACTIONS.contains(required),
+            "Script Kit Selfie execution should use named action behavior: {required}"
+        );
+    }
+    for required in [
         "execute_utility_selfie_builtin",
         "crate::platform::capture_script_kit_selfie(&state)",
     ] {

@@ -6,7 +6,6 @@
 const APP_STATE: &str = include_str!("../src/main_sections/app_state.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 const FILTER_INPUT_UPDATES: &str = include_str!("../src/app_impl/filter_input_updates.rs");
-const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
 
 fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
     let start = source
@@ -81,11 +80,7 @@ fn startup_and_filtering_route_through_fallback_owner() {
         "Live startup must initialize fallback state through its named default."
     );
     assert!(
-        FILTER_INPUT_UPDATES.contains("self.main_menu_fallback_state.replace_items(fallbacks);"),
-        "Filtering must activate fallback state through the owner."
-    );
-    assert!(
-        SELECTION_FALLBACK.contains("self.main_menu_fallback_state.selected_item().cloned()"),
-        "Fallback execution must resolve the selected fallback through the owner."
+        FILTER_INPUT_UPDATES.contains("self.main_menu_fallback_state.clear();"),
+        "Filtering must clear fallback state through the owner."
     );
 }

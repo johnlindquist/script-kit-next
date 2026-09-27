@@ -7,9 +7,22 @@
 //! `surface-proof --kind main` all timed out. The live machine had many
 //! old forwarder/cat processes reading `/tmp/sk-agentic-sessions/default/input`,
 //! so writes to the current session FIFO could be consumed by an orphan
-//! before the active app saw them.
+//! before the active app saw them. Each session now records its forwarder's
+//! start identity and stops exactly that process.
 
 const SESSION_SH: &str = include_str!("../scripts/agentic/session.sh");
+
+fn shell_function_body(name: &str) -> &'static str {
+    let opener = format!("\n{name}() {{\n");
+    let start = SESSION_SH
+        .find(&opener)
+        .unwrap_or_else(|| panic!("session.sh must define {name}()"));
+    let body = &SESSION_SH[start + 1..];
+    let end = body
+        .find("\n}\n")
+        .unwrap_or_else(|| panic!("session.sh {name}() must close"));
+    &body[..end]
+}
 
 #[test]
 fn startup_ready_marker_matches_compact_log_shape() {
@@ -19,61 +32,6 @@ fn startup_ready_marker_matches_compact_log_shape() {
          app_run_setup.rs (`STARTUP_READY profile=...`). The older \
          `|STARTUP|STARTUP_READY` marker never appears in SCRIPT_KIT_AI_LOG=1 \
          output, so session start reported ready=false even after startup."
-    );
-}
-
-#[test]
-fn session_wrapper_can_find_forwarders_by_pipe_and_input_fifo() {
-    assert!(
-        SESSION_SH.contains("session_forwarder_pids()"),
-        "session.sh must define a helper that finds forwarder ownership by \
-         both the primary pipe path and input FIFO path."
-    );
-    assert!(
-        SESSION_SH.contains("pgrep -f \"$pipe_pattern\""),
-        "session_forwarder_pids must use pgrep -f for the primary pipe path. \
-         `ps -axo pid=,command=` is not safe here because bash -c command \
-         strings contain embedded newlines on macOS, so path matches can \
-         appear on continuation lines where $1 is not a PID."
-    );
-    assert!(
-        SESSION_SH.contains("pgrep -f \"cat ${input_pattern}\""),
-        "session_forwarder_pids must also match cat processes reading the \
-         input FIFO; orphan cats can consume commands before the active \
-         forwarder sees them."
-    );
-    assert!(
-        SESSION_SH.contains("regex_escape()"),
-        "session_forwarder_pids must escape session paths before feeding \
-         them to pgrep -f, because session names and /tmp paths can contain \
-         regex metacharacters."
-    );
-    assert!(
-        SESSION_SH.contains("path_aliases()")
-            && SESSION_SH.contains("${SESSION_DIR_RAW}${file_path#\"$SESSION_DIR\"}"),
-        "session_forwarder_pids must search both canonical `/private/tmp` \
-         paths and the raw `/tmp` path spelling. Existing forwarders may \
-         have been launched before SESSION_DIR canonicalization."
-    );
-}
-
-#[test]
-fn cleanup_preserves_active_forwarder_process_tree() {
-    assert!(
-        SESSION_SH.contains("is_descendant_of()"),
-        "session.sh must define descendant detection so resume cleanup can \
-         keep the active forwarder's process-substitution child and cat reader."
-    );
-    assert!(
-        SESSION_SH.contains("cleanup_orphan_session_forwarders()"),
-        "session.sh must expose one cleanup helper for start/resume/stop."
-    );
-    assert!(
-        SESSION_SH.contains("is_descendant_of \"$orphan_pid\" \"$keep_pid\""),
-        "cleanup_orphan_session_forwarders must skip the kept forwarder and \
-         its descendants. Killing the process-substitution child of the \
-         active forwarder would make a resumed session look healthy while \
-         dropping every command."
     );
 }
 
@@ -105,35 +63,31 @@ fn startup_forwarder_does_not_depend_on_process_substitution() {
 }
 
 #[test]
-fn start_and_stop_call_forwarder_cleanup_at_ownership_boundaries() {
-    let resume_marker =
-        "cleanup_orphan_session_forwarders \"$primary_pipe\" \"$input_fifo\" \"$old_fwd_pid\"";
+fn start_and_stop_stop_only_the_recorded_forwarder_at_ownership_boundaries() {
+    let stop_exact = shell_function_body("stop_exact_forwarder");
+    let identity = stop_exact
+        .find("[[ -n \"$expected\" && \"$expected\" == \"$actual\" ]]")
+        .expect("stop_exact_forwarder must prove the forwarder's recorded start identity");
+    let kill = stop_exact
+        .find("kill -TERM \"$pid\"")
+        .expect("stop_exact_forwarder must stop the recorded forwarder");
     assert!(
-        SESSION_SH.contains(resume_marker),
-        "cmd_start must clean orphan readers before resuming a healthy \
-         session, while preserving the recorded active forwarder. Expected \
-         marker:\n\n{resume_marker}\n"
+        identity < kill,
+        "the forwarder is signalled only after its start identity matches the one this session recorded"
     );
 
-    let stale_marker = "cleanup_orphan_session_forwarders \"$primary_pipe\" \"$input_fifo\"";
+    let start = shell_function_body("cmd_start");
     assert!(
-        SESSION_SH.contains(stale_marker),
-        "cmd_start must clean old readers when replacing a stale session. \
-         Otherwise orphan forwarders remain attached to the next input FIFO."
+        start.contains("> \"${sdir}/fwd-start\""),
+        "cmd_start must record the new forwarder's start identity"
     );
-
-    let fresh_marker = "cleanup_orphan_session_forwarders \"$pipe_path\" \"$input_fifo\"";
     assert!(
-        SESSION_SH.contains(fresh_marker),
-        "cmd_start must clean session-path orphans before launching a fresh \
-         forwarder/app pair."
+        start.contains("stop_exact_forwarder \"$sdir\" || return 1"),
+        "cmd_start must stop the stale session's own forwarder before replacing it"
     );
-
-    let stop_marker = "cleanup_orphan_session_forwarders \"${sdir}/pipe\" \"${sdir}/input\"";
     assert!(
-        SESSION_SH.contains(stop_marker),
-        "cmd_stop must clean all forwarder/cat processes still attached to \
-         the named session path, not just the PID recorded in fwd_pid."
+        shell_function_body("cmd_stop").contains("stop_exact_forwarder \"$sdir\" || return 1"),
+        "cmd_stop must stop the session's own forwarder before removing its FIFOs"
     );
 }
 
@@ -164,7 +118,7 @@ fn start_sends_startup_keepalive_before_waiting_for_ready() {
          not send a JSON command immediately."
     );
 
-    let launch_marker = "python3 \"${PROJECT_ROOT}/scripts/agentic/session-supervisor.py\"";
+    let launch_marker = "--binary \"$BINARY\"";
     let keepalive_marker = "if send_startup_keepalive \"$input_fifo\" \"$app_pid\"; then";
     let wait_marker =
         "if wait_for_ready_log \"$log_path\" \"$app_pid\" \"$READY_TIMEOUT_MS\"; then";

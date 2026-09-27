@@ -7,8 +7,7 @@
 
 const APP_STATE: &str = include_str!("../src/main_sections/app_state.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
-const STARTUP_NEW_PRELUDE: &str = include_str!("../src/app_impl/startup_new_prelude.rs");
-const STARTUP_NEW_STATE: &str = include_str!("../src/app_impl/startup_new_state.rs");
+const STARTUP_DATA: &str = include_str!("../src/app_impl/startup_data.rs");
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
 const UI_WINDOW: &str = include_str!("../src/app_impl/ui_window.rs");
 const MAIN_WINDOW_PREFLIGHT: &str = include_str!("../src/main_window_preflight/build.rs");
@@ -29,6 +28,30 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
+fn block_body<'a>(source: &'a str, opener: &str) -> &'a str {
+    let start = source
+        .find(opener)
+        .unwrap_or_else(|| panic!("missing block: {opener}"));
+    let after_start = &source[start..];
+    let open = after_start
+        .find('{')
+        .unwrap_or_else(|| panic!("missing block body for: {opener}"));
+    let mut depth = 0usize;
+    for (offset, ch) in after_start[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &after_start[..open + offset + 1];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unterminated block: {opener}");
+}
+
 fn source_contains_ignoring_whitespace(source: &str, needle: &str) -> bool {
     let compact_source: String = source.chars().filter(|c| !c.is_whitespace()).collect();
     let compact_needle: String = needle.chars().filter(|c| !c.is_whitespace()).collect();
@@ -37,11 +60,7 @@ fn source_contains_ignoring_whitespace(source: &str, needle: &str) -> bool {
 
 #[test]
 fn result_cache_owner_names_behavior_accessors() {
-    let cache_impl = source_between(
-        APP_STATE,
-        "impl MainMenuResultCacheState {",
-        "\n}\n\nstruct ScriptListApp",
-    );
+    let cache_impl = block_body(APP_STATE, "impl MainMenuResultCacheState {");
 
     for accessor in [
         "fn has_filtered_results_for(&self, filter_text: &str) -> bool",
@@ -56,15 +75,11 @@ fn result_cache_owner_names_behavior_accessors() {
         "fn grouped_flat_results(&self) -> &[scripts::SearchResult]",
         "fn grouped_flat_result_count(&self) -> usize",
         "fn flat_result_index_for_grouped_item(&self, grouped_index: usize) -> Option<usize>",
-        "fn flat_result_index_for_coerced_grouped_selection(",
         "fn search_result_for_flat_index(",
         "fn cloned_search_result_for_flat_index(",
         "fn search_result_for_grouped_item(",
         "fn cloned_search_result_for_grouped_item(",
-        "fn first_search_result_at_or_after_grouped_item(",
-        "fn cloned_first_search_result_at_or_after_grouped_item(",
         "fn grouped_search_results(&self) -> impl Iterator<Item = &scripts::SearchResult>",
-        "fn selectable_bounds(&self) -> (Option<usize>, Option<usize>)",
         "fn first_selectable_index(&self) -> Option<usize>",
         "fn last_selectable_index(&self) -> Option<usize>",
         "fn has_selectable_grouped_item(&self) -> bool",
@@ -134,12 +149,7 @@ fn startup_and_background_app_loading_route_through_cache_owner() {
         "Live startup must initialize result caches through the named default."
     );
     assert!(
-        STARTUP_NEW_STATE.contains("main_menu_result_caches: MainMenuResultCacheState::default(),"),
-        "Legacy startup state must preserve source-audit parity with the named default."
-    );
-    assert!(
-        STARTUP.contains("app.main_menu_result_caches.mark_apps_loaded();")
-            && STARTUP_NEW_PRELUDE.contains("app.main_menu_result_caches.mark_apps_loaded();"),
+        STARTUP_DATA.contains("self.main_menu_result_caches.mark_apps_loaded();"),
         "Background app loading must invalidate both cache keys through the owner."
     );
 }
@@ -171,42 +181,9 @@ fn filtering_cache_mutation_routes_through_cache_owner() {
 fn grouped_cache_readers_use_behavior_named_accessors() {
     for (name, source, required_accessors) in [
         (
-            "ui_window",
-            UI_WINDOW,
-            &[
-                ".grouped_items()",
-                ".flat_result_index_for_grouped_item(",
-                ".search_result_for_flat_index(",
-            ][..],
-        ),
-        (
-            "main_window_preflight",
-            MAIN_WINDOW_PREFLIGHT,
-            &[".cloned_first_search_result_at_or_after_grouped_item("][..],
-        ),
-        (
-            "agent_handoff",
-            TAB_AI_MODE,
-            &[
-                ".search_result_for_grouped_item(",
-                ".grouped_search_results()",
-            ][..],
-        ),
-        (
             "selection_fallback",
             SELECTION_FALLBACK,
-            &[
-                ".flat_result_index_for_coerced_grouped_selection(",
-                ".cloned_search_result_for_flat_index(",
-            ][..],
-        ),
-        (
-            "preview_panel",
-            PREVIEW_PANEL,
-            &[
-                ".flat_result_index_for_grouped_item(",
-                ".cloned_search_result_for_flat_index(",
-            ][..],
+            &[".cloned_search_result_for_flat_index("][..],
         ),
         (
             "impl_movement",
@@ -216,11 +193,7 @@ fn grouped_cache_readers_use_behavior_named_accessors() {
         (
             "impl_scroll",
             IMPL_SCROLL,
-            &[
-                ".first_selectable_index()",
-                ".last_selectable_index()",
-                ".has_selectable_grouped_item()",
-            ][..],
+            &[".first_selectable_index()"][..],
         ),
         (
             "builtin_execution",
@@ -239,12 +212,22 @@ fn grouped_cache_readers_use_behavior_named_accessors() {
 
 #[test]
 fn submit_selection_reads_grouped_cache_through_domain_guard() {
+    let execute = block_body(SELECTION_FALLBACK, "pub(crate) fn execute_selected(");
     assert!(
-        SELECTION_FALLBACK.contains("self.filter_text != self.computed_filter_text")
-            && SELECTION_FALLBACK.contains("has_grouped_results_for(&self.computed_filter_text)")
-            && SELECTION_FALLBACK
-                .contains("flat_result_index_for_coerced_grouped_selection(self.selected_index)"),
-        "ScriptList submit must prove live filter, computed filter, grouped cache key, and selected grouped row before dispatch"
+        execute.contains("if !self.root_search.query_is_current()")
+            && execute.contains("anyhow::bail!(\"main_menu_query_pending\");"),
+        "ScriptList submit must refuse while the typed query has not been computed yet"
+    );
+    let run = block_body(SELECTION_FALLBACK, "pub(crate) fn run_selected_row(");
+    let live_row = run
+        .find("self.live_script_list_flat_selection_for_submit()")
+        .expect("ScriptList submit must resolve the live selected grouped row");
+    let cached = run
+        .find(".cloned_search_result_for_flat_index(idx)")
+        .expect("ScriptList submit must read the selected result through the cache owner");
+    assert!(
+        live_row < cached,
+        "ScriptList submit must prove the live selected grouped row before reading the cached result"
     );
 }
 

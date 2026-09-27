@@ -134,12 +134,14 @@ fn filterable_view_preparation_preserves_route_specific_side_effects() {
 fn apply_filterable_route_plan_is_the_single_assignment_step() {
     let apply = body_of(DISPATCH, "fn apply_filterable_route_plan(");
     assert!(
-        apply.contains("self.current_view = plan.next_view;"),
-        "apply step must own the single filterable-route current_view assignment"
-    );
-    assert!(
         apply.contains("self.restore_current_view_with_focus(plan.next_view, focus);"),
         "apply step must synchronize pending_focus and focused_input through the shared focus restore owner"
+    );
+    assert!(
+        apply.contains(
+            "self.transition_current_view_and_rekey_main_automation_surface(plan.next_view);"
+        ),
+        "apply step must hand focusless routes to the shared transition owner"
     );
     assert!(
         apply.contains("let surface_kind = self.current_view.surface_kind();"),
@@ -150,10 +152,9 @@ fn apply_filterable_route_plan_is_the_single_assignment_step() {
         "apply step must preserve deferred resize ownership"
     );
 
-    let assignment_count = DISPATCH.matches("self.current_view =").count();
-    assert_eq!(
-        assignment_count, 1,
-        "trigger_builtin_dispatch.rs should expose exactly one filterable-route current_view assignment"
+    assert!(
+        !DISPATCH.contains("self.current_view ="),
+        "trigger_builtin_dispatch.rs must assign current_view only through the shared view owners"
     );
 
     for forbidden in [

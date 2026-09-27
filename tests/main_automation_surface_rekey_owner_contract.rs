@@ -104,11 +104,6 @@ fn script_list_main_filter_owner_delegates_to_restore_owner_contract() {
 fn script_list_entry_paths_delegate_to_main_filter_owner() {
     for (name, source, signature) in [
         (
-            "attachment_portal.rs",
-            include_str!("../src/app_impl/attachment_portal.rs"),
-            "fn open_script_list_attachment_portal",
-        ),
-        (
             "filter_input_change.rs",
             include_str!("../src/app_impl/filter_input_change.rs"),
             "pub(crate) fn handle_filter_input_change",
@@ -145,22 +140,23 @@ fn trigger_builtin_helper_delegates_to_shared_owner() {
 }
 
 #[test]
-fn about_and_confirm_routes_rekey_from_current_view_contract() {
-    assert_eq!(
-        ABOUT_ROUTE_SOURCE
-            .matches("self.transition_current_view_and_rekey_main_automation_surface(")
-            .count(),
-        3,
-        "About open, About dismiss, and parent confirm open must transition through the shared current-view owner"
-    );
-    assert!(
-        !ABOUT_ROUTE_SOURCE.contains("self.rekey_main_automation_surface_from_current_view();"),
-        "About/confirm routes should not split current_view mutation from the paired semantic re-key"
-    );
-    for forbidden in ["Some(\"about\"", "Some(\"confirmPrompt\""] {
+fn about_routes_rekey_from_current_view_contract() {
+    for signature in [
+        "pub(crate) fn open_about_surface",
+        "pub(crate) fn dismiss_about",
+    ] {
         assert!(
-            !ABOUT_ROUTE_SOURCE.contains(forbidden),
-            "About/confirm routes must not hand-code semanticSurface literals outside the surface registry: {forbidden}"
+            function_body(ABOUT_ROUTE_SOURCE, signature)
+                .contains("self.transition_current_view_and_rekey_main_automation_surface("),
+            "{signature} must transition through the shared current-view owner"
         );
     }
+    assert!(
+        !ABOUT_ROUTE_SOURCE.contains("self.rekey_main_automation_surface_from_current_view();"),
+        "About routes should not split current_view mutation from the paired semantic re-key"
+    );
+    assert!(
+        !ABOUT_ROUTE_SOURCE.contains("Some(\"about\""),
+        "About routes must not hand-code semanticSurface literals outside the surface registry"
+    );
 }
