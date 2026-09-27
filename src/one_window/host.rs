@@ -39,7 +39,7 @@ pub(crate) struct OneWindowHost {
     height_generation: u64,
     /// The main window's height as the reducer last placed it.
     height: Option<f32>,
-    window: Option<gpui::AnyWindowHandle>,
+    pub(super) window: Option<gpui::AnyWindowHandle>,
     /// Words the reducer put in the input; their echo from the input isn't typing.
     echo: Option<String>,
     jev_asked: u64,

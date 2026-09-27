@@ -62,6 +62,22 @@ impl OneWindow {
     pub(super) fn undoable(e: &Entry) -> bool {
         e.risk == Risk::Undo && e.state == EntryState::Done
     }
+
+    /// Whether ⌘Z now takes something back: the input is empty and something waits to go, or
+    /// the last run can be undone. When it can't, ⌘Z belongs to the input's own undo.
+    pub fn can_take_back(&self) -> bool {
+        self.text.is_empty()
+            && !self.in_view()
+            && (self.holds.newest().is_some() || self.ledger.last().is_some_and(Self::undoable))
+    }
+
+    /// The icon beside a waiting thing: a run shows its own, a message the message icon.
+    pub(super) fn waits_icon(&self, held: &Held) -> String {
+        held.entry
+            .filter(|_| self.holds_a_run(held.id))
+            .and_then(|id| self.ledger.get(id))
+            .map_or_else(|| "message".to_string(), |e| e.icon.clone())
+    }
 }
 
 #[cfg(test)]
@@ -149,6 +165,22 @@ mod tests {
             held_ops(&out.effects).is_empty(),
             "a stopped run never goes"
         );
+    }
+
+    #[test]
+    fn cmd_z_takes_back_only_what_can_be_taken_back() {
+        let mut w = OneWindow::default();
+        assert!(!w.can_take_back(), "nothing ran yet: ⌘Z is the input's");
+        w.handle(0, Event::Notice(Notice::new("check", "Copied")));
+        assert!(!w.can_take_back(), "a notice can't be undone");
+        w.handle(
+            10,
+            Event::Irreversible(Irreversible::new("trash", "Empty Trash")),
+        );
+        assert!(w.can_take_back());
+        assert_eq!(w.slot_line(10).icon, "trash");
+        w.handle(20, Event::Text("x".into()));
+        assert!(!w.can_take_back(), "with words typed ⌘Z edits them");
     }
 
     #[test]

@@ -92,7 +92,7 @@ fn a_script_hud_is_the_line_now_and_after_the_window_comes_back() {
 #[test]
 fn a_builtin_that_used_to_ask_first_waits_and_cmd_z_stops_it() {
     let (waiting, stopped) = in_launcher("held_builtin", 0, |cx| {
-        let (app, _) = launcher(cx, Jev::Off);
+        let (app, window) = launcher(cx, Jev::Off);
         app.update(cx, |app, cx| {
             let entry = crate::builtins::get_builtin_entries(&app.config.get_builtins())
                 .into_iter()
@@ -102,7 +102,8 @@ fn a_builtin_that_used_to_ask_first_waits_and_cmd_z_stops_it() {
         });
         wait(cx, 20);
         let waiting = line(&app, cx);
-        key(&app, cx, Key::CmdZ);
+        // Through the window, so the line's ⌘Z interceptor claims it before the input's undo.
+        cx.dispatch_keystroke(window, gpui::Keystroke::parse("cmd-z").expect("cmd-z"));
         wait(cx, 20);
         (waiting, line(&app, cx))
     });

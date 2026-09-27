@@ -823,6 +823,7 @@ impl ScriptListApp {
             });
         });
 
+        app.install_line_undo_interceptor(cx);
         app.install_main_window_close_interceptor(cx);
 
         // Add Tab key interceptor for "Ask AI" feature and file search directory navigation

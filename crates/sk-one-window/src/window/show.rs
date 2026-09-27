@@ -37,7 +37,7 @@ impl OneWindow {
                 self.waits_label(m)
             };
             let mut line = SlotLine::new(SlotKind::Holding, label, m.label.clone())
-                .with_icon("message")
+                .with_icon(self.waits_icon(m))
                 .with_hint("⌘Z", "undo")
                 .with_hint("↑", "more");
             if live > 1 {

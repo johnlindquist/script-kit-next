@@ -328,6 +328,45 @@ impl ScriptListApp {
         }
     }
 
+    /// ⌘Z in the main window takes back what the line offers before the input's own undo
+    /// sees it. Interceptors run ahead of the focused input's key bindings.
+    pub(crate) fn install_line_undo_interceptor(&mut self, cx: &mut Context<Self>) {
+        let app = cx.weak_entity();
+        let interceptor = cx.intercept_keystrokes(move |event, window, cx| {
+            let keys = &event.keystroke;
+            let cmd_z = keys.key.eq_ignore_ascii_case("z")
+                && keys.modifiers.platform
+                && !keys.modifiers.shift
+                && !keys.modifiers.alt
+                && !keys.modifiers.control;
+            if !cmd_z {
+                return;
+            }
+            let handle = window.window_handle();
+            let taken = app
+                .update(cx, |app, cx| app.one_window_line_undo(handle, cx))
+                .unwrap_or(false);
+            if taken {
+                cx.stop_propagation();
+            }
+        });
+        self.gpui_input_subscriptions.push(interceptor);
+    }
+
+    fn one_window_line_undo(
+        &mut self,
+        window: gpui::AnyWindowHandle,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.one_window_host
+            .window
+            .is_none_or(|main| main == window)
+            && self.one_window_owns_list()
+            && self.filter_text.is_empty()
+            && self.one_window.can_take_back()
+            && self.one_window_key(Key::CmdZ, cx).taken()
+    }
+
     // ------------------------------------------------------------------ history
 
     pub(crate) fn one_window_open_history(&mut self, cx: &mut Context<Self>) {
