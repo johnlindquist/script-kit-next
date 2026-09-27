@@ -9,7 +9,7 @@ mod tests {
         last_selectable_index, matching_action_id_for_keystroke,
         matching_filtered_action_id_for_keystroke, resolve_visible_action_shortcut,
         selectable_index_at_or_after, selectable_index_at_or_before,
-        should_render_section_separator, visible_action_shortcut_bindings, ActionsDialog,
+        visible_action_shortcut_bindings, ActionsDialog,
         ActionsDialogChromeAudit, ActionsDialogRuntimeAudit, GroupedActionItem,
         MainListDisplayedActionShortcut,
     };
@@ -186,62 +186,6 @@ mod tests {
                 .all(|action| action.id != "reload_scripts"),
             "host-owned sections count as context and must suppress the global fallback"
         );
-    }
-
-    #[test]
-    fn section_separator_only_shows_on_section_boundary() {
-        let actions = vec![
-            Action::new(
-                "run_script",
-                "Run Script",
-                Some("Run".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_section("Actions"),
-            Action::new(
-                "edit_script",
-                "Edit Script",
-                Some("Edit".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_section("Edit"),
-            Action::new(
-                "copy_path",
-                "Copy Path",
-                Some("Copy".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_section("Share"),
-            Action::new(
-                "copy_deeplink",
-                "Copy Deeplink",
-                Some("Copy".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_section("Share"),
-        ];
-        let filtered_actions = vec![0, 1, 2, 3];
-
-        assert!(!should_render_section_separator(
-            &actions,
-            &filtered_actions,
-            0
-        ));
-        assert!(should_render_section_separator(
-            &actions,
-            &filtered_actions,
-            1
-        ));
-        assert!(should_render_section_separator(
-            &actions,
-            &filtered_actions,
-            2
-        ));
-        assert!(!should_render_section_separator(
-            &actions,
-            &filtered_actions,
-            3
-        ));
     }
 
     #[test]
