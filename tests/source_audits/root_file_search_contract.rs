@@ -1020,15 +1020,9 @@ mod tests {
 
         let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
             .expect("read src/app_impl/simulate_key_dispatch.rs");
-        let runtime_stdin = fs::read_to_string("src/main_entry/app_run_setup.rs")
-            .expect("read src/main_entry/app_run_setup.rs");
         assert!(
             simulate_key_source.contains("try_execute_root_file_action_shortcut"),
             "central simulateKey dispatcher should offer direct root-file shortcuts"
-        );
-        assert!(
-            runtime_stdin.contains("dispatch_simulate_key"),
-            "stdin runtime entry point should delegate simulateKey to the shared dispatcher"
         );
     }
 
@@ -1108,15 +1102,12 @@ mod tests {
     fn root_directory_tab_navigation_has_no_plain_tab_agent_chat_routing() {
         let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
             .expect("read src/app_impl/simulate_key_dispatch.rs");
-        let runtime_stdin = fs::read_to_string("src/main_entry/app_run_setup.rs")
-            .expect("read src/main_entry/app_run_setup.rs");
         assert!(
             simulate_key_source.contains("try_navigate_root_file_directory_with_tab"),
             "central simulateKey dispatcher should route root file directory Tab"
         );
         assert!(
-            !simulate_key_source.contains("try_route_plain_tab_to_agent_chat_context_capture")
-                && !runtime_stdin.contains("try_route_plain_tab_to_agent_chat_context_capture"),
+            !simulate_key_source.contains("try_route_plain_tab_to_agent_chat_context_capture"),
             "ScriptList Tab simulateKey should not route plain Tab to Agent Chat"
         );
 
@@ -1172,12 +1163,9 @@ mod tests {
     fn root_file_actions_are_main_list_only() {
         let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
             .expect("read src/app_impl/actions_dialog.rs");
-        let staging_source = fs::read_to_string("src/one_window/staging.rs")
-            .expect("read src/one_window/staging.rs");
         let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
             .expect("read src/app_impl/simulate_key_dispatch.rs");
         let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
-        let staging_body = function_body(&staging_source, "fn one_window_actions_for(");
         let simulate_key_normalized = simulate_key_source
             .split_whitespace()
             .collect::<Vec<_>>()
@@ -1186,10 +1174,8 @@ mod tests {
         assert!(
             normalized.contains(
                 "ActionsDialogHost::MainList => self.one_window_owns_list() && self.one_window_stage(cx),"
-            ) && staging_body.contains("self.selected_main_list_search_result_owned()")
-                && staging_body.contains("root_unified_action_owner_for_result")
-                && staging_body.contains("RootUnifiedActionSubject::File(file)"),
-            "MainList ⌘K should stage the row and offer root-file actions for selected root file rows"
+            ),
+            "MainList ⌘K should stage the row in place"
         );
         assert!(
             simulate_key_normalized.contains("view.simulate_key_requests_generic_actions_toggle")

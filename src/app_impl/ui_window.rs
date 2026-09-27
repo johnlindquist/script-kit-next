@@ -2184,6 +2184,9 @@ mod tests;
 #[path = "ui_window_enter_button_property_tests.rs"]
 mod enter_button_property_tests;
 
+#[path = "quick_terminal_footer.rs"]
+mod quick_terminal_footer;
+
 include!("ui_window_footer_helpers.rs");
 include!("ui_window_context_chips.rs");
 include!("ui_window_interaction_helpers.rs");

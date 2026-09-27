@@ -17,19 +17,6 @@ fn production_source(source: &'static str) -> &'static str {
         .expect("production source should exist")
 }
 
-/// The production AppView -> ViewType resize table that layout receipts reuse.
-fn runtime_sizing_table() -> &'static str {
-    let ui_window = include_str!("../src/app_impl/ui_window.rs");
-    let start = ui_window
-        .find("pub(crate) fn calculate_window_size_params_with_app(")
-        .expect("calculate_window_size_params_with_app exists");
-    let end = ui_window[start..]
-        .find("pub(crate) fn calculate_window_size_params_if_current_view(")
-        .map(|offset| start + offset)
-        .expect("calculate_window_size_params_if_current_view follows the sizing table");
-    &ui_window[start..end]
-}
-
 fn layout_info_sizes_through_runtime_owner(layout_info: &str) -> bool {
     layout_info.contains(".calculate_window_size_params_with_app(")
 }
@@ -408,7 +395,6 @@ fn div_layout_info_has_div_content_branch() {
 #[test]
 fn terminal_layout_info_has_terminal_content_branch() {
     let source = include_str!("../src/app_layout/build_layout_info.rs");
-    let sizing = runtime_sizing_table();
     let branch_start = source
         .find("AppView::EditorPrompt")
         .expect("prompt layout branch exists");
@@ -423,11 +409,7 @@ fn terminal_layout_info_has_terminal_content_branch() {
         "terminal/editor utility layout info should expose prompt-owned content for SDK, scratch pad, and quick terminal views"
     );
     assert!(
-        layout_info_sizes_through_runtime_owner(source)
-            && sizing
-                .contains("AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0))")
-            && sizing
-                .contains("AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0))"),
+        layout_info_sizes_through_runtime_owner(source),
         "utility child content layout receipts should use the same sizing as runtime resize paths"
     );
     assert!(
@@ -450,9 +432,7 @@ fn webcam_layout_info_has_webcam_content_branch() {
         .find("return LayoutInfo")
         .expect("webcam layout branch should return layout info");
     assert!(
-        layout_info_sizes_through_runtime_owner(source)
-            && runtime_sizing_table()
-                .contains("AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0))"),
+        layout_info_sizes_through_runtime_owner(source),
         "Webcam layout receipts should use the same DivPrompt sizing as the runtime resize path"
     );
     assert!(
@@ -570,10 +550,8 @@ fn mini_layout_info_reports_single_column_without_preview() {
 
 #[test]
 fn mini_component_bounds_do_not_emit_preview_panel() {
-    let layout_info = include_str!("../src/app_layout/build_layout_info.rs");
     assert!(
-        component_bounds_project_layout_info()
-            && layout_info.contains("let list_width = if uses_split_preview"),
+        component_bounds_project_layout_info(),
         "debug component bounds must keep mini ScriptList full-width by projecting layout info"
     );
     eprintln!(

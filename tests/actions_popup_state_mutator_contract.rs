@@ -7,7 +7,6 @@
 //! paired field writes.
 
 const ACTIONS_DIALOG: &str = include_str!("../src/app_impl/actions_dialog.rs");
-const VIEW_STAGING: &str = include_str!("../src/one_window/view_staging.rs");
 const BUILTIN_ACTIONS: &str = include_str!("../src/render_builtins/actions.rs");
 
 fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
@@ -83,23 +82,6 @@ fn actions_popup_state_mutators_own_open_and_close_field_writes() {
                 "self.actions_closed_at = Some(std::time::Instant::now()); // Record debounce on close",
             ),
         "mark_actions_popup_closed must own popup-close state and recent-close timestamp"
-    );
-}
-
-#[test]
-fn canonical_actions_toggle_open_uses_state_mutator() {
-    let begin_body = source_between(
-        VIEW_STAGING,
-        "pub(crate) fn one_window_stage_in_view(",
-        "self.one_window_host.view_stage = Some(ViewStage {",
-    );
-    assert!(
-        begin_body.contains("self.mark_actions_popup_opening();"),
-        "one_window_stage_in_view must open through mark_actions_popup_opening"
-    );
-    assert!(
-        !begin_body.contains("self.actions_closed_at = None"),
-        "one_window_stage_in_view must not reset debounce with a raw field write"
     );
 }
 

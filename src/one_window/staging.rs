@@ -77,7 +77,10 @@ impl ScriptListApp {
                 self.pending_root_unified_actions_subject = Some(*owned);
                 actions
             }
-            Some(_) => match self.get_focused_script_info() {
+            Some(
+                crate::root_unified_result_actions::RootUnifiedResultActionOwner::ExistingScriptActions
+                | crate::root_unified_result_actions::RootUnifiedResultActionOwner::None,
+            ) => match self.get_focused_script_info() {
                 Some(info) if info.is_scriptlet => {
                     crate::actions::get_scriptlet_context_actions_with_custom(
                         &info,

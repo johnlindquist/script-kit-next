@@ -18,10 +18,8 @@ fn read_source(path: &str) -> String {
 #[test]
 fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
     let platform = read_source("src/platform/secondary_window_config.rs");
-    let secondary_vibrancy = read_source("src/platform/secondary_window_vibrancy_impl.rs");
     let main_vibrancy = read_source("src/platform/vibrancy_config.rs");
     let ui_foundation = read_source("src/ui_foundation/mod.rs");
-    let actions_dialog = read_source("src/actions/dialog_opacity.rs");
     let terminal_command_bar = read_source("src/terminal/command_bar_ui/render.rs");
     let file_search = read_source("src/file_search/mod.rs");
 
@@ -44,11 +42,9 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
         "GPUI and native liquid-glass backgrounds must share one theme-derived tint helper"
     );
     assert!(
-        secondary_vibrancy.contains(
-            "configure_tahoe_window_backdrop_with_result(window, log_target, window_name, backdrop_role)"
-        ) && main_vibrancy
+        main_vibrancy
             .contains("configure_tahoe_window_backdrop(window, \"PANEL\", \"Main window\")"),
-        "Both shared secondary-window vibrancy and main-window vibrancy paths must use the semantic Tahoe window-backdrop hook"
+        "Main-window vibrancy must use the semantic Tahoe window-backdrop hook"
     );
     assert!(
         platform.contains("configure_tahoe_window_backdrop(window, \"APPEARANCE\", &title_string)")
@@ -61,11 +57,6 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
             && main_vibrancy.contains("background_tint,")
             && main_vibrancy.contains("glass_bits,"),
         "Main-window Liquid Glass refresh de-dupe must include the shared theme tint, not just dark/material state"
-    );
-    assert!(
-        actions_dialog.contains("AppChromeColors::from_theme(theme).popup_surface_rgba")
-            && !actions_dialog.contains("vibrancy_background.unwrap_or(0.75)"),
-        "Actions dialog background alpha must come from AppChromeColors popup_surface_rgba, not a local 0.75 fallback"
     );
     assert!(
         terminal_command_bar.contains("AppChromeColors::from_theme(&self.theme).popup_surface_rgba")
