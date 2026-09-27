@@ -1,0 +1,3 @@
+[{"name":"capsules-no-glass","waitMs":800},
+ {"name":"main-cmdk-capsule-click","click":"footer-action:actions","waitMs":600},
+ {"name":"main-capsule-esc","key":"escape","waitMs":500}]

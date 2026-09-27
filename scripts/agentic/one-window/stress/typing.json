@@ -1,0 +1,81 @@
+[
+ {
+  "name": "empty"
+ },
+ {
+  "name": "w1-when",
+  "append": "when",
+  "waitMs": 0
+ },
+ {
+  "name": "w2-does",
+  "append": " does",
+  "waitMs": 0
+ },
+ {
+  "name": "w3-lebron",
+  "append": " lebron",
+  "waitMs": 0
+ },
+ {
+  "name": "w4-james",
+  "append": " james",
+  "waitMs": 0
+ },
+ {
+  "name": "w5-play",
+  "append": " play",
+  "waitMs": 0
+ },
+ {
+  "name": "w6-next",
+  "append": " next",
+  "waitMs": 0
+ },
+ {
+  "name": "settle-300",
+  "waitMs": 300
+ },
+ {
+  "name": "settle-1800",
+  "waitMs": 1500
+ },
+ {
+  "name": "typo-bs1",
+  "key": "backspace"
+ },
+ {
+  "name": "typo-bs2",
+  "key": "backspace"
+ },
+ {
+  "name": "typo-bs3",
+  "key": "backspace"
+ },
+ {
+  "name": "typo-bs4",
+  "key": "backspace"
+ },
+ {
+  "name": "retype-next",
+  "append": "next",
+  "waitMs": 0
+ },
+ {
+  "name": "retype-settled",
+  "waitMs": 1200
+ },
+ {
+  "name": "clear-all",
+  "key": "cmd-a"
+ },
+ {
+  "name": "clear-bs",
+  "key": "backspace",
+  "waitMs": 0
+ },
+ {
+  "name": "cleared-settled",
+  "waitMs": 900
+ }
+]

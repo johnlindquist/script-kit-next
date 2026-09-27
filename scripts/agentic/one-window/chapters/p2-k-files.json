@@ -1,0 +1,2 @@
+[{"name":"files-open","waitMs":800},
+ {"name":"files-cmdk-staged","key":"cmd-k","waitMs":500}]

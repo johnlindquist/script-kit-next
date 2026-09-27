@@ -1,0 +1,19 @@
+[
+  {"name": "empty"},
+  {"name": "list-before", "type": "p", "waitMs": 400},
+  {"name": "typed-chat", "type": "brainstorm names for the launch party", "waitMs": 500},
+  {"name": "chat-open", "key": "cmd-1", "waitMs": 900},
+  {"name": "chat-esc-back", "key": "escape", "waitMs": 500},
+  {"name": "typed-steps", "type": "move standup to tomorrow at 9, tell mo i'm running late and open the beta notes", "waitMs": 500},
+  {"name": "steps-cards", "key": "enter", "waitMs": 0},
+  {"name": "steps-needs-calendar", "waitMs": 600},
+  {"name": "connect-view", "key": "enter", "waitMs": 300},
+  {"name": "connect-signing-in", "key": "enter", "waitMs": 100},
+  {"name": "connected-steps-resume", "waitMs": 1200},
+  {"name": "steps-do-all", "key": "enter", "waitMs": 800},
+  {"name": "list-with-tasks", "type": "p", "waitMs": 500},
+  {"name": "agent-typed", "type": "fix SK-431", "waitMs": 400},
+  {"name": "agent-view", "key": "tab", "waitMs": 700},
+  {"name": "agent-strip", "key": "escape", "waitMs": 600},
+  {"name": "cmdj", "key": "cmd-j", "waitMs": 600}
+]

@@ -1,0 +1,223 @@
+[
+ {
+  "name": "empty"
+ },
+ {
+  "name": "learned-row",
+  "type": "put t",
+  "waitMs": 600
+ },
+ {
+  "name": "saved-typed",
+  "type": "tell sa",
+  "waitMs": 600
+ },
+ {
+  "name": "saved-script",
+  "key": "enter",
+  "waitMs": 500
+ },
+ {
+  "name": "saved-back",
+  "key": "escape",
+  "waitMs": 900
+ },
+ {
+  "name": "automations-typed",
+  "type": "list my automations",
+  "waitMs": 1500
+ },
+ {
+  "name": "automations-list",
+  "key": "enter",
+  "waitMs": 600
+ },
+ {
+  "name": "automations-said",
+  "type": "stop the omega one",
+  "waitMs": 900
+ },
+ {
+  "name": "automations-stopped",
+  "key": "enter",
+  "waitMs": 600
+ },
+ {
+  "name": "automations-back",
+  "key": "escape",
+  "waitMs": 900
+ },
+ {
+  "name": "share-typed",
+  "type": "share my last action",
+  "waitMs": 1500
+ },
+ {
+  "name": "share-rows",
+  "key": "enter",
+  "waitMs": 600
+ },
+ {
+  "name": "share-let-go",
+  "key": "escape",
+  "waitMs": 900
+ },
+ {
+  "name": "shortcut-typed",
+  "type": "give launch alpha a shortcut",
+  "waitMs": 1500
+ },
+ {
+  "name": "shortcut-view",
+  "key": "enter",
+  "waitMs": 600
+ },
+ {
+  "name": "shortcut-record",
+  "key": "cmd-shift-k",
+  "waitMs": 500
+ },
+ {
+  "name": "shortcut-back",
+  "key": "escape",
+  "waitMs": 900
+ },
+ {
+  "name": "mic-typed",
+  "type": "select microphone",
+  "waitMs": 1500
+ },
+ {
+  "name": "mic-rows",
+  "key": "enter",
+  "waitMs": 700
+ },
+ {
+  "name": "mic-back",
+  "key": "escape",
+  "waitMs": 900
+ },
+ {
+  "name": "history-typed",
+  "type": "dictation history",
+  "waitMs": 1500
+ },
+ {
+  "name": "dictation-history-rows",
+  "key": "enter",
+  "waitMs": 700
+ },
+ {
+  "name": "dictation-history-staged",
+  "key": "cmd-k",
+  "waitMs": 600
+ },
+ {
+  "name": "history-unstage",
+  "key": "escape",
+  "waitMs": 500
+ },
+ {
+  "name": "history-back",
+  "key": "escape",
+  "waitMs": 900
+ },
+ {
+  "name": "typed-talk",
+  "type": "talk",
+  "waitMs": 1500
+ },
+ {
+  "name": "voice-listening",
+  "key": "enter",
+  "waitMs": 600
+ },
+ {
+  "name": "voice-heard",
+  "type": "Hi Sarah, thanks for checking in",
+  "waitMs": 700
+ },
+ {
+  "name": "dictation-typing-into",
+  "key": "cmd-1",
+  "waitMs": 500
+ },
+ {
+  "name": "dictation-ask",
+  "key": "cmd-2",
+  "waitMs": 500
+ },
+ {
+  "name": "dictation-asked",
+  "key": "enter",
+  "waitMs": 700
+ },
+ {
+  "name": "typed-talk-2",
+  "type": "talk",
+  "waitMs": 1500
+ },
+ {
+  "name": "voice-again",
+  "key": "enter",
+  "waitMs": 600
+ },
+ {
+  "name": "voice-heard-2",
+  "type": "maybe friday works for the review",
+  "waitMs": 700
+ },
+ {
+  "name": "dictation-close-call",
+  "key": "enter",
+  "waitMs": 1200
+ },
+ {
+  "name": "drop-close-call",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "chat-talking",
+  "control": {
+   "family": "oneWindow",
+   "operation": "talkTo",
+   "destination": "chat"
+  },
+  "waitMs": 600
+ },
+ {
+  "name": "chat-heard",
+  "type": "what changed in the launcher this week",
+  "waitMs": 700
+ },
+ {
+  "name": "dictation-to-chat",
+  "key": "enter",
+  "waitMs": 3000
+ },
+ {
+  "name": "chat-back",
+  "key": "escape",
+  "waitMs": 900
+ },
+ {
+  "name": "note-talking",
+  "control": {
+   "family": "oneWindow",
+   "operation": "talkTo",
+   "destination": "note"
+  },
+  "waitMs": 600
+ },
+ {
+  "name": "note-heard",
+  "type": "pick up milk on the way home",
+  "waitMs": 700
+ },
+ {
+  "name": "dictation-to-note",
+  "key": "enter",
+  "waitMs": 900
+ }
+]

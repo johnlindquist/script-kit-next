@@ -1,0 +1,13 @@
+[{"name":"empty-brief","waitMs":600},
+ {"name":"typed-names-and-jev","type":"sla","waitMs":500},
+ {"name":"cmdk-staged","key":"cmd-k","waitMs":500},
+ {"name":"cmdk-filter","append":"cop","waitMs":500},
+ {"name":"esc-unstaged","key":"escape","waitMs":600},
+ {"name":"jev-slow","type":"remind me to call mom at 5","waitMs":0},
+ {"name":"jev-down","waitMs":1500},
+ {"name":"word-marks","type":"summarize @selection for >:dev","waitMs":500},
+ {"name":"lebron-w","type":"w","waitMs":120},
+ {"name":"lebron-when-does","append":"hen does","waitMs":120},
+ {"name":"lebron-when-does-lebron","append":" lebron","waitMs":120},
+ {"name":"lebron-full","append":" james play next","waitMs":120},
+ {"name":"lebron-settled","waitMs":1500}]

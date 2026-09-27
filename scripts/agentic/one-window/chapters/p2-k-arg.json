@@ -1,0 +1,4 @@
+[{"name":"arg-open","waitMs":500},
+ {"name":"arg-actions-staged","key":"cmd-k","waitMs":500},
+ {"name":"arg-actions-filter","append":"pin","waitMs":500},
+ {"name":"arg-esc","key":"escape","waitMs":500}]

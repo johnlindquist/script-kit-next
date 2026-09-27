@@ -1,0 +1,3 @@
+[{"name":"clipboard-open","waitMs":800},
+ {"name":"clipboard-cmdk-staged","key":"cmd-k","waitMs":500},
+ {"name":"clipboard-esc","key":"escape","waitMs":500}]

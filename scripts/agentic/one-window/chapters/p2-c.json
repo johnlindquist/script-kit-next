@@ -1,0 +1,85 @@
+[
+ {
+  "name": "empty"
+ },
+ {
+  "name": "calc",
+  "type": "12*7",
+  "waitMs": 900
+ },
+ {
+  "name": "answer-number",
+  "key": "enter",
+  "waitMs": 500
+ },
+ {
+  "name": "copied",
+  "key": "enter",
+  "waitMs": 700
+ },
+ {
+  "name": "clipboard-staged",
+  "key": "cmd-v",
+  "waitMs": 400
+ },
+ {
+  "name": "staged-down-1",
+  "key": "down",
+  "waitMs": 150
+ },
+ {
+  "name": "staged-down-2",
+  "key": "down",
+  "waitMs": 150
+ },
+ {
+  "name": "staged-down-3",
+  "key": "down",
+  "waitMs": 150
+ },
+ {
+  "name": "answer-card",
+  "key": "enter",
+  "waitMs": 400
+ },
+ {
+  "name": "card-back",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "restaged",
+  "key": "cmd-v",
+  "waitMs": 400
+ },
+ {
+  "name": "form-open",
+  "key": "enter",
+  "waitMs": 600
+ },
+ {
+  "name": "form-filling",
+  "type": "Sarah",
+  "waitMs": 700
+ },
+ {
+  "name": "form-tab",
+  "key": "tab",
+  "waitMs": 400
+ },
+ {
+  "name": "form-back",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "note-sentence",
+  "type": "buy oat milk",
+  "waitMs": 900
+ },
+ {
+  "name": "note-view",
+  "key": "cmd-3",
+  "waitMs": 600
+ }
+]

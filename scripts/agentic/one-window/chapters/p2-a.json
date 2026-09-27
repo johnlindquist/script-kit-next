@@ -1,0 +1,59 @@
+[
+ {
+  "name": "needs-setup"
+ },
+ {
+  "name": "type-clear-suggested",
+  "type": "clear suggested",
+  "waitMs": 500
+ },
+ {
+  "name": "held-8s",
+  "key": "enter",
+  "waitMs": 300
+ },
+ {
+  "name": "held-paused-typing",
+  "type": "x",
+  "waitMs": 300
+ },
+ {
+  "name": "select-all",
+  "key": "cmd-a"
+ },
+ {
+  "name": "cleared",
+  "key": "backspace",
+  "waitMs": 300
+ },
+ {
+  "name": "unsent",
+  "key": "cmd-z",
+  "waitMs": 500
+ },
+ {
+  "name": "type-effect-off",
+  "type": "turn off background effect",
+  "waitMs": 500
+ },
+ {
+  "name": "undo-offer",
+  "key": "enter",
+  "waitMs": 700
+ },
+ {
+  "name": "last-after-summon",
+  "key": "cmd-z",
+  "waitMs": 700
+ },
+ {
+  "name": "type-history",
+  "type": "what did i run today",
+  "waitMs": 500
+ },
+ {
+  "name": "history-list",
+  "key": "enter",
+  "waitMs": 700
+ }
+]

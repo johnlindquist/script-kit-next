@@ -1,0 +1,4 @@
+[{"name":"hotkey-open","waitMs":600},
+ {"name":"hotkey-partial","key":"k","waitMs":500},
+ {"name":"hotkey-complete","key":"cmd-shift-k","waitMs":500},
+ {"name":"hotkey-esc","key":"escape","waitMs":700}]

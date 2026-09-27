@@ -1,0 +1,99 @@
+[
+ {
+  "name": "empty"
+ },
+ {
+  "name": "k1",
+  "append": "s",
+  "waitMs": 0
+ },
+ {
+  "name": "k2",
+  "append": "l",
+  "waitMs": 0
+ },
+ {
+  "name": "k3",
+  "append": "a",
+  "waitMs": 0
+ },
+ {
+  "name": "k4",
+  "append": "c",
+  "waitMs": 0
+ },
+ {
+  "name": "k5",
+  "append": "k",
+  "waitMs": 0
+ },
+ {
+  "name": "k6",
+  "append": " ",
+  "waitMs": 0
+ },
+ {
+  "name": "k7",
+  "append": "m",
+  "waitMs": 0
+ },
+ {
+  "name": "k8",
+  "append": "e",
+  "waitMs": 0
+ },
+ {
+  "name": "down-early",
+  "key": "down"
+ },
+ {
+  "name": "down-2",
+  "key": "down"
+ },
+ {
+  "name": "up-1",
+  "key": "up"
+ },
+ {
+  "name": "jev-lands",
+  "waitMs": 1200
+ },
+ {
+  "name": "cmdk-1",
+  "key": "cmd-k"
+ },
+ {
+  "name": "esc-1",
+  "key": "escape"
+ },
+ {
+  "name": "cmdk-2",
+  "key": "cmd-k"
+ },
+ {
+  "name": "esc-2",
+  "key": "escape"
+ },
+ {
+  "name": "paste-long",
+  "type": "remind me to call mom tomorrow at 5 and text sarah that i'm running late",
+  "waitMs": 0
+ },
+ {
+  "name": "paste-settled",
+  "waitMs": 1800
+ },
+ {
+  "name": "home-clear",
+  "key": "cmd-a"
+ },
+ {
+  "name": "home-bs",
+  "key": "backspace",
+  "waitMs": 0
+ },
+ {
+  "name": "home-settled",
+  "waitMs": 900
+ }
+]
