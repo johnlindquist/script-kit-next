@@ -20,8 +20,14 @@ fn settings_uses_shared_chrome_text_tokens() {
         );
     }
     assert!(SETTINGS_SOURCE.contains("chrome.text_primary_hex"));
-    assert!(SETTINGS_SOURCE.contains("chrome.text_hint_rgba"));
-    assert!(SETTINGS_SOURCE.contains("chrome.text_muted_rgba"));
+    assert!(
+        SETTINGS_SOURCE.contains("crate::components::render_simple_empty_state("),
+        "Settings should draw its muted empty state with the shared empty-state component"
+    );
+    assert!(
+        SETTINGS_SOURCE.contains("self.render_builtin_main_input_count_label("),
+        "Settings should draw its count in the shared hint-colored count label"
+    );
 }
 
 #[test]
@@ -100,15 +106,12 @@ fn settings_row_clicks_follow_launcher_activation_contract() {
 #[test]
 fn settings_header_uses_bounded_flex_for_filter_and_count() {
     for needle in [
-        ".flex_1()",
-        ".min_w(px(0.))",
-        ".flex_none()",
-        ".whitespace_nowrap()",
-        "chrome.text_hint_rgba",
+        "header: self.render_builtin_main_input_header(",
+        "self.render_builtin_main_input_count_label(format_settings_count_label(",
     ] {
         assert!(
             SETTINGS_SOURCE.contains(needle),
-            "Settings header should keep filter/count layout bounded: {needle}"
+            "Settings header should keep filter/count layout in the shared main-input header: {needle}"
         );
     }
 }

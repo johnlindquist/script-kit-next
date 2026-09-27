@@ -1158,14 +1158,16 @@ fn collect_elements_rich_list_surfaces_use_real_collectors() {
     ];
 
     for (view, collector) in rich_list_views {
-        // Find the AppView match arm
         let view_pattern = format!("AppView::{view}");
         let pos = COLLECT_ELEMENTS_SOURCE
             .find(&view_pattern)
             .unwrap_or_else(|| panic!("collect_visible_elements must handle {view_pattern}"));
-        // Check that the next ~500 chars reference the expected collector
-        let arm_body =
-            &COLLECT_ELEMENTS_SOURCE[pos..pos + 800.min(COLLECT_ELEMENTS_SOURCE.len() - pos)];
+        let arm_len = COLLECT_ELEMENTS_SOURCE[pos + view_pattern.len()..]
+            .find("\n            AppView::")
+            .map_or(COLLECT_ELEMENTS_SOURCE.len() - pos, |end| {
+                view_pattern.len() + end
+            });
+        let arm_body = &COLLECT_ELEMENTS_SOURCE[pos..pos + arm_len];
         assert!(
             arm_body.contains(collector),
             "{view} should use {collector}, not a panel placeholder"
@@ -1228,7 +1230,6 @@ fn collect_elements_entity_prompts_use_finalize_surface_outcome() {
 #[test]
 fn collect_elements_panel_only_surfaces_emit_warnings() {
     let panel_only_views = vec![
-        ("ThemeChooserView", "panel_only_theme_chooser"),
         ("ActionsDialog", "panel_only_actions_dialog"),
         ("DivPrompt", "panel_only_div_prompt"),
         ("WebcamView", "panel_only_webcam"),
@@ -1244,6 +1245,10 @@ fn collect_elements_panel_only_surfaces_emit_warnings() {
     assert!(
         !COLLECT_ELEMENTS_SOURCE.contains("panel_only_creation_feedback"),
         "CreationFeedback must expose semantic receipt/action elements instead of a panel-only warning"
+    );
+    assert!(
+        !COLLECT_ELEMENTS_SOURCE.contains("panel_only_theme_chooser"),
+        "ThemeChooserView must expose its theme rows and controls instead of a panel-only warning"
     );
 }
 
@@ -1292,7 +1297,7 @@ const UTILITY_VIEWS_SOURCE: &str = include_str!("../src/app_execute/utility_view
 #[test]
 fn file_search_render_clamps_selected_index() {
     assert!(
-        FILE_SEARCH_RENDER_SOURCE.contains("clamp_file_search_display_index"),
+        FILE_SEARCH_RENDER_SOURCE.contains("self.file_search_selection_binding(selected_index)"),
         "render_file_search must clamp the selected index before resolving the selected file"
     );
     assert!(
@@ -1303,8 +1308,8 @@ fn file_search_render_clamps_selected_index() {
 
 #[test]
 fn file_search_key_handler_clamps_for_get_selected_file() {
-    // The get_selected_file closure inside the key handler must also use
-    // clamp_file_search_display_index to avoid out-of-bounds access.
+    // The get_selected_file closure inside the key handler must resolve
+    // through the clamped selection binding to avoid out-of-bounds access.
     let handler_start = FILE_SEARCH_RENDER_SOURCE
         .find("let get_selected_file = ||")
         .or_else(|| FILE_SEARCH_RENDER_SOURCE.find("let get_selected_file"))
@@ -1313,7 +1318,7 @@ fn file_search_key_handler_clamps_for_get_selected_file() {
         [handler_start..handler_start + 300.min(FILE_SEARCH_RENDER_SOURCE.len() - handler_start)];
 
     assert!(
-        handler_body.contains("clamp_file_search_display_index"),
+        handler_body.contains("file_search_selection_binding(sel_idx)"),
         "get_selected_file must clamp the index to avoid out-of-bounds on shrinking results"
     );
 }
@@ -1356,8 +1361,8 @@ fn clamp_uses_min_not_modulo() {
 
 #[test]
 fn selected_file_search_result_uses_clamping() {
-    // selected_file_search_result must delegate to clamp_file_search_display_index
-    // so AI and preview share the same clamped resolution.
+    // selected_file_search_result must delegate to the clamped selection
+    // binding so AI and preview share the same clamped resolution.
     let fn_start = UTILITY_VIEWS_SOURCE
         .find("fn selected_file_search_result(")
         .expect("selected_file_search_result must exist");
@@ -1365,8 +1370,26 @@ fn selected_file_search_result_uses_clamping() {
         &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
 
     assert!(
-        fn_body.contains("clamp_file_search_display_index"),
+        fn_body.contains(".file_search_selection_binding(selected_index)"),
         "selected_file_search_result must use the clamped helper"
+    );
+    let binding_start = UTILITY_VIEWS_SOURCE
+        .find("fn file_search_selection_binding(")
+        .expect("file_search_selection_binding must exist");
+    let binding_body = &UTILITY_VIEWS_SOURCE
+        [binding_start..binding_start + 300.min(UTILITY_VIEWS_SOURCE.len() - binding_start)];
+    assert!(
+        binding_body.contains("Self::resolve_file_search_selection_projection("),
+        "file_search_selection_binding must resolve through the clamping projection"
+    );
+    let projection_start = UTILITY_VIEWS_SOURCE
+        .find("fn resolve_file_search_selection_projection(")
+        .expect("resolve_file_search_selection_projection must exist");
+    let projection_body = &UTILITY_VIEWS_SOURCE[projection_start
+        ..projection_start + 500.min(UTILITY_VIEWS_SOURCE.len() - projection_start)];
+    assert!(
+        projection_body.contains("selected_index.min(display_indices.len().saturating_sub(1))"),
+        "the selection projection must clamp to the last visible row"
     );
 }
 

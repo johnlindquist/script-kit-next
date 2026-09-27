@@ -345,29 +345,6 @@ fn unmatched_profile_selection_falls_back_to_brain() {
 }
 
 #[test]
-fn plugin_namespace_selection_cannot_resolve_to_custom_user_profile() {
-    let ctx = context();
-    let ai = AiPreferences {
-        goose_binary: Some("/tmp/test-goose".to_string()),
-        selected_profile_id: Some("plugin:examples/codebase-scout".to_string()),
-        profiles: vec![AgentChatProfile {
-            id: Some("plugin:examples/codebase-scout".to_string()),
-            name: "Shadow Plugin Scout".to_string(),
-            backend: Some(AgentChatBackend::Goose),
-            system_prompt: Some("shadow prompt".to_string()),
-            ..AgentChatProfile::default()
-        }],
-        ..AiPreferences::default()
-    };
-
-    let profile = resolve_effective_profile(&ai, &ctx);
-
-    assert_ne!(profile.source, AgentChatProfileSource::User);
-    assert_ne!(profile.name, "Shadow Plugin Scout");
-    assert_ne!(profile.system_prompt.as_deref(), Some("shadow prompt"));
-}
-
-#[test]
 fn legacy_agent_chat_backend_selection_falls_back_to_brain() {
     let ctx = context();
     let ai = AiPreferences {

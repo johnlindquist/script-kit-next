@@ -48,24 +48,30 @@ fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_agent_chat_context_
         );
     };
 
-    let arm_body: String = CANONICAL_SIMULATEKEY[anchor_idx..]
-        .lines()
-        .take(90)
-        .collect::<Vec<_>>()
-        .join("\n");
+    let arm = &CANONICAL_SIMULATEKEY[anchor_idx..];
+    let cmd_enter_log = arm
+        .find("SimulateKey: Cmd+Enter - run the sentence or open the model's chat")
+        .expect("missing Cmd+Enter log line in the ScriptList arm");
+    let gate_start = arm[..cmd_enter_log]
+        .rfind("} else if has_cmd")
+        .expect("Cmd+Enter branch must open with a `has_cmd` gate");
+    let gate = &arm[gate_start..cmd_enter_log];
 
     assert!(
-        arm_body.contains("has_cmd")
-            && arm_body.contains("key_lower == \"enter\"")
-            && arm_body.contains("!has_shift")
-            && arm_body.contains("!_has_alt")
-            && arm_body.contains("!_has_ctrl"),
+        gate.contains("key_lower == \"enter\"")
+            && gate.contains("!has_shift")
+            && gate.contains("!_has_alt")
+            && gate.contains("!_has_ctrl"),
         "simulate_key_dispatch.rs `AppView::ScriptList` must gate the Cmd+Enter routing on modifiers"
     );
 
+    let branch_end = arm[cmd_enter_log..]
+        .find("} else if")
+        .expect("Cmd+Enter branch must close");
     assert!(
-        arm_body.contains("view.try_route_global_cmd_enter_to_agent_chat_context_capture(ctx);"),
-        "simulate_key_dispatch.rs `AppView::ScriptList` must call try_route_global_cmd_enter_to_agent_chat_context_capture"
+        arm[cmd_enter_log..cmd_enter_log + branch_end]
+            .contains("view.route_main_window_cmd_enter(ctx);"),
+        "simulate_key_dispatch.rs `AppView::ScriptList` must route Cmd+Enter through route_main_window_cmd_enter, which falls back to try_route_global_cmd_enter_to_agent_chat_context_capture"
     );
 
     // 2. Verify that the stdin entry point delegates to the unified helper.
@@ -79,7 +85,7 @@ fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_agent_chat_context_
 fn simulate_key_cmd_enter_arm_precedes_plain_enter_in_scriptlist() {
     // Ordering contract: the Cmd+Enter arm MUST appear before the plain-enter arm.
     let cmd_enter_idx = CANONICAL_SIMULATEKEY
-        .find("SimulateKey: Cmd+Enter - route to Agent Chat context capture")
+        .find("SimulateKey: Cmd+Enter - run the sentence or open the model's chat")
         .expect("missing Cmd+Enter log line in simulate_key_dispatch.rs");
 
     let plain_enter_idx = CANONICAL_SIMULATEKEY
@@ -133,8 +139,9 @@ fn script_list_cmd_enter_spine_attempt_is_explicit_and_non_terminal() {
         "ScriptList Cmd+Enter must gate Spine submission behind an explicit prompt-plan predicate"
     );
     assert!(
-        body.contains("if self.try_submit_spine_prompt_plan_from_enter(cx)")
-            && body.contains("return true;"),
+        body.contains(
+            "if explicit_spine_prompt_plan && self.try_submit_spine_prompt_plan_from_enter(cx)"
+        ) && body.contains("return true;"),
         "Spine should consume Cmd+Enter only after a successful explicit prompt-plan submission"
     );
     assert_before(
@@ -156,7 +163,7 @@ fn script_list_cmd_enter_plain_prompt_uses_agent_chat_entry_intent() {
         "plain natural ScriptList input should have a distinct Cmd+Enter prompt route"
     );
     assert!(
-        body.contains("ask_agent_chat_suppressing_focused_part(intent, cx)"),
+        body.contains("self.one_window_open_chat(ChatEntry::sending(intent), cx)"),
         "plain natural ScriptList input should seed Agent Chat as an entry intent so it can stream"
     );
 }

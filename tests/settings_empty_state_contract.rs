@@ -14,7 +14,8 @@ fn settings_empty_state_copy_is_modeled() {
         "Settings empty states should own filter classification and visible copy"
     );
     assert!(
-        SETTINGS.contains("SettingsEmptyState::from_filter(&filter).message()"),
+        SETTINGS.contains("let state = SettingsEmptyState::from_filter(&filter);")
+            && SETTINGS.contains("state.message(),"),
         "Settings renderer should derive empty-state copy from the model"
     );
     assert!(

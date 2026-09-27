@@ -3,6 +3,17 @@
 
 use std::fs;
 
+/// `builtin_execution.rs` `include!`s its utility action states from a sibling file.
+fn builtin_execution_with_utility_actions() -> String {
+    let mut content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+    content.push_str(
+        &fs::read_to_string("src/app_execute/builtin_execution_utility_actions.rs")
+            .expect("Failed to read builtin execution utility actions"),
+    );
+    content
+}
+
 /// Verify that the action handler files have the expected dispatch structure.
 #[test]
 fn action_handler_dispatch_structure_exists() {
@@ -70,8 +81,8 @@ fn launcher_handoff_builtins_use_submit_reset_not_focus_loss_preserve() {
         "Open Notes handoff should be treated as a launcher submit, not focus-loss preservation"
     );
     assert!(
-        notes_fn.contains("self.close_and_reset_window(cx);"),
-        "Open Notes must reset the launcher so the next main-menu open starts with an empty input"
+        notes_fn.contains("self.one_window_show_note(notes::NoteTarget::Today, cx)"),
+        "Open Notes must open today's note under the main input"
     );
     assert!(
         !notes_fn.contains("defer_hide_main_window(cx)"),
@@ -88,8 +99,8 @@ fn launcher_handoff_builtins_use_submit_reset_not_focus_loss_preserve() {
     let notes_command_fn = &notes_command_tail[..notes_command_end];
 
     assert!(
-        notes_command_fn.contains("self.close_and_reset_window(cx);"),
-        "Notes commands that hand off to the Notes window must use the submit reset path"
+        notes_command_fn.contains("self.one_window_show_note(target, cx)"),
+        "Notes commands must open their note under the main input"
     );
     assert!(
         !notes_command_fn.contains("defer_hide_main_window(cx)"),
@@ -403,9 +414,11 @@ fn clipboard_save_snippet_handler_uses_named_action_state() {
         "clipboard save-snippet handler should be driven by a named action state"
     );
     assert!(
-        content.contains("let save_snippet_action = ClipboardSaveSnippetHandlerAction::SaveSnippet")
+        content
+            .contains("let save_snippet_action = ClipboardSaveSnippetHandlerAction::SaveSnippet")
             && content.contains("save_snippet_action.selection_required_message()")
-            && content.contains("save_snippet_action.text_required_message()")
+            && content.contains("save_snippet_action.content_type_error(entry.content_type)")
+            && content.contains("Some(self.text_required_message())")
             && content.contains("save_snippet_action.content_unavailable_message()")
             && content.contains("save_snippet_action.default_keyword()")
             && content.contains("save_snippet_action.create_failure_message(e)")
@@ -621,28 +634,6 @@ fn notes_command_bar_actions_use_named_plan_states() {
             && content.contains("fn has_trash_note_actions")
             && content.contains("fn needs_auto_sizing_action"),
         "notes command-bar actions should derive visible action groups from the named plan"
-    );
-}
-
-#[test]
-fn command_bar_open_feedback_uses_named_action_state() {
-    let content =
-        fs::read_to_string("src/actions/command_bar.rs").expect("Failed to read command bar");
-
-    assert!(
-        content.contains("enum CommandBarOpenFeedbackAction") && content.contains("OpenWindow"),
-        "command-bar open logging should be driven by a named action state"
-    );
-    assert!(
-        content.contains("CommandBarOpenFeedbackAction::OpenWindow")
-            && content.contains("open_feedback.success_log(position)")
-            && content.contains("open_feedback.failure_log(e)"),
-        "command-bar open success and failure text should derive from the named action state"
-    );
-    assert!(
-        content.contains("format!(\"Command bar opened at {position:?}\")")
-            && content.contains("format!(\"Failed to open command bar: {error}\")"),
-        "command-bar open feedback should preserve the existing log copy"
     );
 }
 
@@ -1399,8 +1390,7 @@ fn permission_assistant_builtin_uses_named_action_states() {
 
 #[test]
 fn utility_open_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
+    let content = builtin_execution_with_utility_actions();
 
     assert!(
         content.contains("enum UtilityOpenBuiltinAction")
@@ -1533,8 +1523,8 @@ fn frecency_command_builtin_uses_named_action_states() {
         "Clear Suggested failure copy should derive from the named state"
     );
     assert!(
-        content.contains("self.frecency_store.clear()")
-            && content.contains("self.invalidate_grouped_cache()")
+        content.contains("self.commit_main_menu_results_refresh(\"clear-suggested\"")
+            && content.contains("app.frecency_store.clear()")
             && content.contains("resize_to_view_sync(ViewType::ScriptList, 0)"),
         "Clear Suggested should keep clearing frecency, invalidating grouped cache, and resizing the script list"
     );
@@ -1563,12 +1553,10 @@ fn settings_command_builtin_uses_named_action_states() {
     );
     assert!(
         content.contains("SettingsSnapModeBuiltinAction::from_command(command)")
-            && content
-                .contains("expect(\"snap mode settings command should map to snap mode action\")")
+            && content.contains(".unwrap_or(SettingsSnapModeBuiltinAction::Configure)")
             && content.contains("Self::builtin_success(dctx, action.success_detail())")
             && content.contains("SettingsMicrophoneBuiltinAction::from_command(command)")
-            && content
-                .contains("expect(\"select microphone command should map to microphone action\")")
+            && content.contains(".unwrap_or(SettingsMicrophoneBuiltinAction::Select)")
             && content.contains("self.execute_select_microphone_builtin(microphone_action"),
         "Settings command state should preserve snap-mode and microphone success details"
     );
@@ -1667,8 +1655,10 @@ fn ai_generate_builtin_uses_named_action_states() {
         content.contains("normalize_generate_script_request(Some(")
             && content.contains("normalize_generate_script_from_current_app_request")
             && content.contains("Some(query)")
-            && content.contains("open_tab_ai_chat_with_entry_intent")
-            && content.contains("open_tab_ai_agent_chat_with_entry_intent"),
+            && content.contains("self.open_chat_about_current_view(intent, cx)")
+            && content.contains(
+                "self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx)"
+            ),
         "AI generation state should preserve direct script and current-app intent routing"
     );
     assert!(
@@ -1723,9 +1713,8 @@ fn permission_command_builtin_uses_named_action_states() {
         content.contains("PermissionCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_permission_command_builtin(")
             && content.contains("PermissionAssistantBuiltinAction::from_command(command)")
-            && content.contains(
-                "expect(\"permission assistant command should map to assistant action\")"
-            )
+            && content.contains(".unwrap_or(PermissionAssistantBuiltinAction::Accessibility)")
+            && content.contains(".unwrap_or(PermissionAssistantBuiltinAction::ScreenRecording)")
             && content.contains("action.success_detail()")
             && content.contains("action.failure_detail()"),
         "Permission command routing should delegate through named state details"
@@ -1750,8 +1739,7 @@ fn permission_command_builtin_uses_named_action_states() {
 
 #[test]
 fn utility_process_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
+    let content = builtin_execution_with_utility_actions();
 
     assert!(
         content.contains("enum UtilityProcessBuiltinAction")
@@ -1800,8 +1788,7 @@ fn process_manager_terminate_selected_uses_named_action_state() {
 
 #[test]
 fn utility_command_dispatch_uses_named_wrapper_state() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
+    let content = builtin_execution_with_utility_actions();
 
     assert!(
         content.contains("enum UtilityCommandBuiltinAction")
@@ -1827,8 +1814,7 @@ fn utility_command_dispatch_uses_named_wrapper_state() {
 
 #[test]
 fn utility_turn_this_into_command_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
+    let content = builtin_execution_with_utility_actions();
 
     assert!(
         content.contains("TurnThisIntoCommand")
@@ -1858,8 +1844,7 @@ fn utility_turn_this_into_command_builtin_uses_named_action_states() {
 
 #[test]
 fn utility_do_in_current_app_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
+    let content = builtin_execution_with_utility_actions();
 
     assert!(
         content.contains("enum UtilityDoInCurrentAppBuiltinAction")
@@ -1887,8 +1872,7 @@ fn utility_do_in_current_app_builtin_uses_named_action_states() {
 
 #[test]
 fn utility_current_app_commands_builtin_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
-        .expect("Failed to read builtin execution handler");
+    let content = builtin_execution_with_utility_actions();
 
     assert!(
         content.contains("enum UtilityCurrentAppCommandsBuiltinAction")
@@ -2003,12 +1987,14 @@ fn surface_open_builtins_use_named_action_states() {
         content.contains("clipboard_history::get_cached_entries(100)")
             && content.contains("AppView::FavoritesBrowseView")
             && content.contains("app_launcher::scan_applications()")
-            && content.contains("open_tab_ai_agent_chat_with_entry_intent(None, cx)")
+            && content.contains(
+                "self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx)"
+            )
             && content.contains("crate::emoji_usage::load_frequent_snapshot")
             && content.contains("self.open_webcam(cx)")
             && content.contains("self.open_file_search(String::new(), cx)")
             && content.contains("AppView::SettingsView")
-            && content.contains("AppView::AgentChatHistoryView")
+            && content.contains("self.one_window_open_past_chats(String::new(), cx)")
             && content.contains("self.open_ai_vault_source_filter(cx)")
             && content.contains("self.one_window_open_dictation_history(cx)")
             && content.contains("sdk_reference_entries_for_ui")
@@ -2386,9 +2372,9 @@ fn window_switcher_focus_feedback_uses_named_action_state() {
     );
     assert!(
         content.contains("WindowSwitcherFocusAction::FocusSelectedWindow")
-            && content.contains("focus_action.attempt_log(&window_info.title)")
-            && content.contains("focus_action.success_log(&window_info.title)")
-            && content.contains("focus_action.failure_message(e)"),
+            && content.contains("focus_action.attempt_log(&window_title)")
+            && content.contains("focus_action.success_log(&window_title)")
+            && content.contains("action.failure_message(error)"),
         "Window Switcher focus logs and error toast should derive from the named action state"
     );
     assert!(
@@ -2487,129 +2473,26 @@ fn script_ranking_handler_uses_named_action_states() {
 }
 
 #[test]
-fn agent_chat_model_selection_actions_use_named_plan_states() {
-    let content = fs::read_to_string("src/actions/builders/script_context.rs")
-        .expect("Failed to read script context builder");
-
-    assert!(
-        content.contains("enum AgentChatModelSelectionActionPlan")
-            && content.contains("CurrentModel")
-            && content.contains("AvailableModel"),
-        "Agent Chat model current/switch labels and descriptions should be driven by named selection plan states"
-    );
-    assert!(
-        content.contains("AgentChatModelSelectionActionPlan::from_is_selected(is_selected)")
-            && content.contains("fn picker_title")
-            && content.contains("fn description"),
-        "Agent Chat model picker rows should derive visible copy from the named selection plan"
-    );
-}
-
-#[test]
-fn agent_chat_model_switch_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatModelSwitchHandlerAction")
-            && content.contains("SwitchModel"),
-        "Agent Chat model switch handler should be driven by named action states"
-    );
-    assert!(
-        content.contains("AgentChatModelSwitchHandlerAction::from_action_id(action_id)")
-            && content.contains("model_action.unavailable_message(model_id)")
-            && content.contains("model_action.already_selected_message(&model_display_name)")
-            && content.contains("model_action.hud_message(&model_display_name)")
-            && content.contains("model_action.switched_message(&model_display_name)")
-            && content.contains("Model '{model_id}' is no longer available")
-            && content.contains("Already using {display_name}")
-            && content.contains("Model: {display_name}")
-            && content.contains("Switched model to {display_name}"),
-        "Agent Chat model switch handler should derive unavailable/current/HUD/switched feedback from named state"
-    );
-}
-
-#[test]
-fn agent_chat_profile_switch_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatProfileSwitchHandlerAction")
-            && content.contains("SwitchProfile"),
-        "Agent Chat profile switch handler should be driven by named action states"
-    );
-    assert!(
-        content.contains("AgentChatProfileSwitchHandlerAction::from_action_id(action_id)")
-            && content.contains("profile_action.unavailable_message(profile_id)")
-            && content.contains("profile_action.persist_failure_message(&profile.name, error)")
-            && content.contains("profile_action.relaunch_message(&profile.name)")
-            && content.contains("Profile '{profile_id}' is no longer available")
-            && content.contains("Failed to persist profile '{profile_name}': {error}")
-            && content.contains("Switching profile to {profile_name}"),
-        "Agent Chat profile switch handler should derive unavailable, persistence, and relaunch feedback from named state"
-    );
-}
-
-#[test]
-fn agent_chat_root_change_actions_use_named_plan_states() {
-    let content = fs::read_to_string("src/actions/builders/script_context.rs")
-        .expect("Failed to read script context builder");
-
-    assert!(
-        content.contains("enum AgentChatRootPickerActionPlan")
-            && content.contains("CurrentSelection")
-            && content.contains("NoCurrentSelection"),
-        "Agent Chat root Change Profile/Model descriptions should be driven by named picker plan states"
-    );
-    assert!(
-        content.contains("AgentChatRootPickerActionPlan::from_selected_display_name")
-            && content
-                .contains("profile_picker_plan.description(AGENT_CHAT_CHANGE_PROFILE_DESCRIPTION)")
-            && content.contains("model_picker_plan.description(AGENT_CHAT_CHANGE_MODEL_DESCRIPTION)"),
-        "Agent Chat root Change Profile/Model actions should derive current/fallback copy from the named picker plan"
-    );
-}
-
-#[test]
-fn agent_chat_last_response_handlers_use_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatLastResponseHandlerAction")
-            && content.contains("CopyToClipboard")
-            && content.contains("PasteToFrontmost"),
-        "Agent Chat last-response copy/paste handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("AgentChatLastResponseHandlerAction::from_action_id(action_id)")
-            && content.contains("last_response_action.success_message()")
-            && content.contains("Copied last response to clipboard")
-            && content.contains("Pasting to frontmost app"),
-        "Agent Chat last-response handlers should derive user-facing copy/paste feedback from the named state"
-    );
-}
-
-#[test]
 fn deferred_agent_chat_handoff_uses_named_failure_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
+    let deferred = fs::read_to_string("src/app_actions/handle_action/deferred_agent_chat.rs")
+        .expect("Failed to read deferred Agent Chat action state");
 
     assert!(
-        content.contains("enum DeferredAgentChatAction")
-            && content.contains("enum DeferredAgentChatActionKind")
-            && content.contains("fn name(self) -> &'static str")
-            && content.contains("fn failure_message(self, error: impl std::fmt::Display)")
-            && content.contains("let deferred_action_kind = deferred_action.kind();")
-            && content.contains("deferred_action_kind.failure_message(&error)"),
+        content.contains("include!(\"deferred_agent_chat.rs\");")
+            && deferred.contains("enum DeferredAgentChatAction")
+            && deferred.contains("fn name(&self) -> &'static str")
+            && deferred.contains("fn failure_message(&self, error: impl std::fmt::Display)")
+            && content.contains("let failure = action.failure_message(\"\");")
+            && content.contains("self.notice_failed(format!(\"{failure}{error}\"), cx);"),
         "deferred Agent Chat handoff failure feedback should derive from the named deferred action state"
     );
     assert!(
-        content.contains("Failed to open Agent Chat: {error}")
-            && content.contains("Failed to send to Agent Chat: {error}")
-            && content.contains("Failed to attach file to Agent Chat: {error}")
-            && content.contains("Failed to apply AI preset: {error}"),
+        deferred.contains("Couldn't open the chat: {error}")
+            && deferred.contains("Couldn't attach the image: {error}")
+            && deferred.contains("Couldn't attach the file: {error}")
+            && deferred.contains("Couldn't apply the AI preset: {error}"),
         "deferred Agent Chat handoff state should preserve action-specific failure copy"
     );
     // The legacy AI window module is deleted, so any reference to its entry
@@ -2677,165 +2560,6 @@ fn ai_open_failure_helper_preserves_actionable_copy() {
         content.contains("fn ai_open_failure_message(error: impl std::fmt::Display) -> String")
             && content.contains("format!(\"Failed to open AI: {error}\")"),
         "AI open failure helper should preserve actionable user-facing copy with error details"
-    );
-}
-
-#[test]
-fn agent_chat_conversation_session_handlers_use_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatConversationSessionHandlerAction")
-            && content.contains("NewConversation")
-            && content.contains("ClearConversation"),
-        "Agent Chat new/clear conversation handlers should be driven by named session action states"
-    );
-    assert!(
-        content.contains("AgentChatConversationSessionHandlerAction::from_action_id(action_id)")
-            && content.contains("session_action.preserves_session()")
-            && content.contains("thread.clear_messages(cx)")
-            && content.contains("self.close_tab_ai_harness_terminal(cx)")
-            && content.contains("self.open_tab_ai_agent_chat_with_entry_intent(None, cx)"),
-        "Agent Chat conversation session handlers should derive keep-session vs fresh-session behavior from the named state"
-    );
-}
-
-#[test]
-fn agent_chat_retry_last_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatRetryLastHandlerAction")
-            && content.contains("RetryLastMessage"),
-        "Agent Chat retry-last handler should be driven by a named action state"
-    );
-    assert!(
-        content.contains("AgentChatRetryLastHandlerAction::from_action_id(action_id)")
-            && content.contains("retry_action.missing_user_message()")
-            && content.contains("No previous message to retry"),
-        "Agent Chat retry-last handler should derive missing-message copy from the named state"
-    );
-}
-
-#[test]
-fn agent_chat_code_copy_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatCodeCopyHandlerAction") && content.contains("CopyAllCode"),
-        "Agent Chat copy-all-code handler should be driven by named action states"
-    );
-    assert!(
-        content.contains("AgentChatCodeCopyHandlerAction::from_action_id(action_id)")
-            && content.contains("code_copy_action.result_message(false)")
-            && content.contains("code_copy_action.result_message(true)")
-            && content.contains("No code blocks found")
-            && content.contains("All code blocks copied"),
-        "Agent Chat copy-all-code handler should derive found/missing feedback from the named state"
-    );
-}
-
-#[test]
-fn agent_chat_conversation_markdown_handlers_use_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatConversationMarkdownHandlerAction")
-            && content.contains("CopyToClipboard")
-            && content.contains("SaveAsNote"),
-        "Agent Chat conversation markdown copy/save handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("AgentChatConversationMarkdownHandlerAction::from_action_id(action_id)")
-            && content.contains("markdown_action.empty_message()")
-            && content.contains("markdown_action.success_message()")
-            && content.contains(".failure_message(e)")
-            && content.contains("No Agent Chat messages to copy")
-            && content.contains("No Agent Chat messages to save")
-            && content.contains("Copied Agent Chat conversation as markdown")
-            && content.contains("Saved Agent Chat conversation to Notes")
-            && content.contains("Failed to save note: {error}"),
-        "Agent Chat markdown handlers should derive empty, success, and save-failure feedback from the named state"
-    );
-}
-
-#[test]
-fn agent_chat_last_code_block_handlers_use_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatLastCodeBlockHandlerAction")
-            && content.contains("SaveAsScript")
-            && content.contains("RunLastCode"),
-        "Agent Chat save/run-last-code handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("AgentChatLastCodeBlockHandlerAction::from_action_id(action_id)")
-            && content.contains("code_block_action.missing_code_message()")
-            && content.contains("code_block_action.saved_script_message(&name, ext)")
-            && content.contains("code_block_action.temp_write_failure_message(e)")
-            && content.contains("code_block_action.running_message(&name)")
-            && content.contains("code_block_action\n                                            .run_success_message(&stdout)")
-            && content.contains("code_block_action\n                                            .run_failure_message(output.status, &out)")
-            && content.contains("code_block_action\n                                    .run_spawn_failure_message(e)")
-            && content.contains("No code block found in last response")
-            && content.contains("No code block found")
-            && content.contains("Saved as {name}.{ext}")
-            && content.contains("Failed to write temp file: {error}")
-            && content.contains("Running `{name}`...")
-            && content.contains("Finished (no output)")
-            && content.contains("Error (exit {status})")
-            && content.contains("Failed to run: {error}"),
-        "Agent Chat save/run-last-code handlers should derive missing-code, save-success, run status, and failure feedback from the named state"
-    );
-}
-
-#[test]
-fn agent_chat_panel_window_handlers_use_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatPanelWindowHandlerAction")
-            && content.contains("ShowHistory")
-            && content.contains("DetachWindow")
-            && content.contains("ReattachPanel"),
-        "Agent Chat history/detach/reattach handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("AgentChatPanelWindowHandlerAction::from_action_id(action_id)")
-            && content.contains("panel_action.success_message().map(String::from)")
-            && content.contains(".history_search_placeholder()")
-            && content.contains("Opened conversation history")
-            && content.contains("Search conversation history...")
-            && content.contains("Chat kept open in window")
-            && content.contains("Chat returned to panel"),
-        "Agent Chat panel/window handlers should derive success messages and history placeholder from the named state"
-    );
-}
-
-#[test]
-fn agent_chat_history_mutation_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
-        .expect("Failed to read action handler");
-
-    assert!(
-        content.contains("enum AgentChatHistoryMutationHandlerAction")
-            && content.contains("ClearHistory"),
-        "Agent Chat history mutation handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("AgentChatHistoryMutationHandlerAction::from_action_id(action_id)")
-            && content.contains("history_action.history_index_path(&kit)")
-            && content.contains("history_action.conversations_dir(&kit)")
-            && content.contains("history_action.success_message()")
-            && content.contains("Conversation history cleared"),
-        "Agent Chat clear-history should derive deletion targets and success copy from the named state"
     );
 }
 

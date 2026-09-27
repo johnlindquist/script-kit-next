@@ -55,10 +55,10 @@ fn browser_tabs_arm_calls_collect_named_rows_with_browser_tabs_list_name() {
 
 #[test]
 fn browser_tabs_arm_uses_fuzzy_search_not_raw_contains() {
-    // BrowserTabsView uses `fuzzy_search_browser_tabs` for its filter
-    // predicate (see `src/app_impl/ui_window.rs:749` and
-    // `src/render_builtins/browser_tabs.rs:25`). The collect arm MUST
-    // match that predicate, NOT fall back to `.to_lowercase().contains()`
+    // BrowserTabsView filters with `fuzzy_search_browser_tabs` and labels
+    // rows with `display_title()`, both inside the renderer-owned
+    // `browser_tabs_visible_row_labels` helper. The collect arm MUST use
+    // that helper, NOT its own `.to_lowercase().contains()` predicate,
     // which would drift the collector's row count away from the
     // renderer's visible list and skew `visibleChoiceCount` receipts.
     let start = COLLECT_ELEMENTS
@@ -73,21 +73,18 @@ fn browser_tabs_arm_uses_fuzzy_search_not_raw_contains() {
         );
     let arm = &COLLECT_ELEMENTS[start..start + end_rel];
     assert!(
-        arm.contains("fuzzy_search_browser_tabs"),
-        "BrowserTabsView arm must call \
-         `crate::browser_tabs::fuzzy_search_browser_tabs` for its \
-         non-empty-filter branch, mirroring the renderer at \
-         `src/render_builtins/browser_tabs.rs:25` and the `collect_state` \
-         arm at `src/prompt_handler/mod.rs:2508`. Any other predicate \
-         would skew row count vs renderer. Arm body was:\n{}",
+        arm.contains("self.browser_tabs_visible_row_labels(filter)"),
+        "BrowserTabsView arm must take its rows from the renderer's \
+         `browser_tabs_visible_row_labels` helper, which filters with \
+         `crate::browser_tabs::fuzzy_search_browser_tabs` and labels rows \
+         with `tab.display_title()`. Any other predicate or field would \
+         skew row count or text vs the renderer. Arm body was:\n{}",
         arm
     );
     assert!(
-        arm.contains("display_title()"),
-        "BrowserTabsView arm must derive row strings from \
-         `tab.display_title()`, consistent with the renderer's display. \
-         Any other field (e.g., `tab.url`) would render different text \
-         in `getElements` vs the visible list. Arm body was:\n{}",
+        !arm.contains(".to_lowercase().contains("),
+        "BrowserTabsView arm must not filter with a raw substring match. \
+         Arm body was:\n{}",
         arm
     );
 }
