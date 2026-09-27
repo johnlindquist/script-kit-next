@@ -527,12 +527,10 @@ impl ScriptListApp {
             // Neutral and informational. A running turn is not an error, and
             // this must never read as though something was cancelled — the
             // point of refusing is that nothing was.
-            self.toast_manager.push(
-                crate::components::toast::Toast::info(
-                    "Stop the current turn before starting a new conversation".to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(2500)),
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                "Stop the current turn before starting a new conversation".to_string(),
+                cx,
             );
             cx.notify();
             tracing::info!(
@@ -669,12 +667,10 @@ impl ScriptListApp {
                 // nothing and says nothing is indistinguishable from a chord
                 // that is not bound at all, which is the exact bug that left
                 // ⇧⌘C advertised-but-dead in this surface for a release.
-                self.toast_manager.push(
-                    crate::components::toast::Toast::info(
-                        "No response to copy yet".to_string(),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(1500)),
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    "No response to copy yet".to_string(),
+                    cx,
                 );
                 false
             }
@@ -753,12 +749,10 @@ impl ScriptListApp {
         meta.runtime_generation = meta.runtime_generation.saturating_add(1);
         crate::flows::session::conversation_store()
             .persist_snapshot(meta.next_persisted_snapshot());
-        self.toast_manager.push(
-            crate::components::toast::Toast::success(
-                "Runtime terminated — conversation history is preserved".to_string(),
-                &self.theme,
-            )
-            .duration_ms(Some(1800)),
+        self.one_window_notice(
+            crate::line_notice::DONE,
+            "Runtime terminated — conversation history is preserved".to_string(),
+            cx,
         );
         let _ = window;
         cx.notify();
@@ -784,15 +778,13 @@ impl ScriptListApp {
             false,
         );
         self.start_flow_ux_tick(cx);
-        self.toast_manager.push(
-            crate::components::toast::Toast::success(
-                format!(
-                    "{} running in background — watch it in the desk list",
-                    flow.friendly_name()
-                ),
-                &self.theme,
-            )
-            .duration_ms(Some(1800)),
+        self.one_window_notice(
+            crate::line_notice::DONE,
+            format!(
+                "{} running in background — watch it in the desk list",
+                flow.friendly_name()
+            ),
+            cx,
         );
         cx.notify();
         run_id
@@ -806,12 +798,10 @@ impl ScriptListApp {
         // "command not found" is a dead end — point at the install
         // affordance instead.
         if crate::flows::catalog::mdflow_binary().is_none() {
-            self.toast_manager.push(
-                crate::components::toast::Toast::error(
-                    "mdflow isn't installed — use the Install mdflow row first".to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(3000)),
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                "mdflow isn't installed — use the Install mdflow row first".to_string(),
+                cx,
             );
             cx.notify();
             return;

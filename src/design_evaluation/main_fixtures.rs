@@ -1,29 +1,6 @@
-use super::fixture_ids::{main_fixture_ids, MAIN_OVERLAY_FIXTURE_IDS, SHORTCUT_FIXTURE_IDS};
+use super::fixture_ids::{main_fixture_ids, MAIN_OVERLAY_FIXTURE_IDS};
 use crate::*;
 use anyhow::Context as _;
-
-pub(crate) fn mount_shortcut_fixture(
-    fixture_id: &str,
-    app: Entity<ScriptListApp>,
-    parent: &crate::protocol::AutomationWindowInfo,
-    parent_handle: gpui::AnyWindowHandle,
-    cx: &mut App,
-) -> anyhow::Result<crate::protocol::AutomationWindowInfo> {
-    anyhow::ensure!(
-        SHORTCUT_FIXTURE_IDS.contains(&fixture_id),
-        "unknown_shortcut_fixture"
-    );
-    crate::shortcut_recorder::mount_owned_shortcut_recorder(app, parent, parent_handle, cx)
-}
-
-pub(crate) fn close_shortcut_fixture(
-    id: &str,
-    generation: u64,
-    cx: &mut App,
-) -> anyhow::Result<()> {
-    anyhow::ensure!(id == "shortcut-recorder-popup", "not_shortcut_recorder");
-    crate::shortcut_recorder::close_shortcut_recorder_instance(generation, cx)
-}
 
 /// Data injection into the real ScriptListApp route; never normal startup followed by clearing.
 pub(crate) fn mount_main_fixture(
@@ -92,6 +69,7 @@ pub(crate) fn mount_main_fixture(
                 }]);
             }
             prepare_launcher_files(app, root)?;
+            app.one_window_seed_owned_fixture();
             AppView::ScriptList
         }
         "main.menu-syntax-trigger" | "main.menu-syntax-object" | "main.menu-syntax-history" => {
@@ -407,26 +385,6 @@ pub(crate) fn mount_main_fixture(
                 selected_index: 0,
             }
         }
-        "main.dictation-history" => {
-            let entries = (0..18)
-                .map(|index| crate::dictation::DictationHistoryEntry {
-                    version: 1,
-                    id: format!("owned-transcript-{index}"),
-                    timestamp: "2026-08-28T12:00:00Z".into(),
-                    transcript: format!("Release checklist item {index}: review the launch plan."),
-                    preview: format!("Release checklist item {index}"),
-                    target_id: "main".into(),
-                    target_label_snapshot: "Launcher".into(),
-                    audio_duration_ms: 2500,
-                })
-                .collect::<Vec<_>>();
-            crate::dictation::seed_owned_dictation_history(&entries)?;
-            AppView::DictationHistoryView {
-                filter: String::new(),
-                selected_index: 0,
-                visible_limit: 10,
-            }
-        }
         "main.notes-browse"
         | "main.notes-browse-no-match"
         | "main.notes-browse-loading"
@@ -531,9 +489,14 @@ fn prepare_launcher_files(app: &ScriptListApp, root: &std::path::Path) -> anyhow
             if let Some(parent) = script.path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
+            let schedule = match script.name.as_str() {
+                "Omega Report" => "// Schedule: every friday at 4pm\n",
+                "Launch Beta" => "// Cron: 0 9 * * 1-5\n",
+                _ => "",
+            };
             std::fs::write(
                 &script.path,
-                "// Synthetic catalogue source; never executed.\n",
+                format!("{schedule}// Synthetic catalogue source; never executed.\n"),
             )?;
         }
     }
@@ -598,8 +561,6 @@ fn fixture_browser_history() -> Vec<crate::browser_history::BrowserHistoryEntry>
         .collect()
 }
 
-struct OwnedMainRootNotification;
-
 fn overlay_sources(app: &mut ScriptListApp) -> anyhow::Result<&mut OwnedMainSources> {
     match &mut app.main_services {
         MainServices::OwnedFixtures(sources) => Ok(Arc::make_mut(sources)),
@@ -634,7 +595,7 @@ pub(crate) fn mount_main_overlay_fixture(
     window: &mut Window,
     cx: &mut Context<ScriptListApp>,
 ) -> anyhow::Result<()> {
-    use gpui_component::{notification::Notification, WindowExt as _};
+    use gpui_component::WindowExt as _;
     crate::runtime_policy::WindowHostPolicy::OwnedHidden.validate()?;
     anyhow::ensure!(
         window.is_owned_hidden(),
@@ -648,9 +609,6 @@ pub(crate) fn mount_main_overlay_fixture(
     let scope = crate::runtime_policy::owned_evaluation().context("main_overlay_policy_missing")?;
     app.close_alias_input(cx);
     app.close_tab_ai_save_offer(cx);
-    if app.show_bun_warning {
-        app.dismiss_bun_warning(cx);
-    }
     if app.show_logs {
         app.toggle_logs(cx);
     }
@@ -658,7 +616,6 @@ pub(crate) fn mount_main_overlay_fixture(
         app.set_background_effect(None, cx);
     }
     app.hide_grid(cx);
-    app.toast_manager.drain_pending();
     window.close_all_dialogs(cx);
     window.clear_notifications(cx);
     mount_main_fixture(app, "main.script-list", window, cx)?;
@@ -666,7 +623,6 @@ pub(crate) fn mount_main_overlay_fixture(
         let sources = overlay_sources(app)?;
         sources.overlay_fixture_id = Some(fixture_id);
         sources.overlay_root_dialog = None;
-        sources.overlay_root_notification = None;
         sources.overlay_actions.clear();
         sources.overlay_logs.clear();
     }
@@ -729,24 +685,6 @@ pub(crate) fn mount_main_overlay_fixture(
             overlay_sources(app)?.overlay_root_dialog =
                 Some((dialog.root_entity_id, dialog.generation));
         }
-        "main-overlay.root-notification" => {
-            window.push_notification(
-                Notification::info("The owned document is ready to review.")
-                    .title("Local update")
-                    .id::<OwnedMainRootNotification>()
-                    .autohide(false),
-                cx,
-            );
-            let snapshot = gpui_component::Root::read(window, cx).layer_snapshot(cx);
-            overlay_sources(app)?.overlay_root_notification = Some(
-                snapshot
-                    .notifications
-                    .first()
-                    .context("root_notification_not_opened")?
-                    .entity_id,
-            );
-        }
-        "main-overlay.warning" => app.show_bun_warning = true,
         "main-overlay.logs" => {
             overlay_sources(app)?.overlay_logs = vec![
                 "[fixture] Launch catalogue prepared".into(),
@@ -764,21 +702,6 @@ pub(crate) fn mount_main_overlay_fixture(
             anyhow::ensure!(
                 app.main_list_loading_kind().is_some(),
                 "fixture_loading_source_not_started"
-            );
-        }
-        "main-overlay.toast" => {
-            app.toast_manager.push(
-                components::toast::Toast::info("The owned action is ready to review.", &app.theme)
-                    .duration_ms(Some(TOAST_INFO_MS)),
-            );
-            app.flush_pending_toasts(window, cx);
-            let snapshot = gpui_component::Root::read(window, cx).layer_snapshot(cx);
-            overlay_sources(app)?.overlay_root_notification = Some(
-                snapshot
-                    .notifications
-                    .first()
-                    .context("toast_not_presented")?
-                    .entity_id,
             );
         }
         "main-overlay.effects" => {
@@ -802,12 +725,12 @@ pub(crate) fn main_overlay_state(
     let sources = app.main_services.owned_sources();
     serde_json::json!({
         "fixtureId": sources.and_then(|sources| sources.overlay_fixture_id),
-        "alias": app.alias_input_state.as_ref().map(|state| {
-            let field = state.field.borrow();
-            serde_json::json!({"text": field.text(), "cursor": field.state.cursor(), "selection": field.state.selection().range(), "problem": field.problem().map(|problem| problem.to_string())})
+        "alias": app.alias_input_state.as_ref().map(|_| {
+            let text = app.one_window.text();
+            serde_json::json!({"text": text, "problem": crate::alias_validation::alias_problem(text)})
         }),
         "saveOffer": app.tab_ai_save_offer_state.as_ref().map(|state| serde_json::json!({"filename": state.filename_stem, "syntheticExecution": state.record.provider_id == "owned-fixture"})),
-        "warningVisible": app.show_bun_warning, "logsVisible": app.show_logs,
+        "logsVisible": app.show_logs,
         "logLines": if app.show_logs { sources.map(|sources| sources.overlay_logs.as_slice()).unwrap_or(&[]) } else { &[] },
         "loading": app.main_list_loading_kind().map(|kind| kind.footer_label()),
         "backgroundEffect": crate::effects::BackgroundEffect::persisted_slug(app.background_effect),
@@ -829,17 +752,14 @@ pub(crate) fn main_overlay_elements(
     let mut elements = Vec::new();
     let layers = gpui_component::Root::read(window, cx).layer_snapshot(cx);
     if let Some(state) = &app.alias_input_state {
-        let field = state.field.borrow();
-        let mut title = ElementInfo::panel("alias-input-modal-content");
-        title.semantic_id = "alias-input-modal-content".into();
+        let mut title = ElementInfo::panel("alias-input-view");
+        title.semantic_id = "alias-input-view".into();
         title.text = Some(format!("Alias for \u{201c}{}\u{201d}", state.command_name));
         elements.push(title.redact_text(ElementContentKind::UserContent));
-        let mut input = ElementInfo::input("alias", Some(field.text()), true);
-        input.semantic_id = "alias-input-field".into();
-        elements.push(input);
         let mut save = ElementInfo::button(0, "Save");
         save.semantic_id = "alias-input:save".into();
-        save.action_disabled = field.problem().map(|_| "alias_validation_failed".into());
+        save.action_disabled = crate::alias_validation::alias_problem(app.one_window.text())
+            .map(|_| "alias_validation_failed".into());
         save.selectable = Some(save.action_disabled.is_none());
         elements.push(save);
         if state.has_alias {
@@ -870,15 +790,6 @@ pub(crate) fn main_overlay_elements(
             command.selectable = Some(true);
             elements.push(command);
         }
-    }
-    if app.show_bun_warning {
-        let mut banner = ElementInfo::panel("main-warning-banner");
-        banner.semantic_id = "main-warning-banner".into();
-        banner.text = Some("bun is not installed. Install from bun.sh".into());
-        elements.push(banner);
-        let mut dismiss = ElementInfo::button(0, "Dismiss");
-        dismiss.semantic_id = "main-warning-banner:dismiss".into();
-        elements.push(dismiss);
     }
     if app.show_logs {
         let mut panel = ElementInfo::panel("main-log-panel");
@@ -932,28 +843,6 @@ pub(crate) fn main_overlay_elements(
     elements
 }
 
-pub(crate) fn set_main_overlay_input(
-    app: &mut ScriptListApp,
-    text: &str,
-    window: &Window,
-    cx: &mut Context<ScriptListApp>,
-) -> anyhow::Result<bool> {
-    anyhow::ensure!(text.len() <= 4096, "overlay_input_too_large");
-    crate::runtime_policy::WindowHostPolicy::OwnedHidden.validate()?;
-    anyhow::ensure!(
-        gpui_component::Root::read(window, cx)
-            .layer_snapshot(cx)
-            .dialogs
-            .is_empty(),
-        "root_dialog_has_no_editable_fixture_field"
-    );
-    if app.alias_input_state.is_none() {
-        return Ok(false);
-    }
-    app.update_alias_text(text.to_owned(), cx);
-    Ok(true)
-}
-
 pub(crate) fn select_main_overlay_element(
     app: &mut ScriptListApp,
     id: &str,
@@ -976,8 +865,8 @@ pub(crate) fn select_main_overlay_element(
     if !submit {
         return Ok(true);
     }
-    if let Some(state) = &app.alias_input_state {
-        let alias = state.field.borrow().text().to_string();
+    if app.alias_input_state.is_some() {
+        let alias = app.one_window.text().to_string();
         match id {
             "alias-input:save" => app.save_alias_with_text(alias, cx),
             "alias-input:clear" => app.save_alias_with_text(String::new(), cx),
@@ -995,10 +884,6 @@ pub(crate) fn select_main_overlay_element(
         }
         "tab-ai-save-offer:dismiss" if app.tab_ai_save_offer_state.is_some() => {
             app.close_tab_ai_save_offer(cx);
-            return Ok(true);
-        }
-        "main-warning-banner:dismiss" if app.show_bun_warning => {
-            app.dismiss_bun_warning(cx);
             return Ok(true);
         }
         _ => {}

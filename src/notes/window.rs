@@ -28,7 +28,6 @@ use tracing::{debug, info};
 
 // Use the unified ActionsDialog/CommandBar system
 use crate::actions::{get_notes_command_bar_actions, CommandBar, CommandBarConfig, NotesInfo};
-use crate::confirm;
 
 use super::actions_panel::NotesAction;
 use super::markdown;
@@ -780,11 +779,9 @@ mod editor_formatting;
 mod editor_ops_a;
 mod editor_ops_b;
 mod focus;
-pub(crate) mod layout;
-pub(crate) mod style;
-use focus::NotesFocusSurface;
 pub(crate) mod init;
 mod keyboard;
+pub(crate) mod layout;
 mod navigation;
 mod notes;
 mod notes_actions;
@@ -797,6 +794,7 @@ mod render_editor_body;
 mod render_editor_titlebar;
 mod render_ui;
 mod resize;
+pub(crate) mod style;
 mod traits;
 mod vibrancy;
 pub(crate) mod window_ops;

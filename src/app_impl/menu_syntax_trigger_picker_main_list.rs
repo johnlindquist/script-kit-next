@@ -391,9 +391,9 @@ impl ScriptListApp {
                             self.computed_filter_text.clear();
                             self.set_menu_syntax_mode_from_filter("");
                             self.invalidate_grouped_cache();
-                            self.show_hud(
+                            self.one_window_notice(
+                                crate::line_notice::INFO,
                                 format!("Created {}", created.filename),
-                                Some(crate::HUD_SHORT_MS),
                                 cx,
                             );
                         }
@@ -404,7 +404,7 @@ impl ScriptListApp {
                                 slug = %slug,
                                 error = %error,
                             );
-                            self.show_error_toast(format!("Create handler failed: {error}"), cx);
+                            self.notice_failed(format!("Create handler failed: {error}"), cx);
                         }
                     }
                 }

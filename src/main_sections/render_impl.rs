@@ -61,10 +61,6 @@ impl Render for ScriptListApp {
             );
         }
 
-        // Flush any pending toasts to gpui-component's NotificationList
-        // This is needed because toast push sites don't have window access
-        self.flush_pending_toasts(window, cx);
-
         // Check for API key configuration completion (from built-in commands)
         // The EnvPrompt callback signals completion via channel
         if let Ok((provider, success)) = self.api_key_completion_receiver.try_recv() {
@@ -234,46 +230,24 @@ impl Render for ScriptListApp {
             }
 
             // Close popups when the main window regains focus (user clicked on it)
-            if confirm::is_confirm_window_open() {
-                logging::log(
-                    "FOCUS",
-                    "Main window regained focus - closing confirm popup",
-                );
-                confirm::route_key_to_confirm_popup("escape", cx);
-            }
-            if actions::is_actions_window_open() {
-                logging::log(
-                    "FOCUS",
-                    "Main window regained focus - closing actions popup via canonical close path",
-                );
-                self.close_actions_popup_for_current_view(window, cx);
-            }
         }
         if self.was_window_focused && !is_window_focused {
-            let actions_popup_active_or_closing = self.show_actions_popup
-                || self.actions_dialog.is_some()
-                || actions::is_actions_window_open();
             if matches!(self.current_view, AppView::FileSearchView { .. }) {
                 logging::log(
                     "FOCUS",
                     &format!(
-                        "FileSearch focus lost: visible={} pinned={} actions_open={} confirm_open={}",
+                        "FileSearch focus lost: visible={} pinned={} actions_open={}",
                         script_kit_gpui::is_main_window_visible(),
                         self.is_pinned,
                         actions::is_actions_window_open(),
-                        confirm::is_confirm_window_open()
                     ),
                 );
             }
             // Window just lost focus (user clicked another window)
             // Only auto-dismiss if we're in a dismissable view AND window is visible AND not pinned
-            // AND the actions popup is not open (actions popup is a companion window, not "losing focus")
             if self.is_dismissable_view()
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
-                && !actions_popup_active_or_closing
-                && !confirm::is_confirm_window_open()
-                && !crate::dictation::is_dictation_overlay_open()
                 && !crate::dictation::is_dictation_recording()
                 && self.tab_ai_save_offer_state.is_none()
                 && self.shortcut_recorder_state.is_none()
@@ -291,11 +265,6 @@ impl Render for ScriptListApp {
                     );
                     self.close_and_reset_window(cx);
                 }
-            } else if actions_popup_active_or_closing {
-                logging::log(
-                    "FOCUS",
-                    "Main window lost focus but actions popup is open or closing - staying open",
-                );
             } else if self.shortcut_recorder_state.is_some() {
                 logging::log(
                     "FOCUS",
@@ -305,11 +274,6 @@ impl Render for ScriptListApp {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus but Tab AI save-offer is active - staying open",
-                );
-            } else if confirm::is_confirm_window_open() {
-                logging::log(
-                    "FOCUS",
-                    "Main window lost focus but confirm popup is open - staying open",
                 );
             } else if self.is_pinned {
                 logging::log(
@@ -347,7 +311,6 @@ impl Render for ScriptListApp {
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::FavoritesBrowseView { .. }
                 | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::TipsView { .. }
                 | AppView::MiniPrompt { .. }
@@ -379,14 +342,9 @@ impl Render for ScriptListApp {
         // The clone is unavoidable due to borrow checker: we need &mut self for render methods
         // but also need to match on self.current_view. Future optimization: refactor render
         // methods to take &str/&[T] references instead of owned values.
-        //
-        // HUD is now handled by hud_manager as a separate floating window
-        // No need to render it as part of this view
         let view_owns_main_window_shell = self.current_view.uses_view_owned_main_window_shell();
         let current_view = self.current_view.clone();
-        let main_window_modal_dim_active = confirm::is_confirm_window_open()
-            || self.shortcut_recorder_state.is_some()
-            || self.shortcut_recorder_entity.is_some();
+        let main_window_modal_dim_active = false;
         let main_window_modal_dim_layer =
             crate::components::modal_dim::render_main_window_modal_dim_layer(
                 main_window_modal_dim_active,
@@ -750,18 +708,14 @@ impl Render for ScriptListApp {
             } => self
                 .render_browser_history(filter, selected_index, cx)
                 .into_any_element(),
-            AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                visible_limit,
-            } => self
-                .render_dictation_history(filter, selected_index, visible_limit, cx)
-                .into_any_element(),
             AppView::NotesBrowseView { search } => self
                 .render_notes_browse_portal(search, cx)
                 .into_any_element(),
             AppView::DayPage { entity } => entity.into_any_element(),
         };
+        let main_content = self.one_window_staged_view(main_content, cx);
+        let view_owns_main_window_shell =
+            view_owns_main_window_shell || self.one_window_view_staged().is_some();
 
         // Wrap content in a container that can have the debug grid overlay
         let window_bounds = window.bounds();
@@ -784,50 +738,6 @@ impl Render for ScriptListApp {
             self.build_component_bounds(main_content_size, cx)
         } else {
             Vec::new()
-        };
-
-        // Build warning banner if needed (bun not available)
-        let warning_banner = if self.show_bun_warning {
-            let banner_colors = WarningBannerColors::from_theme(&self.theme);
-            let entity = cx.entity().downgrade();
-            let entity_for_dismiss = entity.clone();
-
-            Some(
-                div()
-                    .debug_selector(|| "main-warning-banner".into())
-                    .w_full()
-                    .px(px(12.))
-                    .pt(px(8.))
-                    .child(
-                        WarningBanner::new(
-                            "bun is not installed. Install from bun.sh",
-                            banner_colors,
-                        )
-                        .on_click(Box::new(move |_event, _window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    if let Err(error) = this.open_bun_website() {
-                                        this.show_error_toast(
-                                            format!("Browser was not opened: {error}"),
-                                            cx,
-                                        );
-                                    }
-                                });
-                            }
-                        }))
-                        .on_dismiss(Box::new(
-                            move |_event, _window, cx| {
-                                if let Some(app) = entity_for_dismiss.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.dismiss_bun_warning(cx);
-                                    });
-                                }
-                            },
-                        )),
-                    ),
-            )
-        } else {
-            None
         };
 
         // Log render timing for filter perf analysis - always log for "gr" filters
@@ -911,32 +821,6 @@ impl Render for ScriptListApp {
         // Get themed border color with 25% opacity (0x40 = 64/255)
         let border_color = rgba((self.theme.colors.ui.border << 8) | 0x40);
 
-        let actions_window_open = actions::is_actions_window_open();
-        let actions_background_shield = if actions_window_open {
-            Some(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .occlude()
-                    .on_any_mouse_down(cx.listener(|this, _, window, cx| {
-                        logging::log(
-                            "FOCUS",
-                            "Main window shield clicked - closing actions popup via canonical close path",
-                        );
-                        this.close_actions_popup_for_current_view(window, cx);
-                        cx.stop_propagation();
-                    }))
-                    .on_mouse_move(cx.listener(|_this, _: &MouseMoveEvent, _window, cx| {
-                        cx.stop_propagation();
-                    }))
-                    .on_scroll_wheel(cx.listener(|_this, _event: &gpui::ScrollWheelEvent, _window, cx| {
-                        cx.stop_propagation();
-                    })),
-            )
-        } else {
-            None
-        };
-
         // Arg-family windows price rows before layout, but the root can also
         // contain intrinsically sized chrome (notably the missing-Bun warning).
         // Observe the real shell allocation rather than duplicating that
@@ -977,7 +861,6 @@ impl Render for ScriptListApp {
                 .when_some(arg_sizing, |container, (mode, choice_count)| {
                     let entity = cx.entity().downgrade();
                     let revision = self.main_revisions;
-                    let warning_visible = self.show_bun_warning;
                     let geometry = self.arg_prompt_geometry.clone();
                     container.on_children_prepainted(move |bounds, window, cx| {
                         let Some(shell_bounds) = bounds.first() else {
@@ -998,7 +881,6 @@ impl Render for ScriptListApp {
                         let layout = crate::window_resize::arg_layout::resolved_arg_layout(rendered_inputs);
                         geometry.set(Some(ArgPromptGeometry {
                             revision,
-                            warning_visible,
                             window_size: observed_size,
                             shell_bounds: *shell_bounds,
                             inputs,
@@ -1025,7 +907,6 @@ impl Render for ScriptListApp {
                             };
                             entity.update(cx, |this, cx| {
                                 if this.main_revisions != revision
-                                    || this.show_bun_warning != warning_visible
                                     || window.viewport_size() != observed_size
                                 {
                                     return;
@@ -1184,23 +1065,11 @@ impl Render for ScriptListApp {
                     logging::log(
                         "FOCUS",
                         &format!(
-                            "FileSearch root mouse down: restored_main_filter_focus=true activated_window=true main_window_focused={} actions_open={} confirm_open={}",
+                            "FileSearch root mouse down: restored_main_filter_focus=true activated_window=true main_window_focused={} actions_open={}",
                             platform::is_main_window_focused(),
                             actions::is_actions_window_open(),
-                            confirm::is_confirm_window_open()
                         ),
                     );
-                }
-                if confirm::is_confirm_window_open() {
-                    logging::log("FOCUS", "Main window clicked - closing confirm popup");
-                    confirm::route_key_to_confirm_popup("escape", cx);
-                }
-                if actions::is_actions_window_open() {
-                    logging::log(
-                        "FOCUS",
-                        "Main window clicked - closing actions popup via canonical close path",
-                    );
-                    this.close_actions_popup_for_current_view(window, cx);
                 }
                 if this.shortcut_recorder_state.is_some() {
                     logging::log("SHORTCUT", "Main window clicked - closing shortcut recorder");
@@ -1262,14 +1131,9 @@ impl Render for ScriptListApp {
                     .border_1()
                     .border_color(border_color)
                     .overflow_hidden()
-                    // Warning banner appears at the top when bun is not available
-                    .when_some(warning_banner, |container, banner| container.child(banner))
                     // Main content takes remaining space
                     .child(main_content_container)
                     .when_some(main_window_modal_dim_layer, |container, overlay| {
-                        container.child(overlay)
-                    })
-                    .when_some(actions_background_shield, |container, overlay| {
                         container.child(overlay)
                     })
                     .when_some(grid_config, |container, config| {

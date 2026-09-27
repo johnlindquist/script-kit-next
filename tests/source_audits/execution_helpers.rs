@@ -60,7 +60,7 @@ fn open_scratch_pad_shows_toast_on_directory_creation_failure() {
     let block = &content[dir_create_pos..dir_create_pos + 800];
 
     assert!(
-        block.contains("show_error_toast("),
+        block.contains("notice_failed("),
         "Expected directory creation failure to show error toast"
     );
 }

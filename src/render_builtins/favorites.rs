@@ -355,7 +355,7 @@ impl ScriptListApp {
             action = "favorite_not_found",
             "Favorite script not found in scripts or scriptlets"
         );
-        self.show_error_toast(format!("Script '{}' not found", id), cx);
+        self.notice_failed(format!("Script '{}' not found", id), cx);
     }
 
     pub(crate) fn run_selected_favorite(
@@ -389,7 +389,7 @@ impl ScriptListApp {
             Ok(_) => {
                 self.clamp_favorites_selection();
                 let success_message = action.success_message(&id);
-                self.show_hud(success_message.clone(), Some(HUD_SHORT_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, success_message.clone(), cx);
                 cx.notify();
                 Ok(success_message)
             }
@@ -493,21 +493,21 @@ impl ScriptListApp {
 
         if crate::ui_foundation::is_key_enter(key) {
             if let Err(message) = self.run_selected_favorite(window, cx) {
-                self.show_error_toast(message, cx);
+                self.notice_failed(message, cx);
             }
         } else if crate::ui_foundation::is_key_escape(key) {
             self.go_back_or_close(window, cx);
         } else if key.eq_ignore_ascii_case("d") && self.filter_text.is_empty() {
             if let Err(message) = self.remove_selected_favorite(cx) {
-                self.show_error_toast(message, cx);
+                self.notice_failed(message, cx);
             }
         } else if key.eq_ignore_ascii_case("u") && self.filter_text.is_empty() {
             if let Err(message) = self.move_selected_favorite_up(cx) {
-                self.show_error_toast(message, cx);
+                self.notice_failed(message, cx);
             }
         } else if key.eq_ignore_ascii_case("j") && self.filter_text.is_empty() {
             if let Err(message) = self.move_selected_favorite_down(cx) {
-                self.show_error_toast(message, cx);
+                self.notice_failed(message, cx);
             }
         }
     }

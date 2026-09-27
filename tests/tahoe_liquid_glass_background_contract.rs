@@ -16,6 +16,102 @@ fn read_source(path: &str) -> String {
 }
 
 #[test]
+fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
+    let platform = read_source("src/platform/secondary_window_config.rs");
+    let main_vibrancy = read_source("src/platform/vibrancy_config.rs");
+    let ui_foundation = read_source("src/ui_foundation/mod.rs");
+    let actions_dialog = read_source("src/actions/dialog.rs");
+    let terminal_command_bar = read_source("src/terminal/command_bar_ui/render.rs");
+    let file_search = read_source("src/file_search/mod.rs");
+
+    assert!(
+        platform.contains("NSClassFromString")
+            && platform.contains("c\"NSGlassEffectView\".as_ptr()")
+            && platform.contains("class availability is the capability gate"),
+        "Liquid Glass must only be enabled when the macOS 26 NSGlassEffectView API is present"
+    );
+    assert!(
+        platform.contains("unsafe fn liquid_glass_tint_color()")
+            && platform.contains("crate::ui_foundation::main_window_matched_background_rgba(&theme)"),
+        "Tahoe glass capability code must preserve the shared theme tint helper for future contentView-backed glass elements"
+    );
+    assert!(
+        ui_foundation.contains("pub fn main_window_matched_background_rgba(theme: &Theme) -> u32")
+            && ui_foundation
+                .contains("pub fn main_window_matched_background(theme: &Theme) -> Rgba")
+            && ui_foundation.contains("main_window_matched_background_rgba(theme)"),
+        "GPUI and native liquid-glass backgrounds must share one theme-derived tint helper"
+    );
+    assert!(
+        platform.contains("configure_tahoe_window_backdrop(window, log_target, window_name)")
+            && main_vibrancy
+                .contains("configure_tahoe_window_backdrop(window, \"PANEL\", \"Main window\")"),
+        "Both shared secondary-window vibrancy and main-window vibrancy paths must use the semantic Tahoe window-backdrop hook"
+    );
+    assert!(
+        platform.contains("configure_tahoe_window_backdrop(window, \"APPEARANCE\", &title_string)")
+            && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
+        "Theme/appearance refresh must revisit existing secondary native backdrops"
+    );
+    assert!(
+        platform.contains("fn should_refresh_secondary_window_appearance(title: &str) -> bool")
+            && platform.contains("EXACT_SECONDARY_TITLES")
+            && platform.contains("\"Notes\"")
+            && platform.contains("\"Mini AI\"")
+            && platform.contains("\"Script Kit Agent Chat\"")
+            && platform.contains("\"Script Kit Agent Chat\"")
+            && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
+        "Theme/appearance refresh must use one predicate covering real Notes, detached Agent Chat, and legacy AI titles"
+    );
+    assert!(
+        platform.contains("pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool)")
+            && platform.contains("c\"Script Kit HUD\".as_ptr()")
+            && platform.contains("\"Script Kit HUD\""),
+        "HUD Liquid Glass must use the shared native material path and remain discoverable for theme/appearance refresh"
+    );
+    assert!(
+        main_vibrancy
+            .contains("crate::ui_foundation::main_window_matched_background_rgba(&theme)")
+            && main_vibrancy.contains("background_tint,")
+            && main_vibrancy.contains("glass_bits,"),
+        "Main-window Liquid Glass refresh de-dupe must include the shared theme tint, not just dark/material state"
+    );
+    assert!(
+        actions_dialog.contains("AppChromeColors::from_theme(theme).popup_surface_rgba")
+            && !actions_dialog.contains("vibrancy_background.unwrap_or(0.75)"),
+        "Actions dialog background alpha must come from AppChromeColors popup_surface_rgba, not a local 0.75 fallback"
+    );
+    assert!(
+        terminal_command_bar.contains("AppChromeColors::from_theme(&self.theme).popup_surface_rgba")
+            && !terminal_command_bar.contains("let opacity = if self.theme.is_vibrancy_enabled()"),
+        "Terminal command bar must share AppChromeColors popup_surface_rgba instead of hardcoded 0.50/0.95 alpha"
+    );
+    assert!(
+        file_search.contains("AppChromeColors::from_theme(&theme)")
+            && file_search.contains("chrome.popup_surface_rgba")
+            && !file_search.contains(".bg(rgb(theme.colors.background.title_bar))"),
+        "File-search drag preview must use shared popup chrome tokens instead of painting title_bar directly"
+    );
+    for forbidden in [
+        "unsafe fn configure_tahoe_liquid_glass_background",
+        "find_existing_liquid_glass_background",
+        "Tahoe Liquid Glass background configured",
+        "fitted to GPUI content without participating in app layout",
+        "addSubview: view positioned: -1isize relativeTo: cocoa::base::nil",
+    ] {
+        assert!(
+            !platform.contains(forbidden),
+            "NSGlassEffectView must not be installed or named as a full-window background sibling; forbidden marker: {forbidden}"
+        );
+    }
+    assert!(
+        !main_vibrancy
+            .contains("configure_tahoe_liquid_glass_background(window, \"PANEL\", \"Main window\")"),
+        "Main-window vibrancy must not install NSGlassEffectView as a full-window content background"
+    );
+}
+
+#[test]
 fn root_window_layout_material_is_backdrop_not_content_glass() {
     let layout = read_source("src/app_layout/build_layout_info.rs");
     let tokens = read_source("src/ui/chrome/tokens.rs");

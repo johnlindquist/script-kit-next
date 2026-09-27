@@ -259,7 +259,6 @@ impl ScriptListApp {
             AppView::PermissionsWizardView { .. } => "PermissionsWizardView",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
-            AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
             AppView::DayPage { .. } => "DayPage",
             AppView::ScriptIssuesView { .. } => "ScriptIssuesView",

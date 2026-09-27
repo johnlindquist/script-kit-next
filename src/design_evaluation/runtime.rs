@@ -14,8 +14,8 @@ use serde_json::{json, Value};
 use super::bootstrap::{Bootstrap, GUARDS};
 use super::runtime_query::QueryMode;
 use super::{
-    catalog, conversation_fixtures, dictation_fixtures, main_fixtures, notes_fixtures,
-    prompt_fixtures, secondary_fixtures,
+    catalog, conversation_fixtures, main_fixtures, notes_fixtures, prompt_fixtures,
+    secondary_fixtures,
 };
 use crate::computer_use::gpui_runtime_bridge::{
     capture_render_window_on_gpui_thread, forget_owned_render_frame, publish_owned_render_frame,
@@ -36,11 +36,7 @@ pub(super) const BATCH_STEP_REQUEST_ID_PREFIX: &str = "owned-evaluation:batch:";
 pub(super) enum RootOwner {
     Main(Entity<ScriptListApp>),
     Notes(Entity<crate::notes::NotesApp>),
-    Dictation(Entity<crate::dictation::DictationOverlay>),
     Secondary(Rc<secondary_fixtures::MountedSecondaryFixture>),
-    Footer,
-    ShortcutRecorder,
-    ConversationPopup,
     RegisteredChild,
 }
 
@@ -59,7 +55,6 @@ pub(super) struct Evaluator {
     pub mounted: BTreeMap<String, Mounted>,
     pub sdk_controls: BTreeMap<String, conversation_fixtures::SdkChatFixtureControl>,
     pub sdk_prompt_controls: BTreeMap<String, super::runtime_sdk::SdkPromptControl>,
-    pub dictation_controls: BTreeMap<String, crate::dictation::DictationFixtureControl>,
     pub flow_controls: BTreeMap<String, u64>,
     pub(super) theme_fixture: super::runtime_theme::ThemeFixtureState,
     pub(super) frames: super::runtime_frames::RuntimeFrames,
@@ -99,7 +94,6 @@ impl Evaluator {
             mounted: BTreeMap::new(),
             sdk_controls: BTreeMap::new(),
             sdk_prompt_controls: BTreeMap::new(),
-            dictation_controls: BTreeMap::new(),
             flow_controls: BTreeMap::new(),
             theme_fixture: Default::default(),
             frames: Default::default(),
@@ -290,7 +284,6 @@ impl Evaluator {
             }
             self.sdk_controls.remove(&id);
             self.sdk_prompt_controls.remove(&id);
-            self.dictation_controls.remove(&id);
             self.flow_controls.remove(&id);
             if id == "main" {
                 self.main = None;
@@ -323,8 +316,6 @@ impl Evaluator {
                     crate::windows::get_runtime_window_handle_for_generation(&id, generation)
                         .context("runtime_handle_missing")?;
                 let owner = match info.semantic_surface.as_deref() {
-                    Some("footerOverlay") => RootOwner::Footer,
-                    Some("shortcutRecorder") => RootOwner::ShortcutRecorder,
                     _ => RootOwner::RegisteredChild,
                 };
                 self.mounted.insert(
@@ -557,21 +548,6 @@ impl Evaluator {
             "fixture_outside_launch_subset"
         );
         let descriptor = catalog::fixture(fixture_id).context("unknown_fixture")?;
-        if descriptor.family == "dictationMicrophone" {
-            let parent = self
-                .resolve(parent.as_ref().context("dictation_parent_required")?)?
-                .clone();
-            let RootOwner::Dictation(view) = &parent.owner else {
-                anyhow::bail!("dictation_parent_required");
-            };
-            let info = dictation_fixtures::open_owned_dictation_microphone_fixture(
-                view,
-                &parent.info,
-                parent.handle,
-                &mut self.cx.app.borrow_mut(),
-            )?;
-            return self.finish_registered_presentation(fixture_id, info);
-        }
         if matches!(
             descriptor.family.as_str(),
             "notesAuxiliary" | "dayPageAuxiliary"
@@ -728,42 +704,9 @@ impl Evaluator {
                     owner: RootOwner::Notes(entity),
                 }
             }
-            "dictation" => {
-                let (entity, info) = dictation_fixtures::open_owned_dictation_fixture(
-                    fixture_id,
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                let generation = info.generation.context("dictation_generation_missing")?;
-                let handle =
-                    crate::windows::get_runtime_window_handle_for_generation(&info.id, generation)
-                        .context("dictation_runtime_missing")?;
-                Mounted {
-                    fixture_id: fixture_id.into(),
-                    info,
-                    handle,
-                    owner: RootOwner::Dictation(entity),
-                }
-            }
-            "actions" | "confirm" | "hud" | "snap" => {
-                let parent = if descriptor.parent_fixture_id.is_some() {
-                    let mounted = match parent.as_ref() {
-                        Some(target) => self.resolve(target)?.clone(),
-                        None => self.ensure_main()?,
-                    };
-                    Some(secondary_fixtures::SecondaryFixtureParent {
-                        id: mounted.info.id.clone(),
-                        generation: mounted
-                            .info
-                            .generation
-                            .context("parent_generation_missing")?,
-                        handle: mounted.handle,
-                    })
-                } else {
-                    None
-                };
+            "snap" => {
                 let fixture = Rc::new(secondary_fixtures::mount_secondary_fixture(
                     fixture_id,
-                    parent,
                     &mut self.cx.app.borrow_mut(),
                 )?);
                 let info = crate::windows::automation_window_by_id(&fixture.automation_id)
@@ -774,9 +717,6 @@ impl Evaluator {
                     handle: fixture.handle,
                     owner: RootOwner::Secondary(fixture),
                 }
-            }
-            "footer" | "shortcutRecorder" | "agentChatPopup" => {
-                self.mount_auxiliary(fixture_id, &descriptor.family, parent.as_ref())?
             }
             _ => anyhow::bail!("catalogue_root_owner_mismatch"),
         };
@@ -1493,14 +1433,6 @@ impl Evaluator {
             crate::footer_popup::retire_footer_owner(mounted.handle, &mut app);
             match &mounted.owner {
                 RootOwner::Secondary(fixture) => fixture.close(&mut app)?,
-                RootOwner::Footer => crate::footer_popup::close_owned_footer_fixture(
-                    &mounted.info.id,
-                    generation,
-                    &mut app,
-                )?,
-                RootOwner::ShortcutRecorder => {
-                    main_fixtures::close_shortcut_fixture(&mounted.info.id, generation, &mut app)?
-                }
                 RootOwner::Main(entity) => {
                     entity.update(&mut **app, |app, _| super::search_fixtures::retire(app))?;
                     mounted
@@ -1520,7 +1452,6 @@ impl Evaluator {
             forget_owned_render_frame(&mounted.info.id, generation);
             self.sdk_controls.remove(&mounted.info.id);
             self.sdk_prompt_controls.remove(&mounted.info.id);
-            self.dictation_controls.remove(&mounted.info.id);
             self.flow_controls.remove(&mounted.info.id);
             if mounted.info.id == "main" {
                 self.main = None;

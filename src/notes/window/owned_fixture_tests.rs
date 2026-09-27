@@ -42,6 +42,13 @@ fn failed_save_keeps_notes_open_for_escape_and_cmd_w(cx: &mut gpui::TestAppConte
     });
     let app = app_slot.borrow().clone().expect("Notes entity");
     let window: gpui::AnyWindowHandle = handle.into();
+    let said = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+    let said_for_sink = said.clone();
+    cx.update(|cx| {
+        crate::line_notice::install(cx, move |_, _, text, _| {
+            said_for_sink.borrow_mut().push(text)
+        })
+    });
     window
         .update(cx, |_, window, cx| {
             app.update(cx, |app, cx| {
@@ -72,23 +79,18 @@ fn failed_save_keeps_notes_open_for_escape_and_cmd_w(cx: &mut gpui::TestAppConte
                 let layers = Root::read(window, cx).layer_snapshot(cx);
                 assert!(
                     layers.notifications.is_empty(),
-                    "{key}: Notes toasts belong in the attached popup: {:?}",
+                    "{key}: nothing pops up over the Notes editor: {:?}",
                     layers.notifications
-                );
-                let toast = crate::toast_popup::semantic_element(window.window_handle())
-                    .unwrap_or_else(|| panic!("{key}: save failure must show a toast"));
-                assert_eq!(
-                    toast.semantic_id,
-                    format!("toast:{}", super::render::NOTES_SAVE_FAILURE_TOAST_KEY),
-                    "{key}: repeat close must reuse the one save-failure toast"
-                );
-                assert_eq!(
-                    toast.text.as_deref(),
-                    Some(super::navigation::NOTES_SAVE_FAILURE_MESSAGE)
                 );
             }
         })
         .expect("failed save leaves the Notes window available");
+    cx.run_until_parked();
+    assert_eq!(
+        *said.borrow(),
+        vec![super::navigation::NOTES_SAVE_FAILURE_MESSAGE.to_string(); 3],
+        "each refused close says why in the line above the main input"
+    );
 }
 
 /// A removed backing day file must not strand the last editable copy in memory.
@@ -375,6 +377,15 @@ fn trashing_a_note_clears_the_editor_and_cmd_z_restores_it(cx: &mut gpui::TestAp
     });
     let app = app_slot.borrow().clone().expect("Notes entity");
     let window: gpui::AnyWindowHandle = handle.into();
+    let undo = std::rc::Rc::new(std::cell::RefCell::new(None::<crate::line_notice::Later>));
+    let undo_for_sink = undo.clone();
+    cx.update(|cx| {
+        crate::line_notice::install(cx, move |_, _, _, said| {
+            if let crate::line_notice::Said::Undoable(offered) = said {
+                *undo_for_sink.borrow_mut() = Some(offered);
+            }
+        })
+    });
     let typed = "Audit note";
     window
         .update(cx, |_, window, cx| {
@@ -400,12 +411,11 @@ fn trashing_a_note_clears_the_editor_and_cmd_z_restores_it(cx: &mut gpui::TestAp
         assert!(app.save_current_note(), "a later autosave must not fail");
         assert!(app.save_failure.is_none());
     });
-    window
-        .update(cx, |_, window, cx| {
-            let undo = gpui::Keystroke::parse("cmd-z").expect("undo shortcut");
-            assert!(crate::undo_offer::route_window_key(window, &undo, cx));
-        })
-        .expect("take the undo offer");
+    let undo = undo
+        .borrow_mut()
+        .take()
+        .expect("trashing offers ⌘Z in the line");
+    cx.update(|cx| undo(cx));
     cx.run_until_parked();
     app.update(cx, |app, cx| {
         assert_eq!(app.selected_note_id, Some(note_id));

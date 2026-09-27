@@ -280,7 +280,7 @@ impl ScriptListApp {
         use crate::prompt_completion::{PromptCompletionBinding, PromptOutcome};
         let binding = if let Some(binding) = &self.prompt_completion {
             if binding.instance().id != id {
-                self.show_error_toast("stale_prompt_submission".to_string(), cx);
+                self.notice_failed("stale_prompt_submission".to_string(), cx);
                 return;
             }
             binding.clone()
@@ -293,7 +293,7 @@ impl ScriptListApp {
             PromptOutcome::Submitted(crate::protocol::SubmitValue::Text(value))
         });
         if let Err(error) = binding.try_complete(outcome) {
-            self.show_error_toast(error.to_string(), cx);
+            self.notice_failed(error.to_string(), cx);
             return;
         }
         self.mark_main_data_changed();
@@ -623,12 +623,10 @@ impl ScriptListApp {
         });
 
         if !registry.has_any_provider() {
-            self.toast_manager.push(
-                components::toast::Toast::error(
-                    "No AI providers configured for script generation",
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_MS)),
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                "No AI providers configured for script generation",
+                cx,
             );
             cx.notify();
             return;
@@ -645,12 +643,10 @@ impl ScriptListApp {
                         stage
                     ),
                 );
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        "No AI models available for script generation",
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    "No AI models available for script generation",
+                    cx,
                 );
                 cx.notify();
                 return;
@@ -671,9 +667,9 @@ impl ScriptListApp {
                 prompt_description.len()
             ),
         );
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             "Generating script with AI...".to_string(),
-            Some(HUD_SHORT_MS),
             cx,
         );
 
@@ -721,12 +717,10 @@ impl ScriptListApp {
                                 script_path.display()
                             ),
                         );
-                        app.toast_manager.push(
-                            components::toast::Toast::success(
-                                format!("Generated and opened {}", script_name),
-                                &app.theme,
-                            )
-                            .duration_ms(Some(TOAST_INFO_MS)),
+                        app.one_window_notice(
+                            crate::line_notice::DONE,
+                            format!("Generated and opened {}", script_name),
+                            cx,
                         );
                         app.close_and_reset_window(cx);
                     }
@@ -735,12 +729,10 @@ impl ScriptListApp {
                             "AI_SCRIPT_GEN",
                             &format!("state=failed attempted=generate_script error={}", error),
                         );
-                        app.toast_manager.push(
-                            components::toast::Toast::error(
-                                format!("Failed to generate script: {}", error),
-                                &app.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_DETAILED_MS)),
+                        app.one_window_notice(
+                            crate::line_notice::FAILED,
+                            format!("Failed to generate script: {}", error),
+                            cx,
                         );
                         cx.notify();
                     }

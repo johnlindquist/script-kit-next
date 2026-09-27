@@ -103,9 +103,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let Some(part) = self.capture_focused_text_part(source) else {
-            self.show_hud(
-                "Nothing to rewrite — select text or focus a text field".to_string(),
-                Some(HUD_SHORT_MS),
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                "Nothing to rewrite — select text or focus a text field",
                 cx,
             );
             return;

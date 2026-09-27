@@ -310,9 +310,8 @@ fn force_quit_command_text_names_the_dialog_it_opens() {
         "Force Quit Apps builtin should open the macOS dialog instead of directly terminating apps"
     );
     assert!(
-        execution.contains("\"builtin/force-quit\"")
-            && execution.contains("\"Open Force Quit Apps\"")
-            && execution.contains("\"Open Force Quit Apps?\""),
-        "Force Quit confirmation should name the dialog-opening action"
+        execution.contains("self.config.requires_confirmation(&entry.id)")
+            && execution.contains("self.one_window_hold("),
+        "built-ins that used to ask first wait in the line above the input instead"
     );
 }

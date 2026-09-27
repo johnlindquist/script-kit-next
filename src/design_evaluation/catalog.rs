@@ -49,16 +49,8 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
         "main-overlay.alias" => return ("scriptList", &["alias-*"]),
         "main-overlay.tab-ai-save-offer" => return ("scriptList", &["tab-ai-save-offer"]),
         "main-overlay.root-dialog" => return ("scriptList", &["root-dialog:*"]),
-        "main-overlay.root-notification" => return ("scriptList", &["root-notification:*"]),
-        "main-overlay.warning" => {
-            return (
-                "scriptList",
-                &["main-warning-banner", "main-warning-banner:dismiss"],
-            )
-        }
         "main-overlay.logs" => return ("scriptList", &["main-log-panel"]),
         "main-overlay.loading" => return ("scriptList", &["main-loading"]),
-        "main-overlay.toast" => return ("scriptList", &["root-notification:*"]),
         "main-overlay.effects" => return ("scriptList", &["main-background-effect"]),
         "main-overlay.debug-grid" => return ("scriptList", &["main-debug-grid"]),
         _ => {}
@@ -146,9 +138,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             ("currentAppCommands", &["input:*", "list:menu-commands"])
         }
         Some("BrowserHistoryView") => ("browserHistory", &["input:*", "list:browser-history"]),
-        Some("DictationHistoryView") => {
-            ("dictationHistory", &["input:*", "list:dictation-history"])
-        }
         Some("NotesBrowseView") => ("notesBrowse", &["input:notes-browse-filter"]),
         Some("DayPage") => ("dayPage", &["input:day-page-editor"]),
         Some("FlowUxView") => ("flowDesk", &["input:flow-ux-filter", "flow-desk:state"]),
@@ -157,43 +146,10 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             "notes.editor" => ("notes", &["input:notes-editor"]),
             "notes.root-dialog" => ("notes", &["root-dialog:*"]),
             "notes.root-notification" => ("notes", &["root-notification:*"]),
-            "notes.actions"
-            | "notes.recent-switcher"
-            | "day-page.switcher"
-            | "secondary.actions" => ("actionsDialog", &["input:actions-search", "list:actions"]),
-            "dictation.microphone-picker" => (
-                "dictationMicrophonePopup",
-                &[
-                    "choice:0:dictation-mic-row-0",
-                    "choice:1:dictation-mic-row-1",
-                ],
-            ),
-            "secondary.confirm" => (
-                "confirmDialog",
-                &[
-                    "panel:confirm-dialog",
-                    "button:0:confirm",
-                    "button:1:cancel",
-                ],
-            ),
-            "secondary.confirm-three-button" => (
-                "confirmDialog",
-                &[
-                    "panel:confirm-dialog",
-                    "button:0:confirm",
-                    "button:1:secondary",
-                    "button:2:cancel",
-                ],
-            ),
-            "secondary.hud" => ("hud", &["panel:hud"]),
-            "secondary.hud-action" => ("hud", &["panel:hud", "hud:primary-action"]),
+            "notes.actions" | "notes.recent-switcher" | "day-page.switcher" => {
+                ("actionsDialog", &["input:actions-search", "list:actions"])
+            }
             "secondary.snap" => ("snapOverlay", &["panel:snap-overlay", "snap:target:*"]),
-            "secondary.footer" => ("footerOverlay", &["footer-action:*"]),
-            "secondary.shortcut-recorder" => ("shortcutRecorder", &["shortcut-key-display"]),
-            id if fixture_ids::DICTATION_FIXTURE_IDS.contains(&id) => (
-                "dictation",
-                &["panel:dictation-overlay", "panel:dictation-signal-band"],
-            ),
             _ => panic!("missing fixture semantic contract: {id}"),
         },
         _ => panic!("missing fixture route contract: {id}"),
@@ -224,22 +180,10 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "ScriptList",
             "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
         ),
-        "main-overlay.root-notification" => (
-            "ScriptList",
-            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
-        ),
-        "main-overlay.warning" => (
-            "ScriptList",
-            "src/main_sections/render_impl.rs::WarningBanner",
-        ),
         "main-overlay.logs" => ("ScriptList", "src/render_script_list/mod.rs::log_panel"),
         "main-overlay.loading" => (
             "ScriptList",
             "src/components/braille_loading.rs::constellation_loading_layer",
-        ),
-        "main-overlay.toast" => (
-            "ScriptList",
-            "src/app_impl/lifecycle_reset.rs::flush_pending_toasts",
         ),
         "main-overlay.effects" => ("ScriptList", "src/effects.rs::background_effect_layer"),
         "main-overlay.debug-grid" => ("ScriptList", "src/debug_grid/mod.rs::render_grid_overlay"),
@@ -298,10 +242,6 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "main.browser-history" => (
             "BrowserHistoryView",
             "src/render_builtins/browser_history.rs",
-        ),
-        "main.dictation-history" => (
-            "DictationHistoryView",
-            "src/render_builtins/dictation_history.rs",
         ),
         "main.notes-browse"
         | "main.notes-browse-no-match"
@@ -383,21 +323,21 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "notes.actions" => (
             "notesAuxiliary",
             "secondary",
-            "src/actions/window.rs",
+            "src/components/staged_actions.rs",
             "src/notes/window/panels.rs::open_actions_panel",
             Some("notes.editor"),
         ),
         "notes.recent-switcher" => (
             "notesAuxiliary",
             "secondary",
-            "src/actions/window.rs",
+            "src/components/staged_actions.rs",
             "src/notes/window/panels.rs::open_browse_panel",
             Some("notes.editor"),
         ),
         "day-page.switcher" => (
             "dayPageAuxiliary",
             "secondary",
-            "src/actions/window.rs",
+            "src/components/staged_actions.rs",
             "src/main_sections/day_page_switcher.rs::open_day_switcher",
             Some("day-page.today"),
         ),
@@ -415,66 +355,12 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
             Some("notes.editor"),
         ),
-        "dictation.recording"
-        | "dictation.confirming"
-        | "dictation.transcribing"
-        | "dictation.delivering"
-        | "dictation.finished"
-        | "dictation.failed" => (
-            "dictation",
-            "dictation",
-            "src/dictation/window.rs",
-            "src/dictation/window.rs::DictationOverlay",
-            None,
-        ),
-        "dictation.microphone-picker" => (
-            "dictationMicrophone",
-            "secondary",
-            "src/dictation/microphone_popup_window.rs",
-            "src/dictation/microphone_popup_window.rs::DictationMicrophonePopupWindow",
-            Some("dictation.recording"),
-        ),
-        "secondary.actions" => (
-            "actions",
-            "secondary",
-            "src/actions/window.rs",
-            "src/actions/dialog.rs",
-            Some("main.script-list"),
-        ),
-        "secondary.confirm" | "secondary.confirm-three-button" => (
-            "confirm",
-            "secondary",
-            "src/confirm/window.rs",
-            "src/confirm/parent_dialog.rs",
-            Some("main.script-list"),
-        ),
-        "secondary.hud" | "secondary.hud-action" => (
-            "hud",
-            "secondary",
-            "src/hud_manager/mod.rs",
-            "src/hud_manager/mod.rs::HudView",
-            None,
-        ),
         "secondary.snap" => (
             "snap",
             "secondary",
             "src/window_control/snap_overlay.rs",
             "src/window_control/snap_overlay.rs::SnapOverlayView",
             None,
-        ),
-        "secondary.footer" => (
-            "footer",
-            "secondary",
-            "src/footer_popup.rs",
-            "src/footer_popup.rs::GpuiFooterOverlay",
-            Some("main.script-list"),
-        ),
-        "secondary.shortcut-recorder" => (
-            "shortcutRecorder",
-            "secondary",
-            "src/app_impl/shortcut_recorder.rs",
-            "src/components/shortcut_recorder.rs",
-            Some("main.script-list"),
         ),
         _ => return None,
     };

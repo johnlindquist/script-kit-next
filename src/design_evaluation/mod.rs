@@ -11,8 +11,6 @@ mod bootstrap;
 mod catalog;
 #[cfg(all(feature = "owned-ui-evaluation", target_os = "macos"))]
 mod conversation_fixtures;
-#[cfg(all(feature = "owned-ui-evaluation", target_os = "macos"))]
-mod dictation_fixtures;
 #[cfg(all(any(test, feature = "owned-ui-evaluation"), target_os = "macos"))]
 pub(crate) mod fixture_ids;
 #[cfg(all(feature = "owned-ui-evaluation", target_os = "macos"))]

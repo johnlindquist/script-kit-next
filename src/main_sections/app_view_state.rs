@@ -361,12 +361,6 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Browsing saved dictation transcripts with search and preview
-    DictationHistoryView {
-        filter: String,
-        selected_index: usize,
-        visible_limit: usize,
-    },
     /// Browsing the canonical Notes search corpus standalone or as an Agent Chat portal.
     NotesBrowseView {
         search: crate::notes::search_model::NoteSearchHostState,
@@ -644,7 +638,7 @@ impl LauncherSurfaceContractVocabulary {
 ///
 /// Oracle-Session `shortcuts-hud-grid-dismiss-logic` — kept separate from
 /// popup-specific dismissal (confirm/actions overlays have their own close
-/// paths through `close_actions_popup_for_current_view` / `confirm::*`).
+/// paths through `close_actions_popup_for_current_view`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DismissTrigger {
     /// Main launcher window lost focus — the `focus_lost` click-outside path.
@@ -872,7 +866,6 @@ impl AppView {
             AppView::TipsView { .. } => "TipsView",
             AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
-            AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
             AppView::DayPage { .. } => "DayPage",
         }
@@ -944,9 +937,9 @@ impl AppView {
             AppView::SdkReferenceView { .. } => SurfaceKind::SdkReference,
             AppView::TipsView { .. } => SurfaceKind::Tips,
             AppView::ScriptTemplateCatalogView { .. } => SurfaceKind::ScriptTemplateCatalog,
-            AppView::BrowserHistoryView { .. }
-            | AppView::DictationHistoryView { .. }
-            | AppView::NotesBrowseView { .. } => SurfaceKind::AttachmentPortalBrowser,
+            AppView::BrowserHistoryView { .. } | AppView::NotesBrowseView { .. } => {
+                SurfaceKind::AttachmentPortalBrowser
+            }
             AppView::DayPage { .. } => SurfaceKind::DayPage,
         }
     }
@@ -991,7 +984,6 @@ impl AppView {
             | AppView::FavoritesBrowseView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::BrowserHistoryView { .. }
-            | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. } => MainViewHeaderInputPolicy::ViewOwnedCanonicalInput,
             AppView::DayPage { .. } => MainViewHeaderInputPolicy::ViewOwnedContextOnly,
             AppView::About { .. }
@@ -1058,7 +1050,6 @@ impl AppView {
             AppView::ArgPrompt { .. } => Some("arg_prompt"),
             AppView::EmojiPickerView { .. } => Some("emoji_picker"),
             AppView::BrowserHistoryView { .. } => Some("browser_history"),
-            AppView::DictationHistoryView { .. } => Some("dictation_history"),
             AppView::DayPage { .. } => Some("day_page"),
             AppView::ChatPrompt { .. } => Some("chat_prompt"),
             AppView::QuickTerminalView { .. } => Some("quick_terminal"),
@@ -1713,8 +1704,6 @@ enum ActionsDialogHost {
     FileSearch,
     /// Actions in clipboard history (restore focus to clipboard search input)
     ClipboardHistory,
-    /// Actions in dictation history (restore focus to dictation search input)
-    DictationHistory,
     /// Actions in favorites browser (restore focus to favorites search input)
     Favorites,
     /// Actions in theme chooser / theme designer (restore focus to theme search input)
@@ -1780,10 +1769,7 @@ enum FileSearchThumbnailPreviewState {
     Unavailable { path: String, message: String },
 }
 
-/// State for the inline shortcut recorder overlay.
-///
-/// When this is Some, the ShortcutRecorder modal is displayed.
-/// Used for configuring keyboard shortcuts without opening an external editor.
+/// The command whose shortcut the main window's "Press the keys for …" view records.
 #[derive(Debug, Clone)]
 struct ShortcutRecorderState {
     /// The unique command identifier (e.g., "scriptlet/my-script", "builtin/clipboard-history")
@@ -1792,33 +1778,25 @@ struct ShortcutRecorderState {
     command_name: String,
 }
 
-/// The open alias editor. When this is Some, its modal is on screen.
+/// The open alias editor. When this is Some, its view is under the input.
 #[derive(Debug)]
 struct AliasInputState {
     /// The unique command identifier (e.g., "builtin/clipboard-history", "app/com.apple.Safari")
     command_id: String,
     /// Human-readable name of the command being configured
     command_name: String,
-    /// The modal's field, shared with the popup that edits it.
-    field: crate::confirm::SharedConfirmTextField,
-    /// Whether the command already had an alias (the modal offers Remove).
+    /// Whether the command already had an alias (empty words remove it).
     has_alias: bool,
-    /// Dropping the state closes the modal: its lifetime check holds a weak
-    /// reference to this token.
-    _open: std::rc::Rc<()>,
 }
 
 /// The open Tab AI save offer, shown after a successful ephemeral script run.
-/// When this is Some, its modal is on screen.
+/// When this is Some, its question is in the line above the input.
 #[derive(Debug, Clone)]
 struct TabAiSaveOfferState {
     /// The execution record for the completed Tab AI run.
     record: crate::ai::TabAiExecutionRecord,
     /// Derived filename stem (e.g. "force-quit-this-app").
     filename_stem: String,
-    /// Dropping the state closes the modal: its lifetime check holds a weak
-    /// reference to this token.
-    _open: std::rc::Rc<()>,
 }
 
 #[cfg(test)]

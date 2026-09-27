@@ -811,12 +811,7 @@ fn is_attached_popup(kind: crate::protocol::AutomationWindowKind) -> bool {
 
 /// Returns `true` for window kinds that are detached (own OS window).
 fn is_detached_window(kind: crate::protocol::AutomationWindowKind) -> bool {
-    matches!(
-        kind,
-        crate::protocol::AutomationWindowKind::Dictation
-            | crate::protocol::AutomationWindowKind::Notes
-            | crate::protocol::AutomationWindowKind::Hud
-    )
+    matches!(kind, crate::protocol::AutomationWindowKind::Notes)
 }
 
 /// Capture a screenshot of a targeted window and produce a popup capture receipt.

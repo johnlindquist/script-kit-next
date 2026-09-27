@@ -168,12 +168,11 @@ fn dictation_to_ai_empty_capture_aborts_without_opening_agent_chat() {
     let empty_arm = &empty_tail[..error_offset];
 
     assert!(
-        empty_arm.contains("WindowEvent::AbortDictation"),
-        "an empty Agent Chat capture must abort the overlay session"
+        empty_arm.contains("one_window_talk_final(String::new(), None, cx)"),
+        "an empty Agent Chat capture must end the voice view with no words"
     );
     assert!(
-        !empty_arm.contains("WindowEvent::FinishDictation")
-            && !empty_arm.contains("send_dictation_to_agent_chat")
+        !empty_arm.contains("send_dictation_to_agent_chat")
             && !empty_arm.contains("open_tab_ai_agent_chat_with_entry_intent"),
         "an empty Agent Chat capture must not reveal or seed Agent Chat"
     );

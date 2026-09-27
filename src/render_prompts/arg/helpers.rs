@@ -401,24 +401,6 @@ impl ScriptListApp {
     fn submit_arg_prompt_from_current_state(&mut self, prompt_id: &str, cx: &mut Context<Self>) {
         match self.resolve_current_arg_submit_outcome() {
             ArgSubmitOutcome::SubmitChoice(value) | ArgSubmitOutcome::SubmitText(value) => {
-                // Intercept built-in mic selection prompt — persist device and
-                // return to the script list instead of sending to a script.
-                if prompt_id == BUILTIN_MIC_SELECT_PROMPT_ID {
-                    if !self.is_valid_builtin_mic_selection(&value) {
-                        self.show_error_toast("Select a microphone from the list", cx);
-                        return;
-                    }
-                    self.record_submit_diagnostic(
-                        "prompt",
-                        "submit_arg_prompt_from_current_state",
-                        Some(prompt_id),
-                        Some(value.as_str()),
-                        true,
-                    );
-                    self.handle_builtin_mic_selection(&value, cx);
-                    return;
-                }
-
                 // Intercept dictation model download consent prompt.
                 if prompt_id == BUILTIN_DICTATION_MODEL_PROMPT_ID {
                     if !matches!(
@@ -429,7 +411,7 @@ impl ScriptListApp {
                             | BUILTIN_DICTATION_MODEL_HIDE
                             | BUILTIN_DICTATION_MODEL_START_PENDING
                     ) {
-                        self.show_error_toast("Choose Download or Not now", cx);
+                        self.notice_failed("Choose Download or Not now", cx);
                         return;
                     }
                     self.record_submit_diagnostic(
@@ -459,7 +441,7 @@ impl ScriptListApp {
                 // Intercept snap mode configuration prompt.
                 if prompt_id == BUILTIN_SNAP_MODE_PROMPT_ID {
                     if !self.is_valid_builtin_snap_mode_selection(&value) {
-                        self.show_error_toast("Select a snap mode from the list", cx);
+                        self.notice_failed("Select a snap mode from the list", cx);
                         return;
                     }
                     self.record_submit_diagnostic(
@@ -482,71 +464,13 @@ impl ScriptListApp {
                 self.submit_prompt_response(prompt_id.to_string(), Some(value), cx);
             }
             ArgSubmitOutcome::InvalidEmpty => {
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     "Type a value to continue".to_string(),
-                    Some(HUD_SHORT_MS),
                     cx,
                 );
             }
         }
-    }
-
-    fn is_valid_builtin_mic_selection(&self, value: &str) -> bool {
-        value == BUILTIN_MIC_DEFAULT_VALUE
-            || matches!(
-                &self.current_view,
-                AppView::ArgPrompt { choices, .. } | AppView::MiniPrompt { choices, .. }
-                    if choices.iter().any(|choice| choice.value == value)
-            )
-    }
-
-    /// Persist the microphone selection and return to the script list.
-    fn handle_builtin_mic_selection(&mut self, value: &str, cx: &mut Context<Self>) {
-        let action = if value == BUILTIN_MIC_DEFAULT_VALUE {
-            crate::dictation::DictationDeviceSelectionAction::UseSystemDefault
-        } else {
-            crate::dictation::DictationDeviceSelectionAction::UseDevice(
-                crate::dictation::DictationDeviceId(value.to_string()),
-            )
-        };
-
-        match crate::dictation::apply_device_selection(&action) {
-            Ok(()) => {
-                let label = match &action {
-                    crate::dictation::DictationDeviceSelectionAction::UseDevice(_) => {
-                        // Find the device name from the choices for a nicer HUD message.
-                        let choices_ref = match &self.current_view {
-                            AppView::ArgPrompt { ref choices, .. }
-                            | AppView::MiniPrompt { ref choices, .. } => Some(choices),
-                            _ => None,
-                        };
-                        if let Some(choices) = choices_ref {
-                            choices
-                                .iter()
-                                .find(|c| c.value == value)
-                                .map(|c| c.name.trim_end_matches(" (current)").to_string())
-                                .unwrap_or_else(|| "Selected".to_string())
-                        } else {
-                            "Selected".to_string()
-                        }
-                    }
-                    crate::dictation::DictationDeviceSelectionAction::UseSystemDefault => {
-                        "System Default".to_string()
-                    }
-                };
-                self.show_hud(format!("Microphone: {label}"), Some(HUD_SHORT_MS), cx);
-            }
-            Err(error) => {
-                tracing::error!(
-                    category = "DICTATION",
-                    error = %error,
-                    "Failed to save microphone preference"
-                );
-                self.show_error_toast(format!("Failed to save microphone: {error}"), cx);
-            }
-        }
-
-        BuiltinPromptSubmitTransition::ReturnToScriptList.apply(self, cx);
     }
 
     fn is_valid_builtin_snap_mode_selection(&self, value: &str) -> bool {
@@ -561,7 +485,7 @@ impl ScriptListApp {
             "expanded" => crate::window_control::SnapMode::Expanded,
             "precision" => crate::window_control::SnapMode::Precision,
             _ => {
-                self.show_error_toast("Invalid snap mode selection", cx);
+                self.notice_failed("Invalid snap mode selection", cx);
                 return;
             }
         };
@@ -578,7 +502,7 @@ impl ScriptListApp {
                     ?target_mode,
                     "Failed to persist snap mode from built-in prompt"
                 );
-                self.show_error_toast(format!("Failed to update snap mode: {error}"), cx);
+                self.notice_failed(format!("Failed to update snap mode: {error}"), cx);
                 return;
             }
         };
@@ -615,7 +539,7 @@ impl ScriptListApp {
             crate::window_control::SnapMode::Precision => "Snap mode: Precision",
         };
 
-        self.show_hud(hud_text.to_string(), Some(HUD_SHORT_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, hud_text.to_string(), cx);
         BuiltinPromptSubmitTransition::CloseMainWindow.apply(self, cx);
     }
 

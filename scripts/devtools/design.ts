@@ -23,7 +23,6 @@ import { fixtureEvidenceIssues, type FixtureBinding } from "./lib/fixture-contra
 import { runSdkJourney } from "./sdk-journey.ts";
 import { runConversationAcceptance, CONVERSATION_FIXTURE_IDS } from "./conversation-journey.ts";
 import { runNotesAcceptance, NOTES_ACCEPTANCE_FIXTURES } from "./notes-acceptance.ts";
-import { runFooterOwnershipJourney, FOOTER_JOURNEY_ID } from "./footer-journey.ts";
 import { runSearchJourney, type SearchRecipeOptions } from "../agentic/launcher-search-recipes.ts";
 import { retainSearchShardEvidence, searchShardArtifactSpecs } from "../agentic/launcher-search-receipt.ts";
 import { SEARCH_CASES, SEARCH_PROVIDERS, SEARCH_FIXTURE_ID, searchContractSpec, searchScheduleComparisonGroup } from "../agentic/launcher-search-contract.ts";
@@ -55,10 +54,9 @@ export const CORE_FIXTURES: Record<CoreJourneyId, readonly string[]> = {
   "launcher-ranking-provider": [SEARCH_FIXTURE_ID],
   "choice-prompt-completion": ["prompt.arg", "prompt.mini", "prompt.select"],
   "editable-prompt-validation": ["prompt.form", "prompt.fields", "prompt.editor", "prompt.template"],
-  "actions-popup-activation": ["main.script-list", "secondary.actions", "secondary.confirm", "dictation.recording", "dictation.microphone-picker", "secondary.footer", "secondary.shortcut-recorder"],
+  "actions-popup-activation": ["main.script-list"],
   "notes-day-roundtrip": [...NOTES_ACCEPTANCE_FIXTURES],
   "conversation-recovery-stop": [...CONVERSATION_FIXTURE_IDS],
-  "dictation-delivery-refusal": ["main.script-list", "dictation.recording", "agent-chat.standard.populated", "agent-chat.popup.history", "day-page.today"],
   "theme-publication-revert": ["main.script-list", "notes.editor", "main.theme-chooser"],
   "close-reopen-stale": ["main.script-list"],
 };
@@ -476,66 +474,11 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
         break;
       }
       case "actions-popup-activation": {
-        const parent = await mount("main.script-list"); const target = await mount("secondary.actions", parent);
-        await input(target, ""); await key(target, "down");
-        const selected = nodes(await active.query(target, "elements")).find(node => node.selected && node.activatable !== false);
-        assertStory(receipt, "selected_production_action", !!selected);
-        const result = await active.act(target, { type: "select", semanticId: String(selected!.semanticId ?? selected!.id), submit: true }); receipt.effects.push(result);
-        assertStory(receipt, "actual_action_sink_delivery", (result.actionReceipt ?? result.results?.[0]?.actionReceipt)?.effect?.kind === "submissionDelivered");
-        await active.inspect(parent); assertStory(receipt, "same_parent_survives_activation", true);
-        const windowLifetimes = async () => {
-          const diagnosis = await active.diagnose();
-          if (diagnosis.operation !== "diagnose" || diagnosis.ok !== true) throw new EvaluationContractError("owned_diagnosis_required");
-          return diagnosis.targets.map(value => `${value.windowId}:${value.windowGeneration}`).sort();
-        };
-        let disabledTargetsExercised = 0;
-        for (const fixture of ["secondary.confirm", "dictation.microphone-picker", "secondary.shortcut-recorder", "secondary.footer"]) {
-          const host = fixture === "dictation.microphone-picker" ? await mount("dictation.recording") : parent;
-          const child = await mount(fixture, host);
-          const deferred = await active.probeSafety(child, "deferredDispatch"); receipt.effects.push(deferred);
-          for (const assertion of nativeSafetyProbeAssertions(deferred)) assertStory(receipt, `${fixture}:${assertion.id}`, assertion.pass);
-          const controls = nodes(await active.query(child, "elements"));
-          const semanticId = fixture === "secondary.confirm" ? "button:0:confirm"
-            : fixture === "dictation.microphone-picker" ? "choice:1:dictation-mic-row-1"
-            : fixture === "secondary.shortcut-recorder" ? "shortcut-cancel-button" : "footer-action:actions";
-          assertStory(receipt, `${fixture}:production_control_present`, controls.some(node => node.semanticId === semanticId && !node.actionDisabled));
-          const before = await active.inspect(child); const windows = await windowLifetimes();
-          const parentBefore = (await active.inspect(host)).fixtureObservation;
-          let refused = false;
-          try { await active.act(child, { type: "select", semanticId, submit: false }); }
-          catch (error) { refused = error instanceof DriverCommandRefused && error.code === "unsupported_command"; }
-          const unchanged = await active.inspect(child);
-          assertStory(receipt, `${fixture}:selection_only_refused_before_mutation`, refused && unchanged.targetIdentity.dataGeneration === before.targetIdentity.dataGeneration &&
-            JSON.stringify(unchanged.fixtureObservation) === JSON.stringify(before.fixtureObservation) && JSON.stringify(await windowLifetimes()) === JSON.stringify(windows));
-          if (fixture === "dictation.microphone-picker") assertStory(receipt, "microphone:selection_only_preserves_completion", (await active.inspect(host)).fixtureObservation.microphoneSelectionCount === parentBefore.microphoneSelectionCount);
-          for (const disabled of controls.filter(node => node.actionDisabled || node.selectable === false && node.elementType === "button")) {
-            disabledTargetsExercised++;
-            let disabledRefused = false;
-            try { await active.act(child, { type: "select", semanticId: disabled.semanticId, submit: true }); }
-            catch (error) { disabledRefused = error instanceof DriverCommandRefused || error instanceof EvaluationContractError; }
-            assertStory(receipt, `${fixture}:disabled_${disabled.semanticId}_refused`, disabledRefused && (await active.inspect(child)).targetIdentity.dataGeneration === before.targetIdentity.dataGeneration);
-          }
-          const expected = (await active.inspect(child)).targetIdentity;
-          const staleCommand = { type: "batch", target: child, expected: { ...expected, windowGeneration: expected.windowGeneration + 1 },
-            commands: [{ type: "selectBySemanticId", semanticId, submit: true }], options: { stopOnError: true, timeout: 5000 } };
-          let staleRefused = false;
-          try { await active.driver.request(staleCommand); } catch (error) { staleRefused = error instanceof DriverCommandRefused && error.code === "stale_target_identity"; }
-          assertStory(receipt, `${fixture}:stale_selection_no_mutation`, staleRefused && (await active.inspect(child)).targetIdentity.dataGeneration === before.targetIdentity.dataGeneration);
-          const activated = await active.act(child, { type: "select", semanticId, submit: true }); receipt.effects.push(activated);
-          assertStory(receipt, `${fixture}:explicit_submit_activates`, !["noOp", "refused"].includes(activated.actionReceipt.effect.kind));
-          const afterWindows = await windowLifetimes();
-          let duplicateRefused = false;
-          try { await active.driver.request({ ...staleCommand, expected }); }
-          catch (error) { duplicateRefused = error instanceof DriverCommandRefused && ["target_not_mounted", "stale_target_identity", "stale_frame_identity", "stale_window_generation"].includes(error.code); }
-          assertStory(receipt, `${fixture}:retained_submit_cannot_execute_twice`, duplicateRefused && JSON.stringify(await windowLifetimes()) === JSON.stringify(afterWindows));
-          if (fixture === "dictation.microphone-picker") {
-            const completed = (await active.inspect(host)).fixtureObservation;
-            assertStory(receipt, "microphone:accepted_selected_row_exactly_once", completed.microphoneSelectionCount === parentBefore.microphoneSelectionCount + 1 && completed.selectedMicrophoneSemanticId === semanticId);
-          }
-          if (fixture === "dictation.microphone-picker") await active.unmount(host);
-        }
-        assertStory(receipt, "disabled_target_activation_exercised", disabledTargetsExercised > 0);
-
+        await mount("main.script-list");
+        const diagnosis = await active.diagnose();
+        if (diagnosis.operation !== "diagnose" || diagnosis.ok !== true) throw new EvaluationContractError("owned_diagnosis_required");
+        const windows = new Set(diagnosis.targets.map(value => value.windowId));
+        assertStory(receipt, "actions_act_in_place_without_a_window", windows.size === 1);
         break;
       }
       case "notes-day-roundtrip": {
@@ -556,79 +499,6 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
         for (const assertion of nativeSafetyProbeAssertions(deferred)) assertStory(receipt, `detached:${assertion.id}`, assertion.pass);
         await active.unmount(detached);
         await runConversationAcceptance(active, receipt);
-        break;
-      }
-      case "dictation-delivery-refusal": {
-        const destination = await mount("main.script-list"); const target = await mount("dictation.recording");
-        await fixtureControl(active, target, { family: "dictation", operation: "begin", destination: "mainFilter" });
-        await fixtureControl(active, target, { family: "dictation", operation: "recording", text: "owned dictation fixture", bars: [0.1,0.2,0.3,0.4,0.5,0.4,0.3,0.2,0.1] });
-        await fixtureControl(active, target, { family: "dictation", operation: "confirm" });
-        await fixtureControl(active, target, { family: "dictation", operation: "transcribe" });
-        let locked = false;
-        try { await fixtureControl(active, target, { family: "dictation", operation: "retarget", destination: "mainFilter" }); }
-        catch (error) { locked = error instanceof EvaluationContractError && error.code === "destination_locked"; }
-        assertStory(receipt, "processing_destination_locked", locked);
-        const delivered = await fixtureControl(active, target, { family: "dictation", operation: "deliver" }); receipt.effects.push(delivered);
-        assertStory(receipt, "actual_internal_insertion", (await active.inspect(destination)).inputValue === "owned dictation fixture");
-        await fixtureControl(active, target, { family: "dictation", operation: "begin", destination: "mainFilter" });
-        await fixtureControl(active, target, { family: "dictation", operation: "recording", text: "stale target fixture", bars: [0.1,0.2,0.3,0.4,0.5,0.4,0.3,0.2,0.1] });
-        await fixtureControl(active, target, { family: "dictation", operation: "confirm" });
-        await fixtureControl(active, target, { family: "dictation", operation: "transcribe" });
-        await active.unmount(destination);
-        const reopened = await mount("main.script-list"); const reopenedInput = (await active.inspect(reopened)).inputValue;
-        const stale = await fixtureControl(active, target, { family: "dictation", operation: "deliver" }); receipt.effects.push(stale);
-        assertStory(receipt, "stale_destination_refused", stale.observation.deliveryOutcome === "staleTarget");
-        assertStory(receipt, "reopened_destination_unchanged", (await active.inspect(reopened)).inputValue === reopenedInput);
-        await active.unmount(target); await active.unmount(reopened);
-        for (const [fixture, destinationKind] of [["agent-chat.standard.populated", "agentChat"], ["day-page.today", "dayPage"]] as const) {
-          const destination = await mount(fixture); const overlay = await mount("dictation.recording");
-          const before = (await active.inspect(destination)).fixtureObservation;
-          const text = "owned exact-window delivery";
-          const prepare = async () => {
-            await fixtureControl(active, overlay, { family: "dictation", operation: "begin", destination: destinationKind });
-            await fixtureControl(active, overlay, { family: "dictation", operation: "recording", text, bars: [0.1,0.2,0.3,0.4,0.5,0.4,0.3,0.2,0.1] });
-            await fixtureControl(active, overlay, { family: "dictation", operation: "confirm" });
-            await fixtureControl(active, overlay, { family: "dictation", operation: "transcribe" });
-          };
-          await prepare();
-          const delivery = await fixtureControl(active, overlay, { family: "dictation", operation: "deliver" }); receipt.effects.push(delivery);
-          const after = (await active.inspect(destination)).fixtureObservation;
-          assertStory(receipt, `${destinationKind}:exact_destination_window`, delivery.observation.deliveryOutcome === "delivered" &&
-            delivery.delivery.destinationWindow.windowId === destination.id && delivery.delivery.destinationWindow.windowGeneration === destination.generation && destination.id !== overlay.id);
-          if (destinationKind === "agentChat") {
-            const old = before.ownedDictation; const inserted = after.ownedDictation;
-            const characters = [...old.input];
-            const expected = [...characters.slice(0, old.selectionStart), ...text, ...characters.slice(old.selectionEnd)].join("");
-            assertStory(receipt, "agentChat:actual_text_selection_and_cached_parent", inserted.input === expected && inserted.selectionStart === old.selectionStart + [...text].length &&
-              inserted.selectionEnd === inserted.selectionStart && inserted.parentWindowId === destination.id && inserted.parentWindowGeneration === destination.generation);
-            const picker = await mount("agent-chat.popup.history", destination); const pickerState = await active.inspect(picker);
-            assertStory(receipt, "agentChat:subsequent_picker_retains_main_parent", pickerState.window.parentWindowId === destination.id && pickerState.window.parentWindowGeneration === destination.generation);
-            await key(picker, "escape");
-            const afterPickerClose = await active.diagnose();
-            receipt.effects.push(afterPickerClose);
-            assertStory(receipt, "agentChat:escape_retires_exact_picker", !afterPickerClose.targets.some(candidate =>
-              candidate.windowId === picker.id && candidate.windowGeneration === picker.generation));
-            assertStory(receipt, "agentChat:focus_return_retains_composer", (await active.inspect(destination)).fixtureObservation.ownedDictation.input === expected);
-          } else {
-            const bytes = Buffer.from(before.inputText); const expected = Buffer.concat([bytes.subarray(0, before.selection.start), Buffer.from(text), bytes.subarray(before.selection.end)]).toString();
-            assertStory(receipt, "dayPage:actual_text_selection_and_canonical_save", after.inputText === expected && after.selection.start === before.selection.start + Buffer.byteLength(text) &&
-              after.selection.end === after.selection.start && after.saved === true && after.documentPath === before.documentPath && after.canonicalContentFingerprint !== before.canonicalContentFingerprint);
-          }
-          await prepare(); const replaced = await mount(fixture); const replacement = (await active.inspect(replaced)).fixtureObservation;
-          const refused = await fixtureControl(active, overlay, { family: "dictation", operation: "deliver" }); receipt.effects.push(refused);
-          const replacementAfterRefusal = (await active.inspect(replaced)).fixtureObservation;
-          // Agent Chat also observes the shared Dictation session. A stale-target
-          // refusal must report its failed phase while leaving every destination
-          // field (including the composer and selection) unchanged.
-          const expectedReplacement = destinationKind === "agentChat"
-            ? { ...replacement, state: { ...replacement.state, dictationPhase: "failed" } }
-            : replacement;
-          receipt.effects.push({ destinationKind, replacement, replacementAfterRefusal });
-          assertStory(receipt, `${destinationKind}:replaced_destination_refused`, refused.observation.deliveryOutcome === "staleTarget" &&
-            JSON.stringify(replacementAfterRefusal) === JSON.stringify(expectedReplacement));
-          receipt.effects.push(await captureEvidence(active, replaced, claim));
-          await active.unmount(overlay); await active.unmount(replaced);
-        }
         break;
       }
       case "theme-publication-revert": {
@@ -1060,9 +930,6 @@ export async function runDesign(argv: string[]): Promise<void> {
     } else if (command === "run" && arg("--scenario") === "sdk-prompt-roundtrip") {
       const journey = await runSdkJourney(reference, claim); observation = { journeys: [journey], assertions: journey.assertions }; cleanups.push(journey.cleanup);
       if (!journey.pass) throw new EvaluationContractError(journey.error ?? "sdk_journey_failed");
-    } else if (command === "run" && arg("--scenario") === FOOTER_JOURNEY_ID) {
-      const journey = await runFooterOwnershipJourney(reference, claim); observation = { journeys: [journey], assertions: journey.assertions }; cleanups.push(journey.cleanup);
-      if (!journey.pass) throw new EvaluationContractError(journey.error ?? "footer_journey_failed");
     } else if (command === "run" && arg("--scenario") === "production-family-matrix") {
       const catalogue = await discoverFixtures(reference, claim); cleanups.push(catalogue.cleanup);
       if (!catalogue.fixtures.length) throw new EvaluationContractError("empty_production_fixture_catalog");

@@ -35,7 +35,6 @@ static SCRIPT_KIT_SELFIE_SEQUENCE: std::sync::atomic::AtomicU64 =
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ScriptKitSelfieWindowKind {
-    Dictation,
     Notes,
     MainOrOther,
 }
@@ -43,7 +42,6 @@ enum ScriptKitSelfieWindowKind {
 impl ScriptKitSelfieWindowKind {
     fn priority(self) -> i32 {
         match self {
-            Self::Dictation => 3,
             Self::Notes => 2,
             Self::MainOrOther => 1,
         }
@@ -51,7 +49,6 @@ impl ScriptKitSelfieWindowKind {
 
     fn state_label(self, fallback: &str) -> String {
         match self {
-            Self::Dictation => "Dictation".to_string(),
             Self::Notes => "Notes".to_string(),
             Self::MainOrOther => fallback.to_string(),
         }
@@ -59,7 +56,6 @@ impl ScriptKitSelfieWindowKind {
 
     fn capture_method_suffix(self) -> &'static str {
         match self {
-            Self::Dictation => "dictation",
             Self::Notes => "notes",
             Self::MainOrOther => "main",
         }
@@ -77,19 +73,10 @@ struct ScriptKitSelfieCandidateSnapshot {
 
 fn classify_script_kit_selfie_candidate(
     candidate: &ScriptKitSelfieCandidateSnapshot,
-    dictation_open: bool,
 ) -> ScriptKitSelfieWindowKind {
     let title = candidate.title.to_lowercase();
     let app_name = candidate.app_name.to_lowercase();
-    let title_or_app_mentions_dictation =
-        title.contains("dictation") || app_name.contains("dictation");
-    let looks_like_titleless_dictation_overlay = dictation_open
-        && candidate.height <= 220
-        && candidate.width >= 240
-        && candidate.width <= 900;
-    if title_or_app_mentions_dictation || looks_like_titleless_dictation_overlay {
-        ScriptKitSelfieWindowKind::Dictation
-    } else if title.contains("notes") || app_name.contains("notes") {
+    if title.contains("notes") || app_name.contains("notes") {
         ScriptKitSelfieWindowKind::Notes
     } else {
         ScriptKitSelfieWindowKind::MainOrOther
@@ -98,13 +85,12 @@ fn classify_script_kit_selfie_candidate(
 
 fn select_script_kit_selfie_candidate_index(
     candidates: &[ScriptKitSelfieCandidateSnapshot],
-    dictation_open: bool,
 ) -> Option<usize> {
     candidates
         .iter()
         .enumerate()
         .max_by_key(|(_, candidate)| {
-            let kind = classify_script_kit_selfie_candidate(candidate, dictation_open);
+            let kind = classify_script_kit_selfie_candidate(candidate);
             let area = candidate.width as i64 * candidate.height as i64;
             (kind.priority(), candidate.focused, area)
         })
@@ -203,13 +189,10 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
             height: candidate.height,
         })
         .collect::<Vec<_>>();
-    let dictation_open = crate::dictation::is_dictation_overlay_open();
-    let candidate_index =
-        select_script_kit_selfie_candidate_index(&candidate_snapshots, dictation_open)
-            .context("no visible Script Kit window found for selfie capture")?;
+    let candidate_index = select_script_kit_selfie_candidate_index(&candidate_snapshots)
+        .context("no visible Script Kit window found for selfie capture")?;
     let candidate = &candidates[candidate_index];
-    let captured_kind =
-        classify_script_kit_selfie_candidate(&candidate_snapshots[candidate_index], dictation_open);
+    let captured_kind = classify_script_kit_selfie_candidate(&candidate_snapshots[candidate_index]);
     let captured_state = captured_kind.state_label(state);
 
     let window_x = candidate.window.x().context("failed to read window x")?;
@@ -456,41 +439,7 @@ mod selfie_capture_tests {
     }
 
     #[test]
-    fn selfie_prefers_dictation_then_notes_before_main_window() {
-        let candidates = vec![
-            ScriptKitSelfieCandidateSnapshot {
-                title: "Script Kit".to_string(),
-                app_name: "Script Kit".to_string(),
-                focused: true,
-                width: 1200,
-                height: 900,
-            },
-            ScriptKitSelfieCandidateSnapshot {
-                title: "Notes".to_string(),
-                app_name: "Script Kit".to_string(),
-                focused: false,
-                width: 350,
-                height: 280,
-            },
-            ScriptKitSelfieCandidateSnapshot {
-                title: "Dictation".to_string(),
-                app_name: "Script Kit".to_string(),
-                focused: false,
-                width: 520,
-                height: 120,
-            },
-        ];
-
-        let index = select_script_kit_selfie_candidate_index(&candidates, true).unwrap();
-        assert_eq!(index, 2);
-        assert_eq!(
-            classify_script_kit_selfie_candidate(&candidates[index], true),
-            ScriptKitSelfieWindowKind::Dictation
-        );
-    }
-
-    #[test]
-    fn selfie_prefers_notes_over_focused_main_when_dictation_is_absent() {
+    fn selfie_prefers_notes_over_the_focused_main_window() {
         let candidates = vec![
             ScriptKitSelfieCandidateSnapshot {
                 title: "Script Kit".to_string(),
@@ -508,38 +457,11 @@ mod selfie_capture_tests {
             },
         ];
 
-        let index = select_script_kit_selfie_candidate_index(&candidates, false).unwrap();
+        let index = select_script_kit_selfie_candidate_index(&candidates).unwrap();
         assert_eq!(index, 1);
         assert_eq!(
-            classify_script_kit_selfie_candidate(&candidates[index], false),
+            classify_script_kit_selfie_candidate(&candidates[index]),
             ScriptKitSelfieWindowKind::Notes
-        );
-    }
-
-    #[test]
-    fn selfie_recognizes_titleless_dictation_overlay_when_dictation_is_open() {
-        let candidates = vec![
-            ScriptKitSelfieCandidateSnapshot {
-                title: "Script Kit".to_string(),
-                app_name: "Script Kit".to_string(),
-                focused: true,
-                width: 1200,
-                height: 900,
-            },
-            ScriptKitSelfieCandidateSnapshot {
-                title: "".to_string(),
-                app_name: "Script Kit".to_string(),
-                focused: false,
-                width: 520,
-                height: 120,
-            },
-        ];
-
-        let index = select_script_kit_selfie_candidate_index(&candidates, true).unwrap();
-        assert_eq!(index, 1);
-        assert_eq!(
-            classify_script_kit_selfie_candidate(&candidates[index], true),
-            ScriptKitSelfieWindowKind::Dictation
         );
     }
 }

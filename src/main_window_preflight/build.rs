@@ -224,7 +224,9 @@ fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResu
         }
         crate::scripts::SearchResult::Fallback(_) => MainWindowPreflightResultRole::Fallback,
         crate::scripts::SearchResult::ScriptIssue(_) => MainWindowPreflightResultRole::ScriptIssue,
-        crate::scripts::SearchResult::Intent(_) => MainWindowPreflightResultRole::Primary,
+        crate::scripts::SearchResult::Intent(_) | crate::scripts::SearchResult::OneWindow(_) => {
+            MainWindowPreflightResultRole::Primary
+        }
         crate::scripts::SearchResult::Agent(_) => MainWindowPreflightResultRole::Agent,
         crate::scripts::SearchResult::SpineProjection(_) => {
             MainWindowPreflightResultRole::RootPassive
@@ -270,7 +272,9 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::ScriptIssue(_) => {
             MainWindowPreflightActionKind::InspectIssues
         }
-        crate::scripts::SearchResult::Intent(_) => MainWindowPreflightActionKind::RunCommand,
+        crate::scripts::SearchResult::Intent(_) | crate::scripts::SearchResult::OneWindow(_) => {
+            MainWindowPreflightActionKind::RunCommand
+        }
         crate::scripts::SearchResult::SpineProjection(_) => {
             MainWindowPreflightActionKind::RunCommand
         }
@@ -582,7 +586,6 @@ pub(crate) fn build_main_window_preflight_receipt(
             | AppView::CurrentAppCommandsView { .. }
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }
-            | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
     ) {
         return None;

@@ -52,36 +52,20 @@ impl TahoeBackdropLayout {
 }
 
 /// Windows whose glass resolves as an untinted popup material
-/// (`NativeGlassSurfaceRole::PopupBackdrop`): the Actions menu, modals, and
-/// attached toasts.
+/// (`NativeGlassSurfaceRole::PopupBackdrop`): the Actions menu.
 /// Keyed by the same label the close paths already pass.
 #[cfg(target_os = "macos")]
 fn window_name_uses_popup_backdrop(window_name: &str) -> bool {
-    matches!(
-        window_name,
-        "Actions popup" | "Confirm popup" | "Toast popup"
-    )
-}
-
-/// Windows whose DEFAULT backdrop reserves the detached-footer band. Notes is
-/// intentionally absent: its default (Notes editor mode) is a full-window
-/// backdrop; Agent mode opts into the band dynamically via
-/// [`set_gpui_window_backdrop_bottom_inset`].
-#[cfg(target_os = "macos")]
-fn window_name_owns_detached_footer(window_name: &str) -> bool {
-    matches!(window_name, "Dictation overlay")
+    window_name == "Actions popup"
 }
 
 #[cfg(target_os = "macos")]
 fn tahoe_backdrop_layout(window_name: &str) -> TahoeBackdropLayout {
-    let bottom_inset = f64::from(crate::footer_popup::main_window_float_footer_strip_height());
     if window_name == "Main window" && crate::footer_popup::main_window_footer_in_stage() {
         // The main footer floats inside the stage on every surface, so the
         // glass fills the window. It keeps the partitioned host's shadow and
         // corner policy (transparent host, depth from the glass edge).
         TahoeBackdropLayout::ContentAboveDetachedFooter { bottom_inset: 0.0 }
-    } else if window_name_owns_detached_footer(window_name) && bottom_inset > 0.0 {
-        TahoeBackdropLayout::ContentAboveDetachedFooter { bottom_inset }
     } else {
         TahoeBackdropLayout::FullWindow
     }
@@ -252,11 +236,7 @@ unsafe fn tahoe_backdrop_corner_radius_for(
     } else if window_name == "Notes" {
         f64::from(crate::ui::chrome::LIQUID_GLASS_WINDOW_RADIUS_PX)
     } else if backdrop_layout.is_detached_footer() {
-        if window_name == "Dictation overlay" {
-            f64::from(crate::ui::chrome::LIQUID_GLASS_PANEL_RADIUS_PX)
-        } else {
-            f64::from(crate::ui::chrome::MAIN_WINDOW_CONTENT_RADIUS_PX)
-        }
+        f64::from(crate::ui::chrome::MAIN_WINDOW_CONTENT_RADIUS_PX)
     } else {
         radius
     }

@@ -133,13 +133,12 @@ describe("fail-closed coverage ownership registry", () => {
     );
   });
 
-  test("Dictation ownership includes visual state, recovery actions, and automation layout", () => {
+  test("Dictation ownership includes the main window's voice view and its list views", () => {
     expect(coverageProfileById("dictation")?.sourceFiles).toEqual(
       expect.arrayContaining([
-        "src/dictation/window.rs",
-        "src/dictation/window_visual_primitives.rs",
-        "src/dictation/window_actions.rs",
-        "src/dictation/window_automation.rs",
+        "src/one_window/talk_host.rs",
+        "src/one_window/voice_lists.rs",
+        "crates/sk-one-window/src/talk.rs",
       ]),
     );
   });
@@ -153,7 +152,7 @@ describe("fail-closed coverage ownership registry", () => {
     expect(report.registryValidation.errors).toEqual([]);
   });
 
-  test("launcher and Dictation History advertise their real direct owners without claiming runtime proof", () => {
+  test("launcher advertises its real direct owner and Dictation History its list owner without claiming runtime proof", () => {
     const launcher = coverageProfileById("main");
     const dictationHistory = coverageProfileById("dictation-history");
 
@@ -165,10 +164,10 @@ describe("fail-closed coverage ownership registry", () => {
       hostKinds: ["MainWindow"],
     });
     expect(dictationHistory?.status).toBe("partial");
+    expect(dictationHistory?.bindingSelectors).toEqual([]);
     expect(dictationHistory?.sourceFiles).toEqual(
       expect.arrayContaining([
-        "src/render_builtins/dictation_history.rs",
-        "src/render_builtins/common.rs",
+        "src/one_window/voice_lists.rs",
         "src/app_layout/collect_elements.rs",
         "src/app_layout/build_layout_info.rs",
       ]),

@@ -3,57 +3,17 @@
 // Contains: handle_action, trigger_action_by_name
 //
 // ============================================================================
-// Feedback Consistency Matrix
+// Feedback
 // ============================================================================
 //
-// Every action handler MUST follow these rules:
-//
-// | Category             | Feedback Type | When                                      |
-// |----------------------|---------------|-------------------------------------------|
-// | **Side-effect: copy**| HUD           | Clipboard write succeeded                 |
-// | **Side-effect: paste**| HUD (flash)  | Simulated Cmd+V succeeded                 |
-// | **Side-effect: pin** | HUD           | Clipboard pin/unpin toggled               |
-// | **Side-effect: share**| HUD          | Share sheet opened                        |
-// | **Side-effect: save**| HUD           | File/snippet saved to disk                |
-// | **Side-effect: delete**| HUD         | Entry/script moved to trash               |
-// | **Side-effect: shortcut/alias change** | HUD | Shortcut removed, alias removed    |
-// | **Side-effect: reload**| HUD         | Scripts reloaded                          |
-// | **Side-effect: system action**| HUD  | System action (volume, dark mode) ok      |
-// | **Side-effect: open external**| HUD  | Editor/Finder/app launched                |
-// | **Side-effect: OCR** | HUD (via copy)| Text extracted and copied                 |
-// | **View transition**  | Silent        | Opening ClipboardHistory, EmojiPicker,    |
-// |                      |               | AppLauncher, WindowSwitcher, FileSearch,  |
-// |                      |               | ThemeChooser, Webcam,                   |
-// |                      |               | ScratchPad, QuickTerminal, ShortcutRec,   |
-// |                      |               | Alias modal, NamingDialog, ActionsDialog  |
-// | **Info / coming soon**| Toast (info) | Feature not yet available, empty state     |
-// | **Warning**          | Toast (warning)| Missing permissions, unsupported platform |
-// | **Error**            | Toast (error) | ALL failure paths — no exceptions          |
-//
-// Rules (enforced by tests in app_actions_tests):
-//  1. Never use both HUD and Toast for the same action path.
-//  2. All error paths MUST show Toast with .error() variant.
-//  3. All HUD/Toast calls MUST use named duration constants below — no inline ms.
-//  4. View transitions are Silent; the new view IS the feedback.
-//  5. Use show_error_toast() helper for errors, copy_to_clipboard_with_feedback()
-//     for clipboard writes, show_unsupported_platform_toast() for platform guards.
+// Nothing pops up. What an action did lands in the ledger, so the line above the
+// input says it (now while the window shows, when it comes back otherwise):
+//  - notice_done() for a side effect that worked (copied, saved, opened, reloaded);
+//  - notice_failed() / notice_failed_with_code() for every failure path;
+//  - one_window_done_undoable() when the change can be taken back (⌘Z);
+//  - one_window_hold() when it can't: it waits in the line before it runs.
+// View transitions are silent; the new view is the feedback.
 // ============================================================================
-
-pub(crate) const HUD_FLASH_MS: u64 = 1000;
-pub(crate) const HUD_SHORT_MS: u64 = 1500;
-pub(crate) const HUD_MEDIUM_MS: u64 = 2000;
-pub(crate) const HUD_2200_MS: u64 = 2200;
-pub(crate) const HUD_2500_MS: u64 = 2500;
-pub(crate) const HUD_LONG_MS: u64 = 3000;
-pub(crate) const HUD_CONFLICT_MS: u64 = 4000;
-pub(crate) const HUD_SLOW_MS: u64 = 5000;
-
-pub(crate) const TOAST_SUCCESS_MS: u64 = 2500;
-pub(crate) const TOAST_INFO_MS: u64 = 3500;
-pub(crate) const TOAST_WARNING_MS: u64 = 5000;
-pub(crate) const TOAST_ERROR_MS: u64 = 5000;
-pub(crate) const TOAST_ERROR_DETAILED_MS: u64 = 8000;
-pub(crate) const TOAST_CRITICAL_MS: u64 = 10000;
 
 /// Unsupported platform message for macOS-only features.
 /// Returns a consistent "only supported on macOS" string for the given feature.

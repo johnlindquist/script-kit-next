@@ -11,10 +11,6 @@ use crate::theme::Theme;
 
 pub(crate) const CONFIRM_MODAL_SHELL_ID: &str = "modal-shell:confirm";
 pub(crate) const MODAL_WIDTH_PX: f32 = 360.0;
-/// Wider request used by parent-attached dialogs. Native modal windows clamp
-/// through `MODAL_WIDTH_PX`, so this variant exists only for callers whose
-/// parent surface can host the wider layout.
-pub(crate) const PARENT_MODAL_WIDTH_PX: f32 = 448.0;
 pub(crate) const MODAL_ACTION_DISABLED_OPACITY: f32 = 0.45;
 pub(crate) const MODAL_ACTION_ROW_TOP_MARGIN_PX: f32 = 12.0;
 pub(crate) const CONFIRM_MODAL_HEADER_ACCENT_WIDTH: f32 = 2.0;
@@ -23,10 +19,12 @@ pub(crate) const CONFIRM_MODAL_HEADER_GAP: f32 = 8.0;
 /// Title row height. Fixed rather than derived from the theme font size, so
 /// modal heights computed from it match what is painted.
 pub(crate) const CONFIRM_MODAL_TITLE_LINE_HEIGHT: f32 = 22.0;
-/// The shell's `border_1()`; modal height math counts it on both edges.
-pub(crate) const CONFIRM_MODAL_BORDER_WIDTH: f32 = 1.0;
 pub(crate) const CONFIRM_MODAL_RADIUS: f32 = 8.0;
 /// Gap kept between a modal and the edges of the screen's visible area.
+#[allow(
+    dead_code,
+    reason = "the binary's shortcut recorder places its window with it"
+)]
 pub(crate) const MODAL_SCREEN_MARGIN_PX: f32 = 12.0;
 
 /// Place a `width` × `height` modal over its parent window.
@@ -36,6 +34,10 @@ pub(crate) const MODAL_SCREEN_MARGIN_PX: f32 = 12.0;
 /// parent parked at a screen edge never pushes its modal off screen. The modal
 /// keeps its own size instead of shrinking to a small parent — that clipped
 /// its buttons — and only shrinks to fit the screen.
+#[allow(
+    dead_code,
+    reason = "the binary's shortcut recorder places its window with it"
+)]
 pub(crate) fn modal_bounds_over_parent(
     parent: Bounds<Pixels>,
     display: Option<Bounds<Pixels>>,

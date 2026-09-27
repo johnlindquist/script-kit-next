@@ -915,7 +915,7 @@ impl ScriptListApp {
         let text = Self::format_script_issues_diagnostics(report);
         match crate::platform::copy_text_to_clipboard(&text) {
             Ok(()) => {
-                self.show_hud("Issues copied".to_string(), Some(2000), cx);
+                self.one_window_notice(crate::line_notice::INFO, "Issues copied".to_string(), cx);
             }
             Err(e) => {
                 tracing::warn!(error = %e, "script_issues copy_text_to_clipboard failed");
@@ -977,7 +977,11 @@ impl ScriptListApp {
                     tracing::warn!(error = %e, "copy_text_to_clipboard failed");
                 } else if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.show_hud("Path copied".to_string(), None, cx);
+                        this.one_window_notice(
+                            crate::line_notice::INFO,
+                            "Path copied".to_string(),
+                            cx,
+                        );
                     });
                 }
             }))
@@ -991,7 +995,11 @@ impl ScriptListApp {
                     tracing::warn!(error = %e, "copy_receipt_path_to_clipboard failed");
                 } else if let Some(app) = entity_for_receipt.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.show_hud("Receipt path copied".to_string(), None, cx);
+                        this.one_window_notice(
+                            crate::line_notice::INFO,
+                            "Receipt path copied".to_string(),
+                            cx,
+                        );
                     });
                 }
             }))

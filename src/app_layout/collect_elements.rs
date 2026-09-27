@@ -193,6 +193,10 @@ impl ScriptListApp {
         include_headers: bool,
         cx: &Context<Self>,
     ) -> ElementCollectionOutcome {
+        if let Some(mut staged) = self.one_window_view_stage_elements(limit, include_headers, cx) {
+            self.append_footer_elements(&mut staged, limit);
+            return staged;
+        }
         let mut outcome = match &self.current_view {
             AppView::ScriptList => {
                 let context = vec![self.main_view_slot_line_element()];
@@ -422,94 +426,6 @@ impl ScriptListApp {
                         limit,
                     ),
                 )
-            }
-
-            AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                visible_limit,
-            } => {
-                let page_result = crate::dictation::search_history_page(filter, 0, *visible_limit);
-                let load_failed = page_result.is_err();
-                let page = page_result
-                    .ok()
-                    .or_else(|| self.dictation_history_previous_page.clone());
-                let rows = page
-                    .as_ref()
-                    .map(|page| {
-                        page.rows
-                            .iter()
-                            .map(|entry| entry.preview.clone())
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                let (mut elements, mut total_count) = self.collect_named_rows(
-                    "dictation-history-filter",
-                    filter.clone(),
-                    "dictation-history",
-                    &rows,
-                    *selected_index,
-                    limit,
-                );
-                if let Some(page) = page.as_ref() {
-                    crate::dictation::apply_dictation_history_row_identities(
-                        &mut elements,
-                        &page.rows,
-                    );
-                }
-                if load_failed {
-                    total_count += 1;
-                    Self::push_limited_element(
-                        &mut elements,
-                        limit,
-                        protocol::ElementInfo {
-                            semantic_id: "status:dictation-history-load-failed".to_string(),
-                            element_type: protocol::ElementType::Panel,
-                            text: Some("Dictation History could not be loaded".to_string()),
-                            value: None,
-                            content: None,
-                            selected: Some(false),
-                            focused: Some(false),
-                            index: None,
-                            role: Some("status".to_string()),
-                            kind: Some("failed".to_string()),
-                            source: Some("dictationHistory".to_string()),
-                            source_name: None,
-                            selectable: Some(false),
-                            status_kind: Some("loadFailed".to_string()),
-                            action_disabled: Some(
-                                "Retry after the History file becomes available".to_string(),
-                            ),
-                            style: None,
-                        },
-                    );
-                }
-                if page.as_ref().is_some_and(|page| page.has_more) {
-                    total_count += 1;
-                    Self::push_limited_element(
-                        &mut elements,
-                        limit,
-                        protocol::ElementInfo {
-                            semantic_id: "button:dictation-history-load-more".to_string(),
-                            element_type: protocol::ElementType::Button,
-                            text: Some("Load More".to_string()),
-                            value: None,
-                            content: None,
-                            selected: Some(false),
-                            focused: Some(false),
-                            index: None,
-                            role: Some("action".to_string()),
-                            kind: Some("loadMore".to_string()),
-                            source: Some("dictationHistory".to_string()),
-                            source_name: None,
-                            selectable: Some(true),
-                            status_kind: None,
-                            action_disabled: None,
-                            style: None,
-                        },
-                    );
-                }
-                ElementCollectionOutcome::complete("dictationHistory", elements, total_count)
             }
 
             AppView::NotesBrowseView { search } => ElementCollectionOutcome::complete_from(
@@ -1639,15 +1555,6 @@ impl ScriptListApp {
                     },
                     None,
                 )),
-                AppView::DictationHistoryView { filter, .. } => Some((
-                    "dictation-history",
-                    if filter.trim().is_empty() {
-                        "Transcripts"
-                    } else {
-                        "Results"
-                    },
-                    None,
-                )),
                 AppView::EmojiPickerView { filter, .. } => Some((
                     "emoji-picker",
                     if filter.trim().is_empty() {
@@ -1701,12 +1608,17 @@ impl ScriptListApp {
         }
 
         self.append_footer_elements(&mut outcome, limit);
-        if let Some(undo) =
-            crate::undo_offer::semantic_element(crate::undo_offer::UndoSurface::Main)
-        {
-            outcome.total_count += 1;
-            if outcome.elements.len() < limit {
-                outcome.elements.push(undo);
+        if matches!(self.current_view, AppView::ScriptList) {
+            let line = self.one_window.slot_line(self.one_window_clock());
+            for (key, label) in line.hints.iter().filter(|(_, label)| !label.is_empty()) {
+                let mut hint = protocol::ElementInfo::button(0, key);
+                hint.semantic_id =
+                    format!("{}:{label}", crate::one_window::slot_line::SLOT_LINE_ID);
+                hint.role = Some("slot-line-hint".to_string());
+                outcome.total_count += 1;
+                if outcome.elements.len() < limit {
+                    outcome.elements.push(hint);
+                }
             }
         }
         outcome

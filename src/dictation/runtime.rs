@@ -11,7 +11,6 @@ use crate::dictation::types::{
     DictationToggleOutcome,
 };
 use crate::dictation::visualizer::silent_bars;
-use crate::dictation::window::DictationOverlayState;
 use crate::dictation::DictationWrongTargetRefusalDraft;
 use anyhow::{Context, Result};
 use gpui::SharedString;
@@ -84,8 +83,6 @@ impl DictationSession {
         }
     }
 }
-
-include!("runtime_owned_fixture.rs");
 
 fn destination_mutable(phase: &DictationSessionPhase) -> bool {
     matches!(
@@ -181,11 +178,6 @@ static TRANSCRIBER: Mutex<Option<CachedTranscriber>> = Mutex::new(None);
 
 /// Monotonic counter distinguishing capture sessions for partial results.
 static SESSION_GENERATION: AtomicU64 = AtomicU64::new(0);
-
-/// Recording identity survives capture teardown through processing and delivery.
-pub(super) fn current_session_generation() -> u64 {
-    SESSION_GENERATION.load(Ordering::Acquire)
-}
 
 /// `true` while a partial transcription inference is running on its worker
 /// thread — prevents overlapping inferences.
@@ -318,20 +310,6 @@ pub fn dictation_elapsed() -> Option<std::time::Duration> {
     SESSION.lock().as_ref().map(|s| s.started_at.elapsed())
 }
 
-/// Update the overlay phase in the live session.
-///
-/// Called by the overlay key handler so the pump tick reads the correct phase
-/// instead of overwriting it.  Returns `false` when no session is active.
-pub fn set_overlay_phase(phase: DictationSessionPhase) -> bool {
-    let mut guard = SESSION.lock();
-    let Some(session) = guard.as_mut() else {
-        return false;
-    };
-    session.overlay_phase = phase;
-    bump_dictation_state_generation();
-    true
-}
-
 /// Return the active dictation session's overlay phase, or `None` when no
 /// session is recording. Used by automation state receipts to surface the
 /// dictation lifecycle (`recording` → `confirming` → `transcribing` …) through
@@ -342,7 +320,7 @@ pub fn current_dictation_phase() -> Option<DictationSessionPhase> {
 
 #[allow(
     dead_code,
-    reason = "the launcher binary snapshots focus before opening the dictation overlay"
+    reason = "the launcher binary snapshots focus before dictation starts"
 )]
 pub(crate) fn replace_dictation_return_origin(origin: crate::dictation::DictationReturnOrigin) {
     *DICTATION_RETURN_ORIGIN.lock() = Some(origin);
@@ -653,6 +631,7 @@ pub fn get_dictation_target_selection() -> Option<crate::dictation::DictationTar
         .or_else(|| LAST_FROZEN_SELECTION.lock().clone())
 }
 
+#[allow(dead_code)] // Binary app_execute uses this; lib-only builds do not.
 pub(crate) fn retain_frozen_selection_for_delivery(
     selection: crate::dictation::DictationTargetSelection,
 ) {
@@ -759,13 +738,6 @@ pub fn delivery_receipt_generation() -> u64 {
 
 pub fn dictation_target_generation() -> u64 {
     DICTATION_TARGET_GENERATION.load(Ordering::Relaxed)
-}
-
-pub(crate) fn record_fixture_dictation_target_selection() -> u64 {
-    debug_assert!(crate::dictation::dictation_overlay_fixture_mode());
-    let generation = DICTATION_TARGET_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
-    bump_dictation_state_generation();
-    generation
 }
 
 pub fn record_wrong_target_refusal(
@@ -963,15 +935,14 @@ pub fn abort_dictation() -> Result<()> {
     Ok(())
 }
 
-/// Snapshot the current overlay visual state from the live session.
+/// What the live session has heard so far.
 ///
-/// Drains pending events (non-blocking) so the level/chunk data stays
-/// current.  Returns `None` when no recording is active.
-pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
+/// Drains pending events (non-blocking) so the chunk data stays current. Returns `None` when no
+/// recording is active.
+pub fn snapshot_live_state() -> Option<crate::dictation::DictationLiveState> {
     let mut guard = SESSION.lock();
     let session = guard.as_mut()?;
 
-    // Non-blocking drain of queued events.
     while let Ok(event) = session.event_rx.try_recv() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => session.chunks.push(chunk),
@@ -986,13 +957,12 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
         .lock()
         .as_ref()
         .filter(|(generation, _)| *generation == session.session_generation)
-        .map(|(_, text)| SharedString::from(text.clone()))
+        .map(|(_, text)| text.clone())
         .unwrap_or_default();
 
-    Some(DictationOverlayState {
+    Some(crate::dictation::DictationLiveState {
         phase: session.overlay_phase.clone(),
         elapsed: session.started_at.elapsed(),
-        bars: session.last_bars,
         transcript,
         target: session.target,
     })
@@ -1161,22 +1131,6 @@ pub fn automation_state() -> serde_json::Value {
                     "stopReason": "capture stop in flight",
                 }),
             )
-        } else if crate::dictation::dictation_overlay_fixture_mode() {
-            let state = crate::dictation::last_dictation_overlay_state();
-            (
-                false,
-                state.phase.as_automation_str().to_string(),
-                Some(format!("{:?}", state.target)),
-                Some(state.target.overlay_label().to_string()),
-                Some(state.elapsed.as_millis() as u64),
-                serde_json::json!({
-                    "available": true,
-                    "bars": state.bars,
-                    "barCount": state.bars.len(),
-                    "source": "fixture.lastOverlayState",
-                    "stopReason": null,
-                }),
-            )
         } else {
             (
                 false,
@@ -1260,34 +1214,6 @@ pub fn automation_state() -> serde_json::Value {
             "redacted": true,
         })
     });
-    let recovery = match crate::dictation::last_dictation_overlay_state().phase {
-        DictationSessionPhase::Failed(state) => Some(serde_json::json!({
-            "operationId": state.operation_id,
-            "destinationId": state.destination_id,
-            "destinationLabel": state.destination_label,
-            "identityGeneration": state.identity_generation,
-            "transcriptId": state.transcript_id,
-            "historyEntryId": state.history_entry_id,
-            "failureCode": format!("{:?}", state.failure.failure.code),
-            "failureCategory": format!("{:?}", state.failure.failure.kind),
-            "safeSummary": state.failure.primary_message(),
-            "diagnosticFingerprint": state.failure.failure.diagnostic.as_ref().map(|value| value.fingerprint.0.clone()),
-            "retrySafety": format!("{:?}", state.retry_safety),
-            "preservation": {
-                "transcriptId": state.preservation_receipt.transcript_id,
-                "transcriptLength": state.preservation_receipt.transcript_len,
-                "transcriptFingerprint": state.preservation_receipt.transcript_fingerprint,
-                "historyEntryId": state.preservation_receipt.history_entry_id,
-                "historySaved": state.preservation_receipt.history_saved,
-            },
-            "actions": state.capabilities.actions().map(|action| format!("{:?}", action)).collect::<Vec<_>>(),
-            "messageOnlyCard": true,
-            "source": "runtime.dictation.recoveryState",
-            "redacted": true,
-        })),
-        _ => None,
-    };
-
     serde_json::json!({
         "schemaVersion": 1,
         "source": "runtime.dictation.automationState",
@@ -1344,7 +1270,6 @@ pub fn automation_state() -> serde_json::Value {
         "deliveryReceiptAvailable": crate::dictation::last_delivery_receipt().is_some(),
         "wrongTargetRefusal": crate::dictation::last_wrong_target_refusal(),
         "wrongTargetRefusalAvailable": crate::dictation::last_wrong_target_refusal().is_some(),
-        "recovery": recovery,
         "stop": crate::dictation::last_stop_receipt(),
         "cleanup": {
             "captureActive": is_recording,
@@ -1353,7 +1278,6 @@ pub fn automation_state() -> serde_json::Value {
             "generation": generation,
             "source": "runtime.dictation.cleanupState",
         },
-        "windowLifecycle": crate::dictation::dictation_window_lifecycle_receipt(),
         "safety": {
             "noMicrophoneCaptureStarted": true,
             "noSystemSettingsOpened": true,

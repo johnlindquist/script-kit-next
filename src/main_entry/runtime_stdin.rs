@@ -286,26 +286,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // Pass #19 automation re-key fix without rendering a
                                 // visible ScriptList frame while AppKit is still
                                 // closing the panel.
-                                // Full teardown for actions-dialog
-                                // (`id: "actions-dialog"`). Pass #29 fix
-                                // (`cmd-k-on-unfocused-clipboard-pops-overlay-not-actions`):
-                                // upgraded from bare `remove_automation_window` to full
-                                // `close_actions_window`. Pass #23's bare registry op
-                                // left the `ACTIONS_WINDOW` static holding a stale handle;
-                                // a later `simulateKey cmd+k` on an unfocused window read
-                                // `is_actions_window_open()=true` and took the CLOSE branch,
-                                // popping whichever overlay was on top instead of opening
-                                // the actions dialog. `close_actions_window` clears the
-                                // static AND the registry; idempotent.
+                                // Hiding lets go of anything staged, like Esc would.
                                 crate::actions::close_actions_window(ctx);
-                                // Sibling teardown for confirm-popup
-                                // (`id: "confirm-popup"`, PromptPopup kind).
-                                // Pass #25 fix: close_confirm_window at
-                                // src/confirm/window.rs:385 is the only
-                                // production removal path; no hide dispatcher
-                                // calls it (`attacker-hide-path-confirm-popup-registry-stale`).
-                                // Pure registry op; idempotent.
-                                crate::windows::remove_automation_window("confirm-popup");
 
                                 // Check if Notes is open for logging only.
                                 let notes_open = notes::is_notes_window_open();
@@ -492,8 +474,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 );
                                 view.open_creation_feedback_payload(payload, ctx);
                             }
-                            ExternalCommand::OpenConfirmPrompt { title, body, confirm_text, cancel_text, request_id: _ } => {
-                                logging::log("STDIN", "Opening confirm modal fixture via stdin command");
+                            ExternalCommand::OpenConfirmPrompt { title, body: _, confirm_text: _, cancel_text: _, request_id: _ } => {
+                                logging::log("STDIN", "Holding an irreversible fixture in the line via stdin command");
                                 script_kit_gpui::set_main_window_visible(true);
                                 script_kit_gpui::mark_window_shown();
                                 platform::show_main_window_without_activation();
@@ -513,24 +495,15 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     ctx,
                                 );
                                 sync_main_automation_window(current_main_automation_bounds(), true, true);
-                                let options = crate::confirm::ParentConfirmOptions {
-                                    title: title.unwrap_or_else(|| "Delete saved item?".to_string()).into(),
-                                    body: body.unwrap_or_else(|| "This action changes local Script Kit state. Confirm to continue or cancel to return to the launcher.".to_string()).into(),
-                                    confirm_text: confirm_text.unwrap_or_else(|| "Delete".to_string()).into(),
-                                    cancel_text: cancel_text.unwrap_or_else(|| "Cancel".to_string()).into(),
-                                    risk: crate::confirm::ConfirmRisk::Destructive,
-                                    width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-                                };
-                                view.open_main_window_confirm(
-                                    options,
-                                    || true,
-                                    |confirmed, _| {
+                                view.one_window_hold(
+                                    "trash",
+                                    title.unwrap_or_else(|| "Delete saved item".to_string()),
+                                    Box::new(|_, _| {
                                         tracing::info!(
                                             category = "STDIN",
-                                            event = "confirm_modal_fixture_resolved",
-                                            confirmed,
+                                            event = "held_fixture_ran",
                                         );
-                                    },
+                                    }),
                                     ctx,
                                 );
                             }
@@ -938,76 +911,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     "legacy AI window removed"
                                 );
                             }
-                            ExternalCommand::OpenDictationOverlayFixture { ref request_id } => {
-                                let rid = request_id.as_ref().map(|id| id.as_str());
-                                crate::dictation::set_dictation_overlay_fixture_mode(true);
-                                match crate::dictation::open_dictation_overlay(ctx) {
-                                    Ok(handle) => {
-                                        let fixture_bounds = gpui::Bounds {
-                                            origin: gpui::point(gpui::px(585.0), gpui::px(177.0)),
-                                            size: gpui::size(gpui::px(560.0), gpui::px(100.0)),
-                                        };
-                                        let _ = handle.update(ctx, |_view, window, cx| {
-                                            crate::components::inline_popup_window::set_inline_popup_window_bounds(window, fixture_bounds, cx);
-                                        });
-                                        crate::windows::set_automation_bounds(
-                                            "dictation",
-                                            Some(crate::protocol::AutomationWindowBounds {
-                                                x: 585.0,
-                                                y: 177.0,
-                                                width: 560.0,
-                                                height: 100.0,
-                                            }),
-                                        );
-                                        let state = crate::dictation::DictationOverlayState {
-                                            phase: crate::dictation::DictationSessionPhase::Recording,
-                                            elapsed: std::time::Duration::from_secs(7),
-                                            bars: [0.12, 0.34, 0.62, 0.88, 0.55, 0.31, 0.74, 0.42, 0.18],
-                                            transcript: gpui::SharedString::default(),
-                                            target: crate::dictation::DictationTarget::ExternalApp,
-                                        };
-                                        let _ = crate::dictation::update_dictation_overlay(state, ctx);
-                                        tracing::info!(
-                                            category = "STDIN",
-                                            event = "dictation_overlay_fixture_opened",
-                                            command = "openDictationOverlayFixture",
-                                            request_id = ?rid,
-                                            "Dictation overlay fixture opened without media capture"
-                                        );
-                                    }
-                                    Err(error) => {
-                                        crate::dictation::set_dictation_overlay_fixture_mode(false);
-                                        tracing::error!(
-                                            category = "STDIN",
-                                            event = "dictation_overlay_fixture_failed",
-                                            command = "openDictationOverlayFixture",
-                                            request_id = ?rid,
-                                            error = %error,
-                                            "Dictation overlay fixture failed"
-                                        );
-                                    }
-                                }
-                            }
-                            ExternalCommand::OpenDictationMicrophonePopupFixture { ref request_id } => {
-                                let rid = request_id.as_ref().map(|id| id.as_str());
-                                match crate::dictation::open_dictation_microphone_popup_fixture(ctx) {
-                                    Ok(()) => tracing::info!(
-                                        category = "STDIN",
-                                        event = "dictation_microphone_popup_fixture_opened",
-                                        command = "openDictationMicrophonePopupFixture",
-                                        request_id = ?rid,
-                                        "Dictation microphone popup fixture opened without persistence"
-                                    ),
-                                    Err(error) => tracing::error!(
-                                        category = "STDIN",
-                                        event = "dictation_microphone_popup_fixture_failed",
-                                        command = "openDictationMicrophonePopupFixture",
-                                        request_id = ?rid,
-                                        error = %error,
-                                        "Dictation microphone popup fixture failed"
-                                    ),
-                                }
-                            }
                             ExternalCommand::GetConfigFingerprint { ref request_id } => {
                                 let rid = request_id.as_ref().map(|id| id.as_str());
                                 match crate::config::current_config_fingerprint_receipt() {
@@ -1062,7 +965,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
                             ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
-                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), window, ctx);
+                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
                             }
                         },
                         StdinCommand::Protocol(message) => {

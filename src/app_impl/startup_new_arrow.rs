@@ -14,14 +14,12 @@
                 // Keep main list arrow routing scoped to the main window so notes/AI/actions
                 // windows receive their own navigation key events.
                 let is_notes = crate::notes::is_notes_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                let skip_secondary = is_notes || is_actions;
+                let skip_secondary = is_notes;
                 if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "arrow_interceptor_skipped_secondary_window",
                         is_notes,
-                        is_actions,
                         skip_secondary,
                     );
                     return;
@@ -32,14 +30,6 @@
                 let is_down = crate::ui_foundation::is_key_down(key);
                 let is_left = crate::ui_foundation::is_key_left(key);
                 let is_right = crate::ui_foundation::is_key_right(key);
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
                 // Check for arrow keys (no modifiers except shift for selection)
                 // Left/right included for EmojiPickerView grid navigation;
                 // other views fall through to _ => {} so Input handles them normally.
@@ -60,7 +50,6 @@
                                     } else if is_down {
                                         dialog.update(cx, |d, cx| d.move_down(cx));
                                     }
-                                    crate::actions::notify_actions_window(cx);
                                 }
                                 cx.stop_propagation();
                                 return;
@@ -192,7 +181,6 @@
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
-                                            crate::actions::notify_actions_window(cx);
                                         }
                                         cx.stop_propagation();
                                         return;
@@ -474,47 +462,6 @@
                                     }
                                     cx.stop_propagation();
                                 }
-                                AppView::DictationHistoryView {
-                                    selected_index,
-                                    filter,
-                                    visible_limit,
-                                } => {
-                                    let retained_len = this
-                                        .dictation_history_previous_page
-                                        .as_ref()
-                                        .map(|page| page.rows.len())
-                                        .unwrap_or(0);
-                                    let filtered_len = crate::dictation::search_history_page(
-                                        filter,
-                                        0,
-                                        *visible_limit,
-                                    )
-                                    .map(|page| page.rows.len())
-                                    .unwrap_or(retained_len);
-
-                                    if filtered_len == 0 {
-                                        *selected_index = 0;
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-
-                                    if *selected_index >= filtered_len {
-                                        *selected_index = filtered_len - 1;
-                                    }
-
-                                    if is_up && *selected_index > 0 {
-                                        *selected_index -= 1;
-                                        this.dictation_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    } else if is_down && *selected_index + 1 < filtered_len {
-                                        *selected_index += 1;
-                                        this.dictation_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    }
-                                    cx.stop_propagation();
-                                }
                                 AppView::SearchAiPresetsView {
                                     selected_index,
                                     filter,
@@ -657,7 +604,6 @@
                                                 dialog.update(cx, |d, cx| d.move_down(cx));
                                             }
                                             // Notify the actions window to re-render
-                                            crate::actions::notify_actions_window(cx);
                                         }
                                         cx.stop_propagation();
                                         return;
@@ -768,14 +714,12 @@
 
                 // Skip processing if this keystroke is from a secondary window.
                 let is_notes = crate::notes::is_notes_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                let skip_secondary = is_notes || is_actions;
+                let skip_secondary = is_notes;
                 if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "home_end_interceptor_skipped_secondary_window",
                         is_notes,
-                        is_actions,
                         skip_secondary,
                     );
                     return;
@@ -783,15 +727,6 @@
 
                 let key = event.keystroke.key.as_str();
                 let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
-
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
 
                 // Home key or Cmd+Up → jump to first item
                 // End key or Cmd+Down → jump to last item

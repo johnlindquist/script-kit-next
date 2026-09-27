@@ -6,7 +6,6 @@
 //! # Components
 //!
 //! - [`Button`] - Interactive button with variants (Primary, Ghost, Icon)
-//! - [`Toast`] - Toast notification with variants (Success, Warning, Error, Info)
 //! - [`Scrollbar`] - Minimal native-style scrollbar for overlay on lists
 //! - [`FormTextField`] - Text input for text/password/email/number types
 //! - [`FormTextArea`] - Multi-line text input
@@ -66,8 +65,9 @@ pub(crate) mod resource_preview;
 pub mod scrollbar;
 pub mod section_divider;
 pub mod shortcut_recorder;
+#[allow(dead_code, reason = "the binary's ScriptListApp and Day Page draw it")]
+pub(crate) mod staged_actions;
 pub mod text_input;
-pub mod toast;
 pub mod unified_list_item;
 #[cfg(test)]
 mod unified_list_item_tests;
@@ -91,7 +91,6 @@ pub(crate) use confirm_modal_shell::{
     confirm_modal_header, confirm_modal_shell, modal_action_row, ConfirmModalShellConfig,
     ModalActionRowButton, CONFIRM_MODAL_RADIUS, CONFIRM_MODAL_SHELL_ID,
     MODAL_ACTION_DISABLED_OPACITY, MODAL_ACTION_ROW_TOP_MARGIN_PX, MODAL_WIDTH_PX,
-    PARENT_MODAL_WIDTH_PX,
 };
 #[allow(unused_imports)]
 pub use focusable_prompt_wrapper::{
@@ -124,10 +123,7 @@ pub(crate) use info_state::{
     InfoTextMetric, InfoTonePresentation, InfoTypeScale, INFO_SPACING, INFO_TYPE_SCALE,
 };
 #[allow(unused_imports)]
-pub(crate) use inline_dropdown::{
-    inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors,
-    InlineDropdownEmptyState, InlineDropdownSynopsis,
-};
+pub(crate) use inline_dropdown::{inline_dropdown_visible_range_from_start, InlineDropdownColors};
 #[allow(unused_imports)]
 pub use inline_prompt_input::InlinePromptInput;
 #[allow(unused_imports)]
@@ -194,8 +190,6 @@ pub use shortcut_recorder::{
 };
 #[allow(unused_imports)]
 pub use text_input::{TextInputState, TextSelection};
-#[allow(unused_imports)]
-pub use toast::{Toast, ToastAction, ToastActionId, ToastColors, ToastId, ToastVariant};
 #[allow(unused_imports)]
 pub use unified_list_item::{
     Density, ItemState, LeadingContent, ListItemLayout, SectionHeader, TextContent,

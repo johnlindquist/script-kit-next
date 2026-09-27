@@ -27,7 +27,6 @@ impl ScriptListApp {
                 | AppView::SettingsView { .. }
                 | AppView::FavoritesBrowseView { .. }
                 | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::CreationFeedback { .. }
@@ -82,10 +81,6 @@ impl ScriptListApp {
         event: crate::window_orchestrator::WindowEvent,
         cx: &mut Context<Self>,
     ) {
-        let restore_dictation_origin = matches!(
-            &event,
-            crate::window_orchestrator::WindowEvent::AbortDictation
-        );
         let commands = self.window_orchestrator.dispatch(event);
         if commands.is_empty() {
             return;
@@ -125,9 +120,6 @@ impl ScriptListApp {
                         );
                         this.pending_focus = Some(target);
                         cx.notify();
-                    }
-                    if restore_dictation_origin {
-                        let _ = this.restore_dictation_return_origin(cx);
                     }
                 });
             }

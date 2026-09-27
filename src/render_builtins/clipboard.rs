@@ -374,7 +374,7 @@ impl ScriptListApp {
                         if let Some(entry) = selected_entry {
                             if let Err(e) = clipboard_history::quick_look_entry(&entry) {
                                 logging::log("ERROR", &format!("Quick Look failed: {}", e));
-                                this.show_error_toast(format!("Quick Look failed: {}", e), cx);
+                                this.notice_failed(format!("Quick Look failed: {}", e), cx);
                             }
                         }
                         return;

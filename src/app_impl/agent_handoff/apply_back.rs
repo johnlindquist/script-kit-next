@@ -149,13 +149,7 @@ impl ScriptListApp {
                 .as_ref()
                 .map(|route| &route.source_type),
         );
-        self.toast_manager.push(
-            crate::components::toast::Toast::error(
-                format!("{apply_label} failed: select terminal text or wait for output."),
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_ERROR_MS)),
-        );
+        self.one_window_notice(crate::line_notice::FAILED, format!("{apply_label} failed: select terminal text or wait for output."), cx);
         cx.notify();
     }
 
@@ -169,10 +163,7 @@ impl ScriptListApp {
             ),
             None => "Paste Back target is still preparing. Try again in a moment.".to_string(),
         };
-        self.toast_manager.push(
-            crate::components::toast::Toast::error(message, &self.theme)
-                .duration_ms(Some(TOAST_ERROR_MS)),
-        );
+        self.one_window_notice(crate::line_notice::FAILED, message, cx);
         cx.notify();
     }
 
@@ -186,13 +177,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         if text.trim().is_empty() {
-            self.toast_manager.push(
-                crate::components::toast::Toast::error(
-                    "No terminal selection or harness output was available".to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_MS)),
-            );
+            self.one_window_notice(crate::line_notice::FAILED, "No terminal selection or harness output was available".to_string(), cx);
             cx.notify();
             return;
         }
@@ -201,21 +186,9 @@ impl ScriptListApp {
             crate::ai::TabAiSourceType::RunningCommand => {
                 self.close_tab_ai_harness_terminal(cx);
                 if self.try_set_prompt_input(text.clone(), cx) {
-                    self.toast_manager.push(
-                        crate::components::toast::Toast::success(
-                            tab_ai_apply_back_success_message(&route.source_type).to_string(),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_SUCCESS_MS)),
-                    );
+                    self.one_window_notice(crate::line_notice::DONE, tab_ai_apply_back_success_message(&route.source_type).to_string(), cx);
                 } else {
-                    self.toast_manager.push(
-                        crate::components::toast::Toast::error(
-                            "The original prompt is no longer active".to_string(),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                    );
+                    self.one_window_notice(crate::line_notice::FAILED, "The original prompt is no longer active".to_string(), cx);
                 }
                 cx.notify();
             }
@@ -223,22 +196,10 @@ impl ScriptListApp {
                 self.close_tab_ai_harness_terminal(cx);
                 match write_tab_ai_apply_back_clipboard_text(&text) {
                     Ok(()) => {
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::success(
-                                tab_ai_apply_back_success_message(&route.source_type).to_string(),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_SUCCESS_MS)),
-                        );
+                        self.one_window_notice(crate::line_notice::DONE, tab_ai_apply_back_success_message(&route.source_type).to_string(), cx);
                     }
                     Err(error) => {
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::error(
-                                format!("Failed to update clipboard: {error}"),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
-                        );
+                        self.one_window_notice(crate::line_notice::FAILED, format!("Failed to update clipboard: {error}"), cx);
                     }
                 }
                 cx.notify();
@@ -266,19 +227,13 @@ impl ScriptListApp {
                             script_path_bytes = path_str.len(),
                             "tab_ai_apply_back.script_saved"
                         );
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::success(
-                                format!(
+                        self.one_window_notice(crate::line_notice::DONE, format!(
                                     "Saved and running generated script: {}",
                                     script_path
                                         .file_stem()
                                         .and_then(|s| s.to_str())
                                         .unwrap_or("script"),
-                                ),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_SUCCESS_MS)),
-                        );
+                                ), cx);
                         self.execute_script_by_path(&path_str, cx);
                     }
                     Err(error) => {
@@ -287,13 +242,7 @@ impl ScriptListApp {
                             error = %error,
                             "tab_ai_apply_back.script_save_failed"
                         );
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::error(
-                                format!("Failed to save generated script: {error}"),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
-                        );
+                        self.one_window_notice(crate::line_notice::FAILED, format!("Failed to save generated script: {error}"), cx);
                     }
                 }
                 cx.notify();
@@ -345,25 +294,13 @@ impl ScriptListApp {
                         app.update(cx, |this, cx| {
                             match result {
                                 Ok(()) => {
-                                    this.toast_manager.push(
-                                        crate::components::toast::Toast::success(
-                                            tab_ai_apply_back_success_message(
+                                    this.one_window_notice(crate::line_notice::DONE, tab_ai_apply_back_success_message(
                                                 &route_for_toast.source_type,
                                             )
-                                            .to_string(),
-                                            &this.theme,
-                                        )
-                                        .duration_ms(Some(TOAST_SUCCESS_MS)),
-                                    );
+                                            .to_string(), cx);
                                 }
                                 Err(error) => {
-                                    this.toast_manager.push(
-                                        crate::components::toast::Toast::error(
-                                            format!("Failed to apply result: {error}"),
-                                            &this.theme,
-                                        )
-                                        .duration_ms(Some(TOAST_ERROR_MS)),
-                                    );
+                                    this.one_window_notice(crate::line_notice::FAILED, format!("Failed to apply result: {error}"), cx);
                                 }
                             }
                             cx.notify();
@@ -491,7 +428,7 @@ impl ScriptListApp {
         // content behind. The allowed production timer path below is unchanged.
         if let Err(error) = prime {
             tracing::warn!(%error, "Tab AI apply-back clipboard priming refused");
-            self.show_error_toast(format!("Paste Back failed: {error}"), cx);
+            self.notice_failed(format!("Paste Back failed: {error}"), cx);
             TAB_AI_APPLY_BACK_CLIPBOARD_PROBE.with(|probe| {
                 if let Some(probe) = probe.borrow().as_ref() {
                     let mut probe = probe.borrow_mut();

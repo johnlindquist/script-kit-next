@@ -6866,7 +6866,6 @@ mod from_dialog_builtin_action_validation_tests_38 {
     //! - New chat last_used icon BoltFilled, model icon Settings
     //! - Note switcher current note "• " prefix and preview trimming
     //! - count_section_headers edge cases
-    //! - WindowPosition enum variants and defaults
     //! - ProtocolAction::with_value constructor
     //! - score_action with whitespace and special character searches
     //! - Cross-context description keyword validation
@@ -6880,7 +6879,7 @@ mod from_dialog_builtin_action_validation_tests_38 {
         use crate::actions::types::{
             Action, ActionCategory, AnchorPosition, ScriptInfo, SectionStyle,
         };
-        use crate::actions::window::{count_section_headers, WindowPosition};
+        use crate::actions::dialog::count_section_headers;
         use crate::clipboard_history::ContentType;
         use crate::designs::icon_variations::IconName;
         use crate::file_search::{FileInfo, FileType};
@@ -7627,30 +7626,6 @@ mod from_dialog_builtin_action_validation_tests_38 {
             let actions = vec![Action::new("a", "A", None, ActionCategory::ScriptContext)];
             let filtered = vec![0];
             assert_eq!(count_section_headers(&actions, &filtered), 0);
-        }
-
-        // =========================================================================
-        // 18. WindowPosition enum variants and Default
-        // =========================================================================
-
-        #[test]
-        fn window_position_default_is_bottom_right() {
-            assert_eq!(WindowPosition::default(), WindowPosition::BottomRight);
-        }
-
-        #[test]
-        fn window_position_bottom_right_variant_exists() {
-            let _pos = WindowPosition::BottomRight;
-        }
-
-        #[test]
-        fn window_position_top_right_variant_exists() {
-            let _pos = WindowPosition::TopRight;
-        }
-
-        #[test]
-        fn window_position_top_center_variant_exists() {
-            let _pos = WindowPosition::TopCenter;
         }
 
         // =========================================================================
@@ -11144,7 +11119,7 @@ mod from_dialog_builtin_action_validation_tests_41 {
         use crate::actions::builders::*;
         use crate::actions::dialog::ActionsDialog;
         use crate::actions::types::{Action, ActionCategory, ScriptInfo};
-        use crate::actions::window::count_section_headers;
+        use crate::actions::dialog::count_section_headers;
         use crate::clipboard_history::ContentType;
         use crate::designs::icon_variations::IconName;
         use crate::file_search::{FileInfo, FileType};

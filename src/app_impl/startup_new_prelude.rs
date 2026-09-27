@@ -186,7 +186,7 @@
                     // Close actions popup when main input receives focus
                     // This ensures consistent behavior: clicking the input closes actions
                     // just like pressing Cmd+K would
-                    if this.show_actions_popup || is_actions_window_open() {
+                    if this.show_actions_popup {
                         logging::log(
                             "FOCUS",
                             "Main input focused while actions open - closing actions via shared close path",
@@ -222,7 +222,7 @@
                 }
                 InputEvent::PressEnter { .. } => {
                     if matches!(this.current_view, AppView::ThemeChooserView { .. }) {
-                        if !this.show_actions_popup && !actions::is_actions_window_open() {
+                        if !this.show_actions_popup {
                             this.submit_theme_chooser_from_input_enter(window, cx);
                         } else {
                             logging::log(

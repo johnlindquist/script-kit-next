@@ -30,6 +30,9 @@ impl OneWindow {
             self.record_ran(now, &d.row, d.app, d.said);
             self.home(now, String::new(), fx);
         }
+        if !self.user_turn(now) {
+            self.talk_decide(now, fx);
+        }
     }
 
     /// The list drew again: the height may start its pause over or stop holding.

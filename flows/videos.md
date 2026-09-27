@@ -114,7 +114,7 @@ Never git commit, push, tag, stash, reset, or clean unless the user explicitly a
 ## Worked examples (follow this shape exactly)
 Example 1 — "add a dictation demo video":
 1. git status --short --branch
-2. Read the harness; check the staging vocabulary for what dictation content can be staged (pushDictationResult targets; openDictationOverlayFixture for the overlay visual).
+2. Read the harness; check the staging vocabulary for what dictation content can be staged (pushDictationResult targets; the result shows in the main window's voice view).
 3. Add a Scenario with stage seeds + a run storyboard that ends on a visible view; pick theme/effect that flatter the beat.
 4. Hand back or run: bun scripts/agentic/glamour-video-probe.ts dictation-demo
 5. Frame-check 3 beats, report receipts and file paths. Done.

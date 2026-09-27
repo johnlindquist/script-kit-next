@@ -194,12 +194,10 @@ impl ScriptListApp {
                                 match crate::browser_tabs::activate_tab(&tab) {
                                     Ok(()) => this.hide_main_and_reset(cx),
                                     Err(error) => {
-                                        this.toast_manager.push(
-                                            components::toast::Toast::error(
-                                                activation_action.failure_message(error),
-                                                &this.theme,
-                                            )
-                                            .duration_ms(Some(TOAST_ERROR_MS)),
+                                        this.one_window_notice(
+                                            crate::line_notice::FAILED,
+                                            activation_action.failure_message(error),
+                                            cx,
                                         );
                                         cx.notify();
                                     }
@@ -311,16 +309,8 @@ impl ScriptListApp {
                                                                     this.hide_main_and_reset(cx)
                                                                 }
                                                                 Err(_) => {
-                                                                    this.toast_manager.push(
-                                                                        components::toast::Toast::error(
-                                                                            activation_action
-                                                                                .generic_failure_message(),
-                                                                            &this.theme,
-                                                                        )
-                                                                        .duration_ms(Some(
-                                                                            TOAST_ERROR_MS,
-                                                                        )),
-                                                                    );
+                                                                    this.one_window_notice(crate::line_notice::FAILED, activation_action
+                                                                                .generic_failure_message(), cx);
                                                                     cx.notify();
                                                                 }
                                                             }

@@ -180,12 +180,11 @@ fn coverage_pins_dictation_states_media_and_privacy_boundaries() {
         "wrong-target rejection",
         "cleanup without TCC/System Settings mutation",
         "dictation hotkey",
-        "target badge click",
         "devtools.media.inspect",
         "dictation.deliver-fixture pushDictationResult target delivery generation, transcript fingerprint, and main-filter insertion range receipt",
         "passive microphone permission status",
         "hotkey binding snapshot",
-        "src/dictation/window.rs",
+        "src/one_window/talk_host.rs",
         "src/dictation/runtime.rs",
         "src/dictation/types.rs",
         "src/dictation/setup.rs",
@@ -310,6 +309,44 @@ fn main_cli_early_frame_freshness_uses_target_scoped_state_not_screenshots() {
         !MAIN_DEVTOOLS.contains("captureScreenshot"),
         "main early-frame freshness proof must not use screenshots as proof"
     );
+}
+
+#[test]
+fn coverage_source_files_exist_for_notes_and_dictation() {
+    for path in [
+        "src/notes/window.rs",
+        "src/notes/window/keyboard.rs",
+        "src/notes/window/ai_handoff.rs",
+        "src/notes/window/window_ops.rs",
+        "src/notes/actions_panel.rs",
+        "src/notes/window/panels.rs",
+        "src/notes/storage.rs",
+        "src/notes/model.rs",
+        "src/one_window/talk_host.rs",
+        "src/dictation/runtime.rs",
+        "src/dictation/types.rs",
+        "src/dictation/setup.rs",
+        "src/dictation/capture.rs",
+        "src/dictation/device.rs",
+        "src/dictation/transcription.rs",
+        "src/main_entry/runtime_tray_hotkeys.rs",
+        "src/ai/agent_chat/ui/ui_variant.rs",
+        "src/ai/focused_text/platform_bridge.rs",
+        "src/ai/agent_chat/launch.rs",
+        "src/ai/agent_chat/profiles.rs",
+        "src/platform/accessibility/focused_text.rs",
+        "src/platform/accessibility/mutation.rs",
+        "src/app_layout/collect_elements.rs",
+    ] {
+        assert!(
+            fs::metadata(path).is_ok(),
+            "coverage source reference should exist: {path}"
+        );
+        assert!(
+            COVERAGE.contains(path),
+            "coverage CLI should expose source reference: {path}"
+        );
+    }
 }
 
 #[test]

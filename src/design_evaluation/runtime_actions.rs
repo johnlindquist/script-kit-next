@@ -1,12 +1,11 @@
+use super::conversation_fixtures as chat;
 use super::runtime::{Evaluator, Mounted, RootOwner, BATCH_STEP_REQUEST_ID_PREFIX};
-use super::{conversation_fixtures as chat, dictation_fixtures as dictation};
 use crate::protocol::{
-    AutomationTargetIdentitySnapshot, AutomationWindowTarget, DictationFixtureCommand,
-    DictationFixtureDestination, FixtureControl, FlowFixtureCommand, SdkChatFixtureCommand,
+    AutomationTargetIdentitySnapshot, AutomationWindowTarget, FixtureControl, FlowFixtureCommand,
+    SdkChatFixtureCommand,
 };
-use crate::{AppView, ScriptListApp};
+use crate::AppView;
 use anyhow::{ensure, Context as _, Result};
-use gpui::Entity;
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -99,7 +98,6 @@ impl Evaluator {
         self.validate_expected(target, expected)?;
         let mounted = self.resolve(target)?.clone();
         let baseline = self.begin_action(&mounted, target)?;
-        let mut completed_delivery = None;
         let mut explicit_observation = None;
         match control {
             FixtureControl::Search(command) => {
@@ -222,198 +220,6 @@ impl Evaluator {
                 };
                 chat::drive_sdk_chat_fixture(&prompt, control, action, &mut cx)?;
             }
-            FixtureControl::Dictation(command) => {
-                let RootOwner::Dictation(view) = &mounted.owner else {
-                    anyhow::bail!("dictation_host_required");
-                };
-                let main = self.main.clone();
-                match command {
-                    DictationFixtureCommand::Begin { destination } => {
-                        let main = main.context("dictation_destination_unavailable")?;
-                        let selection = main
-                            .update(&mut **self.cx.app.borrow_mut(), |main, cx| {
-                                main.capture_dictation_target_selection(
-                                    dictation_destination(destination),
-                                    cx,
-                                )
-                            })
-                            .map_err(anyhow::Error::msg)?;
-                        self.dictation_controls.remove(&mounted.info.id);
-                        let control = mounted.handle.update(
-                            &mut **self.cx.app.borrow_mut(),
-                            |_, window, cx| {
-                                dictation::begin_dictation_fixture(view, selection, window, cx)
-                            },
-                        )??;
-                        self.dictation_controls
-                            .insert(mounted.info.id.clone(), control);
-                    }
-                    DictationFixtureCommand::Retarget { destination } => {
-                        let control = self
-                            .dictation_controls
-                            .get(&mounted.info.id)
-                            .context("dictation_fixture_not_started")?;
-                        let phase = view
-                            .read(&self.cx.app.borrow())
-                            .fixture_state()
-                            .phase
-                            .clone();
-                        ensure!(
-                            matches!(
-                                phase,
-                                crate::dictation::DictationSessionPhase::Recording
-                                    | crate::dictation::DictationSessionPhase::Confirming
-                            ),
-                            "destination_locked"
-                        );
-                        let main = main.context("dictation_destination_unavailable")?;
-                        let selection = main
-                            .update(&mut **self.cx.app.borrow_mut(), |main, cx| {
-                                main.capture_dictation_target_selection(
-                                    dictation_destination(destination),
-                                    cx,
-                                )
-                            })
-                            .map_err(anyhow::Error::msg)?;
-                        mounted.handle.update(
-                            &mut **self.cx.app.borrow_mut(),
-                            |_, window, cx| {
-                                dictation::drive_dictation_fixture(
-                                    view,
-                                    control,
-                                    dictation::DictationFixtureEvent::Retarget(selection),
-                                    window,
-                                    cx,
-                                )
-                            },
-                        )??;
-                    }
-                    DictationFixtureCommand::Deliver {} => {
-                        let control = self
-                            .dictation_controls
-                            .get(&mounted.info.id)
-                            .context("dictation_fixture_not_started")?;
-                        mounted.handle.update(
-                            &mut **self.cx.app.borrow_mut(),
-                            |_, window, cx| {
-                                dictation::drive_dictation_fixture(
-                                    view,
-                                    control,
-                                    dictation::DictationFixtureEvent::Deliver,
-                                    window,
-                                    cx,
-                                )
-                            },
-                        )??;
-                        let request = control.delivery_request()?;
-                        let mut destination_window = None;
-                        let outcome = if let Some(main) = main {
-                            let destination = main
-                                .update(&mut **self.cx.app.borrow_mut(), |main, cx| {
-                                    main.owned_dictation_destination_window(&request, cx)
-                                });
-                            match destination {
-                                Ok(handle) => {
-                                    let owner = self.mounted.values().find(|candidate| candidate.handle == handle)
-                                        .context("dictation_destination_not_mounted")?;
-                                    destination_window = Some(json!({"windowId":owner.info.id,"windowGeneration":owner.info.generation}));
-                                    handle.update(&mut **self.cx.app.borrow_mut(), |_, window, cx| {
-                                        main.update(cx, |main, cx| main.deliver_owned_dictation_request(request.clone(), window, cx))
-                                    })?.map_err(anyhow::Error::msg)?
-                                }
-                                Err(detail) => crate::dictation::DictationDeliveryOutcome::Refused {
-                                    failure: crate::ai::reliability::destination_failure(true, &detail),
-                                    reason: crate::dictation::DictationDeliveryFailureReason::DestinationStale,
-                                },
-                            }
-                        } else {
-                            crate::dictation::DictationDeliveryOutcome::Refused {
-                                failure: crate::ai::reliability::destination_failure(true, "The frozen main window was closed"),
-                                reason: crate::dictation::DictationDeliveryFailureReason::DestinationStale,
-                            }
-                        };
-                        if request.selection.target
-                            == crate::dictation::DictationTarget::NotesEditor
-                            && matches!(
-                                &outcome,
-                                crate::dictation::DictationDeliveryOutcome::Delivered { .. }
-                            )
-                        {
-                            let notes = crate::windows::automation_window_by_id("notes")
-                                .context("delivered_notes_owner_missing")?;
-                            destination_window = Some(
-                                json!({"windowId":notes.id,"windowGeneration":notes.generation}),
-                            );
-                        }
-                        completed_delivery = Some(match &outcome {
-                            crate::dictation::DictationDeliveryOutcome::Delivered {
-                                mutation_receipt,
-                                ..
-                            } => {
-                                json!({"deliveryOutcome":"delivered","destinationWindow":destination_window,"mutationReceipt":{
-                                "deliveryId":mutation_receipt.delivery_id,"insertedLength":mutation_receipt.inserted_length,
-                                "insertionStart":mutation_receipt.insertion_start,"insertionEnd":mutation_receipt.insertion_end,"duplicate":mutation_receipt.duplicate}})
-                            }
-                            crate::dictation::DictationDeliveryOutcome::Refused {
-                                reason, ..
-                            } => {
-                                json!({"deliveryOutcome": if *reason == crate::dictation::DictationDeliveryFailureReason::DestinationStale { "staleTarget" } else { "refused" }})
-                            }
-                            crate::dictation::DictationDeliveryOutcome::Failed { .. } => {
-                                json!({"deliveryOutcome":"failed"})
-                            }
-                        });
-                        mounted.handle.update(
-                            &mut **self.cx.app.borrow_mut(),
-                            |_, window, cx| {
-                                dictation::drive_dictation_fixture(
-                                    view,
-                                    control,
-                                    dictation::DictationFixtureEvent::DeliveryCompleted {
-                                        request: Box::new(request),
-                                        outcome,
-                                    },
-                                    window,
-                                    cx,
-                                )
-                            },
-                        )??;
-                    }
-                    command => {
-                        let event = match command {
-                            DictationFixtureCommand::Recording { text, bars } => {
-                                dictation::DictationFixtureEvent::Recording {
-                                    transcript: text,
-                                    bars,
-                                }
-                            }
-                            DictationFixtureCommand::Confirm {} => {
-                                dictation::DictationFixtureEvent::Confirm
-                            }
-                            DictationFixtureCommand::Resume {} => {
-                                dictation::DictationFixtureEvent::Resume
-                            }
-                            DictationFixtureCommand::Transcribe {} => {
-                                dictation::DictationFixtureEvent::Transcribe
-                            }
-                            DictationFixtureCommand::OpenMicrophonePicker {} => {
-                                dictation::DictationFixtureEvent::OpenMicrophonePicker
-                            }
-                            _ => unreachable!(),
-                        };
-                        let control = self
-                            .dictation_controls
-                            .get(&mounted.info.id)
-                            .context("dictation_fixture_not_started")?;
-                        mounted.handle.update(
-                            &mut **self.cx.app.borrow_mut(),
-                            |_, window, cx| {
-                                dictation::drive_dictation_fixture(view, control, event, window, cx)
-                            },
-                        )??;
-                    }
-                }
-            }
             FixtureControl::Theme(command) => {
                 ensure!(
                     mounted.fixture_id == "main.theme-chooser",
@@ -433,6 +239,20 @@ impl Evaluator {
                     self.theme_fixture
                         .control(command, &mut self.cx.app.borrow_mut())?,
                 );
+            }
+            FixtureControl::OneWindow(crate::protocol::OneWindowFixtureCommand::TalkTo {
+                destination,
+            }) => {
+                let RootOwner::Main(main) = &mounted.owner else {
+                    anyhow::bail!("one_window_host_required");
+                };
+                let dest = match destination {
+                    crate::protocol::OneWindowTalkDestination::Chat => sk_one_window::Dest::Chat,
+                    crate::protocol::OneWindowTalkDestination::Note => sk_one_window::Dest::Note,
+                };
+                main.update(&mut **self.cx.app.borrow_mut(), |app, cx| {
+                    app.one_window_talk_began(false, Some(dest), cx)
+                });
             }
             FixtureControl::Fault {
                 operation: crate::protocol::ThemeFaultOperation::SuppressThemeNotification,
@@ -455,7 +275,7 @@ impl Evaluator {
             self.finish_action(request_id, "fixtureControl", &mounted, target, baseline)?;
         Ok(
             json!({"operation":"fixtureControl","ok":true,"target":self.identity(target)?,
-            "observation":observation,"delivery":completed_delivery,"actionReceipt":action_receipt}),
+            "observation":observation,"actionReceipt":action_receipt}),
         )
     }
 
@@ -478,11 +298,6 @@ impl Evaluator {
                     crate::validate_gpui_expected_identity(expected, &actual)
                         .map_err(anyhow::Error::msg)?;
                     main.update(cx, |app, cx| match command {
-                        crate::protocol::BatchCommand::SetInput { text }
-                            if app.alias_input_state.is_some() =>
-                        {
-                            super::main_fixtures::set_main_overlay_input(app, text, window, cx)
-                        }
                         crate::protocol::BatchCommand::SelectBySemanticId {
                             semantic_id,
                             submit,
@@ -576,10 +391,10 @@ impl Evaluator {
             "batch_timeout_exceeds_session_limit"
         );
         let started = std::time::Instant::now();
-        let generation = mounted
-            .info
-            .generation
-            .context("window_generation_missing")?;
+        ensure!(
+            mounted.info.generation.is_some(),
+            "window_generation_missing"
+        );
         let target = Self::instance(mounted)?;
         let mut results = Vec::with_capacity(commands.len());
         let mut failed_at = None;
@@ -621,53 +436,6 @@ impl Evaluator {
                         &expected,
                         timeout.saturating_sub(started.elapsed()),
                     );
-                }
-                if matches!(mounted.owner, RootOwner::Footer) {
-                    let crate::protocol::BatchCommand::SelectBySemanticId {
-                        semantic_id,
-                        submit,
-                    } = command
-                    else {
-                        anyhow::bail!("footer_requires_semantic_selection");
-                    };
-                    let ticket = crate::footer_popup::footer_fixture_select(
-                        &mounted.info.id,
-                        generation,
-                        semantic_id,
-                        *submit,
-                        &mut self.cx.app.borrow_mut(),
-                    )?
-                    .context("footer_action_not_found")?;
-                    loop {
-                        if ticket.poll()? {
-                            return Ok(Some(semantic_id.clone()));
-                        }
-                        ensure!(
-                            started.elapsed() < timeout,
-                            "footer_action_completion_timeout"
-                        );
-                        self.tick(true)?;
-                    }
-                }
-                if matches!(mounted.owner, RootOwner::ShortcutRecorder) {
-                    let crate::protocol::BatchCommand::SelectBySemanticId {
-                        semantic_id,
-                        submit,
-                    } = command
-                    else {
-                        anyhow::bail!("recorder_requires_semantic_selection_or_gpui_key");
-                    };
-                    ensure!(
-                        crate::shortcut_recorder::shortcut_fixture_select(
-                            &mounted.info.id,
-                            generation,
-                            semantic_id,
-                            *submit,
-                            &mut self.cx.app.borrow_mut()
-                        )?,
-                        "recorder_action_not_found"
-                    );
-                    return Ok(Some(semantic_id.clone()));
                 }
                 crate::windows::with_runtime_window_dispatch(mounted.handle, || {
                     crate::apply_registered_surface_command(
@@ -767,13 +535,8 @@ impl Evaluator {
             None
         };
         let observation = if after.is_none()
-            && matches!(
-                mounted.owner,
-                RootOwner::Main(_)
-                    | RootOwner::Notes(_)
-                    | RootOwner::ShortcutRecorder
-                    | RootOwner::Footer
-            ) {
+            && matches!(mounted.owner, RootOwner::Main(_) | RootOwner::Notes(_))
+        {
             Value::Null
         } else {
             self.fixture_observation(mounted)?
@@ -885,69 +648,5 @@ impl Evaluator {
             was_deferred: false,
             effect,
         })
-    }
-
-    pub(super) fn mount_auxiliary(
-        &mut self,
-        fixture_id: &str,
-        family: &str,
-        parent: Option<&AutomationWindowTarget>,
-    ) -> Result<Mounted> {
-        let parent = match parent {
-            Some(target) => self.resolve(target)?.clone(),
-            None => self.ensure_main()?,
-        };
-        self.tick(true)?;
-        let mut cx = self.cx.app.borrow_mut();
-        let (info, owner) = match family {
-            "footer" => (
-                crate::footer_popup::mount_owned_footer_fixture(
-                    fixture_id,
-                    &parent.info,
-                    parent.handle,
-                    &mut cx,
-                )?,
-                RootOwner::Footer,
-            ),
-            "shortcutRecorder" => {
-                let main: Entity<ScriptListApp> =
-                    self.main.clone().context("shortcut_main_owner_missing")?;
-                (
-                    super::main_fixtures::mount_shortcut_fixture(
-                        fixture_id,
-                        main,
-                        &parent.info,
-                        parent.handle,
-                        &mut cx,
-                    )?,
-                    RootOwner::ShortcutRecorder,
-                )
-            }
-            _ => anyhow::bail!("unknown_auxiliary_family"),
-        };
-        let handle = crate::windows::get_runtime_window_handle_for_generation(
-            &info.id,
-            info.generation.context("auxiliary_generation_missing")?,
-        )
-        .context("auxiliary_handle_missing")?;
-        Ok(Mounted {
-            fixture_id: fixture_id.into(),
-            info,
-            handle,
-            owner,
-        })
-    }
-}
-
-fn dictation_destination(
-    destination: DictationFixtureDestination,
-) -> crate::dictation::DictationTarget {
-    use crate::dictation::DictationTarget;
-    match destination {
-        DictationFixtureDestination::MainFilter => DictationTarget::MainWindowFilter,
-        DictationFixtureDestination::MainPrompt => DictationTarget::MainWindowPrompt,
-        DictationFixtureDestination::Notes => DictationTarget::NotesEditor,
-        DictationFixtureDestination::AgentChat => DictationTarget::TabAiHarness,
-        DictationFixtureDestination::DayPage => DictationTarget::DayPageToday,
     }
 }

@@ -1251,26 +1251,6 @@ impl ScriptListApp {
                     "input:notes-browse-filter",
                 ))
             }
-            AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                visible_limit,
-            } => {
-                let ids = self
-                    .dictation_history_current_or_previous_page(filter, *visible_limit)
-                    .map(|page| page.rows)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|entry| entry.semantic_id())
-                    .collect();
-                Some(self.active_tracked_list_scroll_receipt(
-                    "dictation_history",
-                    &self.dictation_history_scroll_handle,
-                    ids,
-                    *selected_index,
-                    "input:dictation-history-filter",
-                ))
-            }
             _ => None,
         }
     }
@@ -1730,7 +1710,6 @@ mod builtin_browser_consistency_audit {
             include_str!("current_app_commands.rs"),
         ),
         ("design_picker.rs", include_str!("design_picker.rs")),
-        ("dictation_history.rs", include_str!("dictation_history.rs")),
         ("emoji_picker.rs", include_str!("emoji_picker.rs")),
         ("favorites.rs", include_str!("favorites.rs")),
         ("file_search.rs", include_str!("file_search.rs")),

@@ -22,9 +22,9 @@ impl ScriptListApp {
         if let Err(error) = crate::platform::copy_text_to_clipboard(&example.input) {
             tracing::warn!(%error, "tips copy-example failed");
         } else {
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 "Copied example — paste it in the main menu".to_string(),
-                Some(2000),
                 cx,
             );
         }

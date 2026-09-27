@@ -1,7 +1,6 @@
 //! Source-level contract for the native main-window footer surface owner.
 
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
-const DICTATION_WINDOW_SOURCE: &str = include_str!("../src/dictation/window.rs");
 const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 const VIBRANCY_CONFIG_SOURCE: &str = include_str!("../src/platform/vibrancy_config.rs");
@@ -325,28 +324,17 @@ fn footer_context_chips_do_not_count_as_action_slots() {
 }
 
 #[test]
-fn live_dictation_overlay_does_not_join_main_window_footer_ownership() {
-    let footer_map = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
+fn cwd_and_agent_model_are_not_rendered_as_main_window_footer_chips() {
     assert!(
-        footer_map.contains("AppView::DictationHistoryView { .. } => Some(\"dictation_history\")"),
-        "DictationHistoryView is the main-window dictation history footer surface"
+        !UI_WINDOW_SOURCE.contains("FooterButtonConfig::new(FooterAction::Cwd")
+            && !UI_WINDOW_SOURCE.contains("FooterButtonConfig::new(FooterAction::AgentModel"),
+        "cwd and Agent/model are shared-header controls and must not be duplicated as native footer buttons"
     );
     assert!(
-        !footer_map.contains("dictation_overlay"),
-        "Live DictationOverlay must not be owned by AppView::native_footer_surface"
-    );
-    assert!(
-        DICTATION_WINDOW_SOURCE.contains("DICTATION_OVERLAY_FOOTER_SURFACE")
-            && DICTATION_WINDOW_SOURCE.contains("\"dictation_overlay\""),
-        "Dictation overlay may keep a local footer identity for tests/logging"
-    );
-    assert!(
-        DICTATION_WINDOW_SOURCE.contains("dictation_footer_action_channel")
-            && DICTATION_WINDOW_SOURCE.contains("MainWindowFooterConfig")
-            && !DICTATION_WINDOW_SOURCE.contains("active_main_window_footer_surface")
-            && DICTATION_WINDOW_SOURCE.contains("FooterAction::Stop")
-            && DICTATION_WINDOW_SOURCE.contains("FooterAction::Close"),
-        "Dictation overlay must reuse the native footer renderer without joining main-window surface ownership"
+        !UI_WINDOW_SOURCE.contains("prepend_global_main_window_left_chips")
+            && !UI_WINDOW_SOURCE.contains("global_main_window_left_chip_buttons")
+            && !UI_WINDOW_SOURCE.contains("current_view_shows_global_left_chips"),
+        "main-window footer config must not have a global cwd/model prepending path"
     );
 }
 
@@ -389,8 +377,8 @@ fn gpui_footer_overlay_is_default_and_keeps_native_material_as_background_only()
             ),
         "AppKit left-info text must also be bypassed only while GPUI overlay owns footer visuals"
     );
-    // Non-main footer hosts (detached Agent Chat, dictation overlay) have no
-    // GPUI overlay child window, so they must keep native glyph rendering.
+    // Non-main footer hosts (detached Agent Chat) have no GPUI overlay child
+    // window, so they must keep native glyph rendering.
     let window_sync = function_body(
         FOOTER_POPUP_SOURCE,
         "pub(crate) fn sync_window_footer_popup",

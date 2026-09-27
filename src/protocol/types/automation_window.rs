@@ -35,11 +35,8 @@ pub enum AutomationWindowTarget {
 pub enum AutomationWindowKind {
     Main,
     Notes,
-    Dictation,
     ActionsDialog,
     PromptPopup,
-    /// Transient HUD notification pill (floating, focusless, auto-dismissing).
-    Hud,
     /// Production snap target overlay, independent of a launcher parent.
     SnapOverlay,
 }
@@ -53,10 +50,8 @@ impl AutomationWindowKind {
         match self {
             AutomationWindowKind::Main => "main",
             AutomationWindowKind::Notes => "notes",
-            AutomationWindowKind::Dictation => "dictation",
             AutomationWindowKind::ActionsDialog => "actionsDialog",
             AutomationWindowKind::PromptPopup => "promptPopup",
-            AutomationWindowKind::Hud => "hud",
             AutomationWindowKind::SnapOverlay => "snapOverlay",
         }
     }

@@ -20,7 +20,7 @@ use super::dialog::{
 use super::types::{
     Action, ActionCategory, AnchorPosition, ScriptInfo, SearchPosition, SectionStyle,
 };
-use super::window::{WindowPosition, count_section_headers};
+use super::dialog::count_section_headers;
 use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;
 use crate::file_search::{FileInfo, FileType};
@@ -1082,31 +1082,6 @@ fn coerce_all_headers_returns_none() {
     assert_eq!(coerce_action_selection(&rows, 2), None);
 }
 
-// =========================================================================
-// 20. Window position variants exhaustive test
-// =========================================================================
-
-#[test]
-fn window_position_all_variants_have_unique_debug_repr() {
-    let variants = [
-        WindowPosition::BottomRight,
-        WindowPosition::TopRight,
-        WindowPosition::TopCenter,
-    ];
-    let debug_strs: Vec<String> = variants.iter().map(|v| format!("{:?}", v)).collect();
-    // Each variant should have a distinct debug representation
-    for (i, s) in debug_strs.iter().enumerate() {
-        for (j, other) in debug_strs.iter().enumerate() {
-            if i != j {
-                assert_ne!(
-                    s, other,
-                    "Variants {} and {} should have distinct Debug repr",
-                    i, j
-                );
-            }
-        }
-    }
-}
 
 // =========================================================================
 // 21. ProtocolAction — edge case field combos

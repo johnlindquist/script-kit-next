@@ -122,10 +122,6 @@ const ALLOWLIST: &[(&str, &str)] = &[
         "pre-policy survivor: exact count over stable call token",
     ),
     (
-        "tests/dictation_background_sync_contract.rs",
-        "pre-policy survivor: exact count over stable qualified call token",
-    ),
-    (
         "tests/filter_input_preflight_contract.rs",
         "pre-policy survivor: singleton inside function_body scope",
     ),

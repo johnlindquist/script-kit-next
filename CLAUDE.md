@@ -142,9 +142,9 @@ the Actions menu, Notes, and every other window. The contract:
   stays alpha `0.0` via `GLASS_HIDDEN_PARK_ALPHA`; zero-alpha parking of a
   visible window is a contract violation (runtime tripwire
   `glass_hidden_park_on_visible_window`);
-- Actions and confirm modals settle on the untinted popup material
-  (`NativeGlassSurfaceRole::PopupBackdrop`) over the already-tinted main
-  glass; every other window uses the window material;
+- every window uses the window material; the untinted popup material
+  (`NativeGlassSurfaceRole::PopupBackdrop`) has no window left, since ⌘K acts
+  in place and confirm modals are retired;
 - Notes reveals its body with the fade (reveal delay `0ms`) and unlocks native
   resizing at `configured_at + settle_duration_ms`;
 - glass material: stability tint floor `0.35` and capsule veil `0.0`
@@ -235,19 +235,44 @@ A fresh launcher always highlights a real row (`first_selectable_index` — a Br
 - Only entries where the user deliberately targeted a row (⌘K then "Ask the model about it", actions payloads, explicit handoffs) may add the row's part with `ChatEntry::with`.
 - The contract is locked by `a_quick_question_takes_nothing_along_from_the_launcher` in `src/app_impl/ui_window_one_window_chat_tests.rs`; keep new entry points honest against it rather than weakening the test.
 
-## Modal Contract
+## Hold, Undo, and the Line (replaces the Modal Contract)
 
-Modals have repeatedly leaked keys (Tab that never moved focus, ⌘↵ that ran a destructive primary, Notes and Agent Chat modals whose keys went into the editor underneath, an Add Alias editor whose Enter ran a launcher row), replaced their window instead of floating over it, and hung off the edge of a display. The 2026-09-24 audit made every modal one component with one key owner:
+There are no modals, toasts, HUD windows, or banners. The main window is the only window, and
+everything that used to pop up now lands in the line above the input, which the
+`sk_one_window` reducer owns. The 2026-09-26 one-window build (lane A) deleted `src/confirm/**`,
+`src/toast_popup.rs`, `src/toast_manager/**`, `src/undo_offer.rs`, `src/hud_manager/**`,
+`src/warning_banner.rs`, and the modal key-owner interceptor. Do not bring any of them back.
 
-- Every modal is the shared confirm popup (`src/confirm/**`): a native glass child window over its parent — main, Notes, or Dictation. Never render a modal as an `AppView` or an in-window overlay that replaces or covers the window's content. Main-window callers open it with `ScriptListApp::open_main_window_confirm` / `open_main_window_modal`; a modal that asks for a value uses `confirm::open_parent_input_dialog` with a `ConfirmTextField` (the alias editor does).
-- `components::confirm_modal_shell::modal_bounds_over_parent` places modals: over the on-screen part of the parent, fully inside the display's visible area, never shrunk to a small parent.
-- `install_modal_key_owner_interceptor` (`src/app_impl/startup/modal_key_owner.rs`) is registered before every other keystroke interceptor and routes keys to the popup (`confirm::route_window_key_to_confirm_popup`) from its parent window. Do not add confirm checks to individual interceptors or element key listeners — bindings such as Root's Tab focus cycle run before element listeners and pre-empt them.
-- `vendor/gpui/src/window.rs` returns immediately when an interceptor stops propagation. Upstream GPUI still hands that key to the first element listener on the focus path; restoring that behavior double-routes every modal key.
-- `confirm::confirm_window_key_intent` is the single key map: only a bare Enter activates; Esc and ⌘W dismiss; Tab/⇧Tab (and ←/→ without a field) move focus; ⌘I runs the secondary button. Keycaps follow focus: the focused button shows ↵.
-- Every modal declares a `ConfirmRisk`. `Safe` is the default. `Destructive` (quit, stop, terminate) paints the primary label red and keeps Enter on it. `Irreversible` (permanent deletes, clearing history) paints it red and starts focus on Cancel, so Enter never destroys anything unasked. The SDK passes `confirm({ destructive })` / `confirm({ irreversible })`.
-- Reversible actions get no modal. Moving a script, file, or note to Trash happens at once and offers Undo through `crate::undo_offer` (a toast with ⌘Z, projected as `button:undo`). Only ask first when the action cannot be taken back.
-- One modal at a time. A modal requested while another is open waits in `confirm::parent_dialog`'s queue and opens after the current one closes; it never replaces it.
-- Prove modal changes with `bun scripts/agentic/modal-keyboard-audit-probe.ts`. It presses keys with `simulateGpuiEvent` on the window macOS would deliver them to (`simulateKey` calls surface methods directly and cannot show a leak) and checks each modal's real frame from the macOS window server against every display's visible area. GPUI reports window bounds relative to the window's own display, so automation bounds alone cannot prove a modal is on screen.
+- Every action declares its risk instead of asking. Irreversible (quit, shut down, empty the
+  Trash, clear history, permanent deletes, anything in `DEFAULT_CONFIRMATION_COMMANDS`) waits
+  8 s in the line ("Runs in 8s" / "Sending in 8s") and runs only when the wait runs out
+  untouched: `ScriptListApp::one_window_hold` / `one_window_hold_or_stop` in the main window,
+  `crate::line_notice::hold` from Notes, Agent Chat, Dictation or any lib-side code. Typing with
+  the list showing pauses it ("Paused while you type"); ⌘Z on an empty input or the staged
+  "Don't send it" row stops it, and the line says "Didn't run: …".
+- Reversible actions happen at once and offer ⌘Z in the line:
+  `ScriptListApp::one_window_done_undoable` / `crate::line_notice::undoable`. The line shows the
+  `⌘Z undo` hint (projected by `getElements` as `main-view-slot-line:undo`); ⌘Z on an empty input
+  runs the kept undo exactly once.
+- Word from the app (a script's `hud()`, failures, "Copied", script errors) is a notice:
+  `ScriptListApp::one_window_notice` (`notice_done` / `notice_failed` in action handlers) or
+  `crate::line_notice::say`. It lands in the ledger, so the line reads "Last · <words> just now"
+  at once while the window shows and when it comes back if it was hidden. A notice never covers
+  a waiting hold or a staged subject.
+- A question that genuinely needs an answer (SDK `confirm()` with no risk, provider sign-in,
+  the Tab AI "Save this script?" offer, Agent Chat recovery) is staged in the line and its
+  answers become rows: `ScriptListApp::one_window_ask` / `crate::line_notice::ask`. Esc lets go
+  of it and answers its cancel. SDK `confirm({ destructive })` / `confirm({ irreversible })`
+  holds instead and resolves `true` when the wait runs out, `false` if stopped.
+- Values are typed in the main input, never in a popup field: the alias editor is a view under
+  the same input (Enter saves, empty words remove the alias, Esc goes back).
+- What still needs setting up leads the empty list under a "Needs setup" header (bun missing →
+  "bun is not installed · Install from bun.sh"; Enter opens bun.sh). Nothing is drawn above the
+  line and the input never moves.
+- Prove these with the reducer (`./scripts/agentic/agent-cargo.sh test -p sk-one-window`,
+  including `tests/replay.rs` and `tests/properties/`), the app tests in
+  `enter_button_property_tests::ledger`, and owned-evaluator frames
+  (`scripts/agentic/one-window-frames.ts`) that show exactly one owned window.
 
 # Agent Cargo Wrapper
 

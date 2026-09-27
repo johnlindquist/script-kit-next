@@ -338,7 +338,7 @@ impl ScriptListApp {
                                 {
                                     return false;
                                 }
-                                app.show_error_toast(error, cx);
+                                app.notice_failed(error, cx);
                                 true
                             })
                             .ok()
@@ -376,7 +376,7 @@ impl ScriptListApp {
                     if !matches!(&app.current_view, AppView::ScratchPadView { entity, .. } if entity == &editor) { return; }
                     let error = editor.read(cx).autosave_error.clone();
                     if error != last_error {
-                        if let Some(error) = error.as_ref() { app.show_error_toast(format!("Failed to auto-save scratch pad: {error}"), cx); }
+                        if let Some(error) = error.as_ref() { app.notice_failed(format!("Failed to auto-save scratch pad: {error}"), cx); }
                         last_error = error;
                     }
                 }).detach();
@@ -547,7 +547,7 @@ impl ScriptListApp {
                         }
                     });
                     if let Some(outcome) = outcome {
-                        if let Err(error) = completion.try_complete(outcome) { this.show_error_toast(error.to_string(), cx); }
+                        if let Err(error) = completion.try_complete(outcome) { this.notice_failed(error.to_string(), cx); }
                         this.mark_main_data_changed();
                         cx.notify();
                     }
@@ -1157,7 +1157,11 @@ pub(crate) fn prompt_fixture_seed(
         template: None,
     };
     Ok(match fixture_id {
-        "prompt.arg" => PromptSeed::Arg(ChoicePromptSeed { common, placeholder: "Choose an item".into(), choices: choices(), input: String::new() }),
+        "prompt.arg" => {
+            let action = |name: &str, description: &str| ProtocolAction { description: Some(description.into()), ..ProtocolAction::new(name.into()) };
+            let common = PromptSeedCommon { actions: Some(vec![action("Copy Value", "Copies the highlighted choice"), action("Open Details", "Shows more about the choice"), action("Pin It", "Keeps the choice at the top")]), ..common };
+            PromptSeed::Arg(ChoicePromptSeed { common, placeholder: "Choose an item".into(), choices: choices(), input: String::new() })
+        }
         "prompt.mini" => PromptSeed::Mini(ChoicePromptSeed { common, placeholder: "Choose an item".into(), choices: choices(), input: String::new() }),
         "prompt.micro" => PromptSeed::Micro(ChoicePromptSeed { common, placeholder: "Type a value".into(), choices: choices(), input: String::new() }),
         "prompt.div" => PromptSeed::Div(DivPromptSeed { common, html: "<h2>Prompt document</h2><p>Production native content.</p><a href=\"submit:accepted\">Accept document</a>".into(), options: Default::default() }),

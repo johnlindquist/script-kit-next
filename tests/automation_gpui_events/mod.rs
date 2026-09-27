@@ -65,14 +65,14 @@ fn visible_count(prefix: &str, kind: AutomationWindowKind) -> usize {
 fn single_visible_window_is_not_ambiguous() {
     let p = prefix();
 
-    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::Dictation);
+    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
     script_kit_gpui::windows::upsert_automation_window(info);
 
-    let count = visible_count(&p, AutomationWindowKind::Dictation);
+    let count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     // With exactly one visible window, the ambiguity guard should NOT fire
     assert_eq!(
         count, 1,
-        "Expected exactly 1 visible Dictation window under prefix {p}, got {count}"
+        "Expected exactly 1 visible SnapOverlay window under prefix {p}, got {count}"
     );
 
     cleanup(&p, &["agent_chat-0"]);
@@ -86,16 +86,16 @@ fn single_visible_window_is_not_ambiguous() {
 fn multiple_visible_windows_same_kind_is_ambiguous() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::Dictation);
-    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::Dictation);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
+    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::SnapOverlay);
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    let count = visible_count(&p, AutomationWindowKind::Dictation);
+    let count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     // With 2+ visible windows sharing a kind, the ambiguity guard fires
     assert!(
         count > 1,
-        "Expected >1 visible Dictation windows under prefix {p}, got {count}"
+        "Expected >1 visible SnapOverlay windows under prefix {p}, got {count}"
     );
 
     cleanup(&p, &["agent_chat-0", "agent_chat-1"]);
@@ -109,14 +109,14 @@ fn multiple_visible_windows_same_kind_is_ambiguous() {
 fn hidden_window_not_counted_for_ambiguity() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::Dictation);
-    let mut info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::Dictation);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
+    let mut info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::SnapOverlay);
     info1.visible = false; // hidden
 
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    let count = visible_count(&p, AutomationWindowKind::Dictation);
+    let count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     assert_eq!(
         count, 1,
         "Hidden window should not be counted; expected 1 under prefix {p}, got {count}"
@@ -133,18 +133,18 @@ fn hidden_window_not_counted_for_ambiguity() {
 fn different_kinds_are_not_ambiguous_with_each_other() {
     let p = prefix();
 
-    let agent_chat = make_visible(&p, "agent_chat-0", AutomationWindowKind::Dictation);
+    let agent_chat = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
     let notes = make_visible(&p, "notes-0", AutomationWindowKind::Notes);
 
     script_kit_gpui::windows::upsert_automation_window(agent_chat);
     script_kit_gpui::windows::upsert_automation_window(notes);
 
-    let agent_chat_count = visible_count(&p, AutomationWindowKind::Dictation);
+    let agent_chat_count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     let notes_count = visible_count(&p, AutomationWindowKind::Notes);
 
     assert_eq!(
         agent_chat_count, 1,
-        "Dictation should have 1 visible window under prefix {p}"
+        "SnapOverlay should have 1 visible window under prefix {p}"
     );
     assert_eq!(
         notes_count, 1,
@@ -162,17 +162,17 @@ fn different_kinds_are_not_ambiguous_with_each_other() {
 fn removing_window_clears_ambiguity() {
     let p = prefix();
 
-    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::Dictation);
-    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::Dictation);
+    let info0 = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
+    let info1 = make_visible(&p, "agent_chat-1", AutomationWindowKind::SnapOverlay);
     script_kit_gpui::windows::upsert_automation_window(info0);
     script_kit_gpui::windows::upsert_automation_window(info1);
 
-    assert!(visible_count(&p, AutomationWindowKind::Dictation) > 1);
+    assert!(visible_count(&p, AutomationWindowKind::SnapOverlay) > 1);
 
     // Remove one window — ambiguity should clear
     script_kit_gpui::windows::remove_automation_window(&format!("{p}:agent_chat-1"));
 
-    let count = visible_count(&p, AutomationWindowKind::Dictation);
+    let count = visible_count(&p, AutomationWindowKind::SnapOverlay);
     assert_eq!(
         count, 1,
         "After removing one window, should have 1 visible under prefix {p}, got {count}"
@@ -189,11 +189,11 @@ fn removing_window_clears_ambiguity() {
 fn plain_kind_target_resolves_when_single_window() {
     let p = prefix();
 
-    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::Dictation);
+    let info = make_visible(&p, "agent_chat-0", AutomationWindowKind::SnapOverlay);
     script_kit_gpui::windows::upsert_automation_window(info);
 
     let target = script_kit_gpui::protocol::AutomationWindowTarget::Kind {
-        kind: AutomationWindowKind::Dictation,
+        kind: AutomationWindowKind::SnapOverlay,
         index: None,
     };
     let resolved = script_kit_gpui::windows::resolve_automation_window(Some(&target));
@@ -217,7 +217,7 @@ fn simulate_gpui_event_result_with_error_serializes() {
         "requestId": "gpui-ambiguous",
         "success": false,
         "errorCode": "target_ambiguous",
-        "error": "Resolved target dictation:thread-1 (Dictation) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
+        "error": "Resolved target snapOverlay:thread-1 (SnapOverlay) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
     });
 
     let success = result["success"].as_bool().expect("success field");
@@ -374,7 +374,7 @@ fn attached_surface_without_bounds_fails_closed() {
 fn detached_window_bounds_not_required_for_dispatch() {
     let p = prefix();
 
-    // Detached windows (Notes, Dictation) do not need coordinate rebasing
+    // Detached windows (Notes, SnapOverlay) do not need coordinate rebasing
     let notes = make_with_bounds(
         &p,
         "notes",
@@ -798,7 +798,7 @@ fn inspect_hit_point_lands_inside_target_bounds() {
     cleanup(&p, &["main", "actions"]);
 }
 
-/// Detached windows (Notes, Dictation) must NOT have their coordinates
+/// Detached windows (Notes, SnapOverlay) must NOT have their coordinates
 /// rebased — the inspect geometry should place them at (0, 0).
 #[test]
 fn detached_windows_are_not_rebased() {
@@ -829,7 +829,7 @@ fn detached_windows_are_not_rebased() {
     let agent_chat = make_with_bounds(
         &p,
         "agent_chat",
-        AutomationWindowKind::Dictation,
+        AutomationWindowKind::SnapOverlay,
         Some(AutomationWindowBounds {
             x: 900.0,
             y: 100.0,
@@ -841,7 +841,7 @@ fn detached_windows_are_not_rebased() {
     script_kit_gpui::windows::upsert_automation_window(notes);
     script_kit_gpui::windows::upsert_automation_window(agent_chat);
 
-    for (id_suffix, kind) in [("notes", "Notes"), ("agent_chat", "Dictation")] {
+    for (id_suffix, kind) in [("notes", "Notes"), ("agent_chat", "SnapOverlay")] {
         let target = AutomationWindowTarget::Id {
             id: format!("{p}:{id_suffix}"),
         };

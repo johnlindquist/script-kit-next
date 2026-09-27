@@ -26,7 +26,6 @@ impl ScriptListApp {
         let row_kind = match footer.owner.as_str() {
             "native" => Some("nativeFooterRow"),
             "prompt" => Some("promptFooterRow"),
-            "popup" => Some("popupFooterRow"),
             "content" => Some("contentFooterRow"),
             _ => None,
         };
@@ -73,7 +72,6 @@ impl ScriptListApp {
             let kind = match footer.owner.as_str() {
                 "native" => "nativeFooterButton",
                 "prompt" => "promptFooterButton",
-                "popup" => "popupFooterButton",
                 _ => "contentFooterButton",
             };
             let text = if button.shortcut_routable {

@@ -7,6 +7,9 @@ impl OneWindow {
         if let Some(taken) = self.work_key(now, &key, fx) {
             return taken;
         }
+        if self.talk.is_some() {
+            return self.talk_key(now, key, fx);
+        }
         let armed = self.guard.armed(now);
         self.list.steady.key();
         if self.in_view() {
@@ -38,6 +41,9 @@ impl OneWindow {
                 if let Some(id) = self.holds.newest().map(|h| h.id) {
                     self.staged = None;
                     self.unsend(now, &[id], fx);
+                    return true;
+                }
+                if self.undo_last(now, fx) {
                     return true;
                 }
             }
@@ -147,13 +153,18 @@ impl OneWindow {
         if self.work_run(now, &row, fx) {
             return;
         }
-        let staged_entry = self.staged.as_ref().and_then(|s| s.subject.entry);
+        let staged_entry = self
+            .staged
+            .as_ref()
+            .and_then(|s| s.subject.entry)
+            .or_else(|| self.share_last(&row));
         let from_staged = self
             .staged
             .as_ref()
             .is_some_and(|s| s.rows.iter().any(|r| r.key == row.key));
         if from_staged && row.act != RowAct::Share {
             self.staged = None;
+            self.list.sel = 0;
             self.refresh_rows();
         }
         if row.takes_back_last() && self.take_back(now, row.target.as_deref(), fx) {

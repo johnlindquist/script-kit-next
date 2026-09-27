@@ -562,7 +562,7 @@ impl ScriptListApp {
             match Self::resolve_file_search_results(&query_value) {
                 Ok(results) => self.update_file_search_results(results),
                 Err(error) => {
-                    self.show_error_toast(format!("File search failed: {error}"), cx);
+                    self.notice_failed(format!("File search failed: {error}"), cx);
                     return;
                 }
             }
@@ -644,7 +644,7 @@ impl ScriptListApp {
             match Self::resolve_file_search_results(&query_value) {
                 Ok(results) => self.update_file_search_results(results),
                 Err(error) => {
-                    self.show_error_toast(format!("File search failed: {error}"), cx);
+                    self.notice_failed(format!("File search failed: {error}"), cx);
                     return;
                 }
             }
@@ -713,9 +713,9 @@ impl ScriptListApp {
                                     duration_ms = start.elapsed().as_millis() as u64,
                                     "Async action completed: reveal_in_finder"
                                 );
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     reveal_action.success_hud().to_string(),
-                                    Some(HUD_SHORT_MS),
                                     cx,
                                 );
                                 this.hide_main_and_reset(cx);
@@ -728,7 +728,7 @@ impl ScriptListApp {
                                     error = %message,
                                     "Async action failed: reveal_in_finder"
                                 );
-                                this.show_error_toast_with_code(
+                                this.notice_failed_with_code(
                                     message,
                                     Some(crate::action_helpers::ERROR_REVEAL_FAILED),
                                     cx,
@@ -900,7 +900,11 @@ impl ScriptListApp {
                     match result {
                         Ok(()) => {
                             if let Some(message) = file_action.success_hud(action_id) {
-                                self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
+                                self.one_window_notice(
+                                    crate::line_notice::INFO,
+                                    message.to_string(),
+                                    cx,
+                                );
                             }
                             self.clear_file_search_action_target();
                             if file_action.hides_main_after_success() {
@@ -935,9 +939,9 @@ impl ScriptListApp {
                 match crate::script_creation::open_in_editor(&path_buf, &self.config) {
                     Ok(()) => {
                         self.clear_file_search_action_target();
-                        self.show_hud(
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
                             editor_action.success_hud().to_string(),
-                            Some(HUD_SHORT_MS),
                             cx,
                         );
                         self.hide_main_and_reset(cx);
@@ -981,7 +985,7 @@ impl ScriptListApp {
                         Err(e) => {
                             let _ = this.update(cx, |this, cx| {
                                 this.clear_file_search_action_target();
-                                this.show_error_toast(rename_action.failure_message(e), cx);
+                                this.notice_failed(rename_action.failure_message(e), cx);
                                 this.restore_file_search_input_focus(cx);
                             });
                             return;
@@ -992,9 +996,9 @@ impl ScriptListApp {
                         match crate::file_search::rename_path(&path, &new_name) {
                             Ok(new_path) => {
                                 this.clear_file_search_action_target();
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     rename_action.success_hud(&new_name),
-                                    Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
                                 this.refresh_file_search_after_mutation(
@@ -1007,7 +1011,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 this.file_search_actions_path = None;
-                                this.show_error_toast(rename_action.failure_message(e), cx);
+                                this.notice_failed(rename_action.failure_message(e), cx);
                                 this.restore_file_search_input_focus(cx);
                             }
                         }
@@ -1047,7 +1051,7 @@ impl ScriptListApp {
                             Err(e) => {
                                 let _ = this.update(cx, |this, cx| {
                                     this.clear_file_search_action_target();
-                                    this.show_error_toast(move_action.failure_message(e), cx);
+                                    this.notice_failed(move_action.failure_message(e), cx);
                                     this.restore_file_search_input_focus(cx);
                                 });
                                 return;
@@ -1058,9 +1062,9 @@ impl ScriptListApp {
                         match crate::file_search::move_path(&path, &destination_dir) {
                             Ok(new_path) => {
                                 this.clear_file_search_action_target();
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     move_action.success_hud(&destination_dir),
-                                    Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
                                 this.refresh_file_search_after_mutation(
@@ -1073,7 +1077,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 this.clear_file_search_action_target();
-                                this.show_error_toast(move_action.failure_message(e), cx);
+                                this.notice_failed(move_action.failure_message(e), cx);
                                 this.restore_file_search_input_focus(cx);
                             }
                         }
@@ -1113,7 +1117,7 @@ impl ScriptListApp {
                             "failed to move to trash"
                         );
                         self.clear_file_search_action_target();
-                        self.show_error_toast(trash_action.failure_message(e), cx);
+                        self.notice_failed(trash_action.failure_message(e), cx);
                         self.restore_file_search_input_focus(cx);
                         return DispatchOutcome::success();
                     }
@@ -1129,32 +1133,25 @@ impl ScriptListApp {
                 self.refresh_file_search_after_mutation(&path, None, previous_display_index, cx);
                 self.restore_file_search_input_focus(cx);
 
-                let owner = cx.entity().downgrade();
-                crate::undo_offer::offer_main_window_undo(
+                self.one_window_done_undoable(
+                    "trash",
                     trash_action.success_hud(&name),
-                    move |_window, cx| {
-                        let restored = crate::file_search::restore_from_trash(
+                    Box::new(move |this, cx| {
+                        match crate::file_search::restore_from_trash(
                             &trashed,
                             std::path::Path::new(&path),
-                        );
-                        let Some(owner) = owner.upgrade() else {
-                            return;
-                        };
-                        owner.update(cx, |this, cx| match restored {
-                            Ok(()) => {
-                                this.refresh_file_search_after_mutation(
-                                    &path,
-                                    Some(&path),
-                                    previous_display_index,
-                                    cx,
-                                );
-                                this.show_success_toast(trash_action.restored_message(&name), cx);
-                            }
+                        ) {
+                            Ok(()) => this.refresh_file_search_after_mutation(
+                                &path,
+                                Some(&path),
+                                previous_display_index,
+                                cx,
+                            ),
                             Err(e) => {
-                                this.show_error_toast(trash_action.restore_failure_message(e), cx)
+                                this.notice_failed(trash_action.restore_failure_message(e), cx)
                             }
-                        });
-                    },
+                        }
+                    }),
                     cx,
                 );
 
@@ -1179,7 +1176,11 @@ impl ScriptListApp {
                 match crate::file_search::duplicate_path(&path) {
                     Ok(new_path) => {
                         self.clear_file_search_action_target();
-                        self.show_hud(duplicate_action.success_hud(&name), Some(HUD_MEDIUM_MS), cx);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            duplicate_action.success_hud(&name),
+                            cx,
+                        );
                         self.refresh_file_search_after_insert(
                             &new_path,
                             previous_display_index,
@@ -1248,9 +1249,9 @@ impl ScriptListApp {
                     self.file_search_scroll_handle
                         .scroll_to_item(*selected_index, gpui::ScrollStrategy::Nearest);
                 }
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     sort_action.success_hud().to_string(),
-                    Some(HUD_SHORT_MS),
                     cx,
                 );
                 self.restore_file_search_input_focus(cx);
@@ -1296,7 +1297,7 @@ impl ScriptListApp {
                             cx,
                         );
                         if let Some(message) = directory_action.success_hud(&dir) {
-                            self.show_hud(message, Some(HUD_SHORT_MS), cx);
+                            self.one_window_notice(crate::line_notice::INFO, message, cx);
                         }
                         self.restore_file_search_input_focus(cx);
                         DispatchOutcome::success()
@@ -1305,7 +1306,7 @@ impl ScriptListApp {
                         match crate::file_search::reveal_in_finder(&dir) {
                             Ok(()) => {
                                 if let Some(message) = directory_action.success_hud(&dir) {
-                                    self.show_hud(message, Some(HUD_SHORT_MS), cx);
+                                    self.one_window_notice(crate::line_notice::INFO, message, cx);
                                 }
                                 DispatchOutcome::success()
                             }

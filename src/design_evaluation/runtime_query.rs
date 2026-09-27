@@ -144,78 +144,22 @@ impl Evaluator {
                     .unwrap_or(200)
                     .min(500) as usize;
                 let cx = self.cx.app.borrow();
-                if matches!(mounted.owner, RootOwner::Footer) {
-                    let mut elements = crate::footer_popup::footer_fixture_elements(
-                        &mounted.info.id,
-                        mounted
-                            .info
-                            .generation
-                            .context("footer_generation_missing")?,
+                let snapshot =
+                    crate::windows::automation_surface_collector::collect_surface_snapshot(
+                        &mounted.info,
+                        limit,
                         &cx,
-                    )?;
-                    let total = elements.len();
-                    elements.truncate(limit);
-                    json!({"type":"elementsResult","requestId":request_id,"elements":elements,"totalCount":total,
-                        "window":mounted.info,"semanticQuality":"full","projectionQuality":"complete"})
-                } else if matches!(mounted.owner, RootOwner::ShortcutRecorder) {
-                    let mut elements = crate::shortcut_recorder::shortcut_fixture_elements(
-                        &mounted.info.id,
-                        mounted
-                            .info
-                            .generation
-                            .context("recorder_generation_missing")?,
-                        &cx,
-                    )?;
-                    let total = elements.len();
-                    elements.truncate(limit);
-                    json!({"type":"elementsResult","requestId":request_id,"elements":elements,"totalCount":total,
-                        "window":mounted.info,"semanticQuality":"full","projectionQuality":"complete"})
-                } else {
-                    let snapshot =
-                        crate::windows::automation_surface_collector::collect_surface_snapshot(
-                            &mounted.info,
-                            limit,
-                            &cx,
-                        )
-                        .context("surface_owner_missing")?;
-                    ensure!(
-                        snapshot.quality
-                            == crate::windows::automation_surface_collector::SnapshotQuality::Full,
-                        "surface_projection_incomplete"
-                    );
-                    json!({"type":"elementsResult","requestId":request_id,"elements":snapshot.elements,
-                        "totalCount":snapshot.total_count,"focusedSemanticId":snapshot.focused_semantic_id,
-                        "selectedSemanticId":snapshot.selected_semantic_id,"warnings":snapshot.warnings,
-                        "window":mounted.info,"semanticQuality":"full","projectionQuality":snapshot.quality.projection_quality()})
-                }
-            }
-            "getLayoutInfo" if matches!(mounted.owner, RootOwner::ShortcutRecorder) => {
-                let info = crate::shortcut_recorder::shortcut_fixture_layout(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("recorder_generation_missing")?,
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                serde_json::to_value(crate::protocol::Message::layout_info_result(
-                    request_id.into(),
-                    info,
-                ))?
-            }
-            "getLayoutInfo" if matches!(mounted.owner, RootOwner::Footer) => {
-                let info = crate::footer_popup::footer_fixture_layout(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("footer_generation_missing")?,
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                serde_json::to_value(crate::protocol::Message::layout_info_result(
-                    request_id.into(),
-                    info,
-                ))?
+                    )
+                    .context("surface_owner_missing")?;
+                ensure!(
+                    snapshot.quality
+                        == crate::windows::automation_surface_collector::SnapshotQuality::Full,
+                    "surface_projection_incomplete"
+                );
+                json!({"type":"elementsResult","requestId":request_id,"elements":snapshot.elements,
+                    "totalCount":snapshot.total_count,"focusedSemanticId":snapshot.focused_semantic_id,
+                    "selectedSemanticId":snapshot.selected_semantic_id,"warnings":snapshot.warnings,
+                    "window":mounted.info,"semanticQuality":"full","projectionQuality":snapshot.quality.projection_quality()})
             }
             "getLayoutInfo" if !matches!(mounted.owner, RootOwner::Main(_)) => {
                 let info = match mode {
@@ -923,70 +867,7 @@ impl Evaluator {
                 mounted.handle,
                 &cx,
             ),
-            RootOwner::Dictation(view) => {
-                let state = view.read(&cx).fixture_state();
-                let (microphone_selection_count, selected_microphone_semantic_id) =
-                    view.read(&cx).microphone_selection();
-                let phase = match &state.phase {
-                    crate::dictation::DictationSessionPhase::Idle => "idle",
-                    crate::dictation::DictationSessionPhase::Recording => "recording",
-                    crate::dictation::DictationSessionPhase::Confirming => "confirming",
-                    crate::dictation::DictationSessionPhase::Transcribing => "transcribing",
-                    crate::dictation::DictationSessionPhase::Delivering => "delivering",
-                    crate::dictation::DictationSessionPhase::Finished => "finished",
-                    crate::dictation::DictationSessionPhase::Failed(_) => "failed",
-                };
-                let outcome = match &state.phase {
-                    crate::dictation::DictationSessionPhase::Finished => Some("delivered"),
-                    crate::dictation::DictationSessionPhase::Failed(failure)
-                        if failure.failure.failure.code
-                            == sk_protocol::ai_reliability::AiFailureCode::DestinationStale =>
-                    {
-                        Some("staleTarget")
-                    }
-                    crate::dictation::DictationSessionPhase::Failed(_) => Some("refused"),
-                    _ => None,
-                };
-                let outcome = self
-                    .dictation_controls
-                    .contains_key(&mounted.info.id)
-                    .then_some(outcome)
-                    .flatten();
-                Ok(
-                    json!({"family":"dictation","phase":phase,"transcript":state.transcript.as_ref(),
-                    "microphoneSelectionCount":microphone_selection_count,"selectedMicrophoneSemanticId":selected_microphone_semantic_id,
-                    "generation":self.dictation_controls.get(&mounted.info.id).map(|control|control.generation()),
-                    "deliveryOutcome":outcome,"destinationLocked":!matches!(state.phase,crate::dictation::DictationSessionPhase::Recording|crate::dictation::DictationSessionPhase::Confirming)}),
-                )
-            }
             RootOwner::Secondary(fixture) => fixture.controls.observation(&cx),
-            RootOwner::Footer => {
-                let state = crate::footer_popup::footer_runtime_state(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("footer_generation_missing")?,
-                )
-                .context("footer_owner_missing")?;
-                Ok(
-                    json!({"family":"footer","owner":state.binding.window_id,"completedActionCount":state.completed_action_count,
-                    "semanticRevision":state.semantic_revision,"presentationRevision":state.presentation_revision,
-                    "appliedThemeRevision":state.applied_theme_revision,"heldAction":format!("{:?}",state.held_action)}),
-                )
-            }
-            RootOwner::ShortcutRecorder => {
-                Ok(crate::shortcut_recorder::shortcut_fixture_observation(
-                    &mounted.info.id,
-                    mounted
-                        .info
-                        .generation
-                        .context("recorder_generation_missing")?,
-                    None,
-                    &cx,
-                )?
-                .value)
-            }
             _ => Ok(Value::Null),
         }
     }

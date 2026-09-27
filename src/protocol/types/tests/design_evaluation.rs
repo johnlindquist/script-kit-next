@@ -22,14 +22,8 @@ fn valid_fixture_controls() -> Vec<Value> {
         json!({"family": "sdkChat", "operation": "emitText", "messageId": "turn-7", "text": "response"}),
         json!({"family": "sdkChat", "operation": "complete", "messageId": "turn-7"}),
         json!({"family": "sdkChat", "operation": "fail", "messageId": "turn-7"}),
-        json!({"family": "dictation", "operation": "begin", "destination": "mainFilter"}),
-        json!({"family": "dictation", "operation": "recording", "text": "transcript", "bars": ([0.0; 9])}),
-        json!({"family": "dictation", "operation": "confirm"}),
-        json!({"family": "dictation", "operation": "resume"}),
-        json!({"family": "dictation", "operation": "transcribe"}),
-        json!({"family": "dictation", "operation": "deliver"}),
-        json!({"family": "dictation", "operation": "retarget", "destination": "notes"}),
-        json!({"family": "dictation", "operation": "openMicrophonePicker"}),
+        json!({"family": "oneWindow", "operation": "talkTo", "destination": "chat"}),
+        json!({"family": "oneWindow", "operation": "talkTo", "destination": "note"}),
         json!({"family": "fault", "operation": "suppressThemeNotification", "target": {"type": "instance", "id": "main", "generation": 3}}),
     ]
 }

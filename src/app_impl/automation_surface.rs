@@ -135,11 +135,6 @@ impl ScriptListApp {
             | AppView::BrowserHistoryView {
                 filter,
                 selected_index,
-            }
-            | AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                ..
             } => {
                 filter.hash(&mut token);
                 selected_index.hash(&mut token);

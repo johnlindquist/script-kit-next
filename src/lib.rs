@@ -59,6 +59,7 @@ pub mod hotkeys;
 pub mod icons;
 #[cfg(test)]
 pub(crate) mod launch_filter_policy;
+pub mod line_notice;
 pub mod list_item;
 pub mod logging;
 pub mod menu_syntax;
@@ -92,17 +93,10 @@ pub mod terminal_history;
 pub mod test_support;
 pub mod theme;
 pub mod tips;
-pub mod toast_manager;
-#[allow(dead_code)]
-pub(crate) mod toast_popup;
-#[allow(dead_code)]
-pub(crate) mod undo_offer;
-
 pub mod tray;
 pub mod ui;
 pub mod updates;
 pub mod utils;
-pub mod warning_banner;
 pub mod window_manager;
 pub mod window_ops;
 pub mod window_orchestrator;
@@ -170,7 +164,6 @@ pub mod browser_tabs;
 pub mod builtins;
 pub mod day_page;
 pub mod favicons;
-pub mod hud_manager;
 
 // Typed handle for path-prompt action ids. Physically lives under
 // `src/app_impl/` (pulled into the binary via `include!`); the lib
@@ -367,8 +360,6 @@ pub mod stdin_commands;
 // Protocol-boundary metrics / counters for the JSONL ingress.
 pub mod protocol_stats;
 
-// Confirmation dialog - modal confirmation window for destructive actions
-pub mod confirm;
 #[allow(dead_code)]
 pub mod footer_popup;
 
@@ -427,7 +418,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 /// Global handle to the main GPUI window.
-/// Used to open in-window dialogs (e.g. parent confirm) from async contexts
+/// Used to reach the main window from async contexts
 /// that only have `&mut AsyncApp` and no `Window` reference.
 static MAIN_WINDOW_HANDLE: OnceLock<Mutex<Option<gpui::AnyWindowHandle>>> = OnceLock::new();
 
@@ -764,8 +755,8 @@ mod main_menu_input_guard_tests {
             "physical plain Enter must keep ScriptIssues/menu-syntax Accept ahead of ScriptList submit, then Spine/canonical selected execution"
         );
         assert!(
-            physical_enter_section.contains("!crate::actions::is_actions_window_open()"),
-            "physical plain Enter must not steal Enter while the actions window owns it"
+            physical_enter_section.contains("!this.show_actions_popup"),
+            "physical plain Enter must not steal Enter while staged actions own it"
         );
         assert!(
             !physical_enter_section.contains("is_within_focus_grace_period"),

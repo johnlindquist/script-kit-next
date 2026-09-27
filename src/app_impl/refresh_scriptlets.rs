@@ -1,7 +1,5 @@
 use super::*;
 
-const HUD_PLUGIN_INVENTORY_MS: u64 = 1400;
-
 /// Canonical string spelling of a scriptlet markdown path. Falls back to
 /// canonicalizing the parent (deleted files can't canonicalize) and then to
 /// the raw spelling.
@@ -742,11 +740,11 @@ impl ScriptListApp {
         // conflicts only — persistent ones already toasted on a prior refresh.
         let conflicts = self.rebuild_registries();
         for conflict in self.take_unannounced_registry_conflicts(conflicts) {
-            self.show_hud(conflict, Some(HUD_CONFLICT_MS), cx); // 4s for conflict messages
+            self.one_window_notice(crate::line_notice::INFO, conflict, cx); // 4s for conflict messages
         }
 
         if let Some(message) = build_plugin_inventory_hud(before_counts, after_counts) {
-            self.show_hud(message, Some(HUD_PLUGIN_INVENTORY_MS), cx);
+            self.one_window_notice(crate::line_notice::INFO, message, cx);
         }
 
         logging::log(
@@ -772,18 +770,6 @@ impl ScriptListApp {
     /// 3. The cost of an "unnecessary" notify is near-zero (just marks dirty)
     pub fn refresh_apps(&mut self, cx: &mut Context<Self>) {
         self.start_root_app_catalog(cx);
-    }
-
-    /// Dismiss the bun warning banner
-    pub(crate) fn dismiss_bun_warning(&mut self, cx: &mut Context<Self>) {
-        if !self.show_bun_warning {
-            return;
-        }
-        logging::log("APP", "Bun warning banner dismissed by user");
-        self.show_bun_warning = false;
-        self.mark_main_data_changed();
-        self.mark_main_presentation_changed();
-        cx.notify();
     }
 
     /// Open bun.sh in the default browser
@@ -1031,7 +1017,7 @@ impl ScriptListApp {
             app.invalidate_preview_cache();
             let conflicts = app.rebuild_registries();
             for conflict in app.take_unannounced_registry_conflicts(conflicts) {
-                app.show_hud(conflict, Some(HUD_CONFLICT_MS), cx);
+                app.one_window_notice(crate::line_notice::INFO, conflict, cx);
             }
             true
         };

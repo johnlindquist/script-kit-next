@@ -33,7 +33,6 @@ pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
         "main.favorites-browse",
         "main.current-app-commands",
         "main.browser-history",
-        "main.dictation-history",
         "main.notes-browse",
         "main.notes-browse-no-match",
         "main.notes-browse-loading",
@@ -47,17 +46,12 @@ pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
     ]
 }
 
-pub(crate) const SHORTCUT_FIXTURE_IDS: &[&str] = &["secondary.shortcut-recorder"];
-
 pub(crate) const MAIN_OVERLAY_FIXTURE_IDS: &[&str] = &[
     "main-overlay.alias",
     "main-overlay.tab-ai-save-offer",
     "main-overlay.root-dialog",
-    "main-overlay.root-notification",
-    "main-overlay.warning",
     "main-overlay.logs",
     "main-overlay.loading",
-    "main-overlay.toast",
     "main-overlay.effects",
     "main-overlay.debug-grid",
 ];
@@ -113,24 +107,7 @@ pub(crate) const SDK_CHAT_FIXTURE_IDS: &[&str] = &[
     "sdk-chat.retryable-failure",
 ];
 
-pub(crate) const DICTATION_FIXTURE_IDS: &[&str] = &[
-    "dictation.recording",
-    "dictation.confirming",
-    "dictation.transcribing",
-    "dictation.delivering",
-    "dictation.finished",
-    "dictation.failed",
-    "dictation.microphone-picker",
-];
-
-pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &[
-    "secondary.actions",
-    "secondary.confirm",
-    "secondary.confirm-three-button",
-    "secondary.hud",
-    "secondary.hud-action",
-    "secondary.snap",
-];
+pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &["secondary.snap"];
 
 pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
     main_fixture_ids()
@@ -143,12 +120,5 @@ pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
         .chain(DAY_PAGE_FIXTURE_IDS.iter().copied())
         .chain(FLOW_FIXTURE_IDS.iter().copied())
         .chain(SDK_CHAT_FIXTURE_IDS.iter().copied())
-        .chain(DICTATION_FIXTURE_IDS.iter().copied())
         .chain(SECONDARY_FIXTURE_IDS.iter().copied())
-        .chain(
-            crate::footer_popup::OWNED_FOOTER_FIXTURE_IDS
-                .iter()
-                .copied(),
-        )
-        .chain(SHORTCUT_FIXTURE_IDS.iter().copied())
 }

@@ -38,7 +38,7 @@ impl ScriptListApp {
                             "Rejecting screen capture larger than 10 MB"
                         );
                         this.update(cx, |this, cx| {
-                            this.show_error_toast(
+                            this.notice_failed(
                                 "Screen capture exceeds 10 MB limit".to_string(),
                                 cx,
                             );
@@ -92,7 +92,7 @@ impl ScriptListApp {
                     );
                     let message = capture_action.failure_message(&error);
                     this.update(cx, |this, cx| {
-                        this.show_error_toast(message, cx);
+                        this.notice_failed(message, cx);
                     })
                     .ok();
                 }
@@ -144,7 +144,7 @@ impl ScriptListApp {
                             "Rejecting window capture larger than 10 MB"
                         );
                         this.update(cx, |this, cx| {
-                            this.show_error_toast(
+                            this.notice_failed(
                                 "Window capture exceeds 10 MB limit".to_string(),
                                 cx,
                             );
@@ -186,10 +186,7 @@ impl ScriptListApp {
 
                     this.update(cx, |this, cx| {
                         if let Some(warning_message) = fallback_warning {
-                            this.toast_manager.push(
-                                components::toast::Toast::warning(warning_message, &this.theme)
-                                    .duration_ms(Some(TOAST_WARNING_MS)),
-                            );
+                            this.one_window_notice(crate::line_notice::FAILED, warning_message, cx);
                             cx.notify();
                         }
 
@@ -217,7 +214,7 @@ impl ScriptListApp {
                     );
                     let message = capture_action.failure_message(&error);
                     this.update(cx, |this, cx| {
-                        this.show_error_toast(message, cx);
+                        this.notice_failed(message, cx);
                     })
                     .ok();
                 }
@@ -265,7 +262,7 @@ impl ScriptListApp {
                             "Rejecting screen area capture larger than 10 MB"
                         );
                         this.update(cx, |this, cx| {
-                            this.show_error_toast(
+                            this.notice_failed(
                                 "Screen area capture exceeds 10 MB limit".to_string(),
                                 cx,
                             );
@@ -328,7 +325,7 @@ impl ScriptListApp {
                     );
                     let message = capture_action.failure_message(&error);
                     this.update(cx, |this, cx| {
-                        this.show_error_toast(message, cx);
+                        this.notice_failed(message, cx);
                     })
                     .ok();
                 }
@@ -415,10 +412,7 @@ impl ScriptListApp {
                     );
                 }
                 Ok(DeferredAiCapturedText::Empty(message)) => {
-                    this.toast_manager.push(
-                        components::toast::Toast::info(message, &this.theme)
-                            .duration_ms(Some(TOAST_INFO_MS)),
-                    );
+                    this.one_window_notice(crate::line_notice::INFO, message, cx);
                     cx.notify();
                 }
                 Err(error) => {
@@ -432,10 +426,7 @@ impl ScriptListApp {
                         "Deferred AI text capture failed"
                     );
                     let message = AiTextCaptureBuiltinAction::agent_chat_failure_message(&error);
-                    this.toast_manager.push(
-                        components::toast::Toast::error(message, &this.theme)
-                            .duration_ms(Some(TOAST_CRITICAL_MS)),
-                    );
+                    this.one_window_notice(crate::line_notice::FAILED, message, cx);
                     cx.notify();
                 }
             });
@@ -613,7 +604,7 @@ impl ScriptListApp {
                     let _ = this.update(cx, |app, cx| {
                         let message =
                             AiTextCaptureBuiltinAction::current_app_failure_message(&error);
-                        app.show_error_toast(message.clone(), cx);
+                        app.notice_failed(message.clone(), cx);
                         tracing::error!(
                             trace_id = %trace_id,
                             error = %error,

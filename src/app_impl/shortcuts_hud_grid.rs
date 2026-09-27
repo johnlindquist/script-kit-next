@@ -49,8 +49,7 @@ impl ScriptListApp {
         if has_cmd && has_shift && key_str.eq_ignore_ascii_case("m") {
             let result = crate::platform::cycle_vibrancy_material();
             logging::log("KEY", &format!("Cmd+Shift+M - {}", result));
-            // Show HUD with the material name
-            self.show_hud(result, None, cx);
+            self.one_window_notice(crate::line_notice::INFO, result, cx);
             return true;
         }
 
@@ -63,7 +62,7 @@ impl ScriptListApp {
                 "📌 Window Unpinned"
             };
             logging::log("KEY", &format!("Cmd+Shift+P - {}", status));
-            self.show_hud(status.to_string(), None, cx);
+            self.one_window_notice(crate::line_notice::INFO, status, cx);
             cx.notify();
             return true;
         }
@@ -93,26 +92,6 @@ impl ScriptListApp {
         self.current_view
             .dismiss_policy()
             .closes_main_window_on(DismissTrigger::WindowBlur)
-    }
-
-    /// Show a HUD (heads-up display) overlay message
-    ///
-    /// This creates a separate floating window positioned at bottom-center of the
-    /// screen containing the mouse cursor. The HUD is independent of the main
-    /// Script Kit window and will remain visible even when the main window is hidden.
-    ///
-    /// Position: Bottom-center (85% down screen)
-    /// Duration: 2000ms default, configurable
-    /// Shape: Pill (40px tall, variable width)
-    pub(crate) fn show_hud(
-        &mut self,
-        text: String,
-        duration_ms: Option<u64>,
-        cx: &mut Context<Self>,
-    ) {
-        // Delegate to the HUD manager which creates a separate floating window
-        // This ensures the HUD is visible even when the main app window is hidden
-        hud_manager::show_hud(text, duration_ms, cx);
     }
 
     /// Show the debug grid overlay with specified options

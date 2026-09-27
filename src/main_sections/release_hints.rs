@@ -8,12 +8,10 @@ impl ScriptListApp {
         }
         script_kit_gpui::nux::tap_dismiss::mark_shown();
         tracing::info!(event = "tap_dismiss_retired_hint_shown");
-        self.toast_manager.push(
-            Toast::info(
-                "Tap toggles Day Page — press Esc to dismiss the launcher.",
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_INFO_MS)),
+        self.one_window_notice(
+            crate::line_notice::INFO,
+            "Tap toggles Day Page — press Esc to dismiss the launcher.",
+            cx,
         );
         cx.notify();
     }
@@ -30,13 +28,7 @@ impl ScriptListApp {
         }
         script_kit_gpui::nux::sediment_disclosure::mark_shown();
         tracing::info!(event = "sediment_disclosure_hint_shown");
-        self.toast_manager.push(
-            Toast::info(
-                "Script Kit keeps copied links and repeat copies on Today — press ⌘K on a Clipboard History entry to manage.",
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_INFO_MS)),
-        );
+        self.one_window_notice(crate::line_notice::INFO, "Script Kit keeps copied links and repeat copies on Today — press ⌘K on a Clipboard History entry to manage.", cx);
         cx.notify();
     }
 }

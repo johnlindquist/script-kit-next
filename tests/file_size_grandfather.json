@@ -14,7 +14,6 @@
   "src/app_layout/collect_elements.rs": 2986,
   "src/builtins/mod.rs": 2198,
   "src/config/types.rs": 2483,
-  "src/dictation/window.rs": 3198,
   "src/execute_script/mod.rs": 2769,
   "src/footer_popup.rs": 4733,
   "src/hotkeys/mod.rs": 2149,

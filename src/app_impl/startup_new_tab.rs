@@ -15,15 +15,11 @@
                 // GLOBAL and fire for ALL windows.  Secondary windows own
                 // their own Tab/Cmd+Enter handling.
                 let is_notes = crate::notes::is_notes_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                let is_shortcut_recorder = super::shortcut_recorder::is_shortcut_recorder_window(window);
-                if is_notes || is_actions || is_shortcut_recorder {
+                if is_notes {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
                         is_notes,
-                        is_actions,
-                        is_shortcut_recorder,
                     );
                     return;
                 }
@@ -45,15 +41,6 @@
                     && !has_shift
                     && !has_alt
                     && !has_ctrl;
-
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
 
                 if let Some(app) = app_entity.upgrade() {
                     let mut handled = false;

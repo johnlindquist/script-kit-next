@@ -448,8 +448,9 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open the shared confirm modal over the main window with fixture copy,
-    /// for visual, layout, and keyboard proof.
+    /// Hold an irreversible fixture in the line above the main input, named by `title`,
+    /// for visual, layout, and keyboard proof. `body` and the button words are accepted
+    /// and unused: nothing asks first any more.
     OpenConfirmPrompt {
         #[serde(default)]
         title: Option<String>,
@@ -657,20 +658,6 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open the Dictation overlay with synthetic visual state only.
-    ///
-    /// This is a DevTools visual fixture: it does not request microphone
-    /// permission, start audio capture, invoke transcription, or deliver text.
-    OpenDictationOverlayFixture {
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
-    /// Open the synthetic, no-persistence microphone selector on the active
-    /// Dictation overlay fixture. Refuses production overlays.
-    OpenDictationMicrophonePopupFixture {
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
     /// Read-only probe exposing the current `~/.kit/config.ts`
     /// fingerprint so automation can verify a write landed on disk
     /// without shelling out to `bun` or `stat`. The handler emits a
@@ -772,8 +759,6 @@ impl ExternalCommand {
             | Self::TriggerAction { request_id, .. }
             | Self::InjectClipboardCaptureFixture { request_id, .. }
             | Self::PushDictationResult { request_id, .. }
-            | Self::OpenDictationOverlayFixture { request_id, .. }
-            | Self::OpenDictationMicrophonePopupFixture { request_id, .. }
             | Self::GetConfigFingerprint { request_id, .. }
             | Self::OpenCreationFeedback { request_id, .. }
             | Self::OpenConfirmPrompt { request_id, .. }
@@ -820,10 +805,6 @@ impl ExternalCommand {
             Self::InjectClipboardCaptureFixture { .. } => "injectClipboardCaptureFixture",
             Self::PasteClipboardIntoAgentChat { .. } => "pasteClipboardIntoAgentChat",
             Self::PushDictationResult { .. } => "pushDictationResult",
-            Self::OpenDictationOverlayFixture { .. } => "openDictationOverlayFixture",
-            Self::OpenDictationMicrophonePopupFixture { .. } => {
-                "openDictationMicrophonePopupFixture"
-            }
             Self::GetConfigFingerprint { .. } => "getConfigFingerprint",
         }
     }
@@ -867,8 +848,6 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "injectClipboardCaptureFixture",
     "pasteClipboardIntoAgentChat",
     "pushDictationResult",
-    "openDictationOverlayFixture",
-    "openDictationMicrophonePopupFixture",
     "getConfigFingerprint",
 ];
 

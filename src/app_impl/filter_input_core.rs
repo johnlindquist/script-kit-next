@@ -58,7 +58,6 @@ impl ScriptListApp {
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::TipsView { .. }
         )
@@ -460,7 +459,7 @@ impl ScriptListApp {
                 Err(error) => {
                     let _ = self.begin_file_search_session();
                     self.file_search_loading = false;
-                    self.show_error_toast(format!("File search failed: {error}"), cx);
+                    self.notice_failed(format!("File search failed: {error}"), cx);
                     return;
                 }
             }
@@ -478,7 +477,7 @@ impl ScriptListApp {
                     Err(error) => {
                         let _ = self.begin_file_search_session();
                         self.file_search_loading = false;
-                        self.show_error_toast(format!("File search failed: {error}"), cx);
+                        self.notice_failed(format!("File search failed: {error}"), cx);
                         return;
                     }
                 }

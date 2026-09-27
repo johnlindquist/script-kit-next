@@ -457,7 +457,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(pin_action.selection_required_message(), cx);
+                    self.notice_failed(pin_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -508,40 +508,40 @@ impl ScriptListApp {
                                 .map(|(_, entry)| entry.id.clone());
                         }
 
-                        self.show_hud(pin_action.success_hud().to_string(), Some(HUD_SHORT_MS), cx);
+                        self.one_window_notice(crate::line_notice::INFO, pin_action.success_hud().to_string(), cx);
                         cx.notify();
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to toggle clipboard pin");
-                        self.show_error_toast(pin_action.failure_message(e), cx);
+                        self.notice_failed(pin_action.failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
             }
             "clipboard_keep_in_today" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("Select a clipboard entry to keep", cx);
+                    self.notice_failed("Select a clipboard entry to keep", cx);
                     return DispatchOutcome::success();
                 };
 
                 match clipboard_history::keep_entry_in_today(&entry.id, chrono::Utc::now()) {
                     Ok(true) => {
                         tracing::info!(entry_id = %entry.id, "clipboard entry kept to Today via action");
-                        self.show_hud("Kept in Today".to_string(), Some(HUD_SHORT_MS), cx);
+                        self.one_window_notice(crate::line_notice::INFO, "Kept in Today".to_string(), cx);
                     }
                     Ok(false) => {
-                        self.show_hud("Already on Today".to_string(), Some(HUD_SHORT_MS), cx);
+                        self.one_window_notice(crate::line_notice::INFO, "Already on Today".to_string(), cx);
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to keep clipboard entry in Today");
-                        self.show_error_toast(format!("Couldn't keep in Today: {e}"), cx);
+                        self.notice_failed(format!("Couldn't keep in Today: {e}"), cx);
                     }
                 }
                 DispatchOutcome::success()
             }
             "clipboard_share" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(
+                    self.notice_failed(
                         ClipboardShareHandlerAction::selection_required_message(),
                         cx,
                     );
@@ -549,7 +549,7 @@ impl ScriptListApp {
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast(
+                    self.notice_failed(
                         ClipboardShareHandlerAction::content_unavailable_message(),
                         cx,
                     );
@@ -563,13 +563,9 @@ impl ScriptListApp {
                 let share_result = share_action.share(content);
 
                 match share_result {
-                    Ok(()) => self.show_hud(
-                        share_action.success_hud().to_string(),
-                        Some(HUD_SHORT_MS),
-                        cx,
-                    ),
+                    Ok(()) => self.one_window_notice(crate::line_notice::INFO, share_action.success_hud().to_string(), cx),
                     Err(message) => {
-                        self.show_error_toast(message, cx);
+                        self.notice_failed(message, cx);
                     }
                 }
                 DispatchOutcome::success()
@@ -581,7 +577,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(copy_paste_action.selection_required_message(), cx);
+                    self.notice_failed(copy_paste_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -606,19 +602,19 @@ impl ScriptListApp {
                             );
                         }
                         if let Some(hud) = copy_paste_action.success_hud() {
-                            self.show_hud(hud.to_string(), Some(HUD_SHORT_MS), cx);
+                            self.one_window_notice(crate::line_notice::INFO, hud.to_string(), cx);
                         }
                     }
                     Err(e) => {
                         tracing::error!(error = %e, action = copy_paste_action.action_id(), "clipboard copy/paste failed");
-                        self.show_error_toast(copy_paste_action.failure_message(e), cx);
+                        self.notice_failed(copy_paste_action.failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
             }
             "clipboard_attach_to_ai" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(
+                    self.notice_failed(
                         ClipboardAttachToAiHandlerAction::selection_required_message(),
                         cx,
                     );
@@ -626,7 +622,7 @@ impl ScriptListApp {
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast(
+                    self.notice_failed(
                         ClipboardAttachToAiHandlerAction::content_unavailable_message(),
                         cx,
                     );
@@ -692,7 +688,7 @@ impl ScriptListApp {
                                         error = %message,
                                         "Clipboard image decode failed"
                                     );
-                                    this.show_error_toast(message, cx);
+                                    this.notice_failed(message, cx);
                                 }
                             });
                         })
@@ -708,7 +704,7 @@ impl ScriptListApp {
                     Ok(Some(deferred_action)) => deferred_action,
                     Ok(None) => return DispatchOutcome::success(),
                     Err(message) => {
-                        self.show_error_toast(message, cx);
+                        self.notice_failed(message, cx);
                         return DispatchOutcome::success();
                     }
                 };
@@ -723,13 +719,13 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(external_action.selection_required_message(), cx);
+                    self.notice_failed(external_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 if let Err(e) = clipboard_history::quick_look_entry(&entry) {
                     tracing::error!(error = %e, "failed to Quick Look");
-                    self.show_error_toast(external_action.quick_look_failure_message(e), cx);
+                    self.notice_failed(external_action.quick_look_failure_message(e), cx);
                 }
                 DispatchOutcome::success()
             }
@@ -740,12 +736,12 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(external_action.selection_required_message(), cx);
+                    self.notice_failed(external_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast(external_action.load_failure_message(), cx);
+                    self.notice_failed(external_action.load_failure_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -764,7 +760,7 @@ impl ScriptListApp {
                     Ok(path) => path,
                     Err(e) => {
                         tracing::error!(error = %e, "failed to save temp file");
-                        self.show_error_toast(external_action.temp_save_failure_message(), cx);
+                        self.notice_failed(external_action.temp_save_failure_message(), cx);
                         return DispatchOutcome::success();
                     }
                 };
@@ -774,14 +770,14 @@ impl ScriptListApp {
                     let path_str = temp_path.to_string_lossy().to_string();
                     if let Err(e) = crate::file_search::open_with(&path_str) {
                         tracing::error!(error = %e, "failed to Open With");
-                        self.show_error_toast(external_action.open_with_failure_message(), cx);
+                        self.notice_failed(external_action.open_with_failure_message(), cx);
                     }
                 }
 
                 #[cfg(not(target_os = "macos"))]
                 {
                     let _ = temp_path;
-                    self.show_unsupported_platform_toast(external_action.platform_name(), cx);
+                    self.notice_unsupported_platform(external_action.platform_name(), cx);
                 }
                 DispatchOutcome::success()
             }
@@ -792,12 +788,12 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(cleanshot_action.selection_required_message(), cx);
+                    self.notice_failed(cleanshot_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
-                    self.show_error_toast(cleanshot_action.image_required_message(), cx);
+                    self.notice_failed(cleanshot_action.image_required_message(), cx);
                     return DispatchOutcome::success();
                 }
 
@@ -807,7 +803,10 @@ impl ScriptListApp {
                         ClipboardCleanShotHandlerAction::Annotate => {
                             if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
                                 tracing::error!(error = %e, "failed to copy image");
-                                self.show_error_toast(cleanshot_action.copy_failure_message(), cx);
+                                self.notice_failed(
+                                    cleanshot_action.copy_failure_message(),
+                                    cx,
+                                );
                                 return DispatchOutcome::success();
                             }
                             "cleanshot://open-from-clipboard".to_string()
@@ -815,13 +814,16 @@ impl ScriptListApp {
                         ClipboardCleanShotHandlerAction::Upload => {
                             let Some(content) = clipboard_history::get_entry_content(&entry.id)
                             else {
-                                self.show_error_toast(cleanshot_action.copy_failure_message(), cx);
+                                self.notice_failed(
+                                    cleanshot_action.copy_failure_message(),
+                                    cx,
+                                );
                                 return DispatchOutcome::success();
                             };
 
                             let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
                             else {
-                                self.show_error_toast(
+                                self.notice_failed(
                                     cleanshot_action.decode_failure_message(),
                                     cx,
                                 );
@@ -833,7 +835,7 @@ impl ScriptListApp {
 
                             if let Err(e) = std::fs::write(&temp_path, png_bytes) {
                                 tracing::error!(error = %e, "failed to write temp image");
-                                self.show_error_toast(
+                                self.notice_failed(
                                     cleanshot_action.temp_save_failure_message(),
                                     cx,
                                 );
@@ -851,35 +853,31 @@ impl ScriptListApp {
 
                     match std::process::Command::new("open").arg(url).spawn() {
                         Ok(_) => {
-                            self.show_hud(
-                                cleanshot_action.success_hud().to_string(),
-                                Some(HUD_SHORT_MS),
-                                cx,
-                            );
+                            self.one_window_notice(crate::line_notice::INFO, cleanshot_action.success_hud().to_string(), cx);
                             self.hide_main_and_reset(cx);
                         }
                         Err(e) => {
                             tracing::error!(error = %e, "failed to open CleanShot X");
-                            self.show_error_toast(cleanshot_action.open_failure_message(), cx);
+                            self.notice_failed(cleanshot_action.open_failure_message(), cx);
                         }
                     }
                 }
 
                 #[cfg(not(target_os = "macos"))]
                 {
-                    self.show_unsupported_platform_toast("CleanShot", cx);
+                    self.notice_unsupported_platform("CleanShot", cx);
                 }
                 DispatchOutcome::success()
             }
             "clipboard_ocr" => {
                 let ocr_action = ClipboardOcrHandlerAction::ExtractText;
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(ocr_action.selection_required_message(), cx);
+                    self.notice_failed(ocr_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
-                    self.show_error_toast(ocr_action.image_required_message(), cx);
+                    self.notice_failed(ocr_action.image_required_message(), cx);
                     return DispatchOutcome::success();
                 }
 
@@ -905,7 +903,7 @@ impl ScriptListApp {
                 {
                     // Get image content
                     let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                        self.show_error_toast(ocr_action.load_failure_message(), cx);
+                        self.notice_failed(ocr_action.load_failure_message(), cx);
                         return DispatchOutcome::success();
                     };
 
@@ -913,7 +911,7 @@ impl ScriptListApp {
                     let Some((width, height, rgba_bytes)) =
                         clipboard_history::decode_to_rgba_bytes(&content)
                     else {
-                        self.show_error_toast(ocr_action.decode_failure_message(), cx);
+                        self.notice_failed(ocr_action.decode_failure_message(), cx);
                         return DispatchOutcome::success();
                     };
 
@@ -923,12 +921,8 @@ impl ScriptListApp {
                     match script_kit_gpui::ocr::extract_text_from_rgba(width, height, &rgba_bytes) {
                         Ok(text) => {
                             if text.trim().is_empty() {
-                                tracing::debug!(
-                                    category = "UI",
-                                    event = "clipboard_ocr_empty",
-                                    "no text found in image"
-                                );
-                                self.show_error_toast(ocr_action.empty_text_message(), cx);
+                                tracing::debug!(category = "UI", event = "clipboard_ocr_empty", "no text found in image");
+                                self.notice_failed(ocr_action.empty_text_message(), cx);
                             } else {
                                 tracing::debug!(chars = text.len(), "extracted OCR text");
 
@@ -946,14 +940,14 @@ impl ScriptListApp {
                         }
                         Err(e) => {
                             tracing::error!(error = %e, "OCR failed");
-                            self.show_error_toast(ocr_action.extract_failure_message(e), cx);
+                            self.notice_failed(ocr_action.extract_failure_message(e), cx);
                         }
                     }
                 }
 
                 #[cfg(not(all(target_os = "macos", feature = "ocr")))]
                 {
-                    self.show_unsupported_platform_toast("OCR", cx);
+                    self.notice_unsupported_platform("OCR", cx);
                 }
                 DispatchOutcome::success()
             }
@@ -970,7 +964,7 @@ impl ScriptListApp {
                 };
 
                 if filter_text.is_empty() {
-                    self.show_error_toast(bulk_delete_action.search_required_message(), cx);
+                    self.notice_failed(bulk_delete_action.search_required_message(), cx);
                     return DispatchOutcome::success();
                 }
 
@@ -983,51 +977,15 @@ impl ScriptListApp {
                     .collect();
 
                 if ids_to_delete.is_empty() {
-                    self.show_error_toast(bulk_delete_action.no_matches_message(), cx);
+                    self.notice_failed(bulk_delete_action.no_matches_message(), cx);
                     return DispatchOutcome::success();
                 }
 
                 let delete_count = ids_to_delete.len();
-                let confirm_options = crate::confirm::ParentConfirmOptions::irreversible(
-                    bulk_delete_action.confirm_title(),
-                    bulk_delete_action.confirm_message(delete_count),
-                    bulk_delete_action.confirm_button(),
-                );
-                let trace_id = trace_id.to_string();
-                let start = std::time::Instant::now();
-
-                cx.spawn(async move |this, cx| {
-                    match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &trace_id).await {
-                        Ok(true) => {}
-                        Ok(false) => {
-                            tracing::info!(
-                                trace_id = %trace_id,
-                                status = "cancelled",
-                                duration_ms = start.elapsed().as_millis() as u64,
-                                "Async action cancelled: clipboard_delete_multiple"
-                            );
-                            return;
-                        }
-                        Err(e) => {
-                            let _ = this.update(cx, |this, cx| {
-                                tracing::error!(
-                                    trace_id = %trace_id,
-                                    status = "failed",
-                                    duration_ms = start.elapsed().as_millis() as u64,
-                                    error = %e,
-                                    "failed to open confirmation modal"
-                                );
-                                this.show_error_toast_with_code(
-                                    bulk_delete_action.confirmation_failure_message(),
-                                    Some(crate::action_helpers::ERROR_MODAL_FAILED),
-                                    cx,
-                                );
-                            });
-                            return;
-                        }
-                    }
-
-                    let _ = this.update(cx, move |this, cx| {
+                self.one_window_hold(
+                    "trash",
+                    bulk_delete_action.held_title(delete_count),
+                    Box::new(move |this, cx| {
                         let mut deleted = 0usize;
                         let mut failed = 0usize;
                         for id in ids_to_delete {
@@ -1047,15 +1005,15 @@ impl ScriptListApp {
 
                         ClipboardBulkDeleteResult { deleted, failed }
                             .show_feedback(bulk_delete_action, this, cx);
-                    });
-                })
-                .detach();
+                    }),
+                    cx,
+                );
                 DispatchOutcome::success()
             }
             "clipboard_delete" => {
                 let delete_action = ClipboardDeleteEntryHandlerAction::DeleteEntry;
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(delete_action.selection_required_message(), cx);
+                    self.notice_failed(delete_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -1069,16 +1027,12 @@ impl ScriptListApp {
                         // Update selection respecting active filter
                         self.refresh_clipboard_selection_after_delete();
 
-                        self.show_hud(
-                            delete_action.success_hud().to_string(),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
+                        self.one_window_notice(crate::line_notice::INFO, delete_action.success_hud().to_string(), cx);
                         cx.notify();
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to delete clipboard entry");
-                        self.show_error_toast(delete_action.failure_message(e), cx);
+                        self.notice_failed(delete_action.failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
@@ -1100,52 +1054,14 @@ impl ScriptListApp {
                     .unpinned_availability(unpinned_count)
                     .count()
                 else {
-                    self.show_error_toast(bulk_delete_action.no_unpinned_message(), cx);
+                    self.notice_failed(bulk_delete_action.no_unpinned_message(), cx);
                     return DispatchOutcome::success();
                 };
 
-                let confirm_options = crate::confirm::ParentConfirmOptions::irreversible(
-                    bulk_delete_action.confirm_title(),
-                    bulk_delete_action.confirm_message(unpinned_count),
-                    bulk_delete_action.confirm_button(),
-                );
-                let trace_id = trace_id.to_string();
-                let start = std::time::Instant::now();
-
-                cx.spawn(async move |this, cx| {
-                    match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &trace_id)
-                        .await
-                    {
-                        Ok(true) => {}
-                        Ok(false) => {
-                            tracing::info!(
-                                trace_id = %trace_id,
-                                status = "cancelled",
-                                duration_ms = start.elapsed().as_millis() as u64,
-                                "Async action cancelled: clipboard_delete_all"
-                            );
-                            return;
-                        }
-                        Err(e) => {
-                            let _ = this.update(cx, |this, cx| {
-                                tracing::error!(
-                                    trace_id = %trace_id,
-                                    status = "failed",
-                                    duration_ms = start.elapsed().as_millis() as u64,
-                                    error = %e,
-                                    "failed to open confirmation modal"
-                                );
-                                this.show_error_toast_with_code(
-                                    bulk_delete_action.confirmation_failure_message(),
-                                    Some(crate::action_helpers::ERROR_MODAL_FAILED),
-                                    cx,
-                                );
-                            });
-                            return;
-                        }
-                    }
-
-                    let _ = this.update(cx, move |this, cx| {
+                self.one_window_hold(
+                    "trash",
+                    bulk_delete_action.held_title(unpinned_count),
+                    Box::new(move |this, cx| {
                         match clipboard_history::clear_unpinned_history() {
                             Ok(()) => {
                                 tracing::info!(
@@ -1158,33 +1074,29 @@ impl ScriptListApp {
                                 // Reset selection respecting active filter
                                 this.refresh_clipboard_selection_after_delete();
 
-                                this.show_hud(
-                                    bulk_delete_action.success_hud(unpinned_count),
-                                    Some(HUD_2500_MS),
-                                    cx,
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, bulk_delete_action.success_hud(unpinned_count), cx);
                                 cx.notify();
                             }
                             Err(e) => {
                                 tracing::error!(error = %e, "failed to clear unpinned history");
-                                this.show_error_toast(bulk_delete_action.failure_message(e), cx);
+                                this.notice_failed(bulk_delete_action.failure_message(e), cx);
                             }
                         }
-                    });
-                })
-                .detach();
+                    }),
+                    cx,
+                );
                 DispatchOutcome::success()
             }
 
             "clipboard_save_file" => {
                 let save_file_action = ClipboardSaveFileHandlerAction::SaveFile;
                 let Some(entry) = selected_clipboard_entry.clone() else {
-                    self.show_error_toast(save_file_action.selection_required_message(), cx);
+                    self.notice_failed(save_file_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast(save_file_action.content_unavailable_message(), cx);
+                    self.notice_failed(save_file_action.content_unavailable_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -1197,7 +1109,7 @@ impl ScriptListApp {
                     clipboard_history::ContentType::Image => {
                         let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
                         else {
-                            self.show_error_toast(save_file_action.decode_failure_message(), cx);
+                            self.notice_failed(save_file_action.decode_failure_message(), cx);
                             return DispatchOutcome::success();
                         };
                         (png_bytes, "png")
@@ -1237,11 +1149,7 @@ impl ScriptListApp {
                                         duration_ms = start.elapsed().as_millis() as u64,
                                         "Async action completed: clipboard_save_file"
                                     );
-                                    this.show_hud(
-                                        save_file_action.saved_hud(&save_path),
-                                        Some(HUD_LONG_MS),
-                                        cx,
-                                    );
+                                    this.one_window_notice(crate::line_notice::INFO, save_file_action.saved_hud(&save_path), cx);
                                     this.hide_main_and_reset(cx);
                                 }
                                 Err(message) => {
@@ -1254,11 +1162,7 @@ impl ScriptListApp {
                                         error = %message,
                                         "Async action completed with warning: clipboard_save_file reveal failed"
                                     );
-                                    this.show_hud(
-                                        save_file_action.saved_hud(&save_path),
-                                        Some(HUD_LONG_MS),
-                                        cx,
-                                    );
+                                    this.one_window_notice(crate::line_notice::INFO, save_file_action.saved_hud(&save_path), cx);
                                     this.hide_main_and_reset(cx);
                                 }
                             });
@@ -1267,7 +1171,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to save file");
-                        self.show_error_toast(save_file_action.save_failure_message(e), cx);
+                        self.notice_failed(save_file_action.save_failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
@@ -1275,17 +1179,17 @@ impl ScriptListApp {
             "clipboard_save_snippet" => {
                 let save_snippet_action = ClipboardSaveSnippetHandlerAction::SaveSnippet;
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast(save_snippet_action.selection_required_message(), cx);
+                    self.notice_failed(save_snippet_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 if let Some(message) = save_snippet_action.content_type_error(entry.content_type) {
-                    self.show_error_toast(message, cx);
+                    self.notice_failed(message, cx);
                     return DispatchOutcome::success();
                 }
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast(save_snippet_action.content_unavailable_message(), cx);
+                    self.notice_failed(save_snippet_action.content_unavailable_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -1309,7 +1213,10 @@ impl ScriptListApp {
                 if !scriptlets_dir.exists() {
                     if let Err(e) = std::fs::create_dir_all(&scriptlets_dir) {
                         tracing::error!(error = %e, "failed to create scriptlets dir");
-                        self.show_error_toast(save_snippet_action.create_failure_message(e), cx);
+                        self.notice_failed(
+                            save_snippet_action.create_failure_message(e),
+                            cx,
+                        );
                         return DispatchOutcome::success();
                     }
                 }
@@ -1350,17 +1257,13 @@ impl ScriptListApp {
                 match result {
                     Ok(()) => {
                         tracing::info!(keyword = %keyword, "created snippet");
-                        self.show_hud(
-                            save_snippet_action.success_hud(&keyword),
-                            Some(HUD_LONG_MS),
-                            cx,
-                        );
+                        self.one_window_notice(crate::line_notice::INFO, save_snippet_action.success_hud(&keyword), cx);
                         // Refresh scripts to pick up new snippet
                         self.refresh_scripts(cx);
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to save snippet");
-                        self.show_error_toast(save_snippet_action.save_failure_message(e), cx);
+                        self.notice_failed(save_snippet_action.save_failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
@@ -1560,34 +1463,11 @@ impl ClipboardBulkDeleteHandlerAction {
         }
     }
 
-    fn confirm_title(self) -> &'static str {
+    /// What waits in the line before the entries go.
+    fn held_title(self, count: usize) -> String {
         match self {
-            Self::MatchingEntries => "Delete Clipboard Entries",
-            Self::AllUnpinned => "Delete All Clipboard Entries",
-        }
-    }
-
-    fn confirm_message(self, count: usize) -> String {
-        match self {
-            Self::MatchingEntries => {
-                format!("Are you sure you want to delete these {count} matching clipboard entries?")
-            }
-            Self::AllUnpinned => {
-                format!("Are you sure you want to delete all {count} unpinned clipboard entries?")
-            }
-        }
-    }
-
-    fn confirm_button(self) -> &'static str {
-        match self {
-            Self::MatchingEntries => "Delete",
-            Self::AllUnpinned => "Delete All",
-        }
-    }
-
-    fn confirmation_failure_message(self) -> &'static str {
-        match self {
-            Self::MatchingEntries | Self::AllUnpinned => "Failed to open confirmation dialog",
+            Self::MatchingEntries => format!("Delete {count} matching clipboard entries"),
+            Self::AllUnpinned => format!("Delete all {count} unpinned clipboard entries"),
         }
     }
 
@@ -1636,10 +1516,10 @@ impl ClipboardBulkDeleteResult {
     ) {
         match self.outcome() {
             ClipboardBulkDeleteOutcome::Complete => {
-                app.show_hud(action.success_hud(self.deleted), Some(HUD_2500_MS), cx);
+                app.one_window_notice(crate::line_notice::INFO, action.success_hud(self.deleted), cx);
             }
             ClipboardBulkDeleteOutcome::PartialFailure => {
-                app.show_error_toast(
+                app.notice_failed(
                     action.partial_failure_message(self.deleted, self.failed),
                     cx,
                 );

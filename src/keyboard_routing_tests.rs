@@ -241,25 +241,6 @@ mod tests {
         );
     }
 
-    /// Verify that notify_actions_window is called after navigation.
-    ///
-    /// This ensures the separate actions window re-renders after state changes.
-    #[test]
-    fn test_actions_navigation_triggers_window_notify() {
-        let content = read_app_impl_sources();
-
-        // When we route arrow keys to actions dialog, we should notify the window
-        let notify_count = content.matches("notify_actions_window").count();
-
-        // Should be called at least twice (once for ScriptList, once for FileSearchView)
-        assert!(
-            notify_count >= 2,
-            "notify_actions_window should be called after routing arrow keys to actions dialog. \
-             Found {} occurrences, expected at least 2.",
-            notify_count
-        );
-    }
-
     /// Verify main input focus closes actions popup through shared close path.
     ///
     /// This prevents focus overlay state from desynchronizing.
@@ -348,46 +329,6 @@ mod tests {
             assert!(
                 content.contains(host),
                 "shared actions focus restore should still cover {host}"
-            );
-        }
-    }
-
-    /// All global keystroke interceptors must guard against the actions popup window.
-    ///
-    /// The actions window (ActionsWindow) handles its own Escape, Enter, arrows, etc.
-    /// If the main window's interceptors also process those keystrokes, they pass the
-    /// WRONG window reference to focus restoration code, breaking Escape-to-close.
-    ///
-    /// This test ensures every interceptor file that checks for Notes/AI windows
-    /// also checks for the actions window, preventing the class of bugs where
-    /// interceptors steal keystrokes from the actions popup.
-    #[test]
-    fn test_all_interceptors_guard_against_actions_window_keystrokes() {
-        let interceptor_files = [
-            "src/app_impl/startup.rs",
-            "src/app_impl/startup_new_actions.rs",
-            "src/app_impl/startup_new_arrow.rs",
-            "src/app_impl/startup_new_tab.rs",
-        ];
-
-        for file_path in &interceptor_files {
-            let source = fs::read_to_string(file_path)
-                .unwrap_or_else(|_| panic!("Failed to read {}", file_path));
-
-            // Count how many interceptor guards check for notes/ai windows
-            let notes_guard_count = source.matches("is_notes_window(window)").count();
-            let actions_guard_count = source.matches("is_actions_window(window)").count();
-
-            // Every interceptor that guards against notes windows must also guard
-            // against the actions window. The actions window manages its own keys.
-            assert!(
-                actions_guard_count >= notes_guard_count,
-                "{}: has {} notes window guard(s) but only {} actions window guard(s). \
-                 Every intercept_keystrokes guard that checks is_notes_window must also \
-                 check is_actions_window to prevent stealing keystrokes from the actions popup.",
-                file_path,
-                notes_guard_count,
-                actions_guard_count
             );
         }
     }

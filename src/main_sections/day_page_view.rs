@@ -5,8 +5,7 @@ use chrono::Utc;
 use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
 use crate::footer_popup::{FooterAction, FooterButtonConfig};
 use crate::notes::deeplink_activation::{
-    resolve_activation, run_deeplink_confirm_options, Activation, ActivationErrorReason,
-    ActivationSurface,
+    resolve_activation, Activation, ActivationErrorReason, ActivationSurface,
 };
 use script_kit_gpui::brain::{indexer::wake_indexer, substrate::BrainSubstrate};
 use script_kit_gpui::day_page::normalize_day_page_markdown_references;
@@ -1381,14 +1380,6 @@ impl DayPageView {
 
         if exact_plain
             && crate::ui_foundation::is_key_escape(key)
-            && crate::confirm::is_confirm_window_open()
-        {
-            crate::confirm::route_key_to_confirm_popup("escape", cx);
-            return;
-        }
-
-        if exact_plain
-            && crate::ui_foundation::is_key_escape(key)
             && self.kit_resource_preview.is_some()
         {
             self.close_kit_resource_preview(window, cx);
@@ -1396,12 +1387,12 @@ impl DayPageView {
         }
 
         // Kit resource preview keyboard contract: the preview replaces the
-        // editor, so its power-user keys must win before any editor handling
-        // (but never over an open confirm popup). ⌘C copies the resource URI,
+        // editor, so its power-user keys must win before any editor handling.
+        // ⌘C copies the resource URI,
         // ↵ opens the editable source (when one exists), ⌘↵ stages the
         // resource in Agent Chat. These mirror the clickable footer hints
         // rendered by the shared preview component.
-        if self.kit_resource_preview.is_some() && !crate::confirm::is_confirm_window_open() {
+        if self.kit_resource_preview.is_some() {
             if exact_cmd && key == "c" {
                 self.execute_day_page_action_from_preview(
                     crate::DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID,
@@ -1550,20 +1541,18 @@ impl DayPageView {
         cx: &mut Context<Self>,
     ) {
         match activation {
-            Activation::ConfirmBeforeRun {
+            Activation::HoldBeforeRun {
                 command_id,
-                raw_href,
-            } => self.open_run_deeplink_confirm(command_id, raw_href, window, cx),
+                raw_href: _,
+            } => self.hold_run_deeplink(command_id, cx),
             Activation::Error(error) => {
-                self.open_deeplink_info_dialog(
+                self.say_deeplink(
                     "Can't open this link",
                     format!(
                         "{}\n\n{}",
                         error.raw_href,
                         day_page_activation_error_message(&error.reason)
                     ),
-                    error.raw_href,
-                    window,
                     cx,
                 );
             }
@@ -1629,13 +1618,9 @@ impl DayPageView {
                 self.sync_footer(window, cx);
                 cx.notify();
             }
-            Err(error) => self.open_deeplink_info_dialog(
-                "Can't open this link",
-                format!("{uri}\n\n{error}"),
-                uri,
-                window,
-                cx,
-            ),
+            Err(error) => {
+                self.say_deeplink("Can't open this link", format!("{uri}\n\n{error}"), cx)
+            }
         }
     }
 
@@ -1664,11 +1649,9 @@ impl DayPageView {
                 tracing::info!(event = "day_page_deeplink_url_opened", href = %href);
                 self.sync_footer(window, cx);
             }
-            Err(error) => self.open_deeplink_info_dialog(
+            Err(error) => self.say_deeplink(
                 "Can't open this link",
                 format!("{href}\n\nFailed to open URL: {error}"),
-                href,
-                window,
                 cx,
             ),
         }
@@ -1684,18 +1667,12 @@ impl DayPageView {
         if let Err(error) =
             crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::OpenExternal)
         {
-            self.open_deeplink_info_dialog(
-                "Can't open this link",
-                error.to_string(),
-                raw_href,
-                window,
-                cx,
-            );
+            self.say_deeplink("Can't open this link", error.to_string(), cx);
             return;
         }
         let path_display = path.to_string_lossy().to_string();
         if !path.exists() {
-            self.open_missing_file_deeplink_dialog(path, raw_href, window, cx);
+            self.open_missing_file_deeplink_dialog(path, raw_href, cx);
             return;
         }
 
@@ -1708,11 +1685,9 @@ impl DayPageView {
                 );
                 self.sync_footer(window, cx);
             }
-            Err(error) => self.open_deeplink_info_dialog(
+            Err(error) => self.say_deeplink(
                 "Can't open this link",
                 format!("{raw_href}\n\nFailed to open file:\n{path_display}\n\n{error}"),
-                raw_href,
-                window,
                 cx,
             ),
         }
@@ -1722,15 +1697,12 @@ impl DayPageView {
         &mut self,
         path: PathBuf,
         raw_href: String,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let path_display = path.to_string_lossy().to_string();
-        self.open_deeplink_info_dialog(
+        self.say_deeplink(
             "Can't open this link",
             format!("{raw_href}\n\nFile does not exist:\n{path_display}"),
-            raw_href,
-            window,
             cx,
         );
     }
@@ -1746,15 +1718,13 @@ impl DayPageView {
                 tracing::info!(event = "day_page_deeplink_note_opened", note_id = %note_id);
                 self.sync_footer(window, cx);
             }
-            Err(error) => self.open_deeplink_info_dialog(
+            Err(error) => self.say_deeplink(
                 "Can't open this link",
                 format!(
                     "scriptkit://notes/{}\n\nCould not open note: {}",
                     note_id.as_str(),
                     error
                 ),
-                format!("scriptkit://notes/{}", note_id.as_str()),
-                window,
                 cx,
             ),
         }
@@ -1787,135 +1757,34 @@ impl DayPageView {
             return;
         }
 
-        self.open_deeplink_info_dialog(
-            "Open context search",
-            format!(
+        self.say_deeplink("Open context search", format!(
                 "{context_link}\n\nUse this scoped context token to search {} for matching context. Exact file/project paths and exact browser URLs open directly.",
                 source.search_hint_noun()
-            ),
-            context_link,
-            window,
-            cx,
-        );
+            ), cx);
     }
 
-    fn open_run_deeplink_confirm(
-        &mut self,
-        command_id: String,
-        raw_href: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.app.upgrade().is_none() {
-            self.open_deeplink_info_dialog(
-                "Can't open this link",
-                format!(
-                    "{}\n\nCould not attach the confirmation prompt to the Day Page.",
-                    raw_href
-                ),
-                raw_href,
-                window,
-                cx,
-            );
-            return;
-        }
-
-        let command_id_for_confirm = command_id.clone();
-        let command_id_for_cancel = command_id.clone();
-        let app = self.app.clone();
-        let (sender, receiver) = async_channel::bounded::<bool>(1);
-        self.open_deferred_confirm_prompt(
-            run_deeplink_confirm_options(&command_id, &raw_href),
-            sender,
-            cx,
-        );
-        cx.spawn(async move |_this, cx| {
-            if receiver.recv().await.unwrap_or(false) {
-                let executed = cx.update(|cx| {
-                    app.upgrade()
-                        .map(|app| {
-                            app.update(cx, |app, cx| {
-                                app.execute_by_command_id_or_path(&command_id_for_confirm, cx)
-                            })
-                        })
-                        .unwrap_or(false)
-                });
-                tracing::info!(
-                    event = "day_page_deeplink_run_confirmed",
-                    command_id = %command_id_for_confirm,
-                    executed,
-                    "day_page_deeplink_run_confirmed",
-                );
-            } else {
-                tracing::info!(
-                    event = "day_page_deeplink_run_cancelled",
-                    command_id = %command_id_for_cancel,
-                    "day_page_deeplink_run_cancelled",
-                );
-            }
-        })
-        .detach();
-    }
-
-    fn open_deeplink_info_dialog(
-        &mut self,
-        title: &'static str,
-        body: String,
-        copy_link: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.app.upgrade().is_none() {
-            tracing::warn!(event = "day_page_deeplink_modal_unavailable", title);
-            self.sync_footer(window, cx);
-            return;
-        }
-
-        let (sender, receiver) = async_channel::bounded::<bool>(1);
-        self.open_deferred_confirm_prompt(
-            crate::confirm::ParentConfirmOptions {
-                title: title.into(),
-                body: body.into(),
-                confirm_text: "Copy link".into(),
-                cancel_text: "Dismiss".into(),
-                risk: crate::confirm::ConfirmRisk::Safe,
-                width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-            },
-            sender,
-            cx,
-        );
-        cx.spawn(async move |_this, cx| {
-            if receiver.recv().await.unwrap_or(false) {
-                cx.update(|cx| {
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_link.clone()));
-                });
-            }
-        })
-        .detach();
-    }
-
-    /// Ask through the shared confirm modal over the main window. Deferred
-    /// because the day page is usually updated from inside the app entity.
-    fn open_deferred_confirm_prompt(
-        &self,
-        options: crate::confirm::ParentConfirmOptions,
-        sender: async_channel::Sender<bool>,
-        cx: &mut Context<Self>,
-    ) {
+    /// A note link that runs a command waits in the line before it runs.
+    fn hold_run_deeplink(&mut self, command_id: String, cx: &mut Context<Self>) {
         let app = self.app.clone();
         cx.spawn(async move |_this, cx| {
+            // Deferred: the day page is usually updated from inside the app entity.
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(1))
                 .await;
             cx.update(|cx| {
                 if let Some(app) = app.upgrade() {
                     app.update(cx, |app, cx| {
-                        app.open_main_window_confirm(
-                            options,
-                            || true,
-                            move |confirmed, _| {
-                                let _ = sender.try_send(confirmed);
-                            },
+                        app.one_window_hold(
+                            "play",
+                            format!("Run {command_id}"),
+                            Box::new(move |app, cx| {
+                                let executed = app.execute_by_command_id_or_path(&command_id, cx);
+                                tracing::info!(
+                                    event = "day_page_deeplink_run_held_ran",
+                                    command_id = %command_id,
+                                    executed,
+                                );
+                            }),
                             cx,
                         );
                     });
@@ -1923,6 +1792,15 @@ impl DayPageView {
             });
         })
         .detach();
+    }
+
+    /// A link that can't do what it says says why in the line above the input.
+    fn say_deeplink(&mut self, title: &'static str, body: String, cx: &mut Context<Self>) {
+        crate::line_notice::say(
+            cx,
+            crate::line_notice::INFO,
+            crate::notes::deeplink_activation::deeplink_notice(title, &body),
+        );
     }
 }
 
@@ -1990,9 +1868,7 @@ fn day_page_footer_buttons_for_preview(
     availability: Option<DayPageKitPreviewActionAvailability>,
     return_label: &'static str,
 ) -> Vec<FooterButtonConfig> {
-    let footer_disabled = crate::confirm::is_confirm_window_open();
-    let actions_open = app.show_actions_popup || crate::actions::is_actions_window_open();
-    let enabled = !footer_disabled;
+    let actions_open = app.show_actions_popup;
 
     // While a kit:// resource preview replaces the editor, the footer owns the
     // preview's actions — same anatomy as other main-window surfaces: primary
@@ -2008,19 +1884,13 @@ fn day_page_footer_buttons_for_preview(
             FooterButtonConfig::new(FooterAction::Copy, "⌘C", "Copy URI")
         };
         return vec![
-            primary.enabled(enabled),
-            FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
-                .selected(actions_open)
-                .enabled(enabled),
-            FooterButtonConfig::new(FooterAction::Close, "Esc", return_label).enabled(enabled),
+            primary,
+            FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions").selected(actions_open),
+            FooterButtonConfig::new(FooterAction::Close, "Esc", return_label),
         ];
     }
 
-    vec![
-        FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
-            .selected(actions_open)
-            .enabled(enabled),
-    ]
+    vec![FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions").selected(actions_open)]
 }
 
 impl ScriptListApp {

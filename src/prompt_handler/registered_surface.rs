@@ -106,59 +106,27 @@ pub(crate) fn registered_surface_ui_snapshot(
     cx: &gpui::App,
 ) -> anyhow::Result<protocol::UiStateSnapshot> {
     use crate::windows::automation_surface_collector as collector;
-    use crate::windows::automation_transaction_provider as provider;
     let target = registered_surface_target(resolved)?;
-    let generation = target
+    target
         .generation
         .ok_or_else(|| anyhow::anyhow!("registered_surface_generation_missing"))?;
     match target.kind {
         protocol::AutomationWindowKind::ActionsDialog => {
-            let entity = collector::exact_actions_dialog_entity(&target, cx)
-                .ok_or_else(|| anyhow::anyhow!("actions_target_unavailable"))?;
-            Ok(provider::actions_dialog_ui_snapshot(&target, &entity, cx))
+            anyhow::bail!("actions_are_staged_in_place")
         }
         _ => {
-            let (elements, focused_semantic_id, selected_semantic_id) =
-                if target.id == "shortcut-recorder-popup" {
-                    let elements = crate::shortcut_recorder::shortcut_fixture_elements(
-                        &target.id, generation, cx,
-                    )?;
-                    let focused = elements
-                        .iter()
-                        .find(|element| element.focused == Some(true))
-                        .map(|element| element.semantic_id.clone());
-                    let selected = elements
-                        .iter()
-                        .find(|element| element.selected == Some(true))
-                        .map(|element| element.semantic_id.clone());
-                    (elements, focused, selected)
-                } else if target.semantic_surface.as_deref() == Some("footerOverlay") {
-                    (
-                        crate::footer_popup::footer_fixture_elements(&target.id, generation, cx)?,
-                        None,
-                        None,
-                    )
-                } else {
-                    let surface = collector::collect_surface_snapshot(&target, usize::MAX, cx)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("registered_surface_state_unavailable:{}", target.id)
-                        })?;
-                    (
-                        surface.elements,
-                        surface.focused_semantic_id,
-                        surface.selected_semantic_id,
-                    )
-                };
+            let surface =
+                collector::collect_surface_snapshot(&target, usize::MAX, cx).ok_or_else(|| {
+                    anyhow::anyhow!("registered_surface_state_unavailable:{}", target.id)
+                })?;
+            let (elements, focused_semantic_id, selected_semantic_id) = (
+                surface.elements,
+                surface.focused_semantic_id,
+                surface.selected_semantic_id,
+            );
             let input_value = if target.kind == protocol::AutomationWindowKind::Notes {
                 let (entity, _) = registered_notes_owner(&target, cx)?;
                 Some(entity.read(cx).editor_state.read(cx).value().to_string())
-            } else if target.kind == protocol::AutomationWindowKind::Dictation {
-                Some(
-                    crate::dictation::get_dictation_overlay_state_for_instance(generation, cx)
-                        .ok_or_else(|| anyhow::anyhow!("dictation_target_unavailable"))?
-                        .transcript
-                        .to_string(),
-                )
             } else {
                 elements
                     .iter()
@@ -217,8 +185,6 @@ pub(crate) fn apply_registered_surface_command(
     command: &protocol::BatchCommand,
     cx: &mut gpui::App,
 ) -> anyhow::Result<Option<String>> {
-    use crate::protocol::transaction_executor::TransactionStateProvider;
-    use crate::windows::automation_transaction_provider::ActionsDialogTransactionProvider;
     let target = registered_surface_target(resolved)?;
     if let protocol::BatchCommand::SelectBySemanticId {
         semantic_id,
@@ -231,63 +197,13 @@ pub(crate) fn apply_registered_surface_command(
             return Ok(Some(selected));
         }
     }
-    let generation = target
+    target
         .generation
         .ok_or_else(|| anyhow::anyhow!("registered_surface_generation_missing"))?;
     let kind = registered_batch_target_kind(&target);
-    let selected = match target.kind {
-        protocol::AutomationWindowKind::Dictation => {
-            if let protocol::BatchCommand::SelectBySemanticId {
-                semantic_id,
-                submit,
-            } = command
-            {
-                let actions =
-                    crate::dictation::dictation_recording_actions_for_instance(generation, cx)
-                        .ok_or_else(|| anyhow::anyhow!("dictation_owner_stale"))?;
-                anyhow::ensure!(
-                    actions.iter().any(|action| &action.id == semantic_id
-                        && matches!(
-                            action.id.as_str(),
-                            "dictation_microphone" | "dictation_jump_latest"
-                        )),
-                    "dictation_action_unavailable"
-                );
-                if *submit {
-                    crate::dictation::execute_dictation_overlay_action_for_instance(
-                        generation,
-                        semantic_id,
-                        cx,
-                    )?;
-                }
-                return Ok(Some(semantic_id.clone()));
-            }
-            return Err(unsupported_batch_command_error(kind, command).into());
-        }
+    match target.kind {
         protocol::AutomationWindowKind::ActionsDialog => {
-            let entity = crate::windows::automation_surface_collector::exact_actions_dialog_entity(
-                &target, cx,
-            )
-            .ok_or_else(|| anyhow::anyhow!("actions_target_unavailable"))?;
-            let mut provider = ActionsDialogTransactionProvider {
-                cx,
-                entity,
-                target: target.clone(),
-            };
-            match command {
-                protocol::BatchCommand::SetInput { text } => {
-                    provider.set_input(text)?;
-                    return Ok(None);
-                }
-                protocol::BatchCommand::SelectByValue { value, submit } => {
-                    provider.select_by_value(value, *submit)?
-                }
-                protocol::BatchCommand::SelectBySemanticId {
-                    semantic_id,
-                    submit,
-                } => provider.select_by_semantic_id(semantic_id, *submit)?,
-                _ => return Err(unsupported_batch_command_error(kind, command).into()),
-            }
+            anyhow::bail!("actions_are_staged_in_place")
         }
         protocol::AutomationWindowKind::Notes => {
             let (entity, handle) = registered_notes_owner(&target, cx)?;
@@ -311,58 +227,10 @@ pub(crate) fn apply_registered_surface_command(
                 }
                 _ => return Err(unsupported_batch_command_error(kind, command).into()),
             }
-            return Ok(None);
+            Ok(None)
         }
-        protocol::AutomationWindowKind::PromptPopup => {
-            let subtype = resolve_prompt_popup_subtype(&target)?;
-            revalidate_prompt_popup_target(&target, subtype)?;
-            if subtype == PromptPopupSubtype::Confirm {
-                anyhow::ensure!(
-                    crate::confirm::get_confirm_popup_snapshot(cx, generation, None).is_some(),
-                    "confirm_target_owner_mismatch"
-                );
-            }
-            match command {
-                protocol::BatchCommand::SelectByValue { value, submit } => match subtype {
-                    PromptPopupSubtype::Confirm => crate::confirm::batch_select_confirm_button_by_value(generation, value, *submit, cx)?,
-                    PromptPopupSubtype::DictationMicrophone => crate::dictation::batch_select_dictation_microphone_popup_row_by_value(generation, value, *submit, cx)?,
-                },
-                protocol::BatchCommand::SelectBySemanticId { semantic_id, submit } => match subtype {
-                    PromptPopupSubtype::Confirm => crate::confirm::batch_select_confirm_button_by_semantic_id(generation, semantic_id, *submit, cx)?,
-                    PromptPopupSubtype::DictationMicrophone => crate::dictation::batch_select_dictation_microphone_popup_row_by_semantic_id(generation, semantic_id, *submit, cx)?,
-                },
-                protocol::BatchCommand::SetThemeControl { control, value } => {
-                    // A popup may operate only on its registered parent, never an
-                    // arbitrary launcher (and never create or focus one).
-                    let parent = target.parent_window_id.as_ref().zip(target.parent_window_generation)
-                        .and_then(|(id, generation)| crate::windows::get_runtime_window_handle_for_generation(id, generation))
-                        .ok_or_else(|| anyhow::anyhow!("setThemeControl requires ThemeChooserView"))?;
-                    let root = parent.read(cx, |root: gpui::Entity<crate::Root>, _| root)?;
-                    let app = root.read(cx).view().clone().downcast::<ScriptListApp>()
-                        .map_err(|_| anyhow::anyhow!("setThemeControl requires ThemeChooserView"))?;
-                    return app.update(cx, |app, cx| {
-                        anyhow::ensure!(matches!(app.current_view, AppView::ThemeChooserView { .. }), "setThemeControl requires ThemeChooserView");
-                        app.set_theme_chooser_control_from_devtools(control, value, cx).map(Some)
-                    });
-                }
-                _ => return Err(unsupported_batch_command_error(kind, command).into()),
-            }
-        }
-        _ => return Err(unsupported_batch_command_error(kind, command).into()),
-    };
-    if selected.is_some() {
-        return Ok(selected);
+        _ => Err(unsupported_batch_command_error(kind, command).into()),
     }
-    let error = match command {
-        protocol::BatchCommand::SelectByValue { value, .. } => {
-            protocol::TransactionError::selection_not_found(value)
-        }
-        protocol::BatchCommand::SelectBySemanticId { semantic_id, .. } => {
-            protocol::TransactionError::element_not_found(semantic_id)
-        }
-        _ => unreachable!(),
-    };
-    Err(error.into())
 }
 
 pub(crate) fn registered_surface_state_result(
@@ -382,21 +250,6 @@ pub(crate) fn registered_surface_state_result(
     } else {
         None
     };
-    let actions_dialog = if target.kind == protocol::AutomationWindowKind::ActionsDialog {
-        Some(
-            crate::windows::automation_surface_collector::exact_actions_dialog_entity(&target, cx)
-                .ok_or_else(|| anyhow::anyhow!("actions_target_unavailable"))?
-                .read(cx)
-                .automation_state("actionsDialog", cx),
-        )
-    } else {
-        None
-    };
-    let dictation_state = if target.kind == protocol::AutomationWindowKind::Dictation {
-        Some(crate::dictation::automation_state())
-    } else {
-        None
-    };
     Ok(protocol::Message::StateResult {
         request_id: request_id.to_string(),
         prompt_type: snapshot
@@ -411,8 +264,8 @@ pub(crate) fn registered_surface_state_result(
         is_focused: snapshot.window_focused,
         window_visible: snapshot.window_visible,
         notes_state,
-        actions_dialog,
-        dictation_state,
+        actions_dialog: None,
+        dictation_state: None,
         surface_contract: None,
         active_popup_contract: None,
         active_footer: None,

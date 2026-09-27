@@ -908,8 +908,8 @@ pub struct DictationPreferences {
     /// (default: 600; 0 disables the guard).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_duration_secs: Option<u64>,
-    /// Live partial transcript preview in the recording overlay
-    /// (default: true).
+    /// Live partial transcript, shown as the words heard so far in the
+    /// main window's voice view (default: true).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_preview: Option<bool>,
     /// Hold-the-dictation-hotkey push-to-talk: release after holding to stop
@@ -976,7 +976,7 @@ impl DictationPreferences {
         }
     }
 
-    /// Whether the recording overlay shows live partial transcripts.
+    /// Whether the voice view shows live partial transcripts.
     pub fn live_preview_enabled(&self) -> bool {
         self.live_preview.unwrap_or(true)
     }

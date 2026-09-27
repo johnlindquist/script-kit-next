@@ -278,20 +278,6 @@ fn has_selected_emoji_entry(app: &ScriptListApp) -> bool {
         .is_some()
 }
 
-fn has_selected_dictation_history_entry(app: &ScriptListApp) -> bool {
-    let AppView::DictationHistoryView {
-        filter,
-        selected_index,
-        visible_limit,
-    } = &app.current_view
-    else {
-        return false;
-    };
-
-    app.dictation_history_current_or_previous_page(filter, *visible_limit)
-        .is_some_and(|page| page.rows.get(*selected_index).is_some())
-}
-
 impl ScriptListApp {
     fn copy_selected_sdk_reference_markdown(&mut self, cx: &mut Context<Self>) -> bool {
         let selected = match &self.current_view {
@@ -310,7 +296,11 @@ impl ScriptListApp {
 
         let markdown = crate::mcp_resources::format_sdk_reference_entry_markdown(&entry);
         match crate::platform::copy_text_to_clipboard(&markdown) {
-            Ok(()) => self.show_hud(format!("Copied {} reference", entry.name), Some(2000), cx),
+            Ok(()) => self.one_window_notice(
+                crate::line_notice::INFO,
+                format!("Copied {} reference", entry.name),
+                cx,
+            ),
             Err(error) => tracing::warn!(
                 %error,
                 "sdk_reference footer copy_text_to_clipboard failed"
@@ -339,9 +329,9 @@ impl ScriptListApp {
 
         let markdown = crate::mcp_resources::format_script_template_markdown(&template);
         match crate::platform::copy_text_to_clipboard(&markdown) {
-            Ok(()) => self.show_hud(
+            Ok(()) => self.one_window_notice(
+                crate::line_notice::INFO,
                 format!("Copied {} template", template.title),
-                Some(2000),
                 cx,
             ),
             Err(error) => tracing::warn!(

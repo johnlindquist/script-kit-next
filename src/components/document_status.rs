@@ -12,8 +12,6 @@ impl DocumentFeedbackKind {
         matches!(self, Self::Error | Self::SaveFailure)
     }
 }
-pub struct DocumentSaveFailureNotification;
-
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSaveFailure {

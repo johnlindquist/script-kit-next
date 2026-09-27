@@ -130,8 +130,6 @@
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             agent_chat_history_scroll_handle: ScrollHandle::new(),
             browser_history_scroll_handle: ScrollHandle::new(),
-            dictation_history_scroll_handle: ScrollHandle::new(),
-            dictation_history_previous_page: None,
             notes_browse_scroll_handle: ScrollHandle::new(),
             tracked_builtin_list_states: std::collections::HashMap::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
@@ -182,8 +180,6 @@
             scriptlet_preview_cache_lines: Vec::new(),
             // Design system: start with default design
             current_design: DesignVariant::default(),
-            // Toast manager: initialize for error notifications
-            toast_manager: ToastManager::new(),
             // Clipboard image cache: decoded RenderImages for thumbnails/preview
             clipboard_image_cache: std::collections::HashMap::new(),
             // Frecency store for tracking script usage
@@ -262,14 +258,12 @@
             last_scrolled_arg: None,
             last_scrolled_clipboard: None,
             last_scrolled_window: None,
-            // Show warning banner when bun is not available
-            show_bun_warning: !bun_available,
+            bun_missing: !bun_available,
             // Menu bar integration: Now handled by frontmost_app_tracker module
             // which pre-fetches menu items in background when apps activate
             // Shortcut recorder state - starts as None (no recorder showing)
             shortcut_recorder_state: None,
             // Shortcut recorder entity - persisted to maintain focus
-            shortcut_recorder_entity: None,
             // Alias input state - starts as None (no alias input showing)
             alias_input_state: None,
             // Alias input entity - persisted to maintain focus

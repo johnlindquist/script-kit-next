@@ -8,9 +8,7 @@
   "expectedHost": "MainWindow",
   "memberBindingIds": [
     "AttachmentPortalBrowser::BrowserHistoryView@MainWindow",
-    "AttachmentPortalBrowser::DictationHistoryView@MainWindow",
-    "AttachmentPortalBrowser::NotesBrowseView@MainWindow",
-    "alias:dictation-history"
+    "AttachmentPortalBrowser::NotesBrowseView@MainWindow"
   ],
   "memberReceiptPaths": [
     ".artifacts/consistency/PF-010/family-fixtures.json"

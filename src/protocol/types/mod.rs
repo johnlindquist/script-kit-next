@@ -76,14 +76,13 @@ pub use design_evaluation::{
 };
 #[cfg(any(test, feature = "owned-ui-evaluation"))]
 pub use design_evaluation::{
-    DesignCommand, DictationFixtureCommand, DictationFixtureDestination, EvaluationLimits,
-    FixtureControl, FixtureDescriptor, FlowFixtureCommand, NativeSafetyProbe, NotesFixtureCommand,
-    ObservedEffect, OwnedFileSearchPreviewCondition, OwnedFileSearchStreamCondition,
-    OwnedFrameCursor, OwnedResponseCodec, OwnedResponseEncoding, OwnedRuntimeIdentity,
-    OwnedSearchProviderCondition, OwnedSearchProviderSource, OwnedSearchQueryStamp,
-    ScheduledFrameRequirement, ScopedActionReceipt, SdkChatFixtureCommand, SdkCompletionChannel,
-    SdkPromptCommand, SdkPromptFixtureId, SearchFixtureCommand, ThemeFaultOperation,
-    ThemeFixtureCommand, OWNED_RESPONSE_CODEC,
+    DesignCommand, EvaluationLimits, FixtureControl, FixtureDescriptor, FlowFixtureCommand,
+    NativeSafetyProbe, NotesFixtureCommand, ObservedEffect, OneWindowFixtureCommand,
+    OneWindowTalkDestination, OwnedFileSearchPreviewCondition, OwnedFileSearchStreamCondition,
+    OwnedFrameCursor, OwnedResponseEncoding, OwnedRuntimeIdentity, OwnedSearchProviderCondition,
+    OwnedSearchQueryStamp, ScheduledFrameRequirement, ScopedActionReceipt, SdkChatFixtureCommand,
+    SdkCompletionChannel, SdkPromptCommand, SdkPromptFixtureId, SearchFixtureCommand,
+    ThemeFaultOperation, ThemeFixtureCommand, OWNED_RESPONSE_CODEC,
 };
 pub use elements_actions_scriptlets::{
     ConversationSemanticAction, ConversationSemanticRole, ElementContentDescriptor,

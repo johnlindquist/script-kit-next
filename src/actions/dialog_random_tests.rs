@@ -20,7 +20,7 @@ use super::types::{
     Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
     SectionStyle,
 };
-use super::window::{WindowPosition, count_section_headers};
+use super::dialog::count_section_headers;
 use crate::clipboard_history::ContentType;
 use crate::designs::icon_variations::IconName;
 use crate::file_search::{FileInfo, FileType};
@@ -130,22 +130,7 @@ fn window_count_section_headers_out_of_bounds_index() {
     assert_eq!(count_section_headers(&actions, &[0, 99]), 1);
 }
 
-// =========================================================================
-// 2. WindowPosition enum
-// =========================================================================
 
-#[test]
-fn window_position_default_is_bottom_right() {
-    let pos = WindowPosition::default();
-    assert_eq!(pos, WindowPosition::BottomRight);
-}
-
-#[test]
-fn window_position_variants_are_distinct() {
-    assert_ne!(WindowPosition::BottomRight, WindowPosition::TopRight);
-    assert_ne!(WindowPosition::TopRight, WindowPosition::TopCenter);
-    assert_ne!(WindowPosition::BottomRight, WindowPosition::TopCenter);
-}
 
 // =========================================================================
 // 3. format_shortcut_hint — edge cases

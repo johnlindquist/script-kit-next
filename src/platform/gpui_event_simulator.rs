@@ -197,10 +197,7 @@ fn automation_kind_to_window_role(
         AutomationWindowKind::Notes => Some(WindowRole::Notes),
         // Attached surfaces and popup-only windows use exact runtime handles
         // when available and do not map to the shared role registry.
-        AutomationWindowKind::ActionsDialog
-        | AutomationWindowKind::Dictation
-        | AutomationWindowKind::PromptPopup
-        | AutomationWindowKind::Hud => None,
+        AutomationWindowKind::ActionsDialog | AutomationWindowKind::PromptPopup => None,
         // Each display overlay has its own exact runtime handle, not a shared role.
         AutomationWindowKind::SnapOverlay => None,
     }
@@ -1104,7 +1101,7 @@ mod deferred_dispatch_tests {
                 cx,
                 &mut unwound,
                 "cleanup-unwound",
-                AutomationWindowKind::Dictation,
+                AutomationWindowKind::PromptPopup,
                 None,
             )
         });
@@ -1164,7 +1161,6 @@ mod deferred_dispatch_tests {
         let mut windows = vec![main];
         for kind in [
             AutomationWindowKind::Notes,
-            AutomationWindowKind::Dictation,
             AutomationWindowKind::PromptPopup,
             AutomationWindowKind::ActionsDialog,
         ] {
@@ -1242,7 +1238,6 @@ mod deferred_dispatch_tests {
         for kind in [
             AutomationWindowKind::Main,
             AutomationWindowKind::Notes,
-            AutomationWindowKind::Dictation,
             AutomationWindowKind::PromptPopup,
             AutomationWindowKind::ActionsDialog,
         ] {

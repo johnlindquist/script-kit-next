@@ -10,21 +10,17 @@ use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-use gpui::{AppContext as _, Context};
+use gpui::Context;
 use sk_one_window::contract::{words, MAX_MATCHES};
-use sk_one_window::{Effect, Event, HeightDecision, HeightMode, Item, Key, Row};
+use sk_one_window::{Effect, Event, Item, Key, Row};
 
 use crate::intent::{JevError, JevRow, Plan};
 use crate::list_item::GroupedListItem;
 use crate::scripts::{IntentMatch, SearchResult};
-use crate::{
-    AppView, MainMenuDispatchResult, MainMenuSelectionOrigin, MainWindowMode, ScriptListApp,
-};
+use crate::{AppView, MainMenuDispatchResult, MainMenuSelectionOrigin, ScriptListApp};
 
 /// Jev counts as down for the words it was asked about once this passes without an answer.
 const JEV_TIMEOUT: Duration = Duration::from_secs(5);
-/// How often a shrinking window is redrawn.
-const SHRINK_FRAME: Duration = Duration::from_millis(8);
 
 /// Milliseconds on the host's clock.
 type Ms = sk_one_window::Ms;
@@ -36,9 +32,9 @@ pub(crate) struct OneWindowHost {
     /// The one pending `Tick`; a timer for any other time is stale.
     wake_at: Option<Ms>,
     /// Bumped by every height decision so an older shrink stops drawing.
-    height_generation: u64,
+    pub(super) height_generation: u64,
     /// The main window's height as the reducer last placed it.
-    height: Option<f32>,
+    pub(super) height: Option<f32>,
     pub(super) window: Option<gpui::AnyWindowHandle>,
     /// Words the reducer put in the input; their echo from the input isn't typing.
     echo: Option<String>,
@@ -50,6 +46,18 @@ pub(crate) struct OneWindowHost {
     /// What was highlighted when ⌘K staged something.
     pub(super) staged_from: Option<super::staging::StagedFrom>,
     pub(crate) work: super::work::WorkHost,
+    pub(crate) learns: super::learns::LearnsHost,
+    pub(super) ledger: super::ledger_view::LedgerHost,
+    /// The form, answer or note open in place of the list.
+    pub(super) view: Option<super::views::HostedView>,
+    /// The input's words the open view last took.
+    pub(super) view_text: Option<String>,
+    /// What was staged when this turn began: the subject a staged row that ran acts on.
+    pub(super) acting_on: Option<sk_one_window::Subject>,
+    /// The height last reported for what's drawn in place of the list, while something is.
+    pub(super) view_px: Option<f32>,
+    /// What a view staged with ⌘K, while its actions are listed in its place.
+    pub(super) view_stage: Option<super::view_staging::ViewStage>,
 }
 
 /// What the reducer did with one event.
@@ -155,6 +163,9 @@ impl ScriptListApp {
     /// Whether the reducer owns the list for these words. Launcher syntax, the calculator,
     /// attachment portals and pickers keep their own lists.
     pub(crate) fn one_window_owns(&self, text: &str) -> bool {
+        if matches!(self.current_view, AppView::ScriptList) && self.one_window.in_view() {
+            return true;
+        }
         matches!(self.current_view, AppView::ScriptList)
             && self.inline_calculator.is_none()
             && self.active_script_list_attachment_portal_kind().is_none()
@@ -184,14 +195,20 @@ impl ScriptListApp {
     }
 
     /// Feeds events that happen in one turn: the reducer sees them at the same moment.
-    fn one_window_handle_turn(&mut self, events: Vec<Event>, cx: &mut Context<Self>) -> Handled {
+    pub(super) fn one_window_handle_turn(
+        &mut self,
+        events: Vec<Event>,
+        cx: &mut Context<Self>,
+    ) -> Handled {
         let mut queue = VecDeque::from(events);
         let mut handled = Handled::default();
         let mut runs = Vec::new();
         let mut works = Vec::new();
         let mut first = true;
         let now = self.one_window_now(cx);
+        self.one_window_host.acting_on = self.one_window.staged().map(|s| s.subject.clone());
         while let Some(event) = queue.pop_front() {
+            let typed = matches!(event, Event::Text(_));
             let outcome = self.one_window.handle(now, event);
             if std::mem::take(&mut first) {
                 handled.consumed = outcome.consumed;
@@ -228,23 +245,31 @@ impl ScriptListApp {
                                 key,
                             )));
                         }
-                        _ => tracing::info!(
-                            target: "script_kit::one_window",
-                            event = "effect_not_hosted",
-                            effect = ?Effect::ViewKey(key),
-                        ),
+                        Some(top)
+                            if [super::views::FORM, super::views::ANSWER, super::views::NOTE]
+                                .contains(&top.name.as_str()) =>
+                        {
+                            queue.extend(self.one_window_hosted_view_key(key, cx));
+                        }
+                        _ => self.one_window_ledger_effect(Effect::ViewKey(key), cx),
                     },
                     Effect::Work(work) => works.push(work),
-                    effect @ (Effect::Held { .. }
-                    | Effect::Undo { .. }
-                    | Effect::Again { .. }
-                    | Effect::OpenScript { .. }
-                    | Effect::SaveScript { .. }) => tracing::info!(
-                        target: "script_kit::one_window",
-                        event = "effect_not_hosted",
-                        effect = ?effect,
-                    ),
+                    Effect::OpenScript { name } => self.one_window_open_script(name, cx),
+                    Effect::SaveScript { name, said, .. } => {
+                        self.one_window_save_script(name, said)
+                    }
+                    Effect::TalkAsk { words, last } => self.one_window_talk_ask(words, last, cx),
+                    Effect::Paste { text, app } => self.one_window_paste(text, app, cx),
+                    Effect::TalkEnded => self.one_window_talk_ended(),
+                    Effect::Learned => self.one_window_learned(),
+                    Effect::AddToNote { text } => self.one_window_add_to_note(text, cx),
+                    effect @ (Effect::Held { .. } | Effect::Undo { .. } | Effect::Again { .. }) => {
+                        self.one_window_ledger_effect(effect, cx)
+                    }
                 }
+            }
+            if typed {
+                queue.extend(self.one_window_view_typed());
             }
         }
         for row in runs {
@@ -256,6 +281,8 @@ impl ScriptListApp {
         for work in works {
             self.one_window_apply_work(work, cx);
         }
+        self.one_window_let_go(cx);
+        self.one_window_views_follow(cx);
         self.one_window_after_turn();
         cx.notify();
         handled
@@ -267,10 +294,10 @@ impl ScriptListApp {
         self.one_window_follow_host_selection(cx);
         let before = self.one_window_jev_token();
         let handled = self.one_window_handle(Event::Key(key), cx);
-        self.one_window_show_selection(cx);
         if self.one_window_jev_token() != before {
             self.one_window_republish("one_window_key", cx);
         }
+        self.one_window_show_selection(cx);
         handled
     }
 
@@ -307,7 +334,7 @@ impl ScriptListApp {
 
     /// The highlight moved by pointer, agent or a publication: the reducer's follows.
     pub(crate) fn one_window_follow_host_selection(&mut self, cx: &mut Context<Self>) {
-        if !self.one_window_owns_list() {
+        if !self.one_window_owns_list() || self.one_window_view_height().is_some() {
             return;
         }
         let Some(position) = self.one_window_host_position() else {
@@ -319,6 +346,9 @@ impl ScriptListApp {
     }
 
     fn one_window_show_selection(&mut self, cx: &mut Context<Self>) {
+        if self.one_window_view_height().is_some() {
+            return;
+        }
         let position = self.one_window.list().sel;
         let Some(grouped_index) = self
             .main_menu_committed_rows()
@@ -352,7 +382,7 @@ impl ScriptListApp {
         self.one_window_handle_turn(turn, cx);
     }
 
-    fn one_window_set_input(&mut self, text: String, cx: &mut Context<Self>) {
+    pub(super) fn one_window_set_input(&mut self, text: String, cx: &mut Context<Self>) {
         if text == self.filter_text || !matches!(self.current_view, AppView::ScriptList) {
             return;
         }
@@ -400,6 +430,8 @@ impl ScriptListApp {
         for row in self.one_window.staged().iter().flat_map(|s| &s.rows) {
             row.key.hash(&mut hasher);
         }
+        self.one_window_own_token().hash(&mut hasher);
+        self.one_window_ledger_token(&mut hasher);
         hasher.finish()
     }
 
@@ -418,7 +450,13 @@ impl ScriptListApp {
         if !self.one_window_owns(text) {
             return (grouped, flat, false);
         }
-        if self.one_window.text() != text {
+        if let Some((grouped, flat)) = self
+            .one_window_own_list()
+            .or_else(|| self.one_window_ledger_list(text))
+        {
+            return (grouped, flat, true);
+        }
+        if self.one_window.text() != text && !self.one_window.in_view() {
             self.one_window_handle(Event::Text(text.to_string()), cx);
         }
         let results = if text.trim().is_empty() {
@@ -427,6 +465,7 @@ impl ScriptListApp {
             results
         } else {
             let (rows, results) = self.one_window_names(&grouped, &flat, text);
+            let (rows, results) = self.one_window_more_names(text, rows, results, cx);
             self.one_window_handle(Event::Names(rows), cx);
             results
         };
@@ -448,8 +487,11 @@ impl ScriptListApp {
     ) -> (Vec<Row>, HashMap<String, SearchResult>) {
         let frontmost = crate::ui_window::footer_frontmost_app_name();
         let mut head = None;
-        let mut rows = Vec::new();
-        let mut results = HashMap::new();
+        let mut rows = self.one_window_setup_rows();
+        let mut results: HashMap<String, SearchResult> = rows
+            .iter()
+            .map(|row| (row.key.clone(), super::ledger_view::own_row_result(row)))
+            .collect();
         for item in grouped {
             let index = match item {
                 GroupedListItem::SectionHeader(label, _) => {
@@ -549,11 +591,12 @@ impl ScriptListApp {
                     continue;
                 }
                 Item::Slot(slot) => SearchResult::Intent(self.one_window_jev_match(*slot, text)),
-                item => match list.row(item).and_then(|row| {
+                item => match list.row(item).map(|row| {
                     results
                         .get(&row.key)
                         .cloned()
                         .or_else(|| Self::one_window_action_result(row))
+                        .unwrap_or_else(|| super::ledger_view::own_row_result(row))
                 }) {
                     Some(result) => result,
                     None => continue,
@@ -606,126 +649,20 @@ impl ScriptListApp {
         }
     }
 
-    /// After every publication: the reducer follows the highlight and hears how tall the list
+    /// After every publication: the reducer follows the highlight, or the highlight takes the
+    /// reducer's row when the new rows left it on none, and the reducer hears how tall the list
     /// wants the window.
     pub(crate) fn one_window_published(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.current_view, AppView::ScriptList) {
             return;
         }
         self.one_window_follow_host_selection(cx);
+        if self.one_window_owns_list() && self.one_window_host_position().is_none() {
+            self.one_window_show_selection(cx);
+        }
         let px = self.one_window_natural_height();
         self.one_window_handle(Event::Content { px }, cx);
-    }
-
-    /// How tall the launcher may get in its current mode.
-    fn one_window_height_ceiling(&self) -> f32 {
-        match self.main_window_mode {
-            MainWindowMode::Mini => crate::window_resize::main_window_full_height(),
-            MainWindowMode::Full => crate::window_resize::current_standard_height(),
-        }
-    }
-
-    /// The line above the input, the input, the list as drawn, and the floating footer's zone.
-    fn one_window_natural_height(&self) -> f32 {
-        if self.one_window_work_view_open() {
-            return self.one_window_height_ceiling();
-        }
-        let (grouped, _) = self.get_grouped_results_cached();
-        let heights = crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
-            self.current_main_menu_theme,
-        );
-        let list = crate::scrolling::list_geometry::content_height(grouped.len(), |ix| {
-            heights.row_height(&grouped[ix], ix)
-        });
-        let chrome = sk_one_window::contract::app::SLOT_LINE_PX
-            + f32::from(crate::main_list_header_overlay_height(
-                self.current_main_menu_theme.def(),
-            ))
-            + crate::footer_popup::main_window_footer_reservation_height();
-        (chrome + list).min(self.one_window_height_ceiling())
-    }
-
-    // ------------------------------------------------------------------ height
-
-    fn one_window_apply_height(&mut self, decision: HeightDecision, cx: &mut Context<Self>) {
-        self.one_window_host.height_generation += 1;
-        let generation = self.one_window_host.height_generation;
-        if decision.mode != HeightMode::Shrink {
-            self.one_window_set_height(decision.px, cx);
-            return;
-        }
-        let (from, to) = (decision.from, decision.px);
-        let span = Duration::from_millis(decision.anim_ms.max(1));
-        self.one_window_set_height(from, cx);
-        cx.spawn(async move |this, cx| {
-            let start = cx.background_executor().now();
-            loop {
-                cx.background_executor().timer(SHRINK_FRAME).await;
-                let t = (cx
-                    .background_executor()
-                    .now()
-                    .saturating_duration_since(start)
-                    .as_secs_f32()
-                    / span.as_secs_f32())
-                .min(1.0);
-                let height = from + (to - from) * sk_one_window::contract::shrink_ease(t);
-                let drawing = this
-                    .update(cx, |app, cx| {
-                        let current = app.one_window_host.height_generation == generation;
-                        if current {
-                            app.one_window_set_height(height, cx);
-                        }
-                        current
-                    })
-                    .unwrap_or(false);
-                if !drawing || t >= 1.0 {
-                    break;
-                }
-            }
-        })
-        .detach();
-    }
-
-    fn one_window_set_height(&mut self, height: f32, cx: &mut Context<Self>) {
-        self.one_window_host.height = Some(height);
-        crate::window_resize::set_main_window_height(height);
-        let Some(handle) = self.one_window_host.window else {
-            return;
-        };
-        if !matches!(self.current_view, AppView::ScriptList) {
-            return;
-        }
-        let height = height.min(self.one_window_height_ceiling());
-        cx.defer(move |cx| {
-            let _ = cx.update_window(handle, |_, window, cx| {
-                if crate::runtime_policy::is_owned_evaluation() {
-                    // The owned window is hidden and has no screen edge to keep.
-                    let width = window.viewport_size().width;
-                    window.resize(gpui::size(width, gpui::px(height)));
-                } else {
-                    // The native path keeps the top edge, so the input never moves.
-                    crate::window_ops::queue_resize_with_width(
-                        height,
-                        Some(crate::window_resize::MAIN_WINDOW_WIDTH),
-                        window,
-                        cx,
-                    );
-                }
-            });
-        });
-    }
-
-    /// The window the main list draws in, where its height is applied. A height the reducer
-    /// placed before the window first drew is applied now, or the first key would snap to it.
-    pub(crate) fn one_window_rendered_in(&mut self, window: &gpui::Window, cx: &mut Context<Self>) {
-        let handle = window.window_handle();
-        if self.one_window_host.window == Some(handle) {
-            return;
-        }
-        self.one_window_host.window = Some(handle);
-        if let Some(height) = self.one_window_host.height {
-            self.one_window_set_height(height, cx);
-        }
+        self.one_window_follow_own_selection(cx);
     }
 
     // ------------------------------------------------------------------ Jev
@@ -792,6 +729,7 @@ impl ScriptListApp {
                 let readings = crate::intent::readings(plan);
                 self.intent_launcher.remember(&text, screen, &readings);
                 self.intent_launcher.show(&text, &readings);
+                self.one_window_talk_reading(&text, &readings, cx);
                 tracing::info!(
                     target: "script_kit::intent",
                     event = "jev_answered",
@@ -844,6 +782,15 @@ impl ScriptListApp {
             return Ok(());
         }
         let text = self.one_window.text().to_string();
+        if let Some(ran) = self.one_window_run_act(&row, cx) {
+            return ran;
+        }
+        if let Some(ran) = self.one_window_run_ledger_row(&row, cx) {
+            return ran;
+        }
+        if let Some(ran) = self.one_window_run_learns_row(&row, cx) {
+            return ran;
+        }
         if let Some(ran) = self.run_jev_row(&row.key, &text, cx) {
             return ran.map_err(anyhow::Error::msg);
         }
@@ -862,6 +809,7 @@ impl ScriptListApp {
         if grouped_index != self.selected_index {
             self.select_main_menu_row(grouped_index, MainMenuSelectionOrigin::Keyboard, cx);
         }
+        self.one_window_remember_rerun(&row);
         let observation = self.selected_row_dispatch_observation();
         self.run_selected_row(observation, cx).map(|_| ())
     }
@@ -937,6 +885,8 @@ impl ScriptListApp {
                 .collect::<Vec<_>>(),
             "jevSettled": list.jev.settled_for(&list.text),
             "heightPx": self.one_window_host.height,
+            "nowMs": now,
+            "typedAtMs": self.one_window.height().typed_at(),
             "sinceTypedMs": self.one_window.height().typed_at().map(|at| now.saturating_sub(at)),
             "view": self.one_window.views().top().map(|top| top.name.as_str()),
             "crumb": self.one_window.views().crumb(),

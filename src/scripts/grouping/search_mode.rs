@@ -73,7 +73,9 @@ pub(super) fn build_search_mode_results(
                 SearchResult::Agent(_) => None,
                 SearchResult::Fallback(_) => None,
                 // Script issues row is pinned synthetically; no frecency
-                SearchResult::ScriptIssue(_) | SearchResult::Intent(_) => None,
+                SearchResult::ScriptIssue(_)
+                | SearchResult::Intent(_)
+                | SearchResult::OneWindow(_) => None,
                 // Spine projections don't participate in search-mode frecency
                 SearchResult::SpineProjection(_) => None,
             }

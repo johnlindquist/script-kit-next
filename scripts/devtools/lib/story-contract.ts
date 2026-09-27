@@ -16,7 +16,7 @@ export const PRODUCTION_STORIES = [
 ] as const;
 export const CORE_JOURNEYS = [
   "launcher-ranking-provider", "choice-prompt-completion", "editable-prompt-validation", "actions-popup-activation",
-  "notes-day-roundtrip", "conversation-recovery-stop", "dictation-delivery-refusal", "theme-publication-revert", "close-reopen-stale",
+  "notes-day-roundtrip", "conversation-recovery-stop", "theme-publication-revert", "close-reopen-stale",
 ] as const;
 export type CoreJourneyId = typeof CORE_JOURNEYS[number];
 export interface LibtestSelection { names: string[]; issues: string[] }
@@ -99,14 +99,6 @@ export const SDK_RUNTIME_ASSERTIONS = [
   "full:failure-preserves-rpc", "disconnected:failure-preserves-rpc",
 ] as const;
 
-export const FOOTER_RUNTIME_ASSERTIONS = [
-  "distinct_real_footer_owners", "theme_publication_notifies_both_footer_lifetimes",
-  "both_footer_lifetimes_apply_reverted_theme", "current_enabled_action_executes_one_real_owner_effect",
-  "retained_stale_action_executes_zero_effects", "secondary_refresh_cannot_overwrite_main_state",
-  "teardown_recreates_distinct_footer_lifetime", "retired_binding_cannot_route_to_recreated_owner",
-  "native_footer_pixels_explicitly_excluded",
-] as const;
-
 export function productionStoryReceiptIssues(receipt: Record<string, unknown>): string[] {
   try { receipt = resolveReceiptDetails(receipt); }
   catch (error) { return [error instanceof Error ? error.message : String(error)]; }
@@ -124,11 +116,6 @@ export function productionStoryReceiptIssues(receipt: Record<string, unknown>): 
         !Array.isArray(sdk[0]!.assertions) || !sdk[0]!.assertions.every(assertion => assertion && assertion.pass === true) ||
         SDK_RUNTIME_ASSERTIONS.some(id => sdk[0]!.assertions.filter(assertion => assertion.id === id && assertion.pass).length !== 1))
       issues.push("complete_sdk_runtime_journey_required");
-    const footer = journeys?.filter(journey => journey.id === "footer-owner-isolation") ?? [];
-    if (footer.length !== 1 || footer[0]!.proofLevel !== "owned-production-runtime" || footer[0]!.pass !== true ||
-        !Array.isArray(footer[0]!.assertions) || !footer[0]!.assertions.every(assertion => assertion && assertion.pass === true) ||
-        FOOTER_RUNTIME_ASSERTIONS.some(id => footer[0]!.assertions.filter(assertion => assertion.id === id && assertion.pass).length !== 1))
-      issues.push("complete_footer_runtime_journey_required");
   } else if (receipt.provesRuntimeBehavior !== false || receipt.evidenceClass !== "UNIT_BEHAVIOR") issues.push("library_lane_cannot_claim_native_or_runtime_proof");
   const cleanup = receipt.cleanup as OwnedCleanup | undefined;
   if (!cleanup?.closed || !cleanup.processExited || !cleanup.processGroupExited || !cleanup.streamsDrained || !cleanup.logWriterClosed || !cleanup.referencesFinalized || cleanup.survivors.length)

@@ -675,7 +675,7 @@ fn append_agent_chat_design_tokens(
 
     // Markdown body line box: renderer never sets a line height; GPUI's
     // implicit phi() default applies — resolved through the shared app-side
-    // helper (confirm_prompt_line_height_px), never a fresh 1.618034
+    // helper (theme::default_line_height_px), never a fresh 1.618034
     // literal here.
     b.add(
         "resolved.agentChat.markdown.bodyLineHeight",

@@ -546,24 +546,6 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
-            AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                visible_limit,
-            } => {
-                self.filter_text = new_text.clone();
-                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    *visible_limit = crate::dictation::DICTATION_HISTORY_PAGE_SIZE;
-                    self.dictation_history_scroll_handle
-                        .scroll_to_top_of_item(0);
-                    self.begin_list_viewport_scroll(
-                        crate::scrolling::list_interaction::ListViewportInputSource::Filter,
-                        cx,
-                    );
-                    cx.notify();
-                }
-                return; // Don't run main menu filter logic
-            }
             AppView::TipsView {
                 filter,
                 selected_index,
@@ -1270,7 +1252,7 @@ impl ScriptListApp {
                         app.mark_main_data_changed();
                         Self::resize_file_search_window_after_results_change(presentation, app.file_search_display_indices.len(), false, true);
                         if matches!(error, crate::file_search::SearchFailure::Cancelled) { cx.notify(); }
-                        else { app.show_error_toast(format!("File search failed: {error}"), cx); }
+                        else { app.notice_failed(format!("File search failed: {error}"), cx); }
                     });
                     return;
                 }

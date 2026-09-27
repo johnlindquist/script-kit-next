@@ -698,6 +698,7 @@ mod advanced_query_tests {
                     SearchResult::Fallback(_) => "fallback",
                     SearchResult::ScriptIssue(_) => "scriptIssue",
                     SearchResult::Intent(_) => "intent",
+                    SearchResult::OneWindow(_) => "oneWindow",
                     SearchResult::BrainInboxItem(_) => "brainInbox",
                     SearchResult::Agent(_) => "agent",
                     SearchResult::SpineProjection(_) => "spine",

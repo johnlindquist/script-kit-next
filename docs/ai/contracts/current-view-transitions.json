@@ -12,7 +12,7 @@
   "entries": [
     {
       "file": "src/app_actions/handle_action/mod.rs",
-      "line": 436,
+      "line": 401,
       "owner": "transition_to_script_list_after_action",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -36,7 +36,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 1921,
+      "line": 1750,
       "owner": "open_builtin_filterable_view",
       "receiver": "self",
       "operation": "assign",
@@ -46,7 +46,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 1983,
+      "line": 1812,
       "owner": "open_main_window",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -70,7 +70,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 2051,
+      "line": 1880,
       "owner": "open_ai_vault_source_filter",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -94,7 +94,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 2095,
+      "line": 1924,
       "owner": "open_builtin_filterable_view_with_filter",
       "receiver": "self",
       "operation": "assign",
@@ -104,21 +104,11 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 3647,
+      "line": 3446,
       "owner": "execute_configure_snap_mode_prompt",
       "receiver": "self",
       "operation": "assign",
       "expression": "AppView::MiniPrompt { id: BUILTIN_SNAP_MODE_PROMPT_ID.to_string(), placeholder: \"Select Snap Mode\".to_string(), choices, }",
-      "inferredTarget": "AppView::MiniPrompt",
-      "requiresManualReview": false
-    },
-    {
-      "file": "src/app_execute/builtin_execution.rs",
-      "line": 3739,
-      "owner": "execute_select_microphone_builtin",
-      "receiver": "self",
-      "operation": "assign",
-      "expression": "AppView::MiniPrompt { id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(), placeholder: action.placeholder().to_string(), choices, }",
       "inferredTarget": "AppView::MiniPrompt",
       "requiresManualReview": false
     },
@@ -144,7 +134,7 @@
     },
     {
       "file": "src/app_execute/utility_views.rs",
-      "line": 819,
+      "line": 816,
       "owner": "open_quick_terminal_with_startup_input",
       "receiver": "self",
       "operation": "assign",
@@ -154,7 +144,7 @@
     },
     {
       "file": "src/app_execute/utility_views.rs",
-      "line": 902,
+      "line": 896,
       "owner": "open_webcam",
       "receiver": "self",
       "operation": "assign",
@@ -164,7 +154,7 @@
     },
     {
       "file": "src/app_execute/utility_views.rs",
-      "line": 959,
+      "line": 953,
       "owner": "open_webcam",
       "receiver": "self",
       "operation": "assign",
@@ -174,7 +164,7 @@
     },
     {
       "file": "src/app_execute/utility_views.rs",
-      "line": 991,
+      "line": 985,
       "owner": "open_webcam",
       "receiver": "self",
       "operation": "assign",
@@ -252,7 +242,7 @@
     },
     {
       "file": "src/app_impl/agent_handoff/mod.rs",
-      "line": 1518,
+      "line": 1494,
       "owner": "open_tab_ai_harness_terminal_from_request",
       "receiver": "self",
       "operation": "assign",
@@ -262,7 +252,7 @@
     },
     {
       "file": "src/app_impl/agent_handoff/mod.rs",
-      "line": 2063,
+      "line": 2027,
       "owner": "close_tab_ai_harness_terminal_impl",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -286,7 +276,7 @@
     },
     {
       "file": "src/app_impl/agent_handoff/mod.rs",
-      "line": 2104,
+      "line": 2068,
       "owner": "close_tab_ai_harness_terminal",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -334,7 +324,7 @@
     },
     {
       "file": "src/app_impl/automation_surface.rs",
-      "line": 194,
+      "line": 189,
       "owner": "transition_current_view_and_rekey_main_automation_surface",
       "receiver": "self",
       "operation": "assign",
@@ -344,7 +334,7 @@
     },
     {
       "file": "src/app_impl/automation_surface.rs",
-      "line": 209,
+      "line": 204,
       "owner": "restore_current_view_with_focus",
       "receiver": "self",
       "operation": "assign",
@@ -354,7 +344,7 @@
     },
     {
       "file": "src/app_impl/automation_surface.rs",
-      "line": 225,
+      "line": 220,
       "owner": "show_script_list_with_main_filter_focus",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -402,7 +392,7 @@
     },
     {
       "file": "src/app_impl/filter_input_change.rs",
-      "line": 625,
+      "line": 607,
       "owner": "handle_filter_input_change",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -426,7 +416,7 @@
     },
     {
       "file": "src/app_impl/filter_input_core.rs",
-      "line": 424,
+      "line": 423,
       "owner": "open_file_search_view_with_result_transition",
       "receiver": "self",
       "operation": "assign",
@@ -466,7 +456,7 @@
     },
     {
       "file": "src/app_impl/registries_state.rs",
-      "line": 319,
+      "line": 318,
       "owner": "reset_to_script_list_impl",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -490,7 +480,7 @@
     },
     {
       "file": "src/app_impl/selection_fallback.rs",
-      "line": 1101,
+      "line": 1095,
       "owner": "open_brain_memory_preview",
       "receiver": "self",
       "operation": "assign",
@@ -500,13 +490,37 @@
     },
     {
       "file": "src/app_impl/selection_fallback.rs",
-      "line": 1803,
+      "line": 1801,
       "owner": "open_script_issues_view",
       "receiver": "self",
       "operation": "assign",
       "expression": "AppView::ScriptIssuesView { report }",
       "inferredTarget": "AppView::ScriptIssuesView",
       "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/startup_data.rs",
+      "line": 969,
+      "owner": "install_shared_bundle",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "AppView::ScriptList",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": true,
+      "helper": "transition_current_view_and_rekey_main_automation_surface",
+      "rekeysMainAutomationSurface": true,
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "dynamicArgument",
+        "surfaceKind": "derivedFromNewView",
+        "semanticSurface": "rekeyMainAutomationSurfaceFromCurrentView",
+        "mainAutomationRekey": true,
+        "focusTarget": "callerOwned",
+        "focusedInput": "callerOwned",
+        "resize": "callerOwned",
+        "activePopupContract": "stateReceiptOnly",
+        "stateSnapshot": "getState.surfaceContract"
+      }
     },
     {
       "file": "src/app_impl/trigger_builtin_dispatch.rs",
@@ -558,7 +572,7 @@
     },
     {
       "file": "src/app_impl/ui_window.rs",
-      "line": 513,
+      "line": 506,
       "owner": "dispatch_main_window_footer_action",
       "receiver": "self",
       "operation": "assign",
@@ -568,7 +582,7 @@
     },
     {
       "file": "src/app_impl/ui_window.rs",
-      "line": 556,
+      "line": 549,
       "owner": "dispatch_main_window_footer_action",
       "receiver": "self",
       "operation": "assign",
@@ -588,7 +602,7 @@
     },
     {
       "file": "src/main_sections/day_page_view.rs",
-      "line": 2072,
+      "line": 1942,
       "owner": "show_day_page_view_with_substrate",
       "receiver": "self",
       "operation": "assign",
@@ -598,7 +612,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 5596,
+      "line": 5433,
       "owner": "handle_prompt_message_with_window",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -622,7 +636,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 5915,
+      "line": 5756,
       "owner": "handle_prompt_message_with_window",
       "receiver": "self",
       "operation": "transitionHelper",

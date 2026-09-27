@@ -1,14 +1,6 @@
 /// Delay between hiding the main window and starting a synchronous screenshot capture.
 const AI_CAPTURE_HIDE_SETTLE_MS: u64 = 150;
 
-/// Synthetic prompt ID used when the microphone-selection MiniPrompt is open.
-/// Checked in `submit_arg_prompt_from_current_state` to intercept the submit
-/// and persist the chosen device instead of sending a protocol message.
-const BUILTIN_MIC_SELECT_PROMPT_ID: &str = "builtin:select-microphone";
-
-/// Choice value representing "use system default" in the mic-selection prompt.
-const BUILTIN_MIC_DEFAULT_VALUE: &str = "__system_default__";
-
 /// Synthetic prompt ID for snap mode configuration.
 const BUILTIN_SNAP_MODE_PROMPT_ID: &str = "builtin:configure-snap-mode";
 
@@ -36,10 +28,7 @@ const BUILTIN_DICTATION_SETUP_REQUEST_MIC: &str = "request-microphone";
 const BUILTIN_DICTATION_SETUP_OPEN_MIC_SETTINGS: &str = "open-microphone-settings";
 
 include!("builtin_execution_support.rs");
-use crate::dictation::{
-    dictation_mutation_error_outcome, dictation_outcome_from_insertion_range,
-    with_frozen_dictation_destination,
-};
+use crate::dictation::{dictation_mutation_error_outcome, with_frozen_dictation_destination};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(
@@ -159,14 +148,6 @@ impl DictationBuiltinAction {
     fn stop_fallback_target(self) -> crate::dictation::DictationTarget {
         self.forced_target()
             .unwrap_or(crate::dictation::DictationTarget::ExternalApp)
-    }
-
-    fn conceal_before_overlay(self) -> bool {
-        matches!(self, Self::AgentChat | Self::FrontmostApp)
-    }
-
-    fn dispatch_start_before_overlay(self) -> bool {
-        matches!(self, Self::CurrentSurface)
     }
 
     fn log_forced_route(self) -> bool {
@@ -348,36 +329,6 @@ impl SettingsMicrophoneBuiltinAction {
     fn success_detail(self) -> &'static str {
         match self {
             Self::Select => "select_microphone",
-        }
-    }
-
-    fn enumeration_failure_log(self) -> &'static str {
-        match self {
-            Self::Select => "Failed to enumerate microphone devices",
-        }
-    }
-
-    fn failure_hud(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::Select => format!("Failed to list microphones: {error}"),
-        }
-    }
-
-    fn failure_code(self) -> &'static str {
-        match self {
-            Self::Select => "select_microphone_failed",
-        }
-    }
-
-    fn failure_message(self) -> &'static str {
-        match self {
-            Self::Select => "Failed to list microphones",
-        }
-    }
-
-    fn placeholder(self) -> &'static str {
-        match self {
-            Self::Select => "Select microphone...",
         }
     }
 }
@@ -1370,7 +1321,6 @@ fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
 }
 
 include!("builtin_execution_ai_capture.rs");
-include!("builtin_execution_owned_dictation.rs");
 
 impl ScriptListApp {
     fn system_action_feedback_message(
@@ -1488,7 +1438,7 @@ impl ScriptListApp {
                 }
                 Err(e) => {
                     let message = action_state.failure_message(&e);
-                    self.show_error_toast(message.clone(), cx);
+                    self.notice_failed(message.clone(), cx);
                     Self::builtin_error(
                         dctx,
                         crate::action_helpers::ERROR_ACTION_FAILED,
@@ -1500,7 +1450,7 @@ impl ScriptListApp {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            self.show_unsupported_platform_toast("Menu bar actions", cx);
+            self.notice_unsupported_platform("Menu bar actions", cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
@@ -1608,7 +1558,7 @@ impl ScriptListApp {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = action_type;
-            self.show_unsupported_platform_toast("System actions", cx);
+            self.notice_unsupported_platform("System actions", cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
@@ -1643,7 +1593,7 @@ impl ScriptListApp {
                 );
                 if let Some(message) = self.system_action_feedback_message(action_type) {
                     cx.notify();
-                    self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                    self.one_window_notice(crate::line_notice::INFO, message, cx);
                     self.hide_main_and_reset(cx);
                 } else {
                     self.close_and_reset_window(cx);
@@ -1663,7 +1613,7 @@ impl ScriptListApp {
                     error = %error,
                     "system_action_dispatch"
                 );
-                self.show_error_toast(format!("System action failed: {}", error), cx);
+                self.notice_failed(format!("System action failed: {}", error), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -1684,78 +1634,21 @@ impl ScriptListApp {
         PROCESS_MANAGER.remove_main_pid();
     }
 
-    fn quit_script_kit_confirm_options() -> crate::confirm::ParentConfirmOptions {
-        crate::confirm::ParentConfirmOptions::destructive(
-            "Quit Script Kit",
-            "Quit Script Kit and stop all running processes?",
-            "Quit",
-        )
-    }
-
-    fn builtin_confirmation_options(
-        entry_id: &str,
-        entry_name: &str,
-    ) -> crate::confirm::ParentConfirmOptions {
-        match entry_id {
-            "builtin/quit-script-kit" => Self::quit_script_kit_confirm_options(),
-            "builtin/shut-down" => crate::confirm::ParentConfirmOptions::destructive(
-                "Shut Down Mac",
-                "Shut down this Mac now?",
-                "Shut Down",
-            ),
-            "builtin/restart" => crate::confirm::ParentConfirmOptions::destructive(
-                "Restart Mac",
-                "Restart this Mac now?",
-                "Restart",
-            ),
-            "builtin/log-out" => crate::confirm::ParentConfirmOptions::destructive(
-                "Log Out",
-                "Log out of the current macOS session?",
-                "Log Out",
-            ),
-            "builtin/empty-trash" => crate::confirm::ParentConfirmOptions::irreversible(
-                "Empty Trash",
-                "Empty Trash now? This cannot be undone.",
-                "Empty Trash",
-            ),
-            "builtin/sleep" => crate::confirm::ParentConfirmOptions {
-                title: "Sleep Mac".into(),
-                body: "Put this Mac to sleep now?".into(),
-                confirm_text: "Sleep".into(),
-                cancel_text: "Cancel".into(),
-                ..Default::default()
-            },
-            "builtin/force-quit" => crate::confirm::ParentConfirmOptions {
-                title: "Open Force Quit Apps".into(),
-                body: "Open Force Quit Apps?".into(),
-                confirm_text: "Open".into(),
-                ..Default::default()
-            },
-            "builtin/stop-all-processes" => crate::confirm::ParentConfirmOptions::destructive(
-                "Stop All Processes",
-                "Stop all running Script Kit processes?",
-                "Stop All",
-            ),
-            "builtin/clear-suggested" => crate::confirm::ParentConfirmOptions::irreversible(
-                "Clear Suggested",
-                "Clear suggested items and reset their ranking data?",
-                "Clear Suggested",
-            ),
-            "builtin/sync-to-github" => crate::confirm::ParentConfirmOptions {
-                title: "Sync to GitHub".into(),
-                body: "Write safe .gitignore exclusions, commit Script Kit changes, and sync this workspace to GitHub?".into(),
-                confirm_text: "Sync".into(),
-                cancel_text: "Cancel".into(),
-                ..Default::default()
-            },
-            _ => crate::confirm::ParentConfirmOptions {
-                title: "Confirm".into(),
-                body: format!("Are you sure you want to {}?", entry_name).into(),
-                confirm_text: "Continue".into(),
-                cancel_text: "Cancel".into(),
-                ..Default::default()
-            },
-        }
+    /// Changing the background effect happens at once; ⌘Z puts the previous one back.
+    fn change_background_effect_undoably(
+        &mut self,
+        effect: Option<crate::effects::BackgroundEffect>,
+        cx: &mut Context<Self>,
+    ) {
+        let previous = self.background_effect;
+        self.set_background_effect(effect, cx);
+        let name = effect.map_or("Off", |effect| effect.name());
+        self.one_window_done_undoable(
+            "sparkles",
+            format!("Background Effect: {name}"),
+            Box::new(move |this, cx| this.set_background_effect(previous, cx)),
+            cx,
+        );
     }
 
     pub(crate) fn execute_builtin(
@@ -1774,6 +1667,17 @@ impl ScriptListApp {
     ) -> Option<crate::action_helpers::DispatchOutcome> {
         let start = std::time::Instant::now();
         let dctx = crate::action_helpers::DispatchContext::for_builtin(&entry.id);
+        if let Some(key) = crate::one_window::ledger_view::own_row_key(&entry.id) {
+            return Some(match self.one_window_activate_own_row(key, cx) {
+                Ok(()) => Self::builtin_success(&dctx, "one_window_row"),
+                Err(error) => Self::builtin_error(
+                    &dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    "That row isn't listed any more",
+                    error.to_string(),
+                ),
+            });
+        }
 
         tracing::info!(
             category = "BUILTIN",
@@ -1787,96 +1691,21 @@ impl ScriptListApp {
         // Clear any stale actions popup from previous view
         self.clear_actions_popup_state();
 
-        // Check if this command requires confirmation - open modal if so.
-        // Quit Script Kit goes through this same path (see builtin_confirmation_options
-        // and DEFAULT_CONFIRMATION_COMMANDS) — the parent confirm popup is a separate
-        // native window with its own focus, so Tab/Esc work without competing with the
-        // launcher or any other view's key handlers.
         if self.config.requires_confirmation(&entry.id) {
-            let confirmation_start = std::time::Instant::now();
             let entry_id = entry.id.clone();
-            let query_owned = query_override.map(|s| s.to_string());
+            let query_owned = query_override.map(str::to_string);
             let dctx_owned = dctx.clone();
-            let confirm_options = Self::builtin_confirmation_options(&entry.id, &entry.name);
-
-            // Spawn a task to show confirmation dialog via shared parent dialog helper
-            cx.spawn(async move |this, cx| {
-                match crate::confirm::confirm_with_parent_dialog(
-                    cx,
-                    confirm_options,
-                    &dctx_owned.trace_id,
-                )
-                .await
-                {
-                    Ok(true) => {
-                        let _ = this.update(cx, |this, cx| {
-                            this.handle_builtin_confirmation(
-                                entry_id,
-                                true,
-                                query_owned,
-                                &dctx_owned,
-                                cx,
-                            );
-                        });
-                    }
-                    Ok(false) => {
-                        let outcome = crate::action_helpers::DispatchOutcome::cancelled()
-                            .with_trace_id(dctx_owned.trace_id.clone())
-                            .with_detail("builtin_confirmation_cancelled");
-                        let _ = this.update(cx, |this, _| {
-                            this.clear_menu_origin_after_script_list_confirm_cancel(
-                                "builtin_confirmation_cancelled",
-                            );
-                            Self::log_builtin_outcome(
-                                &entry_id,
-                                &dctx_owned,
-                                "confirmation_gate",
-                                &outcome,
-                                &confirmation_start,
-                            );
-                        });
-                    }
-                    Err(e) => {
-                        let _ = this.update(cx, |this, cx| {
-                            tracing::error!(
-                                builtin_id = %entry_id,
-                                trace_id = %dctx_owned.trace_id,
-                                error = %e,
-                                "failed to open confirmation modal"
-                            );
-                            this.show_error_toast_with_code(
-                                "Failed to open confirmation dialog",
-                                Some(crate::action_helpers::ERROR_MODAL_FAILED),
-                                cx,
-                            );
-                            let outcome = Self::builtin_error(
-                                &dctx_owned,
-                                crate::action_helpers::ERROR_MODAL_FAILED,
-                                "Failed to open confirmation dialog",
-                                format!("confirmation_modal_error={e}"),
-                            );
-                            Self::log_builtin_outcome(
-                                &entry_id,
-                                &dctx_owned,
-                                "confirmation_gate",
-                                &outcome,
-                                &confirmation_start,
-                            );
-                        });
-                    }
-                }
-            })
-            .detach();
-
-            tracing::info!(
-                category = "BUILTIN",
-                trace_id = %dctx.trace_id,
-                builtin_id = %entry.id,
-                status = "awaiting_confirmation",
-                duration_ms = start.elapsed().as_millis() as u64,
-                "Builtin execution deferred to confirmation modal"
+            self.one_window_hold(
+                entry.icon.as_deref().unwrap_or(crate::line_notice::FAILED),
+                entry.name.clone(),
+                Box::new(move |this, cx| {
+                    this.run_held_builtin(entry_id, query_owned, &dctx_owned, cx)
+                }),
+                cx,
             );
-            return None; // Confirmation is pending, not a completed action.
+            let outcome = Self::builtin_success(&dctx, "held_before_it_runs");
+            Self::log_builtin_outcome(&entry.id, &dctx, "hold", &outcome, &start);
+            return Some(outcome);
         }
 
         // All builtins now return DispatchOutcome — system actions are handled
@@ -2246,9 +2075,9 @@ impl ScriptListApp {
             "current_app_commands.session_switched"
         );
         self.present_current_app_commands_session(refreshed, filter, cx);
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             format!("Current app changed: {previous_app_name} -> {refreshed_app_name}"),
-            Some(HUD_SHORT_MS),
             cx,
         );
         tracing::info!(
@@ -2311,7 +2140,7 @@ impl ScriptListApp {
                     entry_index = original_entry_index,
                     "current_app_commands.refresh_failed_before_execute"
                 );
-                self.show_error_toast(
+                self.notice_failed(
                     UtilityCurrentAppCommandsBuiltinAction::Open.refresh_failure_message(&error),
                     cx,
                 );
@@ -2357,7 +2186,7 @@ impl ScriptListApp {
                         preset.number(),
                         preset.name()
                     );
-                    self.show_error_toast(message.clone(), cx);
+                    self.notice_failed(message.clone(), cx);
                     return Self::builtin_error(
                         dctx,
                         crate::action_helpers::ERROR_ACTION_FAILED,
@@ -2378,7 +2207,7 @@ impl ScriptListApp {
                     preset.number(),
                     preset.name()
                 );
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 return Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -2388,12 +2217,10 @@ impl ScriptListApp {
             }
         } else {
             self.animation_replay_generation = self.animation_replay_generation.wrapping_add(1);
-            self.toast_manager.push(
-                components::toast::Toast::success(
-                    format!("Animation {:02} — {}", preset.number(), preset.name()),
-                    &self.theme,
-                )
-                .duration_ms(Some(1800)),
+            self.one_window_notice(
+                crate::line_notice::DONE,
+                format!("Animation {:02} — {}", preset.number(), preset.name()),
+                cx,
             );
             cx.notify();
         }
@@ -2498,14 +2325,7 @@ impl ScriptListApp {
                     .map(|effect| effect.next())
                     .or_else(|| crate::effects::BackgroundEffect::all().first().copied())
                     .unwrap_or(crate::effects::BackgroundEffect::Aurora);
-                self.set_background_effect(Some(next), cx);
-                self.toast_manager.push(
-                    components::toast::Toast::success(
-                        format!("Background Effect: {}", next.name()),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(1500)),
-                );
+                self.change_background_effect_undoably(Some(next), cx);
                 Self::builtin_success(dctx, format!("background_effect::{}", next.slug()))
             }
             builtins::BuiltInFeature::BackgroundEffectPrevious => {
@@ -2514,22 +2334,11 @@ impl ScriptListApp {
                     .map(|effect| effect.prev())
                     .or_else(|| crate::effects::BackgroundEffect::all().last().copied())
                     .unwrap_or(crate::effects::BackgroundEffect::SoftPrism);
-                self.set_background_effect(Some(prev), cx);
-                self.toast_manager.push(
-                    components::toast::Toast::success(
-                        format!("Background Effect: {}", prev.name()),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(1500)),
-                );
+                self.change_background_effect_undoably(Some(prev), cx);
                 Self::builtin_success(dctx, format!("background_effect::{}", prev.slug()))
             }
             builtins::BuiltInFeature::BackgroundEffectOff => {
-                self.set_background_effect(None, cx);
-                self.toast_manager.push(
-                    components::toast::Toast::info("Background Effect: Off", &self.theme)
-                        .duration_ms(Some(1500)),
-                );
+                self.change_background_effect_undoably(None, cx);
                 Self::builtin_success(dctx, "background_effect::off")
             }
 
@@ -2780,6 +2589,10 @@ impl ScriptListApp {
                     .unwrap_or(SurfaceOpenBuiltinAction::Tips);
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
+            builtins::BuiltInFeature::RunHistory => {
+                self.one_window_open_history(cx);
+                Self::builtin_success(dctx, "open_run_history")
+            }
             // =========================================================================
             // New Script from Template — browse kit://script-templates catalog, pick
             // a starter, then hand off to the naming prompt with template metadata
@@ -2885,7 +2698,7 @@ impl ScriptListApp {
                     Ok(apps) => apps,
                     Err(error) => {
                         let message = format!("Application catalogue unavailable: {error:#}");
-                        self.show_error_toast(message.clone(), cx);
+                        self.notice_failed(message.clone(), cx);
                         return Self::builtin_error(
                             dctx,
                             crate::action_helpers::ERROR_ACTION_FAILED,
@@ -3007,16 +2820,7 @@ impl ScriptListApp {
                     "{}",
                     action.log_message()
                 );
-                self.open_builtin_filterable_view(
-                    AppView::DictationHistoryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                        visible_limit: crate::dictation::DICTATION_HISTORY_PAGE_SIZE,
-                    },
-                    "Search dictation history...",
-                    true,
-                    cx,
-                );
+                self.one_window_open_dictation_history(cx);
             }
             SurfaceOpenBuiltinAction::SdkReference => {
                 let entries = crate::mcp_resources::sdk_reference_entries_for_ui();
@@ -3143,7 +2947,7 @@ impl ScriptListApp {
             }
             Err(error) => {
                 let message = action.failure_message(&error);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 cx.notify();
                 Self::builtin_error(
                     dctx,
@@ -3173,7 +2977,7 @@ impl ScriptListApp {
             Ok(apps) => apps,
             Err(error) => {
                 let message = format!("Application catalogue unavailable: {error:#}");
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 return Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -3185,7 +2989,7 @@ impl ScriptListApp {
         if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
             if let Err(error) = app_launcher::launch_application(app) {
                 let message = action.launch_failure_message(app_name, &error);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -3198,7 +3002,7 @@ impl ScriptListApp {
             }
         } else {
             let message = action.not_found_message(app_name);
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_ACTION_FAILED,
@@ -3226,9 +3030,6 @@ impl ScriptListApp {
         );
 
         // Close companion UI before hiding so it does not stay stale.
-        if crate::confirm::is_confirm_window_open() {
-            crate::confirm::route_key_to_confirm_popup("escape", cx);
-        }
         if crate::actions::is_actions_window_open() {
             crate::actions::close_actions_window(cx);
             self.mark_actions_popup_closed();
@@ -3239,7 +3040,7 @@ impl ScriptListApp {
         self.pending_focus = None;
         if let Err(error) = notes::open_notes_window_without_launcher_restore(cx) {
             let message = action.failure_message(&error);
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -3264,7 +3065,7 @@ impl ScriptListApp {
             "{}",
             action.request_log_message()
         );
-        self.show_hud(action.start_hud().to_string(), Some(HUD_SHORT_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, action.start_hud().to_string(), cx);
 
         let dctx_owned = dctx.clone();
         let action_for_task = action;
@@ -3285,7 +3086,7 @@ impl ScriptListApp {
                         "{}",
                         action_for_task.completed_log_message()
                     );
-                    this.show_hud(report.summary_message(), Some(HUD_MEDIUM_MS), cx);
+                    this.one_window_notice(crate::line_notice::INFO, report.summary_message(), cx);
                     this.close_and_reset_window(cx);
                 }
                 Err(error) => {
@@ -3296,7 +3097,7 @@ impl ScriptListApp {
                         "{}",
                         action_for_task.failed_log_message()
                     );
-                    this.show_error_toast(action_for_task.failure_message(&error), cx);
+                    this.notice_failed(action_for_task.failure_message(&error), cx);
                     cx.notify();
                 }
             });
@@ -3368,7 +3169,7 @@ impl ScriptListApp {
             }
             Err(error) => {
                 let message = action.failure_message(&error);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 cx.notify();
                 Self::builtin_error(
                     dctx,
@@ -3443,9 +3244,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
         let message = action.message();
-        self.toast_manager.push(
-            components::toast::Toast::error(message, &self.theme).duration_ms(Some(TOAST_ERROR_MS)),
-        );
+        self.one_window_notice(crate::line_notice::FAILED, message, cx);
         cx.notify();
         Self::builtin_error(
             dctx,
@@ -3498,9 +3297,9 @@ impl ScriptListApp {
                     "{}",
                     action.persistence_failure_log()
                 );
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     action.persistence_failure_hud(&error),
-                    Some(HUD_SHORT_MS),
                     cx,
                 );
                 return Self::builtin_error(
@@ -3540,7 +3339,7 @@ impl ScriptListApp {
             "Updated snap mode from built-in command"
         );
 
-        self.show_hud(action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, action.hud_text().to_string(), cx);
         Self::builtin_success(dctx, action.success_detail())
     }
 
@@ -3662,89 +3461,7 @@ impl ScriptListApp {
         dctx: &crate::action_helpers::DispatchContext,
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
-        let prefs = crate::config::load_user_preferences();
-        let menu_items = match crate::dictation::list_input_device_menu_items(
-            prefs.dictation.selected_device_id.as_deref(),
-        ) {
-            Ok(items) => items,
-            Err(error) => {
-                tracing::error!(
-                    category = "DICTATION",
-                    error = %error,
-                    "{}",
-                    action.enumeration_failure_log()
-                );
-                self.show_hud(action.failure_hud(&error), Some(HUD_SHORT_MS), cx);
-                return Self::builtin_error(
-                    dctx,
-                    action.failure_code(),
-                    action.failure_message(),
-                    error.to_string(),
-                );
-            }
-        };
-
-        let mut start_index: usize = 0;
-        let choices: Vec<Choice> = menu_items
-            .iter()
-            .enumerate()
-            .map(|(idx, item)| {
-                let value = match &item.action {
-                    crate::dictation::DictationDeviceSelectionAction::UseSystemDefault => {
-                        BUILTIN_MIC_DEFAULT_VALUE.to_string()
-                    }
-                    crate::dictation::DictationDeviceSelectionAction::UseDevice(id) => id.0.clone(),
-                };
-                let name = if item.is_selected {
-                    if start_index == 0 && idx > 0 {
-                        start_index = idx;
-                    }
-                    format!("{} (current)", item.title)
-                } else {
-                    item.title.clone()
-                };
-                Choice {
-                    name,
-                    value: value.clone(),
-                    description: Some(item.subtitle.clone()),
-                    key: None,
-                    semantic_id: Some(builtin_choice_semantic_id(
-                        BUILTIN_MIC_SELECT_PROMPT_ID,
-                        idx,
-                        &value,
-                    )),
-                }
-            })
-            .collect();
-
-        // Follow the canonical ShowMini pattern from prompt_handler
-        // (not open_builtin_filterable_view which targets MainFilter focus)
-        let choice_count = choices.len();
-        tracing::info!(
-            category = "AUTOMATION",
-            prompt_id = BUILTIN_MIC_SELECT_PROMPT_ID,
-            choice_count = choice_count,
-            selected_index = start_index,
-            semantic_ids_populated = choices.iter().all(|c| c.semantic_id.is_some()),
-            "opened_builtin_microphone_prompt"
-        );
-        self.opened_from_main_menu = true;
-        self.arg_input.clear();
-        self.set_arg_selected_index(start_index);
-        self.focused_input = FocusedInput::ArgPrompt;
-        self.filter_text.clear();
-        self.pending_filter_sync = true;
-        self.pending_placeholder = Some(action.placeholder().to_string());
-        self.pending_focus = Some(FocusTarget::MainFilter);
-        self.current_view = AppView::MiniPrompt {
-            id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
-            placeholder: action.placeholder().to_string(),
-            choices,
-        };
-        self.note_main_route_changed();
-        resize_to_view_sync(ViewType::MiniPrompt, choice_count.min(5));
-        cx.notify();
-
+        self.one_window_open_microphones(cx);
         Self::builtin_success(dctx, action.success_detail())
     }
 
@@ -3773,7 +3490,7 @@ impl ScriptListApp {
         });
         if let Err(e) = save_result {
             let message = action.failure_message(&e);
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             cx.notify();
             Self::builtin_error(
                 dctx,
@@ -3790,7 +3507,7 @@ impl ScriptListApp {
                 self.reset_to_script_list(cx);
                 resize_to_view_sync(ViewType::ScriptList, 0);
             }
-            self.show_hud(action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
+            self.one_window_notice(crate::line_notice::INFO, action.hud_text().to_string(), cx);
             cx.notify();
             Self::builtin_success(dctx, action.success_detail())
         }
@@ -3803,9 +3520,6 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
         // Close companion UI before hiding so it does not stay stale.
-        if crate::confirm::is_confirm_window_open() {
-            crate::confirm::route_key_to_confirm_popup("escape", cx);
-        }
         if crate::actions::is_actions_window_open() {
             crate::actions::close_actions_window(cx);
             self.mark_actions_popup_closed();
@@ -3828,7 +3542,7 @@ impl ScriptListApp {
 
         if let Err(e) = result {
             let message = action.failure_message(&e);
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -3939,12 +3653,12 @@ impl ScriptListApp {
 
         let outcome = action.outcome(process_count);
         if !outcome.should_stop_processes() {
-            self.show_hud(action.empty_hud().to_string(), Some(HUD_2200_MS), cx);
+            self.one_window_notice(crate::line_notice::INFO, action.empty_hud().to_string(), cx);
         } else {
             crate::process_manager::PROCESS_MANAGER.kill_all_processes();
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 action.success_hud(outcome.process_count()),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             self.close_and_reset_window(cx);
@@ -3965,7 +3679,7 @@ impl ScriptListApp {
             state = %state,
             "script_kit_selfie.capture_requested"
         );
-        self.show_hud(action.starting_hud(&state), Some(HUD_2200_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, action.starting_hud(&state), cx);
 
         match crate::platform::capture_script_kit_selfie(&state) {
             Ok(receipt) => {
@@ -3981,7 +3695,7 @@ impl ScriptListApp {
                     receipt_path_sha256 = %safe_receipt_path.sha256,
                     "script_kit_selfie.capture_saved"
                 );
-                self.show_hud(action.saved_hud(&receipt), Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, action.saved_hud(&receipt), cx);
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(error) => {
@@ -3992,7 +3706,7 @@ impl ScriptListApp {
                     error = %error,
                     "script_kit_selfie.capture_failed"
                 );
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4021,7 +3735,7 @@ impl ScriptListApp {
         if effective_query.is_empty() {
             let message =
                 "Type what you want to automate after \"Turn This Into a Command\"".to_string();
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             return Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4084,9 +3798,9 @@ impl ScriptListApp {
 
                         cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
 
-                        self.show_hud(
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
                             action.copied_recipe_hud(&recipe.suggested_script_name),
-                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
 
@@ -4105,7 +3819,7 @@ impl ScriptListApp {
                             error = %e,
                             "turn_this_into_command.serialize_failed"
                         );
-                        self.show_error_toast(message.clone(), cx);
+                        self.notice_failed(message.clone(), cx);
                         Self::builtin_error(
                             dctx,
                             crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4125,7 +3839,7 @@ impl ScriptListApp {
                     error = %e,
                     "turn_this_into_command.capture_failed"
                 );
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4275,7 +3989,7 @@ impl ScriptListApp {
                                     total_entries = entries.len(),
                                     "do_in_current_app.execute_entry — index out of bounds"
                                 );
-                                self.show_error_toast(message.clone(), cx);
+                                self.notice_failed(message.clone(), cx);
                                 return Self::builtin_error(
                                     dctx,
                                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4336,7 +4050,7 @@ impl ScriptListApp {
             }
             Err(e) => {
                 let message = action.capture_failure_message(&e);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4384,7 +4098,7 @@ impl ScriptListApp {
                     error = %e,
                     "current_app_commands.capture_failed"
                 );
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4416,18 +4130,16 @@ impl ScriptListApp {
                     .map(|card| card.kind.name())
                     .collect();
                 if ungranted.is_empty() {
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
                         action.all_permissions_granted_hud().to_string(),
-                        Some(HUD_SHORT_MS),
                         cx,
                     );
                 } else {
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            format!("Not yet granted: {}", ungranted.join(", ")),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_WARNING_MS)),
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("Not yet granted: {}", ungranted.join(", ")),
+                        cx,
                     );
                     self.open_permissions_wizard(cx);
                 }
@@ -4442,18 +4154,16 @@ impl ScriptListApp {
             PermissionCommandBuiltinAction::RequestAccessibility => {
                 let granted = permissions_wizard::request_accessibility_permission();
                 if granted {
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
                         action.accessibility_granted_hud().to_string(),
-                        Some(HUD_SHORT_MS),
                         cx,
                     );
                 } else {
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            action.accessibility_not_granted_warning(),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_WARNING_MS)),
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        action.accessibility_not_granted_warning(),
+                        cx,
                     );
                 }
                 cx.notify();
@@ -4462,7 +4172,7 @@ impl ScriptListApp {
             PermissionCommandBuiltinAction::OpenAccessibilitySettings => {
                 if let Err(e) = permissions_wizard::open_accessibility_settings() {
                     let message = action.open_settings_failure_message(&e);
-                    self.show_error_toast(message.clone(), cx);
+                    self.notice_failed(message.clone(), cx);
                     Self::builtin_error(
                         dctx,
                         crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -4488,12 +4198,16 @@ impl ScriptListApp {
     ) -> crate::action_helpers::DispatchOutcome {
         match platform::permiso::PermisoAssistant::present_retained(action.panel()) {
             Ok(()) => {
-                self.show_hud(action.success_hud().to_string(), Some(HUD_SHORT_MS), cx);
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    action.success_hud().to_string(),
+                    cx,
+                );
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(error) => {
                 let message = action.failure_message(&error);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -4561,12 +4275,10 @@ impl ScriptListApp {
                             trace_id = %dctx.trace_id,
                             "Paste worker is not running"
                         );
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                "Paste worker crashed — restart Script Kit",
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_CRITICAL_MS)),
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
+                            "Paste worker crashed — restart Script Kit",
+                            cx,
                         );
                         cx.notify();
                         Self::builtin_error(
@@ -4587,7 +4299,7 @@ impl ScriptListApp {
                     "{}", paste_action.log_message()
                 );
                 if let Some(message) = paste_action.hud_message() {
-                    self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
+                    self.one_window_notice(crate::line_notice::INFO, message.to_string(), cx);
                 }
                 Self::builtin_success(dctx, paste_action.success_detail())
             }
@@ -4606,37 +4318,12 @@ impl ScriptListApp {
             "{}", action.opening_message()
         );
 
-        if crate::dictation::dictation_overlay_fixture_mode()
-            && !crate::dictation::is_dictation_overlay_open()
-            && matches!(
-                crate::dictation::last_dictation_overlay_state().phase,
-                crate::dictation::DictationSessionPhase::Transcribing
-                    | crate::dictation::DictationSessionPhase::Delivering
-            )
-        {
-            let _ = crate::dictation::reopen_last_dictation_overlay(cx);
-            return Self::builtin_success(dctx, action.success_detail());
-        }
-
         if crate::dictation::is_dictation_stopping() {
-            let overlay_was_open = crate::dictation::is_dictation_overlay_open();
-            if !overlay_was_open {
-                if let Err(error) = crate::dictation::reopen_last_dictation_overlay(cx) {
-                    tracing::warn!(
-                        category = "DICTATION",
-                        action = ?action,
-                        %error,
-                        trace_id = %dctx.trace_id,
-                        "Could not reopen hidden Dictation processing overlay"
-                    );
-                }
-            }
             tracing::info!(
                 category = "DICTATION",
                 action = ?action,
-                overlay_was_open,
                 trace_id = %dctx.trace_id,
-                "Dictation hotkey kept the in-flight processing session and revealed it when hidden"
+                "Dictation hotkey kept the in-flight processing session"
             );
             return Self::builtin_success(dctx, action.success_detail());
         }
@@ -4681,7 +4368,6 @@ impl ScriptListApp {
         if !is_start_edge {
             self.request_active_dictation_stop(
                 crate::dictation::DictationStopReason::Hotkey,
-                dictation_target,
                 true,
                 cx,
             );
@@ -4717,7 +4403,7 @@ impl ScriptListApp {
                     error = %error,
                     "Dictation destination could not be frozen"
                 );
-                self.show_error_toast(format!("Dictation destination unavailable: {error}"), cx);
+                self.notice_failed(format!("Dictation destination unavailable: {error}"), cx);
                 return;
             }
         };
@@ -4757,12 +4443,6 @@ impl ScriptListApp {
                     dictation_target = ?canonical_target,
                     "Dictation toggle returned Started"
                 );
-                if matches!(
-                    canonical_target,
-                    crate::dictation::DictationTarget::ExternalApp
-                ) {
-                    self.close_and_reset_window(cx);
-                }
                 self.handle_dictation_started(action, canonical_target, cx);
             }
             Ok(crate::dictation::DictationToggleOutcome::Stopped(_)) => {}
@@ -4773,25 +4453,7 @@ impl ScriptListApp {
                     failure_message = action.failure_message(),
                     "Dictation toggle failed"
                 );
-                let _ = crate::dictation::update_dictation_overlay(
-                    crate::dictation::DictationOverlayState {
-                        phase: crate::dictation::DictationSessionPhase::Failed(
-                            crate::dictation::dictation_pipeline_failure_state(
-                                0,
-                                canonical_target,
-                                &error.to_string(),
-                            ),
-                        ),
-                        target: canonical_target,
-                        ..Default::default()
-                    },
-                    cx,
-                );
-                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(800));
-                self.dispatch_window_event(
-                    crate::window_orchestrator::WindowEvent::AbortDictation,
-                    cx,
-                );
+                let _ = self.restore_dictation_return_origin(cx);
             }
         }
     }
@@ -4840,7 +4502,7 @@ impl ScriptListApp {
                 action = ?action,
                 "{}", action.preflight_failure_message()
             );
-            self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
+            self.notice_failed(format!("Dictation unavailable: {error_text}"), cx);
             return DictationStartPreflight::Failed;
         }
 
@@ -5123,119 +4785,26 @@ impl ScriptListApp {
             );
         }
 
-        if action.conceal_before_overlay() {
-            platform::conceal_main_window();
-        }
+        self.one_window_talk_began(true, talk_dest_for(dictation_target), cx);
+    }
 
-        let orch_target =
-            crate::window_orchestrator::executor::to_orchestrator_target(&dictation_target);
-        if action.dispatch_start_before_overlay() {
-            self.dispatch_window_event(
-                crate::window_orchestrator::WindowEvent::StartDictation {
-                    target: orch_target,
-                },
-                cx,
-            );
-            self.start_dictation_overlay_session(cx);
-        } else {
-            self.start_dictation_overlay_session(cx);
-            self.dispatch_window_event(
-                crate::window_orchestrator::WindowEvent::StartDictation {
-                    target: orch_target,
-                },
-                cx,
-            );
+    /// Starts listening the way the voice key does, with the words going to the main window's
+    /// voice view.
+    pub(crate) fn start_dictation_session(&mut self, cx: &mut Context<Self>) {
+        let action = DictationBuiltinAction::FrontmostApp;
+        if self.prepare_dictation_builtin_start(action, None, cx) == DictationStartPreflight::Ready
+        {
+            let target = self.dictation_start_target(action);
+            self.start_ready_dictation_builtin_action(action, target, None, cx);
         }
     }
 
-    /// Open the overlay, register the abort callback, start the pump.
-    ///
-    /// Shared by both `BuiltInFeature::Dictation` and
-    /// `BuiltInFeature::DictationToAiHarness` so confirm/resume fixes
-    /// only need one change.
-    fn install_dictation_overlay_callbacks(&mut self, cx: &mut Context<Self>) {
-        let app_entity = cx.entity().downgrade();
-        let abort_app_entity = app_entity.clone();
-        let retarget_app_entity = app_entity.clone();
-        let recovery_app_entity = app_entity.clone();
-        crate::dictation::set_overlay_abort_callback(move |cx| {
-            if let Some(app) = abort_app_entity.upgrade() {
-                app.update(cx, |this, cx| {
-                    let dictation_target = crate::dictation::get_dictation_target()
-                        .unwrap_or_else(|| this.resolve_dictation_target());
-                    this.request_active_dictation_stop(
-                        crate::dictation::DictationStopReason::OverlayAbort,
-                        dictation_target,
-                        false,
-                        cx,
-                    );
-                });
-            }
-        });
-        crate::dictation::set_overlay_submit_callback(move |cx| {
-            if let Some(app) = app_entity.upgrade() {
-                app.update(cx, |this, cx| {
-                    this.submit_active_dictation_from_overlay(cx);
-                });
-            }
-        });
-        crate::dictation::set_overlay_retarget_callback(move |target, cx| {
-            let app = retarget_app_entity
-                .upgrade()
-                .ok_or_else(|| "Dictation host is no longer available".to_string())?;
-            app.update(cx, |this, cx| {
-                this.capture_dictation_target_selection(target, cx)
-            })
-        });
-        crate::dictation::set_overlay_recovery_callback(move |action, cx| {
-            let app = recovery_app_entity
-                .upgrade()
-                .ok_or_else(|| "Dictation recovery host is no longer available".to_string())?;
-            app.update(cx, |this, cx| {
-                this.handle_dictation_recovery_action(action, cx)
-            })
-        });
-    }
-
-    fn start_dictation_overlay_session(&mut self, cx: &mut Context<Self>) {
-        let _ = crate::dictation::begin_overlay_session();
-        self.install_dictation_overlay_callbacks(cx);
-        let _ = crate::dictation::open_dictation_overlay(cx);
-        let _ = crate::dictation::update_dictation_overlay(
-            crate::dictation::DictationOverlayState {
-                phase: crate::dictation::DictationSessionPhase::Recording,
-                ..Default::default()
-            },
-            cx,
-        );
-        self.spawn_dictation_overlay_pump(cx);
-    }
-
-    /// Stop the active recording from the overlay Stop action and continue
-    /// through the same transcription/delivery path as the dictation hotkey.
-    fn submit_active_dictation_from_overlay(&mut self, cx: &mut Context<Self>) {
-        let dictation_target = crate::dictation::get_dictation_target()
-            .unwrap_or_else(|| self.resolve_dictation_target());
-
-        self.request_active_dictation_stop(
-            crate::dictation::DictationStopReason::OverlaySubmit,
-            dictation_target,
-            true,
-            cx,
-        );
-    }
-
-    fn request_active_dictation_stop(
+    pub(crate) fn request_active_dictation_stop(
         &mut self,
         reason: crate::dictation::DictationStopReason,
-        dictation_target: crate::dictation::DictationTarget,
         transcribe: bool,
         cx: &mut Context<Self>,
     ) {
-        // Freeze the timer at the moment the user stopped so the overlay can
-        // keep it on screen (grayed) instead of resetting to 0:00 while the
-        // capture is transcribed.
-        let elapsed_at_stop = crate::dictation::dictation_elapsed().unwrap_or_default();
         match crate::dictation::begin_stop_capture(reason) {
             Ok(crate::dictation::BeginStopCapture::Started {
                 request_id,
@@ -5248,24 +4817,6 @@ impl ScriptListApp {
                 // presses that arrive after it will toggle the queued restart
                 // state rather than being silently ignored.
                 *pending_dictation_restart().lock() = None;
-                if transcribe {
-                    let _ = crate::dictation::begin_overlay_session();
-                    let _ = crate::dictation::open_dictation_overlay(cx);
-                    // Keep the recognized-so-far text visible while the final
-                    // transcription runs — the overlay pulses it instead of
-                    // blanking into a bare progress indicator.
-                    let partial = crate::dictation::last_partial_transcript().unwrap_or_default();
-                    let _ = crate::dictation::update_dictation_overlay(
-                        crate::dictation::DictationOverlayState {
-                            phase: crate::dictation::DictationSessionPhase::Transcribing,
-                            elapsed: elapsed_at_stop,
-                            transcript: partial.into(),
-                            target,
-                            ..Default::default()
-                        },
-                        cx,
-                    );
-                }
                 cx.spawn(async move |this, cx| {
                     let stop_result = cx
                         .background_executor()
@@ -5316,7 +4867,7 @@ impl ScriptListApp {
                                         request_id,
                                         "Capture collection timed out; transcribing partial audio"
                                     );
-                                    this.show_error_toast(
+                                    this.notice_failed(
                                         "Dictation stop timed out — the tail of the recording may be missing"
                                             .to_string(),
                                         cx,
@@ -5330,12 +4881,11 @@ impl ScriptListApp {
                                     cx,
                                 );
                             }
+                            Ok(_) if this.one_window_talking() => {
+                                this.one_window_talk_final(String::new(), None, cx);
+                            }
                             Ok(_) => {
-                                let _ = crate::dictation::close_dictation_overlay(cx);
-                                this.dispatch_window_event(
-                                    crate::window_orchestrator::WindowEvent::AbortDictation,
-                                    cx,
-                                );
+                                let _ = this.restore_dictation_return_origin(cx);
                             }
                             Err(error) => {
                                 let error_text = error.to_string();
@@ -5346,29 +4896,11 @@ impl ScriptListApp {
                                     ?reason,
                                     "Failed to stop dictation capture"
                                 );
-                                let _ = crate::dictation::open_dictation_overlay(cx);
-                                let _ = crate::dictation::update_dictation_overlay(
-                                    crate::dictation::DictationOverlayState {
-                                        phase: crate::dictation::DictationSessionPhase::Failed(
-                                            crate::dictation::dictation_pipeline_failure_state(
-                                                request_id,
-                                                target,
-                                                &error_text,
-                                            ),
-                                        ),
-                                        target,
-                                        ..Default::default()
-                                    },
-                                    cx,
-                                );
-                                this.schedule_dictation_overlay_close(
-                                    cx,
-                                    std::time::Duration::from_millis(800),
-                                );
-                                this.dispatch_window_event(
-                                    crate::window_orchestrator::WindowEvent::AbortDictation,
-                                    cx,
-                                );
+                                if this.one_window_talking() {
+                                    this.one_window_talk_final(String::new(), None, cx);
+                                    return;
+                                }
+                                let _ = this.restore_dictation_return_origin(cx);
                             }
                         }
                     });
@@ -5384,11 +4916,7 @@ impl ScriptListApp {
                 );
             }
             Ok(crate::dictation::BeginStopCapture::NotRecording) => {
-                let _ = crate::dictation::close_dictation_overlay(cx);
-                self.dispatch_window_event(
-                    crate::window_orchestrator::WindowEvent::AbortDictation,
-                    cx,
-                );
+                let _ = self.restore_dictation_return_origin(cx);
             }
             Err(error) => {
                 tracing::error!(
@@ -5396,32 +4924,12 @@ impl ScriptListApp {
                     error = %error,
                     "Failed to stop dictation from overlay"
                 );
-                let _ = crate::dictation::open_dictation_overlay(cx);
-                let _ = crate::dictation::update_dictation_overlay(
-                    crate::dictation::DictationOverlayState {
-                        phase: crate::dictation::DictationSessionPhase::Failed(
-                            crate::dictation::dictation_pipeline_failure_state(
-                                0,
-                                dictation_target,
-                                &error.to_string(),
-                            ),
-                        ),
-                        target: dictation_target,
-                        ..Default::default()
-                    },
-                    cx,
-                );
-                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(800));
-                self.dispatch_window_event(
-                    crate::window_orchestrator::WindowEvent::AbortDictation,
-                    cx,
-                );
+                let _ = self.restore_dictation_return_origin(cx);
             }
         }
     }
 
-    /// Transition a completed capture into the transcribing overlay state
-    /// and kick off async transcription.
+    /// Kick off async transcription of a completed capture.
     ///
     /// Shared by both dictation entry points so the handoff cannot drift.
     fn begin_dictation_transcription(
@@ -5432,18 +4940,6 @@ impl ScriptListApp {
         session_generation: u64,
         cx: &mut Context<Self>,
     ) {
-        let _ = crate::dictation::update_dictation_overlay(
-            crate::dictation::DictationOverlayState {
-                phase: crate::dictation::DictationSessionPhase::Transcribing,
-                elapsed: capture.audio_duration,
-                transcript: crate::dictation::last_partial_transcript()
-                    .unwrap_or_default()
-                    .into(),
-                target,
-                ..Default::default()
-            },
-            cx,
-        );
         let audio_duration = capture.audio_duration;
         let chunks = capture.chunks;
         cx.spawn(async move |this, cx| {
@@ -5458,6 +4954,7 @@ impl ScriptListApp {
                     DictationDeliveryTiming {
                         audio_duration,
                         target,
+                        record_history: true,
                     },
                     selection,
                     session_generation,
@@ -5465,60 +4962,6 @@ impl ScriptListApp {
                     cx,
                 );
             });
-        })
-        .detach();
-    }
-
-    /// Periodically snapshot the live capture session and push state to the
-    /// dictation overlay.  Runs every 16 ms (~60 fps) for smooth waveform
-    /// animation and stops automatically when the session ends.
-    fn spawn_dictation_overlay_pump(&mut self, cx: &mut Context<Self>) {
-        let generation = crate::dictation::overlay_generation();
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(16))
-                    .await;
-                // Bail if a newer overlay session has started.
-                if crate::dictation::overlay_generation() != generation {
-                    tracing::debug!(
-                        category = "DICTATION",
-                        "Overlay pump detected generation change, stopping"
-                    );
-                    break;
-                }
-                // Guard against runaway recordings: auto-stop and transcribe
-                // once the configured max duration is reached.  The stop
-                // coordinator dedupes repeat requests while the stop is in
-                // flight.
-                if crate::dictation::dictation_auto_stop_due() {
-                    tracing::warn!(
-                        category = "DICTATION",
-                        "Dictation reached its configured max duration; auto-stopping"
-                    );
-                    let _ = this.update(cx, |this, cx| {
-                        this.show_hud(
-                            "Dictation reached its time limit — transcribing".to_string(),
-                            Some(HUD_MEDIUM_MS),
-                            cx,
-                        );
-                        let target = crate::dictation::get_dictation_target()
-                            .unwrap_or_else(|| this.resolve_dictation_target());
-                        this.request_active_dictation_stop(
-                            crate::dictation::DictationStopReason::MaxDurationReached,
-                            target,
-                            true,
-                            cx,
-                        );
-                    });
-                }
-                let Some(state) = crate::dictation::snapshot_overlay_state() else {
-                    break;
-                };
-                cx.update(|cx| {
-                    let _ = crate::dictation::update_dictation_overlay(state, cx);
-                });
-            }
         })
         .detach();
     }
@@ -5673,6 +5116,7 @@ impl ScriptListApp {
         let DictationDeliveryTiming {
             audio_duration,
             target,
+            ..
         } = timing;
         let mut request = request;
         if request.history_entry_id.is_empty() {
@@ -5688,7 +5132,7 @@ impl ScriptListApp {
                         reason = ?error.kind(),
                         "dictation_history_recovery_entry_not_saved"
                     );
-                    self.show_error_toast(
+                    self.notice_failed(
                         "Dictation History could not save this transcript. Copy it before closing.",
                         cx,
                     );
@@ -5701,115 +5145,14 @@ impl ScriptListApp {
             target,
             reason,
         };
-        let failure_state = crate::dictation::preserve_dictation_recovery_work(
-            work,
-            failure,
-            retry_safety,
-            crate::dictation::overlay_recovery_callback_installed(),
-        );
-        let transcript = crate::dictation::dictation_recovery_work()
-            .map(|work| work.request.transcript.text().to_string())
-            .unwrap_or_default();
-        let _ = crate::dictation::open_dictation_overlay(cx);
-        let _ = crate::dictation::update_dictation_overlay(
-            crate::dictation::DictationOverlayState {
-                phase: crate::dictation::DictationSessionPhase::Failed(failure_state),
-                elapsed: audio_duration,
-                transcript: transcript.into(),
-                target,
-                ..Default::default()
-            },
+        let transcript = work.request.transcript.text().to_string();
+        crate::dictation::preserve_dictation_recovery_work(work, failure, retry_safety, false);
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(transcript));
+        self.one_window_notice(
+            crate::line_notice::FAILED,
+            "Couldn't type the words where you were, so they're on the clipboard",
             cx,
         );
-    }
-
-    fn handle_dictation_recovery_action(
-        &mut self,
-        action: crate::dictation::DictationRecoveryAction,
-        cx: &mut Context<Self>,
-    ) -> Result<(), String> {
-        let work = crate::dictation::dictation_recovery_work()
-            .ok_or_else(|| "The saved Dictation transcript is no longer available".to_string())?;
-        match action {
-            crate::dictation::DictationRecoveryAction::CopyTranscript => {
-                arboard::Clipboard::new()
-                    .and_then(|mut clipboard| {
-                        clipboard.set_text(work.request.transcript.text().to_string())
-                    })
-                    .map_err(|error| format!("Could not copy the saved transcript: {error}"))?;
-                self.show_hud("Transcript copied".to_string(), Some(HUD_MEDIUM_MS), cx);
-                Ok(())
-            }
-            crate::dictation::DictationRecoveryAction::OpenDictationHistory => {
-                if work.request.history_entry_id.is_empty() {
-                    return Err(
-                        "This transcript does not have a Dictation History entry".to_string()
-                    );
-                }
-                let _ = crate::dictation::close_dictation_overlay(cx);
-                self.open_builtin_filterable_view(
-                    AppView::DictationHistoryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                        visible_limit: crate::dictation::DICTATION_HISTORY_PAGE_SIZE,
-                    },
-                    "Search dictation history...",
-                    true,
-                    cx,
-                );
-                Ok(())
-            }
-            crate::dictation::DictationRecoveryAction::RetrySameDestination
-            | crate::dictation::DictationRecoveryAction::ChooseDestination => {
-                let selection =
-                    if action == crate::dictation::DictationRecoveryAction::ChooseDestination {
-                        crate::dictation::get_dictation_target_selection().ok_or_else(|| {
-                            "Choose a destination before retrying Dictation".to_string()
-                        })?
-                    } else {
-                        work.request.selection.clone()
-                    };
-                if action == crate::dictation::DictationRecoveryAction::RetrySameDestination
-                    && matches!(
-                        work.reason,
-                        crate::dictation::DictationDeliveryFailureReason::DestinationStale
-                            | crate::dictation::DictationDeliveryFailureReason::DestinationUnavailable
-                            | crate::dictation::DictationDeliveryFailureReason::MutationOutcomeUnknown
-                    )
-                {
-                    return Err("Retrying the same destination is not safe".to_string());
-                }
-                let target = selection.target;
-                let request = crate::dictation::DictationDeliveryRequest {
-                    delivery_id: crate::dictation::next_dictation_delivery_id(),
-                    session_generation: work.request.session_generation,
-                    selection: selection.clone(),
-                    transcript: work.request.transcript.clone(),
-                    history_entry_id: work.request.history_entry_id.clone(),
-                    attempt: work.request.attempt.saturating_add(1),
-                };
-                crate::dictation::replace_dictation_recovery_work(
-                    crate::dictation::DictationRecoveryWork {
-                        request: request.clone(),
-                        audio_duration: work.audio_duration,
-                        target,
-                        reason: work.reason,
-                    },
-                );
-                self.handle_dictation_transcript(
-                    Ok(Some(request.transcript.text().to_string())),
-                    DictationDeliveryTiming {
-                        audio_duration: work.audio_duration,
-                        target,
-                    },
-                    Some(selection),
-                    request.session_generation,
-                    Some(request),
-                    cx,
-                );
-                Ok(())
-            }
-        }
     }
 
     fn dictation_prompt_input_len(&self, cx: &App) -> Option<usize> {
@@ -6084,17 +5427,6 @@ impl ScriptListApp {
             insertion_range,
         );
 
-        let _ = crate::dictation::update_dictation_overlay(
-            crate::dictation::DictationOverlayState {
-                phase: crate::dictation::DictationSessionPhase::Finished,
-                elapsed: audio_duration,
-                transcript: request.transcript.text().to_string().into(),
-                target,
-                ..Default::default()
-            },
-            cx,
-        );
-        self.schedule_dictation_overlay_close(cx, Self::DICTATION_FINISHED_LINGER);
         self.focus_after_dictation_delivery(&request.selection, cx);
         if matches!(target, crate::dictation::DictationTarget::MainWindowFilter)
             && !script_kit_gpui::is_main_window_visible()
@@ -6106,7 +5438,6 @@ impl ScriptListApp {
             crate::platform::show_main_window_without_activation();
         }
         self.schedule_dictation_transcriber_cleanup(cx, std::time::Duration::from_secs(300));
-        self.dispatch_window_event(crate::window_orchestrator::WindowEvent::FinishDictation, cx);
     }
 
     /// Handle the result of background transcription: deliver the transcript
@@ -6124,6 +5455,7 @@ impl ScriptListApp {
         let DictationDeliveryTiming {
             audio_duration,
             target,
+            record_history,
         } = timing;
         match result {
             Ok(Some(transcript)) => {
@@ -6132,9 +5464,10 @@ impl ScriptListApp {
                     .as_ref()
                     .map(|request| request.history_entry_id.clone())
                     .unwrap_or_else(|| {
-                        if crate::config::load_user_preferences()
-                            .dictation
-                            .save_history_enabled()
+                        if record_history
+                            && crate::config::load_user_preferences()
+                                .dictation
+                                .save_history_enabled()
                         {
                             match crate::dictation::record_dictation_history(
                                 &transcript,
@@ -6156,7 +5489,7 @@ impl ScriptListApp {
                                         reason = ?error.kind(),
                                         "dictation_history_entry_not_saved_before_delivery"
                                     );
-                                    self.show_error_toast(
+                                    self.notice_failed(
                                         "Dictation History could not save this transcript. Your spoken text can still be delivered.",
                                         cx,
                                     );
@@ -6172,18 +5505,27 @@ impl ScriptListApp {
                             String::new()
                         }
                     });
+                if self.one_window_talking() {
+                    let type_it: crate::one_window::talk_host::TalkPaste =
+                        Box::new(move |app, text, cx| {
+                            app.handle_dictation_transcript(
+                                Ok(Some(text)),
+                                DictationDeliveryTiming {
+                                    audio_duration,
+                                    target,
+                                    record_history: false,
+                                },
+                                frozen_selection,
+                                session_generation,
+                                None,
+                                cx,
+                            );
+                        });
+                    self.one_window_talk_final(transcript, Some(type_it), cx);
+                    return;
+                }
                 // Show the recognized text while it is being delivered so the
                 // user gets confirmation of what was heard.
-                let _ = crate::dictation::update_dictation_overlay(
-                    crate::dictation::DictationOverlayState {
-                        phase: crate::dictation::DictationSessionPhase::Delivering,
-                        elapsed: audio_duration,
-                        transcript: transcript.clone().into(),
-                        target,
-                        ..Default::default()
-                    },
-                    cx,
-                );
                 let (selection, selection_refusal) = match frozen_selection {
                     Some(selection) if selection.is_compatible_with(target) => (selection, None),
                     Some(selection) => {
@@ -6571,24 +5913,21 @@ impl ScriptListApp {
                 }
             }
             Ok(None) => {
-                // No speech detected — close overlay quietly and treat the
-                // session as an abort. For Agent Chat dictation, a successful finish
-                // means "reveal Agent Chat with a transcript"; without transcript
-                // there is nothing to seed or submit.
+                // No speech detected — treat the session as an abort: without a
+                // transcript there is nothing to seed, submit, or paste.
                 tracing::info!(
                     category = "DICTATION",
                     ?target,
                     "No dictation transcript recognized; aborting delivery"
                 );
-                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(150));
+                if self.one_window_talking() {
+                    self.one_window_talk_final(String::new(), None, cx);
+                }
                 self.schedule_dictation_transcriber_cleanup(
                     cx,
                     std::time::Duration::from_secs(300),
                 );
-                self.dispatch_window_event(
-                    crate::window_orchestrator::WindowEvent::AbortDictation,
-                    cx,
-                );
+                let _ = self.restore_dictation_return_origin(cx);
             }
             Err(error) => {
                 let error_text = error.to_string();
@@ -6599,13 +5938,12 @@ impl ScriptListApp {
                     model_path = %model_path.display(),
                     "Transcription failed"
                 );
+                if self.one_window_talking() {
+                    self.one_window_talk_final(String::new(), None, cx);
+                }
 
                 if error_text.contains("model not downloaded") {
-                    let _ = crate::dictation::close_dictation_overlay(cx);
-                    self.dispatch_window_event(
-                        crate::window_orchestrator::WindowEvent::AbortDictation,
-                        cx,
-                    );
+                    let _ = self.restore_dictation_return_origin(cx);
                     self.open_dictation_model_prompt(cx);
                     self.schedule_dictation_transcriber_cleanup(
                         cx,
@@ -6614,30 +5952,21 @@ impl ScriptListApp {
                     return;
                 }
 
-                let _ = crate::dictation::update_dictation_overlay(
-                    crate::dictation::DictationOverlayState {
-                        phase: crate::dictation::DictationSessionPhase::Failed(
-                            crate::dictation::dictation_pipeline_failure_state(
-                                session_generation,
-                                target,
-                                &error_text,
-                            ),
-                        ),
-                        elapsed: audio_duration,
-                        target,
-                        ..Default::default()
-                    },
+                let failure = crate::dictation::dictation_pipeline_failure_state(
+                    session_generation,
+                    target,
+                    &error_text,
+                );
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    failure.failure.primary_message(),
                     cx,
                 );
-                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(800));
                 self.schedule_dictation_transcriber_cleanup(
                     cx,
                     std::time::Duration::from_secs(300),
                 );
-                self.dispatch_window_event(
-                    crate::window_orchestrator::WindowEvent::AbortDictation,
-                    cx,
-                );
+                let _ = self.restore_dictation_return_origin(cx);
             }
         }
     }
@@ -6763,13 +6092,16 @@ impl ScriptListApp {
             crate::dictation::retain_frozen_selection_for_delivery(frozen_selection);
             return Ok(target);
         }
-        self.install_dictation_overlay_callbacks(cx);
+        if !self.one_window_talking() {
+            self.one_window_talk_began(false, talk_dest_for(target), cx);
+        }
         let result = Ok(resolution.transcript);
         self.handle_dictation_transcript(
             result,
             DictationDeliveryTiming {
                 audio_duration: std::time::Duration::ZERO,
                 target,
+                record_history: true,
             },
             Some(frozen_selection),
             0,
@@ -6813,9 +6145,9 @@ impl ScriptListApp {
             )
             .is_err()
         {
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 "Dictation model download already in progress".to_string(),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             return;
@@ -6863,9 +6195,9 @@ impl ScriptListApp {
                                     speed_bytes_per_sec,
                                     eta_seconds,
                                 );
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     format!("Downloading model\u{2026} {summary}"),
-                                    Some(HUD_SHORT_MS),
                                     cx,
                                 );
                             }
@@ -6877,9 +6209,9 @@ impl ScriptListApp {
                                 cx,
                             );
                             if !prompt_visible {
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     "Extracting dictation model\u{2026}".to_string(),
-                                    Some(HUD_SHORT_MS),
                                     cx,
                                 );
                             }
@@ -7027,7 +6359,7 @@ impl ScriptListApp {
                             .unwrap_or_else(|| {
                                 "Dictation model ready — press hotkey to dictate".to_string()
                             });
-                        this.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                        this.one_window_notice(crate::line_notice::INFO, message, cx);
                     }
                     Err(error) if error.to_string().contains("cancelled") => {
                         let cancelled = "model download cancelled".to_string();
@@ -7039,9 +6371,9 @@ impl ScriptListApp {
                             crate::dictation::DictationModelStatus::DownloadFailed(cancelled),
                             cx,
                         );
-                        this.show_hud(
+                        this.one_window_notice(
+                            crate::line_notice::INFO,
                             "Dictation model download cancelled".to_string(),
-                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -7061,7 +6393,7 @@ impl ScriptListApp {
                             ),
                             cx,
                         );
-                        this.show_error_toast(
+                        this.notice_failed(
                             format!("Dictation model download failed: {error_text}"),
                             cx,
                         );
@@ -7487,9 +6819,9 @@ impl ScriptListApp {
                     if let Some(cancel) = parakeet_model_download_cancel_slot().lock().clone() {
                         cancel.store(true, std::sync::atomic::Ordering::Release);
                     }
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
                         "Cancelling dictation model download\u{2026}".to_string(),
-                        Some(HUD_SHORT_MS),
                         cx,
                     );
                 } else {
@@ -7520,9 +6852,9 @@ impl ScriptListApp {
                         crate::action_helpers::DispatchContext::for_builtin(action.builtin_id());
                     let _ = self.execute_dictation_builtin_action(action, &dctx, cx);
                 } else {
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
                         "No pending dictation action".to_string(),
-                        Some(HUD_SHORT_MS),
                         cx,
                     );
                     self.reset_to_script_list(cx);
@@ -7821,15 +7153,15 @@ impl ScriptListApp {
                 if let Err(refusal) =
                     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Device)
                 {
-                    self.show_error_toast(refusal.to_string(), cx);
+                    self.notice_failed(refusal.to_string(), cx);
                     return;
                 }
                 crate::dictation::request_microphone_permission_nonblocking(|status| {
                     tracing::info!(category = "DICTATION", status = ?status, "Microphone permission prompt resolved from setup prompt");
                 });
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     "Choose Allow when macOS asks for microphone access".to_string(),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -7837,20 +7169,17 @@ impl ScriptListApp {
                 if let Err(refusal) = crate::runtime_policy::check(
                     crate::runtime_policy::ExternalEffect::OpenExternal,
                 ) {
-                    self.show_error_toast(refusal.to_string(), cx);
+                    self.notice_failed(refusal.to_string(), cx);
                     return;
                 }
                 let url = crate::permissions_wizard::PermissionKind::Microphone.settings_url();
                 if let Err(error) = open::that(url) {
-                    self.show_error_toast(
-                        format!("Could not open Microphone settings: {error}"),
-                        cx,
-                    );
+                    self.notice_failed(format!("Could not open Microphone settings: {error}"), cx);
                 }
             }
-            _ => self.show_hud(
+            _ => self.one_window_notice(
+                crate::line_notice::INFO,
                 "Setup item is informational".to_string(),
-                Some(HUD_SHORT_MS),
                 cx,
             ),
         }
@@ -7920,7 +7249,7 @@ impl ScriptListApp {
                     .unwrap_or_else(|| {
                         "Saved microphone unavailable — using System Default".to_string()
                     });
-                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, message, cx);
                 return false;
             }
             crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
@@ -7942,22 +7271,14 @@ impl ScriptListApp {
                     if let Ok(status) = permission_rx.recv().await {
                         let _ = this.update(cx, |this, cx| {
                             if matches!(status, crate::dictation::DictationMicrophonePermissionStatus::Granted) {
-                                this.show_hud(
-                                    "Microphone ready — start dictation again".to_string(),
-                                    Some(HUD_MEDIUM_MS),
-                                    cx,
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, "Microphone ready — start dictation again".to_string(), cx);
                             } else {
-                                this.show_hud(
-                                    "Microphone access denied — enable it in System Settings → Privacy & Security → Microphone".to_string(),
-                                    Some(HUD_MEDIUM_MS),
-                                    cx,
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, "Microphone access denied — enable it in System Settings → Privacy & Security → Microphone".to_string(), cx);
                             }
                         });
                     }
                 }).detach();
-                self.show_error_toast(
+                self.notice_failed(
                     "Choose Allow when macOS asks for microphone access, then start dictation again.",
                     cx,
                 );
@@ -7966,21 +7287,21 @@ impl ScriptListApp {
             crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
                 crate::dictation::DictationMicrophonePermissionStatus::Denied,
             ) => {
-                self.show_error_toast(
+                self.notice_failed(
                     "Microphone access is off. Enable Script Kit in System Settings → Privacy & Security → Microphone.",
                     cx,
                 );
                 self.open_dictation_setup_prompt(cx);
             }
             crate::dictation::DictationMicrophoneStatus::NoDevices => {
-                self.show_error_toast(
+                self.notice_failed(
                     "No microphone found. Connect an input device or choose one in macOS Sound settings.",
                     cx,
                 );
                 self.open_dictation_setup_prompt(cx);
             }
             crate::dictation::DictationMicrophoneStatus::EnumerationFailed(error) => {
-                self.show_error_toast(format!("Could not list microphones: {error}"), cx);
+                self.notice_failed(format!("Could not list microphones: {error}"), cx);
                 self.open_dictation_setup_prompt(cx);
             }
             crate::dictation::DictationMicrophoneStatus::Ready { .. }
@@ -8139,8 +7460,8 @@ impl ScriptListApp {
         target
     }
 
-    /// Close the dictation overlay, hide Script Kit, and activate the tracked
-    /// target app before the CGEvent Cmd+V paste fires.
+    /// Hide Script Kit and activate the tracked target app before the CGEvent Cmd+V paste
+    /// fires.
     fn yield_focus_for_dictation_paste(
         &mut self,
         target_pid: i32,
@@ -8148,7 +7469,6 @@ impl ScriptListApp {
         target_app_name: &str,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
-        use anyhow::Context as _;
         tracing::info!(
             category = "DICTATION",
             target_pid,
@@ -8156,8 +7476,6 @@ impl ScriptListApp {
             target_app_name = %target_app_name,
             "Yielding focus for dictation paste"
         );
-        crate::dictation::close_dictation_overlay(cx)
-            .context("failed to close dictation overlay before paste")?;
         if script_kit_gpui::is_main_window_visible() {
             script_kit_gpui::set_main_window_visible(false);
             platform::defer_hide_main_window(cx);
@@ -8225,31 +7543,6 @@ impl ScriptListApp {
         Ok(())
     }
 
-    /// Schedule the overlay window to close after a delay.
-    fn schedule_dictation_overlay_close(
-        &mut self,
-        cx: &mut Context<Self>,
-        delay: std::time::Duration,
-    ) {
-        let generation = crate::dictation::overlay_generation();
-        cx.spawn(async move |_this, cx| {
-            cx.background_executor().timer(delay).await;
-            // Contract: if crate::dictation::overlay_generation() != gen {
-            // Only close if the overlay hasn't been replaced by a newer session.
-            if crate::dictation::overlay_generation() != generation {
-                tracing::debug!(
-                    category = "DICTATION",
-                    "Scheduled overlay close skipped — generation changed"
-                );
-                return;
-            }
-            cx.update(|cx| {
-                let _ = crate::dictation::close_dictation_overlay(cx);
-            });
-        })
-        .detach();
-    }
-
     /// Bring the main window back after a delay.
     ///
     /// Used by the dictation-to-AI path: the main window is concealed so
@@ -8284,6 +7577,21 @@ impl ScriptListApp {
             });
         })
         .detach();
+    }
+}
+
+/// Where the voice view sends the words for a session started for one place: Agent Chat
+/// targets open the model's chat, Notes targets add to today's note.
+fn talk_dest_for(target: crate::dictation::DictationTarget) -> Option<sk_one_window::Dest> {
+    match target {
+        crate::dictation::DictationTarget::TabAiHarness
+        | crate::dictation::DictationTarget::AiChatComposer => Some(sk_one_window::Dest::Chat),
+        crate::dictation::DictationTarget::NotesEditor
+        | crate::dictation::DictationTarget::DayPageToday => Some(sk_one_window::Dest::Note),
+        crate::dictation::DictationTarget::ExternalApp
+        | crate::dictation::DictationTarget::MainWindowFilter
+        | crate::dictation::DictationTarget::MainWindowPrompt
+        | crate::dictation::DictationTarget::QuickAiQuestion => None,
     }
 }
 

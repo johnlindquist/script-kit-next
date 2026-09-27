@@ -432,11 +432,10 @@ pub(crate) fn resolved_conversation_send_state_chrome(
 }
 
 /// Markdown body line box: the renderer never sets a line height, so GPUI's
-/// implicit phi() default applies. Resolved through the SAME app-side
-/// framework helper the confirm contract uses — never a fresh 1.618034
-/// literal in the exporter.
+/// implicit phi() default applies. Resolved through the shared theme helper — never a fresh
+/// 1.618034 literal in the exporter.
 pub(crate) fn resolved_conversation_markdown_body_line_height(style: &ConversationStyleDef) -> f32 {
-    crate::confirm::confirm_prompt_line_height_px(style.markdown.body_font_size)
+    crate::theme::default_line_height_px(style.markdown.body_font_size)
 }
 
 /// Legacy design-contract projection of the one-line composer shell. Active
@@ -499,6 +498,7 @@ mod conversation_style_contract_tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings, clippy::mistyped_literal_suffixes)]
     fn resolved_transcript_bytes_match_renderer_packing() {
         let theme = stock_theme();
         let style = production_conversation_style();
@@ -527,6 +527,7 @@ mod conversation_style_contract_tests {
     }
 
     #[test]
+    #[allow(clippy::unusual_byte_groupings)]
     fn send_state_chrome_covers_all_four_states() {
         let accent = 0xFBBF24;
         let text = 0xFFFFFF;

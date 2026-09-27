@@ -25,13 +25,8 @@
 //!    BEFORE the delivery `match target` block, so a delivery failure never
 //!    silently drops the captured audio.
 //!
-//! 4. The `TabAiHarness` arm dispatches `WindowEvent::FinishDictation` inside
-//!    itself, and the post-match cleanup block guards against a second
-//!    dispatch with `if !matches!(target, ...::TabAiHarness)` — a regression
-//!    removing the guard would double-fire orchestrator events.
-//!
-//! 5. `DictationSessionPhase::Idle` remains a valid terminal/inactive state
-//!    the overlay can return to — approximates the story's "dictationStatus
+//! 4. `DictationSessionPhase::Idle` remains a valid terminal/inactive state
+//!    the session returns to — approximates the story's "dictationStatus
 //!    returns to idle" assertion at the type level.
 
 const DELIVERY_SOURCE: &str = include_str!("../src/app_execute/builtin_execution.rs");
@@ -93,7 +88,7 @@ fn day_page_today_delivery_appends_capture_without_opening_ui() {
     assert!(
         handler.contains("DictationTarget::DayPageToday =>"),
         "DayPageToday arm must remain in the delivery match — it is the \
-         'Today' overlay chip's destination"
+         `today` destination"
     );
     assert!(
         handler.contains("append_to_day") && handler.contains("DayEntry::Capture"),
@@ -108,7 +103,7 @@ fn quick_ai_delivery_submit_flag_comes_from_config() {
     assert!(
         handler.contains("DictationTarget::QuickAiQuestion =>"),
         "QuickAiQuestion arm must remain in the delivery match — it is the \
-         'Ask' overlay chip's destination"
+         `ask` destination"
     );
     assert!(
         handler.contains("quick_ai_answers()"),
@@ -142,29 +137,6 @@ fn history_is_recorded_before_delivery_routing() {
 }
 
 #[test]
-fn finish_dictation_dispatch_is_guarded_against_double_fire_for_tab_ai() {
-    let handler = handler_slice();
-    let tab_ai_arm_pos = handler
-        .find("DictationTarget::TabAiHarness =>")
-        .expect("TabAiHarness arm must exist");
-    let tab_ai_arm_tail =
-        &handler[tab_ai_arm_pos..tab_ai_arm_pos + 1200.min(handler.len() - tab_ai_arm_pos)];
-    assert!(
-        tab_ai_arm_tail.contains("crate::window_orchestrator::WindowEvent::FinishDictation"),
-        "TabAiHarness arm must dispatch FinishDictation INSIDE the arm so the \
-         orchestrator fires RevealMain immediately (before the post-match \
-         cleanup runs)"
-    );
-    assert!(
-        handler.contains("if !matches!(target, crate::dictation::DictationTarget::TabAiHarness) {"),
-        "post-match cleanup must guard the SECOND FinishDictation dispatch \
-         with `if !matches!(target, ...::TabAiHarness)` so tab-ai dictation \
-         does not double-fire the orchestrator event (once in-arm, once \
-         post-match would cause duplicate RevealMain)"
-    );
-}
-
-#[test]
 fn dictation_session_phase_idle_is_a_valid_inactive_state() {
     assert!(
         DICTATION_TYPES_SOURCE.contains("pub enum DictationSessionPhase {")
@@ -177,9 +149,8 @@ fn dictation_session_phase_idle_is_a_valid_inactive_state() {
     );
     assert!(
         DICTATION_TYPES_SOURCE.contains("Finished,"),
-        "DictationSessionPhase::Finished must remain — the overlay \
-         transitions from Recording → Transcribing → Finished, then the \
-         cleanup schedule returns the runtime to Idle. Losing Finished \
-         would break the overlay's terminal display."
+        "DictationSessionPhase::Finished must remain — a session moves \
+         from Recording → Transcribing → Finished, then the cleanup \
+         schedule returns the runtime to Idle."
     );
 }

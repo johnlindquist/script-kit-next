@@ -158,7 +158,7 @@ impl ScriptListApp {
                                 error = %message,
                                 "Async action failed: favorites_edit_script"
                             );
-                            this.show_error_toast_with_code(
+                            this.notice_failed_with_code(
                                 message,
                                 Some(crate::action_helpers::ERROR_LAUNCH_FAILED),
                                 cx,

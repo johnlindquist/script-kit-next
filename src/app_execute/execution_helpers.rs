@@ -120,7 +120,7 @@ impl ScriptListApp {
         if let Err(e) = app_launcher::launch_application(app) {
             let message = execution_action.failure_message(&app.name, &e);
             tracing::error!(message = %message);
-            self.show_error_toast(message, cx);
+            self.notice_failed(message, cx);
             false
         } else {
             tracing::info!(message = %&format!("Launched app: {}", app.name));
@@ -141,7 +141,7 @@ impl ScriptListApp {
         if let Err(e) = window_control::focus_window(window.id) {
             let message = execution_action.failure_message(&window.title, &e);
             tracing::error!(message = %message);
-            self.show_error_toast(message, cx);
+            self.notice_failed(message, cx);
         } else {
             tracing::info!(message = %&format!("Focused window: {}", window.title));
             self.root_search
@@ -268,10 +268,7 @@ impl ScriptListApp {
 
         if let Some(message) = completion_outcome.success_message(&provider) {
             // Show success toast
-            self.toast_manager.push(
-                components::toast::Toast::success(message, &self.theme)
-                    .duration_ms(Some(TOAST_SUCCESS_MS)),
-            );
+            self.one_window_notice(crate::line_notice::DONE, message, cx);
         }
 
         if completion_outcome.should_rebuild_provider_registry() {
@@ -326,18 +323,15 @@ impl ScriptListApp {
                     Ok(true) => {
                         tracing::info!(message = %"Config restored from backup after validation failure",
                         );
-                        self.show_error_toast(enable_action.validation_restored_message(), cx);
+                        self.notice_failed(enable_action.validation_restored_message(), cx);
                     }
                     Ok(false) => {
-                        self.show_error_toast(
-                            enable_action.validation_no_backup_message(&reason),
-                            cx,
-                        );
+                        self.notice_failed(enable_action.validation_no_backup_message(&reason), cx);
                     }
                     Err(recover_err) => {
                         tracing::info!(message = %&format!("Backup recovery also failed: {}", recover_err),
                         );
-                        self.show_error_toast(
+                        self.notice_failed(
                             enable_action.validation_recovery_failed_message(&reason, &recover_err),
                             cx,
                         );
@@ -348,7 +342,7 @@ impl ScriptListApp {
             Err(e) => {
                 let message = enable_action.write_failure_message(&e);
                 tracing::info!(message = %message);
-                self.show_error_toast(message, cx);
+                self.notice_failed(message, cx);
                 return;
             }
         }
@@ -373,25 +367,21 @@ impl ScriptListApp {
             .unwrap_or(false);
 
         if claude_available {
-            self.toast_manager.push(
-                components::toast::Toast::success(
-                    "Claude Code enabled! Ready to use.".to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_SUCCESS_MS)),
+            self.one_window_notice(
+                crate::line_notice::DONE,
+                "Claude Code enabled! Ready to use.".to_string(),
+                cx,
             );
 
             // Go back to main menu, then re-show inline chat
             self.go_back_or_close(window, cx);
             self.show_inline_ai_chat(None, cx);
         } else {
-            self.toast_manager.push(
-                components::toast::Toast::warning(
-                    "Config saved! Install Claude CLI: npm install -g @anthropic-ai/claude-code"
-                        .to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_DETAILED_MS)),
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                "Config saved! Install Claude CLI: npm install -g @anthropic-ai/claude-code"
+                    .to_string(),
+                cx,
             );
             tracing::info!(message = %"Claude Code config saved but CLI not found - user needs to install it",
             );
@@ -411,7 +401,7 @@ impl ScriptListApp {
         if let Err(error) =
             crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::ExternalStorage)
         {
-            self.show_error_toast(error.to_string(), cx);
+            self.notice_failed(error.to_string(), cx);
             return;
         }
 
@@ -423,7 +413,7 @@ impl ScriptListApp {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 let action = ScratchPadExecutionAction::CreateDirectory;
                 tracing::error!(message = %action.log_message(&e));
-                self.show_error_toast(action.toast_message(&e), cx);
+                self.notice_failed(action.toast_message(&e), cx);
                 return;
             }
         }
@@ -436,7 +426,7 @@ impl ScriptListApp {
                 if let Err(write_err) = std::fs::write(&scratch_path, "") {
                     let action = ScratchPadExecutionAction::CreateFile;
                     tracing::error!(message = %action.log_message(&write_err));
-                    self.show_error_toast(action.toast_message(&write_err), cx);
+                    self.notice_failed(action.toast_message(&write_err), cx);
                     return;
                 }
                 String::new()
@@ -444,7 +434,7 @@ impl ScriptListApp {
             Err(e) => {
                 let action = ScratchPadExecutionAction::ReadFile;
                 tracing::error!(message = %action.log_message(&e));
-                self.show_error_toast(action.toast_message(&e), cx);
+                self.notice_failed(action.toast_message(&e), cx);
                 return;
             }
         };
@@ -465,7 +455,7 @@ impl ScriptListApp {
             path: scratch_path,
         });
         if let Err(error) = self.construct_prompt_seed(seed, cx) {
-            self.show_error_toast(error.to_string(), cx);
+            self.notice_failed(error.to_string(), cx);
             return;
         }
         self.prepare_constructed_sdk_prompt("scratch-pad", true, cx);

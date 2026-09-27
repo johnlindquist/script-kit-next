@@ -72,15 +72,9 @@ impl ScriptListApp {
                     missing = %names,
                     "Missing required permissions at startup"
                 );
-                self.toast_manager.push(
-                    components::toast::Toast::warning(
-                        format!(
+                self.one_window_notice(crate::line_notice::FAILED, format!(
                             "Missing required permissions: {names}. Run \u{201c}Set Up Permissions\u{201d} to grant them."
-                        ),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_WARNING_MS)),
-                );
+                        ), cx);
                 let _ = notify_rust::Notification::new()
                     .summary("Script Kit needs permissions")
                     .body(&format!(
@@ -141,15 +135,15 @@ impl ScriptListApp {
         if let Err(error) =
             crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery)
         {
-            self.show_error_toast(error.to_string(), cx);
+            self.notice_failed(error.to_string(), cx);
             return;
         }
         use crate::platform::permiso_detect::PermissionStatus;
 
         if crate::permissions_wizard::detect_permission(kind) == PermissionStatus::Authorized {
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 format!("{} already granted", kind.name()),
-                Some(HUD_SHORT_MS),
                 cx,
             );
             cx.notify();
@@ -157,7 +151,11 @@ impl ScriptListApp {
         }
 
         if crate::permissions_wizard::request_permission(kind) == PermissionStatus::Authorized {
-            self.show_hud(format!("{} granted", kind.name()), Some(HUD_SHORT_MS), cx);
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                format!("{} granted", kind.name()),
+                cx,
+            );
             cx.notify();
             return;
         }
@@ -179,18 +177,12 @@ impl ScriptListApp {
         };
 
         if opened {
-            self.toast_manager.push(
-                components::toast::Toast::info(
-                    format!(
+            self.one_window_notice(crate::line_notice::INFO, format!(
                         "Enable \u{201c}{}\u{201d} for Script Kit in System Settings — this list updates automatically",
                         kind.name()
-                    ),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_INFO_MS)),
-            );
+                    ), cx);
         } else {
-            self.show_error_toast(
+            self.notice_failed(
                 format!("Couldn't open System Settings for {}", kind.name()),
                 cx,
             );

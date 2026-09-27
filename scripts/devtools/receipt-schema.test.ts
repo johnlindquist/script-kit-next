@@ -114,7 +114,7 @@ describe("executable receipt registry", () => {
       provesRuntimeBehavior: true,
     });
     expect(claimedCampaign.exitCode).not.toBe(0);
-    expect(claimedCampaign.validation.errors).toContain("complete_122_fixture_inventory_required");
+    expect(claimedCampaign.validation.errors).toContain("complete_113_fixture_inventory_required");
   });
 
   test("positive layout receipt becomes EVALUABLE_PASS", () => {

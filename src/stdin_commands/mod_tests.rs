@@ -180,8 +180,6 @@ mod tests {
                 use_frozen_selection: false,
                 request_id: None,
             },
-            ExternalCommand::OpenDictationOverlayFixture { request_id: None },
-            ExternalCommand::OpenDictationMicrophonePopupFixture { request_id: None },
             ExternalCommand::GetConfigFingerprint { request_id: None },
             ExternalCommand::SimulateMainHotkeyGesture {
                 phase: String::new(),

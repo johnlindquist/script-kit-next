@@ -161,15 +161,11 @@ impl ScriptListApp {
                             crate::mcp_resources::format_sdk_reference_entry_markdown(entry);
                         match crate::platform::copy_text(&markdown) {
                             Ok(receipt) => {
-                                this.show_hud(
-                                    receipt.feedback(catalog_action.copied_hud(&entry.name)),
-                                    Some(2000),
-                                    cx,
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, receipt.feedback(catalog_action.copied_hud(&entry.name)), cx);
                             }
                             Err(e) => {
                                 tracing::warn!(error = %e, "sdk_reference copy failed");
-                                this.show_error_toast(format!("Failed to copy SDK reference: {e}"), cx);
+                                this.notice_failed(format!("Failed to copy SDK reference: {e}"), cx);
                             }
                         }
                     }
@@ -181,15 +177,11 @@ impl ScriptListApp {
                             crate::mcp_resources::format_sdk_reference_entry_markdown(entry);
                         match crate::platform::copy_text(&markdown) {
                             Ok(receipt) => {
-                                this.show_hud(
-                                    receipt.feedback(catalog_action.copied_hud(&entry.name)),
-                                    Some(2000),
-                                    cx,
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, receipt.feedback(catalog_action.copied_hud(&entry.name)), cx);
                             }
                             Err(e) => {
                                 tracing::warn!(error = %e, "sdk_reference enter-copy failed");
-                                this.show_error_toast(format!("Failed to copy SDK reference: {e}"), cx);
+                                this.notice_failed(format!("Failed to copy SDK reference: {e}"), cx);
                             }
                         }
                     }

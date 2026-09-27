@@ -910,18 +910,6 @@ impl ScriptListApp {
                 }
                 true
             }
-            AppView::DictationHistoryView {
-                filter,
-                selected_index,
-                visible_limit,
-            } => {
-                if Self::sync_builtin_query_state(filter, selected_index, text) {
-                    *visible_limit = crate::dictation::DICTATION_HISTORY_PAGE_SIZE;
-                    self.dictation_history_scroll_handle.scroll_to_item(0);
-                    tracked_reset = true;
-                }
-                true
-            }
             AppView::TipsView {
                 filter,
                 selected_index,

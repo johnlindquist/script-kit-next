@@ -225,9 +225,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let app_name = target.app_name.clone();
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             lifecycle_action.hud_message(&app_name),
-            Some(HUD_SHORT_MS),
             cx,
         );
         self.hide_main_and_reset(cx);
@@ -297,7 +297,6 @@ impl ScriptListApp {
         &mut self,
         action_id: &str,
         dctx: &DispatchContext,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         let trace_id = &dctx.trace_id;
@@ -338,9 +337,9 @@ impl ScriptListApp {
                                         action = open_action.trace_name(),
                                         "app open item action completed"
                                     );
-                                    this.show_hud(
+                                    this.one_window_notice(
+                                        crate::line_notice::INFO,
                                         open_action.success_hud().to_string(),
-                                        Some(HUD_SHORT_MS),
                                         cx,
                                     );
                                     this.hide_main_and_reset(cx);
@@ -352,7 +351,7 @@ impl ScriptListApp {
                                         action = open_action.trace_name(),
                                         "app open item action failed"
                                     );
-                                    this.show_error_toast(open_action.failure_message(e), cx);
+                                    this.notice_failed(open_action.failure_message(e), cx);
                                 }
                             });
                         })
@@ -446,70 +445,19 @@ impl ScriptListApp {
                 }
 
                 if lifecycle_action == AppLifecycleHandlerAction::ForceQuit {
-                    let weak_entity = cx.entity().downgrade();
-                    let owner = weak_entity.clone();
-                    let confirmed_target = target.clone();
-                    let confirmation_trace_id = trace_id.to_string();
-                    let cancellation_trace_id = confirmation_trace_id.clone();
-
-                    crate::confirm::open_parent_confirm_dialog_for_entity(
-                        window,
-                        cx,
-                        owner,
-                        crate::confirm::ParentConfirmOptions::destructive(
-                            "Force Quit Application",
-                            format!(
-                                "Force quit \"{}\"? Unsaved changes may be lost.",
-                                target.app_name
-                            ),
-                            "Force Quit",
-                        ),
-                        move |_window, cx| {
-                            let Some(entity) = weak_entity.upgrade() else {
-                                return;
-                            };
-
-                            let captured_target = confirmed_target.clone();
-                            let trace_id = confirmation_trace_id.clone();
-                            entity.update(cx, move |this, cx| {
-                                let current_target = lifecycle_action
-                                    .target_from_result(this.get_selected_result())
-                                    .ok();
-                                let decision = crate::window_orchestrator::interaction::
-                                    plan_confirmed_destructive_action(
-                                        true,
-                                        &captured_target,
-                                        current_target.as_ref(),
-                                    );
-
-                                if decision
-                                    != crate::window_orchestrator::interaction::
-                                        ConfirmedDestructiveActionDecision::ExecuteCapturedTarget
-                                {
-                                    tracing::warn!(
-                                        trace_id = %trace_id,
-                                        decision = ?decision,
-                                        event = "force_quit_target_rejected",
-                                        "Force quit refused because the confirmed application changed"
-                                    );
-                                    return;
-                                }
-
-                                this.execute_app_lifecycle_action(
-                                    lifecycle_action,
-                                    captured_target,
-                                    trace_id,
-                                    cx,
-                                );
-                            });
-                        },
-                        move |_window, _cx| {
-                            tracing::info!(
-                                trace_id = %cancellation_trace_id,
-                                event = "force_quit_cancelled",
-                                "Force quit cancelled"
+                    let trace_id = trace_id.to_string();
+                    self.one_window_hold(
+                        "app",
+                        format!("Force quit {}", target.app_name),
+                        Box::new(move |this, cx| {
+                            this.execute_app_lifecycle_action(
+                                lifecycle_action,
+                                target,
+                                trace_id,
+                                cx,
                             );
-                        },
+                        }),
+                        cx,
                     );
                     return DispatchOutcome::success();
                 }

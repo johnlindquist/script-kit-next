@@ -130,7 +130,6 @@ pub(crate) struct OwnedMainSources {
     pub overlay_fixture_id: Option<&'static str>,
     pub overlay_logs: Vec<String>,
     pub overlay_root_dialog: Option<(u64, u64)>,
-    pub overlay_root_notification: Option<u64>,
     pub overlay_actions: Vec<String>,
 }
 
@@ -155,7 +154,6 @@ impl Default for OwnedMainSources {
             overlay_fixture_id: None,
             overlay_logs: Vec::new(),
             overlay_root_dialog: None,
-            overlay_root_notification: None,
             overlay_actions: Vec::new(),
         }
     }
@@ -782,66 +780,27 @@ impl ScriptListApp {
                         .timer(std::time::Duration::from_millis(180))
                         .await;
 
-                    let options = crate::confirm::ParentConfirmOptions {
-                        title: import.bundle.prompt_title().into(),
-                        body: import.bundle.prompt_body().into(),
-                        confirm_text: "Install".into(),
-                        cancel_text: "Ignore".into(),
-                        ..Default::default()
-                    };
-                    let trace_id = format!(
-                        "share-import-{}-{}",
-                        import.bundle.kind.display_name().to_lowercase(),
-                        import.bundle.title.to_lowercase().replace(' ', "-")
-                    );
-
-                    let confirmed =
-                        match crate::confirm::confirm_with_parent_dialog(cx, options, &trace_id)
-                            .await
-                        {
-                            Ok(confirmed) => confirmed,
-                            Err(error) => {
-                                tracing::error!(
-                                    ?error,
-                                    title = %import.bundle.title,
-                                    "clipboard_share_confirm_failed"
-                                );
-                                continue;
-                            }
-                        };
-                    if !confirmed {
-                        continue;
-                    }
-
-                    let install_result =
-                        crate::script_sharing::install_share_bundle(&import.bundle);
-                    let title = import.bundle.title.clone();
-                    let kind = import.bundle.kind.display_name().to_lowercase();
+                    let bundle = import.bundle;
                     let _ = cx.update(|cx| {
-                        this.update(cx, |app, cx| match install_result {
-                            Ok(outcome) => {
-                                app.refresh_scripts(cx);
-                                app.refresh_skills(cx);
-                                app.transition_current_view_and_rekey_main_automation_surface(
-                                    AppView::ScriptList,
-                                );
-                                app.reset_main_menu_selection_intent();
-                                app.flush_pending_main_menu_query(cx);
-                                app.show_hud(
-                                    format!("Installed shared {} into {}", kind, outcome.plugin_id),
-                                    Some(2000),
-                                    cx,
-                                );
-                            }
-                            Err(error) => {
-                                app.show_error_toast(
-                                    format!(
-                                        "Failed to install shared {} '{}': {}",
-                                        kind, title, error
+                        this.update(cx, |app, cx| {
+                            let asked = bundle.prompt_title();
+                            let detail = bundle.prompt_body();
+                            app.one_window_ask(
+                                "download",
+                                asked,
+                                detail,
+                                vec![
+                                    (
+                                        "Install".to_string(),
+                                        Box::new(move |app, cx| {
+                                            app.install_shared_bundle(&bundle, cx)
+                                        }),
                                     ),
-                                    cx,
-                                );
-                            }
+                                    ("Ignore".to_string(), Box::new(|_, _| {})),
+                                ],
+                                None,
+                                cx,
+                            );
                         })
                     });
                 }
@@ -991,5 +950,37 @@ impl ScriptListApp {
             });
         })
         .detach();
+    }
+}
+
+impl ScriptListApp {
+    /// Installs a script or skill someone shared, once the user says to.
+    #[cfg_attr(test, allow(dead_code))]
+    fn install_shared_bundle(
+        &mut self,
+        bundle: &crate::script_sharing::ScriptShareBundle,
+        cx: &mut Context<Self>,
+    ) {
+        let kind = bundle.kind.display_name().to_lowercase();
+        match crate::script_sharing::install_share_bundle(bundle) {
+            Ok(outcome) => {
+                self.refresh_scripts(cx);
+                self.refresh_skills(cx);
+                self.transition_current_view_and_rekey_main_automation_surface(AppView::ScriptList);
+                self.reset_main_menu_selection_intent();
+                self.flush_pending_main_menu_query(cx);
+                self.notice_done(
+                    format!("Installed shared {} into {}", kind, outcome.plugin_id),
+                    cx,
+                );
+            }
+            Err(error) => self.notice_failed(
+                format!(
+                    "Failed to install shared {} '{}': {}",
+                    kind, bundle.title, error
+                ),
+                cx,
+            ),
+        }
     }
 }

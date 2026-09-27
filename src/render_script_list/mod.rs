@@ -706,7 +706,7 @@ impl ScriptListApp {
     ) -> crate::window_orchestrator::interaction::LauncherEscapeDecision {
         crate::window_orchestrator::interaction::plan_launcher_escape(
             crate::window_orchestrator::interaction::LauncherEscapeFacts {
-                actions_open: self.show_actions_popup || crate::actions::is_actions_window_open(),
+                actions_open: self.show_actions_popup,
                 attachment_portal_open: self.is_in_attachment_portal(),
                 object_selector_open: self.menu_syntax_object_selector_owns_main_keyboard(),
                 trigger_picker_open: self.menu_syntax_trigger_picker_owns_main_keyboard(),
@@ -1025,6 +1025,8 @@ impl ScriptListApp {
         let active_filter_empty_copy = "There are no search results with this filter applied.";
         let list_element: AnyElement = if let Some(view) = self.render_one_window_work_view(cx) {
             view
+        } else if let Some(view) = self.one_window_view_element() {
+            view
         } else if menu_syntax_owns_main_list
             && !trigger_picker_owns_main_list_for_render
             && !object_selector_owns_main_list_for_render
@@ -1311,15 +1313,13 @@ impl ScriptListApp {
                                     let mut item_name = "inline-calculator";
                                     let item_element = if let Some(calculator) = inline_calculator
                                     {
-                                        let _legacy_calculator_renderer = render_calculator_item;
                                         render_inline_calc_list_item(
                                             calculator,
                                             row_semantic_id,
+                                            ix,
                                             is_selected,
-                                            &this.theme,
-                                            this.current_main_menu_theme.def().list,
-                                            this.current_design,
-                                            color_resolver,
+                                            theme_colors,
+                                            current_main_menu_theme,
                                         )
                                     } else if let Some(result) = flat_results_clone.get(*result_idx)
                                     {
@@ -1537,6 +1537,7 @@ impl ScriptListApp {
                 )
                 .into_any_element()
         };
+        let list_element = self.one_window_view_under_list(list_element, theme_colors);
 
         // Log panel - uses pre-extracted theme values to avoid borrow conflicts
         let log_panel = if self.show_logs {
@@ -2318,9 +2319,6 @@ impl ScriptListApp {
                 None
             }
         };
-
-        // Note: Toast notifications are now handled by gpui-component's NotificationList
-        // via the Root wrapper. Toasts are flushed in render() via flush_pending_toasts().
 
         // Note: HUD overlay is added at the top-level render() method for all views
 

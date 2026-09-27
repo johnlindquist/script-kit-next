@@ -60,66 +60,13 @@ impl DayPageView {
             });
         let actions = crate::actions::get_canonical_note_search_actions(&search_state, current_id);
         self.note_switcher.set_actions(actions, cx);
-        self.note_switcher.open_centered(window, cx);
-        self.wire_note_switcher_activation(window, cx);
+        self.note_switcher.open(window, cx);
         if let Some(dialog) = self.note_switcher.dialog() {
             dialog.update(cx, |dialog, cx| {
                 dialog.set_context_title(Some(destination.primary_verb().to_string()));
                 cx.notify();
             });
         }
-    }
-
-    fn wire_note_switcher_activation(&mut self, window: &Window, cx: &mut Context<Self>) {
-        let Some(dialog) = self.note_switcher.dialog().cloned() else {
-            return;
-        };
-        let dialog_id = dialog.entity_id();
-        let day_page = cx.entity().downgrade();
-        let day_window = window.window_handle();
-        let on_close_day_page = day_page.clone();
-        dialog.update(cx, |dialog, _cx| {
-            dialog.set_on_close(std::sync::Arc::new(move |cx| {
-                let day_page = on_close_day_page.clone();
-                cx.defer(move |cx| {
-                    let _ = day_window.update(cx, |_root, window, cx| {
-                        let Some(day_page) = day_page.upgrade() else {
-                            return;
-                        };
-                        day_page.update(cx, |view, cx| {
-                            if view.note_switcher.dialog().map(|dialog| dialog.entity_id()) != Some(dialog_id) {
-                                return;
-                            }
-                            view.note_switcher.mark_closed_externally();
-                            view.focus_editor(window, cx);
-                        });
-                    });
-                });
-            }));
-            dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
-                match activation {
-                    crate::actions::ActionsDialogActivation::Executed { action_id, .. } => {
-                        let day_page = day_page.clone();
-                        cx.defer(move |cx| {
-                            let _ = day_window.update(cx, |_root, window, cx| {
-                                let Some(day_page) = day_page.upgrade() else {
-                                    return;
-                                };
-                                day_page.update(cx, |view, cx| {
-                                    if view.note_switcher.dialog().map(|dialog| dialog.entity_id()) != Some(dialog_id) {
-                                        return;
-                                    }
-                                    view.execute_note_switcher_action(&action_id, window, cx);
-                                });
-                            });
-                        });
-                    }
-                    crate::actions::ActionsDialogActivation::DrillDownPushed { .. }
-                    | crate::actions::ActionsDialogActivation::Blocked { .. }
-                    | crate::actions::ActionsDialogActivation::NoSelection => {}
-                }
-            }));
-        });
     }
 
     fn execute_note_switcher_action(

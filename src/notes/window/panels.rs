@@ -252,7 +252,7 @@ impl NotesApp {
             NotesAction::OpenTrash => self.set_view_mode(NotesViewMode::Trash, window, cx),
             NotesAction::EmptyTrash => {
                 self.close_actions_panel(window, cx);
-                self.request_empty_trash(window, cx);
+                self.request_empty_trash(cx);
                 return;
             }
             NotesAction::BackToNotes => self.set_view_mode(NotesViewMode::AllNotes, window, cx),
@@ -404,13 +404,10 @@ impl NotesApp {
                             error_sha256 = %safe_error.sha256,
                             "Failed to load note from switcher"
                         );
-                        super::render::show_notes_toast(
-                            window,
-                            "notes-switcher-load-failed",
-                            "Selected note could not be loaded",
-                            crate::toast_popup::ToastPopupKind::Error,
-                            Some(super::render::NOTES_ERROR_TOAST_MS),
+                        crate::line_notice::say(
                             cx,
+                            crate::line_notice::FAILED,
+                            "Selected note could not be loaded",
                         );
                         cx.notify();
                         self.close_browse_panel(window, cx);
@@ -440,13 +437,10 @@ impl NotesApp {
                 notes_len = self.notes.len(),
                 "notes_note_switcher_selected_note_not_found",
             );
-            super::render::show_notes_toast(
-                window,
-                "notes-switcher-not-found",
-                "Selected note could not be found",
-                crate::toast_popup::ToastPopupKind::Error,
-                Some(super::render::NOTES_ERROR_TOAST_MS),
+            crate::line_notice::say(
                 cx,
+                crate::line_notice::FAILED,
+                "Selected note could not be found",
             );
             cx.notify();
             self.close_browse_panel(window, cx);

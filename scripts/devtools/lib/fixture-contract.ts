@@ -58,7 +58,6 @@ export function fixtureEvidenceIssues(binding: FixtureBinding, evidence: Json): 
   // These are distinct catalogue presentations, not aliases for launcher/overlay.
   if (fixture.id === "main.file-search-mini" && (frame.appViewVariant !== "FileSearchView" || contract.surfaceKind !== "FileSearchMini")) issues.push("file_search_mini_entry_mismatch");
   if (fixture.id === "main.file-search-full" && (frame.appViewVariant !== "FileSearchView" || contract.surfaceKind !== "FileSearchFull")) issues.push("file_search_full_entry_mismatch");
-  if (fixture.id === "dictation.microphone-picker" && (window.id !== "dictation-microphone-popup" || window.semanticSurface !== "dictationMicrophonePopup" || frame.appViewVariant !== "dictationMicrophonePopup")) issues.push("microphone_child_required");
   return issues;
 }
 
@@ -67,11 +66,11 @@ export function familyCampaignIssues(observation: Json): string[] {
     try { observation = object(resolveReceiptDetails(observation).observation); }
     catch (error) { return [error instanceof Error ? error.message : String(error)]; }
   }
-  if (!Array.isArray(observation.fixtures)) return ["complete_122_fixture_inventory_required"];
+  if (!Array.isArray(observation.fixtures)) return ["complete_113_fixture_inventory_required"];
   const catalogue: FixtureDescriptor[] = Array.isArray(observation.catalogue) ? observation.catalogue : [];
   const rows: Json[] = observation.fixtures;
   const issues: string[] = [];
-  if (catalogue.length !== 122 || rows.length !== catalogue.length || new Set(catalogue.map(value => value.id)).size !== 122 || new Set(rows.map(value => value.id)).size !== 122) issues.push("complete_122_fixture_inventory_required");
+  if (catalogue.length !== 113 || rows.length !== catalogue.length || new Set(catalogue.map(value => value.id)).size !== 113 || new Set(rows.map(value => value.id)).size !== 113) issues.push("complete_113_fixture_inventory_required");
   for (const descriptor of catalogue) {
     const row = rows.find(value => value.id === descriptor.id);
     if (!row || row.pass !== true || !row.binding || JSON.stringify(row.binding.descriptor) !== JSON.stringify(descriptor)) { issues.push(`fixture_binding_missing:${descriptor.id}`); continue; }

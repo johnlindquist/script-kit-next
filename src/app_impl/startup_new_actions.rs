@@ -5,16 +5,6 @@
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
                 let is_notes = crate::notes::is_notes_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                let is_shortcut_recorder = super::shortcut_recorder::is_shortcut_recorder_window(window);
-
-                // A detached actions popup hosted by a secondary window (Notes,
-                // detached Agent Chat) owns its keys via ActionsWindow::on_key_down.
-                // Routing them through the main app's dialog router would land on
-                // the wrong (or absent) dialog entity and swallow every keystroke.
-                if is_actions && !crate::actions::is_actions_window_open_for_main() {
-                    return;
-                }
 
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
@@ -31,10 +21,7 @@
                     let mut close_key_routed = false;
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            if !is_actions
-                                && !this.show_actions_popup
-                                && !crate::actions::is_actions_window_open_for_main()
-                            {
+                            if !this.show_actions_popup {
                                 return;
                             }
                             if let crate::app_impl::actions_dialog::ActionsSupport::SharedDialog(
@@ -53,11 +40,7 @@
                                     ActionsRoute::Handled | ActionsRoute::Execute { .. } => {
                                         tracing::info!(
                                             target: "script_kit::actions",
-                                            event = if is_actions {
-                                                "actions_interceptor_routed_from_actions_window"
-                                            } else {
-                                                "actions_interceptor_routed_close_before_visibility_guard"
-                                            },
+                                            event = "actions_interceptor_routed_close_before_visibility_guard",
                                             host = ?host,
                                             key = %key,
                                         );
@@ -73,70 +56,6 @@
                     }
                 }
 
-                if is_actions {
-                    let mut actions_key_routed = false;
-                    if let Some(app) = app_entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            logging::log(
-                                "KEY",
-                                &format!(
-                                    "Actions interceptor saw actions-window key={} shortcut={} popup={} focused_input={:?}",
-                                    key,
-                                    crate::shortcuts::keystroke_to_shortcut(
-                                        key,
-                                        &event.keystroke.modifiers,
-                                    ),
-                                    this.show_actions_popup,
-                                    this.focused_input
-                                ),
-                            );
-                            if let crate::app_impl::actions_dialog::ActionsSupport::SharedDialog(
-                                host,
-                            ) = this.actions_support_for_view()
-                            {
-                                match this.route_key_to_actions_dialog(
-                                    key,
-                                    key_char,
-                                    &event.keystroke.modifiers,
-                                    host,
-                                    window,
-                                    cx,
-                                ) {
-                                    ActionsRoute::NotHandled => {}
-                                    ActionsRoute::Handled => {
-                                        tracing::debug!(
-                                            target: "script_kit::actions",
-                                            event = "actions_interceptor_routed_from_actions_window",
-                                            host = ?host,
-                                            key = %key,
-                                        );
-                                        cx.stop_propagation();
-                                        actions_key_routed = true;
-                                    }
-                                    ActionsRoute::Execute {
-                                        action_id,
-                                        should_close,
-                                    } => {
-                                        this.execute_actions_route_action(
-                                            host,
-                                            action_id,
-                                            should_close,
-                                            window,
-                                            cx,
-                                        );
-                                        cx.stop_propagation();
-                                        actions_key_routed = true;
-                                    }
-                                }
-                            }
-                        });
-                    }
-                    if actions_key_routed {
-                        return;
-                    }
-                    return;
-                }
-
                 // When the main window is hidden (e.g. Notes/AI open), main-menu
                 // key interceptors must not consume keystrokes from secondary windows.
                 if !script_kit_gpui::is_main_window_visible() {
@@ -146,23 +65,12 @@
                 // Skip keystrokes from secondary windows — interceptors are
                 // GLOBAL and fire for ALL windows.  Secondary windows own
                 // their own Cmd+K/Escape/Enter handling.
-                if is_notes || is_shortcut_recorder {
+                if is_notes {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
                         is_notes,
-                        is_actions,
-                        is_shortcut_recorder,
                     );
-                    return;
-                }
-
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
                     return;
                 }
 
@@ -286,13 +194,7 @@
                             if has_cmd && !has_shift && key.eq_ignore_ascii_case("m") {
                                 logging::log("KEY", "Interceptor: Cmd+M -> cycle vibrancy material");
                                 let description = platform::cycle_vibrancy_material();
-                                this.toast_manager.push(
-                                    components::toast::Toast::info(
-                                        description,
-                                        &this.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, description, cx);
                                 cx.notify();
                                 cx.stop_propagation();
                                 return;
@@ -302,13 +204,7 @@
                             if has_cmd && has_shift && key.eq_ignore_ascii_case("a") {
                                 logging::log("KEY", "Interceptor: Cmd+Shift+A -> cycle vibrancy appearance");
                                 let description = platform::cycle_appearance();
-                                this.toast_manager.push(
-                                    components::toast::Toast::info(
-                                        description,
-                                        &this.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, description, cx);
                                 cx.notify();
                                 cx.stop_propagation();
                                 return;
@@ -464,7 +360,6 @@
                                 dialog.update(cx, |d, cx| {
                                     d.backspace_search_input(window, cx);
                                 });
-                                crate::actions::notify_actions_window(cx);
                             }
                             cx.stop_propagation();
                             return;
@@ -478,7 +373,6 @@
                                         dialog.update(cx, |d, cx| {
                                             d.insert_search_text(ch.to_string(), window, cx);
                                         });
-                                        crate::actions::notify_actions_window(cx);
                                             }
                                     cx.stop_propagation();
                                 }

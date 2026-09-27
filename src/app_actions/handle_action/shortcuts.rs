@@ -151,7 +151,6 @@ impl ScriptListApp {
         &mut self,
         action_id: &str,
         dctx: &DispatchContext,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         let _ = dctx; // Reserved for future async path logging
@@ -214,7 +213,7 @@ impl ScriptListApp {
                         item_type = result.type_label(),
                         "launcher_shortcut_recorder_requested"
                     );
-                    self.show_shortcut_recorder(command_id, command_name, window, cx);
+                    self.show_shortcut_recorder(command_id, command_name, cx);
                 } else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
@@ -273,9 +272,9 @@ impl ScriptListApp {
                                     command_id = %command_id,
                                     "Removed config shortcut"
                                 );
-                                self.show_hud(
+                                self.one_window_notice(
+                                    crate::line_notice::INFO,
                                     remove_action.success_hud().to_string(),
-                                    Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
                                 // Refresh scripts to update shortcut display
@@ -399,9 +398,9 @@ impl ScriptListApp {
                                     command_id = %command_id,
                                     "Removed alias override"
                                 );
-                                self.show_hud(
+                                self.one_window_notice(
+                                    crate::line_notice::INFO,
                                     remove_action.success_hud().to_string(),
-                                    Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
                                 // Refresh scripts to update alias display and registry

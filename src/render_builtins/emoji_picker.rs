@@ -242,7 +242,7 @@ impl ScriptListApp {
                                 let receipt = match crate::platform::copy_text(emoji.emoji) {
                                     Ok(receipt) => receipt,
                                     Err(error) => {
-                                        this.show_error_toast(
+                                        this.notice_failed(
                                             format!("Failed to copy emoji: {error}"),
                                             cx,
                                         );
@@ -262,9 +262,9 @@ impl ScriptListApp {
                                 if receipt.destination()
                                     == crate::runtime_policy::CopyDestination::OwnedProcessLocal
                                 {
-                                    this.show_hud(
+                                    this.one_window_notice(
+                                        crate::line_notice::INFO,
                                         receipt.feedback(format!("Copied {}", emoji.emoji)),
-                                        Some(HUD_SHORT_MS),
                                         cx,
                                     );
                                 } else {
@@ -390,7 +390,7 @@ impl ScriptListApp {
                                                             let receipt = match crate::platform::copy_text(&emoji_value) {
                                                                 Ok(receipt) => receipt,
                                                                 Err(error) => {
-                                                                    this.show_error_toast(format!("Failed to copy emoji: {error}"), cx);
+                                                                    this.notice_failed(format!("Failed to copy emoji: {error}"), cx);
                                                                     return;
                                                                 }
                                                             };
@@ -406,11 +406,7 @@ impl ScriptListApp {
                                                                 );
                                                             }
                                                             if receipt.destination() == crate::runtime_policy::CopyDestination::OwnedProcessLocal {
-                                                                this.show_hud(
-                                                                    receipt.feedback(format!("Copied {emoji_value}")),
-                                                                    Some(HUD_SHORT_MS),
-                                                                    cx,
-                                                                );
+                                                                this.one_window_notice(crate::line_notice::INFO, receipt.feedback(format!("Copied {emoji_value}")), cx);
                                                                 return;
                                                             }
                                                             this.hide_main_and_reset(cx);

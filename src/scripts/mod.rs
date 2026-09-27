@@ -76,9 +76,9 @@ pub use self::types::{
     AgentMatch, AiVaultMatch, AppMatch, BrainInboxMatch, BrainMatch, BrowserHistoryMatch,
     BrowserTabMatch, BuiltInMatch, ClipboardHistoryMatch, ConversationRowTarget,
     DictationHistoryMatch, FallbackConfig, FallbackMatch, FileMatch, FlowMatch, IntentMatch,
-    MatchEvidence, MatchEvidenceField, MatchIndices, NoteMatch, RootWindowEntry, Script,
-    ScriptBody, ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet,
-    ScriptletMatch, SearchResult, SkillMatch, TodoMatch, WindowMatch,
+    MatchEvidence, MatchEvidenceField, MatchIndices, NoteMatch, OneWindowMatch, RootWindowEntry,
+    Script, ScriptBody, ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind,
+    Scriptlet, ScriptletMatch, SearchResult, SkillMatch, TodoMatch, WindowMatch,
 };
 #[allow(unused_imports)]
 pub use self::validation::{

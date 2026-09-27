@@ -77,55 +77,6 @@ pub(crate) fn should_show_jump_to_latest(can_scroll_y: bool, is_following_tail: 
     can_scroll_y && !is_following_tail
 }
 
-/// Render the shared jump-to-latest pill.
-///
-/// Centered above the transcript's bottom edge. The caller supplies the click
-/// handler, which MUST route through whatever already owns tail-following
-/// (`scroll_to_end()`), not set a flag of its own.
-pub(crate) fn render_jump_to_latest_pill(
-    id: &'static str,
-    label: &'static str,
-    theme: &crate::theme::Theme,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> AnyElement {
-    let border = theme.colors.ui.border;
-    let text = theme.colors.text.primary;
-
-    div()
-        .id(id)
-        .debug_selector(move || id.to_string())
-        .absolute()
-        .bottom(px(JUMP_TO_LATEST_BOTTOM_INSET_PX))
-        .left_0()
-        .right_0()
-        .flex()
-        .justify_center()
-        .child(
-            div()
-                .id("jump-to-latest-button")
-                .px(px(JUMP_TO_LATEST_PADDING_X_PX))
-                .py(px(JUMP_TO_LATEST_PADDING_Y_PX))
-                .rounded_full()
-                .bg(rgba((border << 8) | JUMP_TO_LATEST_BG_ALPHA))
-                .text_color(gpui::rgb(text))
-                .text_xs()
-                .cursor_pointer()
-                .hover(move |d| d.bg(rgba((border << 8) | JUMP_TO_LATEST_HOVER_BG_ALPHA)))
-                .on_click(on_click)
-                .child(label),
-        )
-        .into_any_element()
-}
-
-/// Pill geometry, lifted verbatim from Flow's existing
-/// `chat-scroll-to-latest-pill` so Agent Chat's port is visually identical
-/// rather than a re-authored approximation.
-const JUMP_TO_LATEST_BOTTOM_INSET_PX: f32 = 12.0;
-const JUMP_TO_LATEST_PADDING_X_PX: f32 = 10.0;
-const JUMP_TO_LATEST_PADDING_Y_PX: f32 = 5.0;
-const JUMP_TO_LATEST_BG_ALPHA: u32 = 0xCC;
-const JUMP_TO_LATEST_HOVER_BG_ALPHA: u32 = 0xE6;
-
 #[cfg(test)]
 mod jump_to_latest_tests {
     use super::*;
@@ -171,9 +122,4 @@ mod tests {
         assert_eq!(top_occlusion_alpha(tokens, 1.0), 0x2E);
         assert_eq!(top_occlusion_alpha(tokens, 2.0), 0x2E);
     }
-}
-
-/// Use the scroll container's current geometry rather than a shadow follow flag.
-pub(crate) fn scroll_handle_is_at_bottom(handle: &gpui::ScrollHandle) -> bool {
-    handle.max_offset().y + handle.offset().y <= gpui::px(1.0)
 }

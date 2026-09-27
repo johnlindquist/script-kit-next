@@ -140,6 +140,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> Option<Result<(), &'static str>> {
         if let Some(plan) = self.intent_launcher.plan(text, key) {
+            if self.one_window_open_plan(&plan, cx) {
+                return Some(Ok(()));
+            }
             if !plan.ready {
                 self.explain_unready_plan(&plan, cx);
                 return Some(Err("intent_plan_not_ready"));
@@ -147,9 +150,10 @@ impl ScriptListApp {
             return Some(self.execute_intent_plan(&plan, cx));
         }
         match key {
-            "down:note" => Some(append_capture_to_day("note", text, None).map(|()| {
-                self.one_window_ran_here(cx);
-            })),
+            "down:note" => {
+                self.one_window_open_note(text.to_string(), cx);
+                Some(Ok(()))
+            }
             _ => None,
         }
     }
@@ -160,7 +164,7 @@ impl ScriptListApp {
             Some(missing) => format!("Needs {missing}"),
             None => "Needs more to go on".to_string(),
         };
-        self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, message, cx);
     }
 
     /// ⌘↵ in the main window: Jev's first row for the words, or the model's chat under the input
@@ -345,7 +349,7 @@ impl ScriptListApp {
             _ => text.to_string(),
         };
         append_memory_to_day(&text)?;
-        self.show_hud("Remembered".to_string(), Some(HUD_MEDIUM_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, "Remembered".to_string(), cx);
         self.close_and_reset_window(cx);
         Ok(())
     }
@@ -385,9 +389,9 @@ impl ScriptListApp {
             event = "intent_script_saved",
             path = %path.display(),
         );
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             format!("Saved script: {}", draft.name),
-            Some(HUD_MEDIUM_MS),
             cx,
         );
         self.close_and_reset_window(cx);
@@ -403,18 +407,18 @@ impl ScriptListApp {
             return false;
         };
         let Some(plan) = intent_match.plan else {
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::FAILED,
                 "Nothing to save until Jev reads it".to_string(),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             return true;
         };
         if let Err(reason) = self.save_intent_plan_as_script(&plan, cx) {
             tracing::warn!(target: "script_kit::intent", reason, "intent script not saved");
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::FAILED,
                 "Couldn't save the script".to_string(),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
         }

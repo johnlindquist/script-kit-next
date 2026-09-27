@@ -31,29 +31,21 @@ const CLIPBOARD_CACHE_SIZE: usize = 100;
 include!("deferred_agent_chat.rs");
 
 impl ScriptListApp {
-    /// Show an error toast and call cx.notify() to ensure the UI updates.
-    ///
-    /// Consolidates the repeated pattern of pushing an error toast, setting the
-    /// duration to TOAST_ERROR_MS, and calling cx.notify().
-    ///
-    /// The optional `error_code` is logged for machine-readable diagnostics but
-    /// never shown to the user.  Use the stable constants from
-    /// `crate::action_helpers` (e.g. `ERROR_LAUNCH_FAILED`).
-    fn show_error_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
-        self.show_error_toast_with_code(message, None, cx);
+    /// Says in the line above the input that something failed.
+    fn notice_failed(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        self.notice_failed_with_code(message, None, cx);
     }
 
-    /// Show a short success toast in the main window.
-    fn show_success_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
-        let msg: String = message.into();
-        self.toast_manager.push(
-            components::toast::Toast::success(msg, &self.theme).duration_ms(Some(TOAST_SUCCESS_MS)),
-        );
-        cx.notify();
+    /// Says in the line above the input that something worked.
+    fn notice_done(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+        self.one_window_notice(crate::line_notice::DONE, message, cx);
     }
 
-    /// Like `show_error_toast` but also logs a stable error code.
-    fn show_error_toast_with_code(
+    /// Like `notice_failed`, and logs a stable error code.
+    ///
+    /// The code is for machine-readable diagnostics and is never shown to the user. Use the
+    /// stable constants from `crate::action_helpers` (e.g. `ERROR_LAUNCH_FAILED`).
+    fn notice_failed_with_code(
         &mut self,
         message: impl Into<String>,
         error_code: Option<&str>,
@@ -67,10 +59,7 @@ impl ScriptListApp {
                 "Action error"
             );
         }
-        self.toast_manager.push(
-            components::toast::Toast::error(msg, &self.theme).duration_ms(Some(TOAST_ERROR_MS)),
-        );
-        cx.notify();
+        self.one_window_notice(crate::line_notice::FAILED, msg, cx);
     }
 
     /// Copy application text with destination-accurate success/error feedback.
@@ -92,35 +81,28 @@ impl ScriptListApp {
                         receipt.feedback("Copied".to_owned())
                     }
                 };
-                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, message, cx);
                 if close_after {
                     self.hide_main_and_reset(cx);
                 }
             }
             Err(e) => {
                 tracing::error!(error = %e, "Text copy failed");
-                self.show_error_toast(format!("Failed to copy text: {e}"), cx);
+                self.notice_failed(format!("Failed to copy text: {e}"), cx);
             }
         }
     }
 
-    /// Show a consistent "not supported on this platform" warning toast.
-    ///
-    /// Uses Toast::warning (not error) per the feedback matrix — unsupported
-    /// platform is a warning, not an error.  Internally logs with the
+    /// Says "not supported on this platform" in the line, and logs the
     /// `unsupported_platform` error code.
     #[cfg_attr(target_os = "macos", allow(dead_code))]
-    fn show_unsupported_platform_toast(&mut self, feature: &str, cx: &mut Context<Self>) {
+    fn notice_unsupported_platform(&mut self, feature: &str, cx: &mut Context<Self>) {
         tracing::warn!(
             error_code = crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
             feature = feature,
             "Unsupported platform"
         );
-        self.toast_manager.push(
-            components::toast::Toast::warning(unsupported_platform_message(feature), &self.theme)
-                .duration_ms(Some(TOAST_WARNING_MS)),
-        );
-        cx.notify();
+        self.one_window_notice(crate::line_notice::FAILED, unsupported_platform_message(feature), cx);
     }
 
     pub(crate) fn hide_main_and_reset(&self, cx: &mut Context<Self>) {
@@ -168,7 +150,7 @@ impl ScriptListApp {
                     action = name,
                     error = %error,
                 );
-                self.show_error_toast(format!("{failure}{error}"), cx);
+                self.notice_failed(format!("{failure}{error}"), cx);
             }
         }
     }
@@ -340,20 +322,6 @@ impl ScriptListApp {
             .cloned()
     }
 
-    fn selected_dictation_history_entry(&self) -> Option<crate::dictation::DictationHistoryEntry> {
-        let AppView::DictationHistoryView {
-            filter,
-            selected_index,
-            visible_limit,
-        } = &self.current_view
-        else {
-            return None;
-        };
-
-        self.dictation_history_current_or_previous_page(filter, *visible_limit)
-            .and_then(|page| page.rows.into_iter().nth(*selected_index))
-    }
-
     /// Return true when the current view has any available actions.
     fn has_actions(&mut self) -> bool {
         match &self.current_view {
@@ -365,9 +333,6 @@ impl ScriptListApp {
                     "has_actions (clipboard)",
                 );
                 has
-            }
-            AppView::DictationHistoryView { .. } => {
-                self.selected_dictation_history_entry().is_some()
             }
             _ => {
                 let script_info = self.get_focused_script_info();
@@ -465,7 +430,7 @@ impl ScriptListApp {
     fn show_outcome_feedback(&mut self, outcome: &DispatchOutcome, cx: &mut Context<Self>) {
         if outcome.status == ActionOutcomeStatus::Error {
             if let Some(ref msg) = outcome.user_message {
-                self.show_error_toast_with_code(msg.clone(), outcome.error_code, cx);
+                self.notice_failed_with_code(msg.clone(), outcome.error_code, cx);
             }
         }
     }
@@ -627,7 +592,7 @@ impl ScriptListApp {
     fn handle_action(&mut self, action_id: String, window: &mut Window, cx: &mut Context<Self>) {
         if action_id.starts_with("brain_inbox_open:") {
             if !self.open_brain_inbox_action(&action_id, cx) {
-                self.show_error_toast(
+                self.notice_failed(
                     "The inbox changed. Open Brain Inbox in Actions and choose again.",
                     cx,
                 );
@@ -679,30 +644,6 @@ impl ScriptListApp {
             return;
         }
 
-        let selected_dictation_entry = if action_id_stripped.starts_with("dictation_history_") {
-            self.selected_dictation_history_entry()
-        } else {
-            None
-        };
-        let dictation_outcome = self.handle_dictation_history_action(
-            &action_id_stripped,
-            selected_dictation_entry,
-            &dctx,
-            window,
-            cx,
-        );
-        if dictation_outcome.was_handled() {
-            log_dispatch_outcome(
-                &action_id_stripped,
-                &dctx.trace_id,
-                "dictation_history",
-                &dictation_outcome,
-                &start,
-            );
-            self.show_outcome_feedback(&dictation_outcome, cx);
-            return;
-        }
-
         let favorites_outcome =
             self.handle_favorites_action(&action_id_stripped, &dctx, window, cx);
         if favorites_outcome.was_handled() {
@@ -724,11 +665,11 @@ impl ScriptListApp {
 
         // Dispatch through handler chain, collecting the final outcome.
         let (handler, outcome) = {
-            let o = self.handle_shortcut_alias_action(&action_id_stripped, &dctx, window, cx);
+            let o = self.handle_shortcut_alias_action(&action_id_stripped, &dctx, cx);
             if o.was_handled() {
                 ("shortcut_alias", o)
             } else {
-                let o = self.handle_script_action(&action_id_stripped, &dctx, window, cx);
+                let o = self.handle_script_action(&action_id_stripped, &dctx, cx);
                 if o.was_handled() {
                     ("script", o)
                 } else {
@@ -736,7 +677,7 @@ impl ScriptListApp {
                     if o.was_handled() {
                         ("file", o)
                     } else {
-                        let o = self.handle_app_action(&action_id_stripped, &dctx, window, cx);
+                        let o = self.handle_app_action(&action_id_stripped, &dctx, cx);
                         if o.was_handled() {
                             ("app", o)
                         } else {
@@ -809,7 +750,6 @@ fn log_dispatch_outcome(
 // Include semantic submodules — each adds `impl ScriptListApp` methods.
 include!("clipboard.rs");
 include!("paste.rs");
-include!("dictation_history.rs");
 include!("favorites.rs");
 include!("scripts.rs");
 include!("shortcuts.rs");

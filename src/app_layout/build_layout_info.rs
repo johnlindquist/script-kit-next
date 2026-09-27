@@ -77,7 +77,6 @@ impl ScriptListApp {
             AppView::PermissionsWizardView { .. } => "permissionsWizard",
             AppView::FavoritesBrowseView { .. } => "favoritesBrowse",
             AppView::BrowserHistoryView { .. } => "browserHistory",
-            AppView::DictationHistoryView { .. } => "dictationHistory",
             AppView::NotesBrowseView { .. } => "notesBrowse",
             AppView::DayPage { .. } => "dayPage",
             AppView::ScriptIssuesView { .. } => "scriptIssues",
@@ -110,7 +109,6 @@ impl ScriptListApp {
                 actual_window_size.is_some()
                     && geometry.is_current(
                         self.main_revisions,
-                        self.show_bun_warning,
                         gpui::size(gpui::px(window_width), gpui::px(window_height)),
                         inputs,
                     )
@@ -1668,10 +1666,7 @@ impl ScriptListApp {
             };
         }
 
-        if matches!(
-            self.current_view,
-            AppView::DictationHistoryView { .. } | AppView::NotesBrowseView { .. }
-        ) {
+        if matches!(self.current_view, AppView::NotesBrowseView { .. }) {
             // GEO-009 ledgered legacy caller: AttachmentPortal.
             let portal_row_metrics = crate::list_item::metrics::resolved_legacy_metrics_for_caller(
                 crate::list_item::metrics::LegacyListCallerId::AttachmentPortal,
@@ -1682,16 +1677,6 @@ impl ScriptListApp {
             let PORTAL_ROW_HEIGHT: f32 = portal_row_metrics.row_slot_height;
 
             let (variant, list_count) = match &self.current_view {
-                AppView::DictationHistoryView {
-                    filter,
-                    visible_limit,
-                    ..
-                } => (
-                    "dictationHistory",
-                    self.dictation_history_current_or_previous_page(filter, *visible_limit)
-                        .map(|page| page.rows.len())
-                        .unwrap_or(0),
-                ),
                 AppView::NotesBrowseView { search } => (
                     "notesBrowse",
                     Self::notes_browse_visible_row_labels(search).len(),

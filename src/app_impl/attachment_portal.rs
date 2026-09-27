@@ -388,6 +388,9 @@ impl ScriptListApp {
             kind = ?portal_kind,
             focus_target = ?return_focus_target,
         );
+        if self.one_window_own_view().is_some() {
+            self.one_window_handle(sk_one_window::Event::View(sk_one_window::ViewOp::Park), cx);
+        }
 
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
         if matches!(self.current_view, AppView::ScriptList) {

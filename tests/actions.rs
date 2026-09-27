@@ -3,34 +3,6 @@
 
 use std::fs;
 
-/// Verify the feedback contract constants exist in helpers.rs:
-/// success feedback uses HUD, errors use Toast.
-#[test]
-fn feedback_contract_constants_defined() {
-    let content =
-        fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read helpers.rs");
-
-    // HUD constants for success paths
-    assert!(
-        content.contains("HUD_SHORT_MS"),
-        "HUD_SHORT_MS must be defined for success feedback"
-    );
-    assert!(
-        content.contains("HUD_MEDIUM_MS"),
-        "HUD_MEDIUM_MS must be defined for success feedback"
-    );
-
-    // Toast constants for error paths
-    assert!(
-        content.contains("TOAST_ERROR_MS"),
-        "TOAST_ERROR_MS must be defined for error feedback"
-    );
-    assert!(
-        content.contains("TOAST_CRITICAL_MS"),
-        "TOAST_CRITICAL_MS must be defined for critical errors"
-    );
-}
-
 /// Verify that the action handler files have the expected dispatch structure.
 #[test]
 fn action_handler_dispatch_structure_exists() {
@@ -72,10 +44,10 @@ fn action_handler_dispatch_structure_exists() {
         "Action handler must dispatch quick_look"
     );
 
-    // Must have toast_manager usage for errors (may be in chunk files)
+    // Errors are said in the line above the input (may be in chunk files)
     assert!(
-        content.contains("toast_manager.push("),
-        "Action handler must use toast_manager for error feedback"
+        content.contains("self.notice_failed("),
+        "Action handler must say its failures in the line"
     );
 }
 
@@ -134,11 +106,9 @@ fn launcher_handoff_builtins_use_submit_reset_not_focus_loss_preserve() {
     let dictation_fn = &dictation_tail[..dictation_end];
 
     assert!(
-        dictation_fn.contains("DictationTarget::ExternalApp")
-            && dictation_fn.contains("self.close_and_reset_window(cx);")
-            && dictation_fn.find("self.close_and_reset_window(cx);")
-                < dictation_fn.find("self.handle_dictation_started(action, dictation_target, cx);"),
-        "external-app dictation starts from the launcher must reset/hide after capture starts but before opening the overlay"
+        dictation_fn.contains("self.handle_dictation_started(action, canonical_target, cx);")
+            && !dictation_fn.contains("self.close_and_reset_window(cx);"),
+        "dictation starts keep the launcher open: the voice view lives in the main window"
     );
 }
 
@@ -498,15 +468,13 @@ fn clipboard_bulk_delete_handlers_use_named_action_states() {
     );
     assert!(
         content.contains("ClipboardBulkDeleteHandlerAction::from_action_id(action_id)")
-            && content.contains("bulk_delete_action.confirm_title()")
-            && content.contains("bulk_delete_action.confirm_message(delete_count)")
-            && content.contains("bulk_delete_action.confirm_message(unpinned_count)")
-            && content.contains("bulk_delete_action.confirm_button()")
+            && content.contains("bulk_delete_action.held_title(delete_count)")
+            && content.contains("bulk_delete_action.held_title(unpinned_count)")
             && content.contains("action.success_hud(self.deleted)")
             && content.contains("bulk_delete_action.success_hud(unpinned_count)")
             && content.contains("action.partial_failure_message(self.deleted, self.failed)")
             && content.contains("bulk_delete_action.failure_message(e)"),
-        "clipboard bulk delete handlers should derive confirmation, success, and failure text from named states"
+        "clipboard bulk delete handlers should derive the held title, success, and failure text from named states"
     );
 }
 
@@ -1321,33 +1289,6 @@ fn favorites_browse_renderer_uses_named_list_action_states() {
 }
 
 #[test]
-fn dictation_history_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/dictation_history.rs")
-        .expect("Failed to read dictation history action handler");
-
-    assert!(
-        content.contains("enum DictationHistoryHandlerAction")
-            && content.contains("Paste")
-            && content.contains("AddToAgentChat")
-            && content.contains("SaveNote")
-            && content.contains("Copy")
-            && content.contains("Delete"),
-        "dictation history paste/attach/save/copy/delete handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("DictationHistoryHandlerAction::from_action_id(action_id)")
-            && content.contains("history_action.selection_required_message()")
-            && content.contains("history_action.user_message()")
-            && content.contains("history_action.success_hud()")
-            && content.contains("error_prefix()")
-            && content.contains("history_action.failure_message(error)")
-            && content.contains("\"Deleted dictation\"")
-            && content.contains("\"Failed to delete dictation\""),
-        "dictation history handlers should derive empty-selection, user message, HUD, and error copy from named states"
-    );
-}
-
-#[test]
 fn dictation_builtin_execution_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
@@ -1642,21 +1583,10 @@ fn select_microphone_builtin_uses_named_action_states() {
     assert!(
         content.contains("enum SettingsMicrophoneBuiltinAction")
             && content.contains("fn execute_select_microphone_builtin(")
-            && content.contains("action.enumeration_failure_log()")
-            && content.contains("action.failure_hud(&error)")
-            && content.contains("action.failure_code()")
-            && content.contains("action.failure_message()")
-            && content.contains("action.placeholder().to_string()")
-            && content.contains("action.success_detail()"),
-        "Select Microphone should derive failure copy, placeholder text, and success detail from the named state"
-    );
-    assert!(
-        content.contains("\"select_microphone\"")
-            && content.contains("\"select_microphone_failed\"")
-            && content.contains("format!(\"Failed to list microphones: {error}\")")
-            && content.contains("\"Failed to list microphones\"")
-            && content.contains("\"Select microphone...\""),
-        "Select Microphone named state should preserve current success detail, error code, error copy, and placeholder"
+            && content.contains("self.one_window_open_microphones(cx);")
+            && content.contains("action.success_detail()")
+            && content.contains("\"select_microphone\""),
+        "Select Microphone should open the main window's microphone list and report its named success detail"
     );
 }
 
@@ -1772,7 +1702,7 @@ fn ai_unavailable_builtin_uses_named_action_states() {
     assert!(
         content.contains("Send Screen Area to Agent Chat is unavailable")
             && content.contains("ai_send_screen_area_unavailable")
-            && content.contains("Toast::error(message, &self.theme)"),
+            && content.contains("self.one_window_notice(crate::line_notice::FAILED, message, cx)"),
         "Send Screen Area should keep its unavailable toast and error detail"
     );
 }
@@ -2013,7 +1943,7 @@ fn menu_bar_builtin_uses_named_action_states() {
         content.contains("script_kit_gpui::menu_executor::execute_menu_action")
             && content.contains("&action.bundle_id")
             && content.contains("&action.menu_path")
-            && content.contains("self.show_unsupported_platform_toast(\"Menu bar actions\", cx)"),
+            && content.contains("self.notice_unsupported_platform(\"Menu bar actions\", cx)"),
         "Menu bar built-ins should preserve platform execution and unsupported-platform behavior"
     );
 }
@@ -2081,7 +2011,7 @@ fn surface_open_builtins_use_named_action_states() {
             && content.contains("AppView::SettingsView")
             && content.contains("AppView::AgentChatHistoryView")
             && content.contains("self.open_ai_vault_source_filter(cx)")
-            && content.contains("AppView::DictationHistoryView")
+            && content.contains("self.one_window_open_dictation_history(cx)")
             && content.contains("sdk_reference_entries_for_ui")
             && content.contains("script_template_entries_for_ui")
             && content.contains("action.success_detail()"),
@@ -2392,7 +2322,6 @@ fn notes_builtin_uses_named_action_states() {
     );
     assert!(
         content.contains("notes_handoff_submit_reset")
-            && content.contains("crate::confirm::route_key_to_confirm_popup(\"escape\", cx)")
             && content.contains("crate::actions::close_actions_window(cx)")
             && content.contains("self.mark_filter_resync_after_actions_if_needed()")
             && content.contains("self.pending_focus = None")

@@ -5,14 +5,19 @@
 //! window's height moves, and what waits before it goes. Nothing here reads a clock.
 
 mod chat_work;
+mod clipboard;
 mod finishing;
 mod keys;
+mod learning;
+mod ledger_rules;
 mod show;
 mod staging;
+mod talking;
 #[cfg(test)]
 mod tests;
 mod text;
 mod time;
+mod view_stage;
 mod views;
 mod work;
 
@@ -184,6 +189,23 @@ pub enum Event {
     Tick,
     /// Something happened to the model's chat, the steps, a service or an agent.
     Work(crate::work::WorkEvent),
+    /// Holding the voice key.
+    Talk(crate::talk::TalkEvent),
+    /// Word from the app (a script's `toast()` or `hud()`, a failure): it lands in the ledger.
+    Notice(crate::notice::Notice),
+    /// The host is about to run something that can't be taken back: it waits in the line first.
+    Irreversible(crate::notice::Irreversible),
+    /// A view put something in the line (history's Enter stages the entry it's on).
+    Stage(Subject),
+    /// ⌘V with this text on the clipboard.
+    Paste(String),
+    /// ⌘K in a view: what it has focused, and the actions it lists for it.
+    StageView {
+        subject: Subject,
+        rows: Vec<Row>,
+    },
+    /// The view stopped acting on what it staged.
+    LetGo,
 }
 
 impl Event {
@@ -201,7 +223,7 @@ impl Event {
     fn is_user(&self) -> bool {
         matches!(
             self,
-            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon
+            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon | Event::Paste(_)
         )
     }
 }
@@ -268,6 +290,24 @@ pub enum Effect {
     SetInput(String),
     /// Work for the host: ask the model, read or run steps, sign in, start or park an agent.
     Work(crate::work::WorkEffect),
+    /// Ask Jev whether the heard words are writing or a request; `last` for the final words.
+    TalkAsk {
+        words: String,
+        last: bool,
+    },
+    /// Paste the words at the front app's cursor.
+    Paste {
+        text: String,
+        app: String,
+    },
+    /// The voice session is over: stop listening and let go of what was heard.
+    TalkEnded,
+    /// Something new was learned; the host keeps it for the next session.
+    Learned,
+    /// Add the words at the end of today's note.
+    AddToNote {
+        text: String,
+    },
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -334,6 +374,12 @@ pub struct OneWindow {
     wake: Option<Ms>,
     now: Ms,
     work: crate::work::Work,
+    lessons: crate::lessons::Lessons,
+    talk: Option<crate::talk::Talk>,
+    /// Voice sessions so far, so each one's Enter targets are new.
+    talks: u64,
+    /// Waiting things that are runs rather than messages.
+    runs_held: Vec<u64>,
 }
 
 impl Default for OneWindow {
@@ -376,6 +422,10 @@ impl OneWindow {
             wake: None,
             now: 0,
             work: crate::work::Work::default(),
+            lessons: crate::lessons::Lessons::default(),
+            talk: None,
+            talks: 0,
+            runs_held: Vec::new(),
         }
     }
 
@@ -449,6 +499,7 @@ impl OneWindow {
             self.line = None;
             self.line_from_view = false;
         }
+        self.settle_lessons(&mut fx);
         self.schedule(now, &mut fx);
         Outcome {
             effects: fx,
@@ -673,6 +724,25 @@ impl OneWindow {
             }
             Event::Tick => true,
             Event::Work(ev) => self.on_work(now, ev, fx),
+            Event::Talk(ev) => self.on_talk(now, ev, fx),
+            Event::Notice(notice) => {
+                self.on_notice(now, notice);
+                true
+            }
+            Event::Irreversible(run) => {
+                self.on_irreversible(now, run, fx);
+                true
+            }
+            Event::Stage(subject) => {
+                self.stage(now, subject, None, words::STAGED, fx);
+                true
+            }
+            Event::Paste(text) => self.on_paste(now, text, fx),
+            Event::StageView { subject, rows } => {
+                self.stage_from_view(subject, rows);
+                true
+            }
+            Event::LetGo => self.let_go(),
         }
     }
 }

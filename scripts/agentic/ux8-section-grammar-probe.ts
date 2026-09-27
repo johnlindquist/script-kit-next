@@ -246,18 +246,6 @@ try {
   await driver.simulateGpuiKeyDown("escape", { target: actionsTarget, timeoutMs: 10_000 });
   await waitForWindow(driver, "actions-dialog", false);
 
-  driver.send({ type: "openDictationOverlayFixture" });
-  await waitForWindow(driver, "dictation", true);
-  driver.send({ type: "openDictationMicrophonePopupFixture" });
-  const popup = await waitForWindow(driver, "dictation-microphone-popup", true);
-  assert(popup?.generation, "compact popup generation missing", popup);
-  const compactTarget = { type: "instance", id: popup.id, generation: popup.generation };
-  const compactElements = await driver.getElements({ target: compactTarget, limit: 80 }, { timeoutMs: 10_000 });
-  assert(sectionElements(compactElements).length === 0, "compact no-header popup acquired a section heading", compactElements);
-  const compactShot = await capture(driver, "compact-popup-remains-headerless.png", compactTarget);
-  await driver.simulateGpuiKeyDown("escape", { target: { type: "id", id: "dictation" }, timeoutMs: 10_000 });
-  await waitForWindow(driver, "dictation-microphone-popup", false);
-
   receipt = {
     classification: "RUNTIME-CONFIRMED",
     binary,
@@ -274,11 +262,6 @@ try {
         openDispatch: openActions,
         sections,
         screenshot: actionsShot,
-      },
-      compactNegative: {
-        target: compactTarget,
-        sectionCount: 0,
-        screenshot: compactShot,
       },
     },
   };
