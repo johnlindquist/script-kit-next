@@ -198,9 +198,9 @@ describe("parseTargetArgs", () => {
 
   test("target selectors", () => {
     expect(parseTargetArgs(["--target-id", "win-3"]).args.target).toEqual({ type: "id", id: "win-3" });
-    expect(parseTargetArgs(["--target-kind", "notes", "--target-index", "2"]).args.target).toEqual({
+    expect(parseTargetArgs(["--target-kind", "snapOverlay", "--target-index", "2"]).args.target).toEqual({
       type: "kind",
-      kind: "notes",
+      kind: "snapOverlay",
       index: 2,
     });
     expect(parseTargetArgs(["--target-title", "Day Page"]).args.target).toEqual({
@@ -253,20 +253,20 @@ describe("serializeTargetFlags", () => {
       "--session",
       "s9",
       "--target-kind",
-      "notes",
+      "snapOverlay",
       "--target-index",
       "1",
       "--strict",
       "--surface",
-      "Notes",
+      "SnapOverlay",
       "--timeout",
       "9000",
     ]).args;
     const reparsed = parseTargetArgs(serializeTargetFlags(original)).args;
     expect(reparsed.session).toBe("s9");
-    expect(reparsed.target).toEqual({ type: "kind", kind: "notes", index: 1 });
+    expect(reparsed.target).toEqual({ type: "kind", kind: "snapOverlay", index: 1 });
     expect(reparsed.strict).toBe(true);
-    expect(reparsed.expectedSurfaceKind).toBe("Notes");
+    expect(reparsed.expectedSurfaceKind).toBe("SnapOverlay");
     expect(reparsed.timeoutMs).toBe(9000);
   });
 });
