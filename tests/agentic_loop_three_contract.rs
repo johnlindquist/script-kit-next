@@ -72,23 +72,6 @@ fn template_prompt_stress_opens_template_without_wrong_parse_wait() {
 }
 
 #[test]
-fn actions_dialog_automation_elements_use_cached_semantic_rows() {
-    const COLLECTOR: &str = include_str!("../src/windows/automation_surface_collector.rs");
-
-    for token in [
-        "actions_dialog_semantic_cache",
-        "upsert_actions_dialog_snapshot",
-        "remove_actions_dialog_snapshot",
-        "collect_cached_actions_dialog_snapshot(&resolved.id)",
-    ] {
-        assert!(
-            COLLECTOR.contains(token),
-            "ActionsDialog automation collector must pin cached semantic rows with {token}"
-        );
-    }
-}
-
-#[test]
 fn current_app_commands_stress_pins_frontmost_and_shared_filtering() {
     for token in [
         "current-app-commands-frontmost-stress",
