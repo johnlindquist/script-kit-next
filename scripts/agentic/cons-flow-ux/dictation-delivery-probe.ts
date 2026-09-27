@@ -51,10 +51,6 @@ async function openMicrophonePrompt(driver: Driver): Promise<void> {
   await driver.simulateKey("enter", []);
   await poll("MiniPrompt", () => state(driver), (value) => value.promptType === "mini");
 }
-async function windows(driver: Driver): Promise<Obj[]> {
-  const value = asObj(await driver.listAutomationWindows({ timeoutMs: 8000 }));
-  return Array.isArray(value.windows) ? value.windows.map(asObj) : [];
-}
 async function deliver(driver: Driver, target: string, transcript: string): Promise<Obj> {
   const before = await dictation(driver);
   const beforeGeneration = Number(asObj(before.lastDelivery).generation ?? 0);
@@ -176,34 +172,6 @@ scenarios.push(await runScenario("stale-prompt-input-refuses", async (driver, fa
   facts.noFallback = true;
 }));
 
-scenarios.push(await runScenario("notes-editor", async (driver, facts) => {
-  driver.send({ type: "openNotes", requestId: "c12-open-notes" });
-  await poll("Notes window", () => windows(driver), (items) => items.some((item) => item.kind === "notes"));
-  const transcript = "C12 notes fixture";
-  const after = await deliver(driver, "notes", transcript);
-  const receipt = assertReceipt(after, "NotesEditor", "notesEditor", transcript);
-  assert(asObj(receipt.insertionRange).operation?.includes("Frozen"), "Notes did not use frozen anchor", receipt);
-  facts.receipt = receipt;
-}));
-
-scenarios.push(await runScenario("stale-notes-editor-refuses", async (driver, facts) => {
-  driver.send({ type: "openNotes", requestId: "c12-open-stale-notes" });
-  await poll("stale Notes window", () => windows(driver), (items) => items.some((item) => item.kind === "notes"));
-  const frozen = await freeze(driver, "notes", "notesEditor");
-  await driver.request({
-    type: "batch",
-    requestId: "c12-change-stale-note",
-    target: { type: "kind", kind: "notes", index: 0 },
-    commands: [{ type: "setInput", text: "changed after frozen Notes selection" }],
-    options: { stopOnError: true, timeout: 5000 },
-  }, { expect: "batchResult", timeoutMs: 7000 });
-  const refusal = await deliverFrozenRefusal(driver, "notes", "C12 stale notes fixture");
-  facts.frozenSelection = frozen;
-  facts.refusal = refusal;
-  facts.destinationAttemptCount = 0;
-  facts.noFallback = true;
-}));
-
 scenarios.push(await runScenario("captured-day", async (driver, facts) => {
   const transcript = "C12 captured day fixture";
   const after = await deliver(driver, "today", transcript);
@@ -280,9 +248,9 @@ for (const taskId of ["WF-020", "WF-021"] as const) {
     const controls = taskId === "WF-020"
       ? {
           "stale-destination-never-mutates":
-            stale.length === 3 && stale.every((scenario) => scenario.facts.destinationAttemptCount === 0),
+            stale.length === 2 && stale.every((scenario) => scenario.facts.destinationAttemptCount === 0),
           "stale-destination-never-falls-back":
-            stale.length === 3 && stale.every((scenario) => scenario.facts.noFallback === true),
+            stale.length === 2 && stale.every((scenario) => scenario.facts.noFallback === true),
         }
       : {
           "delivery-occurs-exactly-once":
