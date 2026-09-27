@@ -1941,6 +1941,7 @@ impl ScriptListApp {
                     )
                 })
                 .collect();
+            next_highlight_ranges.extend(self.one_window_input_marks(&highlight_text));
 
             if self.spine_enabled {
                 let accent_color: gpui::Hsla = rgb(self.theme.colors.accent.selected).into();

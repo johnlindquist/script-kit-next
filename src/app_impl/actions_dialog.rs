@@ -469,28 +469,7 @@ impl ScriptListApp {
         );
 
         match host {
-            ActionsDialogHost::MainList => {
-                if let Some(result) = self.selected_main_list_search_result_owned() {
-                    match crate::root_unified_result_actions::root_unified_action_owner_for_result(&result) {
-                        crate::root_unified_result_actions::RootUnifiedResultActionOwner::RootSubject(subject) => {
-                            self.toggle_root_unified_result_actions(*subject, window, cx);
-                        }
-                        crate::root_unified_result_actions::RootUnifiedResultActionOwner::ExistingScriptActions => {
-                            if self.has_actions() {
-                                self.toggle_actions(cx, window);
-                            }
-                        }
-                        crate::root_unified_result_actions::RootUnifiedResultActionOwner::None => {
-                            if self.has_actions() {
-                                self.toggle_actions(cx, window);
-                            }
-                        }
-                    }
-                } else if self.has_actions() {
-                    self.toggle_actions(cx, window);
-                }
-                true
-            }
+            ActionsDialogHost::MainList => self.one_window_owns_list() && self.one_window_stage(cx),
             ActionsDialogHost::FileSearch => {
                 let selected = self.selected_file_search_result_owned();
                 self.toggle_file_search_actions(

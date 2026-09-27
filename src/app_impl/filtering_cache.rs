@@ -3071,7 +3071,6 @@ impl ScriptListApp {
             ranking_evidence,
             !laid_out_by_one_window,
         )?;
-        self.one_window_suggested(cx);
 
         if logging::filter_perf_trace_enabled() || elapsed >= std::time::Duration::from_millis(8) {
             logging::log(

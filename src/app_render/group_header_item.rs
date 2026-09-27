@@ -39,6 +39,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::ScriptCommand(_) => "Script Creation".to_string(),
         builtins::BuiltInFeature::NewScriptFromTemplate => "Script Creation".to_string(),
         builtins::BuiltInFeature::NewFlow => "Flow Creation".to_string(),
+        builtins::BuiltInFeature::StagedAction(_) => "Action".to_string(),
         builtins::BuiltInFeature::PermissionCommand(_) => "Permission Management".to_string(),
         builtins::BuiltInFeature::FrecencyCommand(_) => "Suggested Items".to_string(),
         builtins::BuiltInFeature::UtilityCommand(_) => "Quick Utility".to_string(),

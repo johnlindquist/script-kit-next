@@ -8,6 +8,7 @@ use crate::Ms;
 use crate::contract::{ASK_LEAD_P, JEV_ROWS, MIN_READING_P, ROW_ARM_MS, words};
 use crate::enter::EnterTarget;
 use crate::row::{Row, RowAct};
+use crate::steady::Steady;
 
 /// One of Jev's reserved rows.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -273,6 +274,8 @@ pub struct ListState {
     pub jev_first: bool,
     /// A stale Jev row never owns Enter.
     pub stale_holds: bool,
+    /// Keeps ↵'s words steady while a sentence is typed forward.
+    pub steady: Steady,
 }
 
 impl ListState {
@@ -289,7 +292,9 @@ impl ListState {
     }
 
     fn has_strong_name(&self) -> bool {
-        self.names.iter().any(|r| !r.fallback && r.is_strong())
+        self.names
+            .iter()
+            .any(|r| !r.fallback && r.is_strong() && self.steady.may_own(&r.key))
     }
 
     /// The input changed.
@@ -413,7 +418,7 @@ impl ListState {
                 } else {
                     format!("slot{i}")
                 };
-                match eff {
+                match eff.filter(|_| self.asking || self.steady.settled(now)) {
                     None => {
                         let label = if self.held.is_some() {
                             words::ENTER_WAITING
@@ -448,6 +453,35 @@ impl ListState {
     /// Position of Jev place `i` among the visible rows.
     pub fn slot_position(&self, i: usize) -> Option<usize> {
         self.visible().iter().position(|v| *v == Item::Slot(i))
+    }
+}
+
+impl ListState {
+    /// A header as the list draws it: Jev's carries the keys that run its rows.
+    pub fn drawn_header(&self, head: &str) -> String {
+        if head == words::JEV {
+            format!("{head} · {}", words::jev_keys(self.jev.len()))
+        } else {
+            head.to_string()
+        }
+    }
+
+    /// The host listed the names for the current words.
+    pub fn names_came(&mut self) {
+        let strong = self
+            .names
+            .iter()
+            .filter(|r| !r.fallback && r.is_strong())
+            .map(|r| r.key.as_str());
+        self.steady.names(strong);
+    }
+
+    /// When a fresh reading that waits for the keys to pause may name ↵.
+    pub fn reading_wake(&self, now: Ms) -> Option<Ms> {
+        let waiting = (0..self.jev.len())
+            .filter_map(|i| self.jev.get(i))
+            .any(|s| s.row.is_some() && !s.stale);
+        waiting.then(|| self.steady.settles_at(now)).flatten()
     }
 }
 

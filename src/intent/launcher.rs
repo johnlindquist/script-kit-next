@@ -165,6 +165,11 @@ impl IntentLauncher {
             .flatten()
     }
 
+    /// The plan behind one of Jev's rows as it was last shown, whatever the input says now.
+    pub fn shown_plan(&self, key: &str) -> Option<Arc<Plan>> {
+        self.shown.get(key).cloned()
+    }
+
     pub fn record(&mut self, action: LastAction) {
         self.last_action = Some(action);
     }

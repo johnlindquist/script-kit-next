@@ -466,6 +466,7 @@ impl OneWindow {
             Event::Names(rows) => {
                 self.host_names = rows;
                 self.refresh_rows();
+                self.list.names_came();
                 true
             }
             Event::Pinned(rows) => {

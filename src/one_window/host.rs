@@ -39,7 +39,7 @@ pub(crate) struct OneWindowHost {
     height_generation: u64,
     /// The main window's height as the reducer last placed it.
     height: Option<f32>,
-    window: Option<gpui::AnyWindowHandle>,
+    pub(super) window: Option<gpui::AnyWindowHandle>,
     /// Words the reducer put in the input; their echo from the input isn't typing.
     echo: Option<String>,
     jev_asked: u64,
@@ -47,6 +47,8 @@ pub(crate) struct OneWindowHost {
     /// A row that ran and opened something; its title is what finished when that ends.
     finishing: Option<Row>,
     last_run: Option<Row>,
+    /// What was highlighted when ⌘K staged something.
+    pub(super) staged_from: Option<super::staging::StagedFrom>,
 }
 
 /// What the reducer did with one event.
@@ -204,13 +206,15 @@ impl ScriptListApp {
                     Effect::Hide { .. } => self.close_and_reset_window(cx),
                     // Summon comes from the show path, which is already showing the window.
                     Effect::Show => {}
+                    Effect::ActionsFor(subject) => {
+                        queue.push_back(self.one_window_actions_for(&subject));
+                    }
                     effect @ (Effect::ViewKey(_)
                     | Effect::Held { .. }
                     | Effect::Undo { .. }
                     | Effect::Again { .. }
                     | Effect::OpenScript { .. }
-                    | Effect::SaveScript { .. }
-                    | Effect::ActionsFor(_)) => tracing::info!(
+                    | Effect::SaveScript { .. }) => tracing::info!(
                         target: "script_kit::one_window",
                         event = "effect_not_hosted",
                         effect = ?effect,
@@ -364,17 +368,20 @@ impl ScriptListApp {
             slot.row.as_ref().map(|row| &row.key).hash(&mut hasher);
             slot.stale.hash(&mut hasher);
         }
+        for row in self.one_window.staged().iter().flat_map(|s| &s.rows) {
+            row.key.hash(&mut hasher);
+        }
         hasher.finish()
     }
 
     // ------------------------------------------------------------------ the list
 
-    /// The list for typed words is the reducer's layout: the name matches the search found,
-    /// Jev's three rows, and their headers. An empty input keeps the launcher's own list, led by
-    /// a header. Lists the reducer doesn't own come back unchanged.
+    /// Every list the reducer owns is its layout, headers and all: for typed words the name
+    /// matches the search found and Jev's three rows; for an empty input what the launcher
+    /// suggests, or what's staged. Lists the reducer doesn't own come back unchanged.
     pub(crate) fn one_window_list(
         &mut self,
-        mut grouped: Vec<GroupedListItem>,
+        grouped: Vec<GroupedListItem>,
         flat: Vec<SearchResult>,
         text: &str,
         cx: &mut Context<Self>,
@@ -382,26 +389,64 @@ impl ScriptListApp {
         if !self.one_window_owns(text) {
             return (grouped, flat, false);
         }
-        if text.trim().is_empty() {
-            if grouped
-                .iter()
-                .any(|item| matches!(item, GroupedListItem::Item(_)))
-                && !matches!(grouped.first(), Some(GroupedListItem::SectionHeader(..)))
-            {
-                grouped.insert(
-                    0,
-                    GroupedListItem::SectionHeader(words::SUGGESTED.to_string(), None),
-                );
-            }
-            return (grouped, flat, false);
-        }
         if self.one_window.text() != text {
             self.one_window_handle(Event::Text(text.to_string()), cx);
         }
-        let (rows, results) = self.one_window_names(&grouped, &flat, text);
-        self.one_window_handle(Event::Names(rows), cx);
-        let (grouped, flat) = self.one_window_layout(&results, text);
-        (grouped, flat, true)
+        let results = if text.trim().is_empty() {
+            let (rows, results) = self.one_window_suggestions(&grouped, &flat);
+            self.one_window_handle(Event::Suggested(rows), cx);
+            results
+        } else {
+            let (rows, results) = self.one_window_names(&grouped, &flat, text);
+            self.one_window_handle(Event::Names(rows), cx);
+            results
+        };
+        let (mut laid_out, flat) = self.one_window_layout(&results, text);
+        laid_out.extend(
+            grouped
+                .into_iter()
+                .filter(|item| matches!(item, GroupedListItem::Status(_))),
+        );
+        (laid_out, flat, true)
+    }
+
+    /// What the launcher lists for an empty input, in order, each section's first row carrying
+    /// its header.
+    fn one_window_suggestions(
+        &self,
+        grouped: &[GroupedListItem],
+        flat: &[SearchResult],
+    ) -> (Vec<Row>, HashMap<String, SearchResult>) {
+        let frontmost = crate::ui_window::footer_frontmost_app_name();
+        let mut head = None;
+        let mut rows = Vec::new();
+        let mut results = HashMap::new();
+        for item in grouped {
+            let index = match item {
+                GroupedListItem::SectionHeader(label, _) => {
+                    head = Some(label.clone());
+                    continue;
+                }
+                GroupedListItem::Item(index) => *index,
+                GroupedListItem::Status(_) => continue,
+            };
+            let Some(result) = flat.get(index) else {
+                continue;
+            };
+            let key = result
+                .stable_selection_key()
+                .unwrap_or_else(|| format!("name/{}", result.name()));
+            if results.contains_key(&key) {
+                continue;
+            }
+            let mut row = Row::new(key.clone(), result.name()).with_enter_label(
+                crate::ui_window::main_window_result_action_label(result, frontmost.as_deref()),
+            );
+            row.head = head.take();
+            rows.push(row);
+            results.insert(key, result.clone());
+        }
+        (rows, results)
     }
 
     /// The top name matches in the search's order, then the fallbacks the window offers when
@@ -466,20 +511,21 @@ impl ScriptListApp {
         let mut flat = Vec::new();
         for item in list.layout() {
             let result = match &item {
-                Item::Header(head) if head == words::JEV => {
+                Item::Header(head) => {
                     grouped.push(GroupedListItem::SectionHeader(
-                        format!("{head} · ⌘1–3"),
+                        list.drawn_header(head),
                         None,
                     ));
                     continue;
                 }
-                Item::Header(head) => {
-                    grouped.push(GroupedListItem::SectionHeader(head.clone(), None));
-                    continue;
-                }
                 Item::Slot(slot) => SearchResult::Intent(self.one_window_jev_match(*slot, text)),
-                item => match list.row(item).and_then(|row| results.get(&row.key)) {
-                    Some(result) => result.clone(),
+                item => match list.row(item).and_then(|row| {
+                    results
+                        .get(&row.key)
+                        .cloned()
+                        .or_else(|| Self::one_window_action_result(row))
+                }) {
+                    Some(result) => result,
                     None => continue,
                 },
             };
@@ -521,52 +567,11 @@ impl ScriptListApp {
                 }
             }
             None if slot == 0 && !settled => IntentMatch {
-                title: "Understanding…".to_string(),
+                title: words::UNDERSTANDING.to_string(),
                 ..blank
             },
             None => blank,
         }
-    }
-
-    /// The reducer's rows for an empty input: every row the launcher lists, in order, each
-    /// section's first row carrying its header.
-    pub(crate) fn one_window_suggested(&mut self, cx: &mut Context<Self>) {
-        if !self.computed_filter_text.trim().is_empty()
-            || !self.one_window_owns(&self.computed_filter_text)
-        {
-            return;
-        }
-        let (grouped, flat) = self.get_grouped_results_cached();
-        let frontmost = crate::ui_window::footer_frontmost_app_name();
-        let mut head = None;
-        let mut rows = Vec::new();
-        for row in self.main_menu_committed_rows() {
-            let Some(item) = grouped.get(row.grouped_index) else {
-                continue;
-            };
-            if row.grouped_index > 0 {
-                if let Some(GroupedListItem::SectionHeader(label, _)) =
-                    grouped.get(row.grouped_index - 1)
-                {
-                    head = Some(label.clone());
-                }
-            }
-            if row.selectable_ordinal.is_none() {
-                continue;
-            }
-            let GroupedListItem::Item(index) = item else {
-                continue;
-            };
-            let Some(result) = flat.get(*index) else {
-                continue;
-            };
-            let mut suggested = Row::new(row.stable_key.clone(), result.name()).with_enter_label(
-                crate::ui_window::main_window_result_action_label(result, frontmost.as_deref()),
-            );
-            suggested.head = head.take();
-            rows.push(suggested);
-        }
-        self.one_window_handle(Event::Suggested(rows), cx);
     }
 
     /// After every publication: the reducer follows the highlight and hears how tall the list
@@ -796,6 +801,10 @@ impl ScriptListApp {
         tracing::info!(target: "script_kit::one_window", event = "run", key = %row.key);
         self.one_window_host.last_run = Some(row.clone());
         self.one_window_host.finishing = Some(row.clone());
+        if let Some(id) = row.key.strip_prefix(super::staging::ACTION_KEY) {
+            self.one_window_run_action(id.to_string(), cx);
+            return Ok(());
+        }
         let text = self.one_window.text().to_string();
         if let Some(ran) = self.run_jev_row(&row.key, &text, cx) {
             return ran.map_err(anyhow::Error::msg);

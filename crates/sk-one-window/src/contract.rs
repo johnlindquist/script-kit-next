@@ -130,6 +130,14 @@ pub mod words {
     pub fn ask_again(title: &str) -> String {
         format!("{title} — ↵ again")
     }
+
+    /// The note beside Jev's header: the keys that run its rows, "⌘1–3".
+    pub fn jev_keys(rows: usize) -> String {
+        format!("⌘1–{rows}")
+    }
+
+    /// Jev's first reserved row while it reads the words.
+    pub const UNDERSTANDING: &str = "Understanding…";
 }
 
 /// Icons whose runs can be undone (the rest either wait or just happen).
@@ -141,6 +149,19 @@ pub const UNDOABLE_ICONS: &[&str] = &[
 /// The one TypeScript file every saved run lands in.
 pub const SAVED_SCRIPT_FILE: &str = "~/.scriptkit/plugins/main/scripts/saved.ts";
 pub const SAVED_SCRIPT_FILE_NAME: &str = "saved.ts";
+
+/// Jev's reading names ↵ once the keys have paused this long; keys closer together are one
+/// sentence still being typed, and a reading of part of it never shows on the button.
+pub const READING_SETTLE_MS: u64 = 200;
+
+/// The colors of the words under the sentence (the spec's vocabulary), 0xRRGGBB.
+pub mod marks {
+    pub const SUBJECT: u32 = 0xFF_B8_6B;
+    pub const ACTION: u32 = 0xF5_C5_42;
+    pub const TARGET: u32 = 0x6F_DC_9B;
+    pub const DETAILS: u32 = 0x8F_B8_FF;
+    pub const OWNER: u32 = 0xC9_A7_FF;
+}
 
 /// Rounds a prototype length to the app's scale.
 pub fn to_app_px(prototype_px: f32) -> f32 {

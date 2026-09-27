@@ -321,6 +321,8 @@ pub enum BuiltInFeature {
     /// Create a new mdflow flow: opens `md create` in the Quick Terminal
     /// (the same path as the Flow Desk's "Create a flow…" row).
     NewFlow,
+    /// An action on what ⌘K staged in the line above the input, by its action id.
+    StagedAction(String),
 }
 /// A built-in feature entry that appears in the main search
 #[derive(Debug, Clone)]
@@ -560,6 +562,7 @@ impl BuiltInEntry {
             BuiltInFeature::AnimationPreset(_) => "Apply Animation Preset",
             BuiltInFeature::FlowUxVariant(_) => "Open Flow Launcher",
             BuiltInFeature::NewFlow => "Create Flow",
+            BuiltInFeature::StagedAction(_) => "Run Action",
         }
     }
 
@@ -684,6 +687,7 @@ impl BuiltInEntry {
             BuiltInFeature::AnimationPreset(_) => "Apply Preset",
             BuiltInFeature::FlowUxVariant(_) => "Flows",
             BuiltInFeature::NewFlow => "New Flow",
+            BuiltInFeature::StagedAction(_) => "Run",
         }
     }
 }
