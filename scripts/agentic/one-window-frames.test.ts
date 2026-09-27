@@ -45,6 +45,16 @@ describe("steps", () => {
     expect(actionsForStep({ name: "k", key: "down" })).toEqual([{ type: "key", key: "down", modifiers: [] }]);
     expect(actionsForStep({ name: "e" })).toEqual([]);
   });
+  test("append steps keep typing after what's there: no select-all, and never combined with type or key", () => {
+    expect(actionsForStep({ name: "a", append: "s " })).toEqual([
+      { type: "key", key: "s", text: "s" }, { type: "key", key: "space", text: " " },
+    ]);
+    expect(parseSteps([{ name: "a", append: "x" }])[0]).toEqual({ name: "a", append: "x" });
+    expect(() => parseSteps([{ name: "a", append: "x", type: "y" }])).toThrow();
+    expect(() => parseSteps([{ name: "a", append: "x", key: "down" }])).toThrow();
+    expect(() => parseSteps([{ name: "a", append: "" }])).toThrow();
+    expect(stepWaitMs({ name: "a", append: "x" })).toBe(300);
+  });
   test("wait defaults: type steps settle, key steps do not, explicit zero wins", () => {
     expect(stepWaitMs({ name: "t", type: "x" })).toBe(300);
     expect(stepWaitMs({ name: "t", type: "x", waitMs: 0 })).toBe(0);

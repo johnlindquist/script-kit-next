@@ -25,7 +25,7 @@ const MAX_WAIT_MS = 10_000;
 
 // ---------------------------------------------------------------- steps
 
-export interface Step { name: string; type?: string; key?: string; waitMs?: number }
+export interface Step { name: string; type?: string; append?: string; key?: string; waitMs?: number }
 const MODIFIERS = new Set(["cmd", "ctrl", "alt", "shift"]);
 const NAMED_KEYS = new Set(["escape", "enter", "down", "up", "left", "right", "tab", "backspace", "space", "home", "end", "pageup", "pagedown"]);
 
@@ -44,28 +44,37 @@ export function parseSteps(value: unknown): Step[] {
   return value.map((raw, index) => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new EvaluationContractError("invalid_step", [String(index)]);
     const step = raw as Record<string, unknown>;
-    const unknown = Object.keys(step).filter(key => !["name", "type", "key", "waitMs"].includes(key));
+    const unknown = Object.keys(step).filter(key => !["name", "type", "append", "key", "waitMs"].includes(key));
     if (unknown.length) throw new EvaluationContractError("unknown_step_field", unknown);
     if (typeof step.name !== "string" || !/^[a-z0-9][a-z0-9-]{0,47}$/.test(step.name) || names.has(step.name))
       throw new EvaluationContractError("invalid_or_duplicate_step_name", [String(step.name)]);
     names.add(step.name);
-    if (step.type !== undefined && step.key !== undefined) throw new EvaluationContractError("step_has_type_and_key", [step.name]);
-    if (step.type !== undefined && (typeof step.type !== "string" || !step.type.length || step.type.length > 256 || /[\n\r\t]/.test(step.type)))
-      throw new EvaluationContractError("invalid_step_type_text", [step.name]);
+    if ([step.type, step.append, step.key].filter(value => value !== undefined).length > 1)
+      throw new EvaluationContractError("step_has_type_and_key", [step.name]);
+    for (const text of [step.type, step.append])
+      if (text !== undefined && (typeof text !== "string" || !text.length || text.length > 256 || /[\n\r\t]/.test(text)))
+        throw new EvaluationContractError("invalid_step_type_text", [step.name]);
     if (step.key !== undefined) { if (typeof step.key !== "string") throw new EvaluationContractError("invalid_key_spec", [step.name]); parseKeySpec(step.key); }
     if (step.waitMs !== undefined && (!Number.isSafeInteger(step.waitMs) || (step.waitMs as number) < 0 || (step.waitMs as number) > MAX_WAIT_MS))
       throw new EvaluationContractError("invalid_wait_ms", [step.name]);
     return { name: step.name, ...(step.type !== undefined ? { type: step.type as string } : {}),
+      ...(step.append !== undefined ? { append: step.append as string } : {}),
       ...(step.key !== undefined ? { key: step.key as string } : {}), ...(step.waitMs !== undefined ? { waitMs: step.waitMs as number } : {}) };
   });
 }
 
-export function stepWaitMs(step: Step): number { return step.waitMs ?? (step.type !== undefined ? DEFAULT_TYPE_WAIT_MS : 0); }
+export function stepWaitMs(step: Step): number {
+  return step.waitMs ?? (step.type !== undefined || step.append !== undefined ? DEFAULT_TYPE_WAIT_MS : 0);
+}
 
-/** A type step replaces the filter: select all, then one GPUI key event per character. */
+const characterKeys = (text: string): OwnedAction[] =>
+  Array.from(text).map(character => ({ type: "key" as const, key: character === " " ? "space" : character, text: character }));
+
+/** A type step replaces the filter: select all, then one GPUI key event per character. An append step types
+ * after what's already there, the way someone keeps typing a sentence. */
 export function actionsForStep(step: Step): OwnedAction[] {
-  if (step.type !== undefined) return [{ type: "key", key: "a", modifiers: ["cmd"] },
-    ...Array.from(step.type).map(character => ({ type: "key" as const, key: character === " " ? "space" : character, text: character }))];
+  if (step.type !== undefined) return [{ type: "key", key: "a", modifiers: ["cmd"] }, ...characterKeys(step.type)];
+  if (step.append !== undefined) return characterKeys(step.append);
   if (step.key !== undefined) { const { key, modifiers } = parseKeySpec(step.key); return [{ type: "key", key, modifiers }]; }
   return [];
 }
