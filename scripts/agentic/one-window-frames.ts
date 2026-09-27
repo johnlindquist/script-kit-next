@@ -249,6 +249,8 @@ export interface FrameInputs {
 export interface StepMeasurement {
   windowHeight: number | null; windowWidth: number | null; scale: number | null;
   input: (Rect & { source: string }) | null;
+  /** The Owner pill ⇥ puts ahead of the input's words (S04), when drawn. */
+  ownerPill: Rect | null;
   aboveInput: { y: number; h: number; text: string | null; source: string } | null;
   aboveInputAll: { name: string; y: number; h: number; text: string | null }[];
   firstHeader: { y: number; h: number; text: string | null; groupedIndex: number } | null;
@@ -282,6 +284,8 @@ export function measureFrame(inputs: FrameInputs): StepMeasurement {
   const input = inputNode ? { ...round(inputNode.bounds), source: "paint-time:main-view-input-shell" } :
     modelInput ? { ...round(modelInput), source: "model:MainViewInput" } : null;
   if (!inputNode) issues.push("input_paint_bounds_missing");
+  const pillNode = named("main-input-owner-pill");
+  const ownerPill = pillNode ? round(pillNode.bounds) : null;
 
   const containers = /^(main-view-shell|main-view-header|main-content-stage|main-view-main|main-view-overlay-clip|main-window-.*-boundary)$/;
   const aboveInputAll = input ? nodes.filter(node => isVisible(node) && !containers.test(node.name) && node.bounds.y + node.bounds.h <= input.y + 0.5)
@@ -345,7 +349,7 @@ export function measureFrame(inputs: FrameInputs): StepMeasurement {
   const footerSemantics = elements.filter(element => /^footer[-_:]/.test(String(element.semanticId ?? "")))
     .map(element => `${element.semanticId}${elementText(element) ? `=${elementText(element)}` : ""}`);
 
-  return { windowHeight, windowWidth, scale, input, aboveInput, aboveInputAll, firstHeader, firstRow, selectedRow, selectedIcon, selectedRowFill,
+  return { windowHeight, windowWidth, scale, input, ownerPill, aboveInput, aboveInputAll, firstHeader, firstRow, selectedRow, selectedIcon, selectedRowFill,
     leftEdgeBar: bar ? bar.present : null, leftEdgeBarDetail: bar, rowKeycaps, rowKeycapRows: keycaps.length, capsules, footerSemantics,
     visibleRows: rows.length, issues };
 }

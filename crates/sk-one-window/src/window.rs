@@ -383,6 +383,8 @@ pub struct OneWindow {
     talks: u64,
     /// Waiting things that are runs rather than messages.
     runs_held: Vec<u64>,
+    /// ⇥ made the agent the Owner of what's typed.
+    agent_owns: bool,
 }
 
 impl Default for OneWindow {
@@ -429,6 +431,7 @@ impl OneWindow {
             talk: None,
             talks: 0,
             runs_held: Vec::new(),
+            agent_owns: false,
         }
     }
 
@@ -469,6 +472,11 @@ impl OneWindow {
     }
     pub fn in_view(&self) -> bool {
         !self.views.is_empty()
+    }
+
+    /// ⇥ made the agent the Owner of what's typed: the list is the one row that starts it.
+    pub fn agent_owns(&self) -> bool {
+        self.agent_owns
     }
 
     /// The sentence the open view came from, or what's typed when nothing is open.

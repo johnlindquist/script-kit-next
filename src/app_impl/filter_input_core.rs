@@ -227,11 +227,11 @@ impl ScriptListApp {
         }
         match projection {
             Some(proj) => {
-                // Committed postfix captures (`todo; …`) are owned by the
-                // menu-syntax capture composer (the restored form
-                // experience). The spine owns capture target *selection*
-                // (the `;to` prefix spelling) but classifies the committed
-                // postfix form only for highlighting and submit blocking.
+                // A committed capture (`todo; …`, `;todo buy milk`) is the
+                // one-window list's capture row. The spine owns capture target
+                // *selection* (the `;to` prefix spelling) until a whole capture
+                // is typed, and classifies the committed postfix form only for
+                // highlighting and submit blocking.
                 if matches!(
                     proj.active_segment_kind,
                     crate::spine::SpineSegmentKind::Capture { .. }
@@ -241,7 +241,11 @@ impl ScriptListApp {
                         .get(proj.active_segment_index)
                         .map(|segment| segment.raw.as_str())
                         .unwrap_or("");
-                    if !raw.starts_with(';') {
+                    if !raw.starts_with(';')
+                        || self
+                            .menu_syntax_mode
+                            .capture_composer_owns_input_for(&parse.input)
+                    {
                         return false;
                     }
                 }

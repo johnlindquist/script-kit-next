@@ -156,11 +156,18 @@ impl SpineListRow {
                 SpineListAction::AcceptMenuSyntaxTrigger { .. } => "Accept",
                 SpineListAction::AcceptMenuSyntaxObject { .. } => "Insert",
                 SpineListAction::AttachContextResult { .. } => "Attach",
-                // One verb per Enter mechanic: rows that insert text and
-                // keep you typing say "Refine"; rows that resolve into a
-                // prompt segment say "Attach".
+                // Rows that insert text and keep you typing say "Refine".
+                // Rows that resolve a segment name what they resolve to:
+                // context and flows attach; a command, profile, style or
+                // folder is used.
                 SpineListAction::InsertSegmentText { .. } => "Refine",
-                SpineListAction::ResolveSegment { .. } => "Attach",
+                SpineListAction::ResolveSegment {
+                    ref resolution_source,
+                    ..
+                } => match resolution_source.as_ref() {
+                    "context-builtin" | "flow" => "Attach",
+                    _ => "Use",
+                },
             })
     }
 }
@@ -711,6 +718,24 @@ mod tests {
         assert!(rows
             .iter()
             .any(|r| matches!(r.kind, SpineListRowKind::Profile { .. })));
+    }
+
+    #[test]
+    fn resolving_rows_attach_context_and_use_everything_else() {
+        let first_verb = |input: &str| {
+            let parse = parse_spine(input);
+            let proj = project_cursor(&parse, input.len());
+            build_spine_list_sections(&parse, &proj)
+                .iter()
+                .flat_map(|section| &section.rows)
+                .find(|row| matches!(row.action, SpineListAction::ResolveSegment { .. }))
+                .map(|row| row.default_action_text().to_string())
+                .unwrap_or_else(|| panic!("{input:?} has no resolving row"))
+        };
+        assert_eq!(first_verb("@cl"), "Attach");
+        assert_eq!(first_verb("/"), "Use");
+        assert_eq!(first_verb("|"), "Use");
+        assert_eq!(first_verb("rewrite this ."), "Use");
     }
 
     #[test]

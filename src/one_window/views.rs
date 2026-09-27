@@ -25,6 +25,7 @@ pub(crate) enum HostedView {
     Answer(Answer),
     Note(super::notes::NoteView),
     Notes(super::notes::NotesList),
+    Reading(super::reading::ReadingView),
 }
 
 impl HostedView {
@@ -34,6 +35,7 @@ impl HostedView {
             HostedView::Answer(_) => ANSWER,
             HostedView::Note(_) => NOTE,
             HostedView::Notes(_) => super::notes::NOTES,
+            HostedView::Reading(_) => super::reading::READING,
         }
     }
 
@@ -51,6 +53,7 @@ impl HostedView {
             HostedView::Answer(_) => "Answer".into(),
             HostedView::Note(note) => format!("Note · {}", note.title),
             HostedView::Notes(_) => "Notes".into(),
+            HostedView::Reading(_) => "How Jev reads it".into(),
         }
     }
 
@@ -60,6 +63,7 @@ impl HostedView {
             HostedView::Answer(answer) => answer.enter(),
             HostedView::Note(note) => note.enter(),
             HostedView::Notes(list) => list.enter(),
+            HostedView::Reading(reading) => reading.enter(),
         }
     }
 
@@ -74,6 +78,7 @@ impl HostedView {
             },
             HostedView::Note(note) => note.row_count(),
             HostedView::Notes(list) => list.found.len().max(1),
+            HostedView::Reading(reading) => reading.rows.len(),
         }
     }
 }
@@ -96,10 +101,8 @@ impl ScriptListApp {
         // The host holds one view, so a view opened from another takes its place: Esc then
         // goes back to where the first one was opened from, not to a view nothing can draw.
         let replaces = self.one_window_hosted_view().is_some();
-        self.one_window_host.view_text = Some(
-            text.clone()
-                .unwrap_or_else(|| self.one_window.text().to_string()),
-        );
+        let typed = self.filter_text.clone();
+        self.one_window_host.view_text = Some(text.clone().unwrap_or_else(|| typed.clone()));
         let spec = ViewSpec {
             name: view.name().to_string(),
             label: view.label(),
@@ -115,7 +118,14 @@ impl ScriptListApp {
         } else {
             ViewOp::Open(spec)
         };
-        self.one_window_handle_turn(vec![Event::View(op), Event::Content { px }], cx);
+        // A symbol picker or composer owning the list keeps typing from the reducer, so it
+        // hears the words first or going back would restore older ones.
+        let mut turn = Vec::new();
+        if self.one_window.text() != typed {
+            turn.push(Event::Text(typed));
+        }
+        turn.extend([Event::View(op), Event::Content { px }]);
+        self.one_window_handle_turn(turn, cx);
     }
 
     /// The view the reducer has on top, when it's one of these.
@@ -142,6 +152,10 @@ impl ScriptListApp {
             .unwrap_or_default();
         match top.as_str() {
             FORM | ANSWER => self.one_window_hosted_key(key, cx),
+            super::reading::READING if key == Key::Enter => {
+                vec![Event::View(ViewOp::Back), Event::Key(Key::Enter)]
+            }
+            super::reading::READING => Vec::new(),
             NOTE => self.one_window_note_key(key, cx),
             super::notes::NOTES => self.one_window_notes_list_key(key, cx),
             _ => {
@@ -192,7 +206,10 @@ impl ScriptListApp {
                 })
                 .map_err(|_| "one_window_copy_failed")
             }),
-            HostedView::Answer(_) | HostedView::Note(_) | HostedView::Notes(_) => None,
+            HostedView::Answer(_)
+            | HostedView::Note(_)
+            | HostedView::Notes(_)
+            | HostedView::Reading(_) => None,
         };
         let mut events = Vec::new();
         if let Some(words) = caret_words {
@@ -255,6 +272,7 @@ impl ScriptListApp {
             return None;
         }
         self.one_window_host.view_text = Some(text.clone());
+        let reading = self.one_window_jev_reading(&text);
         let view = self.one_window_host.view.as_mut()?;
         let before = view.enter();
         match view {
@@ -273,6 +291,15 @@ impl ScriptListApp {
             }
             HostedView::Note(note) => note.typed(text),
             HostedView::Notes(list) => list.typed(text),
+            HostedView::Reading(view) => {
+                let words = reading.as_deref().map(|plan| plan.words.as_slice());
+                *view = super::reading::ReadingView::new(
+                    text,
+                    words,
+                    view.enter.clone(),
+                    view.owner_tab,
+                );
+            }
             HostedView::Answer(_) => return None,
         }
         let after = view.enter();
@@ -296,6 +323,13 @@ impl ScriptListApp {
             return false;
         }
         let key = key.to_ascii_lowercase();
+        if matches!(key.as_str(), "right" | "arrowright")
+            && !modifiers.platform
+            && !modifiers.shift
+            && self.one_window_open_reading(cx)
+        {
+            return true;
+        }
         let key = match self.one_window_hosted_view() {
             Some(HostedView::Form(_)) if !modifiers.platform => match key.as_str() {
                 "tab" if modifiers.shift => Key::Up,
@@ -327,6 +361,39 @@ impl ScriptListApp {
         true
     }
 
+    /// → with the caret at the end of the sentence opens how Jev reads it, when there's a reading
+    /// or a typed symbol to show and Jev's list is the one showing. Anywhere else → moves the
+    /// caret.
+    fn one_window_open_reading(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.one_window.in_view()
+            || self.ghost_prediction.is_some()
+            || !self.one_window_owns_list()
+        {
+            return false;
+        }
+        let text = self.one_window.text().to_string();
+        let at_end = {
+            let input = self.gpui_input_state.read(cx);
+            input.selected_range().is_empty() && input.cursor() == input.value().len()
+        };
+        if text.trim().is_empty() || !at_end {
+            return false;
+        }
+        let reading = self.one_window_jev_reading(&text);
+        if reading.is_none()
+            && !self.one_window.agent_owns()
+            && sk_one_window::marks::typed_symbols(&text).is_empty()
+        {
+            return false;
+        }
+        let enter = self.one_window.enter_target(self.one_window_clock());
+        let words = reading.as_deref().map(|plan| plan.words.as_slice());
+        let view =
+            super::reading::ReadingView::new(text, words, enter, self.one_window.agent_owns());
+        self.one_window_open_hosted(HostedView::Reading(view), None, cx);
+        true
+    }
+
     /// After every turn: a view the reducer closed is gone here too, and when what's drawn in
     /// place of the list changed size (a view opened or closed, a subject was staged or let go)
     /// the reducer hears the window's new natural height.
@@ -334,6 +401,10 @@ impl ScriptListApp {
         if self.one_window_host.view.is_some() && self.one_window_hosted_view().is_none() {
             self.one_window_host.view = None;
             self.one_window_host.view_text = None;
+        }
+        let covered = self.one_window.in_view();
+        if covered != std::mem::replace(&mut self.one_window_host.covered, covered) {
+            self.refresh_ghost_with_input(cx);
         }
         let drawn = self.one_window_view_height();
         if drawn != self.one_window_host.view_px {

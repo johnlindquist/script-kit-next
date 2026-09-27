@@ -5,7 +5,8 @@ Grades every step a one-window-frames.ts run wrote against the one-window target
 markdown table. Exit 1 when any hard target fails.
 
 Hard targets per step: the input never moves (inputDy 0), the line above the input is present and
-34 pt and nothing else is drawn above it, a 28 pt header leads whenever rows show and one of them is highlighted, rows are 44 pt,
+34 pt and nothing else is drawn above it, the main list always leads with a 28 pt header (a card drawn in
+its place fails) and one of its rows is highlighted, rows are 44 pt,
 the selected row has no fill (its color is the backdrop's, read from the strip above it), no left bar, no row keycaps, the focused tile is 24 pt, no popup
 window opened, and the input draws all of its text (ink reaches at least 4.5 pt per character, up to
 the input's width). The ↵ label sequence is flagged when it returns to an earlier label while the text
@@ -23,8 +24,11 @@ TILE_ALPHA = 0.95
 # A view's own content (a form field, an answer, a chat turn) is not a list: no header leads it and
 # nothing in it is the selected row. Views that are lists (history, learned, shortcuts) keep the list rules.
 VIEW_CONTENT = ("answer:", "form-field:", "note-line:", "chat:", "chat-next:", "step:", "connect:",
-                "connect-can:", "agent:")
+                "connect-can:", "agent:", "word:")
 
+
+# Glyphs a few points wide at most, so a line of them reaches less than 4.5 pt per character.
+NARROW_GLYPHS = set(".,;:|!'`ilIj ")
 
 def in_view_content(m):
     return str((m.get("firstRow") or {}).get("semanticId") or "").startswith(VIEW_CONTENT)
@@ -122,6 +126,12 @@ def input_reach(d, m):
     return None if first is None else (last - first) / k
 
 
+def on_main_list(m):
+    """The launcher's list is showing: the main surface with no view over it."""
+    variant = (((m.get("frame") or {}).get("target")) or {}).get("appViewVariant")
+    return variant == "ScriptList" and view_name(m) is None
+
+
 def view_name(m):
     """The view on top, from the host's own report; None on the list."""
     path = os.path.join(m.get("_dir", ""), m.get("_file", "")[:-5] + ".capture.json")
@@ -197,6 +207,8 @@ def main():
             notes.append("view " + str(fr.get("semanticId")).split(":")[0])
         if fr and not view and (not fh or fh["y"] > fr["y"]):
             fails.append("rows without a leading header")
+        if not fh and not fr and on_main_list(m):
+            fails.append("list without a header")
         if fr and not view and not m.get("selectedRow"):
             fails.append("rows with none highlighted")
         if fh and abs(fh["h"] - 28) > 0.5:
@@ -234,7 +246,7 @@ def main():
             fails.append("issues: " + ";".join(map(str, issues))[:80])
         text = m.get("inputValue") or ""
         reach = input_reach(d, m) if text.strip() else None
-        want = min(4.5 * len(text), m["input"]["w"] - 40)
+        want = min(sum(1.5 if c in NARROW_GLYPHS else 4.5 for c in text), m["input"]["w"] - 40)
         if reach is not None and reach < want:
             fails.append(f"input text cut at {reach:.0f} pt of {len(text)} chars")
         label = enter_label(m)

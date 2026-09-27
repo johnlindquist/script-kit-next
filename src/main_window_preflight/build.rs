@@ -49,7 +49,6 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
     use crate::scripts::*;
 
     match &app.current_view {
-        AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => None,
         AppView::ScriptList => match app.resolved_main_menu_selected_subject()? {
             crate::ResolvedMainMenuSelection::SearchResult { result, .. } => Some(result.clone()),
             crate::ResolvedMainMenuSelection::Calculator { .. } => None,
@@ -117,7 +116,6 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
 
 fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
     match &app.current_view {
-        AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => Vec::new(),
         AppView::ScriptList => app
             .main_menu_committed_rows()
             .iter()
@@ -156,11 +154,6 @@ fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
 }
 
 fn visible_row_fingerprint(app: &crate::ScriptListApp) -> String {
-    if matches!(app.current_view, AppView::ScriptList) && app.menu_syntax_capture_form_owns_input()
-    {
-        return "handler-form".to_string();
-    }
-
     if !matches!(app.current_view, AppView::ScriptList) {
         return format!(
             "v:{}:{}",
@@ -282,11 +275,6 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
 }
 
 fn visible_result_receipts(app: &crate::ScriptListApp) -> Vec<MainWindowPreflightVisibleResult> {
-    if matches!(app.current_view, AppView::ScriptList) && app.menu_syntax_capture_form_owns_input()
-    {
-        return Vec::new();
-    }
-
     if !matches!(app.current_view, AppView::ScriptList) {
         // For built-in views, we just return the selected result as the only visible result for now
         // to satisfy the basic preflight requirements.
@@ -372,10 +360,6 @@ fn leading_icon_bundle_id(result: &SearchResult) -> Option<String> {
 
 fn build_tab_action(app: &crate::ScriptListApp) -> Option<MainWindowPreflightAction> {
     if app.filter_text.trim().is_empty() {
-        return None;
-    }
-
-    if app.menu_syntax_capture_form_owns_input() {
         return None;
     }
 
@@ -471,10 +455,6 @@ fn selection_warnings(
     if app.filter_text.trim().is_empty() {
         warnings
             .push("Command+Enter Agent Chat is inactive until the filter has text.".to_string());
-    } else if app.menu_syntax_capture_form_owns_input() {
-        warnings.push(
-            "Command+Enter Agent Chat is disabled while the handler form owns input.".to_string(),
-        );
     }
 
     warnings

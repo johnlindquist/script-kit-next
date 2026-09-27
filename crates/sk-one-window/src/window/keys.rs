@@ -64,6 +64,22 @@ impl OneWindow {
                     return true;
                 }
             }
+            Key::Tab if !self.text.trim().is_empty() => {
+                self.agent_owns = !self.agent_owns;
+                self.list.held = None;
+                self.list.asking = false;
+                self.refresh_rows();
+                return true;
+            }
+            Key::Escape if self.agent_owns => {
+                self.agent_owns = false;
+                self.refresh_rows();
+                return true;
+            }
+            Key::CmdEnter if self.agent_owns => {
+                self.activate(now, fx);
+                return true;
+            }
             Key::CmdEnter if !self.text.trim().is_empty() => {
                 return self.on_key(now, Key::CmdDigit(1), fx);
             }

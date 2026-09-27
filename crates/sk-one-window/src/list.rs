@@ -276,6 +276,8 @@ pub struct ListState {
     pub stale_holds: bool,
     /// Keeps ↵'s words steady while a sentence is typed forward.
     pub steady: Steady,
+    /// The Owner is decided: only the pinned row shows.
+    pub owned: bool,
 }
 
 impl ListState {
@@ -309,7 +311,7 @@ impl ListState {
     /// Selectable rows in order, without headers.
     pub fn visible(&self) -> Vec<Item> {
         let mut out: Vec<Item> = (0..self.pinned.len()).map(Item::Pinned).collect();
-        if !self.has_text() {
+        if !self.has_text() || self.owned {
             return out;
         }
         let names = (0..self.names.len()).map(Item::Name);

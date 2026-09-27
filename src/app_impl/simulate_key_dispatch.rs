@@ -286,21 +286,11 @@ impl ScriptListApp {
                         match key_lower.as_str() {
                             "tab" => {
                                 // Mirrors the live Tab interceptor in
-                                // startup.rs: menu-syntax focus → empty-input
-                                // cwd pick → Quick AI (text) → root-dir
+                                // startup.rs: empty-input cwd pick → Quick AI
+                                // (text) → root-dir
                                 // completion. Keep the two paths in lockstep
                                 // or the header Tab chip lies to automation.
-                                if view.menu_syntax_capture_form_owns_input() {
-                                    if has_shift {
-                                        view.focus_previous_menu_syntax_form_field(window, ctx);
-                                    } else {
-                                        view.focus_next_menu_syntax_form_field(window, ctx);
-                                    }
-                                    logging::log(
-                                        "STDIN",
-                                        "SimulateKey: Tab - move menu syntax form focus",
-                                    );
-                                } else if !has_shift
+                                if !has_shift
                                     && view.spine_enabled
                                     && !view.show_actions_popup
                                     && view.filter_text.trim().is_empty()
@@ -327,6 +317,10 @@ impl ScriptListApp {
                                         state.set_selection_focused(len, len, window, cx);
                                     });
                                     view.suppress_filter_events = false;
+                                } else if !has_shift
+                                    && view.try_complete_spine_segment_with_tab(window, ctx)
+                                {
+                                    logging::log("STDIN", "SimulateKey: Tab - finish the symbol with the highlighted row");
                                 } else if !has_shift
                                     && !view.show_actions_popup
                                     && !view.menu_syntax_object_selector_owns_main_keyboard()
@@ -425,21 +419,11 @@ impl ScriptListApp {
                         match key_lower.as_str() {
                             "tab" => {
                                 // Mirrors the live Tab interceptor in
-                                // startup.rs: menu-syntax focus → empty-input
-                                // cwd pick → Quick AI (text) → root-dir
+                                // startup.rs: empty-input cwd pick → Quick AI
+                                // (text) → root-dir
                                 // completion. Keep the two paths in lockstep
                                 // or the header Tab chip lies to automation.
-                                if view.menu_syntax_capture_form_owns_input() {
-                                    if has_shift {
-                                        view.focus_previous_menu_syntax_form_field(window, ctx);
-                                    } else {
-                                        view.focus_next_menu_syntax_form_field(window, ctx);
-                                    }
-                                    logging::log(
-                                        "STDIN",
-                                        "SimulateKey: Tab - move menu syntax form focus",
-                                    );
-                                } else if !has_shift
+                                if !has_shift
                                     && view.spine_enabled
                                     && !view.show_actions_popup
                                     && view.filter_text.trim().is_empty()
@@ -466,6 +450,10 @@ impl ScriptListApp {
                                         state.set_selection_focused(len, len, window, cx);
                                     });
                                     view.suppress_filter_events = false;
+                                } else if !has_shift
+                                    && view.try_complete_spine_segment_with_tab(window, ctx)
+                                {
+                                    logging::log("STDIN", "SimulateKey: Tab - finish the symbol with the highlighted row");
                                 } else if !has_shift
                                     && !view.show_actions_popup
                                     && !view.menu_syntax_object_selector_owns_main_keyboard()

@@ -72,6 +72,9 @@ impl OneWindow {
             .unwrap_or_else(|| EnterTarget::new(spec.name.clone(), ""));
         self.guard.forget_view();
         self.guard.observe_view(now, &target.id, user);
+        if spec.name == crate::strip::AGENT_VIEW && std::mem::take(&mut self.agent_owns) {
+            self.refresh_rows();
+        }
         if let Some(text) = spec.text {
             if text != self.text {
                 fx.push(Effect::SetInput(text.clone()));

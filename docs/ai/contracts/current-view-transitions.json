@@ -416,7 +416,7 @@
     },
     {
       "file": "src/app_impl/filter_input_core.rs",
-      "line": 423,
+      "line": 427,
       "owner": "open_file_search_view_with_result_transition",
       "receiver": "self",
       "operation": "assign",
@@ -480,7 +480,7 @@
     },
     {
       "file": "src/app_impl/selection_fallback.rs",
-      "line": 1092,
+      "line": 1100,
       "owner": "open_brain_memory_preview",
       "receiver": "self",
       "operation": "assign",
@@ -490,7 +490,7 @@
     },
     {
       "file": "src/app_impl/selection_fallback.rs",
-      "line": 1794,
+      "line": 1802,
       "owner": "open_script_issues_view",
       "receiver": "self",
       "operation": "assign",

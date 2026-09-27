@@ -574,6 +574,7 @@ impl ScriptListApp {
         self.pending_programmatic_filter_echo = Some(text.clone());
         self.gpui_input_state.update(cx, |state, cx| {
             state.set_highlight_ranges_with_roles(Vec::new());
+            state.clear_mark_ranges();
             if !input_already_matches {
                 state.set_value(text.clone(), window, cx);
             }
@@ -590,6 +591,7 @@ impl ScriptListApp {
         self.main_menu_render_diagnostics.last_input_highlight_text = String::new();
         self.main_menu_render_diagnostics
             .last_input_highlight_ranges = Vec::new();
+        self.main_menu_render_diagnostics.last_input_mark_ranges = Vec::new();
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
 
@@ -668,20 +670,9 @@ impl ScriptListApp {
                 let _ = has_cwd_segment;
             }
             self.accept_root_search_input_intent(&text);
-            let handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);
             self.sync_menu_syntax_form_inputs_from_filter(window, cx);
-            let handler_form_field_owns_input =
-                self.menu_syntax_form_input_active && handler_form_owns_input;
-            if handler_form_field_owns_input {
-                self.menu_syntax_object_selector_state = Default::default();
-                self.menu_syntax_trigger_picker_state = Default::default();
-                self.sync_menu_syntax_form_inputs_from_filter(window, cx);
-            } else {
-                self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
-            }
-            if !handler_form_field_owns_input
-                && self.menu_syntax_object_selector_state.snapshot.is_none()
-            {
+            self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
+            if self.menu_syntax_object_selector_state.snapshot.is_none() {
                 self.run_menu_syntax_trigger_picker_state_machine(&text, window, cx);
             }
             self.invalidate_grouped_cache();
@@ -705,7 +696,6 @@ impl ScriptListApp {
         if self.menu_syntax_mode.is_menu_syntax_for(&text)
             || self.menu_syntax_trigger_picker_state.snapshot.is_some()
             || self.menu_syntax_object_selector_state.snapshot.is_some()
-            || self.menu_syntax_capture_form_owns_input_for(&text)
             || crate::menu_syntax::active_filter_head_owns_main_list(&text)
         {
             // Typed menu ownership suppresses unrelated launcher fallbacks.
@@ -759,9 +749,6 @@ impl ScriptListApp {
             return false;
         }
         if modifiers.platform || modifiers.alt || modifiers.control {
-            return false;
-        }
-        if self.menu_syntax_form_input_active && self.menu_syntax_capture_form_owns_input() {
             return false;
         }
         let Some(ch) = key_char else {
@@ -1041,8 +1028,7 @@ impl ScriptListApp {
                 .capture_composer_owns_input_for(&self.filter_text)
                 || self
                     .menu_syntax_mode
-                    .command_owns_input_for(&self.filter_text)
-                || self.menu_syntax_capture_form_owns_input_for(&self.filter_text))
+                    .command_owns_input_for(&self.filter_text))
     }
 
     pub(crate) fn menu_syntax_filter_only_escape_should_clear(&self) -> bool {
@@ -1144,6 +1130,27 @@ impl ScriptListApp {
             ..observation
         }));
         handled
+    }
+
+    /// Tab finishes the symbol being typed with the highlighted row, as Enter would, when that
+    /// row only rewrites the symbol in the input (`@cl` becomes `@clipboard`).
+    pub(crate) fn try_complete_spine_segment_with_tab(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !matches!(self.current_view, AppView::ScriptList) || self.show_actions_popup {
+            return false;
+        }
+        self.flush_pending_main_menu_query(cx);
+        let completes_in_place = self.selected_spine_projection_row().is_some_and(|row| {
+            matches!(
+                row.action,
+                crate::spine::SpineListAction::ResolveSegment { .. }
+                    | crate::spine::SpineListAction::InsertSegmentText { .. }
+            )
+        });
+        completes_in_place && self.accept_spine_projection_row(window, cx)
     }
 
     fn apply_spine_attachment_outcome(

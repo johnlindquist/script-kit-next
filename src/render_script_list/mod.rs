@@ -728,14 +728,17 @@ impl ScriptListApp {
         use crate::window_orchestrator::interaction::LauncherEscapeDecision;
 
         let decision = self.launcher_escape_decision(cx);
-        if matches!(
-            decision,
+        // A view drawn over a symbol picker or typed words hides them, so Esc leaves the view first.
+        let to_one_window = match decision {
+            LauncherEscapeDecision::CloseActions => false,
             LauncherEscapeDecision::ClearVisibleFilter
-                | LauncherEscapeDecision::ReturnToOrigin
-                | LauncherEscapeDecision::DismissMain
-        ) && self.one_window_owns_list()
-            && self.one_window_key(sk_one_window::Key::Escape, cx).taken()
-        {
+            | LauncherEscapeDecision::ReturnToOrigin
+            | LauncherEscapeDecision::DismissMain => {
+                self.one_window.in_view() || self.one_window_owns_list()
+            }
+            _ => self.one_window.in_view(),
+        };
+        if to_one_window && self.one_window_key(sk_one_window::Key::Escape, cx).taken() {
             return LauncherEscapeDecision::OneWindow;
         }
         match decision {
@@ -981,31 +984,26 @@ impl ScriptListApp {
         // NOTE: Removed P4 perf log - called every render frame, causing log spam
 
         // Build script list using uniform_list for proper virtualized scrolling.
-        let handler_form_owns_input_for_render =
-            self.menu_syntax_capture_form_owns_input_for(&filter_text_for_render);
+        let capture_owns_input_for_render = self
+            .menu_syntax_mode
+            .capture_composer_owns_input_for(&filter_text_for_render);
         // The three-zone launcher keeps Agent discovery in the footer action zone.
         let show_launcher_ask_ai_hint = false;
-        let capture_composer_owns_main_list = self
-            .menu_syntax_mode
-            .capture_composer_owns_input_for(&filter_text_for_render)
-            || handler_form_owns_input_for_render;
-        let popup_owns_main_list = !handler_form_owns_input_for_render
-            && (self.menu_syntax_object_selector_state.owns_main_list()
-                || self.menu_syntax_trigger_picker_state.owns_main_list());
-        let trigger_picker_owns_main_list_for_render = !handler_form_owns_input_for_render
-            && self.menu_syntax_trigger_picker_state.owns_main_list();
-        let object_selector_owns_main_list_for_render = !handler_form_owns_input_for_render
-            && self.menu_syntax_object_selector_state.owns_main_list();
-        let active_filter_head_owns_main_list_for_render = !handler_form_owns_input_for_render
+        let popup_owns_main_list = self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_picker_state.owns_main_list();
+        let trigger_picker_owns_main_list_for_render =
+            self.menu_syntax_trigger_picker_state.owns_main_list();
+        let object_selector_owns_main_list_for_render =
+            self.menu_syntax_object_selector_state.owns_main_list();
+        let active_filter_head_owns_main_list_for_render = !capture_owns_input_for_render
             && crate::menu_syntax::active_filter_head_owns_main_list(&filter_text_for_render);
         let spine_owns_main_list_for_render = self.spine_projection_owns_main_list()
             && self.spine_parse.input == filter_text_for_render;
         let menu_syntax_owns_main_list = popup_owns_main_list
             || (!spine_owns_main_list_for_render
-                && (capture_composer_owns_main_list
-                    || self
-                        .menu_syntax_mode
-                        .command_owns_input_for(&filter_text_for_render)));
+                && self
+                    .menu_syntax_mode
+                    .command_owns_input_for(&filter_text_for_render));
         // Keep guide cards available for bare/partial `:` refine entry, but
         // let completed advanced queries render their filtered results first.
         // Empty-state hint cards are handled by the item-count branch below.
@@ -1637,21 +1635,6 @@ impl ScriptListApp {
                     cx.stop_propagation();
                     return;
                 }
-                if sk_is_key_tab(key_str)
-                    && !has_cmd
-                    && !event.keystroke.modifiers.alt
-                    && !event.keystroke.modifiers.control
-                    && this.menu_syntax_capture_form_owns_input()
-                {
-                    if event.keystroke.modifiers.shift {
-                        this.focus_previous_menu_syntax_form_field(window, cx);
-                    } else {
-                        this.focus_next_menu_syntax_form_field(window, cx);
-                    }
-                    cx.stop_propagation();
-                    return;
-                }
-
                 // Check SDK action shortcuts FIRST (before built-in shortcuts)
                 // This allows scripts to override default shortcuts via setActions()
                 if !this.action_shortcuts.is_empty() {
@@ -1934,13 +1917,23 @@ impl ScriptListApp {
         if self.main_menu_render_diagnostics.last_input_highlight_text != highlight_text {
             let capture_targets =
                 crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
-            let mut next_highlight_ranges: Vec<(std::ops::Range<usize>, gpui::Hsla, String)> =
-                crate::menu_syntax::input_spans_for_input_with_targets(
-                    &highlight_text,
-                    &capture_targets,
-                )
+            let spans = crate::menu_syntax::input_spans_for_input_with_targets(
+                &highlight_text,
+                &capture_targets,
+            );
+            let mut spine_marks = Vec::new();
+            let syntax_marks: Vec<sk_one_window::marks::Mark> = spans
+                .iter()
+                .filter_map(|span| {
+                    Some(sk_one_window::marks::Mark {
+                        range: span.range.clone(),
+                        word: crate::one_window::marks::menu_syntax_word(span.role)?,
+                    })
+                })
+                .collect();
+            let next_highlight_ranges: Vec<(std::ops::Range<usize>, gpui::Hsla, String)> = spans
                 .into_iter()
-                .filter(|span| span.role != crate::menu_syntax::MenuSyntaxFragmentRole::Subject)
+                .filter(|span| span.role == crate::menu_syntax::MenuSyntaxFragmentRole::Unresolved)
                 .map(|span| {
                     (
                         span.range,
@@ -1949,10 +1942,8 @@ impl ScriptListApp {
                     )
                 })
                 .collect();
-            next_highlight_ranges.extend(self.one_window_input_marks(&highlight_text));
 
             if self.spine_enabled {
-                let accent_color: gpui::Hsla = rgb(self.theme.colors.accent.selected).into();
                 let spine_projection = self.spine_projection.as_ref();
                 let spine_accent_ranges =
                     crate::spine::input_spans::accent_ranges_for_parse_with_resolved_tokens(
@@ -1969,11 +1960,15 @@ impl ScriptListApp {
                             && gpui_input_value.is_char_boundary(range.start)
                             && gpui_input_value.is_char_boundary(range.end)
                         {
-                            next_highlight_ranges.push((range, accent_color, role.to_string()));
+                            if let Some(word) = crate::one_window::marks::spine_word(role) {
+                                spine_marks.push(sk_one_window::marks::Mark { range, word });
+                            }
                         }
                     }
                 }
             }
+            spine_marks.extend(syntax_marks);
+            self.main_menu_render_diagnostics.last_input_exact_marks = spine_marks;
 
             if self
                 .main_menu_render_diagnostics
@@ -1987,7 +1982,31 @@ impl ScriptListApp {
                 self.main_menu_render_diagnostics
                     .last_input_highlight_ranges = next_highlight_ranges;
             }
-            self.main_menu_render_diagnostics.last_input_highlight_text = highlight_text;
+            self.main_menu_render_diagnostics.last_input_highlight_text = highlight_text.clone();
+        }
+        let exact_marks = self
+            .main_menu_render_diagnostics
+            .last_input_exact_marks
+            .clone();
+        let next_marks = self.one_window_input_marks(&highlight_text, exact_marks);
+        let input_holds_next_marks = {
+            let input = self.gpui_input_state.read(cx);
+            input.mark_ranges().len() == next_marks.len()
+                && input
+                    .mark_ranges()
+                    .iter()
+                    .zip(input.mark_range_roles())
+                    .zip(&next_marks)
+                    .all(|(((range, color), role), (next_range, next_color, next_role))| {
+                        range == next_range && color == next_color && role == next_role
+                    })
+        };
+        if !input_holds_next_marks {
+            let input_marks = next_marks.clone();
+            self.gpui_input_state.update(cx, |state, _cx| {
+                state.set_mark_ranges_with_roles(input_marks);
+            });
+            self.main_menu_render_diagnostics.last_input_mark_ranges = next_marks;
         }
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
@@ -2077,7 +2096,7 @@ impl ScriptListApp {
             )
         });
 
-        let input_body = if handler_form_owns_input_for_render
+        let input_body = if capture_owns_input_for_render
             && menu_syntax_text_contains_line_break(&filter_text_for_render)
         {
             div()
@@ -2094,6 +2113,30 @@ impl ScriptListApp {
                 .child(menu_syntax_single_line_text_for_gpui(
                     &filter_text_for_render,
                 ))
+                .into_any_element()
+        } else if self.one_window.agent_owns()
+            && (!self.one_window.in_view()
+                || matches!(
+                    self.one_window_hosted_view(),
+                    Some(crate::one_window::views::HostedView::Reading(_))
+                ))
+        {
+            div()
+                .flex_1()
+                .min_w(px(0.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(crate::one_window::owner_pill::render_owner_pill(
+                    &self.theme,
+                    menu_def,
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .child(self.render_search_input_with_ghost(cx)),
+                )
                 .into_any_element()
         } else {
             self.render_search_input_with_ghost(cx).into_any_element()

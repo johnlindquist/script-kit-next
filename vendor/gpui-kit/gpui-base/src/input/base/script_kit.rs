@@ -62,6 +62,10 @@ pub(crate) struct ScriptKitInputExt {
     highlight_range_roles: Vec<String>,
     /// Highlight range currently under the pointer, with its role.
     hovered_highlight_range: Option<(Range<usize>, String)>,
+    /// Host-owned word marks: a colored bar under each range; the text keeps its color.
+    mark_ranges: Vec<(Range<usize>, Hsla)>,
+    /// Semantic role per mark range (same index), e.g. `subject`.
+    mark_range_roles: Vec<String>,
     /// Capture-only devtools fidelity scope for shaped line measurements.
     pub(crate) fidelity_scope: Option<SharedString>,
 }
@@ -236,6 +240,43 @@ impl<M: InputModeKind> InputBaseState<M> {
     /// The host highlight range under the pointer, with its role.
     pub fn hovered_highlight_range(&self) -> Option<(Range<usize>, String)> {
         self.sk.hovered_highlight_range.clone()
+    }
+
+    /// Replace the word marks: each range gets a bar in its color under the text, and the
+    /// text keeps its own color.
+    pub fn set_mark_ranges_with_roles(&mut self, ranges: Vec<(Range<usize>, Hsla, String)>) {
+        let (ranges, roles): (Vec<_>, Vec<_>) = ranges
+            .into_iter()
+            .map(|(range, color, role)| ((range, color), role))
+            .unzip();
+        self.sk.mark_ranges = ranges;
+        self.sk.mark_range_roles = roles;
+    }
+
+    pub fn clear_mark_ranges(&mut self) {
+        self.set_mark_ranges_with_roles(Vec::new());
+    }
+
+    pub fn mark_ranges(&self) -> &[(Range<usize>, Hsla)] {
+        &self.sk.mark_ranges
+    }
+
+    pub fn mark_range_roles(&self) -> &[String] {
+        &self.sk.mark_range_roles
+    }
+
+    /// The marks to paint: none for masked text, and only ranges that fit the text.
+    pub(super) fn script_kit_paint_marks(&self) -> Vec<(Range<usize>, Hsla)> {
+        if self.masked {
+            return Vec::new();
+        }
+        let len = self.text.len();
+        self.sk
+            .mark_ranges
+            .iter()
+            .filter(|(range, _)| range.start < range.end && range.end <= len)
+            .cloned()
+            .collect()
     }
 
     pub(super) fn update_script_kit_hovered_range(

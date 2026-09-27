@@ -56,6 +56,9 @@ pub(crate) struct OneWindowHost {
     pub(super) acting_on: Option<sk_one_window::Subject>,
     /// The height last reported for what's drawn in place of the list, while something is.
     pub(super) view_px: Option<f32>,
+    /// Whether a view covered the list after the last turn. The input's ghost words belong to
+    /// the list, so they go when a view opens and come back when it closes.
+    pub(super) covered: bool,
     /// Lines of notes waiting to be deleted: note views leave them out.
     pub(super) note_deletes: Vec<super::notes::PendingDelete>,
     /// A note asked for while the window was hidden, opened once it's shown.
@@ -171,20 +174,24 @@ impl ScriptListApp {
     /// Whether the reducer owns the list for these words. Launcher syntax, the calculator,
     /// attachment portals and pickers keep their own lists.
     pub(crate) fn one_window_owns(&self, text: &str) -> bool {
-        if matches!(self.current_view, AppView::ScriptList) && self.one_window.in_view() {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return false;
+        }
+        if self.one_window.in_view() {
             return true;
         }
-        matches!(self.current_view, AppView::ScriptList)
-            && self.inline_calculator.is_none()
+        let picker_owns = self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_picker_state.owns_main_list();
+        if self.menu_syntax_mode.capture_composer_owns_input_for(text) {
+            return !picker_owns;
+        }
+        self.inline_calculator.is_none()
             && self.active_script_list_attachment_portal_kind().is_none()
-            && !self.menu_syntax_object_selector_state.owns_main_list()
-            && !self.menu_syntax_trigger_picker_state.owns_main_list()
+            && !picker_owns
             && !self.spine_projection_owns_main_list()
             && !crate::menu_syntax::active_filter_head_owns_main_list(text)
-            && self.menu_syntax_mode.capture_for(text).is_none()
             && self.menu_syntax_mode.command_for(text).is_none()
             && self.menu_syntax_mode.incomplete_hint_for(text).is_none()
-            && !self.menu_syntax_mode.capture_composer_owns_input_for(text)
             && !self.menu_syntax_mode.command_owns_input_for(text)
             && !self
                 .menu_syntax_mode
@@ -224,14 +231,6 @@ impl ScriptListApp {
             for effect in outcome.effects {
                 match effect {
                     Effect::Run { row, .. } => runs.push(row),
-                    Effect::PassKey(sk_one_window::Key::Tab)
-                        if self.one_window_tab_hands_to_agent() =>
-                    {
-                        handled.consumed = true;
-                        queue.push_back(Event::Work(sk_one_window::work::WorkEvent::Agent {
-                            task: self.one_window.text().trim().to_string(),
-                        }));
-                    }
                     Effect::PassKey(_) => handled.passed = true,
                     Effect::EnterIgnored => {
                         handled.ignored = true;
@@ -259,6 +258,7 @@ impl ScriptListApp {
                                 super::views::ANSWER,
                                 super::views::NOTE,
                                 super::notes::NOTES,
+                                super::reading::READING,
                             ]
                             .contains(&top.name.as_str()) =>
                         {
@@ -546,7 +546,13 @@ impl ScriptListApp {
         let mut rows = Vec::new();
         let mut fallbacks = Vec::new();
         let mut results = HashMap::new();
-        super::work::steps_row(text, &mut rows, &mut results);
+        match self.one_window_capture_row(text) {
+            Some((row, result)) => {
+                results.insert(row.key.clone(), result);
+                rows.push(row);
+            }
+            None => super::work::steps_row(text, &mut rows, &mut results),
+        }
         for item in grouped {
             let GroupedListItem::Item(index) = item else {
                 continue;
@@ -695,8 +701,11 @@ impl ScriptListApp {
         }
         if !crate::intent::wants_reading(&text) {
             queue.push_back(Event::Jev {
+                rows: sk_one_window::list::down_rows(&text)
+                    .into_iter()
+                    .filter(|row| row.act != sk_one_window::RowAct::AskJevAgain)
+                    .collect(),
                 text,
-                rows: Vec::new(),
             });
             return;
         }
@@ -794,6 +803,9 @@ impl ScriptListApp {
             self.one_window_run_action(id.to_string(), cx);
             return Ok(());
         }
+        if let Some(ran) = self.one_window_run_capture(&row, cx) {
+            return ran;
+        }
         let text = self.one_window.text().to_string();
         if let Some(ran) = self.one_window_run_act(&row, cx) {
             return ran;
@@ -881,9 +893,27 @@ impl ScriptListApp {
     pub(crate) fn one_window_automation_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
         let list = self.one_window.list();
         let now = self.one_window_peek_now(cx);
+        let marks = {
+            let input = self.gpui_input_state.read(cx);
+            let value = input.value();
+            input
+                .mark_ranges()
+                .iter()
+                .zip(input.mark_range_roles())
+                .map(|((range, _), word)| {
+                    serde_json::json!({
+                        "word": word,
+                        "range": [range.start, range.end],
+                        "text": value.get(range.clone()),
+                    })
+                })
+                .collect::<Vec<_>>()
+        };
         serde_json::json!({
             "owned": self.one_window_owns_list(),
             "text": self.one_window.text(),
+            "marks": marks,
+            "agentOwns": self.one_window.agent_owns(),
             "header": self.one_window_drawn_header(),
             "enter": self.one_window.enter_target(self.one_window_host.now),
             "enterArmed": self.one_window_enter_arming(),

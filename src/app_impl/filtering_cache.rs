@@ -2101,6 +2101,9 @@ impl ScriptListApp {
         self.main_menu_render_diagnostics
             .last_input_highlight_ranges
             .clear();
+        self.main_menu_render_diagnostics
+            .last_input_mark_ranges
+            .clear();
     }
 
     pub(crate) fn active_script_list_attachment_portal_kind(
@@ -3541,9 +3544,12 @@ impl ScriptListApp {
     ) {
         let structural_clear = !matches!(self.current_view, AppView::ScriptList)
             || self.show_actions_popup
+            || self.one_window.in_view()
             || self.menu_syntax_trigger_picker_state.owns_main_list()
             || crate::menu_syntax::active_filter_head_owns_main_list(&self.filter_text)
-            || self.menu_syntax_capture_form_owns_input()
+            || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(&self.filter_text)
             || self.inline_calculator.is_some();
 
         if structural_clear {

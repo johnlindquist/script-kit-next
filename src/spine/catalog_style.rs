@@ -193,7 +193,7 @@ pub(super) fn build_style_rows(
                 is_selectable: true,
                 // Style-only input auto-submits the rewrite plan to Agent
                 // Chat on Enter (A9 decision), so the footer verb is
-                // "Rewrite", not the generic prompt-builder "Attach".
+                // "Rewrite"; inline it only picks the style, so "Use".
                 action_label: auto_submit_rewrite.then(|| ss("Rewrite")),
                 action: SpineListAction::ResolveSegment {
                     segment_index,

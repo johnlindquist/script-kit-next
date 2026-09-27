@@ -142,10 +142,9 @@ impl ScriptListApp {
         if !matches!(self.current_view, AppView::ScriptList) || self.show_actions_popup {
             return MainViewTabChipAction::Inactive;
         }
-        // Menu-syntax pickers/forms claim Tab first and show their own hints.
+        // Menu-syntax pickers claim Tab first and show their own hints.
         if self.menu_syntax_object_selector_owns_main_keyboard()
             || self.menu_syntax_trigger_picker_owns_main_keyboard()
-            || self.menu_syntax_capture_form_owns_input()
         {
             return MainViewTabChipAction::Inactive;
         }

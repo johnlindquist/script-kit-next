@@ -1,0 +1,240 @@
+{
+ "steps": {
+  "s1-settled": {
+   "marks": [
+    {
+     "word": "action",
+     "text": "send"
+    },
+    {
+     "word": "subject",
+     "text": "what I copied"
+    },
+    {
+     "word": "target",
+     "text": "to sarah"
+    },
+    {
+     "word": "details",
+     "text": "tomorrow at 9"
+    }
+   ]
+  },
+  "s1-why": {
+   "marks": [
+    {
+     "word": "action",
+     "text": "send"
+    },
+    {
+     "word": "subject",
+     "text": "what I copied"
+    },
+    {
+     "word": "target",
+     "text": "to sarah"
+    },
+    {
+     "word": "details",
+     "text": "tomorrow at 9"
+    }
+   ]
+  },
+  "s2-02-clipboard": {
+   "exact": false,
+   "marks": [
+    {
+     "word": "subject",
+     "text": "@clipboard"
+    }
+   ]
+  },
+  "s2-03-concise": {
+   "exact": false,
+   "marks": [
+    {
+     "word": "subject",
+     "text": "@clipboard"
+    },
+    {
+     "word": "details",
+     "text": ".concise"
+    }
+   ]
+  },
+  "s2-settled": {
+   "marks": [
+    {
+     "word": "action",
+     "text": "summarize"
+    },
+    {
+     "word": "subject",
+     "text": "@clipboard"
+    },
+    {
+     "word": "details",
+     "text": ".concise"
+    }
+   ]
+  },
+  "s2-why": {
+   "marks": [
+    {
+     "word": "action",
+     "text": "summarize"
+    },
+    {
+     "word": "subject",
+     "text": "@clipboard"
+    },
+    {
+     "word": "details",
+     "text": ".concise"
+    }
+   ]
+  },
+  "s3-settled": {
+   "marks": [
+    {
+     "word": "owner",
+     "text": "have the agent"
+    },
+    {
+     "word": "action",
+     "text": "fix"
+    },
+    {
+     "word": "subject",
+     "text": "this"
+    }
+   ]
+  },
+  "s3-why": {
+   "marks": [
+    {
+     "word": "owner",
+     "text": "have the agent"
+    },
+    {
+     "word": "action",
+     "text": "fix"
+    },
+    {
+     "word": "subject",
+     "text": "this"
+    }
+   ]
+  },
+  "s4-settled": {
+   "owner": false,
+   "marks": [
+    {
+     "word": "action",
+     "text": "fix"
+    },
+    {
+     "word": "subject",
+     "text": "this"
+    }
+   ]
+  },
+  "s4-tab": {
+   "owner": true,
+   "marks": [
+    {
+     "word": "action",
+     "text": "fix"
+    },
+    {
+     "word": "subject",
+     "text": "this"
+    }
+   ]
+  },
+  "s4-tab-typed-on": {
+   "owner": true,
+   "exact": false,
+   "marks": [
+    {
+     "word": "action",
+     "text": "fix"
+    },
+    {
+     "word": "subject",
+     "text": "this"
+    }
+   ]
+  },
+  "s4-why": {
+   "owner": true,
+   "exact": false,
+   "marks": [
+    {
+     "word": "action",
+     "text": "fix"
+    }
+   ]
+  },
+  "s4-why-back": {
+   "owner": true,
+   "exact": false,
+   "marks": [
+    {
+     "word": "action",
+     "text": "fix"
+    },
+    {
+     "word": "subject",
+     "text": "this"
+    }
+   ]
+  },
+  "s4-let-go": {
+   "owner": false,
+   "exact": false,
+   "marks": [
+    {
+     "word": "action",
+     "text": "fix"
+    },
+    {
+     "word": "subject",
+     "text": "this"
+    }
+   ]
+  },
+  "s2-space": {
+   "marks": [
+    {
+     "word": "action",
+     "text": "summarize"
+    },
+    {
+     "word": "subject",
+     "text": "@clipboard"
+    },
+    {
+     "word": "details",
+     "text": ".concise"
+    }
+   ]
+  },
+  "s2-back": {
+   "marks": [
+    {
+     "word": "action",
+     "text": "summarize"
+    },
+    {
+     "word": "subject",
+     "text": "@clipboard"
+    },
+    {
+     "word": "details",
+     "text": ".concise"
+    }
+   ]
+  }
+ }
+}

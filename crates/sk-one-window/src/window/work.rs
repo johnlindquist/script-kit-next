@@ -235,6 +235,10 @@ impl OneWindow {
 
     /// Enter on a row that needs a service opens the connect view instead of running it.
     pub(super) fn work_run(&mut self, now: Ms, row: &Row, fx: &mut Vec<Effect>) -> bool {
+        if row.key == strip::OWNER_ROW {
+            let task = self.text.trim().to_string();
+            return self.on_work(now, WorkEvent::Agent { task }, fx);
+        }
         let Some(key) = connect::waits_on(row, &self.work.connections).map(str::to_string) else {
             return false;
         };
@@ -842,6 +846,89 @@ mod tests {
                 text: "both".into()
             }]
         );
+    }
+
+    #[test]
+    fn tab_makes_the_agent_the_owner_and_only_enter_starts_it() {
+        use crate::contract::words;
+        let mut win = OneWindow::default();
+        win.handle(0, Event::Text("fix this".into()));
+        let before = win.list().layout();
+        let fx = key(&mut win, 10, Key::Tab);
+        assert!(work_fx(&fx).is_empty(), "⇥ starts nothing");
+        assert!(win.agent_owns());
+        assert!(!win.in_view());
+        assert_eq!(win.list().header(), words::AGENT);
+        assert_eq!(
+            win.list().visible().len(),
+            1,
+            "the one row that hands it over"
+        );
+        let enter = win.enter_target(10);
+        assert_eq!(
+            (enter.id.as_str(), enter.label.as_str()),
+            (strip::OWNER_ROW, words::START_AGENT)
+        );
+        assert!(
+            !win.enter_armed(10),
+            "the user's own key never guards Enter"
+        );
+
+        win.handle(20, Event::Text("fix this now".into()));
+        assert!(win.agent_owns(), "typing on keeps the Owner");
+        assert_eq!(win.enter_target(20).id, strip::OWNER_ROW);
+
+        key(&mut win, 30, Key::Escape);
+        assert!(!win.agent_owns(), "Esc lets go of the Owner first");
+        assert_eq!(win.text(), "fix this now");
+        assert_ne!(win.list().header(), words::AGENT);
+
+        key(&mut win, 40, Key::Tab);
+        key(&mut win, 50, Key::Tab);
+        assert!(!win.agent_owns(), "⇥ again takes it back");
+        win.handle(60, Event::Text("fix this".into()));
+        assert_eq!(win.list().layout(), before);
+
+        key(&mut win, 70, Key::Tab);
+        win.handle(80, Event::Text(String::new()));
+        assert!(!win.agent_owns(), "an empty input has no Owner");
+        let fx = key(&mut win, 90, Key::Tab);
+        assert!(
+            fx.contains(&Effect::PassKey(Key::Tab)),
+            "⇥ on nothing is the host's"
+        );
+
+        win.handle(100, Event::Text("fix this".into()));
+        key(&mut win, 110, Key::Tab);
+        let fx = key(&mut win, 120, Key::Enter);
+        assert!(
+            matches!(work_fx(&fx).as_slice(), [WorkEffect::StartAgent { task, .. }] if task == "fix this")
+        );
+        assert_eq!(
+            win.views().top().map(|f| f.name.as_str()),
+            Some(strip::AGENT_VIEW)
+        );
+        assert!(!win.agent_owns(), "the agent took the sentence");
+    }
+
+    #[test]
+    fn the_owner_stays_while_a_view_reads_the_sentence_and_is_there_after_esc() {
+        let mut win = OneWindow::default();
+        win.handle(0, Event::Text("fix this".into()));
+        key(&mut win, 10, Key::Tab);
+        win.handle(
+            20,
+            Event::View(ViewOp::Open(ViewSpec {
+                name: "reading".into(),
+                label: "How Jev reads it".into(),
+                ..ViewSpec::default()
+            })),
+        );
+        assert!(win.agent_owns());
+        key(&mut win, 30, Key::Escape);
+        assert!(!win.in_view());
+        assert!(win.agent_owns(), "Esc closed the reading, not the Owner");
+        assert_eq!(win.enter_target(30).id, strip::OWNER_ROW);
     }
 
     #[test]

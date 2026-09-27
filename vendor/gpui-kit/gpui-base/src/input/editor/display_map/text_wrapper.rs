@@ -24,6 +24,16 @@ pub enum WrappingIndent {
     Same,
 }
 
+/// One visual row's share of a marked byte range, relative to its line layout's top-left.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct MarkSegment {
+    pub(crate) x0: Pixels,
+    pub(crate) x1: Pixels,
+    pub(crate) top: Pixels,
+    pub(crate) baseline: Pixels,
+    pub(crate) font_size: Pixels,
+}
+
 /// A line with soft wrapped lines info.
 #[derive(Debug, Clone)]
 pub(crate) struct LineItem {
@@ -663,6 +673,38 @@ impl LineLayout {
         }
 
         None
+    }
+
+    /// The part of the local byte `range` each visual line shows, relative to this layout's
+    /// top-left: one segment per wrapped row the range touches.
+    pub(crate) fn mark_segments(
+        &self,
+        range: Range<usize>,
+        last_layout: &LastLayout,
+    ) -> SmallVec<[MarkSegment; 1]> {
+        let line_height = last_layout.line_height;
+        let x_offset = last_layout.alignment_offset(self.longest_width);
+        let mut segments = SmallVec::new();
+        let mut row_start = 0;
+        let mut top = px(0.);
+        for (i, line) in self.wrapped_lines.iter().enumerate() {
+            let row_end = row_start + line.len;
+            let from = range.start.max(row_start);
+            let to = range.end.min(row_end);
+            if from < to {
+                let indent = x_offset + self.line_indent(i);
+                segments.push(MarkSegment {
+                    x0: line.x_for_index(from - row_start) + indent,
+                    x1: line.x_for_index(to - row_start) + indent,
+                    top,
+                    baseline: top + (line_height - line.ascent - line.descent) / 2. + line.ascent,
+                    font_size: line.font_size,
+                });
+            }
+            row_start = row_end;
+            top += line_height;
+        }
+        segments
     }
 
     /// Get the closest index for the given x in this line layout.

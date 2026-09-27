@@ -5,6 +5,9 @@
 #   check-frames.py   per frame: the input never moves, the 34 pt line above it, a 28 pt header leads every
 #                     list, 44 pt rows with no fill, bar or keycaps, the 24 pt yellow tile, zero popups, and
 #                     the ↵ label never returns to an earlier one while the text only grows
+#   check-marks.py    per frame: every word mark the app handed the input is painted as a bar in its
+#                     word's color under exactly its text, the text keeps its own color, and no other
+#                     bar shows; chapters/<name>.marks.json is the spec for what each sentence is marked
 #   stress-report.py  per run: anchor, first row, header, pump, fidelity, rug, layout shift
 # chapters/<name>.args holds extra one-window-frames.ts options (e.g. --fixture prompt.arg);
 # chapters/<name>.expect.json and stress/<name>.expect.json hold what each step showed when its frames were
@@ -63,16 +66,20 @@ capture() { # name steps extra-args-file -> frames in $out/name
     ${extra[@]+"${extra[@]}"} >"$dir/frames-run.log" 2>&1
 }
 for steps in "$here"/chapters/*.json; do
-  case "$steps" in *.expect.json) continue ;; esac
+  case "$steps" in *.expect.json|*.marks.json) continue ;; esac
   name="$(basename "$steps" .json)"
   if [ -n "${CHAPTERS:-}" ] && [[ " $CHAPTERS " != *" $name "* ]]; then continue; fi
   capture "$name" "$steps" "${steps%.json}.args"; fcode=$?
   expect=(); [ -f "${steps%.json}.expect.json" ] && expect=(--expect "${steps%.json}.expect.json")
   python3 "$here/check-frames.py" "$out/$name/frames" --json "$out/$name/check.json" --bless "$out/$name/shown.json" \
     ${expect[@]+"${expect[@]}"} >"$out/$name/check.md" 2>&1; ccode=$?
-  echo "$name capture=$fcode grade=$ccode"
-  { echo "## $name — capture $fcode, grade $ccode"; echo; cat "$out/$name/check.md"; echo; } >>"$out/summary.md"
-  [ "$fcode" = 0 ] && [ "$ccode" = 0 ] || status=1
+  spec=(); [ -f "${steps%.json}.marks.json" ] && spec=(--expect "${steps%.json}.marks.json")
+  python3 "$here/check-marks.py" "$out/$name/frames" --json "$out/$name/marks.json" --evidence "$out/$name/marks" \
+    ${spec[@]+"${spec[@]}"} >"$out/$name/marks.md" 2>&1; mcode=$?
+  echo "$name capture=$fcode grade=$ccode marks=$mcode"
+  { echo "## $name — capture $fcode, grade $ccode, marks $mcode"; echo; cat "$out/$name/check.md"; echo
+    cat "$out/$name/marks.md"; echo; } >>"$out/summary.md"
+  [ "$fcode" = 0 ] && [ "$ccode" = 0 ] && [ "$mcode" = 0 ] || status=1
 done
 for n in ${SUITES-typing fast views}; do
   name="stress-$n"

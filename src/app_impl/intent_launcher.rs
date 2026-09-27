@@ -21,6 +21,14 @@ const WINDOW_STEP_RETRY: Duration = Duration::from_millis(250);
 /// `SCRIPT_KIT_JEV_INTENT=0` keeps Jev from being asked.
 const INTENT_ENV_TOGGLE: &str = "SCRIPT_KIT_JEV_INTENT";
 
+/// Under owned evaluation the app never reaches Jev; it reads against what Jev was recorded
+/// answering instead: the same screens, catalog and answers.
+fn intent_fixture_world() -> Option<Arc<intent_engine::FixtureWorld>> {
+    crate::runtime_policy::is_owned_evaluation()
+        .then(intent_engine::FixtureWorld::get)
+        .flatten()
+}
+
 impl ScriptListApp {
     pub(crate) fn settle_intent_oracle_slot(&mut self) {
         if !matches!(self.intent_launcher.oracle_slot(), OracleSlot::Unloaded) {
@@ -30,8 +38,14 @@ impl ScriptListApp {
             self.intent_launcher
                 .set_oracle_slot(OracleSlot::Off("disabled"));
         } else if !self.main_services.is_production() {
-            self.intent_launcher
-                .set_oracle_slot(OracleSlot::Off("not production"));
+            match intent_fixture_world() {
+                Some(world) => self
+                    .intent_launcher
+                    .set_oracle_slot(OracleSlot::Ready(world)),
+                None => self
+                    .intent_launcher
+                    .set_oracle_slot(OracleSlot::Off("not production")),
+            }
         }
     }
 
@@ -76,7 +90,15 @@ impl ScriptListApp {
     /// Asks Jev to read `text`; the answer goes back to the one-window host as request `id`.
     pub(crate) fn ask_jev(&mut self, id: u64, text: String, screen: u64, cx: &mut Context<Self>) {
         self.settle_intent_oracle_slot();
-        let catalog = self.intent_catalog();
+        let world = if self.main_services.is_production() {
+            None
+        } else {
+            intent_fixture_world()
+        };
+        let catalog = match &world {
+            Some(world) => world.catalog(),
+            None => self.intent_catalog(),
+        };
         let slot = self.intent_launcher.oracle_slot().clone();
         let last_action = self.intent_launcher.last_action().cloned();
         let live_screen = self.main_services.is_production();
@@ -98,6 +120,11 @@ impl ScriptListApp {
                     };
                     let screen = if live_screen {
                         live::live_screen(last_action)
+                    } else if let Some(world) = &world {
+                        intent_engine::ScreenContext {
+                            last_action,
+                            ..world.screen_for(&request)
+                        }
                     } else {
                         intent_engine::ScreenContext {
                             id: "fixture".into(),

@@ -12,6 +12,7 @@ use super::catalog::{Catalog, Command, CommandKind, WindowOp};
 use super::context::{describe, LastAction, LastStep, MenuCommand, ScreenContext};
 use super::jev::{Answer, Answers, Criteria, JevError, Oracle, Probabilities, Question, Questions};
 use super::spans::{span_candidates, split_clauses, tokenize, Span, Word, SPAN_LIMIT};
+use super::words::{read_words, WordRead};
 
 pub const NONE: &str = "none";
 /// Unfinished requests scored 0.07–0.35 in testing; the least sure finished one scored 0.49.
@@ -351,6 +352,8 @@ pub struct Plan {
     pub ready: bool,
     pub alternatives: Vec<Reading>,
     pub slots: Slots,
+    /// The seven words as the top reading fills them.
+    pub words: Vec<WordRead>,
     pub clauses: Vec<Plan>,
     pub timing: Timing,
 }
@@ -819,7 +822,10 @@ pub fn build_questions(
     }
 }
 
-fn choice_answer<'a>(answers: &'a Answers, name: &str) -> Option<(&'a str, &'a Probabilities)> {
+pub(super) fn choice_answer<'a>(
+    answers: &'a Answers,
+    name: &str,
+) -> Option<(&'a str, &'a Probabilities)> {
     match answers.get(name)? {
         Answer::Choice {
             choice,
@@ -830,14 +836,14 @@ fn choice_answer<'a>(answers: &'a Answers, name: &str) -> Option<(&'a str, &'a P
     }
 }
 
-fn picked<'a>(answers: &'a Answers, name: &str) -> Option<&'a str> {
+pub(super) fn picked<'a>(answers: &'a Answers, name: &str) -> Option<&'a str> {
     choice_answer(answers, name)
         .map(|(choice, _)| choice)
         .filter(|choice| *choice != NONE)
 }
 
 /// Only a run of the user's own words; Jev cannot put words in their mouth.
-fn picked_span<'a>(answers: &'a Answers, b: &Built, name: &str) -> Option<&'a str> {
+pub(super) fn picked_span<'a>(answers: &'a Answers, b: &Built, name: &str) -> Option<&'a str> {
     picked(answers, name).filter(|label| b.span_labels.contains(*label))
 }
 
@@ -1120,7 +1126,12 @@ fn named_window_app<'a>(b: &'a Built, answers: &Answers, front: &str) -> Option<
 }
 
 /// "an hour" in "remind me in an hour" keeps its "in", unless the body already has it.
-fn with_time_lead_in(request: &str, b: &Built, when: &str, body: Option<&str>) -> String {
+pub(super) fn with_time_lead_in(
+    request: &str,
+    b: &Built,
+    when: &str,
+    body: Option<&str>,
+) -> String {
     let Some(span) = span_of(b, when).filter(|s| s.from > 0) else {
         return when.to_string();
     };
@@ -1530,6 +1541,7 @@ pub fn compose_plan(
         Pathway::Remember => body.map(|body| with_what_its_about(request, b, body)),
         _ => body.map(str::to_string),
     };
+    let words = read_words(request, ctx, b, answers, &top);
     Plan {
         reading: top,
         request: request.to_string(),
@@ -1545,6 +1557,7 @@ pub fn compose_plan(
             query: slot("query"),
             shortcut: slot("shortcut"),
         },
+        words,
         clauses: Vec::new(),
         timing: Timing::default(),
     }

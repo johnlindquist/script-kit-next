@@ -7,11 +7,13 @@
 pub mod catalog;
 pub mod context;
 pub mod engine;
+pub mod fixture_oracle;
 pub mod jev;
 pub mod launcher;
 pub mod present;
 pub mod script;
 pub mod spans;
+pub mod words;
 
 #[cfg(test)]
 mod replay_tests;
@@ -23,10 +25,12 @@ pub use catalog::{
 };
 pub use context::{FrontApp, LastAction, LastStep, MenuCommand, OpenWindow, ScreenContext};
 pub use engine::{understand, EngineOptions, Pathway, Plan, Reading, Step, COMPLETE_THRESHOLD};
+pub use fixture_oracle::FixtureWorld;
 pub use jev::{JevClient, JevConfig, JevError, Oracle};
 pub use launcher::{readings, IntentLauncher, JevRow, OracleSlot, READINGS};
 pub use present::{plan_subtitle, plan_verb};
 pub use script::{normalize_shortcut, plan_to_script, DraftScript, ScriptOptions};
+pub use words::{WordKind, WordRead, WordSource};
 
 /// Whether a line is worth asking Jev about. Launcher syntax (captures, sigils, filters)
 /// already says exactly what to do.

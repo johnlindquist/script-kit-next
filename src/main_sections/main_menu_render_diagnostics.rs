@@ -14,6 +14,10 @@ pub struct MainMenuRenderDiagnosticsState {
     /// Cache fields for highlighting
     pub last_input_highlight_text: String,
     pub last_input_highlight_ranges: Vec<(std::ops::Range<usize>, gpui::Hsla, String)>,
+    /// Word marks the launcher's grammars resolved for `last_input_highlight_text`.
+    pub last_input_exact_marks: Vec<sk_one_window::marks::Mark>,
+    /// The word marks the input draws, with their word's color and name.
+    pub last_input_mark_ranges: Vec<(std::ops::Range<usize>, gpui::Hsla, String)>,
 }
 
 impl Default for MainMenuRenderDiagnosticsState {
@@ -26,6 +30,8 @@ impl Default for MainMenuRenderDiagnosticsState {
             filter_perf_start: None,
             last_input_highlight_text: String::new(),
             last_input_highlight_ranges: Vec::new(),
+            last_input_exact_marks: Vec::new(),
+            last_input_mark_ranges: Vec::new(),
         }
     }
 }

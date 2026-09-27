@@ -16,7 +16,6 @@ impl ScriptListApp {
         if !matches!(self.current_view, AppView::ScriptList)
             || self.main_menu_committed_query_stamp() != self.root_search.computed_query_stamp()
             || self.spine_empty_subsearch_selection_suppressed()
-            || self.menu_syntax_capture_form_owns_input()
         {
             return None;
         }

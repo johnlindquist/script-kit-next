@@ -741,26 +741,15 @@ impl ScriptListApp {
                 self.menu_syntax_trigger_picker_suppressed_filter = None;
             }
 
-            let capture_composer_owns_input =
-                self.menu_syntax_capture_form_owns_input_for(&new_text);
-            let capture_form_field_owns_input =
-                self.menu_syntax_form_input_active && capture_composer_owns_input;
-            if capture_form_field_owns_input {
-                self.menu_syntax_object_selector_state = Default::default();
-                self.menu_syntax_trigger_picker_state = Default::default();
-            } else {
-                self.run_menu_syntax_object_selector_state_machine(&new_text, window, cx);
-            }
-            let object_selector_owns_input = !capture_form_field_owns_input
-                && self.menu_syntax_object_selector_state.snapshot.is_some();
+            self.run_menu_syntax_object_selector_state_machine(&new_text, window, cx);
+            let object_selector_owns_input =
+                self.menu_syntax_object_selector_state.snapshot.is_some();
 
             let picker_ctx = self.menu_syntax_trigger_picker_context(&new_text);
             let transition = if popup_suppressed_for_this_text {
                 // User just accepted; picker should stay closed for this
                 // exact filter. Represent that as NoChange so the rest of
                 // the block runs uniformly.
-                crate::menu_syntax_trigger_picker::TriggerPickerTransition::NoChange
-            } else if capture_form_field_owns_input {
                 crate::menu_syntax_trigger_picker::TriggerPickerTransition::NoChange
             } else if object_selector_owns_input {
                 if self.menu_syntax_trigger_picker_state.snapshot.is_some() {
@@ -857,11 +846,13 @@ impl ScriptListApp {
             } else if matches!(
                 &transition,
                 crate::menu_syntax_trigger_picker::TriggerPickerTransition::Close
-            ) || capture_composer_owns_input
+            ) || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(&new_text)
                 || crate::menu_syntax::active_filter_head_owns_main_list(&new_text)
             {
-                // Popup just closed or the capture composer now owns the
-                // input — rebuild the main list with the ownership gate.
+                // Popup just closed or a typed capture now owns the input —
+                // rebuild the main list with the ownership gate.
                 self.invalidate_grouped_cache();
             }
         }

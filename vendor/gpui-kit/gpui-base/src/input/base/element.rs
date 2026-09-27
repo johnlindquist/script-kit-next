@@ -17,7 +17,11 @@ use std::{ops::Range, rc::Rc};
 
 use crate::{
     Scrollbar,
-    input::{RopeExt as _, blink_cursor::CURSOR_WIDTH, display_map::LineLayout},
+    input::{
+        RopeExt as _,
+        blink_cursor::CURSOR_WIDTH,
+        display_map::{LineLayout, MarkSegment},
+    },
 };
 
 use super::{
@@ -2383,15 +2387,17 @@ impl<M: InputModeKind> Element for TextElement<M> {
         let mut offset_y = invisible_top_padding;
         let ghost_lines = &prepaint.ghost_lines;
         let has_ghost_lines = !ghost_lines.is_empty();
+        let marks = self.state.read(cx).script_kit_paint_marks();
 
         // Track the y-position of the cursor row for positioning the first line suffix
         let mut cursor_row_y = None;
 
-        for (line, &buffer_line) in prepaint
+        for (line_index, (line, &buffer_line)) in prepaint
             .last_layout
             .lines
             .iter()
             .zip(prepaint.last_layout.visible_buffer_lines.iter())
+            .enumerate()
         {
             let row = buffer_line;
             let line_y = origin.y + offset_y;
@@ -2414,6 +2420,34 @@ impl<M: InputModeKind> Element for TextElement<M> {
                 window,
                 cx,
             );
+
+            if !marks.is_empty() {
+                let line_start = prepaint.last_layout.visible_line_byte_offsets[line_index];
+                let line_end = line_start + line.len();
+                let line_origin = point(
+                    origin.x + prepaint.last_layout.line_number_width,
+                    line_y,
+                );
+                for (range, color) in marks.iter() {
+                    if range.end <= line_start || range.start >= line_end {
+                        continue;
+                    }
+                    let local = range.start.saturating_sub(line_start)
+                        ..range.end.min(line_end) - line_start;
+                    let color = if disabled { color.opacity(0.5) } else { *color };
+                    for segment in line.mark_segments(local, &prepaint.last_layout) {
+                        let bar = word_mark_bar(&segment);
+                        window.paint_quad(
+                            fill(
+                                Bounds::new(line_origin + bar.origin, bar.size),
+                                color,
+                            )
+                            .corner_radii(bar.size.height / 2.),
+                        );
+                    }
+                }
+            }
+
             offset_y += line.size(line_height).height;
 
             if Some(row) == prepaint.current_row {
@@ -2574,6 +2608,18 @@ impl<M: InputModeKind> Element for TextElement<M> {
 
         self.paint_mouse_listeners(&prepaint.hitbox, window, cx);
     }
+}
+
+/// A word mark's bar for one visual row, relative to its line's top-left: a solid bar under
+/// the glyphs that clears descenders, as thick and as low as the S04 marks for the font size.
+pub(super) fn word_mark_bar(segment: &MarkSegment) -> Bounds<Pixels> {
+    let font_size = f32::from(segment.font_size);
+    let thickness = (font_size * 0.11).round().max(2.);
+    let top = segment.baseline + px((font_size * 0.30).round());
+    Bounds::new(
+        point(segment.x0, top),
+        size((segment.x1 - segment.x0).max(px(0.)), px(thickness)),
+    )
 }
 
 /// Split placeholder text into display lines and trim runs to each line.
@@ -2813,6 +2859,26 @@ fn split_runs_by_bg_segments(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_word_mark_bar_sits_under_the_descenders_at_the_s04_thickness() {
+        let at = |font_size: f32, baseline: f32| {
+            word_mark_bar(&MarkSegment {
+                x0: px(12.),
+                x1: px(60.),
+                top: px(0.),
+                baseline: px(baseline),
+                font_size: px(font_size),
+            })
+        };
+        let launcher = at(20., 20.);
+        assert_eq!(launcher.origin, point(px(12.), px(26.)));
+        assert_eq!(launcher.size, size(px(48.), px(2.)));
+        let prototype = at(25., 24.);
+        assert_eq!(prototype.origin.y, px(32.));
+        assert_eq!(prototype.size.height, px(3.));
+        assert_eq!(at(12., 10.).size.height, px(2.), "never thinner than 2px");
+    }
 
     #[test]
     fn test_plain_text_decorations_include_unstyled_gaps() {

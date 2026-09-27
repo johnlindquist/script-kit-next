@@ -1,0 +1,156 @@
+{
+  "steps": {
+    "ac-at": {
+      "marks": []
+    },
+    "ac-at-cl": {
+      "marks": []
+    },
+    "ac-at-cl-tab": {
+      "marks": [
+        {
+          "word": "subject",
+          "text": "@clipboard"
+        }
+      ]
+    },
+    "ac-slash": {
+      "marks": []
+    },
+    "ac-slash-re": {
+      "marks": [
+        {
+          "word": "action",
+          "text": "/re"
+        }
+      ]
+    },
+    "ac-dot": {
+      "marks": []
+    },
+    "ac-dot-co": {
+      "marks": [
+        {
+          "word": "details",
+          "text": ".co"
+        }
+      ]
+    },
+    "ac-project": {
+      "marks": []
+    },
+    "ac-profile": {
+      "marks": []
+    },
+    "ac-capture": {
+      "marks": []
+    },
+    "ac-capture-to": {
+      "marks": [
+        {
+          "word": "target",
+          "text": ";to"
+        }
+      ]
+    },
+    "ac-capture-unknown": {
+      "marks": []
+    },
+    "ac-todo-semicolon": {
+      "marks": [
+        {
+          "word": "target",
+          "text": "todo;"
+        }
+      ]
+    },
+    "sym-subject-owner-details": {
+      "marks": [
+        {
+          "word": "subject",
+          "text": "@clipboard"
+        },
+        {
+          "word": "owner",
+          "text": "|creative"
+        },
+        {
+          "word": "details",
+          "text": ".concise"
+        },
+        {
+          "word": "details",
+          "text": "due:friday"
+        }
+      ]
+    },
+    "sym-selection-dev": {
+      "marks": [
+        {
+          "word": "action",
+          "text": "summarize"
+        },
+        {
+          "word": "subject",
+          "text": "@selection"
+        },
+        {
+          "word": "target",
+          "text": ">:dev"
+        }
+      ]
+    },
+    "sym-rewrite": {
+      "marks": [
+        {
+          "word": "action",
+          "text": "/rewrite"
+        },
+        {
+          "word": "subject",
+          "text": "@selection"
+        },
+        {
+          "word": "details",
+          "text": ".professional"
+        }
+      ]
+    },
+    "sym-todo-due": {
+      "exact": false,
+      "marks": [
+        {
+          "word": "target",
+          "text": "todo;"
+        },
+        {
+          "word": "details",
+          "text": "due:friday"
+        }
+      ]
+    },
+    "sym-capture-prefix": {
+      "exact": false,
+      "marks": [
+        {
+          "word": "target",
+          "text": ";todo"
+        }
+      ]
+    },
+    "sym-file": {
+      "marks": [
+        {
+          "word": "subject",
+          "text": "@file:readme.md"
+        }
+      ]
+    },
+    "sym-plain": {
+      "marks": []
+    },
+    "sym-not-capture": {
+      "marks": []
+    }
+  }
+}

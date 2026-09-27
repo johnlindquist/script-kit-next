@@ -2,11 +2,23 @@
 //! along never changes the list, Esc parks an agent's view into the strip, and ⌘J opens whatever
 //! needs you first, then the newest task.
 
+use crate::contract::words;
 use crate::enter::EnterTarget;
+use crate::row::Row;
 use crate::window::ViewSpec;
 
 pub const AGENT_VIEW: &str = "agent";
 pub const AGENT_LABEL: &str = "Agent";
+/// The one row the list shows once ⇥ made the agent the Owner; Enter starts the agent.
+pub const OWNER_ROW: &str = "owner:agent";
+
+pub fn owner_row(sentence: &str) -> Row {
+    Row::new(OWNER_ROW, words::HAND_TO_AGENT)
+        .with_sub(format!("{AGENT_LABEL} · {}", sentence.trim()))
+        .with_icon("delegate")
+        .with_head(words::AGENT)
+        .with_enter_label(words::START_AGENT)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskState {

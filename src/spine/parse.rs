@@ -105,6 +105,23 @@ pub fn project_cursor(parse: &SpineParse, cursor_byte: usize) -> SpineCursorProj
 
     let has_prompt_segments = parse.segments.iter().any(is_prompt_builder_segment);
 
+    // A space typed after a one-word token finishes it: the caret starts the
+    // next free words, so the token's picker lets go of the list.
+    if let Some(last) = parse.segments.last() {
+        let after = parse.input.get(last.byte_range.end..cursor_byte);
+        if is_prompt_builder_segment(last)
+            && after.is_some_and(|gap| !gap.is_empty() && gap.chars().all(char::is_whitespace))
+        {
+            return SpineCursorProjection {
+                active_segment_index: parse.segments.len(),
+                active_segment_kind: SpineSegmentKind::FreeText,
+                active_query: String::new(),
+                is_tail: true,
+                has_prompt_segments,
+            };
+        }
+    }
+
     // Find the segment containing the cursor. If cursor is at a boundary,
     // it belongs to the segment whose range includes it (left-biased for
     // range end, since ranges are half-open).
@@ -428,6 +445,36 @@ mod tests {
             );
             assert_eq!(parse.segments[0].raw, input);
         }
+    }
+
+    #[test]
+    fn a_space_after_a_one_word_token_starts_free_words() {
+        for input in [
+            "summarize this @clipboard .concise ",
+            "/rewrite ",
+            "@clipboard ",
+            "|creative ",
+        ] {
+            let parse = parse_spine(input);
+            let projection = project_cursor(&parse, input.len());
+            assert!(
+                matches!(projection.active_segment_kind, SpineSegmentKind::FreeText),
+                "{input:?}"
+            );
+            assert!(projection.is_tail, "{input:?}");
+            assert_eq!(projection.active_query, "", "{input:?}");
+            let trimmed = input.trim_end();
+            let inside = project_cursor(&parse, trimmed.len());
+            assert!(
+                !matches!(inside.active_segment_kind, SpineSegmentKind::FreeText),
+                "{input:?}: the caret on the token still picks it"
+            );
+        }
+        let capture = parse_spine(";todo buy milk ");
+        assert!(matches!(
+            project_cursor(&capture, capture.input.len()).active_segment_kind,
+            SpineSegmentKind::Capture { .. }
+        ));
     }
 
     #[test]

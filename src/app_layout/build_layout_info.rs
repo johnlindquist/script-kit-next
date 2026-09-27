@@ -1970,15 +1970,10 @@ impl ScriptListApp {
             prompt_type: prompt_type.to_string(),
             components,
             fidelity: None,
-            handler_form: self.build_handler_form_layout_info(
-                content_top,
-                content_height,
-                window_width,
-            ),
+            handler_form: None,
             timestamp: chrono::Utc::now().to_rfc3339(),
         }
     }
 }
 
-include!("build_layout_info_handler_form.rs");
 include!("build_layout_info_arg.rs");

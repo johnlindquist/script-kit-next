@@ -18,6 +18,8 @@ struct ViewRow {
     description: Option<String>,
     icon: &'static str,
     selected: bool,
+    /// A word of the reading under →: its chip and where it came from.
+    word: Option<super::super::reading::WordRow>,
 }
 
 fn field_icon(name: SlotName) -> &'static str {
@@ -50,6 +52,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 }),
                 icon: field_icon(f.name),
                 selected: form.caret == Some(i),
+                word: None,
             })
             .collect(),
         HostedView::Answer(answer) => match &answer.shape {
@@ -59,6 +62,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 description: Some(answer.question.clone()),
                 icon: "search",
                 selected: true,
+                word: None,
             }],
             Some(Shape::Number { value, from }) => vec![ViewRow {
                 id: "answer:number".into(),
@@ -66,6 +70,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 description: Some(format!("{} · {}", answer.question, from.words())),
                 icon: "code",
                 selected: true,
+                word: None,
             }],
             Some(Shape::List { items }) => items
                 .iter()
@@ -76,6 +81,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                     description: Some(format!("{} · {}", f.detail, f.from.words())),
                     icon: "check",
                     selected: i == 0,
+                    word: None,
                 })
                 .collect(),
             Some(Shape::Card { title, facts }) => std::iter::once(ViewRow {
@@ -86,6 +92,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                     .map(|f| format!("{} · {}", f.detail, f.from.words())),
                 icon: "clipboard",
                 selected: true,
+                word: None,
             })
             .chain(facts.iter().skip(1).enumerate().map(|(i, f)| ViewRow {
                 id: format!("answer:fact:{i}"),
@@ -93,6 +100,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 description: Some(format!("{} · {}", f.detail, f.from.words())),
                 icon: "check",
                 selected: false,
+                word: None,
             }))
             .collect(),
             Some(Shape::Nothing) => vec![ViewRow {
@@ -101,6 +109,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 description: Some(answer.question.clone()),
                 icon: "search",
                 selected: true,
+                word: None,
             }],
         },
         HostedView::Note(note) => note
@@ -112,6 +121,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 title: row.title,
                 description: row.description,
                 selected: row.selected,
+                word: None,
             })
             .collect(),
         HostedView::Notes(list) if list.found.is_empty() => vec![ViewRow {
@@ -120,6 +130,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
             description: Some("Type part of a note's name".into()),
             icon: "search",
             selected: true,
+            word: None,
         }],
         HostedView::Notes(list) => list
             .found
@@ -131,9 +142,62 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 description: Some(found.sub.clone()),
                 icon: "file",
                 selected: list.sel == i,
+                word: None,
+            })
+            .collect(),
+        HostedView::Reading(reading) => reading
+            .rows
+            .iter()
+            .map(|row| ViewRow {
+                id: format!("word:{}", row.kind.label().to_lowercase()),
+                title: row.value.clone(),
+                description: (!row.sub.is_empty()).then(|| row.sub.clone()),
+                icon: "",
+                selected: false,
+                word: Some(row.clone()),
             })
             .collect(),
     }
+}
+
+/// A word's chip: its dot and name in its color, one width for all seven so values line up.
+fn word_chip(row: &super::super::reading::WordRow) -> AnyElement {
+    let color = super::super::reading::word_color(row.kind);
+    div()
+        .w(px(78.))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(6.))
+        .child(div().size(px(7.)).rounded_full().bg(gpui::rgb(color)))
+        .child(
+            div()
+                .text_size(px(12.))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(gpui::rgb(color))
+                .child(row.kind.label()),
+        )
+        .into_any_element()
+}
+
+/// Where a word came from: "typed" in its color, "Jev 93%", "on screen" or "your words".
+fn word_meta(row: &super::super::reading::WordRow, muted: u32) -> Option<AnyElement> {
+    if row.meta.is_empty() {
+        return None;
+    }
+    let color = super::super::reading::word_color(row.kind);
+    let meta = div().text_size(px(11.)).child(row.meta.clone());
+    Some(if row.typed {
+        meta.px(px(6.))
+            .py(px(1.))
+            .rounded(px(5.))
+            .border_1()
+            .border_color(gpui::rgba((color << 8) | 0x80))
+            .text_color(gpui::rgb(color))
+            .into_any_element()
+    } else {
+        meta.text_color(gpui::rgb(muted)).into_any_element()
+    })
 }
 
 impl ScriptListApp {
@@ -172,21 +236,27 @@ impl ScriptListApp {
             .pb(crate::main_list_footer_overlay_total_padding());
         for (ix, row) in rows.into_iter().enumerate() {
             let selector = format!("list-row:{}", row.id);
-            let icon =
-                IconKind::from_icon_hint(row.icon).unwrap_or_else(|| IconKind::Svg("check".into()));
+            let item = ListItem::new(row.title, colors)
+                .index(ix)
+                .selected(row.selected)
+                .main_menu_theme(theme)
+                .semantic_id_opt(Some(row.id))
+                .description_opt(row.description);
+            let item = match &row.word {
+                Some(word) => item
+                    .leading_accessory(word_chip(word))
+                    .trailing_accessory_opt(word_meta(word, self.theme.colors.text.muted))
+                    .disabled(word.dim),
+                None => item.icon_kind(
+                    IconKind::from_icon_hint(row.icon)
+                        .unwrap_or_else(|| IconKind::Svg("check".into())),
+                ),
+            };
             list = list.child(
                 div()
                     .flex_none()
                     .debug_selector(move || selector.clone())
-                    .child(
-                        ListItem::new(row.title, colors)
-                            .index(ix)
-                            .selected(row.selected)
-                            .main_menu_theme(theme)
-                            .semantic_id_opt(Some(row.id))
-                            .description_opt(row.description)
-                            .icon_kind(icon),
-                    ),
+                    .child(item),
             );
         }
         Some(
@@ -245,6 +315,7 @@ impl ScriptListApp {
                     description: row.sub.clone(),
                     icon: staged_icon(row.icon.as_deref()),
                     selected: pos == list.sel,
+                    word: None,
                 })
             })
             .collect();

@@ -402,55 +402,15 @@ impl ScriptListApp {
             return Ok(MainMenuDispatchResult::Dispatched);
         }
 
-        if let Some(invocation) = self
-            .menu_syntax_mode
-            .capture_for(&self.filter_text)
-            .cloned()
-        {
-            let value = self.filter_text.clone();
-            self.record_submit_diagnostic(
-                "launcher",
-                "execute_selected.menu_syntax_capture",
-                None,
-                Some(value.as_str()),
-                false,
-            );
-            let mut ranked_handlers =
-                crate::menu_syntax::rank_handlers_for_target(&self.scripts, &invocation);
-            if let Some(handler) = ranked_handlers.first() {
-                if crate::menu_syntax::ranked_handler_is_user_authored(handler) {
-                    self.execute_menu_syntax_capture_script(handler.script.clone(), invocation, cx);
-                    return Ok(MainMenuDispatchResult::Dispatched);
-                }
-            }
-            match self.try_execute_app_owned_menu_syntax_capture(&invocation, cx) {
-                AppOwnedCaptureOutcome::Handled => return Ok(MainMenuDispatchResult::Dispatched),
-                AppOwnedCaptureOutcome::Invalid => anyhow::bail!("main_menu_capture_invalid"),
-                AppOwnedCaptureOutcome::NotOwned => {}
-            }
-            if let Some(handler) = ranked_handlers.drain(..).next() {
-                self.execute_menu_syntax_capture_script(handler.script, invocation, cx);
-            } else {
-                self.one_window_notice(
-                    crate::line_notice::FAILED,
-                    format!("No capture handler for +{}", invocation.target),
-                    cx,
-                );
-                anyhow::bail!("main_menu_capture_handler_missing");
-            }
-            return Ok(MainMenuDispatchResult::Dispatched);
+        if self.one_window_owns_list() {
+            return self.one_window_enter(cx);
         }
 
         if self
             .menu_syntax_mode
             .capture_composer_owns_input_for(&self.filter_text)
         {
-            self.one_window_notice(
-                crate::line_notice::INFO,
-                "Type something to capture".to_string(),
-                cx,
-            );
-            anyhow::bail!("main_menu_capture_input_missing");
+            return self.submit_typed_capture(cx);
         }
 
         if self
@@ -465,10 +425,58 @@ impl ScriptListApp {
             anyhow::bail!("main_menu_command_input_missing");
         }
 
-        if self.one_window_owns_list() {
-            return self.one_window_enter(cx);
-        }
         self.run_selected_row(observation, cx)
+    }
+
+    /// Saves the capture typed into the input (`todo; buy milk`) through its handler.
+    pub(crate) fn submit_typed_capture(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<MainMenuDispatchResult> {
+        let Some(invocation) = self
+            .menu_syntax_mode
+            .capture_for(&self.filter_text)
+            .cloned()
+        else {
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                "Type something to capture".to_string(),
+                cx,
+            );
+            anyhow::bail!("main_menu_capture_input_missing");
+        };
+        let value = self.filter_text.clone();
+        self.record_submit_diagnostic(
+            "launcher",
+            "execute_selected.menu_syntax_capture",
+            None,
+            Some(value.as_str()),
+            false,
+        );
+        let mut ranked_handlers =
+            crate::menu_syntax::rank_handlers_for_target(&self.scripts, &invocation);
+        if let Some(handler) = ranked_handlers.first() {
+            if crate::menu_syntax::ranked_handler_is_user_authored(handler) {
+                self.execute_menu_syntax_capture_script(handler.script.clone(), invocation, cx);
+                return Ok(MainMenuDispatchResult::Dispatched);
+            }
+        }
+        match self.try_execute_app_owned_menu_syntax_capture(&invocation, cx) {
+            AppOwnedCaptureOutcome::Handled => return Ok(MainMenuDispatchResult::Dispatched),
+            AppOwnedCaptureOutcome::Invalid => anyhow::bail!("main_menu_capture_invalid"),
+            AppOwnedCaptureOutcome::NotOwned => {}
+        }
+        if let Some(handler) = ranked_handlers.drain(..).next() {
+            self.execute_menu_syntax_capture_script(handler.script, invocation, cx);
+        } else {
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                format!("No capture handler for +{}", invocation.target),
+                cx,
+            );
+            anyhow::bail!("main_menu_capture_handler_missing");
+        }
+        Ok(MainMenuDispatchResult::Dispatched)
     }
 
     /// Runs the highlighted row.

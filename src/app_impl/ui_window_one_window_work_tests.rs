@@ -27,6 +27,36 @@ fn still_the_launcher(app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppC
     app.update(cx, |app, _| matches!(app.current_view, AppView::ScriptList))
 }
 
+/// Presses a key the way the physical key reaches the launcher: the test window's root is not
+/// the launcher, so a window keystroke reaches no key handler, and simulateKey takes the same
+/// routes the key interceptors do.
+fn simulate_key(
+    cx: &mut gpui::TestAppContext,
+    window: gpui::AnyWindowHandle,
+    app: &gpui::Entity<ScriptListApp>,
+    key: &str,
+) -> bool {
+    cx.update(|cx| {
+        window
+            .update(cx, |_, window, cx| {
+                app.update(cx, |app, cx| {
+                    app.dispatch_simulate_key(
+                        window,
+                        cx,
+                        crate::simulate_key_dispatch::SimulatedKeyInput {
+                            key,
+                            modifiers: &[],
+                            target: None,
+                        },
+                    )
+                })
+            })
+            .expect("press a key in the test launcher")
+            .status
+            == crate::action_helpers::ActionOutcomeStatus::Success
+    })
+}
+
 #[test]
 fn cmd_enter_with_nothing_typed_asks_the_model_under_the_same_input() {
     let (opened, asked, replied, back) = in_launcher("model_chat_in_place", 0, |cx| {
@@ -177,18 +207,34 @@ fn several_jobs_become_steps_that_connect_calendar_in_place_and_carry_on() {
 }
 
 #[test]
-fn tab_hands_the_words_to_an_agent_and_esc_parks_it_in_the_strip() {
-    let (opened, parked, list_kept, reopened, one_window) = in_launcher("agent_strip", 0, |cx| {
+fn tab_makes_the_agent_the_owner_enter_starts_it_and_esc_parks_it_in_the_strip() {
+    let (owner, opened, parked, list_kept, reopened, one_window) = in_launcher("agent_strip", 0, |cx| {
         let (app, window) = launcher(cx, Jev::Off);
         let before = windows(cx);
         type_into_launcher(cx, window, &app, "fix SK-431");
         wait(cx, 20);
-        let (taken, _) = app.update(cx, |app, cx| {
-            let handled = app.one_window_key(Key::Tab, cx);
-            (handled.taken(), ())
+        let form_takes_tab = cx.update(|cx| {
+            window
+                .update(cx, |_, window, cx| {
+                    app.update(cx, |app, cx| {
+                        app.handle_menu_syntax_form_key_input(
+                            "tab",
+                            Some("\t"),
+                            &gpui::Modifiers::default(),
+                            window,
+                            cx,
+                        )
+                    })
+                })
+                .expect("offer Tab to the capture form")
         });
+        let taken = simulate_key(cx, window, &app, "tab");
         wait(cx, 20);
-        let opened = (taken, top_view(&app, cx));
+        let owns = app.update(cx, |app, _| app.one_window.agent_owns());
+        let owner = (!form_takes_tab && taken, owns, top_view(&app, cx), enter_label(&app, cx));
+        key(&app, cx, Key::Enter);
+        wait(cx, 20);
+        let opened = top_view(&app, cx);
         key(&app, cx, Key::Escape);
         wait(cx, 20);
         let parked = app.update(cx, |app, _| {
@@ -214,9 +260,14 @@ fn tab_hands_the_words_to_an_agent_and_esc_parks_it_in_the_strip() {
         key(&app, cx, Key::CmdJ);
         wait(cx, 20);
         let reopened = (top_view(&app, cx), enter_label(&app, cx));
-        (opened, parked, list_kept, reopened, windows(cx) == before)
+        (owner, opened, parked, list_kept, reopened, windows(cx) == before)
     });
-    assert_eq!(opened, (true, Some("agent".into())));
+    assert_eq!(
+        owner,
+        (true, true, None, sk_one_window::contract::words::START_AGENT.to_string()),
+        "no capture form takes ⇥, which makes the agent the Owner and starts nothing; ↵ says it will start it"
+    );
+    assert_eq!(opened, Some("agent".into()), "↵ starts the agent in place");
     let (in_view, input, tasks) = parked;
     assert!(!in_view);
     assert_eq!(input, "", "the input is free again");
@@ -236,4 +287,68 @@ fn tab_hands_the_words_to_an_agent_and_esc_parks_it_in_the_strip() {
         "it finished while parked and waits for you"
     );
     assert!(one_window, "no window opened");
+}
+
+#[test]
+fn esc_leaves_a_view_opened_over_a_symbol_picker_with_every_typed_word() {
+    let seen = in_launcher("view_over_picker", 0, |cx| {
+        let (app, window) = launcher(cx, Jev::Off);
+        let mut seen = Vec::new();
+        for typed in ["summarize this @clipboard", ";"] {
+            type_into_launcher(cx, window, &app, "summarize this");
+            wait(cx, 20);
+            type_into_launcher(cx, window, &app, typed);
+            wait(cx, 20);
+            let picker_owns = app.update(cx, |app, _| !app.one_window_owns_list());
+            app.update(cx, |app, cx| {
+                app.one_window_open_clipboard_answer("what did I copy".into(), cx)
+            });
+            wait(cx, 20);
+            let opened = top_view(&app, cx);
+            let escaped = simulate_key(cx, window, &app, "escape");
+            wait(cx, 20);
+            let input = app.update(cx, |app, _| app.filter_text.clone());
+            seen.push((typed, picker_owns, opened, escaped, top_view(&app, cx), input));
+        }
+        seen
+    });
+    for (typed, picker_owns, opened, escaped, after, input) in seen {
+        assert!(picker_owns, "{typed:?}: a symbol picker owns the list");
+        assert!(opened.is_some(), "{typed:?}: the answer opens as a view");
+        assert!(escaped, "{typed:?}: Esc is handled");
+        assert_eq!(after, None, "{typed:?}: Esc leaves the view, not the picker under it");
+        assert_eq!(input, typed, "{typed:?}: every typed word is still in the input");
+    }
+}
+
+#[test]
+fn a_typed_capture_is_a_row_under_the_capture_header() {
+    let seen = in_launcher("typed_capture", 0, |cx| {
+        let (app, window) = launcher(cx, Jev::Off);
+        ["todo;", "todo; buy milk due:friday", ";todo buy milk"].map(|typed| {
+            type_into_launcher(cx, window, &app, typed);
+            wait(cx, 20);
+            let (owns, header, first) = app.update(cx, |app, _| {
+                let list = app.one_window.list();
+                let first = list
+                    .visible()
+                    .first()
+                    .and_then(|item| list.row(item))
+                    .map(|row| row.title.clone());
+                (app.one_window_owns_list(), list.header(), first)
+            });
+            (typed, owns, header, first, enter_label(&app, cx))
+        })
+    });
+    let want = [
+        ("Add todo: …", "Type what to write down"),
+        ("Add todo: buy milk (friday)", "Add todo"),
+        ("Add todo: buy milk", "Add todo"),
+    ];
+    for ((typed, owns, header, first, enter), (title, label)) in seen.into_iter().zip(want) {
+        assert!(owns, "{typed:?}: the one-window list owns a typed capture");
+        assert_eq!(header, "Capture", "{typed:?}: the `;` picker's header stays");
+        assert_eq!(first.as_deref(), Some(title), "{typed:?}: the capture leads");
+        assert_eq!(enter, label, "{typed:?}: ↵ says what it does");
+    }
 }

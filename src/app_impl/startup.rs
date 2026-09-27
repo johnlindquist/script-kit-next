@@ -322,19 +322,9 @@ impl ScriptListApp {
         // event stream (gpui-kit's `InputEvent` is matched exhaustively by
         // gpui-ai, so extensions cannot live there).
         let gpui_input_ext_subscription = cx.subscribe_in(&gpui_input_state, window, {
-            move |this, _, event: &gpui_component::input::ScriptKitInputEvent, window, cx| {
+            move |this, _, event: &gpui_component::input::ScriptKitInputEvent, _window, cx| {
                 match event {
-                    gpui_component::input::ScriptKitInputEvent::PressTab { secondary } => {
-                        if matches!(this.current_view, AppView::ScriptList)
-                            && this.menu_syntax_capture_form_owns_input()
-                        {
-                            if *secondary {
-                                this.focus_previous_menu_syntax_form_field(window, cx);
-                            } else {
-                                this.focus_next_menu_syntax_form_field(window, cx);
-                            }
-                        }
-                    }
+                    gpui_component::input::ScriptKitInputEvent::PressTab { .. } => {}
                     gpui_component::input::ScriptKitInputEvent::SelectionChange => {
                         this.note_main_input_changed(cx)
                     }
@@ -1094,6 +1084,11 @@ impl ScriptListApp {
                                 }
                             }
 
+                            if !has_shift && this.try_complete_spine_segment_with_tab(window, cx) {
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             if matches!(this.current_view, AppView::ScriptList)
                                 && this.handle_menu_syntax_form_key_input(
                                     key,
@@ -1103,16 +1098,6 @@ impl ScriptListApp {
                                     cx,
                                 )
                             {
-                                cx.stop_propagation();
-                                return;
-                            }
-
-                            if this.menu_syntax_capture_form_owns_input() {
-                                if has_shift {
-                                    this.focus_previous_menu_syntax_form_field(window, cx);
-                                } else {
-                                    this.focus_next_menu_syntax_form_field(window, cx);
-                                }
                                 cx.stop_propagation();
                                 return;
                             }
@@ -1180,8 +1165,8 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Tab with words typed hands them to an agent that works in the
-                            // strip above the capsules; in a one-window view the view gets it.
+                            // Tab with words typed makes the agent their Owner (Enter starts
+                            // it); in a one-window view the view gets it.
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !has_shift
                                 && !this.show_actions_popup

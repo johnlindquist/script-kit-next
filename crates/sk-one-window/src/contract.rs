@@ -116,6 +116,13 @@ pub mod words {
     pub const STAGED: &str = "Say what to do with it, or pick one";
     pub const SHARE_HOW: &str = "Share it how?";
 
+    /// ⇥ made the agent the Owner: the header over the one row that hands it the sentence.
+    pub const AGENT: &str = "Agent";
+    pub const HAND_TO_AGENT: &str = "Hand it to an agent";
+    pub const START_AGENT: &str = "Start the agent";
+    /// The Owner ⇥ sets, as the input's pill and the reading name it.
+    pub const OWNER_AGENT: &str = "agent";
+
     pub const ENTER_WAITING: &str = "Runs when Jev is sure…";
     pub const ENTER_JEV_FIRST: &str = "Runs what Jev understands";
     pub const ENTER_WAIT: &str = "Wait for Jev, then run it";
@@ -148,6 +155,12 @@ pub const UNDOABLE_ICONS: &[&str] = &[
     "change",
 ];
 
+/// The capture targets the launcher knows by name (`todo;`, `;note …`). Scripts can register more,
+/// which only the launcher's grammar knows.
+pub const CAPTURE_TARGETS: &[&str] = &[
+    "todo", "note", "link", "snippet", "cal", "social", "reminder", "snooze", "defer", "notes",
+];
+
 /// The one TypeScript file every saved run lands in.
 pub const SAVED_SCRIPT_FILE: &str = "~/.scriptkit/plugins/main/scripts/saved.ts";
 pub const SAVED_SCRIPT_FILE_NAME: &str = "saved.ts";
@@ -163,6 +176,9 @@ pub mod marks {
     pub const TARGET: u32 = 0x6F_DC_9B;
     pub const DETAILS: u32 = 0x8F_B8_FF;
     pub const OWNER: u32 = 0xC9_A7_FF;
+    /// The reading's chips for the two words nobody types.
+    pub const CONTEXT: u32 = 0x9A_A0_AD;
+    pub const FOCUSED: u32 = 0xFF_9E_CB;
 }
 
 /// Rounds a prototype length to the app's scale.

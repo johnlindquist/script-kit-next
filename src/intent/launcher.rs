@@ -83,6 +83,8 @@ pub struct IntentLauncher {
     catalog: Option<(u64, Arc<Catalog>)>,
     shown_for: String,
     shown: HashMap<String, Arc<Plan>>,
+    /// The first reading the list last showed.
+    shown_top: Option<Arc<Plan>>,
 }
 
 impl Default for IntentLauncher {
@@ -100,6 +102,7 @@ impl IntentLauncher {
             catalog: None,
             shown_for: String::new(),
             shown: HashMap::new(),
+            shown_top: None,
         }
     }
 
@@ -152,6 +155,10 @@ impl IntentLauncher {
         if self.shown_for != text {
             self.shown_for = text.to_string();
             self.shown.clear();
+            self.shown_top = None;
+        }
+        if let Some(top) = readings.first() {
+            self.shown_top = Some(top.plan.clone());
         }
         for reading in readings {
             self.shown.insert(reading.key.clone(), reading.plan.clone());
@@ -163,6 +170,13 @@ impl IntentLauncher {
         (self.shown_for == text)
             .then(|| self.shown.get(key).cloned())
             .flatten()
+    }
+
+    /// Jev's top reading as the list last showed it, with the words it was for.
+    pub fn shown_top(&self) -> Option<(&str, &Arc<Plan>)> {
+        self.shown_top
+            .as_ref()
+            .map(|plan| (self.shown_for.as_str(), plan))
     }
 
     /// The plan behind one of Jev's rows as it was last shown, whatever the input says now.

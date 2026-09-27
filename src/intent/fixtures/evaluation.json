@@ -1,0 +1,3687 @@
+{
+ "model": "jev-1.13.0",
+ "sentences": [
+  {
+   "ctx": "chrome",
+   "request": "send what I copied to sarah tomorrow at 9",
+   "prefixes": true
+  },
+  {
+   "ctx": "mail",
+   "request": "summarize this @clipboard .concise",
+   "prefixes": true
+  },
+  {
+   "ctx": "ghostty",
+   "request": "have the agent fix this",
+   "prefixes": true
+  },
+  {
+   "ctx": "ghostty",
+   "request": "fix this now",
+   "prefixes": true
+  }
+ ],
+ "answers": {
+  "have the agent fix this": {
+   "pathway": [
+    "delegate",
+    {
+     "delegate": 0.96,
+     "transform": 0.04
+    }
+   ],
+   "complete": 0.7,
+   "reuse": [
+    0.26,
+    {
+     "0": 0.83,
+     "1": 0.1,
+     "2": 0.06,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.49,
+     "none": 0.28,
+     "Agent Chat": 0.17,
+     "Claude Code Terminal": 0.03,
+     "Send Focused Window to Agent Chat": 0.02,
+     "Send Full Screen to Agent Chat": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.97,
+     "Explain This": 0.02,
+     "Capture Area for AI": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.88,
+     "Ghostty": 0.09,
+     "Visual Studio Code - Insiders": 0.03
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Ghostty)",
+    {
+     "the front window (Ghostty)": 0.94,
+     "Visual Studio Code - Insiders": 0.06
+    }
+   ],
+   "capture_target": [
+    "none",
+    {
+     "none": 0.47000000000000003,
+     "note": 0.38,
+     "todo": 0.14,
+     "reminder": 0.01
+    }
+   ],
+   "body": [
+    "fix this",
+    {
+     "fix this": 0.4,
+     "this": 0.25,
+     "have the agent fix this": 0.15,
+     "agent fix this": 0.07,
+     "none": 0.04,
+     "fix": 0.03
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.83,
+     "have the agent fix this": 0.11,
+     "have the": 0.01,
+     "fix this": 0.01,
+     "this": 0.01,
+     "agent fix this": 0.01
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.42,
+     "this": 0.27,
+     "have the agent fix this": 0.11,
+     "fix this": 0.04,
+     "fix": 0.04,
+     "agent fix this": 0.02
+    }
+   ],
+   "task": [
+    "fix this",
+    {
+     "fix this": 0.99,
+     "this": 0.01
+    }
+   ],
+   "script_steps": [
+    "have the agent fix this",
+    {
+     "have the agent fix this": 0.38,
+     "none": 0.34,
+     "fix this": 0.17,
+     "agent fix this": 0.03,
+     "the agent fix this": 0.02,
+     "have the": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "have the agent fix this": 0.01
+    }
+   ],
+   "recall_source": [
+    "none",
+    {
+     "none": 0.56,
+     "history": 0.38,
+     "files": 0.03,
+     "brain": 0.01,
+     "clipboard": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.53,
+     "custom": 0.29,
+     "none": 0.16,
+     "Improve Writing": 0.02
+    }
+   ],
+   "subject": [
+    "selection",
+    {
+     "selection": 0.86,
+     "window": 0.13,
+     "typed": 0.01
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 1
+    }
+   ],
+   "compound": 0.22,
+   "refers_back": 0.09
+  },
+  "have the agent fix": {
+   "pathway": [
+    "delegate",
+    {
+     "delegate": 0.95,
+     "transform": 0.05
+    }
+   ],
+   "complete": 0.18,
+   "reuse": [
+    0.28,
+    {
+     "0": 0.81,
+     "1": 0.11,
+     "2": 0.06,
+     "3": 0.02
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.66,
+     "none": 0.22,
+     "Agent Chat": 0.09999999999999999,
+     "Send Focused Window to Agent Chat": 0.01,
+     "Claude Code Terminal": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.96,
+     "Explain This": 0.03,
+     "Capture Area for AI": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.78,
+     "Ghostty": 0.17,
+     "Visual Studio Code - Insiders": 0.04,
+     "zoom.us": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Ghostty)",
+    {
+     "the front window (Ghostty)": 0.82,
+     "Visual Studio Code - Insiders": 0.17,
+     "none": 0.01
+    }
+   ],
+   "capture_target": [
+    "note",
+    {
+     "none": 0.44,
+     "note": 0.44,
+     "todo": 0.11,
+     "reminder": 0.01
+    }
+   ],
+   "body": [
+    "fix",
+    {
+     "fix": 0.44,
+     "none": 0.28,
+     "the agent fix": 0.09,
+     "have the agent fix": 0.08,
+     "agent fix": 0.06,
+     "have the agent": 0.02
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.87,
+     "have the agent fix": 0.09,
+     "have the agent": 0.01,
+     "the agent fix": 0.01,
+     "have": 0.01,
+     "fix": 0.01
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.34,
+     "fix": 0.27,
+     "have the agent fix": 0.24,
+     "have the agent": 0.03,
+     "the agent fix": 0.03,
+     "agent fix": 0.03
+    }
+   ],
+   "task": [
+    "fix",
+    {
+     "fix": 0.9,
+     "none": 0.06,
+     "have the agent fix": 0.03,
+     "the agent fix": 0.01
+    }
+   ],
+   "script_steps": [
+    "have the agent fix",
+    {
+     "have the agent fix": 0.36,
+     "fix": 0.3,
+     "none": 0.25,
+     "the agent fix": 0.03,
+     "agent fix": 0.02,
+     "have the agent": 0.02
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "have the agent fix": 0.01
+    }
+   ],
+   "recall_source": [
+    "history",
+    {
+     "history": 0.48,
+     "none": 0.43,
+     "brain": 0.04,
+     "files": 0.04,
+     "clipboard": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.71,
+     "custom": 0.15,
+     "none": 0.12,
+     "Improve Writing": 0.02
+    }
+   ],
+   "subject": [
+    "selection",
+    {
+     "selection": 0.89,
+     "window": 0.07,
+     "typed": 0.04
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 1
+    }
+   ],
+   "compound": 0.24,
+   "refers_back": 0.09
+  },
+  "have the agent": {
+   "pathway": [
+    "delegate",
+    {
+     "delegate": 0.81,
+     "none": 0.16,
+     "transform": 0.03
+    }
+   ],
+   "complete": 0.13,
+   "reuse": [
+    0.21,
+    {
+     "0": 0.85,
+     "1": 0.1,
+     "2": 0.04,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.65,
+     "none": 0.17,
+     "Agent Chat": 0.14,
+     "Send Focused Window to Agent Chat": 0.02,
+     "Claude Code Terminal": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.9,
+     "Explain This": 0.09999999999999999
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.75,
+     "Ghostty": 0.19,
+     "Visual Studio Code - Insiders": 0.03,
+     "Terminal": 0.02,
+     "Google Chrome": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.92,
+     "Edit › Copy": 0.03,
+     "View › Command Palette": 0.02,
+     "Window › Bring All to Front": 0.01,
+     "Edit › Find…": 0.01,
+     "Edit › Paste": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.98,
+     "Close Window": 0.01,
+     "Quit App": 0.01
+    }
+   ],
+   "window_target": [
+    "the front window (Ghostty)",
+    {
+     "the front window (Ghostty)": 0.97,
+     "none": 0.03
+    }
+   ],
+   "capture_target": [
+    "note",
+    {
+     "note": 0.48,
+     "none": 0.38,
+     "todo": 0.13,
+     "link": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.68,
+     "have the agent": 0.09,
+     "the agent": 0.09,
+     "agent": 0.09,
+     "have": 0.02,
+     "have the": 0.02
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.87,
+     "have the agent": 0.09,
+     "have": 0.02,
+     "the agent": 0.01,
+     "have the": 0.01
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.34,
+     "agent": 0.28,
+     "have the agent": 0.17,
+     "the agent": 0.15,
+     "have the": 0.03,
+     "have": 0.02
+    }
+   ],
+   "task": [
+    "none",
+    {
+     "none": 0.86,
+     "have the agent": 0.07,
+     "have": 0.03,
+     "have the": 0.02,
+     "the agent": 0.01,
+     "agent": 0.01
+    }
+   ],
+   "script_steps": [
+    "none",
+    {
+     "none": 0.44,
+     "have the agent": 0.37,
+     "the agent": 0.09,
+     "agent": 0.04,
+     "have the": 0.03,
+     "have": 0.02
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "have the agent": 0.01
+    }
+   ],
+   "recall_source": [
+    "history",
+    {
+     "history": 0.58,
+     "none": 0.31,
+     "brain": 0.05,
+     "files": 0.05,
+     "clipboard": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.91,
+     "none": 0.05,
+     "Improve Writing": 0.02,
+     "custom": 0.02
+    }
+   ],
+   "subject": [
+    "typed",
+    {
+     "typed": 0.43,
+     "selection": 0.35,
+     "window": 0.22
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 1
+    }
+   ],
+   "compound": 0.39,
+   "refers_back": 0.12
+  },
+  "have the": {
+   "pathway": [
+    "none",
+    {
+     "none": 0.8,
+     "delegate": 0.08,
+     "transform": 0.08,
+     "ask": 0.02,
+     "run": 0.01,
+     "app_command": 0.01
+    }
+   ],
+   "complete": 0.08,
+   "reuse": [
+    0.2,
+    {
+     "0": 0.85,
+     "1": 0.09,
+     "2": 0.05,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.79,
+     "Send Selection to Agent Chat": 0.15000000000000002,
+     "Agent Chat": 0.03,
+     "Send Focused Window to Agent Chat": 0.01,
+     "Quick Terminal": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.93,
+     "Explain This": 0.07
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.78,
+     "Ghostty": 0.17,
+     "Visual Studio Code - Insiders": 0.02,
+     "Terminal": 0.01,
+     "Google Chrome": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.86,
+     "Edit › Copy": 0.04,
+     "Edit › Paste": 0.03,
+     "Edit › Find…": 0.03,
+     "Window › Bring All to Front": 0.01,
+     "View › Command Palette": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.99,
+     "Close Window": 0.01
+    }
+   ],
+   "window_target": [
+    "the front window (Ghostty)",
+    {
+     "the front window (Ghostty)": 0.96,
+     "none": 0.04
+    }
+   ],
+   "capture_target": [
+    "none",
+    {
+     "none": 0.45,
+     "note": 0.4,
+     "todo": 0.14,
+     "link": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.55,
+     "have the": 0.29,
+     "have": 0.11,
+     "the": 0.05
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.83,
+     "have the": 0.13,
+     "have": 0.03,
+     "the": 0.01
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.7,
+     "have the": 0.15,
+     "have": 0.08,
+     "the": 0.07
+    }
+   ],
+   "task": [
+    "none",
+    {
+     "none": 0.53,
+     "have the": 0.32,
+     "have": 0.14,
+     "the": 0.01
+    }
+   ],
+   "script_steps": [
+    "none",
+    {
+     "none": 0.59,
+     "have the": 0.33,
+     "have": 0.07,
+     "the": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.97,
+     "have the": 0.02,
+     "have": 0.01
+    }
+   ],
+   "recall_source": [
+    "history",
+    {
+     "history": 0.56,
+     "none": 0.24,
+     "files": 0.1,
+     "brain": 0.04,
+     "clipboard": 0.04,
+     "tabs": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.93,
+     "none": 0.04,
+     "custom": 0.01,
+     "Improve Writing": 0.01
+    }
+   ],
+   "subject": [
+    "typed",
+    {
+     "typed": 0.52,
+     "selection": 0.3,
+     "window": 0.17,
+     "clipboard": 0.01
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 1
+    }
+   ],
+   "compound": 0.44,
+   "refers_back": 0.14
+  },
+  "have": {
+   "pathway": [
+    "none",
+    {
+     "none": 0.77,
+     "transform": 0.11,
+     "delegate": 0.09,
+     "ask": 0.02,
+     "run": 0.01
+    }
+   ],
+   "complete": 0.14,
+   "reuse": [
+    0.17,
+    {
+     "0": 0.87,
+     "1": 0.09,
+     "2": 0.03,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.77,
+     "Send Selection to Agent Chat": 0.19,
+     "Agent Chat": 0.02,
+     "Send Focused Window to Agent Chat": 0.01,
+     "Launcher": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.91,
+     "Explain This": 0.09
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.78,
+     "Ghostty": 0.17,
+     "Visual Studio Code - Insiders": 0.02,
+     "Google Chrome": 0.02
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.78,
+     "Edit › Paste": 0.12,
+     "Edit › Copy": 0.06999999999999999,
+     "Edit › Find…": 0.02
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Ghostty)",
+    {
+     "the front window (Ghostty)": 0.96,
+     "none": 0.04
+    }
+   ],
+   "capture_target": [
+    "none",
+    {
+     "none": 0.46,
+     "note": 0.38,
+     "todo": 0.15,
+     "link": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.64,
+     "have": 0.36
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.81,
+     "have": 0.19
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.79,
+     "have": 0.21
+    }
+   ],
+   "task": [
+    "none",
+    {
+     "none": 0.52,
+     "have": 0.48
+    }
+   ],
+   "script_steps": [
+    "none",
+    {
+     "none": 0.65,
+     "have": 0.35
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.97,
+     "have": 0.03
+    }
+   ],
+   "recall_source": [
+    "history",
+    {
+     "history": 0.51,
+     "none": 0.29,
+     "files": 0.12,
+     "clipboard": 0.03,
+     "brain": 0.03,
+     "browser-history": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.94,
+     "none": 0.03,
+     "Improve Writing": 0.02,
+     "custom": 0.01
+    }
+   ],
+   "subject": [
+    "typed",
+    {
+     "typed": 0.51,
+     "selection": 0.35,
+     "window": 0.13,
+     "clipboard": 0.01
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 1
+    }
+   ],
+   "compound": 0.42,
+   "refers_back": 0.09
+  },
+  "send what I copied to sarah tomorrow at 9": {
+   "pathway": [
+    "capture",
+    {
+     "capture": 0.86,
+     "run": 0.06,
+     "none": 0.06,
+     "app_command": 0.01,
+     "delegate": 0.01
+    }
+   ],
+   "complete": 0.81,
+   "reuse": [
+    0.5,
+    {
+     "0": 0.62,
+     "1": 0.26,
+     "2": 0.11,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.74,
+     "Send Selection to Agent Chat": 0.11,
+     "Send Current Browser Tab to Agent Chat": 0.09,
+     "Agent Chat": 0.03,
+     "Launcher": 0.02,
+     "Clipboard History": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.87,
+     "Gmail": 0.04,
+     "Create Reminder": 0.03,
+     "GitHub": 0.02,
+     "Slack": 0.02,
+     "Create Calendar Event": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.6,
+     "Mail": 0.26,
+     "Slack": 0.09,
+     "Google Chrome": 0.02,
+     "Calendar": 0.01,
+     "Reminders": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.9,
+     "Edit › Copy": 0.09,
+     "Edit › Paste": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.99,
+     "Tile Left Half": 0.01
+    }
+   ],
+   "window_target": [
+    "Mail",
+    {
+     "Mail": 0.42,
+     "the front window (Google Chrome)": 0.32,
+     "Slack": 0.14,
+     "none": 0.09,
+     "Messages": 0.03
+    }
+   ],
+   "capture_target": [
+    "reminder",
+    {
+     "reminder": 0.56,
+     "link": 0.18,
+     "cal": 0.14,
+     "note": 0.05,
+     "todo": 0.03,
+     "none": 0.03
+    }
+   ],
+   "body": [
+    "what I copied",
+    {
+     "what I copied": 0.67,
+     "copied": 0.06999999999999999,
+     "I copied": 0.060000000000000005,
+     "none": 0.03,
+     "what I copied to sarah": 0.03,
+     "send what I copied": 0.02
+    }
+   ],
+   "when": [
+    "tomorrow at 9",
+    {
+     "9": 0.01,
+     "tomorrow at 9": 0.6,
+     "at 9": 0.2,
+     "send what I copied to sarah tomorrow at 9": 0.06999999999999999,
+     "tomorrow": 0.05,
+     "what I copied to sarah tomorrow at 9": 0.02
+    }
+   ],
+   "query": [
+    "what I copied",
+    {
+     "what I copied": 0.27,
+     "none": 0.2,
+     "copied": 0.14,
+     "what": 0.07,
+     "I copied": 0.06,
+     "copied to sarah tomorrow at 9": 0.04
+    }
+   ],
+   "task": [
+    "send what I copied to sarah tomorrow at 9",
+    {
+     "send what I copied to sarah tomorrow at 9": 0.93,
+     "send what I copied": 0.02,
+     "send what I copied to": 0.01,
+     "send what I copied to sarah tomorrow": 0.01,
+     "what I copied to sarah tomorrow at 9": 0.01,
+     "send what I copied to sarah tomorrow at": 0.01
+    }
+   ],
+   "script_steps": [
+    "send what I copied to sarah tomorrow at 9",
+    {
+     "send what I copied to sarah tomorrow at 9": 0.76,
+     "none": 0.12,
+     "what I copied to sarah tomorrow at 9": 0.04,
+     "send what I copied to": 0.02,
+     "to sarah tomorrow at 9": 0.02,
+     "send what I copied": 0.02
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.98,
+     "send what I copied to sarah tomorrow at 9": 0.02
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.42,
+     "none": 0.24000000000000002,
+     "brain": 0.18,
+     "history": 0.1,
+     "calendar": 0.05,
+     "browser-history": 0.01
+    }
+   ],
+   "transform": [
+    "none",
+    {
+     "none": 0.56,
+     "Explain This": 0.25,
+     "Improve Writing": 0.15,
+     "custom": 0.04
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 1
+    }
+   ],
+   "project": [
+    "none",
+    {
+     "none": 0.61,
+     "script-kit-gpui": 0.37,
+     "kit-docs": 0.01,
+     "jev-demos": 0.01
+    }
+   ],
+   "compound": 0.59,
+   "refers_back": 0.04
+  },
+  "send what I copied to sarah tomorrow at": {
+   "pathway": [
+    "capture",
+    {
+     "capture": 0.83,
+     "none": 0.09,
+     "run": 0.06,
+     "app_command": 0.01,
+     "delegate": 0.01
+    }
+   ],
+   "complete": 0.12,
+   "reuse": [
+    0.58,
+    {
+     "0": 0.58,
+     "1": 0.27,
+     "2": 0.13,
+     "3": 0.02
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.66,
+     "Send Current Browser Tab to Agent Chat": 0.15000000000000002,
+     "Send Selection to Agent Chat": 0.14,
+     "Launcher": 0.01,
+     "Clipboard History": 0.01,
+     "Agent Chat": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.87,
+     "Gmail": 0.04,
+     "GitHub": 0.03,
+     "Slack": 0.03,
+     "Get Share Link": 0.01,
+     "Create Reminder": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.51,
+     "Mail": 0.4,
+     "Slack": 0.06999999999999999,
+     "Google Chrome": 0.01,
+     "Messages": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.87,
+     "Edit › Copy": 0.1,
+     "Edit › Paste": 0.02,
+     "File › Share…": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.99,
+     "Tile Left Half": 0.01
+    }
+   ],
+   "window_target": [
+    "Mail",
+    {
+     "Mail": 0.42,
+     "the front window (Google Chrome)": 0.39,
+     "Slack": 0.09,
+     "none": 0.07,
+     "Messages": 0.02,
+     "Ghostty": 0.01
+    }
+   ],
+   "capture_target": [
+    "reminder",
+    {
+     "reminder": 0.39,
+     "link": 0.34,
+     "cal": 0.11,
+     "note": 0.1,
+     "todo": 0.03,
+     "none": 0.03
+    }
+   ],
+   "body": [
+    "what I copied",
+    {
+     "what I copied": 0.66,
+     "copied": 0.05,
+     "what I copied to sarah": 0.04,
+     "I copied": 0.03,
+     "none": 0.03,
+     "send what I copied to sarah tomorrow at": 0.02
+    }
+   ],
+   "when": [
+    "tomorrow",
+    {
+     "tomorrow": 0.7,
+     "tomorrow at": 0.17,
+     "send what I copied to sarah tomorrow at": 0.04,
+     "none": 0.03,
+     "at": 0.03,
+     "what I copied to sarah tomorrow at": 0.02
+    }
+   ],
+   "query": [
+    "what I copied",
+    {
+     "what I copied": 0.3,
+     "none": 0.17,
+     "copied": 0.11,
+     "what I copied to sarah tomorrow": 0.06999999999999999,
+     "what": 0.060000000000000005,
+     "sarah": 0.05
+    }
+   ],
+   "task": [
+    "send what I copied to sarah tomorrow at",
+    {
+     "send what I copied to sarah tomorrow at": 0.79,
+     "send what I copied to sarah tomorrow": 0.05,
+     "send what I copied": 0.04,
+     "send what I copied to sarah": 0.04,
+     "send what I copied to": 0.04,
+     "what I copied to sarah tomorrow at": 0.02
+    }
+   ],
+   "script_steps": [
+    "send what I copied to sarah tomorrow at",
+    {
+     "send what I copied to sarah tomorrow at": 0.55,
+     "none": 0.19,
+     "send what I copied to sarah tomorrow": 0.08,
+     "what I copied to sarah tomorrow at": 0.060000000000000005,
+     "send what I copied to sarah": 0.03,
+     "send what I copied to": 0.03
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "send what I copied to sarah tomorrow at": 0.01
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.37,
+     "brain": 0.27,
+     "none": 0.15,
+     "calendar": 0.1,
+     "history": 0.09,
+     "browser-history": 0.01
+    }
+   ],
+   "transform": [
+    "none",
+    {
+     "none": 0.43,
+     "Explain This": 0.29000000000000004,
+     "Improve Writing": 0.23,
+     "custom": 0.05
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 1
+    }
+   ],
+   "project": [
+    "none",
+    {
+     "none": 0.56,
+     "script-kit-gpui": 0.42,
+     "jev-demos": 0.01,
+     "kit-docs": 0.01
+    }
+   ],
+   "compound": 0.63,
+   "refers_back": 0.05
+  },
+  "send what I copied to sarah tomorrow": {
+   "pathway": [
+    "capture",
+    {
+     "capture": 0.74,
+     "none": 0.1,
+     "run": 0.09,
+     "app_command": 0.04,
+     "delegate": 0.02,
+     "recall": 0.01
+    }
+   ],
+   "complete": 0.8,
+   "reuse": [
+    0.58,
+    {
+     "0": 0.58,
+     "1": 0.28,
+     "2": 0.12,
+     "3": 0.02
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.79,
+     "Send Current Browser Tab to Agent Chat": 0.09,
+     "Send Selection to Agent Chat": 0.06999999999999999,
+     "Send Focused Window to Agent Chat": 0.01,
+     "Launcher": 0.01,
+     "Agent Chat": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.9,
+     "Slack": 0.03,
+     "GitHub": 0.02,
+     "Gmail": 0.02,
+     "Get Share Link": 0.01,
+     "Save Tagged Link": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.56,
+     "Mail": 0.26,
+     "Slack": 0.13,
+     "Google Chrome": 0.03,
+     "Messages": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.88,
+     "Edit › Copy": 0.09,
+     "Edit › Paste": 0.02,
+     "File › Share…": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Google Chrome)",
+    {
+     "the front window (Google Chrome)": 0.42,
+     "Mail": 0.27,
+     "Slack": 0.18,
+     "none": 0.09,
+     "Messages": 0.03,
+     "Ghostty": 0.01
+    }
+   ],
+   "capture_target": [
+    "link",
+    {
+     "link": 0.48,
+     "reminder": 0.29,
+     "todo": 0.08,
+     "note": 0.08,
+     "none": 0.05,
+     "cal": 0.02
+    }
+   ],
+   "body": [
+    "what I copied",
+    {
+     "what I copied": 0.71,
+     "none": 0.060000000000000005,
+     "copied": 0.05,
+     "what I copied to sarah tomorrow": 0.04,
+     "what I copied to sarah": 0.03,
+     "send what I copied to sarah": 0.02
+    }
+   ],
+   "when": [
+    "tomorrow",
+    {
+     "tomorrow": 1
+    }
+   ],
+   "query": [
+    "what I copied",
+    {
+     "what I copied": 0.39,
+     "none": 0.21000000000000002,
+     "copied": 0.09,
+     "what I copied to sarah tomorrow": 0.07,
+     "sarah": 0.05,
+     "I copied": 0.04
+    }
+   ],
+   "task": [
+    "send what I copied to sarah tomorrow",
+    {
+     "send what I copied to sarah tomorrow": 0.79,
+     "send what I copied to sarah": 0.07,
+     "send what I copied": 0.04,
+     "what I copied to sarah tomorrow": 0.02,
+     "send what I copied to": 0.02,
+     "what I copied": 0.01
+    }
+   ],
+   "script_steps": [
+    "send what I copied to sarah tomorrow",
+    {
+     "send what I copied to sarah tomorrow": 0.61,
+     "none": 0.19,
+     "what I copied to sarah tomorrow": 0.08,
+     "send what I copied to sarah": 0.02,
+     "send what I copied": 0.02,
+     "what I copied": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.42,
+     "brain": 0.24,
+     "none": 0.2,
+     "history": 0.1,
+     "calendar": 0.02,
+     "tabs": 0.01
+    }
+   ],
+   "transform": [
+    "none",
+    {
+     "none": 0.51,
+     "Explain This": 0.26,
+     "Improve Writing": 0.19,
+     "custom": 0.04
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 1
+    }
+   ],
+   "project": [
+    "none",
+    {
+     "none": 0.59,
+     "script-kit-gpui": 0.39,
+     "jev-demos": 0.01,
+     "kit-docs": 0.01
+    }
+   ],
+   "compound": 0.61,
+   "refers_back": 0.04
+  },
+  "send what I copied to sarah": {
+   "pathway": [
+    "capture",
+    {
+     "capture": 0.43,
+     "none": 0.29,
+     "run": 0.13,
+     "app_command": 0.11,
+     "delegate": 0.01,
+     "window": 0.01
+    }
+   ],
+   "complete": 0.85,
+   "reuse": [
+    0.6,
+    {
+     "0": 0.58,
+     "1": 0.27,
+     "2": 0.13,
+     "3": 0.02
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.62,
+     "Send Current Browser Tab to Agent Chat": 0.17,
+     "Send Selection to Agent Chat": 0.15000000000000002,
+     "Agent Chat": 0.03,
+     "Send Focused Window to Agent Chat": 0.01,
+     "Launcher": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.88,
+     "Slack": 0.08,
+     "GitHub": 0.02,
+     "Gmail": 0.01,
+     "Get Share Link": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.5,
+     "Slack": 0.41000000000000003,
+     "Mail": 0.060000000000000005,
+     "Messages": 0.02,
+     "Google Chrome": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.88,
+     "Edit › Copy": 0.08,
+     "Edit › Paste": 0.03,
+     "File › Share…": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "Slack",
+    {
+     "Slack": 0.45,
+     "the front window (Google Chrome)": 0.28,
+     "none": 0.1,
+     "Mail": 0.08,
+     "Messages": 0.07,
+     "Ghostty": 0.01
+    }
+   ],
+   "capture_target": [
+    "link",
+    {
+     "link": 0.77,
+     "none": 0.11,
+     "note": 0.1,
+     "reminder": 0.01,
+     "todo": 0.01
+    }
+   ],
+   "body": [
+    "what I copied",
+    {
+     "what I copied": 0.67,
+     "send what I copied to sarah": 0.06999999999999999,
+     "none": 0.06,
+     "what I copied to sarah": 0.05,
+     "copied": 0.04,
+     "send what I copied": 0.03
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.87,
+     "sarah": 0.04,
+     "send what I copied to sarah": 0.03,
+     "to sarah": 0.03,
+     "I copied to": 0.01,
+     "send what I copied to": 0.01
+    }
+   ],
+   "query": [
+    "what I copied",
+    {
+     "what I copied": 0.33,
+     "none": 0.13,
+     "copied": 0.11,
+     "what I copied to sarah": 0.1,
+     "what": 0.06,
+     "sarah": 0.05
+    }
+   ],
+   "task": [
+    "send what I copied to sarah",
+    {
+     "send what I copied to sarah": 0.86,
+     "send what I copied to": 0.04,
+     "send what I copied": 0.04,
+     "send": 0.02,
+     "send what": 0.01,
+     "what I copied": 0.01
+    }
+   ],
+   "script_steps": [
+    "send what I copied to sarah",
+    {
+     "send what I copied to sarah": 0.78,
+     "none": 0.12,
+     "what I copied to sarah": 0.04,
+     "send what I copied": 0.02,
+     "send what I copied to": 0.02,
+     "send what": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "send what I copied to sarah": 0.01
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.42,
+     "none": 0.26,
+     "brain": 0.16,
+     "history": 0.11,
+     "calendar": 0.03,
+     "browser-history": 0.01
+    }
+   ],
+   "transform": [
+    "none",
+    {
+     "none": 0.55,
+     "Improve Writing": 0.22,
+     "Explain This": 0.17,
+     "custom": 0.05
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 0.99,
+     "selection": 0.01
+    }
+   ],
+   "project": [
+    "none",
+    {
+     "none": 0.58,
+     "script-kit-gpui": 0.39,
+     "jev-demos": 0.01,
+     "typesafe-sdk": 0.01,
+     "kit-docs": 0.01
+    }
+   ],
+   "compound": 0.61,
+   "refers_back": 0.04
+  },
+  "send what I copied to": {
+   "pathway": [
+    "capture",
+    {
+     "capture": 0.47000000000000003,
+     "none": 0.16,
+     "app_command": 0.15,
+     "window": 0.11,
+     "run": 0.07,
+     "delegate": 0.02
+    }
+   ],
+   "complete": 0.09,
+   "reuse": [
+    0.91,
+    {
+     "0": 0.38,
+     "1": 0.36,
+     "2": 0.21,
+     "3": 0.05
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.47000000000000003,
+     "Send Current Browser Tab to Agent Chat": 0.34,
+     "none": 0.09,
+     "Paste Next Clipboard Item": 0.04,
+     "Send Focused Window to Agent Chat": 0.02,
+     "Agent Chat": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.63,
+     "GitHub": 0.27,
+     "Slack": 0.06999999999999999,
+     "Save Tagged Link": 0.02,
+     "Get Share Link": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.55,
+     "Slack": 0.19,
+     "Google Chrome": 0.13,
+     "Ghostty": 0.06999999999999999,
+     "Mail": 0.03,
+     "Visual Studio Code - Insiders": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.45,
+     "Edit › Paste": 0.36,
+     "File › Open Location…": 0.11,
+     "Edit › Copy": 0.06,
+     "Window › Bring All to Front": 0.01,
+     "File › Share…": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.99,
+     "Tile Left Half": 0.01
+    }
+   ],
+   "window_target": [
+    "the front window (Google Chrome)",
+    {
+     "the front window (Google Chrome)": 0.77,
+     "none": 0.12,
+     "Ghostty": 0.06,
+     "Slack": 0.03,
+     "Mail": 0.01,
+     "Visual Studio Code - Insiders": 0.01
+    }
+   ],
+   "capture_target": [
+    "link",
+    {
+     "link": 0.9,
+     "note": 0.06,
+     "none": 0.03,
+     "todo": 0.01
+    }
+   ],
+   "body": [
+    "what I copied",
+    {
+     "what I copied": 0.45,
+     "none": 0.18,
+     "send what I copied to": 0.09,
+     "I copied": 0.06,
+     "copied": 0.06,
+     "what I copied to": 0.05
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.9,
+     "send what I copied to": 0.04,
+     "I copied": 0.03,
+     "copied": 0.01,
+     "what I copied to": 0.01,
+     "what I copied": 0.01
+    }
+   ],
+   "query": [
+    "what I copied",
+    {
+     "what I copied": 0.35,
+     "none": 0.19,
+     "copied": 0.17,
+     "I copied": 0.07,
+     "send what I copied to": 0.05,
+     "send what I copied": 0.04
+    }
+   ],
+   "task": [
+    "send what I copied to",
+    {
+     "send what I copied to": 0.79,
+     "send what I copied": 0.08,
+     "send": 0.05,
+     "what I copied to": 0.03,
+     "send what I": 0.03,
+     "send what": 0.02
+    }
+   ],
+   "script_steps": [
+    "send what I copied to",
+    {
+     "send what I copied to": 0.55,
+     "none": 0.16,
+     "what I copied to": 0.14,
+     "send what I copied": 0.03,
+     "send what": 0.02,
+     "what I copied": 0.02
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.98,
+     "send what I copied to": 0.02
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.6,
+     "none": 0.16,
+     "history": 0.15,
+     "browser-history": 0.07,
+     "brain": 0.01,
+     "tabs": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.41000000000000003,
+     "none": 0.35,
+     "Improve Writing": 0.2,
+     "custom": 0.04
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 0.97,
+     "selection": 0.01,
+     "page": 0.01,
+     "window": 0.01
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 0.55,
+     "none": 0.42,
+     "jev-demos": 0.01,
+     "kit-docs": 0.01,
+     "typesafe-sdk": 0.01
+    }
+   ],
+   "compound": 0.47,
+   "refers_back": 0.07
+  },
+  "send what I copied": {
+   "pathway": [
+    "capture",
+    {
+     "capture": 0.29,
+     "app_command": 0.28,
+     "run": 0.17,
+     "recall": 0.12,
+     "none": 0.09,
+     "transform": 0.03
+    }
+   ],
+   "complete": 0.85,
+   "reuse": [
+    0.62,
+    {
+     "0": 0.59,
+     "1": 0.23,
+     "2": 0.14,
+     "3": 0.04
+    }
+   ],
+   "builtin": [
+    "Paste Next Clipboard Item",
+    {
+     "Paste Next Clipboard Item": 0.3,
+     "Send Current Browser Tab to Agent Chat": 0.25,
+     "Send Selection to Agent Chat": 0.2,
+     "none": 0.18000000000000002,
+     "Agent Chat": 0.03,
+     "Launcher": 0.02
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.6,
+     "GitHub": 0.37,
+     "Get Share Link": 0.01,
+     "Slack": 0.01,
+     "Save Tagged Link": 0.01
+    }
+   ],
+   "app": [
+    "Google Chrome",
+    {
+     "Google Chrome": 0.5,
+     "none": 0.39,
+     "Slack": 0.05,
+     "Ghostty": 0.04,
+     "Mail": 0.02
+    }
+   ],
+   "menu": [
+    "Edit › Paste",
+    {
+     "Edit › Paste": 0.89,
+     "none": 0.07,
+     "File › Open Location…": 0.03,
+     "Edit › Copy": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.99,
+     "Tile Left Half": 0.01
+    }
+   ],
+   "window_target": [
+    "the front window (Google Chrome)",
+    {
+     "the front window (Google Chrome)": 0.79,
+     "Ghostty": 0.1,
+     "none": 0.06,
+     "Slack": 0.02,
+     "Mail": 0.01,
+     "Visual Studio Code - Insiders": 0.01
+    }
+   ],
+   "capture_target": [
+    "link",
+    {
+     "link": 0.94,
+     "note": 0.03,
+     "none": 0.03
+    }
+   ],
+   "body": [
+    "what I copied",
+    {
+     "what I copied": 0.38,
+     "none": 0.27,
+     "send what I copied": 0.12,
+     "copied": 0.11,
+     "I copied": 0.05,
+     "send what I": 0.02
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.93,
+     "copied": 0.02,
+     "what I copied": 0.02,
+     "I copied": 0.01,
+     "send what I copied": 0.01
+    }
+   ],
+   "query": [
+    "copied",
+    {
+     "copied": 0.32,
+     "none": 0.26,
+     "what I copied": 0.25,
+     "send what I copied": 0.06,
+     "I copied": 0.04,
+     "what": 0.03
+    }
+   ],
+   "task": [
+    "send what I copied",
+    {
+     "send what I copied": 0.95,
+     "send": 0.03,
+     "send what I": 0.01,
+     "send what": 0.01
+    }
+   ],
+   "script_steps": [
+    "send what I copied",
+    {
+     "send what I copied": 0.81,
+     "what I copied": 0.09,
+     "none": 0.06,
+     "send": 0.01,
+     "copied": 0.01,
+     "send what I": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "send what I copied": 0.01
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.85,
+     "none": 0.06,
+     "history": 0.04,
+     "browser-history": 0.04,
+     "tabs": 0.01
+    }
+   ],
+   "transform": [
+    "none",
+    {
+     "none": 0.47000000000000003,
+     "Explain This": 0.34,
+     "Improve Writing": 0.15,
+     "custom": 0.04
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 1
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 0.63,
+     "none": 0.34,
+     "kit-docs": 0.01,
+     "jev-demos": 0.01,
+     "typesafe-sdk": 0.01
+    }
+   ],
+   "compound": 0.46,
+   "refers_back": 0.05
+  },
+  "send what I": {
+   "pathway": [
+    "none",
+    {
+     "none": 0.54,
+     "capture": 0.23,
+     "recall": 0.06,
+     "transform": 0.06,
+     "window": 0.03,
+     "delegate": 0.03
+    }
+   ],
+   "complete": 0.08,
+   "reuse": [
+    0.42,
+    {
+     "0": 0.7,
+     "1": 0.21,
+     "2": 0.08,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.73,
+     "Send Current Browser Tab to Agent Chat": 0.17,
+     "none": 0.060000000000000005,
+     "Send Focused Window to Agent Chat": 0.02,
+     "Turn Off Background Effect": 0.01,
+     "Window Switcher": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.72,
+     "GitHub": 0.16,
+     "Summarize": 0.04,
+     "Slack": 0.03,
+     "Get Share Link": 0.02,
+     "Save Tagged Link": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.78,
+     "Google Chrome": 0.09,
+     "Slack": 0.060000000000000005,
+     "Ghostty": 0.03,
+     "Mail": 0.02,
+     "Visual Studio Code - Insiders": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.42,
+     "Edit › Copy": 0.34,
+     "Edit › Paste": 0.2,
+     "File › Share…": 0.02,
+     "Window › Bring All to Front": 0.01,
+     "Edit › Cut": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.97,
+     "Tile Left Half": 0.03
+    }
+   ],
+   "window_target": [
+    "the front window (Google Chrome)",
+    {
+     "the front window (Google Chrome)": 0.94,
+     "none": 0.04,
+     "Ghostty": 0.01,
+     "Slack": 0.01
+    }
+   ],
+   "capture_target": [
+    "link",
+    {
+     "link": 0.81,
+     "note": 0.09,
+     "none": 0.09,
+     "todo": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.56,
+     "what I": 0.19,
+     "send what I": 0.13,
+     "what": 0.04,
+     "send what": 0.03,
+     "I": 0.03
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.93,
+     "send what I": 0.05,
+     "what I": 0.01
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.42,
+     "what I": 0.18,
+     "send what I": 0.16,
+     "what": 0.13,
+     "send": 0.05,
+     "send what": 0.04
+    }
+   ],
+   "task": [
+    "send what I",
+    {
+     "send what I": 0.59,
+     "send what": 0.18,
+     "send": 0.17,
+     "what I": 0.04,
+     "none": 0.02
+    }
+   ],
+   "script_steps": [
+    "send what I",
+    {
+     "send what I": 0.41,
+     "none": 0.28,
+     "what I": 0.14,
+     "send what": 0.09,
+     "send": 0.06,
+     "what": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.98,
+     "send what I": 0.02
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.49,
+     "history": 0.23,
+     "none": 0.13,
+     "browser-history": 0.06,
+     "tabs": 0.05,
+     "brain": 0.03
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.53,
+     "Improve Writing": 0.24,
+     "none": 0.18,
+     "custom": 0.05
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 0.41000000000000003,
+     "selection": 0.31,
+     "typed": 0.2,
+     "page": 0.07,
+     "window": 0.01
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 0.67,
+     "none": 0.31,
+     "jev-demos": 0.01,
+     "kit-docs": 0.01
+    }
+   ],
+   "compound": 0.54,
+   "refers_back": 0.15
+  },
+  "send what": {
+   "pathway": [
+    "none",
+    {
+     "none": 0.74,
+     "capture": 0.08,
+     "ask": 0.05,
+     "transform": 0.04,
+     "delegate": 0.03,
+     "window": 0.02
+    }
+   ],
+   "complete": 0.14,
+   "reuse": [
+    0.34,
+    {
+     "0": 0.73,
+     "1": 0.21,
+     "2": 0.05,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.59,
+     "Send Current Browser Tab to Agent Chat": 0.25,
+     "none": 0.09999999999999999,
+     "Send Focused Window to Agent Chat": 0.03,
+     "Agent Chat": 0.02,
+     "Window Switcher": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.7,
+     "GitHub": 0.19,
+     "Summarize": 0.03,
+     "Get Share Link": 0.02,
+     "Explain This": 0.02,
+     "Save Tagged Link": 0.02
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.73,
+     "Google Chrome": 0.13,
+     "Ghostty": 0.060000000000000005,
+     "Slack": 0.04,
+     "Visual Studio Code - Insiders": 0.02,
+     "Mail": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.59,
+     "Edit › Copy": 0.19,
+     "Edit › Paste": 0.16,
+     "File › Share…": 0.04,
+     "Window › Bring All to Front": 0.01,
+     "File › Open Location…": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.99,
+     "Tile Left Half": 0.01
+    }
+   ],
+   "window_target": [
+    "the front window (Google Chrome)",
+    {
+     "the front window (Google Chrome)": 0.9,
+     "none": 0.08,
+     "Slack": 0.01,
+     "Ghostty": 0.01
+    }
+   ],
+   "capture_target": [
+    "link",
+    {
+     "link": 0.81,
+     "none": 0.09,
+     "note": 0.09,
+     "todo": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.63,
+     "send what": 0.2,
+     "what": 0.11,
+     "send": 0.06
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.95,
+     "send what": 0.03,
+     "what": 0.01,
+     "send": 0.01
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.42,
+     "what": 0.32,
+     "send what": 0.17,
+     "send": 0.09
+    }
+   ],
+   "task": [
+    "send what",
+    {
+     "send what": 0.92,
+     "send": 0.08
+    }
+   ],
+   "script_steps": [
+    "none",
+    {
+     "none": 0.54,
+     "send what": 0.35,
+     "send": 0.06,
+     "what": 0.05
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.98,
+     "send": 0.01,
+     "send what": 0.01
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.48,
+     "history": 0.23,
+     "none": 0.15,
+     "browser-history": 0.08,
+     "tabs": 0.03,
+     "brain": 0.02
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.53,
+     "Improve Writing": 0.22,
+     "none": 0.2,
+     "custom": 0.05
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 0.46,
+     "typed": 0.22,
+     "selection": 0.19,
+     "page": 0.12,
+     "window": 0.01
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 0.64,
+     "none": 0.35,
+     "kit-docs": 0.01
+    }
+   ],
+   "compound": 0.58,
+   "refers_back": 0.06
+  },
+  "send": {
+   "pathway": [
+    "none",
+    {
+     "none": 0.28,
+     "app_command": 0.25,
+     "capture": 0.24,
+     "run": 0.08,
+     "window": 0.06,
+     "delegate": 0.05
+    }
+   ],
+   "complete": 0.45,
+   "reuse": [
+    0.49,
+    {
+     "0": 0.67,
+     "1": 0.21,
+     "2": 0.1,
+     "3": 0.02
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.63,
+     "Send Current Browser Tab to Agent Chat": 0.26,
+     "none": 0.06999999999999999,
+     "Send Focused Window to Agent Chat": 0.03,
+     "Window Switcher": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.7,
+     "GitHub": 0.23,
+     "Save Tagged Link": 0.03,
+     "Get Share Link": 0.03,
+     "Slack": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.75,
+     "Google Chrome": 0.18000000000000002,
+     "Mail": 0.04,
+     "Ghostty": 0.02,
+     "Slack": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.5700000000000001,
+     "Edit › Copy": 0.22,
+     "Edit › Paste": 0.13,
+     "File › Share…": 0.03,
+     "File › Print…": 0.01,
+     "Window › Bring All to Front": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 0.96,
+     "Tile Left Half": 0.04
+    }
+   ],
+   "window_target": [
+    "the front window (Google Chrome)",
+    {
+     "the front window (Google Chrome)": 0.96,
+     "Ghostty": 0.01,
+     "none": 0.01,
+     "Mail": 0.01,
+     "Slack": 0.01
+    }
+   ],
+   "capture_target": [
+    "link",
+    {
+     "link": 0.8,
+     "none": 0.13,
+     "note": 0.05,
+     "todo": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.76,
+     "send": 0.24
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.96,
+     "send": 0.04
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.73,
+     "send": 0.27
+    }
+   ],
+   "task": [
+    "send",
+    {
+     "send": 0.97,
+     "none": 0.03
+    }
+   ],
+   "script_steps": [
+    "send",
+    {
+     "send": 0.78,
+     "none": 0.22
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.95,
+     "send": 0.05
+    }
+   ],
+   "recall_source": [
+    "clipboard",
+    {
+     "clipboard": 0.43,
+     "none": 0.19,
+     "history": 0.14,
+     "browser-history": 0.13,
+     "tabs": 0.09,
+     "files": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.42,
+     "none": 0.31,
+     "Improve Writing": 0.23,
+     "custom": 0.04
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 0.37,
+     "selection": 0.24,
+     "typed": 0.19,
+     "page": 0.19,
+     "window": 0.01
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 0.6,
+     "none": 0.37,
+     "typesafe-sdk": 0.01,
+     "kit-docs": 0.01,
+     "jev-demos": 0.01
+    }
+   ],
+   "compound": 0.56,
+   "refers_back": 0.04
+  },
+  "summarize this @clipboard .concise": {
+   "pathway": [
+    "transform",
+    {
+     "transform": 1
+    }
+   ],
+   "complete": 0.86,
+   "reuse": [
+    1.71,
+    {
+     "0": 0.11,
+     "1": 0.25,
+     "2": 0.47,
+     "3": 0.17
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.93,
+     "none": 0.04,
+     "Agent Chat": 0.02
+    }
+   ],
+   "script": [
+    "Summarize",
+    {
+     "Summarize": 0.71,
+     "Make Concise": 0.26,
+     "none": 0.03
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.87,
+     "Mail": 0.13
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.98,
+     "Edit › Copy": 0.01,
+     "Message › Reply": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Mail)",
+    {
+     "the front window (Mail)": 1
+    }
+   ],
+   "capture_target": [
+    "todo",
+    {
+     "todo": 0.41,
+     "note": 0.4,
+     "reminder": 0.11,
+     "none": 0.07,
+     "cal": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.31,
+     "this": 0.21,
+     "@clipboard": 0.14,
+     "this @clipboard": 0.12,
+     "summarize this @clipboard .concise": 0.05,
+     "summarize": 0.04
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.81,
+     "summarize this @clipboard .concise": 0.07,
+     "summarize this @clipboard": 0.02,
+     "this @clipboard .concise": 0.02,
+     "@clipboard .concise": 0.01,
+     "summarize": 0.01
+    }
+   ],
+   "query": [
+    "@clipboard",
+    {
+     "none": 0.33,
+     "@clipboard": 0.33,
+     "this": 0.07,
+     "this @clipboard": 0.06,
+     "summarize this @clipboard": 0.05,
+     "summarize this @clipboard .concise": 0.05
+    }
+   ],
+   "task": [
+    "summarize this @clipboard .concise",
+    {
+     "summarize this @clipboard .concise": 0.68,
+     "summarize this": 0.15,
+     "summarize this @clipboard": 0.11,
+     "summarize": 0.05,
+     "this @clipboard .concise": 0.01
+    }
+   ],
+   "script_steps": [
+    "summarize this @clipboard .concise",
+    {
+     "summarize this @clipboard .concise": 0.79,
+     "this @clipboard .concise": 0.06,
+     "summarize this @clipboard": 0.04,
+     "summarize this": 0.04,
+     "none": 0.02,
+     "summarize": 0.02
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.97,
+     "summarize this @clipboard .concise": 0.02,
+     "@clipboard": 0.01
+    }
+   ],
+   "recall_source": [
+    "none",
+    {
+     "none": 0.4,
+     "clipboard": 0.32,
+     "history": 0.22,
+     "brain": 0.03,
+     "files": 0.01,
+     "notes": 0.01
+    }
+   ],
+   "transform": [
+    "Summarize",
+    {
+     "Summarize": 0.42,
+     "Explain This": 0.34,
+     "Make Concise": 0.19,
+     "Improve Writing": 0.03,
+     "none": 0.01,
+     "custom": 0.01
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 0.84,
+     "selection": 0.16
+    }
+   ],
+   "project": [
+    "none",
+    {
+     "none": 0.99,
+     "jev-demos": 0.01
+    }
+   ],
+   "compound": 0.19,
+   "refers_back": 0.05
+  },
+  "summarize this @clipboard": {
+   "pathway": [
+    "transform",
+    {
+     "transform": 1
+    }
+   ],
+   "complete": 0.79,
+   "reuse": [
+    1.37,
+    {
+     "0": 0.19,
+     "1": 0.31,
+     "2": 0.43,
+     "3": 0.07
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.93,
+     "none": 0.04,
+     "Agent Chat": 0.02
+    }
+   ],
+   "script": [
+    "Summarize",
+    {
+     "Summarize": 0.98,
+     "none": 0.02
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.86,
+     "Mail": 0.14
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.99,
+     "Message › Reply": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Mail)",
+    {
+     "the front window (Mail)": 1
+    }
+   ],
+   "capture_target": [
+    "note",
+    {
+     "note": 0.46,
+     "todo": 0.35,
+     "reminder": 0.1,
+     "none": 0.08,
+     "cal": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.43,
+     "@clipboard": 0.14,
+     "this @clipboard": 0.11,
+     "this": 0.11,
+     "summarize this @clipboard": 0.09,
+     "summarize this": 0.06
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.87,
+     "summarize this @clipboard": 0.05,
+     "@clipboard": 0.02,
+     "this @clipboard": 0.02,
+     "this": 0.02,
+     "summarize this": 0.01
+    }
+   ],
+   "query": [
+    "@clipboard",
+    {
+     "@clipboard": 0.35,
+     "none": 0.27,
+     "this @clipboard": 0.11,
+     "summarize this @clipboard": 0.1,
+     "this": 0.07,
+     "summarize": 0.06
+    }
+   ],
+   "task": [
+    "summarize this",
+    {
+     "summarize this": 0.54,
+     "summarize this @clipboard": 0.27,
+     "summarize": 0.18,
+     "this @clipboard": 0.01
+    }
+   ],
+   "script_steps": [
+    "summarize this @clipboard",
+    {
+     "summarize this @clipboard": 0.48,
+     "summarize this": 0.36,
+     "summarize": 0.06,
+     "none": 0.06,
+     "this @clipboard": 0.03,
+     "@clipboard": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.97,
+     "summarize this @clipboard": 0.02,
+     "@clipboard": 0.01
+    }
+   ],
+   "recall_source": [
+    "none",
+    {
+     "none": 0.42,
+     "clipboard": 0.3,
+     "history": 0.21,
+     "brain": 0.03,
+     "calendar": 0.01,
+     "files": 0.01
+    }
+   ],
+   "transform": [
+    "Summarize",
+    {
+     "Summarize": 0.7,
+     "Explain This": 0.19,
+     "Improve Writing": 0.09,
+     "none": 0.01,
+     "custom": 0.01
+    }
+   ],
+   "subject": [
+    "clipboard",
+    {
+     "clipboard": 0.86,
+     "selection": 0.14
+    }
+   ],
+   "project": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "compound": 0.21,
+   "refers_back": 0.05
+  },
+  "summarize this": {
+   "pathway": [
+    "transform",
+    {
+     "transform": 1
+    }
+   ],
+   "complete": 0.78,
+   "reuse": [
+    1.1,
+    {
+     "0": 0.32,
+     "1": 0.3,
+     "2": 0.33,
+     "3": 0.05
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.93,
+     "none": 0.05,
+     "Agent Chat": 0.01
+    }
+   ],
+   "script": [
+    "Summarize",
+    {
+     "Summarize": 0.99,
+     "none": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.86,
+     "Mail": 0.14
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.96,
+     "Edit › Copy": 0.03,
+     "Message › Reply": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Mail)",
+    {
+     "the front window (Mail)": 1
+    }
+   ],
+   "capture_target": [
+    "note",
+    {
+     "note": 0.41000000000000003,
+     "todo": 0.39,
+     "reminder": 0.11,
+     "none": 0.08,
+     "cal": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.6,
+     "this": 0.17,
+     "summarize": 0.14,
+     "summarize this": 0.09
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.86,
+     "summarize this": 0.07,
+     "this": 0.04,
+     "summarize": 0.03
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.52,
+     "this": 0.19,
+     "summarize this": 0.15,
+     "summarize": 0.14
+    }
+   ],
+   "task": [
+    "summarize this",
+    {
+     "summarize this": 0.8200000000000001,
+     "summarize": 0.18
+    }
+   ],
+   "script_steps": [
+    "summarize this",
+    {
+     "summarize this": 0.9,
+     "none": 0.06,
+     "summarize": 0.04
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "summarize this": 0.01
+    }
+   ],
+   "recall_source": [
+    "none",
+    {
+     "none": 0.56,
+     "history": 0.24,
+     "files": 0.07,
+     "brain": 0.04,
+     "clipboard": 0.03,
+     "tabs": 0.02
+    }
+   ],
+   "transform": [
+    "Summarize",
+    {
+     "Summarize": 0.81,
+     "Explain This": 0.13,
+     "Improve Writing": 0.04,
+     "custom": 0.01,
+     "none": 0.01
+    }
+   ],
+   "subject": [
+    "selection",
+    {
+     "selection": 0.99,
+     "window": 0.01
+    }
+   ],
+   "project": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "compound": 0.23,
+   "refers_back": 0.04
+  },
+  "summarize": {
+   "pathway": [
+    "transform",
+    {
+     "transform": 1
+    }
+   ],
+   "complete": 0.71,
+   "reuse": [
+    1.04,
+    {
+     "0": 0.36,
+     "1": 0.29,
+     "2": 0.3,
+     "3": 0.05
+    }
+   ],
+   "builtin": [
+    "Send Selection to Agent Chat",
+    {
+     "Send Selection to Agent Chat": 0.93,
+     "none": 0.05,
+     "Agent Chat": 0.01
+    }
+   ],
+   "script": [
+    "Summarize",
+    {
+     "Summarize": 0.99,
+     "none": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.85,
+     "Mail": 0.15000000000000002
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.95,
+     "Edit › Copy": 0.03,
+     "Message › Reply": 0.02
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Mail)",
+    {
+     "the front window (Mail)": 0.99,
+     "none": 0.01
+    }
+   ],
+   "capture_target": [
+    "note",
+    {
+     "note": 0.46,
+     "todo": 0.34,
+     "reminder": 0.11,
+     "none": 0.08,
+     "cal": 0.01
+    }
+   ],
+   "body": [
+    "none",
+    {
+     "none": 0.79,
+     "summarize": 0.21
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.93,
+     "summarize": 0.07
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.61,
+     "summarize": 0.39
+    }
+   ],
+   "task": [
+    "summarize",
+    {
+     "summarize": 0.99,
+     "none": 0.01
+    }
+   ],
+   "script_steps": [
+    "summarize",
+    {
+     "summarize": 0.92,
+     "none": 0.08
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.97,
+     "summarize": 0.03
+    }
+   ],
+   "recall_source": [
+    "none",
+    {
+     "none": 0.49,
+     "history": 0.28,
+     "files": 0.1,
+     "clipboard": 0.04,
+     "brain": 0.03,
+     "tabs": 0.02
+    }
+   ],
+   "transform": [
+    "Summarize",
+    {
+     "Summarize": 0.66,
+     "Explain This": 0.23,
+     "Improve Writing": 0.07,
+     "custom": 0.01,
+     "Make Concise": 0.01,
+     "none": 0.01
+    }
+   ],
+   "subject": [
+    "selection",
+    {
+     "selection": 0.99,
+     "typed": 0.01
+    }
+   ],
+   "project": [
+    "none",
+    {
+     "none": 0.98,
+     "jev-demos": 0.01,
+     "script-kit-gpui": 0.01
+    }
+   ],
+   "compound": 0.25,
+   "refers_back": 0.05
+  },
+  "fix this now": {
+   "pathway": [
+    "delegate",
+    {
+     "delegate": 0.74,
+     "transform": 0.25,
+     "none": 0.01
+    }
+   ],
+   "complete": 0.61,
+   "reuse": [
+    0.16,
+    {
+     "0": 0.89,
+     "1": 0.06,
+     "2": 0.04,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.65,
+     "Send Selection to Agent Chat": 0.23,
+     "Agent Chat": 0.06999999999999999,
+     "Send Focused Window to Agent Chat": 0.03,
+     "Claude Code Terminal": 0.01,
+     "Send Full Screen to Agent Chat": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.96,
+     "Explain This": 0.03,
+     "Capture Area for AI": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.75,
+     "Ghostty": 0.22,
+     "Visual Studio Code - Insiders": 0.03
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.99,
+     "Edit › Undo": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Ghostty)",
+    {
+     "the front window (Ghostty)": 0.99,
+     "Visual Studio Code - Insiders": 0.01
+    }
+   ],
+   "capture_target": [
+    "note",
+    {
+     "note": 0.35000000000000003,
+     "none": 0.34,
+     "todo": 0.31
+    }
+   ],
+   "body": [
+    "fix this",
+    {
+     "fix this": 0.33999999999999997,
+     "this": 0.28,
+     "fix this now": 0.13,
+     "none": 0.12,
+     "fix": 0.11,
+     "this now": 0.01
+    }
+   ],
+   "when": [
+    "now",
+    {
+     "now": 0.93,
+     "fix this now": 0.04,
+     "this now": 0.01,
+     "none": 0.01
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.48,
+     "this": 0.2,
+     "fix": 0.14,
+     "fix this now": 0.11,
+     "fix this": 0.05,
+     "this now": 0.01
+    }
+   ],
+   "task": [
+    "fix this",
+    {
+     "fix this": 0.5,
+     "fix this now": 0.46,
+     "fix": 0.03,
+     "this now": 0.01
+    }
+   ],
+   "script_steps": [
+    "fix this now",
+    {
+     "fix this now": 0.53,
+     "none": 0.38,
+     "fix this": 0.04,
+     "fix": 0.03,
+     "this now": 0.01,
+     "this": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "fix this now": 0.01
+    }
+   ],
+   "recall_source": [
+    "none",
+    {
+     "none": 0.51,
+     "history": 0.39,
+     "files": 0.06,
+     "brain": 0.02,
+     "clipboard": 0.01,
+     "tabs": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.75,
+     "none": 0.15,
+     "custom": 0.08,
+     "Improve Writing": 0.02
+    }
+   ],
+   "subject": [
+    "selection",
+    {
+     "selection": 0.63,
+     "window": 0.33,
+     "typed": 0.04
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 1
+    }
+   ],
+   "compound": 0.29,
+   "refers_back": 0.07
+  },
+  "fix this": {
+   "pathway": [
+    "delegate",
+    {
+     "delegate": 0.51,
+     "transform": 0.49
+    }
+   ],
+   "complete": 0.57,
+   "reuse": [
+    0.27,
+    {
+     "0": 0.82,
+     "1": 0.1,
+     "2": 0.07,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.67,
+     "Send Selection to Agent Chat": 0.25,
+     "Agent Chat": 0.06,
+     "Claude Code Terminal": 0.01,
+     "Send Focused Window to Agent Chat": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.9400000000000001,
+     "Explain This": 0.04,
+     "Fix Grammar & Spelling": 0.01
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.77,
+     "Ghostty": 0.2,
+     "Visual Studio Code - Insiders": 0.02,
+     "zoom.us": 0.01
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.99,
+     "Edit › Undo": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Ghostty)",
+    {
+     "the front window (Ghostty)": 0.97,
+     "Visual Studio Code - Insiders": 0.03
+    }
+   ],
+   "capture_target": [
+    "none",
+    {
+     "none": 0.48,
+     "note": 0.4,
+     "todo": 0.12
+    }
+   ],
+   "body": [
+    "fix this",
+    {
+     "fix this": 0.35,
+     "this": 0.29,
+     "none": 0.22,
+     "fix": 0.14
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.9,
+     "fix this": 0.08,
+     "this": 0.01,
+     "fix": 0.01
+    }
+   ],
+   "query": [
+    "none",
+    {
+     "none": 0.46,
+     "fix": 0.24,
+     "this": 0.18,
+     "fix this": 0.12
+    }
+   ],
+   "task": [
+    "fix this",
+    {
+     "fix this": 0.94,
+     "fix": 0.06
+    }
+   ],
+   "script_steps": [
+    "fix this",
+    {
+     "fix this": 0.65,
+     "none": 0.27,
+     "fix": 0.07,
+     "this": 0.01
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.99,
+     "fix this": 0.01
+    }
+   ],
+   "recall_source": [
+    "history",
+    {
+     "history": 0.48,
+     "none": 0.38,
+     "files": 0.07,
+     "brain": 0.03,
+     "clipboard": 0.02,
+     "tabs": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.7,
+     "custom": 0.13,
+     "none": 0.13,
+     "Improve Writing": 0.04
+    }
+   ],
+   "subject": [
+    "selection",
+    {
+     "selection": 0.78,
+     "window": 0.16,
+     "typed": 0.06
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 1
+    }
+   ],
+   "compound": 0.25,
+   "refers_back": 0.07
+  },
+  "fix": {
+   "pathway": [
+    "delegate",
+    {
+     "delegate": 0.51,
+     "transform": 0.48,
+     "none": 0.01
+    }
+   ],
+   "complete": 0.45,
+   "reuse": [
+    0.27,
+    {
+     "0": 0.82,
+     "1": 0.11,
+     "2": 0.06,
+     "3": 0.01
+    }
+   ],
+   "builtin": [
+    "none",
+    {
+     "none": 0.71,
+     "Send Selection to Agent Chat": 0.25,
+     "Agent Chat": 0.02,
+     "Send Focused Window to Agent Chat": 0.01,
+     "Claude Code Terminal": 0.01
+    }
+   ],
+   "script": [
+    "none",
+    {
+     "none": 0.93,
+     "Explain This": 0.04,
+     "Fix Grammar & Spelling": 0.02
+    }
+   ],
+   "app": [
+    "none",
+    {
+     "none": 0.74,
+     "Ghostty": 0.22,
+     "Visual Studio Code - Insiders": 0.02,
+     "Google Chrome": 0.02
+    }
+   ],
+   "menu": [
+    "none",
+    {
+     "none": 0.93,
+     "Edit › Undo": 0.04,
+     "Edit › Find…": 0.01,
+     "View › Command Palette": 0.01
+    }
+   ],
+   "window_op": [
+    "none",
+    {
+     "none": 1
+    }
+   ],
+   "window_target": [
+    "the front window (Ghostty)",
+    {
+     "the front window (Ghostty)": 0.98,
+     "Visual Studio Code - Insiders": 0.02
+    }
+   ],
+   "capture_target": [
+    "note",
+    {
+     "note": 0.44,
+     "none": 0.41,
+     "todo": 0.15
+    }
+   ],
+   "body": [
+    "fix",
+    {
+     "fix": 0.68,
+     "none": 0.32
+    }
+   ],
+   "when": [
+    "none",
+    {
+     "none": 0.92,
+     "fix": 0.08
+    }
+   ],
+   "query": [
+    "fix",
+    {
+     "fix": 0.54,
+     "none": 0.46
+    }
+   ],
+   "task": [
+    "fix",
+    {
+     "fix": 1
+    }
+   ],
+   "script_steps": [
+    "fix",
+    {
+     "fix": 0.72,
+     "none": 0.28
+    }
+   ],
+   "shortcut": [
+    "none",
+    {
+     "none": 0.98,
+     "fix": 0.02
+    }
+   ],
+   "recall_source": [
+    "history",
+    {
+     "history": 0.49,
+     "none": 0.36,
+     "files": 0.1,
+     "clipboard": 0.02,
+     "brain": 0.02,
+     "browser-history": 0.01
+    }
+   ],
+   "transform": [
+    "Explain This",
+    {
+     "Explain This": 0.83,
+     "none": 0.1,
+     "custom": 0.05,
+     "Improve Writing": 0.02
+    }
+   ],
+   "subject": [
+    "selection",
+    {
+     "selection": 0.66,
+     "typed": 0.21,
+     "window": 0.13
+    }
+   ],
+   "project": [
+    "script-kit-gpui",
+    {
+     "script-kit-gpui": 1
+    }
+   ],
+   "compound": 0.28,
+   "refers_back": 0.08
+  }
+ }
+}

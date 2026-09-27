@@ -9,38 +9,11 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use super::engine::{build_questions, EngineOptions, Plan, Step};
-use super::jev::{
-    Answer, Answers, JevError, JevResult, Oracle, Probabilities, Question, Questions,
-};
+use super::fixture_oracle::{answer_key, evaluation, evaluation_requests, Compact};
+use super::jev::{Answers, JevError, JevResult, Oracle, Questions};
 use super::{understand, Catalog, ScreenContext};
 
 const FIXTURE: &str = include_str!("fixtures/replay.json");
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum Compact {
-    Noul(f64),
-    Choice(String, Probabilities),
-    Score(f64, Probabilities),
-}
-
-impl Compact {
-    fn expand(&self) -> Answer {
-        match self {
-            Compact::Noul(noul) => Answer::Noul { noul: *noul },
-            Compact::Choice(choice, probabilities) => Answer::Choice {
-                choice: choice.clone(),
-                confidence: 0.0,
-                probabilities: probabilities.clone(),
-            },
-            Compact::Score(score, probabilities) => Answer::Score {
-                score: *score,
-                confidence: 0.0,
-                probabilities: probabilities.clone(),
-            },
-        }
-    }
-}
 
 #[derive(Deserialize, Debug, PartialEq)]
 struct Expect {
@@ -86,20 +59,6 @@ fn fixture() -> Fixture {
 
 struct Recorded<'a> {
     answers: &'a HashMap<String, HashMap<String, Compact>>,
-}
-
-/// First-round and clause-round answers for the same words differ, so the key says which.
-fn answer_key(state: &serde_json::Value, questions: &Questions) -> String {
-    let request = state["request"].as_str().unwrap_or_default();
-    let first_round = matches!(
-        questions.get("pathway"),
-        Some(Question::Choice { criteria, .. }) if criteria.contains("automate")
-    );
-    if first_round {
-        request.to_string()
-    } else {
-        format!("clause:{request}")
-    }
 }
 
 impl Oracle for Recorded<'_> {
@@ -310,4 +269,248 @@ fn the_questions_jev_sees_match_the_prototype_byte_for_byte() {
             );
         }
     }
+}
+
+fn words_for(fixture: &Fixture, request: &str) -> Vec<super::WordRead> {
+    let case = fixture
+        .cases
+        .iter()
+        .find(|case| case.request == request)
+        .unwrap_or_else(|| panic!("no recorded case for {request:?}"));
+    let oracle = Recorded {
+        answers: &case.answers,
+    };
+    understand(
+        &case.request,
+        &fixture.contexts[&case.ctx],
+        &fixture.catalog,
+        &oracle,
+        &EngineOptions::default(),
+    )
+    .unwrap_or_else(|error| panic!("{request:?}: {error}"))
+    .words
+}
+
+fn said(words: &[super::WordRead]) -> Vec<(super::WordKind, &str)> {
+    words
+        .iter()
+        .filter_map(|w| w.said.as_deref().map(|said| (w.kind, said)))
+        .collect()
+}
+
+#[test]
+fn jev_dissects_each_sentence_into_its_words_from_the_recorded_answers() {
+    use super::WordKind::{Action, Details, Owner, Subject, Target};
+    let fixture = fixture();
+    let cases: &[(&str, &[(super::WordKind, &str)])] = &[
+        (
+            "remind me to call mom tomorrow at 5pm",
+            &[
+                (Subject, "call mom"),
+                (Action, "remind me"),
+                (Details, "tomorrow at 5pm"),
+            ],
+        ),
+        (
+            "have an agent fix the failing tests in script kit",
+            &[
+                (Subject, "the failing tests"),
+                (Action, "fix"),
+                (Target, "in script kit"),
+                (Owner, "have an agent"),
+            ],
+        ),
+        (
+            "summarize this",
+            &[(Subject, "this"), (Action, "summarize")],
+        ),
+        (
+            "add buy oat milk to my todo list",
+            &[
+                (Subject, "buy oat milk"),
+                (Action, "add"),
+                (Target, "to my todo list"),
+            ],
+        ),
+        (
+            "put chrome on the left half",
+            &[
+                (Subject, "chrome"),
+                (Action, "put"),
+                (Target, "on the left half"),
+            ],
+        ),
+        ("open slack", &[(Subject, "slack"), (Action, "open")]),
+    ];
+    let mut wrong = Vec::new();
+    for (request, want) in cases {
+        let words = words_for(&fixture, request);
+        let got = said(&words);
+        if got.as_slice() != *want {
+            wrong.push(format!("{request:?}\n  want {want:?}\n  got  {got:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+#[test]
+fn every_word_jev_reads_is_its_own_run_of_the_users_words() {
+    let fixture = fixture();
+    for case in &fixture.cases {
+        let words = words_for(&fixture, &case.request);
+        assert_eq!(
+            words.iter().map(|w| w.kind).collect::<Vec<_>>(),
+            super::WordKind::ALL.to_vec(),
+            "{:?}",
+            case.request
+        );
+        let mut runs: Vec<std::ops::Range<usize>> = Vec::new();
+        for word in &words {
+            let Some(said) = word.said.as_deref() else {
+                continue;
+            };
+            assert!(
+                !said.trim().is_empty(),
+                "{:?}: empty {:?}",
+                case.request,
+                word.kind
+            );
+            let at = case
+                .request
+                .find(said)
+                .unwrap_or_else(|| panic!("{:?}: {said:?} isn't in it", case.request));
+            let run = at..at + said.len();
+            assert!(
+                runs.iter()
+                    .all(|r| run.end <= r.start || r.end <= run.start),
+                "{:?}: {:?} {said:?} overlaps another word",
+                case.request,
+                word.kind
+            );
+            runs.push(run);
+        }
+    }
+}
+
+/// Answers from the evaluation fixture; a round it has none for is written where
+/// `record-jev-answers.ts` picks it up.
+struct Evaluated<'a> {
+    answers: &'a HashMap<String, HashMap<String, Compact>>,
+    ctx: &'a str,
+    missing: std::sync::Mutex<Vec<String>>,
+}
+
+impl Oracle for Evaluated<'_> {
+    fn ask(&self, state: &serde_json::Value, questions: &Questions) -> Result<JevResult, JevError> {
+        let key = answer_key(state, questions);
+        if let Some(set) = self.answers.get(&key) {
+            return Ok(JevResult {
+                answers: set.iter().map(|(n, a)| (n.clone(), a.expand())).collect(),
+                ..JevResult::default()
+            });
+        }
+        let dir = std::env::temp_dir().join("intent-evaluation");
+        let _ = std::fs::create_dir_all(&dir);
+        let round = serde_json::json!({
+            "key": key,
+            "ctx": self.ctx,
+            "request": state["request"],
+            "state": state,
+            "questions": questions,
+        });
+        let path = dir.join(format!("{}.json", super::script::slugify(&key)));
+        let _ = std::fs::write(&path, round.to_string());
+        if let Ok(mut missing) = self.missing.lock() {
+            missing.push(key.clone());
+        }
+        Err(JevError::Decode(format!("no recorded answers for {key}")))
+    }
+}
+
+#[test]
+fn evaluation_sentences_have_jevs_recorded_answers() {
+    let fixture = fixture();
+    let evaluation = evaluation();
+    assert!(
+        !evaluation.sentences.is_empty(),
+        "evaluation fixture lost its sentences"
+    );
+    let mut missing = Vec::new();
+    for sentence in &evaluation.sentences {
+        for request in evaluation_requests(sentence) {
+            let oracle = Evaluated {
+                answers: &evaluation.answers,
+                ctx: &sentence.ctx,
+                missing: std::sync::Mutex::new(Vec::new()),
+            };
+            let _ = understand(
+                &request,
+                &fixture.contexts[&sentence.ctx],
+                &fixture.catalog,
+                &oracle,
+                &EngineOptions::default(),
+            );
+            missing.extend(oracle.missing.into_inner().unwrap_or_default());
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "{} rounds have no recorded answers: {missing:?}\nTheir questions are in {}; run \
+         `bun scripts/agentic/one-window/record-jev-answers.ts`, then this test again.",
+        missing.len(),
+        std::env::temp_dir().join("intent-evaluation").display()
+    );
+}
+
+#[test]
+fn evaluation_jev_reads_the_s04_sentences_into_their_words() {
+    use super::WordKind::{Action, Details, Owner, Subject, Target};
+    let fixture = fixture();
+    let evaluation = evaluation();
+    let cases: &[(&str, &str, &[(super::WordKind, &str)])] = &[
+        (
+            "chrome",
+            "send what I copied to sarah tomorrow at 9",
+            &[
+                (Subject, "what I copied"),
+                (Action, "send"),
+                (Target, "to sarah"),
+                (Details, "tomorrow at 9"),
+            ],
+        ),
+        (
+            "mail",
+            "summarize this @clipboard .concise",
+            &[(Subject, "this"), (Action, "summarize")],
+        ),
+        (
+            "ghostty",
+            "have the agent fix this",
+            &[
+                (Subject, "this"),
+                (Action, "fix"),
+                (Owner, "have the agent"),
+            ],
+        ),
+        ("ghostty", "fix this", &[(Subject, "this"), (Action, "fix")]),
+    ];
+    let mut wrong = Vec::new();
+    for (ctx, request, want) in cases {
+        let oracle = Recorded {
+            answers: &evaluation.answers,
+        };
+        let plan = understand(
+            request,
+            &fixture.contexts[*ctx],
+            &fixture.catalog,
+            &oracle,
+            &EngineOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("{request:?}: {error}"));
+        let got = said(&plan.words);
+        if got.as_slice() != *want {
+            wrong.push(format!("{request:?}\n  want {want:?}\n  got  {got:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

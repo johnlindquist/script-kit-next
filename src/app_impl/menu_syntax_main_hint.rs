@@ -19,18 +19,6 @@ macro_rules! update_form_input {
 }
 
 impl ScriptListApp {
-    pub(crate) fn update_main_input_tab_navigation_for_menu_syntax_form(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let handler_form_owns_input = self.menu_syntax_capture_form_owns_input();
-        self.gpui_input_state.update(cx, |state, cx| {
-            state.set_tab_navigation(handler_form_owns_input, cx);
-        });
-        let _ = window;
-    }
-
     fn menu_syntax_form_signature(form: &crate::menu_syntax::MenuSyntaxFormSnapshot) -> String {
         let mut signature = format!("{}:", form.target);
         for field in &form.fields {
@@ -45,12 +33,6 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.update_main_input_tab_navigation_for_menu_syntax_form(window, cx);
-        if !self.menu_syntax_capture_form_owns_input() {
-            self.clear_menu_syntax_form_inputs();
-            return;
-        }
-
         let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
             self.clear_menu_syntax_form_inputs();
             return;
@@ -583,7 +565,6 @@ impl ScriptListApp {
             };
             app.update(cx, |this, cx| {
                 if !this.menu_syntax_form_input_active
-                    || !this.menu_syntax_capture_form_owns_input()
                     || this.menu_syntax_form_draft_field_id.as_deref() != Some(field_id.as_str())
                 {
                     return;
@@ -660,17 +641,6 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    pub(crate) fn menu_syntax_capture_form_owns_input(&self) -> bool {
-        self.menu_syntax_capture_form_owns_input_for(&self.filter_text)
-    }
-
-    pub(crate) fn menu_syntax_capture_form_owns_input_for(&self, raw_filter_text: &str) -> bool {
-        matches!(self.current_view, AppView::ScriptList)
-            && self
-                .menu_syntax_capture_form_target_for(raw_filter_text)
-                .is_some()
-    }
-
     pub(crate) fn focus_next_menu_syntax_form_field(
         &mut self,
         window: &mut Window,
@@ -694,9 +664,6 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.menu_syntax_capture_form_owns_input() {
-            return false;
-        }
         let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
             return false;
         };
@@ -821,20 +788,8 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.menu_syntax_capture_form_owns_input() {
-            return false;
-        }
         if modifiers.platform || modifiers.alt || modifiers.control {
             return false;
-        }
-
-        if Self::is_menu_syntax_form_tab_key(key, key_char) {
-            if modifiers.shift {
-                self.focus_previous_menu_syntax_form_field(window, cx);
-            } else {
-                self.focus_next_menu_syntax_form_field(window, cx);
-            }
-            return true;
         }
 
         let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
@@ -843,6 +798,14 @@ impl ScriptListApp {
         let Some(form) = snapshot.form else {
             return false;
         };
+        if Self::is_menu_syntax_form_tab_key(key, key_char) {
+            if modifiers.shift {
+                self.focus_previous_menu_syntax_form_field(window, cx);
+            } else {
+                self.focus_next_menu_syntax_form_field(window, cx);
+            }
+            return true;
+        }
         let suggestions_active = self
             .active_menu_syntax_form_suggestion_field(&form)
             .is_some();
@@ -896,7 +859,7 @@ impl ScriptListApp {
         if self.handle_menu_syntax_form_control_key_input(key, key_char, modifiers, window, cx) {
             return true;
         }
-        if !self.menu_syntax_form_input_active || !self.menu_syntax_capture_form_owns_input() {
+        if !self.menu_syntax_form_input_active {
             return false;
         }
         if modifiers.alt || modifiers.control {
@@ -1163,7 +1126,7 @@ impl ScriptListApp {
             .as_ref()
             .filter(|pending| pending.is_current_for(raw_filter_text))
             .map(|pending| &pending.proposal);
-        let mut snapshot = crate::menu_syntax::build_menu_syntax_main_hint(
+        crate::menu_syntax::build_menu_syntax_main_hint(
             crate::menu_syntax::MenuSyntaxMainHintContext {
                 raw_filter_text,
                 mode: &self.menu_syntax_mode,
@@ -1177,135 +1140,7 @@ impl ScriptListApp {
                 advanced_query_results_empty,
                 menu_syntax_ai_proposal,
             },
-        )?;
-
-        if matches!(
-            snapshot.kind,
-            crate::menu_syntax::MenuSyntaxMainHintKind::CaptureComposer
-        ) || self
-            .menu_syntax_capture_form_target_for(raw_filter_text)
-            .is_some()
-        {
-            if let Some(target) = self.menu_syntax_capture_form_target_for(raw_filter_text) {
-                let store = crate::menu_syntax::history::HistoryStore::from_env();
-                let tag_pool = store.try_read_tag_pool(&target).unwrap_or_default();
-                if let Ok(pool) = store.try_read_tag_pool(&target) {
-                    let recent: Vec<String> = pool
-                        .iter()
-                        .take(5)
-                        .map(|tf| format!("#{}", tf.tag))
-                        .collect();
-                    if !recent.is_empty() {
-                        let value = recent.join(" ");
-                        if let Some(existing) =
-                            snapshot.rows.iter_mut().find(|row| row.label == "Tags")
-                        {
-                            existing.value = value;
-                        } else {
-                            snapshot
-                                .rows
-                                .push(crate::menu_syntax::MenuSyntaxMainHintRow {
-                                    label: "Recent tags".to_string(),
-                                    value,
-                                    chips: Vec::new(),
-                                });
-                        }
-                    }
-                }
-
-                let invocation_for_form =
-                    self.menu_syntax_capture_form_invocation_for_form(raw_filter_text);
-
-                if let Some(invocation) = invocation_for_form.as_ref() {
-                    let mut seen: std::collections::HashSet<&str> =
-                        std::collections::HashSet::new();
-                    for (key, _) in invocation.kv.iter().take(3) {
-                        if !seen.insert(key.as_str()) {
-                            continue;
-                        }
-                        if let Ok(pool) = store.try_read_key_pool(&target, key) {
-                            let recent: Vec<String> =
-                                pool.iter().take(3).map(|vf| vf.value.clone()).collect();
-                            if !recent.is_empty() {
-                                snapshot
-                                    .rows
-                                    .push(crate::menu_syntax::MenuSyntaxMainHintRow {
-                                        label: format!("Recent {key}"),
-                                        value: recent.join(", "),
-                                        chips: Vec::new(),
-                                    });
-                            }
-                        }
-                    }
-                    if let Some(schema) = crate::menu_syntax::builtin_schema(&target) {
-                        let validation =
-                            crate::menu_syntax::capture_schema::validate(invocation, &schema);
-                        let priority_values = schema
-                            .optional
-                            .iter()
-                            .chain(schema.required.iter())
-                            .find(|req| {
-                                matches!(
-                                    req,
-                                    crate::menu_syntax::capture_schema::FieldRequirement::Priority
-                                )
-                            })
-                            .map(|req| {
-                                req.enum_values()
-                                    .iter()
-                                    .map(|value| value.to_string())
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_default();
-                        let object_candidates =
-                            crate::menu_syntax::payload::object_kind_for_capture_target(&target)
-                                .map(|kind| {
-                                    crate::menu_syntax::search_root_object_candidates_direct(
-                                        kind, "", 10,
-                                    )
-                                })
-                                .unwrap_or_default();
-                        let mut form = crate::menu_syntax::build_capture_form_snapshot(
-                            &schema,
-                            invocation,
-                            self.menu_syntax_form_focused_index,
-                            &validation,
-                            crate::menu_syntax::MenuSyntaxFormSuggestionPools {
-                                tags: tag_pool,
-                                priority_values,
-                                date_values: store
-                                    .try_read_key_pool(&target, "date")
-                                    .unwrap_or_default(),
-                                url_values: store
-                                    .try_read_key_pool(&target, "url")
-                                    .unwrap_or_default(),
-                                objects: object_candidates,
-                            },
-                        );
-                        if self.menu_syntax_form_input_active {
-                            for field in &mut form.fields {
-                                if field.focused
-                                    && self
-                                        .menu_syntax_form_draft_field_id
-                                        .as_deref()
-                                        .is_some_and(|id| id == field.id)
-                                {
-                                    field.value = self.menu_syntax_form_draft_value.clone();
-                                }
-                            }
-                        } else {
-                            for field in &mut form.fields {
-                                field.focused = false;
-                            }
-                        }
-                        self.annotate_menu_syntax_form_suggestion_selection(&mut form);
-                        snapshot.form = Some(form);
-                    }
-                }
-            }
-        }
-
-        Some(snapshot)
+        )
     }
 
     fn menu_syntax_capture_form_target_for(&self, raw_filter_text: &str) -> Option<String> {

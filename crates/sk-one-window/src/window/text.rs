@@ -25,6 +25,9 @@ impl OneWindow {
             return;
         }
         self.text = text;
+        if self.text.trim().is_empty() {
+            self.agent_owns = false;
+        }
         self.host_names.clear();
         self.list.on_text(&self.text);
         self.list.steady.on_text(now, &self.text, typed);
@@ -43,6 +46,13 @@ impl OneWindow {
 
     pub(super) fn refresh_rows(&mut self) {
         let empty = self.text.trim().is_empty();
+        self.list.owned = self.agent_owns && !empty;
+        if self.list.owned {
+            self.list.pinned = vec![crate::strip::owner_row(&self.text)];
+            self.list.names.clear();
+            self.list.move_sel(0);
+            return;
+        }
         let mut pins = self.host_pinned.clone();
         if let Some(staged) = &self.staged {
             if empty {

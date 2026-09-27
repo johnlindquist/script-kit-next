@@ -2,6 +2,7 @@
 //! connect it to `ScriptListApp`.
 
 pub(crate) mod automations;
+pub(crate) mod capture;
 pub(crate) mod chat_entry;
 pub(crate) mod chat_host;
 pub(crate) mod connections;
@@ -12,7 +13,9 @@ pub(crate) mod ledger_view;
 pub(crate) mod lessons_host;
 pub(crate) mod marks;
 pub(crate) mod notes;
+pub(crate) mod owner_pill;
 pub(crate) mod past_chats;
+pub(crate) mod reading;
 pub(crate) mod saved_scripts;
 pub(crate) mod share;
 pub(crate) mod shortcut_view;

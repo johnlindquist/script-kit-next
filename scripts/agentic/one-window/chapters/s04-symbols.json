@@ -1,0 +1,117 @@
+[
+  {
+    "name": "ac-at",
+    "type": "@",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-at-cl",
+    "append": "cl",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-at-cl-tab",
+    "key": "tab",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-slash",
+    "type": "/",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-slash-re",
+    "append": "re",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-slash-re-tab",
+    "key": "tab",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-dot",
+    "type": ".",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-dot-co",
+    "append": "co",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-project",
+    "type": ">:",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-profile",
+    "type": "|",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-capture",
+    "type": ";",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-capture-to",
+    "append": "to",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-capture-unknown",
+    "type": ";xyz",
+    "waitMs": 500
+  },
+  {
+    "name": "ac-todo-semicolon",
+    "type": "todo;",
+    "waitMs": 500
+  },
+  {
+    "name": "sym-subject-owner-details",
+    "type": "@clipboard |creative .concise due:friday",
+    "waitMs": 600
+  },
+  {
+    "name": "sym-selection-dev",
+    "type": "summarize @selection for >:dev",
+    "waitMs": 600
+  },
+  {
+    "name": "sym-rewrite",
+    "type": "/rewrite @selection .professional",
+    "waitMs": 600
+  },
+  {
+    "name": "sym-todo-due",
+    "type": "todo; buy milk due:friday",
+    "waitMs": 600
+  },
+  {
+    "name": "sym-capture-prefix",
+    "type": ";todo buy milk",
+    "waitMs": 600
+  },
+  {
+    "name": "sym-file",
+    "type": "@file:readme.md",
+    "waitMs": 600
+  },
+  {
+    "name": "sym-plain",
+    "type": "e.g. 3.5 a|b file.txt",
+    "waitMs": 600
+  },
+  {
+    "name": "sym-note-tag",
+    "type": "note; idea for the talk #ideas ",
+    "waitMs": 600
+  },
+  {
+    "name": "sym-not-capture",
+    "type": "hello; world",
+    "waitMs": 600
+  }
+]

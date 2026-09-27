@@ -28,6 +28,9 @@ impl ScriptListApp {
         if let Some(px) = self.one_window_view_height() {
             return px.min(self.one_window_height_ceiling());
         }
+        if self.menu_syntax_card_owns_list() {
+            return self.one_window_height_ceiling();
+        }
         let (grouped, _) = self.get_grouped_results_cached();
         let heights = crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
             self.current_main_menu_theme,
@@ -41,6 +44,21 @@ impl ScriptListApp {
             ))
             + crate::footer_popup::main_window_footer_reservation_height();
         (chrome + list + self.one_window_view_extra_height()).min(self.one_window_height_ceiling())
+    }
+
+    /// Whether a command composer or filter guide fills the list area in place of rows; it has no
+    /// rows to measure, so it gets the whole window. A typed capture is a row.
+    fn menu_syntax_card_owns_list(&self) -> bool {
+        let text = self.filter_text.as_str();
+        if self.menu_syntax_trigger_picker_state.owns_main_list()
+            || self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_mode.capture_composer_owns_input_for(text)
+        {
+            return false;
+        }
+        (self.menu_syntax_mode.command_owns_input_for(text)
+            && !self.spine_projection_owns_main_list())
+            || crate::menu_syntax::active_filter_head_owns_main_list(text)
     }
 
     pub(super) fn one_window_apply_height(

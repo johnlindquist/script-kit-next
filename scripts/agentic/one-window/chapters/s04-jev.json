@@ -1,0 +1,218 @@
+[
+ {
+  "name": "s1-00-send",
+  "type": "send",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-01-what",
+  "append": " what",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-02-i",
+  "append": " I",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-03-copied",
+  "append": " copied",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-04-to",
+  "append": " to",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-05-sarah",
+  "append": " sarah",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-06-tomorrow",
+  "append": " tomorrow",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-07-at",
+  "append": " at",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-08-9",
+  "append": " 9",
+  "waitMs": 260
+ },
+ {
+  "name": "s1-settled",
+  "waitMs": 1200
+ },
+ {
+  "name": "s1-why",
+  "key": "right",
+  "waitMs": 700
+ },
+ {
+  "name": "s1-back",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "s2-00-summarize",
+  "type": "summarize",
+  "waitMs": 260
+ },
+ {
+  "name": "s2-01-this",
+  "append": " this",
+  "waitMs": 260
+ },
+ {
+  "name": "s2-02-clipboard",
+  "append": " @clipboard",
+  "waitMs": 260
+ },
+ {
+  "name": "s2-03-concise",
+  "append": " .concise",
+  "waitMs": 260
+ },
+ {
+  "name": "s2-settled",
+  "waitMs": 1200
+ },
+ {
+  "name": "s2-space",
+  "append": " ",
+  "waitMs": 1200
+ },
+ {
+  "name": "s2-why",
+  "key": "right",
+  "waitMs": 700
+ },
+ {
+  "name": "s2-back",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "s3-00-have",
+  "type": "have",
+  "waitMs": 260
+ },
+ {
+  "name": "s3-01-the",
+  "append": " the",
+  "waitMs": 260
+ },
+ {
+  "name": "s3-02-agent",
+  "append": " agent",
+  "waitMs": 260
+ },
+ {
+  "name": "s3-03-fix",
+  "append": " fix",
+  "waitMs": 260
+ },
+ {
+  "name": "s3-04-this",
+  "append": " this",
+  "waitMs": 260
+ },
+ {
+  "name": "s3-settled",
+  "waitMs": 1200
+ },
+ {
+  "name": "s3-why",
+  "key": "right",
+  "waitMs": 700
+ },
+ {
+  "name": "s3-back",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "s4-00-fix",
+  "type": "fix",
+  "waitMs": 260
+ },
+ {
+  "name": "s4-01-this",
+  "append": " this",
+  "waitMs": 260
+ },
+ {
+  "name": "s4-settled",
+  "waitMs": 1200
+ },
+ {
+  "name": "s4-tab",
+  "key": "tab",
+  "waitMs": 600
+ },
+ {
+  "name": "s4-tab-typed-on",
+  "append": " now",
+  "waitMs": 600
+ },
+ {
+  "name": "s4-why",
+  "key": "right",
+  "waitMs": 700
+ },
+ {
+  "name": "s4-why-back",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "s4-let-go",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "r-remind",
+  "type": "remind me to call mom tomorrow at 5pm",
+  "waitMs": 1500
+ },
+ {
+  "name": "r-agent",
+  "type": "have an agent fix the failing tests in script kit",
+  "waitMs": 1500
+ },
+ {
+  "name": "r-todo",
+  "type": "add buy oat milk to my todo list",
+  "waitMs": 1500
+ },
+ {
+  "name": "r-window",
+  "type": "put chrome on the left half",
+  "waitMs": 1500
+ },
+ {
+  "name": "r-summarize",
+  "type": "summarize this",
+  "waitMs": 1500
+ },
+ {
+  "name": "r-open",
+  "type": "open slack",
+  "waitMs": 1500
+ },
+ {
+  "name": "r-open-why",
+  "key": "right",
+  "waitMs": 700
+ },
+ {
+  "name": "r-open-back",
+  "key": "escape",
+  "waitMs": 500
+ }
+]

@@ -186,11 +186,6 @@ impl ScriptListApp {
             .filter(|reply| !reply.is_empty())
     }
 
-    /// Tab with words typed on the list hands them to an agent.
-    pub(crate) fn one_window_tab_hands_to_agent(&self) -> bool {
-        !self.one_window.in_view() && !self.one_window.text().trim().is_empty()
-    }
-
     /// Rows that open work in place instead of running: the steps row, asking the model, and a
     /// reading that hands the job to an agent.
     pub(crate) fn one_window_route_work(&mut self, row: &Row, cx: &mut Context<Self>) -> bool {

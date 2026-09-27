@@ -750,9 +750,7 @@ pub struct IncompleteSyntax {
 pub const PICKER_VISIBLE_CAPTURE_TARGETS: &[&str] =
     &["todo", "note", "link", "snippet", "cal", "social"];
 
-pub const KNOWN_CAPTURE_TARGETS: &[&str] = &[
-    "todo", "note", "link", "snippet", "cal", "social", "reminder", "snooze", "defer", "notes",
-];
+pub const KNOWN_CAPTURE_TARGETS: &[&str] = sk_one_window::contract::CAPTURE_TARGETS;
 
 pub fn is_known_capture_target(target: &str) -> bool {
     resolve_capture_target(target).is_some()
