@@ -264,6 +264,12 @@ everything that used to pop up now lands in the line above the input, which the
 `src/toast_popup.rs`, `src/toast_manager/**`, `src/undo_offer.rs`, `src/hud_manager/**`,
 `src/warning_banner.rs`, and the modal key-owner interceptor. Do not bring any of them back.
 
+Nothing floats over the main window, because there is nothing else to float over: the Notes,
+Dictation, detached chat, history, actions and footer-overlay windows are all gone (2026-09-27),
+and the only other window the app ever opens is the snap overlay drawn while snapping a window to a
+screen edge. Automation targets are the main window or a view's surface id inside it; a test that
+needs "a second window" to prove targeting has nothing real to target.
+
 - Every action declares its risk instead of asking. Irreversible (quit, shut down, empty the
   Trash, clear history, permanent deletes, anything in `DEFAULT_CONFIRMATION_COMMANDS`) waits
   8 s in the line ("Runs in 8s" / "Sending in 8s") and runs only when the wait runs out

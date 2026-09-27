@@ -2,6 +2,8 @@
 
 This document defines the main user-facing UI surfaces and components in Script Kit GPUI and maps them to their respective locations in the source code.
 
+There is one window. Every surface below is a view under the main window's input; nothing floats over it (no Notes, Dictation, chat, history, actions, footer-overlay, confirm, toast or HUD window). The only other window the app opens is the snap overlay shown while snapping a window to a screen edge.
+
 ---
 
 ## App-independent domain crates

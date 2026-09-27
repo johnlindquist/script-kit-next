@@ -730,50 +730,6 @@ fn surface_collector_emits_snapshot_log_with_kind() {
     );
 }
 
-/// Every automation window kind must reach its own collector.
-///
-/// Asserted against a WHITESPACE-NORMALISED copy of the source, not the raw
-/// text. The raw form of this test failed for a year on a pure formatting
-/// change: rustfmt wrapped the `AgentChatDetached` arm across two lines, so
-/// the exact one-line substring stopped matching while the routing itself was
-/// perfectly correct. Because this target also failed to COMPILE, nobody saw
-/// it — a red test hidden behind a red build.
-///
-/// Normalising means the check survives line wrapping and indentation, and
-/// only fails when an arm genuinely stops routing where it should. Per the
-/// repo's Source Audit Test Policy this is the pruning rule applied: rewrite
-/// structurally rather than patch the string again.
-#[test]
-fn surface_collector_routes_notes() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    let normalised = source.split_whitespace().collect::<Vec<_>>().join(" ");
-
-    for (kind, collector) in [("Notes", "collect_notes_snapshot")] {
-        let head = format!("AutomationWindowKind::{kind} =>");
-        let start = normalised
-            .find(&head)
-            .unwrap_or_else(|| panic!("surface collector has no match arm for {kind}"));
-
-        // Only the body of THIS arm counts. An arm may open a block
-        // (`=> { collect_x(..)`) or call directly (`=> collect_x(..)`), and
-        // rustfmt moves freely between those two shapes, so the assertion
-        // must not depend on which one is in force today. Bounding the search
-        // at the next arm is what keeps this honest: a collector named
-        // anywhere else in the file cannot satisfy it.
-        let rest = &normalised[start + head.len()..];
-        let body = match rest.find("AutomationWindowKind::") {
-            Some(next) => &rest[..next],
-            None => rest,
-        };
-
-        assert!(
-            body.contains(collector),
-            "surface collector must route {kind} targets to {collector}; \
-             that arm's body was {body:.120?}"
-        );
-    }
-}
-
 #[test]
 fn prompt_handler_emits_elements_result_log() {
     let source = include_str!("../../src/prompt_handler/mod.rs");
@@ -784,24 +740,6 @@ fn prompt_handler_emits_elements_result_log() {
     assert!(
         source.contains("target = ?target"),
         "getElements log must include target field for cross-window tracing"
-    );
-}
-
-#[test]
-fn prompt_handler_emits_batch_notes_log() {
-    let source = include_str!("../../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("automation.batch.notes.completed"),
-        "batch handler must emit Notes completion log"
-    );
-}
-
-#[test]
-fn prompt_handler_emits_notes_target_resolution_log() {
-    let source = include_str!("../../src/prompt_handler/mod.rs");
-    assert!(
-        source.contains("automation.target.notes_resolved"),
-        "resolve_automation_read_target must emit Notes resolution log"
     );
 }
 
