@@ -17,7 +17,7 @@ mod grouped_list_state_tests {
     #[test]
     fn first_selectable_skips_all_inert_prefix_rows() {
         let rows = vec![
-            GroupedListItem::ReservedSectionSlot,
+            GroupedListItem::SectionHeader("Suggested".to_owned(), None),
             GroupedListItem::SectionHeader("Loading".to_owned(), None),
             loading_status(),
             GroupedListItem::SectionHeader("Commands".to_owned(), None),
@@ -39,7 +39,7 @@ mod grouped_list_state_tests {
             GroupedListItem::Item(0),
             loading_status(),
             GroupedListItem::SectionHeader("Second".to_owned(), None),
-            GroupedListItem::ReservedSectionSlot,
+            GroupedListItem::SectionHeader("Third".to_owned(), None),
             GroupedListItem::Item(1),
             loading_status(),
             GroupedListItem::Item(2),
@@ -62,7 +62,7 @@ mod grouped_list_state_tests {
         assert_eq!(empty.next_selectable(0), None);
 
         let rows = vec![
-            GroupedListItem::ReservedSectionSlot,
+            GroupedListItem::SectionHeader("Suggested".to_owned(), None),
             GroupedListItem::SectionHeader("Loading".to_owned(), None),
             loading_status(),
         ];
@@ -197,46 +197,24 @@ mod row_chrome_rgba_tests {
 
 #[cfg(test)]
 mod row_shortcut_policy_tests {
-    use super::{
-        should_show_row_shortcut, should_show_search_shortcut, RowShortcutVisibilityPolicy,
-    };
+    use super::{should_show_row_shortcut, RowShortcutVisibilityPolicy};
 
+    /// The one-window row has no keycaps; only the actions dialog opts in.
     #[test]
-    fn selected_only_shows_shortcut_on_focused_row() {
-        let p = RowShortcutVisibilityPolicy::SelectedOnly;
-        assert!(should_show_row_shortcut(p, true, false));
-        assert!(should_show_row_shortcut(p, true, true));
-    }
-
-    #[test]
-    fn selected_only_hides_shortcut_on_unfocused_row() {
-        let p = RowShortcutVisibilityPolicy::SelectedOnly;
-        assert!(!should_show_row_shortcut(p, false, false));
-        assert!(!should_show_row_shortcut(p, false, true));
-    }
-
-    #[test]
-    fn all_rows_always_shows_shortcut() {
-        let p = RowShortcutVisibilityPolicy::AllRows;
-        assert!(should_show_row_shortcut(p, true, false));
-        assert!(should_show_row_shortcut(p, true, true));
-        assert!(should_show_row_shortcut(p, false, false));
-        assert!(should_show_row_shortcut(p, false, true));
-    }
-
-    #[test]
-    fn search_shortcut_delegates_to_selected_only() {
-        // Dense launcher rows use SelectedOnly — only selected rows show shortcuts.
-        assert!(should_show_search_shortcut(true, true, false));
-        assert!(!should_show_search_shortcut(true, false, false));
-        assert!(!should_show_search_shortcut(false, false, false));
+    fn rows_carry_no_keycaps_unless_they_opt_in() {
+        assert!(!should_show_row_shortcut(
+            RowShortcutVisibilityPolicy::Hidden
+        ));
+        assert!(should_show_row_shortcut(
+            RowShortcutVisibilityPolicy::AllRows
+        ));
     }
 }
 
 #[cfg(test)]
 mod render_section_header_source_tests {
     use super::{
-        ensure_launcher_section_slot, grouped_list_item_eligibility,
+        ensure_launcher_lead_header, grouped_list_item_eligibility,
         resolve_section_header_presentation, GroupedListItem, SectionPresentationFamily,
         SectionTextTier,
     };
@@ -280,33 +258,46 @@ mod render_section_header_source_tests {
         assert_eq!(preserved.label_tier, SectionTextTier::Muted);
     }
 
+    /// Every launcher list leads with a real header whose words follow
+    /// `sk_one_window::list::lead_header`.
     #[test]
-    fn launcher_section_slot_is_stable_inert_and_non_semantic() {
-        let mut ungrouped = vec![GroupedListItem::Item(0)];
-        ensure_launcher_section_slot(&mut ungrouped);
-        assert!(matches!(
-            ungrouped.as_slice(),
-            [
-                GroupedListItem::ReservedSectionSlot,
-                GroupedListItem::Item(0)
-            ]
-        ));
-        let reserved = grouped_list_item_eligibility(&ungrouped[0]);
-        assert!(!reserved.focusable && !reserved.selectable && !reserved.activatable);
+    fn launcher_lists_lead_with_an_inert_header() {
+        use sk_one_window::contract::words;
+        for (has_text, expected) in [(true, words::MATCHES), (false, words::PINNED)] {
+            let mut ungrouped = vec![GroupedListItem::Item(0)];
+            ensure_launcher_lead_header(&mut ungrouped, has_text, false);
+            assert!(matches!(
+                ungrouped.as_slice(),
+                [GroupedListItem::SectionHeader(label, None), GroupedListItem::Item(0)]
+                    if label == expected
+            ));
+            let lead = grouped_list_item_eligibility(&ungrouped[0]);
+            assert!(!lead.focusable && !lead.selectable && !lead.activatable);
+        }
 
         let mut grouped = vec![
             GroupedListItem::SectionHeader("Recent".into(), None),
             GroupedListItem::Item(0),
         ];
-        ensure_launcher_section_slot(&mut grouped);
-        assert_eq!(grouped.len(), 2, "a real first header must keep the slot");
+        ensure_launcher_lead_header(&mut grouped, false, false);
+        assert!(
+            matches!(grouped.as_slice(), [GroupedListItem::SectionHeader(label, None), _] if label == "Recent"),
+            "an authored first header is kept"
+        );
+
+        let mut fallbacks = vec![
+            GroupedListItem::SectionHeader("Use \"zzz\" with...".into(), None),
+            GroupedListItem::Item(0),
+        ];
+        ensure_launcher_lead_header(&mut fallbacks, true, true);
+        assert!(matches!(
+            fallbacks.as_slice(),
+            [GroupedListItem::SectionHeader(label, None), _] if label == words::NO_MATCHES
+        ));
 
         let mut empty = Vec::new();
-        ensure_launcher_section_slot(&mut empty);
-        assert!(
-            empty.is_empty(),
-            "zero results must not expose an empty slot"
-        );
+        ensure_launcher_lead_header(&mut empty, true, false);
+        assert!(empty.is_empty(), "the empty state draws its own header");
     }
 
     #[test]

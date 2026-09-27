@@ -49,6 +49,8 @@ pub struct ActionsPopupRowTokens {
     pub selection_opacity: f32,
     pub hover_opacity: f32,
     pub title_font_size: f32,
+    /// Action rows have no icon tile to mark focus, so they keep a fill.
+    pub selected_fill_alpha: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -112,6 +114,7 @@ pub fn base_actions_popup_theme() -> ActionsPopupThemeDef {
             // Matches the main-list name font (14): 13 read as too small in
             // practice even though action rows are one-line commands.
             title_font_size: 14.0,
+            selected_fill_alpha: 0x20,
         },
         section: ActionsPopupSectionTokens {
             padding_x: crate::actions::constants::ACTION_PADDING_X,

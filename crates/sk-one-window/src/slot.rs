@@ -4,7 +4,7 @@
 //! What it says, first match wins: an override a view set, the staged subject ("Acting on"),
 //! the newest message waiting to go ("Sending in 8s"), the last thing that ran ("Last", dimmed),
 //! and before anything ran, what "this" means ("Focused", dimmed). How dim it is depends on the
-//! window too, so the window decides it (`OneWindow::slot_opacity`).
+//! window too, so the window decides it (`OneWindow::slot_style`).
 
 use serde::{Deserialize, Serialize};
 
@@ -74,5 +74,87 @@ impl SlotLine {
             && self.label == other.label
             && self.title == other.title
             && self.sub == other.sub
+    }
+}
+
+/// How strongly the line is drawn. Only this eases, over [`SLOT_DIM_EASE_MS`].
+///
+/// [`SLOT_DIM_EASE_MS`]: crate::contract::SLOT_DIM_EASE_MS
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SlotStyle {
+    pub opacity: f32,
+    /// Inside a view its keys belong to the view, so the line's own hints are hidden.
+    pub hints: bool,
+}
+
+impl SlotStyle {
+    pub fn new(kind: SlotKind, typing: bool, in_view: bool) -> Self {
+        use crate::contract::slot_opacity as o;
+        if in_view && !matches!(kind, SlotKind::Holding | SlotKind::Typing) {
+            return Self {
+                opacity: o::IN_VIEW_NOT_HOLDING,
+                hints: false,
+            };
+        }
+        let opacity = match kind {
+            SlotKind::Focused if typing => o::TYPING_FOCUSED,
+            SlotKind::Recent if typing => o::TYPING_RECENT,
+            SlotKind::Focused => o::FOCUSED,
+            SlotKind::Recent => o::RECENT,
+            SlotKind::Staged | SlotKind::Holding | SlotKind::Typing => 1.0,
+        };
+        Self {
+            opacity,
+            hints: true,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contract::slot_opacity as o;
+
+    #[test]
+    fn context_is_dimmed_and_dims_further_while_typing() {
+        assert_eq!(
+            SlotStyle::new(SlotKind::Focused, false, false).opacity,
+            o::FOCUSED
+        );
+        assert_eq!(
+            SlotStyle::new(SlotKind::Recent, false, false).opacity,
+            o::RECENT
+        );
+        assert_eq!(
+            SlotStyle::new(SlotKind::Focused, true, false).opacity,
+            o::TYPING_FOCUSED
+        );
+        assert_eq!(
+            SlotStyle::new(SlotKind::Recent, true, false).opacity,
+            o::TYPING_RECENT
+        );
+    }
+
+    #[test]
+    fn staged_and_holding_lines_are_full_strength() {
+        for typing in [false, true] {
+            assert_eq!(SlotStyle::new(SlotKind::Staged, typing, false).opacity, 1.0);
+            assert_eq!(
+                SlotStyle::new(SlotKind::Holding, typing, false).opacity,
+                1.0
+            );
+        }
+    }
+
+    #[test]
+    fn inside_a_view_only_a_waiting_message_or_dictated_words_keep_strength_and_hints() {
+        let focused = SlotStyle::new(SlotKind::Focused, false, true);
+        assert_eq!(focused.opacity, o::IN_VIEW_NOT_HOLDING);
+        assert!(!focused.hints);
+        for kind in [SlotKind::Holding, SlotKind::Typing] {
+            let style = SlotStyle::new(kind, false, true);
+            assert_eq!(style.opacity, 1.0);
+            assert!(style.hints);
+        }
     }
 }

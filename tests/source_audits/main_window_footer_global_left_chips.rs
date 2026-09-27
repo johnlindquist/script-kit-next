@@ -49,7 +49,7 @@ fn fn_body<'a>(src: &'a str, header: &str) -> &'a str {
 }
 
 #[test]
-fn main_view_header_owns_global_context_chips_once() {
+fn native_footer_config_does_not_own_context_chips() {
     let src = read("src/app_impl/ui_window.rs");
     assert!(
         src.contains("pub(crate) fn global_footer_cwd_chip("),
@@ -58,27 +58,6 @@ fn main_view_header_owns_global_context_chips_once() {
     assert!(
         src.contains("pub(crate) fn agent_model_footer_label("),
         "global Agent·Model context helper must exist"
-    );
-    // The clickable zone renders the shared PromptHeaderContext, whose handler
-    // dispatches the cwd and Agent·Model actions.
-    let zone_body = fn_body(
-        &src,
-        "pub(crate) fn render_clickable_main_view_context_zone(",
-    );
-    assert!(
-        zone_body.contains("self.prompt_header_context(cx).render("),
-        "shared main-view context zone must render through PromptHeaderContext"
-    );
-    let base = read("src/prompts/base.rs");
-    assert!(
-        base.contains("render_main_view_context_zone_required("),
-        "PromptHeaderContext must render cwd and Agent·Model together"
-    );
-    let context_body = fn_body(&src, "pub(crate) fn prompt_header_context(");
-    assert!(
-        context_body.contains("FooterAction::Cwd")
-            && context_body.contains("FooterAction::AgentModel"),
-        "shared main-view context zone must dispatch the cwd and Agent·Model actions"
     );
     let body = fn_body(&src, "fn main_window_footer_config_with_cx(");
     assert!(

@@ -90,7 +90,6 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
                 format!("[{}]", name)
             }
             GroupedListItem::Item(idx) => results[*idx].name().to_string(),
-            GroupedListItem::ReservedSectionSlot => "[reserved section slot]".to_string(),
             GroupedListItem::Status(status) => format!("[{}]", status.label),
         })
         .collect();
@@ -168,7 +167,6 @@ fn test_get_grouped_results_no_frecency_items_in_type_sections() {
                 format!("[{}]", name)
             }
             GroupedListItem::Item(idx) => results[*idx].name().to_string(),
-            GroupedListItem::ReservedSectionSlot => "[reserved section slot]".to_string(),
             GroupedListItem::Status(status) => format!("[{}]", status.label),
         })
         .collect();
@@ -246,9 +244,7 @@ fn test_get_grouped_results_prefers_last_selected_result_for_exact_query() {
         .iter()
         .find_map(|item| match item {
             GroupedListItem::Item(idx) => Some(baseline_results[*idx].name().to_string()),
-            GroupedListItem::SectionHeader(_, _)
-            | GroupedListItem::ReservedSectionSlot
-            | GroupedListItem::Status(_) => None,
+            GroupedListItem::SectionHeader(_, _) | GroupedListItem::Status(_) => None,
         })
         .expect("baseline search should have a selectable result");
     assert_eq!(baseline_first, "open-alpha");
@@ -274,9 +270,7 @@ fn test_get_grouped_results_prefers_last_selected_result_for_exact_query() {
         .iter()
         .find_map(|item| match item {
             GroupedListItem::Item(idx) => Some(results[*idx].name().to_string()),
-            GroupedListItem::SectionHeader(_, _)
-            | GroupedListItem::ReservedSectionSlot
-            | GroupedListItem::Status(_) => None,
+            GroupedListItem::SectionHeader(_, _) | GroupedListItem::Status(_) => None,
         })
         .expect("remembered search should have a selectable result");
     assert_eq!(remembered_first, "open-zeta");
@@ -336,9 +330,7 @@ fn test_get_grouped_results_prefers_last_selected_builtin_for_exact_query() {
         .iter()
         .find_map(|item| match item {
             GroupedListItem::Item(idx) => Some(baseline_results[*idx].name().to_string()),
-            GroupedListItem::SectionHeader(_, _)
-            | GroupedListItem::ReservedSectionSlot
-            | GroupedListItem::Status(_) => None,
+            GroupedListItem::SectionHeader(_, _) | GroupedListItem::Status(_) => None,
         })
         .expect("baseline builtin search should have a selectable result");
     assert_eq!(baseline_first, "Clipboard History");
@@ -365,9 +357,7 @@ fn test_get_grouped_results_prefers_last_selected_builtin_for_exact_query() {
         .iter()
         .find_map(|item| match item {
             GroupedListItem::Item(idx) => Some(results[*idx].name().to_string()),
-            GroupedListItem::SectionHeader(_, _)
-            | GroupedListItem::ReservedSectionSlot
-            | GroupedListItem::Status(_) => None,
+            GroupedListItem::SectionHeader(_, _) | GroupedListItem::Status(_) => None,
         })
         .expect("remembered builtin search should have a selectable result");
     assert_eq!(remembered_first, "Dictation History");
@@ -424,9 +414,7 @@ fn test_get_grouped_results_ai_vault_builtin_beats_stale_script_history() {
         .iter()
         .find_map(|item| match item {
             GroupedListItem::Item(idx) => Some(&results[*idx]),
-            GroupedListItem::SectionHeader(_, _)
-            | GroupedListItem::ReservedSectionSlot
-            | GroupedListItem::Status(_) => None,
+            GroupedListItem::SectionHeader(_, _) | GroupedListItem::Status(_) => None,
         })
         .expect("vault search should have a selectable result");
     assert_eq!(
@@ -480,9 +468,7 @@ fn test_get_grouped_results_excludes_legacy_vault_script_for_unrelated_query() {
         .iter()
         .filter_map(|item| match item {
             GroupedListItem::Item(idx) => Some(results[*idx].name()),
-            GroupedListItem::SectionHeader(_, _)
-            | GroupedListItem::ReservedSectionSlot
-            | GroupedListItem::Status(_) => None,
+            GroupedListItem::SectionHeader(_, _) | GroupedListItem::Status(_) => None,
         })
         .collect();
 
@@ -618,7 +604,6 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
                 format!("[{}]", name)
             }
             GroupedListItem::Item(idx) => results[*idx].name().to_string(),
-            GroupedListItem::ReservedSectionSlot => "[reserved section slot]".to_string(),
             GroupedListItem::Status(status) => format!("[{}]", status.label),
         })
         .collect();
@@ -729,7 +714,6 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
                 format!("[{}]", name)
             }
             GroupedListItem::Item(idx) => results[*idx].name().to_string(),
-            GroupedListItem::ReservedSectionSlot => "[reserved section slot]".to_string(),
             GroupedListItem::Status(status) => format!("[{}]", status.label),
         })
         .collect();

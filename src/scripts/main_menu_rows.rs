@@ -170,7 +170,7 @@ pub(crate) fn preserve_displayed_main_menu_rows(
     let mut header_end = 0;
     for (index, item) in previous_items.iter().enumerate() {
         match item {
-            GroupedListItem::SectionHeader(..) | GroupedListItem::ReservedSectionSlot => {
+            GroupedListItem::SectionHeader(..) => {
                 if header_start.is_none() || header_end != index {
                     header_start = Some(index);
                 }
@@ -277,7 +277,7 @@ mod canonical_row_projection_tests {
     fn later_matches_preserve_displayed_positions_and_use_current_content() {
         let (mut initial_items, mut initial_rows) =
             projected(&[("first", "First"), ("second", "Second")]);
-        initial_items.insert(0, GroupedListItem::ReservedSectionSlot);
+        initial_items.insert(0, GroupedListItem::SectionHeader("Suggested".into(), None));
         for row in &mut initial_rows {
             row.grouped_index += 1;
         }
@@ -385,9 +385,9 @@ mod canonical_row_projection_tests {
     }
 
     #[test]
-    fn headers_reserved_slots_and_invalid_indices_have_no_subject() {
+    fn headers_and_invalid_indices_have_no_subject() {
         let mut grouped = vec![
-            GroupedListItem::ReservedSectionSlot,
+            GroupedListItem::SectionHeader("Matches".into(), None),
             GroupedListItem::SectionHeader("Results".into(), None),
             GroupedListItem::Item(7),
             GroupedListItem::Item(INLINE_CALCULATOR_RESULT_INDEX),
@@ -396,7 +396,7 @@ mod canonical_row_projection_tests {
             .expect("inert chrome is a valid projection");
         assert!(rows.is_empty());
         assert!(
-            matches!(grouped.as_slice(), [GroupedListItem::ReservedSectionSlot, GroupedListItem::SectionHeader(label, None), GroupedListItem::Item(7), GroupedListItem::Item(INLINE_CALCULATOR_RESULT_INDEX)] if label == "Results")
+            matches!(grouped.as_slice(), [GroupedListItem::SectionHeader(_, None), GroupedListItem::SectionHeader(label, None), GroupedListItem::Item(7), GroupedListItem::Item(INLINE_CALCULATOR_RESULT_INDEX)] if label == "Results")
         );
     }
 
@@ -409,7 +409,7 @@ mod canonical_row_projection_tests {
         let mut grouped = vec![
             GroupedListItem::SectionHeader("Results".into(), None),
             GroupedListItem::Item(0),
-            GroupedListItem::ReservedSectionSlot,
+            GroupedListItem::SectionHeader("More results".into(), None),
             GroupedListItem::Item(1),
         ];
         let rows = project_main_menu_rows(&mut grouped, &mut results, None, "query").unwrap();
@@ -433,10 +433,10 @@ mod canonical_row_projection_tests {
         let mut grouped = vec![GroupedListItem::Item(INLINE_CALCULATOR_RESULT_INDEX)];
         let mut results = Vec::new();
         let calculator = crate::calculator::try_build("2 + 2").unwrap();
-        crate::list_item::ensure_launcher_section_slot(&mut grouped);
+        crate::list_item::ensure_launcher_lead_header(&mut grouped, true, false);
         let rows =
             project_main_menu_rows(&mut grouped, &mut results, Some(&calculator), "2 + 2").unwrap();
-        assert!(matches!(grouped[0], GroupedListItem::ReservedSectionSlot));
+        assert!(matches!(grouped[0], GroupedListItem::SectionHeader(..)));
         assert_eq!(rows.len(), 1);
         let row = &rows[0];
         assert_eq!(row.subject, MainMenuRowSubject::Calculator);

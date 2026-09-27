@@ -87,7 +87,7 @@ impl OneWindow {
         let view = self.views.top().map(|t| t.name.clone());
         let slot = self.slot_line(now);
         Snapshot {
-            slot_opacity: self.slot_opacity(&slot),
+            slot_opacity: self.style_of(&slot).opacity,
             slot,
             header: if view.is_some() {
                 String::new()
@@ -104,21 +104,15 @@ impl OneWindow {
         }
     }
 
-    /// Context (what's focused, what ran last) reads as background and fainter while you type; in a
-    /// view everything steps back except a message waiting to go and words landing by voice.
-    pub(super) fn slot_opacity(&self, slot: &SlotLine) -> f32 {
-        use crate::contract::slot_opacity as o;
-        let typing = !self.text.trim().is_empty();
-        match slot.kind {
-            SlotKind::Holding => 1.0,
-            SlotKind::Typing if !self.views.is_empty() => 1.0,
-            _ if !self.views.is_empty() => o::IN_VIEW_NOT_HOLDING,
-            SlotKind::Focused if typing => o::TYPING_FOCUSED,
-            SlotKind::Focused => o::FOCUSED,
-            SlotKind::Recent if typing => o::TYPING_RECENT,
-            SlotKind::Recent => o::RECENT,
-            SlotKind::Staged | SlotKind::Typing => 1.0,
-        }
+    /// How strongly the line above the input is drawn now. Context (what's focused, what ran last)
+    /// reads as background and fainter while you type; in a view everything steps back except a
+    /// message waiting to go and words landing by voice.
+    pub fn slot_style(&self, now: Ms) -> SlotStyle {
+        self.style_of(&self.slot_line(now))
+    }
+
+    fn style_of(&self, slot: &SlotLine) -> SlotStyle {
+        SlotStyle::new(slot.kind, !self.text.trim().is_empty(), self.in_view())
     }
 
     /// Whether Enter pressed now would be ignored.

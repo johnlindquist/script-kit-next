@@ -69,9 +69,10 @@ pub use chrome::MainMenuRowFillBase;
 pub(crate) use chrome::{
     main_menu_row_state_from_flags, resolve_main_menu_row_state_fill,
     resolve_main_menu_row_state_palette, resolve_main_menu_row_state_palette_from_parts,
-    resolve_row_state_palette, AppChromeColors, DangerActionColors, MainMenuRowColorInputs,
-    MainMenuRowState, MainMenuRowStatePalette, RowForegroundColors, RowStateColorInputs,
-    RowStateColors, RowStateFlags, RowStatePalette, SemanticChipColors,
+    resolve_main_menu_row_state_palette_with_active_alpha, resolve_row_state_palette,
+    AppChromeColors, DangerActionColors, MainMenuRowColorInputs, MainMenuRowState,
+    MainMenuRowStatePalette, RowForegroundColors, RowStateColorInputs, RowStateColors,
+    RowStateFlags, RowStatePalette, SemanticChipColors,
 };
 
 // Re-export contrast audit helpers

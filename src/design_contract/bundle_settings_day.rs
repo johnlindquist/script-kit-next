@@ -360,7 +360,7 @@ fn append_settings_and_day_design_tokens(
         (
             "dayPage.header.contextInteraction",
             "inert",
-            "render_inert_main_view_context_zone (src/app_impl/ui_window.rs) — same chips, no-op handlers, NO keycaps",
+            "render_main_view_slot_line (src/app_impl/ui_window.rs) — the line above the input, no chips",
         ),
         (
             "dayPage.header.inputSlot",

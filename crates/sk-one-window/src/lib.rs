@@ -26,7 +26,7 @@ pub use height::{HeightDecision, HeightMode};
 pub use ledger::{Entry, EntryState, Risk};
 pub use list::Item;
 pub use row::{Row, RowAct};
-pub use slot::{SlotKind, SlotLine};
+pub use slot::{SlotKind, SlotLine, SlotStyle};
 pub use stage::{Subject, SubjectKind};
 pub use window::{
     Config, Done, Effect, Event, HeldOp, Key, OneWindow, Outcome, RunHow, Snapshot, ViewOp,

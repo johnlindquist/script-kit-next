@@ -1061,7 +1061,7 @@ impl Render for ScriptListApp {
                 .min_h(px(0.))
                 .flex()
                 .flex_col()
-                .child(self.render_clickable_main_view_context_header(menu_def, cx))
+                .child(self.render_main_view_slot_line_header(menu_def))
                 .child(
                     div()
                         .id(crate::components::main_view_chrome::MAIN_VIEW_MAIN_ID)

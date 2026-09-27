@@ -1697,7 +1697,7 @@ impl ScriptListApp {
         );
         let header = crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
             menu_def,
-            self.render_clickable_main_view_context_zone(menu_def, cx),
+            self.render_main_view_slot_line(menu_def),
             input,
         );
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {

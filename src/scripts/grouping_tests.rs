@@ -230,13 +230,13 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn pin_alias_match_first_preserves_leading_results_header() {
+    fn pin_alias_match_first_preserves_leading_matches_header() {
         let mut flat = vec![
             builtin_result("Other Command"),
             builtin_result("Aliased Command"),
         ];
         let mut grouped = vec![
-            GroupedListItem::SectionHeader("Results".to_string(), None),
+            GroupedListItem::SectionHeader("Matches".to_string(), None),
             GroupedListItem::Item(0),
             GroupedListItem::Item(1),
         ];
@@ -251,11 +251,11 @@ mod advanced_query_tests {
 
         assert!(matches!(
             grouped.first(),
-            Some(GroupedListItem::SectionHeader(label, None)) if label == "Results"
+            Some(GroupedListItem::SectionHeader(label, None)) if label == "Matches"
         ));
         assert!(
             matches!(grouped.get(1), Some(GroupedListItem::Item(1))),
-            "alias target must be pinned under Results, got {grouped:?}"
+            "alias target must be pinned under Matches, got {grouped:?}"
         );
     }
 
@@ -1039,14 +1039,13 @@ mod advanced_query_tests {
                 GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
                 GroupedListItem::SectionHeader(_, Some(_))
                 | GroupedListItem::Item(_)
-                | GroupedListItem::Status(_)
-                | GroupedListItem::ReservedSectionSlot => None,
+                | GroupedListItem::Status(_) => None,
             })
             .collect::<Vec<_>>();
         assert_eq!(
             section_labels,
             vec![
-                "Results",
+                "Matches",
                 "Files",
                 "Browser Tabs",
                 "Notes",
@@ -1202,14 +1201,13 @@ mod advanced_query_tests {
                 GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
                 GroupedListItem::SectionHeader(_, Some(_))
                 | GroupedListItem::Item(_)
-                | GroupedListItem::Status(_)
-                | GroupedListItem::ReservedSectionSlot => None,
+                | GroupedListItem::Status(_) => None,
             })
             .collect::<Vec<_>>();
         assert_eq!(
             section_labels,
             vec![
-                "Results",
+                "Matches",
                 "Files",
                 "Agent Chat Conversations",
                 "Browser History",
@@ -1503,8 +1501,7 @@ mod advanced_query_tests {
                     GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
                     GroupedListItem::SectionHeader(_, Some(_))
                     | GroupedListItem::Item(_)
-                    | GroupedListItem::Status(_)
-                    | GroupedListItem::ReservedSectionSlot => None,
+                    | GroupedListItem::Status(_) => None,
                 })
                 .collect::<Vec<_>>();
             assert_eq!(section_labels, vec![expected_section], "{source:?}");
@@ -1767,8 +1764,7 @@ mod advanced_query_tests {
                 GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
                 GroupedListItem::SectionHeader(_, Some(_))
                 | GroupedListItem::Item(_)
-                | GroupedListItem::Status(_)
-                | GroupedListItem::ReservedSectionSlot => None,
+                | GroupedListItem::Status(_) => None,
             })
             .collect::<Vec<_>>();
         // The passive budget is consumed greedily in passive-source order:

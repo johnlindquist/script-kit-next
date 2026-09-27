@@ -179,14 +179,13 @@ fn main_window_search_surfaces_use_shared_main_view_input_shell() {
     assert!(app_view_state.contains("| AppView::ProfileSearchView { .. }"));
     assert!(app_view_state.contains("AppView::AgentChatView { .. } =>"));
     assert!(render_impl.contains(".uses_view_owned_main_window_shell(&*cx)"));
-    assert!(render_impl.contains("render_clickable_main_view_context_header"));
+    assert!(render_impl.contains("render_main_view_slot_line_header"));
     assert!(render_impl.contains("main_content_container"));
     assert!(render_impl.contains(".id(crate::components::main_view_chrome::MAIN_VIEW_SHELL_ID)"));
     assert!(render_impl.contains(".id(crate::components::main_view_chrome::MAIN_VIEW_MAIN_ID)"));
 
     assert!(script_list.contains("render_main_view_input_shell"));
-    assert!(script_list.contains("render_clickable_main_view_context_zone"));
-    assert!(script_list.contains("hide_initial_section_header"));
+    assert!(script_list.contains("render_main_view_slot_line"));
     assert!(!script_list.contains("main_view_state_icon_name_for_script_list"));
     assert!(script_list.contains("render_main_view_shell()"));
     assert!(script_list.contains("render_main_view_chrome"));

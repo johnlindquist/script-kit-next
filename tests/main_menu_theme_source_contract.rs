@@ -46,7 +46,6 @@ fn all_header_variations_keep_logo_free_numbered_header_layout() {
             tokens.input_text_alignment,
             MainMenuInputTextAlignment::RowTextColumn
         );
-        assert!(!tokens.hide_initial_section_header);
         assert!(tokens.show_cwd);
         assert!(tokens.show_agent_model);
     }

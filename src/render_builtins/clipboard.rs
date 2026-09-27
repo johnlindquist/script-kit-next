@@ -768,7 +768,7 @@ impl ScriptListApp {
         );
         let header = crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
             menu_def,
-            self.render_clickable_main_view_context_zone(menu_def, cx),
+            self.render_main_view_slot_line(menu_def),
             input,
         );
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {
@@ -845,8 +845,8 @@ mod clipboard_chrome_audit {
             "clipboard must use the shared MainMenuInput shell"
         );
         assert!(
-            source.contains("render_clickable_main_view_context_zone("),
-            "clipboard must render the shared main-view context zone"
+            source.contains("render_main_view_slot_line("),
+            "clipboard must render the shared line above the input"
         );
         assert!(
             source.contains("main_window_footer_slot("),

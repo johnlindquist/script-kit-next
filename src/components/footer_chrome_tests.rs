@@ -372,9 +372,18 @@ mod tests {
             rail.hover_rgba,
             palette.hover.background_rgba.expect("hover has a fill")
         );
+        let variant = crate::designs::current_main_menu_theme();
+        let pressed = crate::theme::resolve_main_menu_row_state_palette_with_active_alpha(
+            &theme,
+            variant,
+            variant.def().footer.button.active_fill_alpha as u8,
+        );
         assert_eq!(
             rail.active_rgba,
-            palette.active.background_rgba.expect("active has a fill")
+            pressed
+                .active
+                .background_rgba
+                .expect("a pressed button has a fill")
         );
         assert_eq!(
             themed_footer_button_rest_rgba(&theme),
@@ -404,11 +413,6 @@ mod tests {
                 let footer_palette =
                     resolved_footer_button_visual_colors_for_variant(&theme, *variant).row_states;
 
-                assert_eq!(
-                    footer_palette, row_palette,
-                    "footer/list palette drift for {:?}",
-                    variant
-                );
                 for state in [
                     crate::theme::MainMenuRowState::Rest,
                     crate::theme::MainMenuRowState::Hover,
@@ -416,12 +420,29 @@ mod tests {
                 ] {
                     let footer_state = footer_palette.for_state(state);
                     let row_state = row_palette.for_state(state);
-                    assert_eq!(footer_state.background_rgba, row_state.background_rgba);
                     assert_eq!(
                         footer_state.primary_foreground_rgba,
                         row_state.primary_foreground_rgba
                     );
+                    if state != crate::theme::MainMenuRowState::Active {
+                        assert_eq!(
+                            footer_state.background_rgba, row_state.background_rgba,
+                            "footer/list palette drift for {variant:?}"
+                        );
+                    }
                 }
+                // Rows show focus by their icon tile; a pressed footer button keeps a fill.
+                assert_eq!(
+                    row_palette.active.background_rgba.map(|rgba| rgba & 0xFF),
+                    Some(sk_one_window::contract::ROW_FILL_ALPHA as u32)
+                );
+                assert_eq!(
+                    footer_palette
+                        .active
+                        .background_rgba
+                        .map(|rgba| rgba & 0xFF),
+                    Some(variant.def().footer.button.active_fill_alpha)
+                );
             }
         }
     }

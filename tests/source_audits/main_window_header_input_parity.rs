@@ -377,8 +377,8 @@ fn prompt_and_child_content_surfaces_use_root_shared_context_header_fallback() {
         "root renderer must ask the AppView ownership policy before wrapping content"
     );
     assert!(
-        render_impl.contains("render_clickable_main_view_context_header("),
-        "root renderer must provide the shared context header fallback for prompt/script child surfaces"
+        render_impl.contains("render_main_view_slot_line_header("),
+        "root renderer must provide the line above the input for prompt/script child surfaces"
     );
 
     for variant in [

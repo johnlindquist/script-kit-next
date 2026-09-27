@@ -727,11 +727,11 @@ pub(crate) fn main_view_header_metrics(
     input_height: Option<f32>,
 ) -> MainViewHeaderMetrics {
     let shell = def.shell;
-    let context = def.header_info_bar;
+    let context_height = def.slot_line.height_px;
     let input_height = input_height.map(|height| height.max(def.search.height));
-    let input_y = shell.header_padding_y + context.height_px + shell.header_gap;
+    let input_y = shell.header_padding_y + context_height + shell.header_gap;
     let header_height = shell.header_padding_y * 2.0
-        + context.height_px
+        + context_height
         + input_height
             .map(|height| shell.header_gap + height)
             .unwrap_or(0.0);
@@ -741,9 +741,9 @@ pub(crate) fn main_view_header_metrics(
         padding_x: shell.header_padding_x,
         padding_y: shell.header_padding_y,
         gap: shell.header_gap,
-        context_x: shell.header_padding_x - context.context_edge_outset_x,
+        context_x: shell.header_padding_x - def.header_info_bar.context_edge_outset_x,
         context_y: shell.header_padding_y,
-        context_height: context.height_px,
+        context_height,
         input_x: shell.header_padding_x,
         input_y,
         input_height,

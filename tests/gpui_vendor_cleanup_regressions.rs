@@ -340,7 +340,6 @@ fn list_item_masks_hover_driven_disclosure_with_window_input_modality() {
     );
     for needle in [
         "should_show_search_description(self.selected, hover_visible, has_description_match)",
-        "should_show_search_shortcut(is_filtering, self.selected, hover_visible)",
         "} else if hover_visible {",
         "self.selected || hover_visible || is_filtering",
     ] {

@@ -116,7 +116,6 @@ fn main_list_row_stable_key(
         GroupedListItem::SectionHeader(label, icon) => {
             format!("section/{label}/{}", icon.as_deref().unwrap_or("none"))
         }
-        GroupedListItem::ReservedSectionSlot => "section/reserved-leading-slot".to_string(),
         GroupedListItem::Status(status) => format!("status/{}", status.source.receipt_label()),
         GroupedListItem::Item(_) => format!("inert/{grouped_index}"),
     }
@@ -1670,7 +1669,6 @@ mod scroll_fade_tests {
             section_header: 32.0,
             status: 24.0,
             item: 40.0,
-            hide_first_section_header: false,
         };
 
         assert_eq!(main_list_visible_range(&rows, 10.0, 55.0, heights), (0, 3));

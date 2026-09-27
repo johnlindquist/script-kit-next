@@ -22,7 +22,7 @@ impl PathPrompt {
 
     pub(crate) fn set_header_context(
         &mut self,
-        context: crate::prompts::base::PromptHeaderContext,
+        context: crate::one_window::slot_line::SlotLineView,
     ) {
         self.header_context = Some(context);
     }

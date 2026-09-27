@@ -20,7 +20,7 @@ use crate::hold::{HeldChange, HeldState, Holds};
 use crate::ledger::{Entry, EntryState, Ledger, NewEntry, Risk, risk_of};
 use crate::list::{Item, ListState};
 use crate::row::{Row, RowAct};
-use crate::slot::{SlotKind, SlotLine};
+use crate::slot::{SlotKind, SlotLine, SlotStyle};
 use crate::stage::{
     Staged, Subject, SubjectKind, default_actions, entry_rows, entry_subject, row_subject,
     script_name, share_rows,

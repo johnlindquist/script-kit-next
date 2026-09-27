@@ -96,7 +96,7 @@ pub struct PathPrompt {
     /// Cached render-row data rebuilt when filtered_entries changes,
     /// avoiding a per-render Vec allocation inside the list closure.
     pub render_rows: Arc<Vec<PathEntryRenderRow>>,
-    pub(crate) header_context: Option<crate::prompts::base::PromptHeaderContext>,
+    pub(crate) header_context: Option<crate::one_window::slot_line::SlotLineView>,
 }
 
 /// Lightweight row data for the uniform_list closure.

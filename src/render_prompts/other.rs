@@ -369,7 +369,7 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
-        let context = self.prompt_header_context(cx);
+        let context = self.prompt_header_context();
         entity.update(cx, |prompt, _cx| prompt.set_header_context(context));
         self.render_entity_owned_prompt_host(
             entity,

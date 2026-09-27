@@ -743,35 +743,49 @@ pub fn resolve_section_header_presentation(
 pub enum GroupedListItem {
     /// A semantic section header with authored source text and optional icon.
     SectionHeader(String, Option<String>),
-    /// A visual first-section slot with no semantic heading or accessible label.
-    ReservedSectionSlot,
     /// Transient source-chip status metadata produced during grouping.
     Status(SourceChipStatusRow),
     /// A regular list item - usize is the index in the flat results array
     Item(usize),
 }
 
-/// Reserve row zero for launcher section chrome without inventing an empty heading.
-pub fn ensure_launcher_section_slot(items: &mut Vec<GroupedListItem>) {
-    let has_result = items
+/// Every launcher list with rows starts with a header; typing may change its words, never
+/// whether it is there. When fallbacks lead, nothing matched and the header says so.
+pub fn ensure_launcher_lead_header(
+    items: &mut Vec<GroupedListItem>,
+    has_text: bool,
+    leads_with_fallback: bool,
+) {
+    use sk_one_window::list::{lead_header, Lead};
+    if !items
         .iter()
-        .any(|item| matches!(item, GroupedListItem::Item(_)));
-    if has_result
-        && !matches!(
-            items.first(),
-            Some(GroupedListItem::SectionHeader(..) | GroupedListItem::ReservedSectionSlot)
-        )
+        .any(|item| matches!(item, GroupedListItem::Item(_)))
     {
-        items.insert(0, GroupedListItem::ReservedSectionSlot);
+        return;
+    }
+    let lead = if leads_with_fallback {
+        Lead::Fallback
+    } else {
+        Lead::Row
+    };
+    match items.first_mut() {
+        Some(GroupedListItem::SectionHeader(label, icon)) => {
+            if leads_with_fallback {
+                *label = lead_header(has_text, lead).to_string();
+                *icon = None;
+            }
+        }
+        _ => items.insert(
+            0,
+            GroupedListItem::SectionHeader(lead_header(has_text, lead).to_string(), None),
+        ),
     }
 }
 
 pub fn grouped_list_item_eligibility(item: &GroupedListItem) -> RowEligibility {
     match item {
         GroupedListItem::Item(_) => RowEligibility::enabled_action(),
-        GroupedListItem::SectionHeader(..)
-        | GroupedListItem::ReservedSectionSlot
-        | GroupedListItem::Status(_) => RowEligibility::inert(),
+        GroupedListItem::SectionHeader(..) | GroupedListItem::Status(_) => RowEligibility::inert(),
     }
 }
 
@@ -1114,38 +1128,23 @@ fn list_item_shortcut_tokens_for_render<'a>(
 
 /// Explicit policy for when row shortcut chrome is visible.
 ///
-/// Dense launcher-style lists use `SelectedOnly` so shortcuts appear only on
-/// the focused row (quiet chrome). Discovery surfaces like the actions dialog
-/// use `AllRows` so every row exposes its shortcut at hint opacity.
+/// Launcher-style rows carry no keycaps: the focused row shows only by its
+/// icon tile and the footer's ↵ button names the action. The actions dialog
+/// lists what each key does, so its rows use `AllRows`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RowShortcutVisibilityPolicy {
-    /// Shortcuts visible only on the selected (focused) row.
-    SelectedOnly,
+    Hidden,
     /// Shortcuts visible on every row at hint opacity.
     AllRows,
 }
 
 /// Resolve whether a row should render its shortcut chrome.
 #[inline]
-pub(crate) fn should_show_row_shortcut(
-    policy: RowShortcutVisibilityPolicy,
-    selected: bool,
-    _hovered: bool,
-) -> bool {
+pub(crate) fn should_show_row_shortcut(policy: RowShortcutVisibilityPolicy) -> bool {
     match policy {
-        RowShortcutVisibilityPolicy::SelectedOnly => selected,
+        RowShortcutVisibilityPolicy::Hidden => false,
         RowShortcutVisibilityPolicy::AllRows => true,
     }
-}
-
-/// Dense launcher rows keep shortcut chrome on the focused row only.
-/// Focus controls description reveal, not metadata discoverability.
-pub(crate) fn should_show_search_shortcut(
-    _is_filtering: bool,
-    selected: bool,
-    _hovered: bool,
-) -> bool {
-    should_show_row_shortcut(RowShortcutVisibilityPolicy::SelectedOnly, selected, false)
 }
 /// Search rows keep descriptions only when they add context for the current focus or match.
 pub(crate) fn should_show_search_description(
@@ -1255,7 +1254,7 @@ impl ListItem {
             description: None,
             shortcut: None,
             shortcut_tokens: None,
-            shortcut_visibility_policy: RowShortcutVisibilityPolicy::SelectedOnly,
+            shortcut_visibility_policy: RowShortcutVisibilityPolicy::Hidden,
             icon: None,
             destructive_text_color: None,
             selected: false,
@@ -1941,23 +1940,30 @@ impl RenderOnce for ListItem {
         let shortcut_element: AnyElement = if let Some(shortcut_tokens) =
             resolved_shortcut_tokens.as_ref()
         {
-            let show_shortcut = !disabled
-                && should_show_row_shortcut(
-                    shortcut_visibility_policy,
-                    self.selected,
-                    hover_visible,
-                );
-            if show_shortcut {
+            if !disabled && should_show_row_shortcut(shortcut_visibility_policy) {
                 crate::components::hint_strip::emit_shortcut_chrome_audit(
                     "list_item",
-                    "footer-keycap-selected-only",
+                    "footer-keycap-all-rows",
                 );
                 let theme = crate::theme::get_cached_theme();
-                crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens(
-                    shortcut_tokens.iter().map(String::as_str),
-                    &theme,
-                    resolved_row_state.primary_foreground_rgba,
-                )
+                let selector = format!(
+                    "oneWindowRowKeycaps:{}:{}",
+                    semantic_id
+                        .clone()
+                        .unwrap_or_else(|| format!("list-item:{item_index}")),
+                    shortcut_tokens.len()
+                );
+                div()
+                    .flex_none()
+                    .debug_selector(move || selector)
+                    .child(
+                        crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens(
+                            shortcut_tokens.iter().map(String::as_str),
+                            &theme,
+                            resolved_row_state.primary_foreground_rgba,
+                        ),
+                    )
+                    .into_any_element()
             } else {
                 div().into_any_element()
             }

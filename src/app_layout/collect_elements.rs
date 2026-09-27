@@ -154,19 +154,28 @@ impl ScriptListApp {
         elements
     }
 
-    fn main_view_context_elements(
-        zone: &crate::components::main_view_chrome::MainViewContextZoneSpec,
-    ) -> Vec<protocol::ElementInfo> {
-        let mut chips = vec![&zone.leading_identity];
-        if let Some(context) = zone.context_attachment.as_ref() {
-            chips.push(context);
+    fn main_view_slot_line_element(&self) -> protocol::ElementInfo {
+        let line = self
+            .one_window
+            .slot_line(crate::one_window::slot_line::now_ms());
+        protocol::ElementInfo {
+            semantic_id: crate::one_window::slot_line::SLOT_LINE_ID.to_string(),
+            element_type: protocol::ElementType::Panel,
+            text: Some(line.title),
+            value: Some(line.label),
+            content: None,
+            selected: Some(false),
+            focused: Some(false),
+            index: None,
+            role: Some("slot-line".to_string()),
+            kind: Some(format!("{:?}", line.kind).to_lowercase()),
+            source: Some("OneWindow::slot_line".to_string()),
+            source_name: (!line.sub.is_empty()).then_some(line.sub),
+            selectable: Some(false),
+            status_kind: None,
+            action_disabled: None,
+            style: None,
         }
-        chips.push(&zone.trailing_identity);
-
-        chips
-            .into_iter()
-            .flat_map(crate::windows::automation_surface_collector::collect_semantic_chip_elements)
-            .collect()
     }
 
     pub(crate) fn collect_visible_elements(
@@ -188,7 +197,7 @@ impl ScriptListApp {
     ) -> ElementCollectionOutcome {
         let mut outcome = match &self.current_view {
             AppView::ScriptList => {
-                let context = Self::main_view_context_elements(&self.main_view_context_zone_spec());
+                let context = vec![self.main_view_slot_line_element()];
                 let context_count = context.len();
                 let (list_elements, list_total) = self.collect_script_list_elements(
                     limit.saturating_sub(context_count),
@@ -1777,7 +1786,8 @@ impl ScriptListApp {
         }
 
         self.append_footer_elements(&mut outcome, limit);
-        if let Some(undo) = crate::undo_offer::semantic_element(crate::undo_offer::UndoSurface::Main)
+        if let Some(undo) =
+            crate::undo_offer::semantic_element(crate::undo_offer::UndoSurface::Main)
         {
             outcome.total_count += 1;
             if outcome.elements.len() < limit {
@@ -2559,13 +2569,7 @@ impl ScriptListApp {
         if include_headers {
             total_count += grouped_items
                 .iter()
-                .filter(|item| {
-                    matches!(
-                        item,
-                        crate::list_item::GroupedListItem::SectionHeader(..)
-                            | crate::list_item::GroupedListItem::ReservedSectionSlot
-                    )
-                })
+                .filter(|item| matches!(item, crate::list_item::GroupedListItem::SectionHeader(..)))
                 .count();
         }
         let mut elements = Vec::with_capacity(limit.min(total_count));
@@ -2698,34 +2702,6 @@ impl ScriptListApp {
                             selectable: Some(false),
                             status_kind: None,
                             action_disabled: None,
-                            style: None,
-                        });
-                    }
-                }
-                crate::list_item::GroupedListItem::ReservedSectionSlot => {
-                    if include_headers {
-                        elements.push(protocol::ElementInfo {
-                            semantic_id: "main-list-reserved-slot".to_string(),
-                            element_type: protocol::ElementType::Panel,
-                            text: None,
-                            value: Some(
-                                serde_json::json!({
-                                    "groupedIndex": grouped_index, "selectableOrdinal": null,
-                                    "selectable": false, "activatable": false, "selected": false,
-                                })
-                                .to_string(),
-                            ),
-                            content: None,
-                            selected: Some(false),
-                            focused: None,
-                            index: None,
-                            role: Some("presentation".to_string()),
-                            kind: Some("reservedSectionSlot".to_string()),
-                            source: Some("mainMenu".to_string()),
-                            source_name: None,
-                            selectable: Some(false),
-                            status_kind: None,
-                            action_disabled: Some("presentationOnly".to_string()),
                             style: None,
                         });
                     }

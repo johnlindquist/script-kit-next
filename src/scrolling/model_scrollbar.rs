@@ -92,7 +92,6 @@ mod tests {
                 section_header: 30.0,
                 status: 24.0,
                 item: 40.0,
-                hide_first_section_header: false,
             },
         )
     }

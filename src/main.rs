@@ -89,6 +89,7 @@ mod login_item;
 mod menu_syntax;
 mod navigation;
 mod nux;
+mod one_window;
 mod panel;
 mod pasted_image;
 mod pasted_text;

@@ -434,9 +434,7 @@ impl MainMenuResultCacheState {
             .iter()
             .filter_map(|item| match item {
                 GroupedListItem::Item(result_idx) => self.search_result_for_flat_index(*result_idx),
-                GroupedListItem::SectionHeader(..)
-                | GroupedListItem::ReservedSectionSlot
-                | GroupedListItem::Status(..) => None,
+                GroupedListItem::SectionHeader(..) | GroupedListItem::Status(..) => None,
             })
     }
 
@@ -481,7 +479,18 @@ impl MainMenuResultCacheState {
                 item => display_items.push(item),
             }
         }
-        crate::list_item::ensure_launcher_section_slot(&mut display_items);
+        let leads_with_fallback = display_items
+            .iter()
+            .find_map(|item| match item {
+                GroupedListItem::Item(index) => flat_results.get(*index),
+                _ => None,
+            })
+            .is_some_and(|result| matches!(result, scripts::SearchResult::Fallback(_)));
+        crate::list_item::ensure_launcher_lead_header(
+            &mut display_items,
+            !query_text.trim().is_empty(),
+            leads_with_fallback,
+        );
         let mut rows = scripts::main_menu_rows::project_main_menu_rows(
             &mut display_items,
             &mut flat_results,
@@ -1651,6 +1660,8 @@ pub(crate) struct ScriptListApp {
     pub(crate) shown_selection_hint_text: Option<String>,
     /// Monotonic token guarding stale async sniff results (bumped per show).
     pub(crate) shown_selection_hint_token: u64,
+    pub(crate) one_window: sk_one_window::OneWindow,
+    pub(crate) slot_dimmer: crate::one_window::slot_line::SlotDimmer,
     /// Cached state for the menu-syntax trigger picker. `filter_input_change` runs
     /// `plan_trigger_picker_transition` on every filter update and keeps this
     /// field in sync while the detached popup window renders from the snapshot
