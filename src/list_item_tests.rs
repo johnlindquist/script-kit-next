@@ -9,8 +9,8 @@ mod tests {
         coerce_eligibility_selection, first_selectable_eligibility_index, format_shortcut_display,
         last_selectable_eligibility_index, selectable_eligibility_index_at_or_after,
         selectable_eligibility_index_at_or_before, should_show_row_shortcut,
-        should_show_search_description, should_show_search_shortcut, RowEligibility,
-        RowShortcutVisibilityPolicy, LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED,
+        should_show_search_description, RowEligibility, RowShortcutVisibilityPolicy,
+        LIST_ITEM_MOUSE_HOVER_TOOLTIPS_ENABLED,
     };
 
     #[test]
@@ -97,33 +97,17 @@ mod tests {
     }
 
     #[test]
-    fn test_should_show_search_shortcut_selected_only() {
-        // Dense launcher rows show shortcut chrome only on the selected (focused) row.
-        assert!(should_show_search_shortcut(true, true, false));
-        assert!(should_show_search_shortcut(true, true, true));
-        assert!(should_show_search_shortcut(false, true, false));
-        // Non-selected rows hide shortcuts regardless of hover/filter state.
-        assert!(!should_show_search_shortcut(true, false, false));
-        assert!(!should_show_search_shortcut(true, false, true));
-        assert!(!should_show_search_shortcut(false, false, false));
-    }
-
-    #[test]
-    fn test_row_shortcut_visibility_selected_only_policy() {
-        let policy = RowShortcutVisibilityPolicy::SelectedOnly;
-        assert!(should_show_row_shortcut(policy, true, false));
-        assert!(should_show_row_shortcut(policy, true, true));
-        assert!(!should_show_row_shortcut(policy, false, false));
-        assert!(!should_show_row_shortcut(policy, false, true));
+    fn test_row_shortcut_visibility_hidden_policy() {
+        assert!(!should_show_row_shortcut(
+            RowShortcutVisibilityPolicy::Hidden
+        ));
     }
 
     #[test]
     fn test_row_shortcut_visibility_all_rows_policy() {
-        let policy = RowShortcutVisibilityPolicy::AllRows;
-        assert!(should_show_row_shortcut(policy, true, false));
-        assert!(should_show_row_shortcut(policy, true, true));
-        assert!(should_show_row_shortcut(policy, false, false));
-        assert!(should_show_row_shortcut(policy, false, true));
+        assert!(should_show_row_shortcut(
+            RowShortcutVisibilityPolicy::AllRows
+        ));
     }
 
     #[test]

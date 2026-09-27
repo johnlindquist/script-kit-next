@@ -714,11 +714,17 @@ pub fn checked_in_design_bundle() -> Result<DesignTokenBundle, String> {
     b.resolved_color(
         "resolved.footer.buttonActive",
         "--sk-footer-button-active",
-        row_states
-            .active
-            .background_rgba
-            .ok_or_else(|| "main-menu active rows must provide a background fill".to_string())?,
-        &["resolved.mainMenu.row.selectedBackground"],
+        crate::components::footer_chrome::resolved_footer_button_visual_colors_for_variant(
+            &theme, variant,
+        )
+        .row_states
+        .active
+        .background_rgba
+        .ok_or_else(|| "footer buttons must provide a pressed fill".to_string())?,
+        &[
+            "theme.colors.text.primary",
+            "FooterButtonTheme.active_fill_alpha",
+        ],
     );
     b.resolved_color(
         "resolved.footer.divider",
@@ -1172,7 +1178,7 @@ pub fn checked_in_design_bundle() -> Result<DesignTokenBundle, String> {
         row_chrome.selected_background_rgba,
         &[
             "theme.colors.text.primary",
-            "mainMenu.row.selectedFillAlpha",
+            "ActionsPopupRowTokens.selected_fill_alpha",
         ],
     );
     b.resolved_color(

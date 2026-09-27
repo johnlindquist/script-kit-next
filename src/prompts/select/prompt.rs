@@ -102,7 +102,7 @@ pub struct SelectPrompt {
     pub design_variant: DesignVariant,
     /// Scroll handle for virtualized choices list
     pub list_scroll_handle: UniformListScrollHandle,
-    pub(crate) header_context: Option<crate::prompts::base::PromptHeaderContext>,
+    pub(crate) header_context: Option<crate::one_window::slot_line::SlotLineView>,
     pub(crate) disabled_choices: HashSet<usize>,
 }
 impl SelectPrompt {
@@ -127,7 +127,7 @@ impl SelectPrompt {
 
     pub(crate) fn set_header_context(
         &mut self,
-        context: crate::prompts::base::PromptHeaderContext,
+        context: crate::one_window::slot_line::SlotLineView,
     ) {
         self.header_context = Some(context);
     }

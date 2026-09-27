@@ -65,10 +65,8 @@ impl ScriptListApp {
                 if ui_foundation::is_key_up(key) && !modifiers.shift {
                     if this.arg_selected_index > 0 {
                         this.set_arg_selected_index(this.arg_selected_index - 1);
-                        this.arg_list_scroll_handle.scroll_to_item(
-                            this.arg_selected_index,
-                            gpui::ScrollStrategy::Nearest,
-                        );
+                        this.arg_list_scroll_handle
+                            .scroll_to_item(this.arg_selected_index, gpui::ScrollStrategy::Nearest);
                         cx.notify();
                     }
                     cx.stop_propagation();
@@ -79,10 +77,8 @@ impl ScriptListApp {
                     let filtered = this.filtered_arg_choices();
                     if this.arg_selected_index < filtered.len().saturating_sub(1) {
                         this.set_arg_selected_index(this.arg_selected_index + 1);
-                        this.arg_list_scroll_handle.scroll_to_item(
-                            this.arg_selected_index,
-                            gpui::ScrollStrategy::Nearest,
-                        );
+                        this.arg_list_scroll_handle
+                            .scroll_to_item(this.arg_selected_index, gpui::ScrollStrategy::Nearest);
                         cx.notify();
                     }
                     cx.stop_propagation();
@@ -201,7 +197,7 @@ impl ScriptListApp {
 
         let header = crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
             menu_def,
-            self.render_clickable_main_view_context_zone(menu_def, cx),
+            self.render_main_view_slot_line(menu_def),
             header,
         );
         crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
@@ -231,7 +227,6 @@ impl ScriptListApp {
 #[cfg(test)]
 mod mini_prompt_render_tests {
     const MINI_SOURCE: &str = include_str!("mini.rs");
-
 
     #[test]
     fn mini_prompt_header_does_not_double_pad_shared_shell() {

@@ -37,14 +37,16 @@ mod tests {
         let canonical = main_view_header_metrics(def, Some(def.search.height));
         let context_only = main_view_header_metrics(def, None);
 
-        assert_eq!(canonical.header_height, 58.0);
+        let slot = sk_one_window::contract::app::SLOT_LINE_PX;
+        assert_eq!(slot, 34.0);
+        assert_eq!(canonical.header_height, 4.0 + slot + 2.0 + 26.0 + 4.0);
         assert_eq!(canonical.context_x, -6.0);
         assert_eq!(canonical.context_y, 4.0);
-        assert_eq!(canonical.context_height, 22.0);
+        assert_eq!(canonical.context_height, slot);
         assert_eq!(canonical.input_x, 2.0);
-        assert_eq!(canonical.input_y, 28.0);
+        assert_eq!(canonical.input_y, 4.0 + slot + 2.0);
         assert_eq!(canonical.input_height, Some(26.0));
-        assert_eq!(context_only.header_height, 30.0);
+        assert_eq!(context_only.header_height, 4.0 + slot + 4.0);
         assert_eq!(context_only.input_height, None);
     }
 

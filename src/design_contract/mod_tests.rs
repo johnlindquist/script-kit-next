@@ -38,8 +38,14 @@ mod tests {
         ];
         assert_eq!(bundle.conflicts.len(), expected_conflicts.len());
         assert_eq!(
-            bundle.conflicts.iter().map(|conflict| conflict.id.as_str()).collect::<std::collections::BTreeSet<_>>(),
-            expected_conflicts.into_iter().collect::<std::collections::BTreeSet<_>>()
+            bundle
+                .conflicts
+                .iter()
+                .map(|conflict| conflict.id.as_str())
+                .collect::<std::collections::BTreeSet<_>>(),
+            expected_conflicts
+                .into_iter()
+                .collect::<std::collections::BTreeSet<_>>()
         );
         for conflict in &bundle.conflicts {
             let lifecycle = &conflict.lifecycle;
@@ -84,14 +90,14 @@ mod tests {
             other => panic!("{id} is not a length: {other:?}"),
         };
 
-        // Selected row: text_primary (#ffffff) at the component byte 0x20.
+        // Selected row: no fill (sk_one_window::contract::ROW_FILL_ALPHA).
         assert_eq!(
             rgba8("resolved.mainMenu.row.selectedBackground"),
-            "#FFFFFF20"
+            "#FFFFFF00"
         );
         // Hover: max(theme hover 0.06*255=15, component 0x12=18) = 0x12.
         assert_eq!(rgba8("resolved.mainMenu.row.hoverBackground"), "#FFFFFF12");
-        // Icon tile: accent #fbbf24 at max(def 0x80, IconTile floor 0xF2).
+        // Icon tile: accent #fbbf24 at sk_one_window::contract::TILE_ALPHA (95%).
         assert_eq!(rgba8("resolved.mainMenu.icon.tileBackground"), "#FBBF24F2");
         // Themed geometry (44px rows), not the legacy 40px constant.
         assert_eq!(length("mainMenu.list.rowHeight"), 44.0);
@@ -306,8 +312,14 @@ mod tests {
         assert_eq!(length("resolved.notes.editor.caretHeight"), 17.0);
         assert_eq!(text("resolved.notes.editor.fontFamily"), "JetBrains Mono");
         assert_eq!(length("resolved.notes.titlebar.titleFontSize"), 14.0);
-        assert!(!bundle.tokens.contains_key("resolved.notes.footer.intrinsicHeight"));
-        assert!(bundle.tokens.values().all(|record| !record.css_var.as_deref().unwrap_or("").starts_with("--sk-notes-footer")));
+        assert!(!bundle
+            .tokens
+            .contains_key("resolved.notes.footer.intrinsicHeight"));
+        assert!(bundle.tokens.values().all(|record| !record
+            .css_var
+            .as_deref()
+            .unwrap_or("")
+            .starts_with("--sk-notes-footer")));
         for id in [
             "resolved.notes.editor.baseFontSize",
             "resolved.notes.editor.lineBoxHeight",
@@ -360,8 +372,14 @@ mod tests {
             "the highlight theme is reachable; the visibility conflict must not fire"
         );
 
-        assert!(bundle.conflicts.iter().any(|c| c.id == "notesMarkdown.titleGlyphExtentsVsLineBox"));
-        assert!(bundle.conflicts.iter().all(|c| !c.id.starts_with("notesFooter.")));
+        assert!(bundle
+            .conflicts
+            .iter()
+            .any(|c| c.id == "notesMarkdown.titleGlyphExtentsVsLineBox"));
+        assert!(bundle
+            .conflicts
+            .iter()
+            .all(|c| !c.id.starts_with("notesFooter.")));
 
         // ── Settings hub ────────────────────────────────────────────────
         // Canonical shared owners only — settings mints NO alias tokens
@@ -389,7 +407,9 @@ mod tests {
             400.0
         );
         // Settings consumes the same themed first-section geometry.
-        assert!(!bundle.tokens.contains_key("resolved.listItem.default.firstSectionSlotHeight"));
+        assert!(!bundle
+            .tokens
+            .contains_key("resolved.listItem.default.firstSectionSlotHeight"));
         assert_eq!(length("mainMenu.list.firstSectionSlotHeight"), 28.0);
         assert_eq!(length("mainMenu.section.firstPaddingTop"), 4.0);
         for id in [
@@ -451,14 +471,20 @@ mod tests {
         assert_eq!(text("settingsHub.icons.policy"), "iconless");
         assert_eq!(text("settingsHub.footer.primaryLabel"), "Open");
         assert_eq!(text("settingsHub.footer.primaryEnabled"), "true");
-        for conflict_id in ["settingsSection.firstSlotLegacyVsThemed",
-            "settingsRows.authoredIconHintsVsResolvedNone", "settingsFooter.nativeRunVsGpuiOpenHint"] {
+        for conflict_id in [
+            "settingsSection.firstSlotLegacyVsThemed",
+            "settingsRows.authoredIconHintsVsResolvedNone",
+            "settingsFooter.nativeRunVsGpuiOpenHint",
+        ] {
             assert!(!bundle.conflicts.iter().any(|c| c.id == conflict_id));
         }
         let caret = record("actionsDialog.search.caretHeight");
         assert!(!caret.writable);
         assert!(matches!(caret.stage, TokenStage::Resolved));
-        assert_eq!(length("actionsDialog.search.caretHeight"), length("actionsDialog.search.fontSize"));
+        assert_eq!(
+            length("actionsDialog.search.caretHeight"),
+            length("actionsDialog.search.fontSize")
+        );
 
         // ── Day Page (2026-07-11 Oracle-corrected slice) ────────────────
         // The five Day-owned geometry tokens (source, writable) — the ONLY
@@ -642,7 +668,7 @@ mod tests {
         let css = render_css(&bundle);
         assert_eq!(css.matches("--sk-main-menu-row-height:").count(), 1);
         assert!(css
-            .contains("--sk-main-menu-row-selected-background: rgb(255 255 255 / 0.1254901961);"));
+            .contains("--sk-main-menu-row-selected-background: rgb(255 255 255 / 0.0000000000);"));
         assert_eq!(
             css.matches("--sk-actions-dialog-row-selected-background:")
                 .count(),
@@ -808,8 +834,14 @@ mod tests {
         );
 
         // Authored byte values retain units distinct from normalized opacity.
-        assert!(matches!(record("agentChat.error.bgAlpha").value, TokenValue::AlphaByte { value: 50 }));
-        assert!(matches!(record("agentChat.block.toolHeaderOpacity").value, TokenValue::NormalizedOpacity { .. }));
+        assert!(matches!(
+            record("agentChat.error.bgAlpha").value,
+            TokenValue::AlphaByte { value: 50 }
+        ));
+        assert!(matches!(
+            record("agentChat.block.toolHeaderOpacity").value,
+            TokenValue::NormalizedOpacity { .. }
+        ));
         assert_eq!(number("agentChat.error.bgAlpha"), 50.0);
         assert_eq!(number("agentChat.user.bgAlpha"), 6.0);
         assert_eq!(number("agentChat.block.toolBorderAlpha"), 127.0);

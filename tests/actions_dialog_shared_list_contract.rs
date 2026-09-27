@@ -72,11 +72,11 @@ fn actions_dialog_preserves_existing_row_interactions_around_shared_item() {
 }
 
 #[test]
-fn list_item_defaults_shortcuts_to_selected_only_and_supports_policy_override() {
+fn list_item_defaults_shortcuts_to_hidden_and_supports_policy_override() {
     for required in [
-        "shortcut_visibility_policy: RowShortcutVisibilityPolicy::SelectedOnly",
+        "shortcut_visibility_policy: RowShortcutVisibilityPolicy::Hidden",
         "pub(crate) fn shortcut_visibility_policy(",
-        "should_show_row_shortcut(shortcut_visibility_policy, self.selected, hover_visible)",
+        "should_show_row_shortcut(shortcut_visibility_policy)",
     ] {
         assert!(
             LIST_ITEM.contains(required),

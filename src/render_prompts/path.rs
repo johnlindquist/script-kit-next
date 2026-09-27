@@ -180,7 +180,7 @@ impl ScriptListApp {
         entity: Entity<PathPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let context = self.prompt_header_context(cx);
+        let context = self.prompt_header_context();
         entity.update(cx, |prompt, _cx| prompt.set_header_context(context));
         tracing::info!(
             surface = "render_prompts::path",
@@ -392,20 +392,20 @@ impl ScriptListApp {
         .key_context("path_prompt_container")
         .on_key_down(handle_key)
         .child(div().size_full().child(entity))
-            // Actions dialog overlays on top (upper-right corner, below the header bar)
-            .when_some(actions_dialog, |d, dialog| {
-                d.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .flex()
-                        .justify_end()
-                        .pt(px(actions_dialog_top))
-                        .pr(px(actions_dialog_right))
-                        .child(dialog),
-                )
-            })
-            .into_any_element()
+        // Actions dialog overlays on top (upper-right corner, below the header bar)
+        .when_some(actions_dialog, |d, dialog| {
+            d.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .justify_end()
+                    .pt(px(actions_dialog_top))
+                    .pr(px(actions_dialog_right))
+                    .child(dialog),
+            )
+        })
+        .into_any_element()
     }
 }
 

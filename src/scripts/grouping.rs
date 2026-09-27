@@ -594,7 +594,11 @@ pub(crate) fn pin_alias_match_first(
 
     let pin_index = |grouped: &[GroupedListItem]| -> usize {
         match grouped.first() {
-            Some(GroupedListItem::SectionHeader(label, _)) if label == "Results" => 1,
+            Some(GroupedListItem::SectionHeader(label, _))
+                if label == sk_one_window::contract::words::MATCHES =>
+            {
+                1
+            }
             _ => 0,
         }
     };
@@ -1163,7 +1167,7 @@ fn append_missing_explicit_source_status_rows(
                 .get(*index)
                 .and_then(SearchResult::root_unified_source)
                 .is_some_and(|item_source| item_source == source),
-            GroupedListItem::SectionHeader(..) | GroupedListItem::ReservedSectionSlot => false,
+            GroupedListItem::SectionHeader(..) => false,
         });
         if !represented {
             grouped.push(GroupedListItem::Status(source_chip_result_status(
@@ -1197,9 +1201,6 @@ fn filter_grouped_results_by_root_sources(
         match item {
             GroupedListItem::SectionHeader(label, icon) => {
                 pending_header = Some(GroupedListItem::SectionHeader(label.clone(), icon.clone()));
-            }
-            GroupedListItem::ReservedSectionSlot => {
-                pending_header = Some(GroupedListItem::ReservedSectionSlot);
             }
             GroupedListItem::Item(old_index) => {
                 if let Some(Some(new_index)) = remap.get(*old_index) {
@@ -1362,7 +1363,7 @@ fn root_brain_passive_insertion_index(
     let mut item_indices: Vec<usize> = Vec::new();
     for (pos, entry) in grouped.iter().enumerate() {
         match entry {
-            GroupedListItem::SectionHeader(_, _) | GroupedListItem::ReservedSectionSlot => {
+            GroupedListItem::SectionHeader(_, _) => {
                 if let Some(start) = section_start {
                     if !item_indices.is_empty() && item_indices.iter().all(is_file_handoff) {
                         return start.min(default_index);
@@ -2425,9 +2426,7 @@ fn root_file_passive_insertion_index(
             GroupedListItem::SectionHeader(label, None) => {
                 label.starts_with("Use \"") && label.ends_with("\" with...")
             }
-            GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::ReservedSectionSlot => {
-                false
-            }
+            GroupedListItem::SectionHeader(_, Some(_)) => false,
         })
         .unwrap_or(grouped.len())
 }

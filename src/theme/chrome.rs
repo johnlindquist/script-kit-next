@@ -401,12 +401,26 @@ pub(crate) fn resolve_main_menu_row_state_palette(
     theme: &Theme,
     variant: crate::designs::MainMenuThemeVariant,
 ) -> MainMenuRowStatePalette {
+    resolve_main_menu_row_state_palette_with_active_alpha(
+        theme,
+        variant,
+        variant.def().row.selected_fill_alpha as u8,
+    )
+}
+
+/// The row palette with another surface's active fill, for chrome (the footer
+/// buttons) that shares the row's colors but keeps a pressed fill.
+pub(crate) fn resolve_main_menu_row_state_palette_with_active_alpha(
+    theme: &Theme,
+    variant: crate::designs::MainMenuThemeVariant,
+    active_fill_alpha: u8,
+) -> MainMenuRowStatePalette {
     let def = variant.def();
     let opacity = theme.get_opacity();
     resolve_main_menu_row_state_palette_from_parts(MainMenuRowColorInputs {
         row_kind: def.row_kind,
         row_hover_fill_alpha: def.row.hover_fill_alpha as u8,
-        row_selected_fill_alpha: def.row.selected_fill_alpha as u8,
+        row_selected_fill_alpha: active_fill_alpha,
         theme_hover_opacity: opacity.hover,
         text_primary_hex: theme.colors.text.primary,
         accent_selected_hex: theme.colors.accent.selected,
@@ -661,7 +675,10 @@ mod tests {
 
             assert_eq!(palette.rest.background_rgba, None);
             assert_eq!(palette.hover.background_rgba, Some((primary << 8) | 0x12));
-            assert_eq!(palette.active.background_rgba, Some((primary << 8) | 0x20));
+            assert_eq!(
+                palette.active.background_rgba,
+                Some((primary << 8) | sk_one_window::contract::ROW_FILL_ALPHA as u32)
+            );
             assert_eq!(palette.rest.primary_foreground_rgba, (primary << 8) | 0xFF);
             assert_eq!(palette.hover.primary_foreground_rgba, (primary << 8) | 0xFF);
             assert_eq!(

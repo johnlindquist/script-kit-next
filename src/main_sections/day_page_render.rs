@@ -216,9 +216,7 @@ impl Render for DayPageView {
             )
             .when_some(clipboard_shelf, |parent, shelf| parent.child(shelf));
 
-        let context_zone = app.update(cx, |app, _cx| {
-            app.render_inert_main_view_context_zone(menu_def)
-        });
+        let context_zone = app.update(cx, |app, _cx| app.render_main_view_slot_line(menu_def));
 
         let main = div()
             .flex()

@@ -151,21 +151,6 @@ fn day_page_context_round_trip_still_uses_main_menu() {
 }
 
 #[test]
-fn day_page_header_context_chips_are_inert() {
-    let view = source("src/main_sections/day_page_render.rs");
-    let render = function_body(&view, "fn render(");
-
-    assert!(
-        render.contains("render_inert_main_view_context_zone"),
-        "Day header context labels should display state without clickable CWD/Agent chip exits"
-    );
-    assert!(
-        !render.contains("render_clickable_main_view_context_zone"),
-        "Day must not mount clickable header chips that can leave Day for prompt-builder surfaces"
-    );
-}
-
-#[test]
 fn day_page_actions_do_not_offer_agent_handoff() {
     let actions = source("src/main_sections/day_page_actions.rs");
     let agent_handoff = source("src/app_impl/agent_handoff/mod.rs");

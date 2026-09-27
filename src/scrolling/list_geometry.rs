@@ -9,9 +9,6 @@ pub(crate) struct GroupedListRowHeights {
     pub(crate) section_header: f32,
     pub(crate) status: f32,
     pub(crate) item: f32,
-    /// The renderer paints a hidden initial header (index 0) at zero height;
-    /// the model must agree or reveal and scrollbar math drift by a header.
-    pub(crate) hide_first_section_header: bool,
 }
 
 impl GroupedListRowHeights {
@@ -23,7 +20,6 @@ impl GroupedListRowHeights {
             section_header: crate::list_item::effective_section_header_height_for_theme(theme),
             status: crate::list_item::effective_source_status_row_height_for_theme(theme),
             item: crate::list_item::effective_list_item_height_for_theme(theme),
-            hide_first_section_header: theme.def().header_info_bar.hide_initial_section_header,
         }
     }
 
@@ -32,13 +28,10 @@ impl GroupedListRowHeights {
             crate::list_item::GroupedListItem::SectionHeader(..) => {
                 if ix != 0 {
                     self.section_header
-                } else if self.hide_first_section_header {
-                    0.0
                 } else {
                     self.first_section_header
                 }
             }
-            crate::list_item::GroupedListItem::ReservedSectionSlot => self.first_section_header,
             crate::list_item::GroupedListItem::Status(..) => self.status,
             crate::list_item::GroupedListItem::Item(..) => self.item,
         }

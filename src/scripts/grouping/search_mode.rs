@@ -231,7 +231,10 @@ pub(super) fn build_search_mode_results(
     if matches!(grouped.first(), Some(GroupedListItem::Item(_))) {
         grouped.insert(
             0,
-            GroupedListItem::SectionHeader("Results".to_string(), None),
+            GroupedListItem::SectionHeader(
+                sk_one_window::contract::words::MATCHES.to_string(),
+                None,
+            ),
         );
     }
 
@@ -318,7 +321,7 @@ mod tests {
         assert_eq!(facts.score, Some(score_from_tier(900, 2)));
         assert_eq!(facts.tier, Some(900));
         assert_eq!(facts.provider_score, None);
-        assert_eq!(facts.section.as_deref(), Some("Results"));
+        assert_eq!(facts.section.as_deref(), Some("Matches"));
     }
 
     #[test]
@@ -426,7 +429,7 @@ mod tests {
 
         assert!(matches!(
             grouped.first(),
-            Some(GroupedListItem::SectionHeader(label, None)) if label == "Results"
+            Some(GroupedListItem::SectionHeader(label, None)) if label == "Matches"
         ));
         assert!(matches!(grouped.get(1), Some(GroupedListItem::Item(0))));
         assert_eq!(sorted_results[0].name(), "Plain Result");
@@ -448,9 +451,9 @@ mod tests {
         assert!(
             grouped.iter().all(|item| !matches!(
                 item,
-                GroupedListItem::SectionHeader(label, None) if label == "Results"
+                GroupedListItem::SectionHeader(label, None) if label == "Matches"
             )),
-            "empty search results must not emit a Results header, got {grouped:?}"
+            "empty search results must not emit a Matches header, got {grouped:?}"
         );
     }
 
@@ -520,9 +523,9 @@ mod tests {
         assert!(
             grouped.iter().all(|item| !matches!(
                 item,
-                GroupedListItem::SectionHeader(label, None) if label == "Results"
+                GroupedListItem::SectionHeader(label, None) if label == "Matches"
             )),
-            "Menu Bar Actions header must not be preceded by duplicate Results, got {grouped:?}"
+            "Menu Bar Actions header must not be preceded by duplicate Matches, got {grouped:?}"
         );
     }
 

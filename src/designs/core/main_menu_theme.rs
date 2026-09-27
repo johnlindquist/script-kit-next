@@ -78,6 +78,8 @@ pub enum MainMenuRowKind {
 pub struct FooterButtonTheme {
     pub border_alpha: u32,
     pub hover_border_alpha: u32,
+    /// The pressed button's fill. Rows have none; their focus is the icon tile.
+    pub active_fill_alpha: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -346,7 +348,6 @@ pub struct HeaderInfoBarTokens {
     pub separator: &'static str,
     pub logo_placement: MainMenuLogoPlacement,
     pub input_text_alignment: MainMenuInputTextAlignment,
-    pub hide_initial_section_header: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -365,6 +366,7 @@ pub struct MainMenuThemeDef {
     pub metadata: MainMenuMetadataTokens,
     pub footer: FooterTheme,
     pub header_info_bar: HeaderInfoBarTokens,
+    pub slot_line: super::SlotLineTokens,
 }
 
 /// Shared section-separator geometry/typography projection (GEO-007): the
@@ -441,7 +443,6 @@ pub struct HeaderInfoBarSignature {
     pub show_agent_model: bool,
     pub show_keys: bool,
     pub separator_len: usize,
-    pub hide_initial_section_header: bool,
 }
 
 impl MainMenuThemeVariant {
@@ -648,7 +649,6 @@ impl MainMenuThemeVariant {
             show_agent_model: tokens.show_agent_model,
             show_keys: tokens.show_keys,
             separator_len: tokens.separator.len(),
-            hide_initial_section_header: tokens.hide_initial_section_header,
         }
     }
 
@@ -718,7 +718,6 @@ fn header_info_bar_tokens(
         separator,
         logo_placement: MainMenuLogoPlacement::Hidden,
         input_text_alignment: MainMenuInputTextAlignment::RowTextColumn,
-        hide_initial_section_header: false,
     }
 }
 
@@ -732,7 +731,7 @@ fn main_menu_row_tokens() -> MainMenuRowTokens {
         name_desc_gap: (40.0_f32 / 18.0).clamp(1.5, 3.5),
         icon_text_gap: (20.0_f32 * 0.42).clamp(7.0, 12.0),
         accessory_gap: (14.0_f32 * 0.45).clamp(5.0, 9.0),
-        selected_fill_alpha: 0x20,
+        selected_fill_alpha: sk_one_window::contract::ROW_FILL_ALPHA as u32,
         hover_fill_alpha: 0x12,
     }
 }
@@ -748,6 +747,7 @@ fn base_main_menu_theme_def(
         button: FooterButtonTheme {
             border_alpha: 50,
             hover_border_alpha: MAIN_MENU_ACTION_BUTTON_HOVER_BORDER_ALPHA,
+            active_fill_alpha: 0x20,
         },
         metrics: FooterMetricsTokens {
             height_px: 32.0,
@@ -891,11 +891,11 @@ fn base_main_menu_theme_def(
         },
         row: main_menu_row_tokens(),
         icon: MainMenuIconTokens {
-            container_size: 20.0,
+            container_size: sk_one_window::contract::app::TILE_PX,
             svg_size: 16.0,
-            tile_size: 20.0,
-            tile_radius: 7.0,
-            tile_fill_alpha: 0x80,
+            tile_size: sk_one_window::contract::app::TILE_PX,
+            tile_radius: sk_one_window::contract::app::TILE_RADIUS_PX,
+            tile_fill_alpha: sk_one_window::contract::TILE_ALPHA as u32,
             tile_border_alpha: 0x00,
         },
         typography: MainMenuTypographyTokens {
@@ -921,6 +921,7 @@ fn base_main_menu_theme_def(
         },
         footer,
         header_info_bar,
+        slot_line: super::slot_line_theme::slot_line_tokens(),
     }
 }
 

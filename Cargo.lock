@@ -8008,6 +8008,7 @@ dependencies = [
  "sha2",
  "shellexpand 2.1.2",
  "sk-clipboard",
+ "sk-one-window",
  "sk-protocol",
  "sk-storage",
  "smallvec",

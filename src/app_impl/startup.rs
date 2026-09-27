@@ -597,6 +597,8 @@ impl ScriptListApp {
             spine_live_preview_cache: Default::default(),
             shown_selection_hint_text: None,
             shown_selection_hint_token: 0,
+            one_window: sk_one_window::OneWindow::default(),
+            slot_dimmer: Default::default(),
             menu_syntax_trigger_picker_state:
                 crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState::default(),
             menu_syntax_object_selector_state:

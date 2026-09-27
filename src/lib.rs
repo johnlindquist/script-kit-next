@@ -63,6 +63,7 @@ pub mod list_item;
 pub mod logging;
 pub mod menu_syntax;
 pub mod navigation;
+pub(crate) mod one_window;
 pub mod panel;
 pub mod pasted_image;
 pub mod pasted_text;

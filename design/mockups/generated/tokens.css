@@ -3,7 +3,7 @@
  * and re-run the exporter; Rust is the single authority.
  */
 :root {
-  /* bundleHash: sha256:c1135582ce88090192127b0326b8a7805ee97f974b5698043348919f9eccacca */
+  /* bundleHash: sha256:47751a0486b9697751b43f08bd01799ea0bdbe3880a7eab0add6a5c02c5d93e4 */
   --sk-actions-dialog-list-padding-bottom: 6px;
   --sk-actions-dialog-list-padding-top: 0px;
   --sk-actions-dialog-row-height: 36px;
@@ -150,9 +150,9 @@
   --sk-main-menu-context-opacity: 0.3400000035762787;
   --sk-main-menu-context-pill-padding-x: 6px;
   --sk-main-menu-context-pill-radius: 6px;
-  --sk-main-menu-icon-container-size: 20px;
+  --sk-main-menu-icon-container-size: 24px;
   --sk-main-menu-icon-svg-size: 16px;
-  --sk-main-menu-icon-tile-size: 20px;
+  --sk-main-menu-icon-tile-size: 24px;
   --sk-main-menu-first-section-slot-height: 28px;
   --sk-main-menu-row-height: 44px;
   --sk-main-menu-section-slot-height: 28px;
@@ -247,7 +247,7 @@
   --sk-arg-input-font-size: 20px;
   --sk-arg-input-height: 22px;
   --sk-arg-input-line-height: 25px;
-  --sk-arg-window-height: 312px;
+  --sk-arg-window-height: 324px;
   --sk-builtin-main-input-count-font-size: 14px;
   --sk-builtin-main-input-count-font-weight: 400;
   --sk-builtin-main-input-count-line-height: 23px;
@@ -297,9 +297,9 @@
   --sk-main-menu-context-keycap-font-size: 9.239999771118164px;
   --sk-main-menu-context-keycap-height: 17.5px;
   --sk-main-menu-icon-tile-background: rgb(251 191 36 / 0.9490196078);
-  --sk-main-menu-icon-tile-radius: 7px;
+  --sk-main-menu-icon-tile-radius: 8px;
   --sk-main-menu-row-hover-background: rgb(255 255 255 / 0.0705882353);
-  --sk-main-menu-row-selected-background: rgb(255 255 255 / 0.1254901961);
+  --sk-main-menu-row-selected-background: rgb(255 255 255 / 0.0000000000);
   --sk-main-view-content-right-inset-x: 2px;
   --sk-notes-editor-font-size: 16px;
   --sk-notes-caret-color: rgb(255 255 255);

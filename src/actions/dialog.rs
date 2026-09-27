@@ -4020,6 +4020,7 @@ pub(crate) fn resolved_actions_dialog_row_metrics(
     let mut metrics = crate::list_item::ListItemMetricsOverride::from_main_menu_def(main_menu);
     metrics.name_font_size = popup.row.title_font_size;
     metrics.name_line_height = metrics.name_line_height.max(popup.row.title_font_size);
+    metrics.row_selected_fill_alpha = popup.row.selected_fill_alpha;
     metrics
 }
 

@@ -64,9 +64,6 @@ pub const ALL_LIST_PRESENTATION_MODES: &[ListPresentationMode] = &[
 pub enum SectionSlotKind {
     First,
     Ordinary,
-    /// A reserved first-section slot the renderer actually reserves
-    /// (`GroupedListItem::ReservedSectionSlot`); uses the first-section metric.
-    ReservedFirst,
 }
 
 /// How the selected-row paint is derived. Prediction exports only this
@@ -246,11 +243,7 @@ pub enum PredictiveListSlot {
     Row,
     FirstSection,
     Section,
-    ReservedFirstSection,
     SourceStatus,
-    /// A section header the renderer suppresses (e.g.
-    /// `hide_initial_section_header`); contributes zero height explicitly.
-    HiddenSection,
 }
 
 /// Sum the content height for an ordered slot sequence under one resolved
@@ -266,9 +259,7 @@ pub fn resolved_list_content_height(
             PredictiveListSlot::Row => metrics.row_slot_height,
             PredictiveListSlot::FirstSection => metrics.first_section_slot_height,
             PredictiveListSlot::Section => metrics.section_slot_height,
-            PredictiveListSlot::ReservedFirstSection => metrics.first_section_slot_height,
             PredictiveListSlot::SourceStatus => metrics.source_status_slot_height,
-            PredictiveListSlot::HiddenSection => 0.0,
         })
         .sum()
 }

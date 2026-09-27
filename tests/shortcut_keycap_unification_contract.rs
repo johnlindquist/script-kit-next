@@ -36,8 +36,8 @@ fn main_list_row_shortcuts_use_footer_keycaps_not_hint_strip_inline_renderer() {
         "main list row shortcuts must render through footer_chrome row keycaps"
     );
     assert!(
-        shortcut_section.contains("should_show_search_shortcut"),
-        "main list must preserve selected-only shortcut visibility"
+        shortcut_section.contains("should_show_row_shortcut(shortcut_visibility_policy)"),
+        "row keycaps must follow the row's policy, which hides them unless a surface opts in"
     );
     assert!(
         !shortcut_section.contains("crate::components::hint_strip::render_inline_shortcut_keys")

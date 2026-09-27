@@ -1387,7 +1387,7 @@ impl ScriptListApp {
         let header = if meta.selected_is_archived() {
             crate::components::main_view_chrome::MainViewHeaderChrome::context_only(
                 menu_def,
-                self.render_clickable_main_view_context_zone(menu_def, cx),
+                self.render_main_view_slot_line(menu_def),
             )
         } else {
             self.render_builtin_main_input_header(trailing, cx)

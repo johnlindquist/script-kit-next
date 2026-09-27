@@ -191,67 +191,68 @@ fn render_menu_syntax_form_field(
     let shell_spec = crate::components::menu_syntax_form_field_shell_spec(target, field, metrics);
     let shell_style = crate::components::resolve_form_field_shell_style(&shell_spec, colors);
 
-    let body = if let Some(gpui_component::input::AnyInputState::Textarea(textarea)) = input.as_ref() {
-        // Multiline fields are gpui-kit `Textarea`s (multi-line is a type).
-        gpui_component::input::Textarea::new(textarea)
-            .w_full()
-            .line_height(px(metrics.input_line_height))
-            .text_size(px(metrics.input_font_size))
-            .px(px(0.0))
-            .py(px(0.0))
-            .appearance(false)
-            .bordered(false)
-            .disabled(shell_spec.disabled)
-            .min_h(px(shell_spec.min_height))
-            .max_h(px(shell_spec.max_height.unwrap_or(shell_spec.min_height)))
-            .into_any_element()
-    } else if let Some(input) = input.as_ref().and_then(|input| input.as_input()) {
-        let input_element = gpui_component::input::Input::new(input)
-            .w_full()
-            .line_height(px(metrics.input_line_height))
-            .px(px(0.0))
-            .py(px(0.0))
-            .with_size(gpui_component::Size::Size(px(metrics.input_font_size)))
-            .appearance(false)
-            .bordered(false)
-            .focus_bordered(false)
-            .disabled(shell_spec.disabled);
-        let input_element = if field.multiline {
-            input_element
+    let body =
+        if let Some(gpui_component::input::AnyInputState::Textarea(textarea)) = input.as_ref() {
+            // Multiline fields are gpui-kit `Textarea`s (multi-line is a type).
+            gpui_component::input::Textarea::new(textarea)
+                .w_full()
+                .line_height(px(metrics.input_line_height))
+                .text_size(px(metrics.input_font_size))
+                .px(px(0.0))
+                .py(px(0.0))
+                .appearance(false)
+                .bordered(false)
+                .disabled(shell_spec.disabled)
                 .min_h(px(shell_spec.min_height))
                 .max_h(px(shell_spec.max_height.unwrap_or(shell_spec.min_height)))
-        } else {
-            input_element.h(px(shell_spec.min_height))
-        };
-        input_element.into_any_element()
-    } else {
-        let has_value = !field.value.trim().is_empty();
-        let display_value = if has_value {
-            menu_syntax_single_line_text_for_gpui(&field.value)
-        } else {
-            field.placeholder.clone()
-        };
-        div()
-            .w_full()
-            .min_h(px(metrics.input_line_height))
-            .flex()
-            .items_center()
-            .text_size(px(metrics.input_font_size))
-            .line_height(px(metrics.input_line_height))
-            .text_color(if has_value {
-                shell_style.text
+                .into_any_element()
+        } else if let Some(input) = input.as_ref().and_then(|input| input.as_input()) {
+            let input_element = gpui_component::input::Input::new(input)
+                .w_full()
+                .line_height(px(metrics.input_line_height))
+                .px(px(0.0))
+                .py(px(0.0))
+                .with_size(gpui_component::Size::Size(px(metrics.input_font_size)))
+                .appearance(false)
+                .bordered(false)
+                .focus_bordered(false)
+                .disabled(shell_spec.disabled);
+            let input_element = if field.multiline {
+                input_element
+                    .min_h(px(shell_spec.min_height))
+                    .max_h(px(shell_spec.max_height.unwrap_or(shell_spec.min_height)))
             } else {
-                shell_style.placeholder
-            })
-            .child(
-                div()
-                    .min_w(px(0.0))
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .child(display_value),
-            )
-            .into_any_element()
-    };
+                input_element.h(px(shell_spec.min_height))
+            };
+            input_element.into_any_element()
+        } else {
+            let has_value = !field.value.trim().is_empty();
+            let display_value = if has_value {
+                menu_syntax_single_line_text_for_gpui(&field.value)
+            } else {
+                field.placeholder.clone()
+            };
+            div()
+                .w_full()
+                .min_h(px(metrics.input_line_height))
+                .flex()
+                .items_center()
+                .text_size(px(metrics.input_font_size))
+                .line_height(px(metrics.input_line_height))
+                .text_color(if has_value {
+                    shell_style.text
+                } else {
+                    shell_style.placeholder
+                })
+                .child(
+                    div()
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(display_value),
+                )
+                .into_any_element()
+        };
 
     crate::components::render_form_field_shell(&shell_spec, colors, metrics, body)
 }
@@ -1071,12 +1072,37 @@ impl ScriptListApp {
                     .menu_syntax_mode
                     .advanced_query_for(&filter_text_for_render)
                     .is_some_and(|query| query.has_source_filters() || query.has_predicates());
-                render_script_list_empty_state(
-                    &filter_text_for_render,
-                    has_active_filter,
-                    &self.theme,
-                    cx,
-                )
+                let lead = sk_one_window::list::lead_header(
+                    !filter_text_for_render.trim().is_empty(),
+                    sk_one_window::list::Lead::Nothing,
+                );
+                div()
+                    .w_full()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .flex_none()
+                            .h(px(
+                                crate::list_item::effective_first_section_header_height_for_theme(
+                                    self.current_main_menu_theme,
+                                ),
+                            ))
+                            .child(render_section_header(lead, None, theme_colors, true)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h(px(0.))
+                            .child(render_script_list_empty_state(
+                                &filter_text_for_render,
+                                has_active_filter,
+                                &self.theme,
+                                cx,
+                            )),
+                    )
+                    .into_any_element()
             }
         } else {
             // Use GPUI's list() component for variable-height items
@@ -1091,10 +1117,6 @@ impl ScriptListApp {
             let painted_query = self.main_menu_committed_query_stamp();
 
             let current_main_menu_theme = self.current_main_menu_theme;
-            let hide_initial_section_header = current_main_menu_theme
-                .def()
-                .header_info_bar
-                .hide_initial_section_header;
             let effective_section_header_height =
                 crate::list_item::effective_section_header_height_for_theme(
                     current_main_menu_theme,
@@ -1130,58 +1152,40 @@ impl ScriptListApp {
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
                             match grouped_item {
                                 GroupedListItem::SectionHeader(label, icon) => {
-                                    // Section header at 32px height (8px grid) for clear visual separation,
-                                    // or 20px if it is the first section header to pull it up closer to input.
                                     let is_first = ix == 0;
-                                    let h_px = if is_first && hide_initial_section_header {
-                                        0.0
-                                    } else if is_first {
+                                    let h_px = if is_first {
                                         crate::list_item::effective_first_section_header_height_for_theme(
                                             current_main_menu_theme,
                                         )
                                     } else {
                                         effective_section_header_height
                                     };
-                                    div()
+                                    let header = div()
+                                        .relative()
                                         .id(ElementId::NamedInteger(
                                             format!("section-header-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
                                         .h(px(h_px))
-                                        .when(!hide_initial_section_header || !is_first, |div| {
-                                            div.child(render_section_header(
-                                                label,
-                                                icon.as_deref(),
-                                                theme_colors,
-                                                is_first,
-                                            ))
-                                        })
-                                        .into_any_element()
-                                }
-                                GroupedListItem::ReservedSectionSlot => {
-                                    let slot = div()
-                                        .id(ElementId::NamedInteger(
-                                            format!("section-slot-reserved-gen-{row_generation}").into(),
-                                            ix as u64,
-                                        ))
-                                        .h(px(
-                                            crate::list_item::effective_first_section_header_height_for_theme(
-                                                current_main_menu_theme,
-                                            ),
+                                        .child(render_section_header(
+                                            label,
+                                            icon.as_deref(),
+                                            theme_colors,
+                                            is_first,
                                         ));
                                     #[cfg(feature = "owned-ui-evaluation")]
-                                    let slot = slot.when(crate::runtime_policy::is_owned_evaluation(), |slot| {
+                                    let header = header.when(crate::runtime_policy::is_owned_evaluation(), |header| {
                                         let metadata = std::rc::Rc::new(serde_json::json!({
-                                            "groupedIndex":ix,"selectableOrdinal":null,"selectable":false,"activatable":false,"selected":false,
+                                            "groupedIndex": ix, "label": label, "first": is_first,
                                         }));
-                                        slot.debug_selector(|| "main-list-reserved-slot".to_string())
-                                            .child(gpui::canvas(|_, _, _| (), move |bounds, _, window, _| {
-                                                if window.owned_frame_observation_active() {
-                                                    window.record_owned_paint_binding("mainSearchReservedSlot", "main-list-reserved-slot".into(), bounds, metadata.clone());
-                                                }
-                                            }).absolute().top_0().left_0().size_full())
+                                        let id = format!("main-list-section-header:{ix}");
+                                        header.child(gpui::canvas(|_, _, _| (), move |bounds, _, window, _| {
+                                            if window.owned_frame_observation_active() {
+                                                window.record_owned_paint_binding("mainSearchSectionHeader", id.clone(), bounds, metadata.clone());
+                                            }
+                                        }).absolute().top_0().left_0().size_full())
                                     });
-                                    slot.into_any_element()
+                                    header.into_any_element()
                                 }
                                 GroupedListItem::Status(status) => {
                                     div()
@@ -1409,13 +1413,14 @@ impl ScriptListApp {
                 // theme heights the reveal math uses. ListState's own
                 // scrollbar offset sums only measured rows, so it collapsed
                 // after jumps and snapped the thumb to the top.
-                let scrollbar_handle = crate::scrolling::model_scrollbar::ModelListScrollbarHandle::new(
-                    self.main_list_state.clone(),
-                    grouped_items.clone(),
-                    crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
-                        current_main_menu_theme,
-                    ),
-                );
+                let scrollbar_handle =
+                    crate::scrolling::model_scrollbar::ModelListScrollbarHandle::new(
+                        self.main_list_state.clone(),
+                        grouped_items.clone(),
+                        crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
+                            current_main_menu_theme,
+                        ),
+                    );
                 let content_height = scrollbar_handle.content_height();
 
                 div()
@@ -2063,7 +2068,7 @@ impl ScriptListApp {
 
         let header = crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
             menu_def,
-            self.render_clickable_main_view_context_zone(menu_def, cx),
+            self.render_main_view_slot_line(menu_def),
             input,
         );
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {

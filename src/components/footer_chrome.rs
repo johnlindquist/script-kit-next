@@ -818,7 +818,11 @@ pub(crate) fn resolved_footer_button_visual_colors_for_variant(
     variant: crate::designs::MainMenuThemeVariant,
 ) -> FooterButtonVisualColors {
     FooterButtonVisualColors {
-        row_states: crate::theme::resolve_main_menu_row_state_palette(theme, variant),
+        row_states: crate::theme::resolve_main_menu_row_state_palette_with_active_alpha(
+            theme,
+            variant,
+            variant.def().footer.button.active_fill_alpha as u8,
+        ),
     }
 }
 

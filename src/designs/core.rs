@@ -7,6 +7,7 @@ mod main_menu_theme;
 mod metadata;
 pub mod registry;
 mod render;
+mod slot_line_theme;
 mod tokens;
 mod variant;
 
@@ -45,6 +46,7 @@ pub use actions_popup_theme::{
     ActionsPopupThemeDef,
 };
 pub use render::render_design_item;
+pub use slot_line_theme::SlotLineTokens;
 pub use tokens::*;
 pub use variant::*;
 

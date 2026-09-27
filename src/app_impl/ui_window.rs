@@ -1559,100 +1559,24 @@ impl ScriptListApp {
         })
     }
 
-    pub(crate) fn prompt_header_context(
-        &self,
-        cx: &mut gpui::Context<Self>,
-    ) -> crate::prompts::base::PromptHeaderContext {
-        let zone = self.main_view_context_zone_spec();
-        let app = cx.entity().downgrade();
-        let handler: crate::components::main_view_chrome::SemanticChipActionHandler =
-            std::rc::Rc::new(move |invocation, window, cx| {
-                let Some(app) = app.upgrade() else {
-                    return;
-                };
-                app.update(cx, |this, cx| {
-                    use crate::components::main_view_chrome::{
-                        SemanticChipAction, MAIN_VIEW_CONTEXT_CWD_BUTTON_ID,
-                        MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID, MAIN_VIEW_CONTEXT_QUICK_AI_BUTTON_ID,
-                        MAIN_VIEW_CONTEXT_SELECTION_BUTTON_ID,
-                    };
-                    match (invocation.semantic_id.as_ref(), invocation.action) {
-                        (MAIN_VIEW_CONTEXT_CWD_BUTTON_ID, SemanticChipAction::OpenSelector) => {
-                            this.dispatch_main_window_footer_action(
-                                crate::footer_popup::FooterAction::Cwd,
-                                window,
-                                cx,
-                                "main_view_context_click",
-                            );
-                        }
-                        (MAIN_VIEW_CONTEXT_MODEL_BUTTON_ID, SemanticChipAction::OpenSelector) => {
-                            this.dispatch_main_window_footer_action(
-                                crate::footer_popup::FooterAction::AgentModel,
-                                window,
-                                cx,
-                                "main_view_context_click",
-                            );
-                        }
-                        (MAIN_VIEW_CONTEXT_QUICK_AI_BUTTON_ID, SemanticChipAction::OpenSurface) => {
-                            let query = this.filter_text.clone();
-                            this.open_quick_ai_from_launcher(query, window, cx);
-                        }
-                        (
-                            MAIN_VIEW_CONTEXT_SELECTION_BUTTON_ID,
-                            SemanticChipAction::OpenDetails,
-                        ) => {
-                            tracing::info!(
-                                target: "script_kit::selection_hint",
-                                event = "selection_context_details_opened",
-                            );
-                            this.open_selection_context_details("selection_hint_chip", cx);
-                        }
-                        _ => {
-                            tracing::warn!(
-                                target: "script_kit::main_view_chrome",
-                                semantic_id = %invocation.semantic_id,
-                                action = ?invocation.action,
-                                "Ignored unsupported semantic chip invocation"
-                            );
-                        }
-                    }
-                });
-            });
-        crate::prompts::base::PromptHeaderContext {
-            zone,
-            on_action: handler,
-        }
+    pub(crate) fn prompt_header_context(&self) -> crate::one_window::slot_line::SlotLineView {
+        crate::one_window::slot_line::SlotLineView::of(&self.one_window, &self.slot_dimmer)
     }
 
-    pub(crate) fn render_clickable_main_view_context_zone(
+    pub(crate) fn render_main_view_slot_line(
         &self,
         menu_def: crate::designs::MainMenuThemeDef,
-        cx: &mut gpui::Context<Self>,
     ) -> gpui::AnyElement {
-        self.prompt_header_context(cx).render(&self.theme, menu_def)
+        self.prompt_header_context().render(&self.theme, menu_def)
     }
 
-    pub(crate) fn render_clickable_main_view_context_header(
+    pub(crate) fn render_main_view_slot_line_header(
         &self,
         menu_def: crate::designs::MainMenuThemeDef,
-        cx: &mut gpui::Context<Self>,
     ) -> gpui::AnyElement {
         crate::components::main_view_chrome::render_main_view_context_header(
             menu_def,
-            self.render_clickable_main_view_context_zone(menu_def, cx),
-        )
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn render_inert_main_view_context_zone(
-        &self,
-        menu_def: crate::designs::MainMenuThemeDef,
-    ) -> gpui::AnyElement {
-        crate::components::main_view_chrome::render_main_view_context_zone_required(
-            &self.theme,
-            menu_def,
-            self.main_view_context_zone_spec(),
-            std::rc::Rc::new(|_, _, _| {}),
+            self.render_main_view_slot_line(menu_def),
         )
     }
 

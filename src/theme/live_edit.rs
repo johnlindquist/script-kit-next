@@ -19,8 +19,6 @@ pub enum ThemeEditError {
     InvalidStateLadder,
     #[error("invalid_text_tier_order")]
     InvalidTextLadder,
-    #[error("invalid_effective_launcher_state_ladder")]
-    InvalidEffectiveStateLadder,
     #[error("invalid_theme_document: {0}")]
     InvalidDocument(String),
 }
@@ -169,13 +167,7 @@ pub(crate) fn prepare_live_theme(
         return Err(ThemeEditError::InvalidTextLadder);
     }
     theme.opacity = Some(opacity);
-    let prepared = prepare_theme(theme)?;
-    if !matches!((prepared.resolved.main_menu_hover_rgba8, prepared.resolved.main_menu_selected_rgba8),
-        (Some(hover), Some(selected)) if (hover & 0xff) < (selected & 0xff))
-    {
-        return Err(ThemeEditError::InvalidEffectiveStateLadder);
-    }
-    Ok(prepared)
+    prepare_theme(theme)
 }
 
 #[derive(Default)]
