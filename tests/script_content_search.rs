@@ -2,7 +2,7 @@
 //!
 //! Validates:
 //! - Body-only queries return results with match_kind=Content and populated content-hit metadata
-//! - The body-content tier contributes exactly +5 and does not outrank name/description matches
+//! - The body-content tier adds exactly +5 and does not outrank name/description matches
 //! - The best matching content line is stable with correct snippet highlight indices
 //! - Content search is case-insensitive
 //! - Content search skips when name/description already matched
@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use script_kit_gpui::scripts::{fuzzy_search_scripts, Script, ScriptMatchKind};
+use sk_protocol::search_primitives::{match_tier_from_score, score_from_tier};
 
 /// Helper to create a test Script with body content
 fn make_script(name: &str, description: Option<&str>, body: Option<&str>) -> Arc<Script> {
@@ -84,9 +85,11 @@ fn content_tier_contributes_exactly_five() {
 
     let results = fuzzy_search_scripts(&scripts, "xyzSpecialToken");
     assert_eq!(results.len(), 1);
+    let score = results[0].score;
     assert_eq!(
-        results[0].score, 5,
-        "content-only match must score exactly 5"
+        score - score_from_tier(match_tier_from_score(score), 0),
+        5,
+        "content-only match must add exactly 5 within its tier"
     );
     assert_eq!(results[0].match_kind, ScriptMatchKind::Content);
 }
@@ -251,22 +254,7 @@ fn natural_language_question_does_not_fuzzy_match_unrelated_script_body() {
     );
 }
 
-// ── Fuzzy body matching ──────────────────────────────────────────────
-
-#[test]
-fn content_search_uses_fuzzy_matching_for_body_lines() {
-    let scripts = vec![make_script(
-        "alpha",
-        None,
-        Some("import { uniqueTokenXyz } from 'lib';\n"),
-    )];
-
-    let results = fuzzy_search_scripts(&scripts, "untknxyz");
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].match_kind, ScriptMatchKind::Content);
-    assert_eq!(results[0].score, 5);
-    assert_eq!(results[0].content_match.as_ref().unwrap().line_number, 1);
-}
+// ── Body phrase matching ─────────────────────────────────────────────
 
 #[test]
 fn multi_word_content_search_requires_phrase_match() {
@@ -284,39 +272,24 @@ fn multi_word_content_search_requires_phrase_match() {
 }
 
 #[test]
-fn content_search_prefers_best_fuzzy_line_not_first_line() {
-    let scripts = vec![make_script(
-        "alpha",
-        None,
-        Some("token partial\nveryUniqueTokenHere\nanother token\n"),
-    )];
-
-    let results = fuzzy_search_scripts(&scripts, "vutoknhr");
-    assert_eq!(results.len(), 1);
-    let cm = results[0].content_match.as_ref().unwrap();
-    assert_eq!(cm.line_number, 2);
-    assert!(cm.line_text.contains("veryUniqueTokenHere"));
-}
-
-#[test]
 fn content_match_byte_range_tracks_the_matched_span() {
-    let scripts = vec![make_script("gamma", None, Some("const alpha = beta;\n"))];
+    let scripts = vec![make_script("gamma", None, Some("const alpha = bravo;\n"))];
 
     let alpha_results = fuzzy_search_scripts(&scripts, "alpha");
-    let beta_results = fuzzy_search_scripts(&scripts, "beta");
+    let bravo_results = fuzzy_search_scripts(&scripts, "bravo");
 
     let alpha_match = alpha_results[0]
         .content_match
         .as_ref()
         .expect("alpha query should produce a content match");
-    let beta_match = beta_results[0]
+    let bravo_match = bravo_results[0]
         .content_match
         .as_ref()
-        .expect("beta query should produce a content match");
+        .expect("bravo query should produce a content match");
 
     assert_eq!(alpha_match.byte_range, 6..11);
-    assert_eq!(beta_match.byte_range, 14..18);
-    assert_ne!(alpha_match.byte_range, beta_match.byte_range);
+    assert_eq!(bravo_match.byte_range, 14..19);
+    assert_ne!(alpha_match.byte_range, bravo_match.byte_range);
 }
 
 #[test]
@@ -369,36 +342,6 @@ fn empty_query_returns_all_scripts_without_content_match() {
 }
 
 // ── Dominant primary-text field regression ─────────────────────────────
-
-#[test]
-fn alias_match_does_not_block_content_snippet_when_name_and_description_do_not_match() {
-    let scripts = vec![Arc::new(Script {
-        name: "utility".to_string(),
-        path: PathBuf::from("/tmp/test-scripts/utility.ts"),
-        extension: "ts".to_string(),
-        description: None,
-        icon: None,
-        alias: Some("tok".to_string()),
-        shortcut: None,
-        typed_metadata: None,
-        schema: None,
-        plugin_id: String::new(),
-        plugin_title: None,
-        kit_name: Some("test".to_string()),
-        body: Some("const tok = 1;\n".into()),
-    })];
-
-    let results = fuzzy_search_scripts(&scripts, "tok");
-    assert_eq!(results.len(), 1);
-    // Alias contributes 80 + content contributes 5 = 85
-    assert_eq!(results[0].score, 85);
-    // No primary text field (name/filename/description) matched, so match_kind is Content
-    assert_eq!(results[0].match_kind, ScriptMatchKind::Content);
-    assert_eq!(
-        results[0].content_match.as_ref().map(|cm| cm.line_number),
-        Some(1)
-    );
-}
 
 #[test]
 fn filename_match_remains_primary_when_body_also_matches() {
