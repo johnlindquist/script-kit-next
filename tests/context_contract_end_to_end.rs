@@ -5,10 +5,10 @@
 //! intentionally stays on the public API surface and uses fixed fixtures to
 //! verify that mixed context parts still prepare consistently end to end.
 
-use script_kit_gpui::ai::context_attachment_specs;
 use script_kit_gpui::ai::message_parts::{
     merge_context_parts, prepare_user_message_with_receipt, AiContextPart, PreparedMessageDecision,
 };
+use script_kit_gpui::ai::{context_attachment_specs, ContextAttachmentKind};
 use std::sync::Arc;
 
 /// Parse fixture `@mention` directives into the public `AiContextPart` shape.
@@ -58,11 +58,17 @@ fn explicit_context_surfaces_share_one_contract_end_to_end() {
         "should parse @snapshot and @browser"
     );
 
-    // Step 2: Simulate pending context chips (from UI actions)
+    // Step 2: Simulate pending context chips (from UI actions, which label
+    // chips from the same canonical specs as mentions)
+    let current = context_attachment_specs()
+        .iter()
+        .find(|spec| spec.kind == ContextAttachmentKind::Current)
+        .expect("canonical current-context spec");
+    assert_eq!(current.uri, "kit://context?profile=minimal");
     let pending = vec![
         AiContextPart::ResourceUri {
-            uri: "kit://context?profile=minimal".to_string(),
-            label: "Current Context".to_string(),
+            uri: current.uri.to_string(),
+            label: current.label.to_string(),
         },
         AiContextPart::ResourceUri {
             uri: "kit://context?diagnostics=1".to_string(),
@@ -108,9 +114,9 @@ fn explicit_context_surfaces_share_one_contract_end_to_end() {
     );
     assert!(
         receipt.final_user_content.contains(
-            "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
+            "source=\"kit://context?selectedText=0&amp;frontmostApp=0&amp;menuBar=0&amp;browserUrl=1&amp;focusedWindow=0\""
         ),
-        "final content should contain browser context URI"
+        "final content should contain the browser context URI as an escaped source attribute"
     );
     assert!(
         receipt

@@ -70,11 +70,10 @@ fn root_launcher_placeholder_replaces_theme_identifier_resets() {
             "src/app_impl/registries_state.rs",
             registries_state.as_str(),
         ),
-        ("src/app_impl/theme_focus.rs", theme_focus.as_str()),
     ] {
         assert!(
-            source.contains("effective_main_input_placeholder()"),
-            "{path} should reset the root launcher placeholder through the live copy override helper"
+            source.contains("crate::ROOT_LAUNCHER_PLACEHOLDER"),
+            "{path} should reset the root launcher placeholder to the shared launcher guidance copy"
         );
     }
 

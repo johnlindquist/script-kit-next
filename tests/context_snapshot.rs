@@ -58,8 +58,8 @@ fn context_option_profiles_are_stable() {
     assert!(full.include_selected_text);
     assert!(full.include_menu_bar);
     assert!(
-        !full.include_screenshot,
-        "full profile must not include screenshot by default"
+        full.include_screenshot,
+        "full profile (@all) must include a screenshot of the frontmost window"
     );
     assert!(
         !full.include_panel_screenshot,
@@ -72,8 +72,8 @@ fn context_option_profiles_are_stable() {
     assert!(minimal.include_browser_url);
     assert!(minimal.include_focused_window);
     assert!(
-        !minimal.include_screenshot,
-        "minimal profile must not include screenshot"
+        minimal.include_screenshot,
+        "minimal profile (@here) must include a screenshot of the frontmost window"
     );
     assert!(
         !minimal.include_panel_screenshot,
@@ -634,8 +634,15 @@ fn restore_env(key: &str, value: Option<std::ffi::OsString>) {
     }
 }
 
+/// The provider slots are process-global, and tests in this file run in
+/// parallel: one publishing calendar data must not race one expecting empty slots.
+static PROVIDER_SLOTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn provider_resources_are_listed_and_empty_fallbacks_are_stable() {
+    let _slots = PROVIDER_SLOTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     // Save and clear env vars + slots to ensure empty-fallback path
     let prev_dictation = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
     let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
@@ -695,6 +702,9 @@ fn provider_resources_are_listed_and_empty_fallbacks_are_stable() {
 
 #[test]
 fn provider_resources_report_slot_source_when_data_published() {
+    let _slots = PROVIDER_SLOTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     // Use the slot-based API (mutex-protected) to avoid env-var races with
     // parallel tests. Slots take priority over env vars in resolution.
     script_kit_gpui::mcp_resources::clear_provider_json_slots();

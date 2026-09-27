@@ -74,6 +74,18 @@ fn forwarded_field_names(source: &str) -> Vec<String> {
         .collect()
 }
 
+/// Names the struct literal fills with an explicit `None` instead of a parameter.
+fn defaulted_field_names(source: &str) -> Vec<String> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let (name, value) = line.trim().strip_suffix(',')?.split_once(':')?;
+            let name = name.trim();
+            (value.trim() == "None" && is_ident(name)).then(|| name.to_string())
+        })
+        .collect()
+}
+
 #[test]
 fn state_result_constructor_signature_and_forwarding_match_variant_field_order() {
     let variant = source_between(
@@ -105,6 +117,21 @@ fn state_result_constructor_signature_and_forwarding_match_variant_field_order()
         Some("request_id"),
         "StateResult variant parsing must start at request_id"
     );
+
+    // Fields the handler fills in after construction are defaulted in the
+    // literal; they must be the variant's trailing fields so the positional
+    // parameters stay an exact prefix of the variant order.
+    let defaulted = defaulted_field_names(literal);
+    let positional_len = authority
+        .len()
+        .checked_sub(defaulted.len())
+        .expect("more defaulted fields than variant fields");
+    assert_eq!(
+        authority[positional_len..],
+        defaulted[..],
+        "Message::state_result may only default the StateResult variant's trailing fields, in order"
+    );
+    let authority = authority[..positional_len].to_vec();
 
     assert_eq!(
         declared_field_names(signature),
