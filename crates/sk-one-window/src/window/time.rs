@@ -26,6 +26,9 @@ impl OneWindow {
             self.record_ran(now, &d.row, d.app, d.said);
             self.home(now, String::new(), fx);
         }
+        if !self.user_turn(now) {
+            self.talk_decide(now, fx);
+        }
     }
 
     pub(super) fn sent(&mut self, now: Ms, id: u64, fx: &mut Vec<Effect>) {

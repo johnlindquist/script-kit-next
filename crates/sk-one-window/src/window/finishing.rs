@@ -160,6 +160,7 @@ impl OneWindow {
     }
 
     pub(super) fn record_ran(&mut self, now: Ms, row: &Row, app: Option<String>, said: String) {
+        self.learn_from(now, &said, row);
         self.ledger.record(
             now,
             NewEntry {

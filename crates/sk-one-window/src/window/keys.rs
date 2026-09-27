@@ -4,6 +4,9 @@ use super::*;
 
 impl OneWindow {
     pub(super) fn on_key(&mut self, now: Ms, key: Key, fx: &mut Vec<Effect>) -> bool {
+        if self.talk.is_some() {
+            return self.talk_key(now, key, fx);
+        }
         let armed = self.guard.armed(now);
         if self.in_view() {
             return match key {

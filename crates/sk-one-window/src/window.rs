@@ -6,8 +6,10 @@
 
 mod finishing;
 mod keys;
+mod learning;
 mod show;
 mod staging;
+mod talking;
 #[cfg(test)]
 mod tests;
 mod text;
@@ -178,6 +180,8 @@ pub enum Event {
     /// Shows a line above the input until cleared; one a view set also goes when no view is open.
     Line(Option<SlotLine>),
     Tick,
+    /// Holding the voice key.
+    Talk(crate::talk::TalkEvent),
 }
 
 impl Event {
@@ -249,6 +253,20 @@ pub enum Effect {
     Show,
     EnterIgnored,
     SetInput(String),
+    /// Ask Jev whether the heard words are writing or a request; `last` for the final words.
+    TalkAsk {
+        words: String,
+        last: bool,
+    },
+    /// Paste the words at the front app's cursor.
+    Paste {
+        text: String,
+        app: String,
+    },
+    /// The voice session is over: stop listening and let go of what was heard.
+    TalkEnded,
+    /// Something new was learned; the host keeps it for the next session.
+    Learned,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -312,6 +330,10 @@ pub struct OneWindow {
     picked: Option<(Row, RunHow)>,
     wake: Option<Ms>,
     now: Ms,
+    lessons: crate::lessons::Lessons,
+    talk: Option<crate::talk::Talk>,
+    /// Voice sessions so far, so each one's Enter targets are new.
+    talks: u64,
 }
 
 impl Default for OneWindow {
@@ -352,6 +374,9 @@ impl OneWindow {
             picked: None,
             wake: None,
             now: 0,
+            lessons: crate::lessons::Lessons::default(),
+            talk: None,
+            talks: 0,
         }
     }
 
@@ -421,6 +446,7 @@ impl OneWindow {
             self.line = None;
             self.line_from_view = false;
         }
+        self.settle_lessons(&mut fx);
         self.schedule(now, &mut fx);
         Outcome {
             effects: fx,
@@ -642,6 +668,7 @@ impl OneWindow {
                 true
             }
             Event::Tick => true,
+            Event::Talk(ev) => self.on_talk(now, ev, fx),
         }
     }
 }

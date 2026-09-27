@@ -4,6 +4,9 @@ use super::*;
 
 impl OneWindow {
     pub(super) fn on_text(&mut self, now: Ms, text: String, typed: bool, fx: &mut Vec<Effect>) {
+        if typed && self.talk.is_some() {
+            return self.talk_heard(now, text, fx);
+        }
         if typed {
             if let Some(top) = self.views.top() {
                 if top.takes_input {

@@ -10,10 +10,12 @@ pub mod enter;
 pub mod height;
 pub mod hold;
 pub mod ledger;
+pub mod lessons;
 pub mod list;
 pub mod row;
 pub mod slot;
 pub mod stage;
+pub mod talk;
 pub mod trace;
 pub mod view;
 pub mod window;
@@ -24,10 +26,12 @@ pub type Ms = u64;
 pub use enter::EnterTarget;
 pub use height::{HeightDecision, HeightMode};
 pub use ledger::{Entry, EntryState, Risk};
+pub use lessons::{Lesson, Lessons};
 pub use list::Item;
 pub use row::{Row, RowAct};
 pub use slot::{SlotKind, SlotLine, SlotStyle};
 pub use stage::{Subject, SubjectKind};
+pub use talk::{Reading, TalkEvent};
 pub use window::{
     Config, Done, Effect, Event, HeldOp, Key, OneWindow, Outcome, RunHow, Snapshot, ViewOp,
     ViewSpec,
