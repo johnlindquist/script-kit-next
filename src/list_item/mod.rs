@@ -1946,11 +1946,24 @@ impl RenderOnce for ListItem {
                     "footer-keycap-all-rows",
                 );
                 let theme = crate::theme::get_cached_theme();
-                crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens(
-                    shortcut_tokens.iter().map(String::as_str),
-                    &theme,
-                    resolved_row_state.primary_foreground_rgba,
-                )
+                let selector = format!(
+                    "oneWindowRowKeycaps:{}:{}",
+                    semantic_id
+                        .clone()
+                        .unwrap_or_else(|| format!("list-item:{item_index}")),
+                    shortcut_tokens.len()
+                );
+                div()
+                    .flex_none()
+                    .debug_selector(move || selector)
+                    .child(
+                        crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens(
+                            shortcut_tokens.iter().map(String::as_str),
+                            &theme,
+                            resolved_row_state.primary_foreground_rgba,
+                        ),
+                    )
+                    .into_any_element()
             } else {
                 div().into_any_element()
             }

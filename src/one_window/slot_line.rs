@@ -163,34 +163,6 @@ impl SlotLineView {
                         .bg(rgb(label_color)),
                 )
             });
-        #[cfg(feature = "owned-ui-evaluation")]
-        let row = row.when(crate::runtime_policy::is_owned_evaluation(), |row| {
-            let metadata = std::rc::Rc::new(serde_json::json!({
-                "kind": line.kind,
-                "label": line.label,
-                "title": line.title,
-                "opacity": self.dim.to,
-            }));
-            row.child(
-                gpui::canvas(
-                    |_, _, _| (),
-                    move |bounds, _, window, _| {
-                        if window.owned_frame_observation_active() {
-                            window.record_owned_paint_binding(
-                                "mainSlotLine",
-                                SLOT_LINE_ID.to_string(),
-                                bounds,
-                                metadata.clone(),
-                            );
-                        }
-                    },
-                )
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full(),
-            )
-        });
 
         let SlotDim {
             from,

@@ -1084,6 +1084,7 @@ impl ScriptListApp {
                     .child(
                         div()
                             .flex_none()
+                            .debug_selector(|| "oneWindowSectionHeader:0".to_string())
                             .h(px(
                                 crate::list_item::effective_first_section_header_height_for_theme(
                                     self.current_main_menu_theme,
@@ -1160,32 +1161,20 @@ impl ScriptListApp {
                                     } else {
                                         effective_section_header_height
                                     };
-                                    let header = div()
-                                        .relative()
+                                    div()
                                         .id(ElementId::NamedInteger(
                                             format!("section-header-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
+                                        .debug_selector(move || format!("oneWindowSectionHeader:{ix}"))
                                         .h(px(h_px))
                                         .child(render_section_header(
                                             label,
                                             icon.as_deref(),
                                             theme_colors,
                                             is_first,
-                                        ));
-                                    #[cfg(feature = "owned-ui-evaluation")]
-                                    let header = header.when(crate::runtime_policy::is_owned_evaluation(), |header| {
-                                        let metadata = std::rc::Rc::new(serde_json::json!({
-                                            "groupedIndex": ix, "label": label, "first": is_first,
-                                        }));
-                                        let id = format!("main-list-section-header:{ix}");
-                                        header.child(gpui::canvas(|_, _, _| (), move |bounds, _, window, _| {
-                                            if window.owned_frame_observation_active() {
-                                                window.record_owned_paint_binding("mainSearchSectionHeader", id.clone(), bounds, metadata.clone());
-                                            }
-                                        }).absolute().top_0().left_0().size_full())
-                                    });
-                                    header.into_any_element()
+                                        ))
+                                        .into_any_element()
                                 }
                                 GroupedListItem::Status(status) => {
                                     div()
