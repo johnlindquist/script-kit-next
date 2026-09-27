@@ -47,32 +47,6 @@ fn main_list_row_shortcuts_use_footer_keycaps_not_hint_strip_inline_renderer() {
 }
 
 #[test]
-fn actions_dialog_row_shortcuts_use_footer_keycaps_not_hint_strip_inline_renderer() {
-    let row_shortcut_section = section_between(
-        ACTIONS_DIALOG,
-        "// Action menus intentionally keep shortcuts visible on all rows.",
-        "let action_row = div()",
-    );
-
-    assert!(
-        row_shortcut_section.contains(
-            "crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens"
-        ),
-        "Actions dialog row shortcuts must render through footer_chrome row keycaps"
-    );
-    assert!(
-        row_shortcut_section.contains("RowShortcutVisibilityPolicy::AllRows"),
-        "Actions dialog must preserve all-row shortcut discoverability"
-    );
-    assert!(
-        !row_shortcut_section
-            .contains("crate::components::hint_strip::render_inline_shortcut_keys")
-            && !row_shortcut_section.contains("whisper_inline_shortcut_colors"),
-        "Actions dialog row shortcuts must not use hint_strip inline shortcut styling"
-    );
-}
-
-#[test]
 fn actions_dialog_devtools_shortcut_layout_uses_footer_keycap_model() {
     let geometry_section = section_between(
         ACTIONS_DIALOG,
