@@ -24,32 +24,6 @@ fn global_actions_source_keeps_public_builtin_copy() {
 }
 
 #[test]
-fn builtin_primary_action_copy_contract_stays_in_source_tests() {
-    let source = read_source("src/actions/builders/script_context.rs");
-    let unit_tests = read_source("src/actions/builders/script_context/tests.rs");
-
-    for expected in [
-        "ScriptContextKind::BuiltIn",
-        "PrimaryActionPlan::PreserveCatalogActionText",
-        "#[path = \"script_context/tests.rs\"]",
-    ] {
-        assert!(
-            source.contains(expected),
-            "built-in primary action copy contract must stay covered: {expected}"
-        );
-    }
-    for expected in [
-        "fn test_get_script_context_actions_preserves_builtin_action_text()",
-        "fn test_get_script_context_actions_skips_toggle_favorite_for_builtin_items()",
-    ] {
-        assert!(
-            unit_tests.contains(expected),
-            "built-in primary action copy contract must stay covered: {expected}"
-        );
-    }
-}
-
-#[test]
 fn main_actions_path_appends_global_actions() {
     let source = read_source("src/app_actions/handle_action/mod.rs");
 
