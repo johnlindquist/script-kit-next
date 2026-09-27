@@ -187,6 +187,9 @@ pub enum Event {
     Work(crate::work::WorkEvent),
     /// Holding the voice key.
     Talk(crate::talk::TalkEvent),
+    /// Put this subject in the line and list what can be done to it, the way ⌘K does for a row
+    /// a view lists itself.
+    Stage(Subject),
 }
 
 impl Event {
@@ -285,6 +288,10 @@ pub enum Effect {
     TalkEnded,
     /// Something new was learned; the host keeps it for the next session.
     Learned,
+    /// Add the words at the end of today's note.
+    AddToNote {
+        text: String,
+    },
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -699,6 +706,10 @@ impl OneWindow {
             Event::Tick => true,
             Event::Work(ev) => self.on_work(now, ev, fx),
             Event::Talk(ev) => self.on_talk(now, ev, fx),
+            Event::Stage(subject) => {
+                self.stage(now, subject, None, words::STAGED, fx);
+                true
+            }
         }
     }
 }
