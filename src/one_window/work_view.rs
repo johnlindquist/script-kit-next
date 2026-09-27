@@ -302,7 +302,7 @@ impl ScriptListApp {
             .left_0()
             .right_0()
             .bottom(px(crate::footer_popup::main_window_footer_reservation_height()))
-            .bg(rgba(chrome.panel_surface_rgba))
+            .bg(rgba(chrome.popup_surface_rgba))
             .flex()
             .flex_col()
             .children(tasks.iter().map(|t| {
