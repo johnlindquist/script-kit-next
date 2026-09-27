@@ -112,7 +112,8 @@ impl ApiKeyCompletionOutcome {
 }
 
 impl ScriptListApp {
-    fn execute_app(&mut self, app: &app_launcher::AppInfo, cx: &mut Context<Self>) {
+    /// Launches an app. Returns whether it launched; the caller hides the window.
+    fn execute_app(&mut self, app: &app_launcher::AppInfo, cx: &mut Context<Self>) -> bool {
         let execution_action = SearchResultExecutionAction::LaunchApp;
         tracing::info!(message = %&format!("Launching app from search: {}", app.name));
 
@@ -120,9 +121,10 @@ impl ScriptListApp {
             let message = execution_action.failure_message(&app.name, &e);
             tracing::error!(message = %message);
             self.show_error_toast(message, cx);
+            false
         } else {
             tracing::info!(message = %&format!("Launched app: {}", app.name));
-            self.close_and_reset_window(cx);
+            true
         }
     }
 

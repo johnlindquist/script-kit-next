@@ -622,6 +622,14 @@ impl ScriptListApp {
         cx: &mut gpui::Context<Self>,
     ) {
         self.flush_pending_main_menu_query(cx);
+        if self.one_window_owns_list() {
+            if is_up {
+                self.move_selection_up(cx);
+            } else {
+                self.move_selection_down(cx);
+            }
+            return;
+        }
         // Key-repeat coalescing: a recalled filter that has not rendered yet
         // means further history steps must wait (same guard as the real-key
         // path).
@@ -720,6 +728,16 @@ impl ScriptListApp {
         use crate::window_orchestrator::interaction::LauncherEscapeDecision;
 
         let decision = self.launcher_escape_decision(cx);
+        if matches!(
+            decision,
+            LauncherEscapeDecision::ClearVisibleFilter
+                | LauncherEscapeDecision::ReturnToOrigin
+                | LauncherEscapeDecision::DismissMain
+        ) && self.one_window_owns_list()
+            && self.one_window_key(sk_one_window::Key::Escape, cx).taken()
+        {
+            return LauncherEscapeDecision::OneWindow;
+        }
         match decision {
             LauncherEscapeDecision::CloseActions => {
                 self.close_actions_popup_for_current_view(window, cx);
@@ -741,6 +759,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
+            LauncherEscapeDecision::OneWindow => {}
             LauncherEscapeDecision::ClearVisibleFilter => self.clear_filter(window, cx),
             LauncherEscapeDecision::ReturnToOrigin => {
                 self.clear_hidden_script_list_filter_before_escape_close(window, cx);
@@ -798,6 +817,11 @@ impl ScriptListApp {
     ) -> bool {
         if !self.should_preempt_empty_script_list_escape_close(event, cx) {
             return false;
+        }
+        if self.one_window_owns_list()
+            && self.one_window_key(sk_one_window::Key::Escape, cx).taken()
+        {
+            return true;
         }
 
         // The focused gpui_component input turns any keydown into a blink pause,
@@ -1357,12 +1381,19 @@ impl ScriptListApp {
                                         "subjectKind": match row.subject { MainMenuRowSubject::SearchResult { .. } => "searchResult", MainMenuRowSubject::Calculator => "calculator" },
                                     })))).flatten();
 
+                                    let stale = matches!(
+                                        flat_results_clone.get(*result_idx),
+                                        Some(crate::scripts::SearchResult::Intent(m)) if m.stale
+                                    );
                                     let row_element = div()
                                         .relative()
                                         .id(ElementId::NamedInteger(
                                             format!("script-item-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
+                                        .when(stale, |row| {
+                                            row.opacity(crate::theme::opacity::OPACITY_STALE_ROW)
+                                        })
                                         .h(px(effective_list_item_height))
                                         .on_mouse_move(mouse_move_handler)
                                         .on_mouse_down(gpui::MouseButton::Left, mouse_down_handler)
@@ -1702,6 +1733,18 @@ impl ScriptListApp {
                             logging::log("KEY", "Shortcut Cmd+L -> toggle_logs");
                             this.toggle_logs(cx);
                             return;
+                        }
+                        "1" | "2" | "3" if !has_shift && this.one_window_owns_list() => {
+                            let digit = key_match.as_bytes()[0] - b'0';
+                            this.one_window_key(sk_one_window::Key::CmdDigit(digit), cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "z" if !has_shift && this.one_window_owns_list() => {
+                            if this.one_window_key(sk_one_window::Key::CmdZ, cx).taken() {
+                                cx.stop_propagation();
+                                return;
+                            }
                         }
                         // Script context shortcuts (require a selected script)
                         // Note: More specific patterns (with shift) must come BEFORE less specific ones

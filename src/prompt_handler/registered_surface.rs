@@ -521,6 +521,7 @@ pub(crate) fn registered_surface_state_result(
         flow_ux: None,
         backgrounded_sessions: None,
         main_window_animation: None,
+        one_window: None,
     })
 }
 

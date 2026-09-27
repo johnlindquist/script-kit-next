@@ -359,6 +359,20 @@ impl ScriptListApp {
                         ctx,
                     ) {
                         logging::log("STDIN", "SimulateKey: Shift+Tab - open Profile Search");
+                    } else if has_cmd
+                        && !has_shift
+                        && matches!(key_lower.as_str(), "1" | "2" | "3")
+                        && view.one_window_owns_list()
+                    {
+                        // Mirrors the live ⌘1–3 arm in src/render_script_list/mod.rs.
+                        let digit = key_lower.as_bytes()[0] - b'0';
+                        view.one_window_key(sk_one_window::Key::CmdDigit(digit), ctx);
+                    } else if has_cmd
+                        && !has_shift
+                        && key_lower == "z"
+                        && view.one_window_owns_list()
+                    {
+                        view.one_window_key(sk_one_window::Key::CmdZ, ctx);
                     } else if has_cmd && key_lower == "k" {
                         logging::log("STDIN", "SimulateKey: Cmd+K - dispatch actions toggle");
                         view.handle_cmd_k_actions_toggle(window, ctx);

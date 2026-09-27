@@ -1005,7 +1005,9 @@ pub(crate) fn execute_root_unified_result_action(
             true
         }
         (RootUnifiedResultAction::AppLaunch, RootUnifiedActionSubject::App(app_info)) => {
-            app.execute_app(app_info, cx);
+            if app.execute_app(app_info, cx) {
+                app.close_and_reset_window(cx);
+            }
             true
         }
         (RootUnifiedResultAction::AppRevealInFinder, RootUnifiedActionSubject::App(app_info)) => {

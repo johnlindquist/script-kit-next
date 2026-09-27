@@ -343,7 +343,7 @@ mod canonical_row_projection_tests {
     }
 
     #[test]
-    fn the_intent_row_keeps_its_place_when_jev_answers() {
+    fn a_row_rewritten_in_place_keeps_its_place() {
         let keys = |rows: &[MainMenuRowProjection]| {
             rows.iter()
                 .map(|row| row.stable_key.clone())
@@ -351,19 +351,16 @@ mod canonical_row_projection_tests {
         };
         let (items, rows) = projected(&[
             ("first", "First"),
-            (scripts::INTENT_ROW_KEY, "Understanding…"),
+            ("rewritten", "Understanding…"),
             ("second", "Second"),
         ]);
         let (mut next_items, mut next_rows) = projected(&[
-            (scripts::INTENT_ROW_KEY, "Ask AI: where is the game"),
+            ("rewritten", "Ask AI: where is the game"),
             ("second", "Second"),
             ("first", "First"),
         ]);
         preserve_displayed_main_menu_rows(&items, &rows, &mut next_items, &mut next_rows);
-        assert_eq!(
-            keys(&next_rows),
-            ["first", scripts::INTENT_ROW_KEY, "second"]
-        );
+        assert_eq!(keys(&next_rows), ["first", "rewritten", "second"]);
         assert_eq!(
             next_rows
                 .iter()

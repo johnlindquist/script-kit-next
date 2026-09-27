@@ -1132,15 +1132,8 @@ impl SearchResult {
             | Self::ClipboardHistory(_)
             | Self::DictationHistory(_)
             | Self::Fallback(_)
-            | Self::ScriptIssue(_) => {}
-            Self::Intent(item) => {
-                if !item.is_actionable() {
-                    descriptor.availability = CommandAvailability::TemporarilyUnavailable;
-                    if let Some(primary) = descriptor.actions.first_mut() {
-                        primary.availability = descriptor.availability.clone();
-                    }
-                }
-            }
+            | Self::ScriptIssue(_)
+            | Self::Intent(_) => {}
         }
         descriptor.validate()?;
         Ok(descriptor)

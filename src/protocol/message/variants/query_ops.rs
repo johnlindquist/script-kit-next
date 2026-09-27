@@ -295,6 +295,11 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         main_window_animation: Option<serde_json::Value>,
+        /// The main window's one-window reducer: what the ↵ button says, whether Enter is
+        /// guarded, the height it placed the window at, and the row it last ran. Omitted for
+        /// non-main targets.
+        #[serde(rename = "oneWindow", default, skip_serializing_if = "Option::is_none")]
+        one_window: Option<serde_json::Value>,
     },
 
     // ============================================================

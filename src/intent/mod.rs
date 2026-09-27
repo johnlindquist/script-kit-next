@@ -24,23 +24,17 @@ pub use catalog::{
 pub use context::{FrontApp, LastAction, LastStep, MenuCommand, OpenWindow, ScreenContext};
 pub use engine::{understand, EngineOptions, Pathway, Plan, Reading, Step, COMPLETE_THRESHOLD};
 pub use jev::{JevClient, JevConfig, JevError, Oracle};
-pub use launcher::{
-    Finish, HeldOutcome, IntentLauncher, IntentRow, OracleSlot, RowState, TextChange, Ticket,
-};
+pub use launcher::{readings, IntentLauncher, JevRow, OracleSlot, READINGS};
 pub use present::{plan_subtitle, plan_verb};
 pub use script::{normalize_shortcut, plan_to_script, DraftScript, ScriptOptions};
 
-/// Requests shorter than this are left to the launcher's own search.
-pub const MIN_WORDS: usize = 2;
-
 /// Whether a line is worth asking Jev about. Launcher syntax (captures, sigils, filters)
-/// already says exactly what to do, and one word is a search.
+/// already says exactly what to do.
 pub fn wants_reading(text: &str) -> bool {
     let trimmed = text.trim();
-    if trimmed.split_whitespace().count() < MIN_WORDS {
+    let Some(first) = trimmed.chars().next() else {
         return false;
-    }
-    let first = trimmed.chars().next().unwrap_or(' ');
+    };
     if matches!(
         first,
         '@' | '/' | '.' | '|' | '>' | ';' | '+' | ':' | '~' | '!' | '?' | '=' | '#'

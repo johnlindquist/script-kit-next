@@ -20,6 +20,9 @@ pub enum LauncherEscapeDecision {
     CancelAttachmentPortal,
     CloseObjectSelector,
     CloseTriggerPicker,
+    /// The main window's one-window reducer took it (it let go of what was staged, or stopped
+    /// an Enter waiting on Jev). Only the host applying the plan decides this.
+    OneWindow,
     ClearVisibleFilter,
     ReturnToOrigin,
     DismissMain,

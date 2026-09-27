@@ -363,6 +363,7 @@ impl ScriptListApp {
             selection_revision: self.main_menu_selection_revision(),
             viewport_revision: self.main_menu_viewport_revision(),
         });
+        self.one_window_published(cx);
         sequence
     }
 
@@ -407,7 +408,7 @@ impl ScriptListApp {
         self.inline_calculator = crate::calculator::try_build(&value);
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
-        self.maybe_start_intent_reading(&value, cx);
+        self.one_window_text(&value, cx);
         if crate::menu_syntax::active_filter_head_owns_main_list(&value) {
             self.main_menu_fallback_state.clear();
         }
@@ -464,8 +465,7 @@ impl ScriptListApp {
         // not publish even one stale-list frame: the input already echoed the
         // new text, so compute now instead of deferring. Same-family typing
         // keeps the coalescer so rapid keystrokes still skip intermediate
-        // computes. An intent row showing Jev's reading quotes the text it was
-        // read from, so leaving that text counts as a flip too.
+        // computes.
         let root_scope_changed = matches!(self.current_view, AppView::ScriptList)
             && self
                 .root_search
@@ -477,9 +477,6 @@ impl ScriptListApp {
                 });
         if root_scope_changed
             || filter_change_flips_list_structure(&self.computed_filter_text, &value)
-            || self
-                .intent_launcher
-                .has_reading_for(&self.computed_filter_text)
         {
             self.filter_coalescer.reset();
             self.apply_filter_compute_now(value, cx);
