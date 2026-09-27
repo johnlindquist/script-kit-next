@@ -102,7 +102,10 @@ fn boundary_05_hud_message_for_link_missing_url_is_human() {
     match decide_capture_gate(&inv, Some(&schema)) {
         CaptureGateDecision::BlockMissing { hud_message, .. } => {
             // link only requires url, so single-field "needs url" with no oxford.
-            assert_eq!(hud_message, ";link needs url");
+            assert_eq!(
+                hud_message,
+                ";link needs url — try `;link https://zed.dev #rust title:\"GPUI notes\"`"
+            );
         }
         other => panic!("expected BlockMissing url, got {other:?}"),
     }
@@ -118,7 +121,7 @@ fn boundary_06_target_with_uppercase_in_invocation_propagates_to_hud() {
     let schema = builtin_schema("cal").unwrap();
     match decide_capture_gate(&inv, Some(&schema)) {
         CaptureGateDecision::BlockMissing { hud_message, .. } => {
-            assert!(hud_message.starts_with("+CAL needs "), "{hud_message}");
+            assert!(hud_message.starts_with(";CAL needs "), "{hud_message}");
         }
         other => panic!("expected BlockMissing, got {other:?}"),
     }
@@ -138,7 +141,10 @@ fn boundary_07_target_with_special_chars_does_not_crash_hud_format() {
     };
     match decide_capture_gate(&inv, Some(&schema)) {
         CaptureGateDecision::BlockMissing { hud_message, .. } => {
-            assert_eq!(hud_message, "+re.*x needs body");
+            assert_eq!(
+                hud_message,
+                ";re.*x needs body — try `;re.*x Capture useful context #inbox`"
+            );
         }
         other => panic!("expected BlockMissing, got {other:?}"),
     }
@@ -185,7 +191,10 @@ fn composition_09_three_missing_fields_use_oxford_comma() {
     let inv = empty("triple");
     match decide_capture_gate(&inv, Some(&schema)) {
         CaptureGateDecision::BlockMissing { hud_message, .. } => {
-            assert_eq!(hud_message, "+triple needs body, date, and url");
+            assert_eq!(
+                hud_message,
+                ";triple needs body, date, and url — try `;triple Capture useful context #inbox`"
+            );
         }
         other => panic!("expected oxford-joined HUD, got {other:?}"),
     }

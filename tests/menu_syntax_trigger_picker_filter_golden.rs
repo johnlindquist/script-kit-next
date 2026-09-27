@@ -43,6 +43,13 @@ fn create_handler_footer(snapshot: &TriggerPickerSnapshot) -> &TriggerPickerRow 
         .expect("create handler footer")
 }
 
+fn has_create_handler_footer(snapshot: &TriggerPickerSnapshot) -> bool {
+    snapshot
+        .rows
+        .iter()
+        .any(|row| row.id == "footer:create-handler")
+}
+
 fn script_with_menu_syntax(name: &str, menu_syntax_json: &str) -> Arc<Script> {
     let mut extra: HashMap<String, serde_json::Value> = HashMap::new();
     extra.insert(
@@ -86,9 +93,9 @@ fn bare_semicolon_lists_all_targets_original_order() {
             "Social draft",
         ]
     );
-    assert_eq!(
-        create_handler_footer(&snap).title,
-        "Create capture handler…"
+    assert!(
+        !has_create_handler_footer(&snap),
+        "the bare picker lists targets only; creating a handler is offered once a slug is typed"
     );
     assert!(
         !target_tokens(&snap).contains(&"mcal;"),
@@ -170,40 +177,41 @@ fn daily_does_not_leave_todo_first() {
 }
 
 #[test]
-fn typed_search_finds_todo_aliases_without_showing_them_by_default() {
+fn typed_todo_alias_search_finds_the_public_todo_target() {
     let ctx = TriggerPickerContext::default();
     let bare = snapshot(";", &ctx);
     assert!(!target_tokens(&bare).contains(&"reminder;"));
     assert!(!target_tokens(&bare).contains(&"snooze;"));
     assert!(!target_tokens(&bare).contains(&"defer;"));
 
-    let rem = snapshot(";rem", &ctx);
-    let rows = target_rows(&rem);
-    assert_eq!(rows[0].token.as_deref(), Some("reminder;"));
-    assert_eq!(rows[0].title, "Todo reminder");
-
-    let snooze = snapshot(";sno", &ctx);
-    let rows = target_rows(&snooze);
-    assert_eq!(rows[0].token.as_deref(), Some("snooze;"));
-    assert_eq!(rows[0].title, "Todo snooze");
-
-    let defer = snapshot(";def", &ctx);
-    let rows = target_rows(&defer);
-    assert_eq!(rows[0].token.as_deref(), Some("defer;"));
-    assert_eq!(rows[0].title, "Todo defer");
+    for (input, alias) in [
+        (";rem", "reminder;"),
+        (";sno", "snooze;"),
+        (";def", "defer;"),
+    ] {
+        let snap = snapshot(input, &ctx);
+        let rows = target_rows(&snap);
+        assert_eq!(rows[0].token.as_deref(), Some("todo;"), "{input}");
+        assert_eq!(rows[0].title, "Todo inbox", "{input}");
+        assert!(
+            !target_tokens(&snap).contains(&alias),
+            "{input} must not render the hidden {alias} alias as its own row"
+        );
+    }
 }
 
 #[test]
-fn typed_search_finds_notes_compat_alias_without_showing_it_by_default() {
+fn typed_notes_alias_search_finds_the_public_note_target() {
     let ctx = TriggerPickerContext::default();
     let bare = snapshot(";", &ctx);
     assert!(!target_tokens(&bare).contains(&"notes;"));
 
     let snap = snapshot(";notes", &ctx);
     let rows = target_rows(&snap);
-    assert_eq!(snap.target.as_deref(), Some("notes"));
-    assert_eq!(rows[0].token.as_deref(), Some("notes;"));
-    assert_eq!(rows[0].title, "Note compatibility alias");
+    assert_eq!(snap.target, None);
+    assert_eq!(rows[0].token.as_deref(), Some("note;"));
+    assert_eq!(rows[0].title, "Note");
+    assert!(!target_tokens(&snap).contains(&"notes;"));
 }
 
 #[test]
@@ -360,15 +368,10 @@ fn filtered_match_keeps_generic_footer_until_exact_target_is_locked() {
     );
 
     let focused = snapshot(";mcal", &ctx);
-    let focused_footer = create_handler_footer(&focused);
     assert_eq!(focused.target.as_deref(), Some("mcal"));
-    assert!(focused_footer
-        .title
-        .contains("Create capture handler for ;mcal…"));
-    assert_eq!(
-        focused_footer.action,
-        TriggerPickerAction::CreateHandler {
-            target: Some("mcal".to_string())
-        }
+    assert_eq!(target_tokens(&focused), vec!["mcal;"]);
+    assert!(
+        !has_create_handler_footer(&focused),
+        "a locked, registered target already has a handler, so no create-handler row is offered"
     );
 }

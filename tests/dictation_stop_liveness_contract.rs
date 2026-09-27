@@ -47,11 +47,24 @@ fn capture_processor_and_drop_cannot_join_before_event_drain() {
         !drop_impl.contains("processor_thread.join()"),
         "capture drop must not unconditionally join the processor thread before runtime drains events"
     );
+    let processor = section_between(
+        DICTATION_CAPTURE,
+        "pub(crate) fn run_processor(",
+        "fn samples_for_duration(",
+    );
+    let (streaming, after_capture) = processor
+        .split_once("// Flush remaining samples as a tail chunk.")
+        .expect("processor must flush its tail after the capture loop ends");
     assert!(
-        DICTATION_CAPTURE.contains("try_send(DictationCaptureEvent::Bars")
-            && DICTATION_CAPTURE.contains("try_send(DictationCaptureEvent::Chunk")
-            && DICTATION_CAPTURE.contains("try_send(DictationCaptureEvent::EndOfStream"),
+        streaming.contains("try_send(DictationCaptureEvent::Bars")
+            && streaming.contains("try_send(DictationCaptureEvent::Chunk")
+            && !streaming.contains("send_blocking("),
         "processor sends must be nonblocking so a full UI event channel cannot deadlock shutdown"
+    );
+    assert!(
+        after_capture.contains("send_blocking(DictationCaptureEvent::Chunk")
+            && after_capture.contains("send_blocking(DictationCaptureEvent::EndOfStream)"),
+        "only the tail chunk and end-of-stream block, once capture has stopped and the stop coordinator drains or drops the receiver"
     );
 }
 
@@ -66,7 +79,7 @@ fn dictation_start_preflight_never_requests_permission_from_hotkey_path() {
     assert!(preflight.contains("list_input_devices()"));
     assert!(preflight.contains("Ok(Vec::new())"));
     assert!(
-        !preflight.contains("request_microphone_permission"),
+        !preflight.contains("request_microphone_permission("),
         "hotkey/start preflight must remain passive and never wait for a TCC permission prompt"
     );
 }

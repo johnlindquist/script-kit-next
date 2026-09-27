@@ -14,7 +14,8 @@ fn sdk_reference_empty_state_copy_is_modeled() {
         "SDK Reference empty states should own filter classification and visible copy"
     );
     assert!(
-        SDK_REFERENCE.contains("SdkReferenceEmptyState::from_filter(filter).message()"),
+        SDK_REFERENCE.contains("let state = SdkReferenceEmptyState::from_filter(filter);")
+            && SDK_REFERENCE.contains("state.message(),"),
         "SDK Reference renderer should derive empty-state copy from the model"
     );
     assert!(

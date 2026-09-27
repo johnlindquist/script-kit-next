@@ -3,12 +3,15 @@
 const TRIGGER_OWNER: &str = include_str!("../src/app_impl/menu_syntax_trigger_picker_main_list.rs");
 const FILTER_INPUT_CHANGE: &str = include_str!("../src/app_impl/filter_input_change.rs");
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
+const FILTERING_CACHE_MAIN_LIST_ROWS: &str =
+    include_str!("../src/app_impl/filtering_cache_main_list_rows.rs");
 const RENDER_SCRIPT_LIST: &str = include_str!("../src/render_script_list/mod.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 const SIMULATE_KEY: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 const UI_WINDOW: &str = include_str!("../src/app_impl/ui_window.rs");
 const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
 const APP_NAV_MOVEMENT: &str = include_str!("../src/app_navigation/impl_movement.rs");
+const APP_STATE: &str = include_str!("../src/main_sections/app_state.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 
 #[test]
@@ -139,11 +142,37 @@ fn type_filter_accept_hint_consumes_enter_until_selection_moves() {
         ),
         "simulateKey Enter path must consume the accepted-filter hint before execute_selected"
     );
+    let keyboard_select = fn_body(APP_NAV_MOVEMENT, "fn set_selected_index(");
+    let main_menu_select = fn_body(APP_STATE, "pub(crate) fn select_main_menu_row(");
     assert!(
-        APP_NAV_MOVEMENT.contains("self.clear_menu_syntax_filter_accept_hint();")
+        keyboard_select
+            .contains("self.select_main_menu_row(ix, MainMenuSelectionOrigin::Keyboard, cx)")
+            && main_menu_select.contains("self.clear_menu_syntax_filter_accept_hint();")
             && RENDER_SCRIPT_LIST.contains("this.clear_menu_syntax_filter_accept_hint();"),
         "keyboard and mouse selection movement must clear the accepted-filter hint"
     );
+}
+
+fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("source must contain `{signature}`"));
+    let tail = &source[start..];
+    let open = tail.find('{').expect("function should have a body");
+    let mut depth = 0usize;
+    for (offset, ch) in tail[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return &tail[..open + offset + 1];
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unterminated body for `{signature}`")
 }
 
 #[test]
@@ -164,13 +193,19 @@ fn trigger_picker_pointer_path_has_proof_grade_logs() {
 
 #[test]
 fn trigger_picker_rows_are_cached_as_main_list_rows() {
+    assert!(
+        FILTERING_CACHE.contains("include!(\"filtering_cache_main_list_rows.rs\");")
+            && FILTERING_CACHE
+                .contains("build_menu_syntax_trigger_picker_main_list_results(snapshot)"),
+        "the grouped cache must build trigger picker rows through the shared row builder"
+    );
     for needle in [
         "fn build_menu_syntax_trigger_picker_main_list_results",
         "trigger_picker_row_to_main_list_row(row)",
         "SearchResult::SpineProjection",
     ] {
         assert!(
-            FILTERING_CACHE.contains(needle),
+            FILTERING_CACHE_MAIN_LIST_ROWS.contains(needle),
             "trigger picker must build shared main-list rows through grouped cache: {needle}"
         );
     }
@@ -242,11 +277,7 @@ fn prompt_popup_resolution_excludes_menu_syntax_trigger_picker() {
 
 #[test]
 fn active_footer_does_not_treat_trigger_picker_as_popup() {
-    let footer_block = PROMPT_HANDLER
-        .split("pub(crate) fn active_footer_snapshot")
-        .nth(1)
-        .and_then(|tail| tail.split("let mut config").next())
-        .expect("active footer block");
+    let footer_block = fn_body(PROMPT_HANDLER, "pub(crate) fn active_footer_snapshot(");
 
     assert!(
         !footer_block.contains("menu_syntax_trigger_picker_state")

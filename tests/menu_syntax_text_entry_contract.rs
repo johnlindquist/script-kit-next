@@ -28,10 +28,10 @@ fn capture_composer_suppresses_main_list_before_capture_grouping() {
         .expect("Failed to read src/app_impl/filtering_cache.rs");
 
     let ownership_gate = source
-        .find("capture_composer_owns_input_for(&raw_filter_text)")
+        .find("capture_composer_owns_input_for(raw_filter_text)")
         .expect("filtering cache must gate capture composer ownership");
     let capture_grouping = source
-        .find("capture_for(&raw_filter_text)")
+        .find("capture_for(raw_filter_text)")
         .expect("filtering cache must keep capture grouping for non-composer paths");
 
     assert!(
@@ -294,7 +294,7 @@ fn enter_in_capture_composer_executes_capture_not_main_selection() {
         .find("capture_for(&self.filter_text)")
         .expect("execute_selected must first check for capture composer input");
     let grouped_results = execute_selected
-        .find("self.live_script_list_flat_selection_for_submit()")
+        .find("self.run_selected_row(")
         .expect("execute_selected still resolves main-list rows for normal search");
 
     assert!(
@@ -319,7 +319,7 @@ fn command_invocation_suppresses_main_list_and_routes_without_shell() {
 
     assert!(
         filtering_cache.contains("command_owns_input_for(filter_text)")
-            && filtering_cache.contains("command_owns_input_for(&raw_filter_text)"),
+            && filtering_cache.contains("command_owns_input_for(raw_filter_text)"),
         "`!` command composition must blank normal launcher results"
     );
 
@@ -328,7 +328,7 @@ fn command_invocation_suppresses_main_list_and_routes_without_shell() {
         .find("command_for(&self.filter_text)")
         .expect("execute_selected must first check command invocation input");
     let grouped_results = execute_selected
-        .find("self.live_script_list_flat_selection_for_submit()")
+        .find("self.run_selected_row(")
         .expect("execute_selected still resolves main-list rows for normal search");
     assert!(
         command_route < grouped_results,
@@ -421,8 +421,8 @@ fn registered_capture_targets_extend_parser_popup_and_input_highlight() {
 fn menu_syntax_hint_surface_is_not_grouped_results() {
     let render = fs::read_to_string("src/render_script_list/mod.rs")
         .expect("Failed to read src/render_script_list/mod.rs");
-    let filtering_cache = fs::read_to_string("src/app_impl/filtering_cache.rs")
-        .expect("Failed to read src/app_impl/filtering_cache.rs");
+    let grouping = fs::read_to_string("src/scripts/grouping.rs")
+        .expect("Failed to read src/scripts/grouping.rs");
     let main_hint = fs::read_to_string("src/menu_syntax/main_hint.rs")
         .expect("Failed to read src/menu_syntax/main_hint.rs");
 
@@ -432,8 +432,11 @@ fn menu_syntax_hint_surface_is_not_grouped_results() {
             && render.contains("menu_syntax_main_hint_snapshot(&filter_text_for_render, true)"),
         "the grammar hint should be a rendered snapshot for owned states and advanced-query empty states"
     );
+    let hint_results = source_after(&grouping, "pub(crate) fn build_menu_syntax_hint_results(");
     assert!(
-        filtering_cache.contains("Arc::<[GroupedListItem]>::from(Vec::new())")
+        hint_results.contains("GroupedListItem::SectionHeader(hint.to_string(), None)")
+            && !hint_results.contains("GroupedListItem::Item(")
+            && hint_results.contains("Vec::new(),")
             && !render.contains("build_menu_syntax_hint_results("),
         "grammar hints must not repopulate the selectable GroupedListItem list"
     );
@@ -470,21 +473,32 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
         .expect("Failed to read src/app_impl/simulate_key_dispatch.rs");
 
     assert!(
-        trigger_picker.contains("fn should_show_has_field_completion(")
-            && trigger_picker.contains("lookup_has_field(value).is_none()")
-            && trigger_picker.contains("complete has:shortcut is a search predicate"),
+        source_after(&trigger_picker, "fn should_show_has_field_completion(")
+            .contains("lookup_has_field(value).is_none()"),
         "exact has:shortcut must be terminal search input, while has:short/has:shortc remain completion states"
     );
-    assert!(
-        dispatcher.contains("self.filter_text = text.clone();")
-            && dispatcher.contains("self.pending_filter_sync = true;")
-            && dispatcher.contains("self.computed_filter_text = text.clone();")
-            && dispatcher.contains("self.set_menu_syntax_mode_from_filter(&text);")
-            && dispatcher.contains("self.invalidate_grouped_cache();")
-            && dispatcher
-                .contains("self.menu_syntax_trigger_picker_suppressed_filter = Some(text.clone());"),
-        "Accept must atomically replace input, advance parser/cache state, and suppress immediate reopen"
-    );
+    let replace_input = dispatcher
+        .split("TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } =>")
+        .nth(1)
+        .and_then(|tail| tail.split("TriggerPickerIntentOutcome::Close =>").next())
+        .expect("trigger picker Accept must handle ReplaceInput");
+    let ordered = [
+        "self.filter_text = text.clone();",
+        "self.pending_filter_sync = true;",
+        "self.menu_syntax_trigger_picker_suppressed_filter = Some(text.clone());",
+        "self.flush_pending_main_menu_query(cx);",
+    ];
+    let mut last = 0usize;
+    for step in ordered {
+        let position = replace_input
+            .find(step)
+            .unwrap_or_else(|| panic!("Accept must `{step}`"));
+        assert!(
+            position >= last,
+            "Accept must atomically replace input, suppress immediate reopen, then commit parser/cache state: `{step}` is out of order"
+        );
+        last = position;
+    }
     assert!(
         filter_change.contains("popup_suppressed_for_this_text")
             && filter_change.contains("plan_trigger_picker_transition("),

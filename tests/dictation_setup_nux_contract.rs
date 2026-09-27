@@ -9,7 +9,7 @@ const CONFIG_TYPES: &str = include_str!("../src/config/types.rs");
 const DEVICE: &str = include_str!("../src/dictation/device.rs");
 const INFO_PLIST_EXT: &str = include_str!("../assets/Info.plist.ext");
 const STDIN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const STDIN_MATCH: &str = include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
+const SIMULATE_KEY: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 const CONFIG_TEMPLATE: &str = include_str!("../kit-init/config-template.ts");
 const GUIDE: &str = include_str!("../kit-init/GUIDE.md");
 const UPDATE_CONFIG_EXAMPLES: &str =
@@ -130,7 +130,7 @@ fn dictation_start_paths_open_setup_when_microphone_is_not_ready() {
 #[test]
 fn dictation_setup_prompt_preserves_safe_download_actions() {
     assert!(
-        BUILTIN_EXECUTION.contains("transcription is local after Parakeet installs"),
+        BUILTIN_EXECUTION.contains("local after install"),
         "setup copy must explain the local transcription boundary after install"
     );
     assert!(
@@ -149,22 +149,19 @@ fn dictation_setup_prompt_preserves_safe_download_actions() {
 
 #[test]
 fn protocol_enter_submits_mini_setup_prompt() {
-    for (label, source) in [
-        ("app_run_setup", STDIN_SETUP),
-        ("runtime_stdin_match", STDIN_MATCH),
-    ] {
-        assert!(
-            source.contains("AppView::MiniPrompt { id, .. }"),
-            "{} must route MiniPrompt through simulateKey",
-            label
-        );
-        assert!(
-            source.contains("SimulateKey: Enter - submit mini prompt selection")
-                && source.contains("view.submit_arg_prompt_from_current_state("),
-            "{} must submit the current MiniPrompt selection on protocol Enter",
-            label
-        );
-    }
+    assert!(
+        STDIN_SETUP.contains("view.dispatch_simulate_key("),
+        "app_run_setup must route simulateKey through the shared dispatcher"
+    );
+    assert!(
+        SIMULATE_KEY.contains("AppView::MiniPrompt { id, .. }"),
+        "simulate_key_dispatch must route MiniPrompt through simulateKey"
+    );
+    assert!(
+        SIMULATE_KEY.contains("SimulateKey: Enter - submit mini prompt selection")
+            && SIMULATE_KEY.contains("view.submit_arg_prompt_from_current_state("),
+        "simulate_key_dispatch must submit the current MiniPrompt selection on protocol Enter"
+    );
 }
 
 #[test]

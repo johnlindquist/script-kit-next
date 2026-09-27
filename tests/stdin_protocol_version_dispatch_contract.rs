@@ -1,4 +1,13 @@
 const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
+const STDIN_COMMAND_TESTS: &str = include_str!("../src/stdin_commands/mod_tests.rs");
+
+fn stdin_command_tests() -> &'static str {
+    assert!(
+        STDIN_COMMANDS.contains("include!(\"mod_tests.rs\");"),
+        "stdin_commands/mod.rs must compile its dispatch tests from mod_tests.rs"
+    );
+    STDIN_COMMAND_TESTS
+}
 
 #[test]
 fn stdin_dispatch_uses_core_protocol_version_reader() {
@@ -21,16 +30,17 @@ fn stdin_dispatch_uses_core_protocol_version_reader() {
 
 #[test]
 fn stdin_dispatch_accepts_explicit_v2_for_external_and_protocol_paths() {
+    let tests = stdin_command_tests();
     assert!(
-        STDIN_COMMANDS.contains("parse_stdin_command_accepts_v2_external_command_protocol_version"),
+        tests.contains("fn parse_stdin_command_accepts_v2_external_command_protocol_version"),
         "missing v2 ExternalCommand dispatch test"
     );
     assert!(
-        STDIN_COMMANDS.contains("parse_stdin_command_accepts_v2_protocol_message"),
+        tests.contains("fn parse_stdin_command_accepts_v2_protocol_message"),
         "missing v2 protocol Message dispatch test"
     );
     assert!(
-        STDIN_COMMANDS.contains("parse_stdin_command_accepts_v2_trigger_builtin"),
+        tests.contains("fn parse_stdin_command_accepts_v2_trigger_builtin"),
         "missing representative v2 triggerBuiltin dispatch test"
     );
 }
@@ -53,8 +63,8 @@ fn unsupported_version_stats_only_count_out_of_range_versions() {
         "unsupported out-of-range versions should increment protocol stats"
     );
     assert!(
-        STDIN_COMMANDS.contains(
-            "parse_stdin_command_rejects_non_integer_protocol_version_without_unsupported_count"
+        stdin_command_tests().contains(
+            "fn parse_stdin_command_rejects_non_integer_protocol_version_without_unsupported_count"
         ),
         "invalid non-integer protocolVersion should have a no-counter test"
     );
