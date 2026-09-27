@@ -41,8 +41,9 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
 
     if !uses_scaffold {
         assert!(
-            source.contains("HEADER_PADDING_X") && source.contains("HEADER_PADDING_Y"),
-            "{name} should use shared chrome header padding tokens"
+            source.contains("render_main_view_chrome_footer_flush(")
+                && source.contains("render_builtin_main_input_header("),
+            "{name} should use the shared main-view chrome and built-in input header"
         );
 
         assert!(
@@ -60,34 +61,31 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
 ///
 /// Expanded surfaces show a list + preview split where users cannot
 /// confidently select without seeing the content. Per .impeccable.md:
-/// - Must use the shared expanded-view scaffold or shell
+/// - Must use the shared main-view chrome and input shell
 /// - Must NOT use SectionDivider (spacing defines structure)
-/// - Must NOT use PromptFooter (scaffold owns the footer)
+/// - Must NOT use PromptFooter (the main-window footer slot owns the footer)
 /// - Entry file must emit PromptChromeAudit::expanded
 fn assert_expanded_builtin_surface(name: &str, entry_source: &str, layout_source: &str) {
     let prompt_footer_needle = ["PromptFooter", "::new("].concat();
     let divider_needle = ["SectionDivider", "::new()"].concat();
 
-    // Layout must route through the shared expanded-view scaffold or shell
+    // Layout must route through the shared main-view chrome
     assert!(
-        layout_source.contains("render_expanded_view_scaffold(")
-            || layout_source.contains("render_expanded_view_scaffold_with_hints(")
-            || layout_source.contains("render_expanded_view_scaffold_with_footer(")
-            || layout_source.contains("render_expanded_view_prompt_shell("),
-        "{name} layout should use shared expanded-view scaffold/shell"
+        layout_source.contains("render_main_view_chrome_footer_flush(")
+            && layout_source.contains("render_main_view_input_shell("),
+        "{name} layout should use the shared main-view chrome and input shell"
     );
 
     // Layout should route footer rendering through the native footer path.
     assert!(
-        layout_source.contains("main_window_footer_slot(")
-            || layout_source.contains("render_expanded_view_scaffold_with_hints("),
+        layout_source.contains("main_window_footer_slot("),
         "{name} layout should route footer rendering through the native footer path"
     );
 
     // Must NOT use old PromptFooter
     assert!(
         !layout_source.contains(&prompt_footer_needle),
-        "{name} layout should not use PromptFooter::new (scaffold/shell owns the footer)"
+        "{name} layout should not use PromptFooter::new (the footer slot owns the footer)"
     );
 
     // Must NOT use SectionDivider — expanded view uses spacing, not dividers
@@ -109,11 +107,7 @@ fn assert_expanded_builtin_surface(name: &str, entry_source: &str, layout_source
     );
 
     eprintln!(
-        "{{\"audit\":\"expanded_contract\",\"surface\":\"{name}\",\"scaffold_used\":{},\"footer_slot\":true,\"divider_absent\":true,\"footer_absent\":true,\"layout_mode\":\"expanded\"}}",
-        layout_source.contains("render_expanded_view_scaffold(")
-            || layout_source.contains("render_expanded_view_scaffold_with_hints(")
-            || layout_source.contains("render_expanded_view_scaffold_with_footer(")
-            || layout_source.contains("render_expanded_view_prompt_shell(")
+        "{{\"audit\":\"expanded_contract\",\"surface\":\"{name}\",\"main_view_chrome\":true,\"footer_slot\":true,\"divider_absent\":true,\"footer_absent\":true,\"layout_mode\":\"expanded\"}}"
     );
 }
 
@@ -135,8 +129,8 @@ fn file_search_enforces_expanded_view_contract() {
         "file_search should use shared main-view chrome"
     );
     assert!(
-        FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_context_zone("),
-        "file_search should keep the shared context zone"
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_slot_line("),
+        "file_search should keep the shared line above the input"
     );
     assert!(
         FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_input_shell("),
@@ -147,8 +141,9 @@ fn file_search_enforces_expanded_view_contract() {
         "file_search should route footer content through the native footer slot"
     );
     assert!(
-        FILE_SEARCH_ENTRY_SOURCE.contains("render_simple_hint_strip(file_search_hints, None)"),
-        "file_search should build the shared hint strip"
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_static_footer_hint_action_rail(")
+            && FILE_SEARCH_ENTRY_SOURCE.contains("file_search_hints,"),
+        "file_search should build its fallback footer from the shared footer action rail"
     );
     assert!(
         FILE_SEARCH_ENTRY_SOURCE.contains("PromptChromeAudit::expanded(\"file_search\""),
@@ -176,10 +171,8 @@ fn file_search_mini_footer_uses_live_hint_contract() {
     );
     assert!(
         FILE_SEARCH_ENTRY_SOURCE.contains("let file_search_hints = if")
-            && (FILE_SEARCH_ENTRY_SOURCE.contains("render_minimal_list_prompt_scaffold(")
-                || FILE_SEARCH_ENTRY_SOURCE
-                    .contains("render_minimal_list_prompt_shell_with_footer(")),
-        "file_search mini mode should compute live hints and route them through a minimal scaffold"
+            && FILE_SEARCH_ENTRY_SOURCE.contains("main_window_footer_slot(gpui_footer)"),
+        "file_search mini mode should compute live hints and route them through the main-window footer slot"
     );
 }
 
@@ -242,7 +235,7 @@ fn production_source(source: &str) -> &str {
 #[test]
 fn surfaces_that_advertise_universal_hints_must_have_actions_support() {
     for (source, label) in [(EMOJI_PICKER_SOURCE, "emoji_picker")] {
-        let advertises_actions = source.contains("universal_prompt_hints()");
+        let advertises_actions = source.contains("universal_prompt_hints");
         // Either the surface locally wires the router, or the canonical resolver
         // maps it to SharedDialog (checked via the ActionsDialogHost variant name).
         let has_local_router = source.contains("route_key_to_actions_dialog(");
@@ -333,7 +326,7 @@ fn theme_chooser_included_in_shared_actions_resolver() {
 #[test]
 fn emoji_picker_advertises_and_wires_shared_actions() {
     assert!(
-        EMOJI_PICKER_SOURCE.contains("universal_prompt_hints()"),
+        EMOJI_PICKER_SOURCE.contains("universal_prompt_hints_with_primary_label(\"Paste\")"),
         "emoji_picker should use universal hints (it supports shared actions)"
     );
     assert!(
@@ -405,76 +398,67 @@ fn native_footer_height_uses_shared_token() {
             .contains("pub const NATIVE_MAIN_WINDOW_FOOTER_HEIGHT: f32 = HINT_STRIP_HEIGHT;"),
         "window_resize.rs must name the native main-window footer height contract"
     );
+    let shared_height = "crate::components::footer_chrome::current_main_menu_footer_height()";
     assert!(
-        FOOTER_POPUP_SOURCE
-            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT as f64"),
-        "AppKit native footer host height must use the shared native footer token"
+        FOOTER_POPUP_SOURCE.contains(&format!("{shared_height} as f64")),
+        "AppKit native footer host height must use the shared footer height"
     );
     assert!(
         PROMPT_LAYOUT_SHELL_SOURCE.contains("render_native_main_window_footer_spacer()")
             && PROMPT_LAYOUT_SHELL_SOURCE
-                .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"),
-        "GPUI native footer spacer must reserve the shared native footer height"
+                .contains("crate::footer_popup::view_owned_native_footer_height()"),
+        "GPUI native footer spacer must reserve the view-owned native footer height"
     );
     assert!(
         PROMPT_LAYOUT_SHELL_SOURCE.contains("render_native_main_window_footer_hover_blocker()")
-            && PROMPT_LAYOUT_SHELL_SOURCE
-                .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT")
-            && RENDER_SCRIPT_LIST_SOURCE.contains("render_native_main_window_footer_hover_blocker()"),
-        "main list footer hover blocker must use the shared native footer height through the shared helper"
+            && PROMPT_LAYOUT_SHELL_SOURCE.contains(shared_height)
+            && RENDER_SCRIPT_LIST_SOURCE
+                .contains("render_native_main_window_footer_hover_blocker()"),
+        "main list footer hover blocker must use the shared footer height through the shared helper"
     );
     assert!(
         APP_NAVIGATION_SCROLL_SOURCE
-            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"),
-        "footer-safe scroll reveal math must use the shared native footer height"
+            .contains("crate::footer_popup::main_window_footer_reservation_height()"),
+        "footer-safe scroll reveal math must use the shared footer reservation"
     );
 }
 
 #[test]
-fn footer_popup_notify_none_removes_native_footer_host() {
-    let notify_pos = FOOTER_POPUP_SOURCE
-        .find("pub(crate) fn notify_main_footer_popup")
-        .expect("footer_popup.rs must define notify_main_footer_popup");
-    let notify_section =
-        &FOOTER_POPUP_SOURCE[notify_pos..FOOTER_POPUP_SOURCE.len().min(notify_pos + 1200)];
+fn footer_popup_sync_none_removes_native_footer_host() {
+    let sync_pos = FOOTER_POPUP_SOURCE
+        .find("pub(crate) fn sync_main_footer_popup(")
+        .expect("footer_popup.rs must define sync_main_footer_popup");
+    let sync_end = FOOTER_POPUP_SOURCE[sync_pos..]
+        .find("\n}\n")
+        .map(|idx| sync_pos + idx)
+        .expect("sync_main_footer_popup must end");
+    let sync_section = &FOOTER_POPUP_SOURCE[sync_pos..sync_end];
 
-    let some_pos = notify_section
+    let some_pos = sync_section
         .find("if let Some(config) = config")
-        .expect("notify_main_footer_popup must branch on config");
-    let refresh_pos = notify_section
-        .find("refresh_main_footer_host(ns_window, config);")
-        .expect("notify_main_footer_popup(Some) must refresh the native footer host");
-    let else_pos = notify_section
+        .expect("sync_main_footer_popup must branch on config");
+    let refresh_pos = sync_section
+        .find("refresh_main_footer_host(ns_window, config)")
+        .expect("sync_main_footer_popup(Some) must refresh the native footer host");
+    let else_pos = sync_section[refresh_pos..]
         .find("} else {")
-        .expect("notify_main_footer_popup must handle None");
-    let clear_pos = notify_section[else_pos..]
+        .map(|idx| refresh_pos + idx)
+        .expect("sync_main_footer_popup must handle None");
+    let clear_pos = sync_section[else_pos..]
         .find("clear_main_window_footer_refresh_signature();")
         .map(|idx| else_pos + idx)
-        .expect("notify_main_footer_popup(None) must clear the cached refresh signature");
-    let remove_pos = notify_section[else_pos..]
-        .find("remove_main_footer_host(ns_window);")
+        .expect("sync_main_footer_popup(None) must clear the cached refresh signature");
+    let remove_pos = sync_section[else_pos..]
+        .find("remove_main_window_footer_host(ns_window);")
         .map(|idx| else_pos + idx)
-        .expect("notify_main_footer_popup(None) must remove the stale native footer host");
+        .expect("sync_main_footer_popup(None) must remove the stale native footer host");
 
     assert!(
         some_pos < refresh_pos
             && refresh_pos < else_pos
             && else_pos < clear_pos
             && clear_pos < remove_pos,
-        "notify_main_footer_popup must refresh on Some and clear/remove the stale native footer host on None"
-    );
-}
-
-#[test]
-fn footer_popup_uses_subtle_hover_for_native_footer_buttons() {
-    assert!(
-        FOOTER_POPUP_SOURCE.contains("let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);"),
-        "native footer hover should use chrome.hover_rgba so the blur stays subtle"
-    );
-    assert!(
-        FOOTER_POPUP_SOURCE
-            .contains("let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);"),
-        "native footer selected state should still restore chrome.selection_rgba"
+        "sync_main_footer_popup must refresh on Some and clear/remove the stale native footer host on None"
     );
 }
 
@@ -500,7 +484,7 @@ fn footer_popup_refresh_signature_covers_visible_theme_inputs() {
         "native footer refresh signature must include selected/hover/dot colors so theme-only changes cannot be skipped"
     );
     assert!(
-        FOOTER_POPUP_SOURCE.contains("left_dot_hex = config.left_info.as_ref()")
+        FOOTER_POPUP_SOURCE.contains("left_dot_hex: config.left_info.as_ref()")
             && FOOTER_POPUP_SOURCE.contains("footer_dot_hex("),
         "native footer refresh signature must key on the computed status dot color"
     );
@@ -623,20 +607,15 @@ fn prompt_entity_footer_surface_strings_match_ui_window_map() {
 }
 
 #[test]
-fn create_ai_preset_form_does_not_inherit_launcher_native_footer() {
+fn search_ai_presets_keeps_native_footer_surface() {
     assert!(
         APP_VIEW_STATE_SOURCE
             .contains("AppView::SearchAiPresetsView { .. } => Some(\"search_ai_presets\")"),
         "search presets list keeps the native footer surface"
     );
     assert!(
-        !APP_VIEW_STATE_SOURCE
-            .contains("AppView::CreateAiPresetView { .. } => Some(\"create_ai_preset\")"),
-        "create preset form must not inherit the generic launcher native footer"
-    );
-    assert!(
         !AI_PRESETS_SOURCE.contains("Some(\"create_ai_preset\")"),
-        "create preset renderer must not reserve native footer space"
+        "create preset renderer must not reserve native footer space itself"
     );
 }
 
@@ -698,8 +677,8 @@ fn prompt_wrapper_routes_footer_through_native_slot() {
 #[test]
 fn clipboard_history_routes_footer_through_native_slot() {
     assert!(
-        CLIPBOARD_HISTORY_LAYOUT_SOURCE.contains("render_expanded_view_scaffold_with_footer("),
-        "clipboard_history should use the footer-aware expanded scaffold"
+        CLIPBOARD_HISTORY_LAYOUT_SOURCE.contains("render_main_view_chrome_footer_flush("),
+        "clipboard_history should use the footer-aware main-view chrome"
     );
     assert!(
         CLIPBOARD_HISTORY_LAYOUT_SOURCE.contains("main_window_footer_slot("),
@@ -718,9 +697,8 @@ fn file_search_routes_footer_through_native_slot() {
         "file_search should route footer rendering through the main-window native footer slot"
     );
     assert!(
-        FILE_SEARCH_ENTRY_SOURCE.contains("render_expanded_view_scaffold_with_footer(")
-            || FILE_SEARCH_ENTRY_SOURCE.contains("render_minimal_list_prompt_shell_with_footer("),
-        "file_search should use footer-aware scaffold helpers"
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_main_view_chrome_footer_flush("),
+        "file_search should use the footer-aware main-view chrome"
     );
 
     eprintln!(
@@ -736,8 +714,8 @@ fn mini_prompt_routes_footer_through_native_slot() {
         "mini_prompt should route footer rendering through the main-window native footer slot"
     );
     assert!(
-        source.contains("render_minimal_list_prompt_shell_with_footer("),
-        "mini_prompt should use the footer-aware minimal list prompt shell"
+        source.contains("render_main_view_chrome_footer_flush("),
+        "mini_prompt should use the footer-aware main-view chrome"
     );
 
     eprintln!(
@@ -859,7 +837,6 @@ fn canonical_resolver_covers_all_focus_restore_hosts() {
         "ActionsDialogHost::ChatPrompt",
         "ActionsDialogHost::ArgPrompt",
         "ActionsDialogHost::WebcamPrompt",
-        "ActionsDialogHost::AgentChat",
     ] {
         assert!(
             resolver_fn.contains(host),

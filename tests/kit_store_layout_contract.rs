@@ -45,7 +45,8 @@ fn kit_store_browse_layout_receipt_uses_shared_chrome_and_content_nodes() {
         "KitStoreBrowseRow",
         "KitStoreBrowseInstallButton",
         "KitStoreBrowseFooter",
-        "KIT_STORE_ROW_HEIGHT: f32 = 72.0",
+        "row_height: 72.0,",
+        "const KIT_STORE_ROW_HEIGHT: f32 = KIT_STORE_BROWSE_CARD.row_height;",
         "canonical MainViewInput trailing slot",
     ] {
         assert!(
@@ -80,7 +81,8 @@ fn kit_store_installed_layout_receipt_uses_shared_chrome_and_content_nodes() {
         "KitStoreInstalledList",
         "KitStoreInstalledRow",
         "KitStoreInstalledFooter",
-        "crate::list_item::LIST_ITEM_HEIGHT",
+        "crate::list_item::metrics::LegacyListCallerId::InstalledKits",
+        "let KIT_STORE_ROW_HEIGHT: f32 = kit_store_row_metrics.row_slot_height;",
         "canonical MainViewInput trailing slot",
         "shared ListItem chrome",
     ] {

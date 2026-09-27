@@ -31,7 +31,6 @@ fn app_launcher_uses_shared_search_input_and_rows() {
         ".selected(is_selected)",
         ".hovered(is_hovered)",
         ".main_menu_theme(",
-        ".with_accent_bar(true)",
         "builtin_uniform_list_scrollbar(&self.list_scroll_handle",
         ".key_context(\"app_launcher\")",
         ".track_focus(&self.focus_handle)",
@@ -91,7 +90,7 @@ fn app_launcher_key_handler_does_not_duplicate_text_input() {
     let key_handler_body = source_between(
         APP_LAUNCHER,
         "let handle_key = cx.listener(",
-        "\n        let color_resolver",
+        "\n        let list_colors",
     );
 
     for required in [

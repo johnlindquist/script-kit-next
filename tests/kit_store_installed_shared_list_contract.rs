@@ -21,7 +21,6 @@ fn installed_kits_uses_shared_search_input_and_list_item_rows() {
         ".selected(is_selected)",
         ".hovered(is_hovered)",
         ".main_menu_theme(main_menu_theme)",
-        ".with_accent_bar(true)",
         ".semantic_id(Self::kit_store_installed_row_semantic_id",
         "builtin_uniform_list_scrollbar(&self.list_scroll_handle",
         "main_window_footer_slot(crate::components::render_simple_hint_strip",
