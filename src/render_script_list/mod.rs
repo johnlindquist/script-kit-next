@@ -1023,7 +1023,9 @@ impl ScriptListApp {
 
         let main_hint_list_tokens = self.current_main_menu_theme.def().list;
         let active_filter_empty_copy = "There are no search results with this filter applied.";
-        let list_element: AnyElement = if menu_syntax_owns_main_list
+        let list_element: AnyElement = if let Some(view) = self.one_window_view_element() {
+            view
+        } else if menu_syntax_owns_main_list
             && !trigger_picker_owns_main_list_for_render
             && !object_selector_owns_main_list_for_render
         {
@@ -1631,6 +1633,12 @@ impl ScriptListApp {
                         window,
                         cx,
                     )
+                {
+                    cx.stop_propagation();
+                    return;
+                }
+                if !has_cmd
+                    && this.one_window_view_takes_key(key_str, &event.keystroke.modifiers, cx)
                 {
                     cx.stop_propagation();
                     return;

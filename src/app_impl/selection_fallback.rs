@@ -486,25 +486,8 @@ impl ScriptListApp {
             self.resolved_main_menu_selected_subject()
         {
             anyhow::ensure!(row.eligibility.activatable, "main_menu_row_not_activatable");
-            let formatted_value = result.formatted.clone();
-            let receipt = crate::runtime_policy::route_text_copy(
-                crate::runtime_policy::owned_evaluation(),
-                &formatted_value,
-                |text| {
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.to_owned()));
-                    Ok(())
-                },
-            )
-            .map_err(|error| {
-                self.update_main_menu_dispatch_status("refused", Some("calculator_copy_failed"));
-                anyhow::anyhow!("calculator_copy_failed: {error}")
-            })?;
-            self.show_hud(
-                receipt.feedback(format!("Copied: {}", formatted_value)),
-                Some(HUD_MEDIUM_MS),
-                cx,
-            );
-            self.close_and_reset_window(cx);
+            let result = result.clone();
+            self.one_window_open_calculator_answer(&result, cx);
             self.set_main_menu_dispatch_observation(observation);
             self.update_main_menu_dispatch_status("completed", None);
             return Ok(MainMenuDispatchResult::Dispatched);

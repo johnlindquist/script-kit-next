@@ -2624,6 +2624,18 @@ impl ScriptListApp {
                             && key_lower == "v"
                             && matches!(this.current_view, AppView::ScriptList)
                             && !this.show_actions_popup
+                            && this.one_window_paste(cx)
+                        {
+                            cx.stop_propagation();
+                            return;
+                        }
+                        if has_cmd
+                            && !has_shift
+                            && !has_alt
+                            && !has_ctrl
+                            && key_lower == "v"
+                            && matches!(this.current_view, AppView::ScriptList)
+                            && !this.show_actions_popup
                             && this.route_large_script_list_paste_to_agent_chat(cx)
                         {
                             logging::log(

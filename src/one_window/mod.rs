@@ -3,3 +3,4 @@
 
 pub(crate) mod host;
 pub(crate) mod slot_line;
+pub(crate) mod views;
