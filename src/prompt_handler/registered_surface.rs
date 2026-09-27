@@ -89,49 +89,42 @@ pub(crate) fn registered_surface_ui_snapshot(
     target
         .generation
         .ok_or_else(|| anyhow::anyhow!("registered_surface_generation_missing"))?;
-    match target.kind {
-        protocol::AutomationWindowKind::ActionsDialog => {
-            anyhow::bail!("actions_are_staged_in_place")
-        }
-        _ => {
-            let surface =
-                collector::collect_surface_snapshot(&target, usize::MAX, cx).ok_or_else(|| {
-                    anyhow::anyhow!("registered_surface_state_unavailable:{}", target.id)
-                })?;
-            let (elements, focused_semantic_id, selected_semantic_id) = (
-                surface.elements,
-                surface.focused_semantic_id,
-                surface.selected_semantic_id,
-            );
-            let input_value = elements
+    let surface =
+            collector::collect_surface_snapshot(&target, usize::MAX, cx).ok_or_else(|| {
+                anyhow::anyhow!("registered_surface_state_unavailable:{}", target.id)
+            })?;
+        let (elements, focused_semantic_id, selected_semantic_id) = (
+            surface.elements,
+            surface.focused_semantic_id,
+            surface.selected_semantic_id,
+        );
+        let input_value = elements
+            .iter()
+            .find(|element| element.element_type == protocol::ElementType::Input)
+            .and_then(|element| element.value.clone());
+        let selected_value = selected_semantic_id.as_ref().and_then(|id| {
+            elements
                 .iter()
-                .find(|element| element.element_type == protocol::ElementType::Input)
-                .and_then(|element| element.value.clone());
-            let selected_value = selected_semantic_id.as_ref().and_then(|id| {
-                elements
-                    .iter()
-                    .find(|element| &element.semantic_id == id)
-                    .and_then(|element| element.value.clone().or_else(|| element.text.clone()))
-            });
-            Ok(protocol::UiStateSnapshot {
-                window_visible: target.visible,
-                window_focused: target.focused,
-                prompt_type: Some(target.kind.as_camel_case().to_string()),
-                input_value,
-                selected_value,
-                choice_count: elements
-                    .iter()
-                    .filter(|element| element.element_type == protocol::ElementType::Choice)
-                    .count(),
-                visible_semantic_ids: elements
-                    .into_iter()
-                    .map(|element| element.semantic_id)
-                    .collect(),
-                focused_semantic_id,
-                ..Default::default()
-            })
-        }
-    }
+                .find(|element| &element.semantic_id == id)
+                .and_then(|element| element.value.clone().or_else(|| element.text.clone()))
+        });
+        Ok(protocol::UiStateSnapshot {
+            window_visible: target.visible,
+            window_focused: target.focused,
+            prompt_type: Some(target.kind.as_camel_case().to_string()),
+            input_value,
+            selected_value,
+            choice_count: elements
+                .iter()
+                .filter(|element| element.element_type == protocol::ElementType::Choice)
+                .count(),
+            visible_semantic_ids: elements
+                .into_iter()
+                .map(|element| element.semantic_id)
+                .collect(),
+            focused_semantic_id,
+            ..Default::default()
+        })
 }
 
 pub(crate) fn registered_surface_wait_satisfied(
@@ -175,12 +168,7 @@ pub(crate) fn apply_registered_surface_command(
         .generation
         .ok_or_else(|| anyhow::anyhow!("registered_surface_generation_missing"))?;
     let kind = registered_batch_target_kind(&target);
-    match target.kind {
-        protocol::AutomationWindowKind::ActionsDialog => {
-            anyhow::bail!("actions_are_staged_in_place")
-        }
-        _ => Err(unsupported_batch_command_error(kind, command).into()),
-    }
+    Err(unsupported_batch_command_error(kind, command).into())
 }
 
 pub(crate) fn registered_surface_state_result(

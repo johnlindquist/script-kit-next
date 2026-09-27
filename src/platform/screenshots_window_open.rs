@@ -774,8 +774,6 @@ fn capture_resolved_window(
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PopupCaptureStrategy {
-    /// Captured the parent window and crop to popup bounds.
-    ParentCaptureWithCrop,
     /// Captured the detached window directly.
     DirectWindowCapture,
     /// Not a popup target (main window or unknown kind).
@@ -799,30 +797,12 @@ pub struct PopupCaptureReceipt {
     pub semantic_receipts_are_primary: bool,
 }
 
-/// Returns `true` for window kinds that are attached popups (rendered
-/// inside the parent window's coordinate space).
-fn is_attached_popup(kind: crate::protocol::AutomationWindowKind) -> bool {
-    matches!(
-        kind,
-        crate::protocol::AutomationWindowKind::ActionsDialog
-            | crate::protocol::AutomationWindowKind::PromptPopup
-    )
-}
-
 /// Returns `true` for window kinds that are detached (own OS window).
 fn is_detached_window(kind: crate::protocol::AutomationWindowKind) -> bool {
     matches!(kind, crate::protocol::AutomationWindowKind::Notes)
 }
 
 /// Capture a screenshot of a targeted window and produce a popup capture receipt.
-///
-/// For **attached popups** (ActionsDialog, PromptPopup):
-/// - Resolves the parent window identity and popup bounds.
-/// - Captures the parent window and computes crop bounds.
-/// - Emits `automation.capture_screenshot.parent_crop_selected` on success.
-/// - **Fails loudly** with `automation.capture_screenshot.parent_crop_failed`
-///   if parent identity or popup bounds are missing — never returns an
-///   unscoped whole-window screenshot.
 ///
 /// For **detached windows** (AgentChatDetached, Notes):
 /// - Captures the window directly.
@@ -850,124 +830,7 @@ pub fn capture_targeted_screenshot_with_popup_receipt(
     let kind = resolved.kind;
     let kind_str = format!("{kind:?}");
 
-    if is_attached_popup(kind) {
-        // Attached popup: require parent identity and bounds.
-        let parent_id = match resolved.parent_window_id.as_ref() {
-            Some(pid) => pid.clone(),
-            None => {
-                tracing::error!(
-                    target: "script_kit::automation",
-                    window_id = %resolved.id,
-                    kind = %kind_str,
-                    "automation.capture_screenshot.parent_crop_failed: \
-                     attached popup has no parent_window_id in automation registry"
-                );
-                return Err(format!(
-                    "Attached popup '{}' ({}) cannot be captured: \
-                     no parent window identity registered. \
-                     Refusing to fall back to unscoped whole-window screenshot.",
-                    resolved.id, kind_str
-                )
-                .into());
-            }
-        };
-
-        // Resolve parent window metadata
-        let parent_target = crate::protocol::AutomationWindowTarget::Id {
-            id: parent_id.clone(),
-        };
-        let parent_resolved = match crate::windows::resolve_automation_window(Some(&parent_target))
-        {
-            Ok(p) => p,
-            Err(err) => {
-                tracing::error!(
-                    target: "script_kit::automation",
-                    window_id = %resolved.id,
-                    kind = %kind_str,
-                    parent_id = %parent_id,
-                    error = %err,
-                    "automation.capture_screenshot.parent_crop_failed: \
-                     parent window not found in automation registry"
-                );
-                return Err(format!(
-                    "Attached popup '{}' ({}) cannot be captured: \
-                     parent '{}' not found in registry. \
-                     Refusing to fall back to unscoped whole-window screenshot.",
-                    resolved.id, kind_str, parent_id
-                )
-                .into());
-            }
-        };
-
-        // Compute crop bounds
-        let target_bounds = crate::protocol::target_bounds_in_screenshot_with_main(
-            &resolved,
-            parent_resolved.bounds.as_ref(),
-        );
-
-        if target_bounds.is_none() {
-            tracing::error!(
-                target: "script_kit::automation",
-                window_id = %resolved.id,
-                kind = %kind_str,
-                parent_id = %parent_id,
-                popup_bounds = ?resolved.bounds,
-                parent_bounds = ?parent_resolved.bounds,
-                "automation.capture_screenshot.parent_crop_failed: \
-                 popup or parent bounds missing, cannot compute crop region"
-            );
-            return Err(format!(
-                "Attached popup '{}' ({}) cannot be captured: \
-                 bounds geometry unavailable (popup bounds: {}, parent bounds: {}). \
-                 Refusing to produce unscoped whole-window screenshot.",
-                resolved.id,
-                kind_str,
-                if resolved.bounds.is_some() {
-                    "present"
-                } else {
-                    "missing"
-                },
-                if parent_resolved.bounds.is_some() {
-                    "present"
-                } else {
-                    "missing"
-                },
-            )
-            .into());
-        }
-
-        // Capture the parent window
-        tracing::info!(
-            target: "script_kit::automation",
-            window_id = %resolved.id,
-            kind = %kind_str,
-            parent_id = %parent_id,
-            hi_dpi = hi_dpi,
-            "automation.capture_screenshot.targeted"
-        );
-
-        let (png_data, width, height) = capture_resolved_window(&parent_resolved, hi_dpi)?;
-
-        tracing::info!(
-            target: "script_kit::automation",
-            window_id = %resolved.id,
-            kind = %kind_str,
-            parent_id = %parent_id,
-            parent_width = width,
-            parent_height = height,
-            crop_bounds = ?target_bounds,
-            "automation.capture_screenshot.parent_crop_selected"
-        );
-
-        let receipt = PopupCaptureReceipt {
-            strategy: PopupCaptureStrategy::ParentCaptureWithCrop,
-            window_kind: kind_str,
-            target_bounds,
-            semantic_receipts_are_primary: true,
-        };
-
-        Ok((png_data, width, height, receipt))
-    } else if is_detached_window(kind) {
+    if is_detached_window(kind) {
         // Detached window: direct capture
         tracing::info!(
             target: "script_kit::automation",

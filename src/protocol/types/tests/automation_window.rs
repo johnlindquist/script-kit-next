@@ -140,12 +140,12 @@ fn automation_window_info_round_trip() {
 #[test]
 fn automation_window_generation_round_trips_serde() {
     let info = AutomationWindowInfo {
-        id: "agent_chat-history-popup".into(),
-        kind: AutomationWindowKind::PromptPopup,
-        title: Some("History".into()),
+        id: "snap-overlay".into(),
+        kind: AutomationWindowKind::SnapOverlay,
+        title: Some("Snap".into()),
         focused: false,
         visible: true,
-        semantic_surface: Some("promptPopup".into()),
+        semantic_surface: Some("snapOverlay".into()),
         bounds: None,
         parent_window_id: Some("main".into()),
         parent_window_generation: None,

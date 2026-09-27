@@ -104,10 +104,8 @@ enum AutomationReadTarget {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AutomationBatchTargetKind {
     Main,
-    Dictation,
     Notes,
-    ActionsDialog,
-    PromptPopup,
+    SnapOverlay,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -115,7 +113,6 @@ struct BatchTargetCapabilities {
     display_name: &'static str,
     unsupported_target_name: &'static str,
     supported_commands: &'static [&'static str],
-    concise_unsupported_message: bool,
 }
 
 impl BatchTargetCapabilities {
@@ -134,13 +131,6 @@ impl BatchTargetCapabilities {
                     "filterAndSelect",
                     "typeAndSubmit",
                 ],
-                concise_unsupported_message: true,
-            },
-            AutomationBatchTargetKind::Dictation => Self {
-                display_name: "Dictation",
-                unsupported_target_name: "Dictation",
-                supported_commands: &["selectBySemanticId", "waitFor"],
-                concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::Notes => Self {
                 display_name: "Notes",
@@ -152,25 +142,11 @@ impl BatchTargetCapabilities {
                     "selectBySemanticId",
                     "waitFor",
                 ],
-                concise_unsupported_message: true,
             },
-            AutomationBatchTargetKind::ActionsDialog => Self {
-                display_name: "ActionsDialog",
-                unsupported_target_name: "ActionsDialog",
-                supported_commands: &["setInput", "selectByValue", "selectBySemanticId", "waitFor"],
-                concise_unsupported_message: false,
-            },
-            AutomationBatchTargetKind::PromptPopup => Self {
-                display_name: "PromptPopup",
-                unsupported_target_name: "PromptPopup",
-                supported_commands: &[
-                    "setInput",
-                    "selectByValue",
-                    "selectBySemanticId",
-                    "setThemeControl",
-                    "waitFor",
-                ],
-                concise_unsupported_message: false,
+            AutomationBatchTargetKind::SnapOverlay => Self {
+                display_name: "SnapOverlay",
+                unsupported_target_name: "SnapOverlay",
+                supported_commands: &["selectBySemanticId", "waitFor"],
             },
         }
     }
@@ -182,8 +158,7 @@ fn registered_batch_target_kind(
     match target.kind {
         protocol::AutomationWindowKind::Main => AutomationBatchTargetKind::Main,
         protocol::AutomationWindowKind::Notes => AutomationBatchTargetKind::Notes,
-        protocol::AutomationWindowKind::ActionsDialog => AutomationBatchTargetKind::ActionsDialog,
-        _ => AutomationBatchTargetKind::PromptPopup,
+        protocol::AutomationWindowKind::SnapOverlay => AutomationBatchTargetKind::SnapOverlay,
     }
 }
 
@@ -207,29 +182,14 @@ fn unsupported_batch_command_error(
     let command = batch_command_name(cmd);
     let capabilities = BatchTargetCapabilities::for_target(kind);
     let supported = supported_batch_commands_for_target(kind).join(", ");
-    let message = match kind {
-        AutomationBatchTargetKind::ActionsDialog => {
-            format!("ActionsDialog batch supports: {supported}. Got: {command}")
-        }
-        AutomationBatchTargetKind::PromptPopup => {
-            format!("PromptPopup batch supports: {supported}. Got: {command}")
-        }
-        _ => format!(
-            "{} is not supported for {} batch targets",
-            command, capabilities.unsupported_target_name
-        ),
-    };
-    let suggestion = if capabilities.concise_unsupported_message {
-        format!(
-            "{} batch supports: {}.",
-            capabilities.display_name, supported
-        )
-    } else {
-        format!(
-            "Use a supported command for {} targets.",
-            capabilities.display_name
-        )
-    };
+    let message = format!(
+        "{} is not supported for {} batch targets",
+        command, capabilities.unsupported_target_name
+    );
+    let suggestion = format!(
+        "{} batch supports: {}.",
+        capabilities.display_name, supported
+    );
 
     protocol::TransactionError {
         code: protocol::TransactionErrorCode::UnsupportedCommand,

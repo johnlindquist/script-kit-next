@@ -469,12 +469,6 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Close one exact generation-scoped PromptPopup through AppKit.
-    ClosePromptPopupNatively {
-        target: crate::protocol::AutomationWindowTarget,
-        #[serde(default, rename = "requestId")]
-        request_id: Option<ExternalCommandRequestId>,
-    },
     /// Open the Agent Chat window (for testing)
     OpenAi,
     /// Open the Mini Agent Chat window (for testing)
@@ -763,7 +757,6 @@ impl ExternalCommand {
             | Self::OpenCreationFeedback { request_id, .. }
             | Self::OpenConfirmPrompt { request_id, .. }
             | Self::OpenChatPromptFixture { request_id, .. }
-            | Self::ClosePromptPopupNatively { request_id, .. }
             | Self::PasteClipboardIntoAgentChat { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
@@ -786,7 +779,6 @@ impl ExternalCommand {
             Self::OpenCreationFeedback { .. } => "openCreationFeedback",
             Self::OpenConfirmPrompt { .. } => "openConfirmPrompt",
             Self::OpenChatPromptFixture { .. } => "openChatPromptFixture",
-            Self::ClosePromptPopupNatively { .. } => "closePromptPopupNatively",
             Self::OpenAi => "openAi",
             Self::OpenMiniAi => "openMiniAi",
             Self::ShowAiCommandBar => "showAiCommandBar",
@@ -829,7 +821,6 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "openCreationFeedback",
     "openConfirmPrompt",
     "openChatPromptFixture",
-    "closePromptPopupNatively",
     "openAi",
     "openMiniAi",
     "showAiCommandBar",

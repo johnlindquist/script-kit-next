@@ -256,7 +256,7 @@ fn ambiguous_error_message_contains_candidates_and_score() {
     assert!(error.contains(&tied_score.to_string()));
 }
 
-// ── Attached-surface target bounds in screenshot ──────────────────────
+// ── Target bounds in screenshot ───────────────────────────────────────
 
 use script_kit_gpui::protocol::{AutomationWindowTarget, InspectBoundsInScreenshot};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -295,124 +295,6 @@ fn shot_cleanup(prefix: &str, ids: &[&str]) {
     for id in ids {
         script_kit_gpui::windows::remove_automation_window(&format!("{prefix}:{id}"));
     }
-}
-
-/// ActionsDialog target bounds are offset from the main window's origin,
-/// not placed at (0, 0). This ensures screenshots expose where the popup
-/// lives inside the captured parent-window image.
-#[test]
-fn attached_actions_dialog_bounds_are_offset_in_screenshot() {
-    let p = shot_prefix();
-
-    make_registered(
-        &p,
-        "main",
-        AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 240.0,
-            y: 124.0,
-            width: 1280.0,
-            height: 820.0,
-        }),
-    );
-    make_registered(
-        &p,
-        "actions",
-        AutomationWindowKind::ActionsDialog,
-        Some(AutomationWindowBounds {
-            x: 620.0,
-            y: 242.0,
-            width: 520.0,
-            height: 384.0,
-        }),
-    );
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:actions"),
-    };
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
-
-    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved)
-        .expect("must compute bounds for attached surface");
-
-    // Offset = target.origin - main.origin = (620-240, 242-124) = (380, 118)
-    assert!(
-        (bounds.x - 380.0).abs() < f64::EPSILON,
-        "Expected x=380, got {}",
-        bounds.x
-    );
-    assert!(
-        (bounds.y - 118.0).abs() < f64::EPSILON,
-        "Expected y=118, got {}",
-        bounds.y
-    );
-    // Dimensions must match the dialog, not the parent
-    assert!(
-        (bounds.width - 520.0).abs() < f64::EPSILON,
-        "Width must be dialog width"
-    );
-    assert!(
-        (bounds.height - 384.0).abs() < f64::EPSILON,
-        "Height must be dialog height"
-    );
-
-    shot_cleanup(&p, &["main", "actions"]);
-}
-
-/// PromptPopup target bounds are similarly offset from main.
-#[test]
-fn attached_prompt_popup_bounds_are_offset_in_screenshot() {
-    let p = shot_prefix();
-
-    let main_bounds_val = AutomationWindowBounds {
-        x: 100.0,
-        y: 50.0,
-        width: 1000.0,
-        height: 700.0,
-    };
-    make_registered(
-        &p,
-        "main",
-        AutomationWindowKind::Main,
-        Some(main_bounds_val.clone()),
-    );
-    make_registered(
-        &p,
-        "popup",
-        AutomationWindowKind::PromptPopup,
-        Some(AutomationWindowBounds {
-            x: 350.0,
-            y: 200.0,
-            width: 400.0,
-            height: 300.0,
-        }),
-    );
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:popup"),
-    };
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
-
-    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
-        &resolved,
-        Some(&main_bounds_val),
-    )
-    .expect("must compute");
-
-    assert!(
-        (bounds.x - 250.0).abs() < f64::EPSILON,
-        "Expected x=250, got {}",
-        bounds.x
-    );
-    assert!(
-        (bounds.y - 150.0).abs() < f64::EPSILON,
-        "Expected y=150, got {}",
-        bounds.y
-    );
-
-    shot_cleanup(&p, &["main", "popup"]);
 }
 
 /// Detached window target bounds must NOT be offset — they're at (0, 0)
@@ -473,143 +355,6 @@ fn detached_window_bounds_at_origin_in_screenshot() {
     shot_cleanup(&p, &["main", "agent_chat"]);
 }
 
-/// Target bounds must be contained within the parent screenshot dimensions
-/// when both are available. Uses `_with_main` variant for test isolation.
-#[test]
-fn attached_surface_bounds_contained_in_parent_dimensions() {
-    let p = shot_prefix();
-
-    let main_w = 1280.0;
-    let main_h = 820.0;
-    let main_bounds_val = AutomationWindowBounds {
-        x: 240.0,
-        y: 124.0,
-        width: main_w,
-        height: main_h,
-    };
-    make_registered(
-        &p,
-        "main",
-        AutomationWindowKind::Main,
-        Some(main_bounds_val.clone()),
-    );
-    make_registered(
-        &p,
-        "actions",
-        AutomationWindowKind::ActionsDialog,
-        Some(AutomationWindowBounds {
-            x: 620.0,
-            y: 242.0,
-            width: 520.0,
-            height: 384.0,
-        }),
-    );
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:actions"),
-    };
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
-
-    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
-        &resolved,
-        Some(&main_bounds_val),
-    )
-    .expect("must compute");
-
-    // The target rect must fit within the parent window dimensions
-    assert!(bounds.x >= 0.0, "Target x must be non-negative");
-    assert!(bounds.y >= 0.0, "Target y must be non-negative");
-    assert!(
-        bounds.x + bounds.width <= main_w,
-        "Target right edge ({}) must not exceed parent width ({})",
-        bounds.x + bounds.width,
-        main_w
-    );
-    assert!(
-        bounds.y + bounds.height <= main_h,
-        "Target bottom edge ({}) must not exceed parent height ({})",
-        bounds.y + bounds.height,
-        main_h
-    );
-
-    shot_cleanup(&p, &["main", "actions"]);
-}
-
-/// When the attached surface has bounds but main does not, the geometry
-/// must fail closed (return None) rather than guess.
-/// Uses `_with_main(None)` for test isolation.
-#[test]
-fn attached_surface_no_main_bounds_fails_closed() {
-    let p = shot_prefix();
-
-    make_registered(&p, "main", AutomationWindowKind::Main, None);
-    make_registered(
-        &p,
-        "actions",
-        AutomationWindowKind::ActionsDialog,
-        Some(AutomationWindowBounds {
-            x: 300.0,
-            y: 200.0,
-            width: 400.0,
-            height: 300.0,
-        }),
-    );
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:actions"),
-    };
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
-
-    // Explicit None main bounds for test isolation
-    let result = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(&resolved, None);
-    assert!(
-        result.is_none(),
-        "Must fail closed when main has no bounds, not silently produce (0, 0)"
-    );
-
-    shot_cleanup(&p, &["main", "actions"]);
-}
-
-/// When the attached surface itself has no bounds, geometry must return None.
-/// Uses `_with_main` variant for test isolation.
-#[test]
-fn attached_surface_no_own_bounds_fails_closed() {
-    let p = shot_prefix();
-
-    let main_bounds_val = AutomationWindowBounds {
-        x: 100.0,
-        y: 50.0,
-        width: 800.0,
-        height: 600.0,
-    };
-    make_registered(
-        &p,
-        "main",
-        AutomationWindowKind::Main,
-        Some(main_bounds_val.clone()),
-    );
-    make_registered(&p, "actions", AutomationWindowKind::ActionsDialog, None);
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:actions"),
-    };
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
-
-    let result = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
-        &resolved,
-        Some(&main_bounds_val),
-    );
-    assert!(
-        result.is_none(),
-        "Must fail closed when target has no bounds"
-    );
-
-    shot_cleanup(&p, &["main", "actions"]);
-}
-
 // ── Popup capture receipt contract ────────────────────────────────────
 
 use script_kit_gpui::platform::{PopupCaptureReceipt, PopupCaptureStrategy};
@@ -627,38 +372,6 @@ fn make_popup_receipt(
         target_bounds,
         semantic_receipts_are_primary: semantic_primary,
     }
-}
-
-/// Popup capture receipt for attached popup with crop bounds includes
-/// both strategy and target_bounds.
-#[test]
-fn popup_receipt_attached_with_bounds() {
-    let receipt = make_popup_receipt(
-        PopupCaptureStrategy::ParentCaptureWithCrop,
-        "ActionsDialog",
-        Some(InspectBoundsInScreenshot {
-            x: 380.0,
-            y: 118.0,
-            width: 520.0,
-            height: 384.0,
-        }),
-        true,
-    );
-
-    assert_eq!(
-        receipt.strategy,
-        PopupCaptureStrategy::ParentCaptureWithCrop
-    );
-    assert_eq!(receipt.window_kind, "ActionsDialog");
-    assert!(receipt.target_bounds.is_some());
-    assert!(receipt.semantic_receipts_are_primary);
-
-    // Serde roundtrip
-    let json = serde_json::to_string(&receipt).expect("serialize");
-    assert!(json.contains("parent_capture_with_crop"));
-    assert!(json.contains("targetBounds"));
-    let parsed: PopupCaptureReceipt = serde_json::from_str(&json).expect("deserialize");
-    assert_eq!(parsed.strategy, PopupCaptureStrategy::ParentCaptureWithCrop);
 }
 
 /// Popup capture receipt for detached window has direct strategy and no bounds.
@@ -685,30 +398,10 @@ fn popup_receipt_main_not_applicable() {
     assert!(!receipt.semantic_receipts_are_primary);
 }
 
-/// Attached popup receipt without target_bounds is structurally representable
-/// but signals a verification failure — agents must treat null bounds as error.
-#[test]
-fn popup_receipt_attached_null_bounds_serializes_for_error_reporting() {
-    let receipt = make_popup_receipt(
-        PopupCaptureStrategy::ParentCaptureWithCrop,
-        "PromptPopup",
-        None,
-        true,
-    );
-
-    let json = serde_json::to_string(&receipt).expect("serialize");
-    assert!(json.contains("parent_capture_with_crop"));
-    assert!(json.contains("\"targetBounds\":null"));
-}
-
-/// All three strategy variants roundtrip through serde.
+/// Both strategy variants roundtrip through serde.
 #[test]
 fn popup_capture_strategy_serde_roundtrip() {
     for (strategy, expected_str) in [
-        (
-            PopupCaptureStrategy::ParentCaptureWithCrop,
-            "\"parent_capture_with_crop\"",
-        ),
         (
             PopupCaptureStrategy::DirectWindowCapture,
             "\"direct_window_capture\"",
@@ -724,69 +417,4 @@ fn popup_capture_strategy_serde_roundtrip() {
         let parsed: PopupCaptureStrategy = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(parsed, strategy);
     }
-}
-
-/// Default hit point computed from target_bounds_in_screenshot must be
-/// at the center of the offset rectangle, not at the center of the
-/// full screenshot. Uses `_with_main` variant for test isolation.
-#[test]
-fn hit_point_is_center_of_offset_bounds_not_full_image() {
-    let p = shot_prefix();
-
-    let main_bounds_val = AutomationWindowBounds {
-        x: 0.0,
-        y: 0.0,
-        width: 1920.0,
-        height: 1080.0,
-    };
-    make_registered(
-        &p,
-        "main",
-        AutomationWindowKind::Main,
-        Some(main_bounds_val.clone()),
-    );
-    make_registered(
-        &p,
-        "actions",
-        AutomationWindowKind::ActionsDialog,
-        Some(AutomationWindowBounds {
-            x: 700.0,
-            y: 300.0,
-            width: 520.0,
-            height: 384.0,
-        }),
-    );
-
-    let target = AutomationWindowTarget::Id {
-        id: format!("{p}:actions"),
-    };
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
-
-    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
-        &resolved,
-        Some(&main_bounds_val),
-    )
-    .expect("must compute");
-    let hit = script_kit_gpui::protocol::default_surface_hit_point(&bounds);
-
-    // bounds = (700, 300, 520, 384) → center = (700 + 260, 300 + 192) = (960, 492)
-    assert!(
-        (hit.x - 960.0).abs() < f64::EPSILON,
-        "Hit x must be center of offset bounds (960), got {}",
-        hit.x
-    );
-    assert!(
-        (hit.y - 492.0).abs() < f64::EPSILON,
-        "Hit y must be center of offset bounds (492), got {}",
-        hit.y
-    );
-
-    // Contrast: center of full image would be (960, 540) — NOT the same
-    assert!(
-        (hit.y - 540.0).abs() > 1.0,
-        "Hit y must NOT be the center of the full image"
-    );
-
-    shot_cleanup(&p, &["main", "actions"]);
 }

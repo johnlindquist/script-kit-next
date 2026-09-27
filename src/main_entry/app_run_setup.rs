@@ -2590,27 +2590,6 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     request_id = ?rid,
                                 );
                             }
-                            ExternalCommand::ClosePromptPopupNatively { ref target, ref request_id } => {
-                                let rid = request_id.as_ref().map(|id| id.as_str());
-                                match crate::components::inline_popup_window::close_prompt_popup_target_natively(target, ctx) {
-                                    Ok((id, generation, native_window_number)) => tracing::info!(
-                                        category = "STDIN",
-                                        event = "prompt_popup_native_close_requested",
-                                        command = "closePromptPopupNatively",
-                                        request_id = ?rid,
-                                        window_id = %id,
-                                        generation,
-                                        native_window_number,
-                                    ),
-                                    Err(error) => tracing::warn!(
-                                        category = "STDIN",
-                                        event = "prompt_popup_native_close_refused",
-                                        command = "closePromptPopupNatively",
-                                        request_id = ?rid,
-                                        error = %error,
-                                    ),
-                                }
-                            }
                             ExternalCommand::OpenMiniAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openMiniAi compatibility alias");
                                 view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), ctx);

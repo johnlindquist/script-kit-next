@@ -50,7 +50,6 @@ pub use automation_inspect::{
 };
 pub use automation_inspect_geometry::{
     default_suggested_hit_points, default_surface_hit_point, target_bounds_in_screenshot,
-    target_bounds_in_screenshot_with_main,
 };
 pub use automation_surface::{
     ActiveFooterButtonSnapshot, ActiveFooterCwdChipSnapshot, ActiveFooterLeftInfoSnapshot,

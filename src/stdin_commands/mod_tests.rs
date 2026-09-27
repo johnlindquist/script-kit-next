@@ -102,13 +102,6 @@ mod tests {
                 request_id: None,
             },
             ExternalCommand::OpenChatPromptFixture { request_id: None },
-            ExternalCommand::ClosePromptPopupNatively {
-                target: crate::protocol::AutomationWindowTarget::Instance {
-                    id: "fixture-popup".to_string(),
-                    generation: 1,
-                },
-                request_id: None,
-            },
             ExternalCommand::OpenAi,
             ExternalCommand::OpenMiniAi,
             ExternalCommand::ShowAiCommandBar,

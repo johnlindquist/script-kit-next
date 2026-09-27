@@ -2,7 +2,7 @@
 //!
 //! A shared, thread-safe registry that maps stable automation IDs to
 //! [`AutomationWindowInfo`] descriptors.  Every product window (main,
-//! Notes, AI, detached Agent Chat, popups) registers here on open and
+//! the snap overlay) registers here on open and
 //! unregisters on close.  The resolver accepts an
 //! [`AutomationWindowTarget`] and returns the matching entry — or an
 //! error, never a silent fallback.
@@ -55,8 +55,6 @@ fn kind_rank(kind: AutomationWindowKind) -> u8 {
     match kind {
         AutomationWindowKind::Main => 0,
         AutomationWindowKind::Notes => 1,
-        AutomationWindowKind::ActionsDialog => 7,
-        AutomationWindowKind::PromptPopup => 8,
         AutomationWindowKind::SnapOverlay => 10,
     }
 }
@@ -191,113 +189,6 @@ pub(super) fn insert_window_instance(
     Ok(info)
 }
 
-/// Register an attached popup window with its parent identity.
-///
-/// This is the canonical entry point for popup registration. It records the
-/// popup in the registry with its real parent window ID and kind, then emits
-/// the `automation.attached_popup_parent_resolved` structured log.
-///
-/// **Fail-closed:** Returns `Err` when `parent_id` is `None` (missing parent
-/// automation identity) or when the provided parent ID is not found in the
-/// registry. No attached popup entry is created unless parent identity is
-/// fully resolved.
-pub fn register_attached_popup(
-    popup_id: String,
-    popup_kind: AutomationWindowKind,
-    title: Option<String>,
-    semantic_surface: Option<String>,
-    bounds: Option<AutomationWindowBounds>,
-    parent_id: Option<&str>,
-) -> Result<()> {
-    register_attached_popup_instance(
-        popup_id,
-        popup_kind,
-        title,
-        semantic_surface,
-        bounds,
-        parent_id,
-        None,
-    )
-}
-
-/// Register one exact attached-popup lifetime.
-pub fn register_attached_popup_instance(
-    popup_id: String,
-    popup_kind: AutomationWindowKind,
-    title: Option<String>,
-    semantic_surface: Option<String>,
-    bounds: Option<AutomationWindowBounds>,
-    parent_id: Option<&str>,
-    generation: Option<u64>,
-) -> Result<()> {
-    let pid = parent_id.ok_or_else(|| {
-        tracing::warn!(
-            target: "script_kit::automation",
-            event = "automation.attached_popup_parent_missing",
-            popup_window_id = %popup_id,
-            popup_kind = ?popup_kind,
-            "Attached popup registration rejected: no parent automation identity provided"
-        );
-        anyhow!(
-            "Cannot register attached popup '{}': parent automation identity is required but was not provided",
-            popup_id
-        )
-    })?;
-
-    let (parent_window_id, parent_kind, parent_window_generation) = {
-        let state = AUTOMATION_WINDOWS.lock();
-        let parent_info = state.windows.get(pid).ok_or_else(|| {
-            tracing::warn!(
-                target: "script_kit::automation",
-                event = "automation.attached_popup_parent_missing",
-                popup_window_id = %popup_id,
-                popup_kind = ?popup_kind,
-                attempted_parent_id = %pid,
-                "Attached popup registration rejected: parent not found in automation registry"
-            );
-            anyhow!(
-                "Cannot register attached popup '{}': parent '{}' not found in automation registry",
-                popup_id,
-                pid
-            )
-        })?;
-        (
-            parent_info.id.clone(),
-            parent_info.kind,
-            parent_info.generation,
-        )
-    };
-
-    let info = AutomationWindowInfo {
-        id: popup_id.clone(),
-        kind: popup_kind,
-        title,
-        focused: false,
-        visible: true,
-        semantic_surface,
-        bounds,
-        parent_window_id: Some(parent_window_id.clone()),
-        parent_window_generation,
-        parent_kind: Some(parent_kind),
-        generation,
-        pid: Some(std::process::id()),
-    };
-
-    upsert_automation_window(info);
-
-    tracing::info!(
-        target: "script_kit::automation",
-        event = "automation.attached_popup_parent_resolved",
-        popup_window_id = %popup_id,
-        popup_kind = ?popup_kind,
-        parent_window_id = %parent_window_id,
-        parent_kind = ?parent_kind,
-        "Attached popup parent identity established"
-    );
-
-    Ok(())
-}
-
 /// Remove an automation window entry by its stable ID.
 ///
 /// Returns the removed entry if it existed.
@@ -318,7 +209,7 @@ pub fn remove_automation_window(id: &str) -> Option<AutomationWindowInfo> {
     removed
 }
 
-/// Remove an automation entry only when it still names the expected popup
+/// Remove an automation entry only when it still names the expected window
 /// lifetime. Delayed close callbacks cannot erase a reopened generation.
 pub fn remove_automation_window_if_generation(
     id: &str,
@@ -344,7 +235,7 @@ pub fn remove_automation_window_if_generation(
 
 /// Return a snapshot of all registered automation windows in stable order.
 ///
-/// Sorted by `kind_rank` (Main first, PromptPopup last) then
+/// Sorted by `kind_rank` (Main first, SnapOverlay last) then
 /// lexicographic `id` within each kind.
 pub fn list_automation_windows() -> Vec<AutomationWindowInfo> {
     let state = AUTOMATION_WINDOWS.lock();
@@ -466,36 +357,6 @@ pub fn set_automation_visibility(id: &str, visible: bool) {
             }
         }
     }
-}
-
-/// Update the `bounds` field for a single window in place.
-///
-/// Used by live-resized attached popups (e.g., the actions-dialog
-/// shrinks/grows as `visibleChoiceCount` changes) so that agentic
-/// callers reading `listAutomationWindows` or `inspectAutomationWindow`
-/// observe the current frame rather than the stale open-time frame.
-/// Leaves every other field untouched. Returns `true` if the window was
-/// found; `false` if no entry with `id` is registered (caller should
-/// typically silently ignore — the window may have been closed
-/// concurrently).
-pub fn set_automation_bounds(id: &str, bounds: Option<AutomationWindowBounds>) -> bool {
-    let mut state = AUTOMATION_WINDOWS.lock();
-    let Some(info) = state.windows.get_mut(id) else {
-        return false;
-    };
-    if info.bounds != bounds {
-        tracing::debug!(
-            target: "script_kit::automation",
-            id = %id,
-            bounds = ?bounds,
-            "automation_window_bounds_changed"
-        );
-        info.bounds = bounds;
-        if let Some(revision) = state.target_revisions.get_mut(id) {
-            *revision = revision.saturating_add(1);
-        }
-    }
-    true
 }
 
 /// Update geometry only for the lifetime that produced the observation.
@@ -1159,12 +1020,12 @@ pub(crate) mod tests {
         // Insert b before a — HashMap would be non-deterministic, but
         // the kind_index must sort lexicographically.
         upsert_automation_window(AutomationWindowInfo {
-            id: format!("{p}:promptPopup:b"),
-            kind: AutomationWindowKind::PromptPopup,
-            title: Some("Popup B".into()),
+            id: format!("{p}:snapOverlay:b"),
+            kind: AutomationWindowKind::SnapOverlay,
+            title: Some("Overlay B".into()),
             focused: false,
             visible: true,
-            semantic_surface: Some("promptPopup".into()),
+            semantic_surface: Some("snapOverlay".into()),
             bounds: None,
             parent_window_id: None,
             parent_window_generation: None,
@@ -1173,12 +1034,12 @@ pub(crate) mod tests {
             generation: None,
         });
         upsert_automation_window(AutomationWindowInfo {
-            id: format!("{p}:promptPopup:a"),
-            kind: AutomationWindowKind::PromptPopup,
-            title: Some("Popup A".into()),
+            id: format!("{p}:snapOverlay:a"),
+            kind: AutomationWindowKind::SnapOverlay,
+            title: Some("Overlay A".into()),
             focused: false,
             visible: true,
-            semantic_surface: Some("promptPopup".into()),
+            semantic_surface: Some("snapOverlay".into()),
             bounds: None,
             parent_window_id: None,
             parent_window_generation: None,
@@ -1189,32 +1050,32 @@ pub(crate) mod tests {
 
         // Index 0 must be :a (lexicographically first)
         let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::PromptPopup,
+            kind: AutomationWindowKind::SnapOverlay,
             index: Some(0),
         }))
         .expect("must resolve index 0");
-        assert_eq!(resolved.id, format!("{p}:promptPopup:a"));
+        assert_eq!(resolved.id, format!("{p}:snapOverlay:a"));
 
         // Index 1 must be :b
         let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::PromptPopup,
+            kind: AutomationWindowKind::SnapOverlay,
             index: Some(1),
         }))
         .expect("must resolve index 1");
-        assert_eq!(resolved.id, format!("{p}:promptPopup:b"));
+        assert_eq!(resolved.id, format!("{p}:snapOverlay:b"));
 
         // Repeated calls produce the same result
         for _ in 0..5 {
             let r = resolve_automation_window(Some(&AutomationWindowTarget::Kind {
-                kind: AutomationWindowKind::PromptPopup,
+                kind: AutomationWindowKind::SnapOverlay,
                 index: Some(0),
             }))
             .expect("stable");
-            assert_eq!(r.id, format!("{p}:promptPopup:a"));
+            assert_eq!(r.id, format!("{p}:snapOverlay:a"));
         }
 
-        remove_automation_window(&format!("{p}:promptPopup:a"));
-        remove_automation_window(&format!("{p}:promptPopup:b"));
+        remove_automation_window(&format!("{p}:snapOverlay:a"));
+        remove_automation_window(&format!("{p}:snapOverlay:b"));
     }
 
     /// Proves that list_automation_windows returns a stable snapshot
@@ -1226,15 +1087,15 @@ pub(crate) mod tests {
 
         // Insert in reverse kind-rank order
         upsert_automation_window(make_info(&p, "snap", AutomationWindowKind::SnapOverlay));
-        upsert_automation_window(make_info(&p, "popup", AutomationWindowKind::PromptPopup));
+        upsert_automation_window(make_info(&p, "notes", AutomationWindowKind::Notes));
         upsert_automation_window(make_info(&p, "main", AutomationWindowKind::Main));
 
         let list1 = list_automation_windows();
         let ours1: Vec<_> = list1.iter().filter(|w| w.id.starts_with(&p)).collect();
 
-        // Main (rank 0) < PromptPopup (rank 8) < SnapOverlay (rank 10)
+        // Main (rank 0) < Notes (rank 1) < SnapOverlay (rank 10)
         assert_eq!(ours1[0].kind, AutomationWindowKind::Main);
-        assert_eq!(ours1[1].kind, AutomationWindowKind::PromptPopup);
+        assert_eq!(ours1[1].kind, AutomationWindowKind::Notes);
         assert_eq!(ours1[2].kind, AutomationWindowKind::SnapOverlay);
 
         // Second call produces identical order
@@ -1246,7 +1107,7 @@ pub(crate) mod tests {
         );
 
         remove_automation_window(&format!("{p}:main"));
-        remove_automation_window(&format!("{p}:popup"));
+        remove_automation_window(&format!("{p}:notes"));
         remove_automation_window(&format!("{p}:snap"));
     }
 
@@ -1284,23 +1145,14 @@ pub(crate) mod tests {
     fn automation_window_instance_target_and_cleanup_require_exact_generation() {
         let _registry_guard = registry_guard();
         let p = test_prefix();
-        let parent_id = format!("{p}:main");
-        let popup_id = format!("{p}:popup");
-        upsert_automation_window(make_info(&p, "main", AutomationWindowKind::Main));
+        let overlay_id = format!("{p}:snap");
 
-        register_attached_popup_instance(
-            popup_id.clone(),
-            AutomationWindowKind::PromptPopup,
-            Some("Popup".into()),
-            Some("promptPopup".into()),
-            None,
-            Some(&parent_id),
-            Some(13),
-        )
-        .expect("generation 13 should register");
+        let mut first = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
+        first.generation = Some(13);
+        upsert_automation_window(first);
         assert_eq!(
             resolve_automation_window(Some(&AutomationWindowTarget::Instance {
-                id: popup_id.clone(),
+                id: overlay_id.clone(),
                 generation: 13,
             }))
             .expect("exact generation should resolve")
@@ -1308,165 +1160,29 @@ pub(crate) mod tests {
             Some(13)
         );
 
-        register_attached_popup_instance(
-            popup_id.clone(),
-            AutomationWindowKind::PromptPopup,
-            Some("Popup reopened".into()),
-            Some("promptPopup".into()),
-            None,
-            Some(&parent_id),
-            Some(14),
-        )
-        .expect("generation 14 should replace current ID lifetime");
+        let mut reopened = make_info(&p, "snap", AutomationWindowKind::SnapOverlay);
+        reopened.generation = Some(14);
+        upsert_automation_window(reopened);
         assert!(
             resolve_automation_window(Some(&AutomationWindowTarget::Instance {
-                id: popup_id.clone(),
+                id: overlay_id.clone(),
                 generation: 13,
             }))
             .is_err()
         );
-        assert!(remove_automation_window_if_generation(&popup_id, 13).is_none());
+        assert!(remove_automation_window_if_generation(&overlay_id, 13).is_none());
         assert_eq!(
             resolve_automation_window(Some(&AutomationWindowTarget::Id {
-                id: popup_id.clone(),
+                id: overlay_id.clone(),
             }))
             .expect("legacy ID should resolve the current lifetime")
             .generation,
             Some(14)
         );
-        assert!(remove_automation_window_if_generation(&popup_id, 14).is_some());
+        assert!(remove_automation_window_if_generation(&overlay_id, 14).is_some());
         assert!(resolve_automation_window(Some(&AutomationWindowTarget::Id {
-            id: popup_id.clone(),
+            id: overlay_id.clone(),
         }))
         .is_err());
-
-        remove_automation_window(&parent_id);
-    }
-
-    // -- Parent identity (register_attached_popup) ---------------------------
-
-    #[test]
-    fn register_attached_popup_records_parent_identity() {
-        let _registry_guard = registry_guard();
-        let p = test_prefix();
-
-        let mut main = make_info(&p, "main", AutomationWindowKind::Main);
-        main.focused = true;
-        upsert_automation_window(main);
-
-        let popup_id = format!("{p}:actions");
-        register_attached_popup(
-            popup_id.clone(),
-            AutomationWindowKind::ActionsDialog,
-            Some("Actions".into()),
-            Some("actionsDialog".into()),
-            None,
-            Some(&format!("{p}:main")),
-        )
-        .expect("should register with known parent");
-
-        let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Id {
-            id: popup_id.clone(),
-        }))
-        .expect("should resolve popup");
-        assert_eq!(resolved.kind, AutomationWindowKind::ActionsDialog);
-        assert_eq!(
-            resolved.parent_window_id.as_deref(),
-            Some(format!("{p}:main").as_str())
-        );
-        assert_eq!(resolved.parent_kind, Some(AutomationWindowKind::Main));
-
-        remove_automation_window(&popup_id);
-        remove_automation_window(&format!("{p}:main"));
-    }
-
-    #[test]
-    fn register_attached_popup_fails_closed_on_unknown_parent() {
-        let _registry_guard = registry_guard();
-        let p = test_prefix();
-
-        let popup_id = format!("{p}:orphan-popup");
-        let result = register_attached_popup(
-            popup_id.clone(),
-            AutomationWindowKind::PromptPopup,
-            Some("Confirm".into()),
-            None,
-            None,
-            Some("nonexistent-parent"),
-        );
-
-        assert!(
-            result.is_err(),
-            "must fail closed when parent is not in registry"
-        );
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("nonexistent-parent"));
-
-        assert!(
-            resolve_automation_window(Some(&AutomationWindowTarget::Id { id: popup_id })).is_err()
-        );
-    }
-
-    #[test]
-    fn register_attached_popup_without_parent_fails_closed() {
-        let _registry_guard = registry_guard();
-        let p = test_prefix();
-
-        let popup_id = format!("{p}:no-parent-popup");
-        let result = register_attached_popup(
-            popup_id.clone(),
-            AutomationWindowKind::ActionsDialog,
-            Some("Actions".into()),
-            None,
-            None,
-            None,
-        );
-
-        assert!(result.is_err(), "must fail closed when parent_id is None");
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("parent automation identity is required"),
-            "error should mention missing parent identity, got: {err_msg}"
-        );
-
-        // Must not have registered the popup
-        assert!(
-            resolve_automation_window(Some(&AutomationWindowTarget::Id { id: popup_id })).is_err(),
-            "popup must not be in registry after failed registration"
-        );
-    }
-
-    #[test]
-    fn parent_identity_serializes_in_list_snapshot() {
-        let _registry_guard = registry_guard();
-        let p = test_prefix();
-
-        let mut main = make_info(&p, "main", AutomationWindowKind::Main);
-        main.focused = true;
-        upsert_automation_window(main);
-
-        register_attached_popup(
-            format!("{p}:popup-with-parent"),
-            AutomationWindowKind::PromptPopup,
-            Some("Confirm".into()),
-            None,
-            None,
-            Some(&format!("{p}:main")),
-        )
-        .expect("should register");
-
-        let all = list_automation_windows();
-        let popup = all
-            .iter()
-            .find(|w| w.id == format!("{p}:popup-with-parent"))
-            .expect("popup should be in list");
-        assert_eq!(
-            popup.parent_window_id.as_deref(),
-            Some(format!("{p}:main").as_str())
-        );
-        assert_eq!(popup.parent_kind, Some(AutomationWindowKind::Main));
-
-        remove_automation_window(&format!("{p}:popup-with-parent"));
-        remove_automation_window(&format!("{p}:main"));
     }
 }

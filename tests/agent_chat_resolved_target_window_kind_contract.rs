@@ -66,8 +66,7 @@ fn as_camel_case_matches_serde_for_every_variant() {
     let cases: &[(AutomationWindowKind, &str)] = &[
         (AutomationWindowKind::Main, "main"),
         (AutomationWindowKind::Notes, "notes"),
-        (AutomationWindowKind::ActionsDialog, "actionsDialog"),
-        (AutomationWindowKind::PromptPopup, "promptPopup"),
+        (AutomationWindowKind::SnapOverlay, "snapOverlay"),
     ];
     for (kind, expected) in cases {
         assert_eq!(

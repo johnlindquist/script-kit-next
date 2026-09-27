@@ -18,153 +18,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-/// Returns `true` when the given kind represents a surface that is visually
-/// attached to a parent window and dispatches mouse events through that parent.
-///
-/// Attached surfaces need coordinate rebasing: popup-local (x, y) must be
-/// translated into the parent window's GPUI dispatch space.
-fn is_attached_surface(kind: crate::protocol::AutomationWindowKind) -> bool {
-    matches!(
-        kind,
-        crate::protocol::AutomationWindowKind::ActionsDialog
-            | crate::protocol::AutomationWindowKind::PromptPopup
-    )
-}
-
-/// Translate pointer-event coordinates from target-local space into the parent
-/// window's GPUI dispatch space for attached surfaces.
-///
-/// The parent window is determined from the popup's recorded `parent_window_id`
-/// metadata (set at popup registration time via `register_attached_popup`).
-/// If an attached popup has no parent metadata, dispatch **fails closed** with
-/// an explicit error instead of silently falling back to Main.
-///
-/// Detached windows and key events pass through unchanged.
-/// Returns `Err` with a deterministic message when bounds are unavailable.
-fn rebase_mouse_event_to_dispatch_space(
-    resolved: &crate::protocol::AutomationWindowInfo,
-    event: &crate::protocol::SimulatedGpuiEvent,
-) -> Result<crate::protocol::SimulatedGpuiEvent, String> {
-    use crate::protocol::SimulatedGpuiEvent;
-
-    if !is_attached_surface(resolved.kind) {
-        return Ok(event.clone());
-    }
-
-    // Key events don't have coordinates — pass through.
-    if matches!(event, SimulatedGpuiEvent::KeyDown { .. }) {
-        return Ok(event.clone());
-    }
-
-    let target_bounds = resolved.bounds.as_ref().ok_or_else(|| {
-        format!(
-            "Resolved target {} ({:?}) has no bounds; cannot translate attached-surface coordinates",
-            resolved.id, resolved.kind
-        )
-    })?;
-
-    // Resolve the parent window from the popup's recorded metadata.
-    // Fail closed if no parent metadata exists — never silently fall back to Main.
-    let parent_id = resolved.parent_window_id.as_ref().ok_or_else(|| {
-        format!(
-            "Attached surface {} ({:?}) has no parent_window_id metadata; \
-             cannot rebase coordinates (fail-closed: will not silently dispatch against Main)",
-            resolved.id, resolved.kind
-        )
-    })?;
-
-    let parent = crate::windows::resolve_automation_window(Some(
-        &crate::protocol::AutomationWindowTarget::Id {
-            id: parent_id.clone(),
-        },
-    ))
-    .map_err(|err| {
-        format!(
-            "Failed to resolve parent window '{}' for attached-surface {} dispatch: {err}",
-            parent_id, resolved.id
-        )
-    })?;
-
-    let parent_bounds = parent.bounds.as_ref().ok_or_else(|| {
-        format!(
-            "Parent window {} ({:?}) has no bounds; cannot translate attached-surface coordinates for {}",
-            parent.id, parent.kind, resolved.id
-        )
-    })?;
-
-    let offset_x = target_bounds.x - parent_bounds.x;
-    let offset_y = target_bounds.y - parent_bounds.y;
-
-    // Log the rebased coordinates for observability, including parent identity.
-    match event {
-        SimulatedGpuiEvent::MouseMove { x, y }
-        | SimulatedGpuiEvent::MouseDown { x, y, .. }
-        | SimulatedGpuiEvent::MouseUp { x, y, .. }
-        | SimulatedGpuiEvent::MouseClick { x, y, .. }
-        | SimulatedGpuiEvent::ScrollWheel { x, y, .. } => {
-            tracing::info!(
-                target: "script_kit::automation",
-                window_id = %resolved.id,
-                kind = ?resolved.kind,
-                parent_window_id = %parent.id,
-                parent_kind = ?parent.kind,
-                local_x = x,
-                local_y = y,
-                offset_x = offset_x,
-                offset_y = offset_y,
-                rebased_x = x + offset_x,
-                rebased_y = y + offset_y,
-                "gpui_event_simulation.rebased_coordinates"
-            );
-        }
-        SimulatedGpuiEvent::KeyDown { .. } => {}
-    }
-
-    let translated = match event {
-        SimulatedGpuiEvent::MouseMove { x, y } => SimulatedGpuiEvent::MouseMove {
-            x: x + offset_x,
-            y: y + offset_y,
-        },
-        SimulatedGpuiEvent::MouseDown { x, y, button } => SimulatedGpuiEvent::MouseDown {
-            x: x + offset_x,
-            y: y + offset_y,
-            button: button.clone(),
-        },
-        SimulatedGpuiEvent::MouseUp { x, y, button } => SimulatedGpuiEvent::MouseUp {
-            x: x + offset_x,
-            y: y + offset_y,
-            button: button.clone(),
-        },
-        SimulatedGpuiEvent::MouseClick { x, y, button } => SimulatedGpuiEvent::MouseClick {
-            x: x + offset_x,
-            y: y + offset_y,
-            button: button.clone(),
-        },
-        SimulatedGpuiEvent::ScrollWheel {
-            x,
-            y,
-            delta_x,
-            delta_y,
-            phase,
-            direct_phase,
-            momentum_phase,
-            timestamp_seconds,
-        } => SimulatedGpuiEvent::ScrollWheel {
-            x: x + offset_x,
-            y: y + offset_y,
-            delta_x: *delta_x,
-            delta_y: *delta_y,
-            phase: *phase,
-            direct_phase: *direct_phase,
-            momentum_phase: *momentum_phase,
-            timestamp_seconds: *timestamp_seconds,
-        },
-        SimulatedGpuiEvent::KeyDown { .. } => event.clone(),
-    };
-
-    Ok(translated)
-}
-
 /// Returns `true` when GPUI dispatch still collapses all windows of this kind
 /// to a single `WindowRole`, meaning it cannot distinguish between multiple
 /// visible windows of the same kind.
@@ -183,9 +36,7 @@ fn visible_window_count_for_kind(kind: crate::protocol::AutomationWindowKind) ->
 /// Map an [`AutomationWindowKind`] to the corresponding [`WindowRole`]
 /// used by the unified window registry.
 ///
-/// Returns `None` for kinds that don't map to a single `WindowRole`
-/// (e.g. `ActionsDialog` and `PromptPopup` are attached to their parent
-/// window, not registered as independent window handles).
+/// Returns `None` for kinds that don't map to a single `WindowRole`.
 fn automation_kind_to_window_role(
     kind: crate::protocol::AutomationWindowKind,
 ) -> Option<crate::windows::WindowRole> {
@@ -195,9 +46,6 @@ fn automation_kind_to_window_role(
     match kind {
         AutomationWindowKind::Main => Some(WindowRole::Main),
         AutomationWindowKind::Notes => Some(WindowRole::Notes),
-        // Attached surfaces and popup-only windows use exact runtime handles
-        // when available and do not map to the shared role registry.
-        AutomationWindowKind::ActionsDialog | AutomationWindowKind::PromptPopup => None,
         // Each display overlay has its own exact runtime handle, not a shared role.
         AutomationWindowKind::SnapOverlay => None,
     }
@@ -653,19 +501,7 @@ impl DispatchTarget {
                 "Exact instance has no matching runtime handle",
             ));
         }
-        let dispatch_info = if is_attached_surface(info.kind) {
-            &parent
-                .as_ref()
-                .ok_or_else(|| {
-                    DispatchTargetError::new(
-                        "handle_unavailable",
-                        "Attached target has no parent identity",
-                    )
-                })?
-                .0
-        } else {
-            &info
-        };
+        let dispatch_info = &info;
         if kind_collapses_to_single_window_role(dispatch_info.kind)
             && visible_window_count_for_kind(dispatch_info.kind) > 1
         {
@@ -807,71 +643,62 @@ pub(crate) fn dispatch_gpui_event(
     // before dispatch without making input delivery depend on timer progress.
     cx.defer(move |cx| {
         if state.pending() {
-            let result =
-                if unix_ms() >= deadline_unix_ms || cx.background_executor().now() >= deadline {
-                    state.failure(
-                        "dispatch_deadline_exceeded",
-                        "Dispatch expired before execution",
-                    )
-                } else if let Err(error) = resolved.validate() {
-                    state.failure("stale_target", error)
-                } else {
-                    let event = if resolved.exact {
-                        Ok(event)
-                    } else {
-                        rebase_mouse_event_to_dispatch_space(&resolved.info, &event)
-                    };
-                    match event
-                        .map_err(|error| {
-                            DispatchTargetError::new("coordinate_translation_failed", error)
+            let result = if unix_ms() >= deadline_unix_ms
+                || cx.background_executor().now() >= deadline
+            {
+                state.failure(
+                    "dispatch_deadline_exceeded",
+                    "Dispatch expired before execution",
+                )
+            } else if let Err(error) = resolved.validate() {
+                state.failure("stale_target", error)
+            } else {
+                let dispatched =
+                    crate::windows::with_runtime_window_dispatch(resolved.handle, || {
+                        resolved.handle.update(cx, |_, window, cx| {
+                            if window.is_owned_hidden()
+                                && !matches!(
+                                    event,
+                                    crate::protocol::SimulatedGpuiEvent::KeyDown { .. }
+                                )
+                                && precondition.is_none()
+                            {
+                                return Err(DispatchTargetError::new(
+                                    "expected_frame_required",
+                                    "Owned coordinate input requires completed-frame authority",
+                                ));
+                            }
+                            if let Some(validate) = precondition {
+                                validate(&resolved.info, window, cx).map_err(|error| {
+                                    let code = if error == "expected_frame_required" {
+                                        "expected_frame_required"
+                                    } else {
+                                        "stale_target_identity"
+                                    };
+                                    DispatchTargetError::new(code, error)
+                                })?;
+                            }
+                            apply_simulated_event(window, cx, &event);
+                            Ok(())
                         })
-                        .and_then(|event| {
-                            crate::windows::with_runtime_window_dispatch(resolved.handle, || {
-                                resolved.handle.update(cx, |_, window, cx| {
-                                    if window.is_owned_hidden()
-                                        && !matches!(
-                                            event,
-                                            crate::protocol::SimulatedGpuiEvent::KeyDown { .. }
-                                        )
-                                        && precondition.is_none()
-                                    {
-                                        return Err(DispatchTargetError::new(
-                                        "expected_frame_required",
-                                        "Owned coordinate input requires completed-frame authority",
-                                    ));
-                                    }
-                                    if let Some(validate) = precondition {
-                                        validate(&resolved.info, window, cx).map_err(|error| {
-                                            let code = if error == "expected_frame_required" {
-                                                "expected_frame_required"
-                                            } else {
-                                                "stale_target_identity"
-                                            };
-                                            DispatchTargetError::new(code, error)
-                                        })?;
-                                    }
-                                    apply_simulated_event(window, cx, &event);
-                                    Ok(())
-                                })
-                            })
-                            .map_err(|error| {
-                                DispatchTargetError::new("dispatch_failed", error.to_string())
-                            })?
-                        }) {
-                        Ok(()) => GpuiEventDispatchResult {
-                            success: true,
-                            error_code: None,
-                            error: None,
-                            dispatch_path: state.path.clone(),
-                            resolved_window_id: state.resolved_id.clone(),
-                            dispatch_completed: true,
-                            dispatch_scheduled: false,
-                            was_deferred: true,
-                            activation_proof: Some("not_observed".into()),
-                        },
-                        Err(error) => state.failure(error.code, error.message),
-                    }
-                };
+                    })
+                    .map_err(|error| DispatchTargetError::new("dispatch_failed", error.to_string()))
+                    .and_then(std::convert::identity);
+                match dispatched {
+                    Ok(()) => GpuiEventDispatchResult {
+                        success: true,
+                        error_code: None,
+                        error: None,
+                        dispatch_path: state.path.clone(),
+                        resolved_window_id: state.resolved_id.clone(),
+                        dispatch_completed: true,
+                        dispatch_scheduled: false,
+                        was_deferred: true,
+                        activation_proof: Some("not_observed".into()),
+                    },
+                    Err(error) => state.failure(error.code, error.message),
+                }
+            };
             state.finish(result);
         }
         cx.global_mut::<GpuiDispatchRequests>()
@@ -1101,7 +928,7 @@ mod deferred_dispatch_tests {
                 cx,
                 &mut unwound,
                 "cleanup-unwound",
-                AutomationWindowKind::PromptPopup,
+                AutomationWindowKind::SnapOverlay,
                 None,
             )
         });
@@ -1144,9 +971,7 @@ mod deferred_dispatch_tests {
     }
 
     #[gpui::test]
-    fn production_response_owner_completes_main_chat_dictation_and_popups_once(
-        cx: &mut gpui::TestAppContext,
-    ) {
+    fn production_response_owner_completes_each_window_kind_once(cx: &mut gpui::TestAppContext) {
         let _guard = crate::windows::automation_registry::tests::registry_guard();
         let mut registrations = TestWindowRegistrations::default();
         let main = cx.update(|cx| {
@@ -1161,17 +986,15 @@ mod deferred_dispatch_tests {
         let mut windows = vec![main];
         for kind in [
             AutomationWindowKind::Notes,
-            AutomationWindowKind::PromptPopup,
-            AutomationWindowKind::ActionsDialog,
+            AutomationWindowKind::SnapOverlay,
         ] {
-            let parent = is_attached_surface(kind).then(|| windows[0].1.clone());
             windows.push(cx.update(|cx| {
                 mount(
                     cx,
                     &mut registrations,
                     &format!("deferred-{}", kind.as_camel_case()),
                     kind,
-                    parent.as_ref(),
+                    None,
                 )
             }));
         }
@@ -1238,8 +1061,7 @@ mod deferred_dispatch_tests {
         for kind in [
             AutomationWindowKind::Main,
             AutomationWindowKind::Notes,
-            AutomationWindowKind::PromptPopup,
-            AutomationWindowKind::ActionsDialog,
+            AutomationWindowKind::SnapOverlay,
         ] {
             let (handle, info, count) = cx.update(|cx| {
                 mount(
@@ -1391,7 +1213,7 @@ mod deferred_dispatch_tests {
                 cx,
                 &mut registrations,
                 "queued-child",
-                AutomationWindowKind::PromptPopup,
+                AutomationWindowKind::SnapOverlay,
                 Some(&parent_info),
             )
         });

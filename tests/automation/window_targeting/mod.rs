@@ -61,8 +61,6 @@ fn automation_window_target_round_trip_all_kinds() {
         AutomationWindowKind::Main,
         AutomationWindowKind::Notes,
         AutomationWindowKind::SnapOverlay,
-        AutomationWindowKind::ActionsDialog,
-        AutomationWindowKind::PromptPopup,
     ];
     for kind in &kinds {
         let target = AutomationWindowTarget::Kind {

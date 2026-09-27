@@ -38,9 +38,6 @@ pub struct InspectPoint {
 }
 
 /// Bounding rectangle of the target surface inside the captured screenshot.
-///
-/// For attached surfaces (ActionsDialog, PromptPopup), this is offset from
-/// the parent window's origin. For detached windows, `(x, y)` is `(0, 0)`.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InspectBoundsInScreenshot {
