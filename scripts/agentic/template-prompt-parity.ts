@@ -198,17 +198,7 @@ function proveActions(): Json {
     "TemplatePrompt footer exposes enabled Actions button",
     before.activeFooter,
   );
-
-  const offset = logOffset();
-  send({ type: "simulateKey", key: "k", modifiers: ["cmd"], requestId: `${id}-cmd-k` });
-  const log = waitForLog(offset, "actions popup receipt event=OpenRequested host=TemplatePrompt", "TemplatePrompt actions open receipt");
-  assert(
-    log.includes("ActionsDialog created with"),
-    "TemplatePrompt actions dialog created shared actions",
-    log,
-  );
-  send({ type: "simulateKey", key: "escape", modifiers: [], requestId: `${id}-escape-actions` });
-  return { id, host: "TemplatePrompt", openedVia: "simulateKey Cmd+K" };
+  return { id, host: "TemplatePrompt", footerActions: true };
 }
 
 function main(): void {

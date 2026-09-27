@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 /**
  * Runtime proof for Day Page deeplink activation:
- * - Cmd+. on a run deeplink opens a confirm popup
- * - Escape closes the confirm and returns to Day Page
- * - Cmd+. on a spine deeplink opens a non-silent context modal
+ * - Cmd+. or a click on a kit://scripts link opens a read-only preview
+ * - Escape closes the preview and returns to Day Page
+ * - A click on plain text stays on Day Page
  */
 import { join, resolve } from "node:path";
-import { Driver, type Json } from "../devtools/driver";
+import { Driver } from "../devtools/driver";
 import { openDayPage } from "./day-page-open-helper";
 
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
@@ -52,14 +52,6 @@ async function setDayPageInput(driver: Driver, text: string) {
   return driver.batch([{ type: "setInput", text }], { timeoutMs: 8000 });
 }
 
-async function confirmWindows(driver: Driver): Promise<Obj[]> {
-  const res = asObj(await driver.listAutomationWindows({ timeoutMs: 8000 }));
-  const windows = (res.windows as Json[] | undefined) ?? [];
-  return windows
-    .map(asObj)
-    .filter((window) => String(window.semanticSurface) === "confirmDialog");
-}
-
 function stateSummary(state: Obj): Obj {
   return {
     promptType: state.promptType,
@@ -79,43 +71,6 @@ async function getStateSummary(driver: Driver): Promise<Obj> {
 
 async function dayPageKitResourcePreview(driver: Driver): Promise<Obj> {
   return asObj(asObj((await getState(driver)).dayPage).kitResourcePreview);
-}
-
-async function dayPageElementsText(driver: Driver): Promise<string> {
-  const elements = await driver.getElements(
-    { target: { type: "kind", kind: "main" } },
-    { timeoutMs: 8000 },
-  );
-  return JSON.stringify(elements);
-}
-
-/**
- * A deep-link confirmation is the shared confirm modal over the day page: the
- * popup opens and the day page stays underneath (it is never replaced).
- */
-async function waitForConfirmModal(driver: Driver, label: string) {
-  const opened = await pollUntil(label, async () => {
-    const state = await getStateSummary(driver);
-    return state.promptType === "dayPage" && (await confirmWindows(driver)).length > 0;
-  });
-  return {
-    opened,
-    state: await getStateSummary(driver),
-    confirmWindows: await confirmWindows(driver),
-  };
-}
-
-async function closeConfirmWithEscape(driver: Driver, label: string) {
-  await driver.simulateKey("escape");
-  const closed = await pollUntil(`${label}-confirm-closed`, async () => {
-    const state = await getStateSummary(driver);
-    return state.promptType === "dayPage" && (await confirmWindows(driver)).length === 0;
-  });
-  return {
-    closed,
-    confirmWindows: await confirmWindows(driver),
-    state: await getStateSummary(driver),
-  };
 }
 
 async function clickDayPageEditorFirstLine(driver: Driver) {
@@ -141,32 +96,6 @@ try {
     promptType: opened.promptType,
   });
 
-  const runLink = "scriptkit://run/nonexistent-day-page-proof-script";
-  const runSeed = asObj(await setDayPageInput(driver, runLink));
-  check("run_link_seeded", runSeed.success === true, { batch: runSeed });
-  await driver.simulateKey(".", ["cmd"]);
-  const runConfirm = await waitForConfirmModal(driver, "run-confirm-open");
-  check("cmd_dot_on_run_link_opens_confirm", runConfirm.opened, runConfirm);
-  const runClose = await closeConfirmWithEscape(driver, "run");
-  check(
-    "escape_closes_run_confirm_and_returns_day_page",
-    runClose.closed && runClose.state.promptType === "dayPage",
-    runClose,
-  );
-
-  const spineLink = "scriptkit://spine/notes/day-page-proof";
-  const spineSeed = asObj(await setDayPageInput(driver, spineLink));
-  check("spine_link_seeded", spineSeed.success === true, { batch: spineSeed });
-  await driver.simulateKey(".", ["cmd"]);
-  const spineModal = await waitForConfirmModal(driver, "spine-modal-open");
-  check("cmd_dot_on_spine_link_opens_context_modal", spineModal.opened, spineModal);
-  const spineClose = await closeConfirmWithEscape(driver, "spine");
-  check(
-    "escape_closes_spine_modal_and_returns_day_page",
-    spineClose.closed && spineClose.state.promptType === "dayPage",
-    spineClose,
-  );
-
   const kitPreviewSeed = asObj(await setDayPageInput(driver, "[scripts](kit://scripts)"));
   check("kit_scripts_link_seeded", kitPreviewSeed.success === true, { batch: kitPreviewSeed });
   await driver.simulateKey(".", ["cmd"]);
@@ -182,7 +111,6 @@ try {
   check("kit_scripts_cmd_dot_opens_read_only_preview", kitPreviewOpened, {
     preview: kitPreviewState,
     state: await getStateSummary(driver),
-    confirmWindows: await confirmWindows(driver),
   });
   await driver.simulateKey("escape");
   const kitPreviewClosed = await pollUntil("kit-scripts-preview-closed", async () => {
@@ -194,23 +122,6 @@ try {
     preview: await dayPageKitResourcePreview(driver),
   });
 
-  const unsupportedKitSeed = asObj(await setDayPageInput(driver, "[context](kit://context)"));
-  check("unsupported_kit_context_seeded", unsupportedKitSeed.success === true, {
-    batch: unsupportedKitSeed,
-  });
-  await driver.simulateKey(".", ["cmd"]);
-  const unsupportedModal = await waitForConfirmModal(driver, "unsupported-kit-context-modal-open");
-  check("unsupported_kit_context_opens_helpful_modal", unsupportedModal.opened, {
-    ...unsupportedModal,
-    elements: await dayPageElementsText(driver),
-  });
-  const unsupportedClose = await closeConfirmWithEscape(driver, "unsupported-kit-context");
-  check(
-    "escape_closes_unsupported_kit_context_modal_and_returns_day_page",
-    unsupportedClose.closed && unsupportedClose.state.promptType === "dayPage",
-    unsupportedClose,
-  );
-
   const mousePlainSeed = asObj(await setDayPageInput(driver, "mouse plain text"));
   check("mouse_plain_text_seeded", mousePlainSeed.success === true, { batch: mousePlainSeed });
   const mousePlainClick = await clickDayPageEditorFirstLine(driver);
@@ -221,42 +132,7 @@ try {
   const mousePlainState = await getStateSummary(driver);
   check("mouse_plain_text_click_stays_on_day_page", mousePlainState.promptType === "dayPage", {
     state: mousePlainState,
-    confirmWindows: await confirmWindows(driver),
   });
-
-  const mouseRunLink = "scriptkit://run/nonexistent-day-page-mouse-proof-script";
-  const mouseRunSeed = asObj(await setDayPageInput(driver, mouseRunLink));
-  check("mouse_run_link_seeded", mouseRunSeed.success === true, { batch: mouseRunSeed });
-  const mouseRunClick = await clickDayPageEditorFirstLine(driver);
-  check("mouse_run_link_click_dispatches", mouseRunClick.every((result) => result.success), {
-    click: mouseRunClick,
-  });
-  const mouseRunConfirm = await waitForConfirmModal(driver, "mouse-run-confirm-open");
-  check("mouse_run_link_opens_confirm", mouseRunConfirm.opened, mouseRunConfirm);
-  const mouseRunClose = await closeConfirmWithEscape(driver, "mouse-run");
-  check(
-    "escape_closes_mouse_run_confirm_and_returns_day_page",
-    mouseRunClose.closed && mouseRunClose.state.promptType === "dayPage",
-    mouseRunClose,
-  );
-
-  const mouseUnknownSpineLink = "scriptkit://spine/not-a-source/value";
-  const mouseUnknownSeed = asObj(await setDayPageInput(driver, mouseUnknownSpineLink));
-  check("mouse_unknown_spine_link_seeded", mouseUnknownSeed.success === true, {
-    batch: mouseUnknownSeed,
-  });
-  const mouseUnknownClick = await clickDayPageEditorFirstLine(driver);
-  check("mouse_unknown_spine_click_dispatches", mouseUnknownClick.every((result) => result.success), {
-    click: mouseUnknownClick,
-  });
-  const mouseUnknownModal = await waitForConfirmModal(driver, "mouse-unknown-spine-modal-open");
-  check("mouse_unknown_spine_opens_context_modal", mouseUnknownModal.opened, mouseUnknownModal);
-  const mouseUnknownClose = await closeConfirmWithEscape(driver, "mouse-unknown-spine");
-  check(
-    "escape_closes_mouse_unknown_spine_modal_and_returns_day_page",
-    mouseUnknownClose.closed && mouseUnknownClose.state.promptType === "dayPage",
-    mouseUnknownClose,
-  );
 
   const mouseKitSeed = asObj(await setDayPageInput(driver, "[scripts](kit://scripts)"));
   check("mouse_kit_scripts_link_seeded", mouseKitSeed.success === true, { batch: mouseKitSeed });
