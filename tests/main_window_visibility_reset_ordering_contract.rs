@@ -45,27 +45,30 @@ fn close_path_hides_before_deferred_script_list_reset() {
     let automation_hidden = preparation
         .find("crate::windows::set_automation_visibility(\"main\", false)")
         .expect("close path must mark automation hidden");
+    let generation = preparation
+        .find("Some(script_kit_gpui::main_window_visibility_generation())")
+        .expect("close preparation must hand back the hide generation");
     let prepared = close
-        .find(".prepare_main_window_close(cx, \"close_and_reset_window\", true, true)")
+        .find(".prepare_main_window_close(cx, \"close_and_reset_window\", true, false)")
         .expect("close path must run shared preparation before native hide");
     let hide = close
-        .find("platform::defer_hide_main_window(cx);")
-        .expect("close path must enqueue main-panel-only hide");
+        .find("self.defer_calibrated_main_window_hide(")
+        .expect("close path must hand the hide to the calibrated main-only exit");
     let deferred_reset = close
-        .find("self.defer_reset_to_script_list_after_main_window_hidden")
-        .expect("close path must schedule hidden reset after native hide is enqueued");
+        .find("MainWindowPostHide::ResetScriptList {")
+        .expect("close path must ask for the ScriptList reset only after the hide completes");
 
     assert!(
         prepared < hide,
         "shared close preparation must complete before native hide is enqueued"
     );
     assert!(
-        automation_hidden < preparation.len(),
-        "shared close preparation must mark automation hidden"
+        automation_hidden < generation && hidden < generation,
+        "shared close preparation must mark the window and automation hidden before snapshotting the hide generation"
     );
     assert!(
         hide < deferred_reset,
-        "hidden ScriptList reset must be scheduled after native hide is enqueued"
+        "hidden ScriptList reset must be the post-hide step of the calibrated hide"
     );
     assert!(
         !preparation[hidden..].contains("reset_to_script_list(cx);"),
@@ -114,11 +117,11 @@ fn hide_helper_defers_script_list_reset_until_after_native_hide() {
         .find("set_main_window_visible(false)")
         .expect("hide helper must mark main window logically hidden");
     let hide = body
-        .find("platform::defer_hide_main_window(cx);")
-        .expect("hide helper must enqueue main-panel-only hide");
+        .find("view.defer_calibrated_main_window_hide(")
+        .expect("hide helper must hand the hide to the calibrated main-only exit");
     let deferred_reset = body
-        .find("view.defer_reset_to_script_list_after_main_window_hidden")
-        .expect("hide helper must schedule hidden reset after native hide is enqueued");
+        .find("MainWindowPostHide::ResetScriptList {")
+        .expect("hide helper must ask for the ScriptList reset only after the hide completes");
 
     assert!(
         hidden < hide,
@@ -143,38 +146,46 @@ fn hide_helper_defers_script_list_reset_until_after_native_hide() {
 }
 
 #[test]
-fn hidden_reset_runs_next_turn_without_timer_and_skips_stale_visibility() {
+fn hidden_reset_runs_on_confirmed_hide_and_skips_stale_visibility() {
+    let calibrated = function_body(
+        LIFECYCLE_RESET,
+        "pub(crate) fn defer_calibrated_main_window_hide",
+    );
+    let hidden = calibrated
+        .find("crate::platform::MainWindowHideCompletion::Hidden(native_hidden) =>")
+        .expect("the post-hide step must wait for AppKit to confirm the window hidden");
+    let completion_reset = calibrated
+        .find("app.complete_hidden_main_window_script_list_reset(")
+        .expect("a confirmed hide must run the hidden ScriptList reset");
+    assert!(
+        hidden < completion_reset,
+        "the ScriptList reset must be inside the confirmed-hidden completion"
+    );
+
     let body = function_body(
         LIFECYCLE_RESET,
-        "pub(crate) fn defer_reset_to_script_list_after_main_window_hidden",
+        "fn complete_hidden_main_window_script_list_reset",
     );
-    let scheduled_generation = body
-        .find("let scheduled_generation = script_kit_gpui::main_window_visibility_generation();")
-        .expect("hidden reset must snapshot the hide generation when scheduled");
-    let spawn = body
-        .find("cx.spawn(async move |this, cx|")
-        .expect("hidden reset must run on the next foreground turn");
+    let current = body
+        .find("hidden_main_window_reset_is_current(")
+        .expect("hidden reset must prove it is still the current hide");
+    let generation = body
+        .find("script_kit_gpui::main_window_visibility_generation()")
+        .expect("hidden reset must skip stale work after a newer visibility transition");
     let stale_visible = body
         .find("script_kit_gpui::is_main_window_visible()")
         .expect("hidden reset must not mutate a re-shown main window");
-    let generation_check = body
-        .find("!= scheduled_generation")
-        .expect("hidden reset must skip stale work after a newer visibility transition");
     let reset = body
-        .find("app.reset_hidden_main_window_to_script_list(cx, reason)")
+        .find("self.reset_hidden_main_window_to_script_list(cx, request.reason)")
         .expect("hidden reset must still reset the hidden main window");
 
     assert!(
-        scheduled_generation < spawn,
-        "hidden reset must capture the hide generation before deferring"
-    );
-    assert!(
-        stale_visible < reset && generation_check < reset,
+        current < generation && generation < reset && stale_visible < reset,
         "hidden reset must prove it is still hidden/current before resetting"
     );
     assert!(
         !body.contains("timer(") && !body.contains("Duration::from_millis(16)"),
-        "hidden reset must not wait on an arbitrary 16ms timer; it should prepare the hidden window as soon as the hide turn has been queued"
+        "hidden reset must not wait on an arbitrary timer once AppKit confirmed the hide"
     );
 }
 

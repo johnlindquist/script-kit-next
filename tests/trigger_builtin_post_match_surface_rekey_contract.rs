@@ -104,9 +104,17 @@ fn every_dispatcher_keeps_hide_path_script_list_rekey() {
             .find("ExternalCommand::SetFilter")
             .unwrap_or(hide_tail.len());
         let hide_arm = &hide_tail[..hide_end];
+        let hide = hide_arm
+            .find("view.defer_calibrated_main_window_hide(")
+            .unwrap_or_else(|| panic!("{path}: Hide must use the calibrated main-only hide"));
+        let reset = hide_arm
+            .find("MainWindowPostHide::ResetScriptList {")
+            .unwrap_or_else(|| {
+                panic!("{path} must schedule the hide-path hidden ScriptList reset")
+            });
         assert!(
-            hide_arm.contains("view.defer_reset_to_script_list_after_main_window_hidden("),
-            "{path} must schedule the hide-path hidden ScriptList reset"
+            hide < reset,
+            "{path}: the hidden ScriptList reset must be the calibrated hide's post-hide step"
         );
     }
 
