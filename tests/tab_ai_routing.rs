@@ -385,22 +385,6 @@ fn startup_new_tab_interceptor_writes_tab_bytes_directly_to_quick_terminal_pty()
     );
 }
 
-#[test]
-fn startup_tab_interceptor_blocks_reentry_when_save_offer_is_open() {
-    assert!(
-        TAB_SOURCE.contains("tab_ai_save_offer_state.is_some()"),
-        "startup_new_tab.rs must block Tab reentry while the save-offer overlay is visible"
-    );
-}
-
-#[test]
-fn open_tab_ai_chat_guards_save_offer_state() {
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("tab_ai_save_offer_state.is_some()"),
-        "open_tab_ai_chat must guard against opening while save-offer is visible"
-    );
-}
-
 // =========================================================================
 // Harness terminal: context injection and capture profile
 // =========================================================================

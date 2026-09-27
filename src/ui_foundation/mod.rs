@@ -679,12 +679,6 @@ pub(crate) fn compact_action_row() -> Div {
     hstack().gap(px(4.0)).flex_wrap()
 }
 
-/// Root div for a modal overlay: absolute, fills parent, flex.
-#[inline]
-pub(crate) fn modal_overlay_root(id: &'static str) -> Stateful<Div> {
-    gpui::div().id(id).absolute().inset_0().flex()
-}
-
 // --- merged from part_001.rs ---
 // ============================================================================
 // Key Normalization - Allocation-free key matching

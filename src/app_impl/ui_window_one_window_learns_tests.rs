@@ -441,3 +441,193 @@ fn saying_dictation_history_opens_what_you_said_rather_than_talking() {
     );
     assert_eq!(view, Some("dictation-history"));
 }
+
+/// The titles of the reducer's own rows the list shows.
+fn own_titles(app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext) -> Vec<String> {
+    app.update(cx, |app, _| {
+        let (_, flat) = app.main_menu_result_caches.clone_grouped_results();
+        flat.iter()
+            .filter_map(|result| match result {
+                SearchResult::OneWindow(m) => Some(m.row.title.clone()),
+                _ => None,
+            })
+            .collect()
+    })
+}
+
+fn press(cx: &mut gpui::TestAppContext, window: gpui::AnyWindowHandle, keys: &str) {
+    cx.dispatch_keystroke(window, gpui::Keystroke::parse(keys).expect("keystroke"));
+    wait(cx, 20);
+}
+
+#[test]
+fn a_scripts_hotkey_prompt_records_under_the_input_and_answers_with_the_same_json() {
+    struct Seen {
+        view: Option<String>,
+        header: Option<String>,
+        titles: Vec<String>,
+        label: String,
+    }
+    let seen = |app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext| Seen {
+        view: top_view(app, cx),
+        header: listed(app, cx).0,
+        titles: own_titles(app, cx),
+        label: enter_label(app, cx),
+    };
+    let (opened, partial, complete, sent, after, elements, cancelled) =
+        in_launcher("hotkey_prompt", 0, move |cx| {
+            let (app, window) = launcher(cx, Jev::Off);
+            let (sender, receiver) = std::sync::mpsc::sync_channel(8);
+            let ask = |app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext, id| {
+                let sender = sender.clone();
+                app.update(cx, |app, cx| {
+                    app.response_sender = Some(sender);
+                    app.handle_prompt_message(
+                        crate::PromptMessage::ShowHotkey {
+                            id,
+                            placeholder: None,
+                        },
+                        cx,
+                    );
+                });
+                wait(cx, 20);
+            };
+            ask(&app, cx, "hotkey-1".to_string());
+            let opened = seen(&app, cx);
+            let elements: Vec<String> = app.update(cx, |app, cx| {
+                app.collect_visible_elements(100, cx)
+                    .elements
+                    .into_iter()
+                    .map(|element| element.semantic_id)
+                    .collect()
+            });
+            press(cx, window, "k");
+            let partial = seen(&app, cx);
+            press(cx, window, "cmd-shift-k");
+            let complete = seen(&app, cx);
+            press(cx, window, "enter");
+            let sent: Vec<String> = receiver
+                .try_iter()
+                .map(|message| serde_json::to_string(&message).expect("message json"))
+                .collect();
+            let after = (
+                top_view(&app, cx),
+                app.update(cx, |app, _| {
+                    matches!(app.current_view, crate::AppView::ScriptList)
+                }),
+                own_titles(&app, cx),
+            );
+            ask(&app, cx, "hotkey-2".to_string());
+            press(cx, window, "escape");
+            let cancelled: Vec<String> = receiver
+                .try_iter()
+                .map(|message| serde_json::to_string(&message).expect("message json"))
+                .collect();
+            (opened, partial, complete, sent, after, elements, cancelled)
+        });
+
+    assert_eq!(
+        opened.view.as_deref(),
+        Some("shortcut"),
+        "a view under the input"
+    );
+    assert_eq!(opened.header.as_deref(), Some("Press a shortcut"));
+    assert_eq!(opened.titles, ["Waiting for keys…"]);
+    assert_eq!(opened.label, "Press the keys first");
+    assert!(
+        !elements.iter().any(|id| {
+            id.contains("shortcut-recorder")
+                || id.contains("shortcut-modal")
+                || id == "hotkey-capture"
+        }),
+        "no recorder card: {elements:?}"
+    );
+    assert!(
+        elements
+            .iter()
+            .any(|id| id == crate::one_window::slot_line::SLOT_LINE_ID),
+        "the line above the input stays: {elements:?}"
+    );
+
+    assert_eq!(partial.titles, ["K"], "one key shows as its keycap");
+    assert_eq!(partial.label, "Press the keys first");
+    assert_eq!(complete.titles, ["⌘⇧K"]);
+    assert_eq!(complete.label, "Use ⌘⇧K");
+
+    assert_eq!(
+        sent,
+        [
+            r#"{"type":"submit","id":"hotkey-1","value":"{\"key\":\"K\",\"command\":true,\"shift\":true,\"option\":false,\"control\":false,\"shortcut\":\"⌘⇧K\",\"keyCode\":\"K\"}"}"#
+        ],
+        "↵ answers the script with the HotkeyInfo it always got"
+    );
+    assert_eq!(
+        after,
+        (None, true, Vec::<String>::new()),
+        "the view and its rows leave once answered"
+    );
+    assert_eq!(
+        cancelled,
+        [r#"{"type":"submit","id":"hotkey-2","value":null}"#],
+        "Esc cancels the prompt"
+    );
+}
+
+#[test]
+fn a_successful_tab_ai_run_keeps_its_script_and_cmd_z_deletes_it() {
+    let (saved, line, undone, left) = in_launcher("tab_ai_saved", 0, |cx| {
+        let kit = KitDir::new();
+        let scripts = kit.dir.path().join("plugins/main/scripts");
+        let listed_scripts = || -> Vec<String> {
+            std::fs::read_dir(&scripts)
+                .map(|dir| {
+                    dir.filter_map(Result::ok)
+                        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                        .filter(|name| name.ends_with(".ts"))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let (app, window) = launcher(cx, Jev::Off);
+        let ran = kit.dir.path().join("tab-ai-run.ts");
+        std::fs::write(&ran, "await div(\"ran\");\n").expect("temp run script");
+        let record = crate::ai::TabAiExecutionRecord::from_parts(
+            "Review the launch checklist".into(),
+            "// Name: Launch Review\nimport \"@scriptkit/sdk\";\nawait div(\"Launch review\");\n"
+                .into(),
+            ran.to_string_lossy().into_owned(),
+            "launch-review".into(),
+            "ScriptList".into(),
+            None,
+            "test-model".into(),
+            "test-provider".into(),
+            0,
+            "2026-09-27T00:00:00Z".into(),
+        );
+        app.update(cx, |app, cx| {
+            app.pending_tab_ai_execution = Some(record);
+            app.complete_tab_ai_execution(true, None, cx);
+        });
+        let saved = listed_scripts();
+        wait(cx, sk_one_window::contract::ENTER_GUARD_MS + 20);
+        let line = app.update(cx, |app, _| {
+            app.one_window.slot_line(app.one_window_clock())
+        });
+        press(cx, window, "cmd-z");
+        let undone = app.update(cx, |app, _| {
+            app.one_window.slot_line(app.one_window_clock()).title
+        });
+        let left = listed_scripts();
+        drop(kit);
+        (saved, line, undone, left)
+    });
+    assert_eq!(saved.len(), 1, "the script is written at once: {saved:?}");
+    assert_eq!(line.title, format!("Saved as {}", saved[0]));
+    assert!(
+        line.hints.iter().any(|(key, _)| key == "⌘Z"),
+        "the line offers ⌘Z: {:?}",
+        line.hints
+    );
+    assert_eq!(undone, format!("Undid · Saved as {}", saved[0]));
+    assert!(left.is_empty(), "⌘Z deleted the file it wrote: {left:?}");
+}

@@ -463,45 +463,6 @@ impl ScriptListApp {
         )
     }
 
-    fn render_hotkey_prompt(
-        &mut self,
-        entity: Entity<crate::components::shortcut_recorder::ShortcutRecorder>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        tracing::info!(
-            surface = "render_prompts::hotkey",
-            shell = "shortcut_recorder",
-            "prompt_surface_rendered"
-        );
-
-        let focus_handle = entity.read(cx).focus_handle.clone();
-        window.focus(&focus_handle, cx);
-
-        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-            vec!["Esc Cancel".into()],
-            None,
-        ));
-
-        div()
-            .id("hotkey-prompt-wrapper")
-            .relative()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .child(
-                div()
-                    .flex_1()
-                    .min_h(px(0.0))
-                    .w_full()
-                    .relative()
-                    .child(entity.clone()),
-            )
-            .when_some(footer, |surface, footer| surface.child(footer))
-            .into_any_element()
-    }
-
     fn render_chat_prompt(
         &mut self,
         entity: Entity<prompts::ChatPrompt>,

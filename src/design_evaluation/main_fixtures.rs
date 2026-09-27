@@ -590,26 +590,6 @@ fn overlay_sources(app: &mut ScriptListApp) -> anyhow::Result<&mut OwnedMainSour
     }
 }
 
-fn complete_root_dialog_fixture(
-    app: &mut ScriptListApp,
-    action: &'static str,
-    cx: &mut Context<ScriptListApp>,
-) -> bool {
-    let Ok(sources) = overlay_sources(app) else {
-        return false;
-    };
-    if sources.overlay_fixture_id != Some("main-overlay.root-dialog")
-        || sources.overlay_actions.len() >= 16
-    {
-        return false;
-    }
-    sources.overlay_actions.push(action.into());
-    app.mark_main_data_changed();
-    crate::runtime_policy::record_completed_fixture_effect();
-    cx.notify();
-    true
-}
-
 /// Mount typed overlay data into the existing production Main/Root presentation.
 pub(crate) fn mount_main_overlay_fixture(
     app: &mut ScriptListApp,
@@ -617,7 +597,6 @@ pub(crate) fn mount_main_overlay_fixture(
     window: &mut Window,
     cx: &mut Context<ScriptListApp>,
 ) -> anyhow::Result<()> {
-    use gpui_component::WindowExt as _;
     crate::runtime_policy::WindowHostPolicy::OwnedHidden.validate()?;
     anyhow::ensure!(
         window.is_owned_hidden(),
@@ -630,7 +609,6 @@ pub(crate) fn mount_main_overlay_fixture(
         .context("unknown_main_overlay_fixture")?;
     let scope = crate::runtime_policy::owned_evaluation().context("main_overlay_policy_missing")?;
     app.close_alias_input(cx);
-    app.close_tab_ai_save_offer(cx);
     if app.show_logs {
         app.toggle_logs(cx);
     }
@@ -638,13 +616,10 @@ pub(crate) fn mount_main_overlay_fixture(
         app.set_background_effect(None, cx);
     }
     app.hide_grid(cx);
-    window.close_all_dialogs(cx);
-    window.clear_notifications(cx);
     mount_main_fixture(app, "main.script-list", window, cx)?;
     {
         let sources = overlay_sources(app)?;
         sources.overlay_fixture_id = Some(fixture_id);
-        sources.overlay_root_dialog = None;
         sources.overlay_actions.clear();
         sources.overlay_logs.clear();
     }
@@ -661,7 +636,7 @@ pub(crate) fn mount_main_overlay_fixture(
             overlay_sources(app)?.alias_overrides = aliases;
             app.show_alias_input(command.into(), "Clipboard History".into(), cx);
         }
-        "main-overlay.tab-ai-save-offer" => {
+        "main-overlay.tab-ai-saved" => {
             let record = crate::ai::TabAiExecutionRecord::from_parts(
                 "Review the launch checklist".into(),
                 "// Name: Owned Launch Review\nimport \"@scriptkit/sdk\";\nawait div(\"Owned launch review\");\n".into(),
@@ -669,43 +644,7 @@ pub(crate) fn mount_main_overlay_fixture(
                 "owned-launch-review".into(), "ScriptList".into(), None,
                 "owned-fixture".into(), "owned-fixture".into(), 0, "2026-08-28T12:00:00Z".into(),
             );
-            app.open_tab_ai_save_offer(record, cx);
-        }
-        "main-overlay.root-dialog" => {
-            app.pending_focus = None;
-            let app_weak = cx.entity().downgrade();
-            // gpui-kit: a confirm (OK + Cancel) dialog is an AlertDialog.
-            window.open_alert_dialog(cx, move |dialog, _, _| {
-                let accept = app_weak.clone();
-                let cancel = app_weak.clone();
-                dialog
-                    .title("Review local change")
-                    .description("This action completes only the owned fixture.")
-                    .button_props(
-                        gpui_component::dialog::DialogButtonProps::default()
-                            .ok_text("OK")
-                            .cancel_text("Cancel")
-                            .show_cancel(true),
-                    )
-                    .on_ok(move |_, _, cx| {
-                        accept.upgrade().is_some_and(|app| {
-                            app.update(cx, |app, cx| {
-                                complete_root_dialog_fixture(app, "confirmed", cx)
-                            })
-                        })
-                    })
-                    .on_cancel(move |_, _, cx| {
-                        cancel.upgrade().is_some_and(|app| {
-                            app.update(cx, |app, cx| {
-                                complete_root_dialog_fixture(app, "cancelled", cx)
-                            })
-                        })
-                    })
-            });
-            let snapshot = gpui_component::Root::read(window, cx).layer_snapshot(cx);
-            let dialog = snapshot.dialogs.last().context("root_dialog_not_opened")?;
-            overlay_sources(app)?.overlay_root_dialog =
-                Some((dialog.root_entity_id, dialog.generation));
+            app.save_tab_ai_script(record, cx);
         }
         "main-overlay.logs" => {
             overlay_sources(app)?.overlay_logs = vec![
@@ -738,12 +677,7 @@ pub(crate) fn mount_main_overlay_fixture(
     Ok(())
 }
 
-pub(crate) fn main_overlay_state(
-    app: &ScriptListApp,
-    window: &Window,
-    cx: &App,
-) -> serde_json::Value {
-    let layers = gpui_component::Root::read(window, cx).layer_snapshot(cx);
+pub(crate) fn main_overlay_state(app: &ScriptListApp) -> serde_json::Value {
     let sources = app.main_services.owned_sources();
     serde_json::json!({
         "fixtureId": sources.and_then(|sources| sources.overlay_fixture_id),
@@ -751,28 +685,20 @@ pub(crate) fn main_overlay_state(
             let text = app.one_window.text();
             serde_json::json!({"text": text, "problem": crate::alias_validation::alias_problem(text)})
         }),
-        "saveOffer": app.tab_ai_save_offer_state.as_ref().map(|state| serde_json::json!({"filename": state.filename_stem, "syntheticExecution": state.record.provider_id == "owned-fixture"})),
+        "line": app.one_window.slot_line(app.one_window_clock()).title,
         "logsVisible": app.show_logs,
         "logLines": if app.show_logs { sources.map(|sources| sources.overlay_logs.as_slice()).unwrap_or(&[]) } else { &[] },
         "loading": app.main_list_loading_kind().map(|kind| kind.footer_label()),
         "backgroundEffect": crate::effects::BackgroundEffect::persisted_slug(app.background_effect),
         "debugGrid": app.grid_config.as_ref().map(|grid| serde_json::json!({"gridSize":grid.grid_size,"showBounds":grid.show_bounds,"showBoxModel":grid.show_box_model,"showAlignmentGuides":grid.show_alignment_guides,"showDimensions":grid.show_dimensions})),
-        "rootLayerRevision": layers.revision,
-        "dialogs": layers.dialogs.iter().map(|dialog| serde_json::json!({"rootEntityId":dialog.root_entity_id,"generation":dialog.generation})).collect::<Vec<_>>(),
-        "notifications": layers.notifications.iter().map(|notification| serde_json::json!({"entityId":notification.entity_id,"closing":notification.closing,"title":notification.title,"message":notification.message})).collect::<Vec<_>>(),
         "completedActions": sources.map(|sources| sources.overlay_actions.as_slice()).unwrap_or(&[]),
     })
 }
 
 /// Fixture-specific controls complement the shared append_root_layer_elements projection.
-pub(crate) fn main_overlay_elements(
-    app: &ScriptListApp,
-    window: &Window,
-    cx: &App,
-) -> Vec<crate::protocol::ElementInfo> {
+pub(crate) fn main_overlay_elements(app: &ScriptListApp) -> Vec<crate::protocol::ElementInfo> {
     use crate::protocol::{ElementContentKind, ElementInfo};
     let mut elements = Vec::new();
-    let layers = gpui_component::Root::read(window, cx).layer_snapshot(cx);
     if let Some(state) = &app.alias_input_state {
         let mut title = ElementInfo::panel("alias-input-view");
         title.semantic_id = "alias-input-view".into();
@@ -792,26 +718,6 @@ pub(crate) fn main_overlay_elements(
         let mut cancel = ElementInfo::button(2, "Cancel");
         cancel.semantic_id = "alias-input:cancel".into();
         elements.push(cancel);
-    }
-    if let Some(state) = &app.tab_ai_save_offer_state {
-        let mut panel = ElementInfo::panel("tab-ai-save-offer");
-        panel.semantic_id = "tab-ai-save-offer".into();
-        panel.text = Some(format!(
-            "Save it as {}.ts to run it again from the launcher.",
-            state.filename_stem
-        ));
-        elements.push(panel.redact_content(ElementContentKind::UserContent));
-        for (id, label) in [
-            ("tab-ai-save-offer:save", "Save"),
-            ("tab-ai-save-offer:dismiss", "Not Now"),
-        ] {
-            let mut command = ElementInfo::panel(id);
-            command.semantic_id = id.into();
-            command.text = Some(label.into());
-            command.role = Some("keyboardAction".into());
-            command.selectable = Some(true);
-            elements.push(command);
-        }
     }
     if app.show_logs {
         let mut panel = ElementInfo::panel("main-log-panel");
@@ -838,30 +744,6 @@ pub(crate) fn main_overlay_elements(
         grid.semantic_id = "main-debug-grid".into();
         elements.push(grid);
     }
-    if !layers.dialogs.is_empty() {
-        for element in &mut elements {
-            if element.element_type == crate::protocol::ElementType::Button
-                || element.role.as_deref() == Some("keyboardAction")
-            {
-                element.action_disabled = Some("covered_by_root_dialog".into());
-                element.selectable = Some(false);
-            }
-        }
-    }
-    if let Some(sources) = app.main_services.owned_sources() {
-        if let Some(dialog) = layers.dialogs.last().filter(|dialog| {
-            sources.overlay_root_dialog == Some((dialog.root_entity_id, dialog.generation))
-        }) {
-            for (index, label, action) in [(0, "OK", "confirm"), (1, "Cancel", "cancel")] {
-                let mut button = ElementInfo::button(index, label);
-                button.semantic_id = format!(
-                    "root-dialog:{}:{}:{action}",
-                    dialog.root_entity_id, dialog.generation
-                );
-                elements.push(button);
-            }
-        }
-    }
     elements
 }
 
@@ -877,7 +759,7 @@ pub(crate) fn select_main_overlay_element(
         window.is_owned_hidden(),
         "main_overlay_requires_owned_window"
     );
-    let elements = main_overlay_elements(app, window, cx);
+    let elements = main_overlay_elements(app);
     let Some(element) = elements.iter().find(|element| element.semantic_id == id) else {
         return Ok(false);
     };
@@ -896,41 +778,6 @@ pub(crate) fn select_main_overlay_element(
             _ => {}
         }
         if id.starts_with("alias-input:") {
-            return Ok(true);
-        }
-    }
-    match id {
-        "tab-ai-save-offer:save" if app.tab_ai_save_offer_state.is_some() => {
-            app.save_tab_ai_script(cx);
-            return Ok(true);
-        }
-        "tab-ai-save-offer:dismiss" if app.tab_ai_save_offer_state.is_some() => {
-            app.close_tab_ai_save_offer(cx);
-            return Ok(true);
-        }
-        _ => {}
-    }
-    let layers = gpui_component::Root::read(window, cx).layer_snapshot(cx);
-    let sources = app
-        .main_services
-        .owned_sources()
-        .context("main_overlay_sources_missing")?;
-    if let Some(dialog) = layers.dialogs.last().filter(|dialog| {
-        sources.overlay_root_dialog == Some((dialog.root_entity_id, dialog.generation))
-    }) {
-        let prefix = format!(
-            "root-dialog:{}:{}:",
-            dialog.root_entity_id, dialog.generation
-        );
-        if id == format!("{prefix}confirm") {
-            window.dispatch_action(
-                Box::new(gpui_component::actions::Confirm { secondary: false }),
-                cx,
-            );
-            return Ok(true);
-        }
-        if id == format!("{prefix}cancel") {
-            window.dispatch_action(Box::new(gpui_component::actions::Cancel), cx);
             return Ok(true);
         }
     }

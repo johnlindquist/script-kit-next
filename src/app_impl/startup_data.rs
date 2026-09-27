@@ -129,7 +129,6 @@ pub(crate) struct OwnedMainSources {
     pub sdk_host_availability: crate::mcp_resources::SdkHostAvailability,
     pub overlay_fixture_id: Option<&'static str>,
     pub overlay_logs: Vec<String>,
-    pub overlay_root_dialog: Option<(u64, u64)>,
     pub overlay_actions: Vec<String>,
 }
 
@@ -153,7 +152,6 @@ impl Default for OwnedMainSources {
             sdk_host_availability: crate::mcp_resources::SdkHostAvailability::current(Vec::new()),
             overlay_fixture_id: None,
             overlay_logs: Vec::new(),
-            overlay_root_dialog: None,
             overlay_actions: Vec::new(),
         }
     }

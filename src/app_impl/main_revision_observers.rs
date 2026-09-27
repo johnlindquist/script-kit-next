@@ -84,7 +84,6 @@ impl ScriptListApp {
             AppView::EnvPrompt { entity, .. } => observe!(entity),
             AppView::DropPrompt { entity, .. } => observe!(entity),
             AppView::TemplatePrompt { entity, .. } => observe!(entity),
-            AppView::HotkeyPrompt { entity, .. } => observe!(entity),
             AppView::ChatPrompt { entity, .. } => observe!(entity),
             AppView::NamingPrompt { entity, .. } => observe!(entity),
             AppView::WebcamView { entity } => observe!(entity),

@@ -5,8 +5,7 @@ mod prompt_handler_message_tests {
         escape_windows_cmd_open_target, is_read_only_automation_query,
         persist_script_error_agent_chat_context_bundle_in_dir, prompt_coming_soon_warning,
         prompt_message_from_protocol_message, replies_to_automation_client,
-        should_restore_main_window_after_script_exit, unhandled_message_warning,
-        PromptConversionSource, PromptMessageRoute,
+        unhandled_message_warning, PromptConversionSource, PromptMessageRoute,
     };
     use crate::PromptMessage;
 
@@ -333,13 +332,6 @@ mod prompt_handler_message_tests {
     fn test_escape_windows_cmd_open_target_escapes_shell_metacharacters() {
         let escaped = escape_windows_cmd_open_target(r#"https://example.com/?x=1&y=2|3"#);
         assert_eq!(escaped, r#"https://example.com/?x=1^&y=2^|3"#);
-    }
-
-    #[test]
-    fn test_script_exit_restores_hidden_window_only_for_active_follow_up_ui() {
-        assert!(should_restore_main_window_after_script_exit(true, true));
-        assert!(!should_restore_main_window_after_script_exit(true, false));
-        assert!(!should_restore_main_window_after_script_exit(false, true));
     }
 
     #[test]

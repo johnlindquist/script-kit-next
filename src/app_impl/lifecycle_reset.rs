@@ -701,7 +701,6 @@ impl ScriptListApp {
             && !self.is_pinned
             && !ai::agent_chat::ui::chat_window::is_chat_window_open()
             && !crate::dictation::is_dictation_recording()
-            && self.tab_ai_save_offer_state.is_none()
             && self.shortcut_recorder_state.is_none()
     }
 

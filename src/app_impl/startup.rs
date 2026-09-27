@@ -705,7 +705,6 @@ impl ScriptListApp {
             // Alias input state - starts as None (no alias input showing)
             alias_input_state: None,
             pending_tab_ai_execution: None,
-            tab_ai_save_offer_state: None,
             tab_ai_harness: None,
             tab_ai_harness_capture_generation: 0,
             tab_ai_harness_return_view: None,
@@ -995,7 +994,6 @@ impl ScriptListApp {
                                 owner,
                                 has_shift,
                                 show_actions_popup = this.show_actions_popup,
-                                save_offer_open = this.tab_ai_save_offer_state.is_some(),
                             );
 
                             if this.main_window_modal_owns_keyboard() {
@@ -1329,13 +1327,6 @@ impl ScriptListApp {
                                         ),
                                     }
                                 });
-                                cx.stop_propagation();
-                                return;
-                            }
-
-
-                            // Block Tab while the save-offer overlay is visible
-                            if this.tab_ai_save_offer_state.is_some() {
                                 cx.stop_propagation();
                             }
                         });

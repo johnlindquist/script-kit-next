@@ -1057,19 +1057,6 @@ impl ScriptListApp {
                 self.tab_ai_harness_capture_generation,
             );
         }
-        if self.tab_ai_save_offer_state.is_some() {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "notes_handoff_blocked_by_save_offer",
-                source,
-                request_id = %request_id,
-            );
-            return failed_outcome(
-                "notes_handoff_save_offer_active",
-                self.tab_ai_harness_capture_generation,
-            );
-        }
-
         let semantic_id = match &primary.part {
             crate::ai::message_parts::AiContextPart::FocusedTarget { target, .. } => {
                 target.semantic_id.clone()

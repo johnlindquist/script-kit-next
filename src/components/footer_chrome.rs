@@ -1001,19 +1001,6 @@ pub(crate) fn footer_centered_action_edge_padding_x() -> f32 {
         + FOOTER_TRAILING_ACTION_EXTRA_PADDING_X_PX / 2.0
 }
 
-pub(crate) fn footer_centered_action_button_layout() -> FooterHintButtonLayoutOverrides {
-    let metrics = current_main_menu_footer_metrics();
-    FooterHintButtonLayoutOverrides {
-        button_padding_x_px: Some(metrics.button_padding_x),
-        button_padding_y_px: Some(metrics.button_padding_y),
-        content_gap_px: Some(metrics.content_gap),
-        button_radius_px: Some(metrics.button_radius),
-        edge_padding_x_px: Some(footer_centered_action_edge_padding_x()),
-        shrink_frame_to_content_px: false,
-        hug_frame_to_content: false,
-    }
-}
-
 pub(crate) fn render_footer_hint_content(
     label: SharedString,
     key: SharedString,

@@ -251,8 +251,8 @@ impl Evaluator {
         };
         mounted
             .handle
-            .update(&mut **self.cx.app.borrow_mut(), |_, window, cx| {
-                super::main_fixtures::main_overlay_state(main.read(cx), window, cx)
+            .update(&mut **self.cx.app.borrow_mut(), |_, _, cx| {
+                super::main_fixtures::main_overlay_state(main.read(cx))
             })
     }
 
@@ -272,11 +272,7 @@ impl Evaluator {
                     let layers = gpui_component::Root::read(window, cx).layer_snapshot(cx);
                     let mut snapshot =
                         crate::windows::automation_surface_collector::SurfaceElementSnapshot {
-                            elements: super::main_fixtures::main_overlay_elements(
-                                main.read(cx),
-                                window,
-                                cx,
-                            ),
+                            elements: super::main_fixtures::main_overlay_elements(main.read(cx)),
                             ..Default::default()
                         };
                     crate::windows::automation_surface_collector::append_root_layer_elements(
@@ -752,7 +748,7 @@ impl Evaluator {
                         state.window_focused = current.focused;
                         let layers = gpui_component::Root::read(window, cx).layer_snapshot(cx);
                         let mut overlay = crate::windows::automation_surface_collector::SurfaceElementSnapshot {
-                            elements: super::main_fixtures::main_overlay_elements(app, window, cx),
+                            elements: super::main_fixtures::main_overlay_elements(app),
                             ..Default::default()
                         };
                         crate::windows::automation_surface_collector::append_root_layer_elements(&mut overlay, &layers);

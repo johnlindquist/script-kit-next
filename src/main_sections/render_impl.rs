@@ -250,7 +250,6 @@ impl Render for ScriptListApp {
                 && !self.is_pinned
                 && !ai::agent_chat::ui::chat_window::is_chat_window_open()
                 && !crate::dictation::is_dictation_recording()
-                && self.tab_ai_save_offer_state.is_none()
                 && self.shortcut_recorder_state.is_none()
             {
                 if matches!(self.current_view, AppView::ScriptList) {
@@ -270,11 +269,6 @@ impl Render for ScriptListApp {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus but shortcut recorder is open - staying open",
-                );
-            } else if self.tab_ai_save_offer_state.is_some() {
-                logging::log(
-                    "FOCUS",
-                    "Main window lost focus but Tab AI save-offer is active - staying open",
                 );
             } else if self.is_pinned {
                 logging::log(
@@ -346,12 +340,6 @@ impl Render for ScriptListApp {
         // methods to take &str/&[T] references instead of owned values.
         let view_owns_main_window_shell = self.current_view.uses_view_owned_main_window_shell(&*cx);
         let current_view = self.current_view.clone();
-        let main_window_modal_dim_active = false;
-        let main_window_modal_dim_layer =
-            crate::components::modal_dim::render_main_window_modal_dim_layer(
-                main_window_modal_dim_active,
-                &self.theme,
-            );
         let main_content: AnyElement = match current_view {
             AppView::ScriptList => self.render_script_list(cx).into_any_element(),
             AppView::About {
@@ -526,9 +514,6 @@ impl Render for ScriptListApp {
             AppView::TemplatePrompt { entity, .. } => {
                 self.render_template_prompt(entity, cx).into_any_element()
             }
-            AppView::HotkeyPrompt { entity, .. } => self
-                .render_hotkey_prompt(entity, window, cx)
-                .into_any_element(),
             AppView::ChatPrompt { entity, .. } => {
                 self.render_chat_prompt(entity, cx).into_any_element()
             }
@@ -1142,9 +1127,6 @@ impl Render for ScriptListApp {
                     .overflow_hidden()
                     // Main content takes remaining space
                     .child(main_content_container)
-                    .when_some(main_window_modal_dim_layer, |container, overlay| {
-                        container.child(overlay)
-                    })
                     .when_some(grid_config, |container, config| {
                         let overlay_bounds = gpui::Bounds {
                             origin: gpui::point(px(0.), px(0.)),
@@ -1155,29 +1137,7 @@ impl Render for ScriptListApp {
                             overlay_bounds,
                             &component_bounds,
                         ))
-                    })
-                    // Root dialogs and their modal hit shields belong to the
-                    // same bounded stage as every other GPUI overlay.
-                    .child(
-                        div()
-                            .id("main-window-dialog-layer-boundary")
-                            .debug_selector(|| "main-window-dialog-layer-boundary".to_string())
-                            .absolute()
-                            .inset_0()
-                            .overflow_hidden()
-                            .children(gpui_component::Root::render_dialog_layer(window, cx)),
-                    )
-                    .child(
-                        div()
-                            .id("main-window-notification-layer-boundary")
-                            .debug_selector(|| {
-                                "main-window-notification-layer-boundary".to_string()
-                            })
-                            .absolute()
-                            .inset_0()
-                            .overflow_hidden()
-                            .children(gpui_component::Root::render_notification_layer(window, cx)),
-                    ),
+                    }),
             )
     }
 }
