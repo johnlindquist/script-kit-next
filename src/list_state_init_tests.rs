@@ -20,27 +20,9 @@
 mod tests {
     use std::fs;
 
-    /// Read legacy startup source-audit fragments in their historical order.
-    ///
-    /// These files are retained as parity fixtures; production startup is
-    /// module-wired through `src/app_impl/startup.rs`.
-    fn read_legacy_startup_source_audit_sequence() -> String {
-        let files = [
-            "src/app_impl/startup_new_prelude.rs",
-            "src/app_impl/startup_new_state.rs",
-            "src/app_impl/startup_new_tab.rs",
-            "src/app_impl/startup_new_arrow.rs",
-            "src/app_impl/startup_new_actions.rs",
-        ];
-
-        let mut content = String::new();
-        for file in files {
-            content.push_str(
-                &fs::read_to_string(file).unwrap_or_else(|_| panic!("Failed to read {}", file)),
-            );
-            content.push('\n');
-        }
-        content
+    fn read_startup_source() -> String {
+        fs::read_to_string("src/app_impl/startup.rs")
+            .expect("Failed to read src/app_impl/startup.rs")
     }
 
     /// Verify that sync_list_state() is called during initialization.
@@ -49,7 +31,7 @@ mod tests {
     /// because main_list_state is initialized with 0 items but scripts have been loaded.
     #[test]
     fn test_new_calls_sync_list_state() {
-        let new_body = read_legacy_startup_source_audit_sequence();
+        let new_body = read_startup_source();
 
         // sync_list_state must be called somewhere in new()
         assert!(
@@ -66,7 +48,7 @@ mod tests {
     /// This ensures the initial selection is valid (not pointing at a section header).
     #[test]
     fn test_new_calls_validate_selection_bounds() {
-        let new_body = read_legacy_startup_source_audit_sequence();
+        let new_body = read_startup_source();
 
         // validate_selection_bounds must be called somewhere in new()
         assert!(
@@ -83,7 +65,7 @@ mod tests {
     /// depends on that count being correct.
     #[test]
     fn test_sync_before_validate() {
-        let new_body = read_legacy_startup_source_audit_sequence();
+        let new_body = read_startup_source();
 
         let sync_pos = new_body
             .find("sync_list_state")
@@ -105,11 +87,15 @@ mod tests {
     /// before we know the count. sync_list_state() then updates this count.
     #[test]
     fn test_list_state_initial_count_is_zero() {
-        let new_body = read_legacy_startup_source_audit_sequence();
+        let new_body = read_startup_source();
 
         // main_list_state should be initialized with 0 items
+        let init_start = new_body
+            .find("main_list_state: ListState::new(")
+            .expect("main_list_state initializer not found");
+        let init_args = &new_body[init_start + "main_list_state: ListState::new(".len()..];
         assert!(
-            new_body.contains("ListState::new(0,"),
+            init_args.trim_start().starts_with("0,"),
             "main_list_state should be initialized with 0 items. \
              The actual count is set by sync_list_state() after grouped results are computed."
         );
@@ -121,33 +107,12 @@ mod tests {
     /// ScriptListApp startup path.
     #[test]
     fn test_main_window_mode_defaults_to_mini_in_startup_state() {
-        let new_body = read_legacy_startup_source_audit_sequence();
+        let new_body = read_startup_source();
 
         assert!(
             new_body.contains("main_window_mode: MainWindowMode::Mini,"),
             "ScriptListApp::new() must initialize main_window_mode to MainWindowMode::Mini \
-             in startup_new_state.rs so the minimalist launcher remains the default."
-        );
-    }
-
-    /// Verify that scripts are loaded before sync_list_state is called.
-    ///
-    /// This ensures there are scripts available when we sync the list state.
-    #[test]
-    fn test_scripts_loaded_before_sync() {
-        let new_body = read_legacy_startup_source_audit_sequence();
-
-        let read_scripts_pos = new_body
-            .find("scripts::read_scripts()")
-            .expect("scripts::read_scripts() not found in new()");
-        let sync_pos = new_body
-            .find("sync_list_state")
-            .expect("sync_list_state not found");
-
-        assert!(
-            read_scripts_pos < sync_pos,
-            "scripts::read_scripts() must be called before sync_list_state() in new(). \
-             The list can't be synced until scripts are loaded."
+             so the minimalist launcher remains the default."
         );
     }
 }

@@ -324,9 +324,7 @@ fn surface_for_kind(kind: AutomationWindowKind) -> &'static str {
     match kind {
         AutomationWindowKind::Main => "agentChat",
         AutomationWindowKind::SnapOverlay => "snapOverlay",
-        AutomationWindowKind::ActionsDialog
-        | AutomationWindowKind::Notes
-        | AutomationWindowKind::PromptPopup => "agentChat",
+        AutomationWindowKind::Notes => "agentChat",
     }
 }
 

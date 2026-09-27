@@ -1,7 +1,6 @@
 const ARG_HELPERS: &str = include_str!("../src/render_prompts/arg/helpers.rs");
 const MINI_RENDER: &str = include_str!("../src/render_prompts/mini.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
-const STARTUP_NEW_PRELUDE: &str = include_str!("../src/app_impl/startup_new_prelude.rs");
 const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
 const SUBMIT_DIAGNOSTICS: &str = include_str!("../src/app_impl/submit_diagnostics.rs");
 const FILTERING_CACHE: &str = include_str!("../src/app_impl/filtering_cache.rs");
@@ -182,10 +181,7 @@ fn snap_mode_submit_closes_main_window_through_named_transition() {
 
 #[test]
 fn script_list_enter_refuses_immediate_prompt_submit_echo() {
-    for (name, source) in [
-        ("startup.rs", STARTUP),
-        ("startup_new_prelude.rs", STARTUP_NEW_PRELUDE),
-    ] {
+    for (name, source) in [("startup.rs", STARTUP)] {
         let press_enter = match_arm_body(source, "InputEvent::PressEnter");
         assert!(
             press_enter.contains("submit_arg_prompt_from_current_state(&prompt_id, cx);"),

@@ -753,15 +753,15 @@ fn inspect_error_snapshot_has_empty_geometry() {
 fn inspect_snapshot_v2_geometry_round_trip() {
     let snapshot = AutomationInspectSnapshot {
         schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
-        window_id: "actionsDialog:main".to_string(),
-        window_kind: "ActionsDialog".to_string(),
+        window_id: "main".to_string(),
+        window_kind: "Main".to_string(),
         surface_kind: None,
         app_view_variant: None,
         native_footer_surface: None,
         target_generation: Some(1),
         surface_generation: Some(1),
         data_generation: Some(1),
-        title: Some("Actions".to_string()),
+        title: Some("Script Kit".to_string()),
         resolved_bounds: Some(AutomationWindowBounds {
             x: 620.0,
             y: 242.0,
@@ -769,21 +769,21 @@ fn inspect_snapshot_v2_geometry_round_trip() {
             height: 384.0,
         }),
         target_bounds_in_screenshot: Some(InspectBoundsInScreenshot {
-            x: 380.0,
-            y: 118.0,
+            x: 0.0,
+            y: 0.0,
             width: 520.0,
             height: 384.0,
         }),
-        surface_hit_point: Some(InspectPoint { x: 640.0, y: 310.0 }),
+        surface_hit_point: Some(InspectPoint { x: 260.0, y: 192.0 }),
         suggested_hit_points: vec![SuggestedHitPoint {
-            semantic_id: "panel:actions-dialog".to_string(),
-            x: 640.0,
-            y: 310.0,
+            semantic_id: "panel:window".to_string(),
+            x: 260.0,
+            y: 192.0,
             reason: "surface_center".to_string(),
         }],
         elements: Vec::new(),
         total_count: 0,
-        focused_semantic_id: Some("panel:actions-dialog".to_string()),
+        focused_semantic_id: Some("panel:window".to_string()),
         selected_semantic_id: None,
         screenshot_width: Some(1280),
         screenshot_height: Some(820),
@@ -809,10 +809,9 @@ fn inspect_snapshot_v2_geometry_round_trip() {
 #[test]
 fn inspect_suggested_hit_semantic_ids_per_kind() {
     let expected = vec![
-        (AutomationWindowKind::ActionsDialog, "panel:actions-dialog"),
-        (AutomationWindowKind::PromptPopup, "panel:prompt-popup"),
         (AutomationWindowKind::Notes, "input:notes-editor"),
         (AutomationWindowKind::Main, "panel:window"),
+        (AutomationWindowKind::SnapOverlay, "panel:window"),
     ];
 
     let bounds = InspectBoundsInScreenshot {

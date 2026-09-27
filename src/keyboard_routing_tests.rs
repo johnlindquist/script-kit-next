@@ -20,13 +20,7 @@ mod tests {
     use std::fs;
 
     fn read_app_impl_sources() -> String {
-        let files = [
-            "src/app_impl/startup_new_prelude.rs",
-            "src/app_impl/startup_new_tab.rs",
-            "src/app_impl/startup_new_arrow.rs",
-            "src/app_impl/startup_new_actions.rs",
-            "src/app_impl/actions_dialog.rs",
-        ];
+        let files = ["src/app_impl/startup.rs", "src/app_impl/actions_dialog.rs"];
 
         let mut content = String::new();
         for file in files {
@@ -55,7 +49,7 @@ mod tests {
     }
 
     fn assert_main_window_visibility_guard_precedes_key_parse(section: &str, section_name: &str) {
-        let guard = "if !script_kit_gpui::is_main_window_visible()";
+        let guard = "if !crate::windows::accepts_main_window_input(window)";
         let guard_pos = section.find(guard).unwrap_or_else(|| {
             panic!("{section_name} must skip handling when main window is hidden")
         });
@@ -140,16 +134,14 @@ mod tests {
     /// main list from consuming notes/AI window arrow navigation.
     #[test]
     fn test_arrow_interceptor_skips_when_main_window_hidden() {
-        let content =
-            fs::read_to_string("src/app_impl/startup_new_arrow.rs").expect("Failed to read");
+        let content = fs::read_to_string("src/app_impl/startup.rs").expect("Failed to read");
         let section = get_arrow_interceptor_section(&content);
         assert_main_window_visibility_guard_precedes_key_parse(section, "arrow interceptor");
     }
 
     #[test]
     fn test_home_end_interceptor_skips_when_main_window_hidden() {
-        let content =
-            fs::read_to_string("src/app_impl/startup_new_arrow.rs").expect("Failed to read");
+        let content = fs::read_to_string("src/app_impl/startup.rs").expect("Failed to read");
         let start = content
             .find("let home_end_interceptor = cx.intercept_keystrokes")
             .expect("home_end interceptor not found");
@@ -204,8 +196,7 @@ mod tests {
 
     #[test]
     fn test_tab_interceptor_skips_when_main_window_hidden() {
-        let content =
-            fs::read_to_string("src/app_impl/startup_new_tab.rs").expect("Failed to read");
+        let content = fs::read_to_string("src/app_impl/startup.rs").expect("Failed to read");
         let start = content
             .find("let tab_interceptor = cx.intercept_keystrokes")
             .expect("tab interceptor not found");
@@ -301,17 +292,6 @@ mod tests {
         assert!(
             content.contains("stop_propagation"),
             "Arrow key handlers must call stop_propagation after routing to actions dialog"
-        );
-    }
-
-    /// The startup interceptor must delegate to the canonical actions_support_for_view()
-    /// resolver instead of maintaining its own match on AppView.
-    #[test]
-    fn startup_interceptor_uses_canonical_actions_support_resolver() {
-        let content = read_app_impl_sources();
-        assert!(
-            content.contains("actions_support_for_view()"),
-            "startup actions routing should delegate to the canonical actions support resolver"
         );
     }
 

@@ -213,16 +213,6 @@ pub(crate) fn view_owned_native_footer_height() -> f32 {
     }
 }
 
-/// Distance from the main window's bottom edge to the in-stage capsules' top
-/// edge; bottom-anchored popups (Actions / Cmd+K) add their own margin.
-pub(crate) fn main_window_bottom_popup_clearance(detached_footer_height: f32) -> f32 {
-    if main_window_footer_in_stage() {
-        main_window_footer_zone_height() - FLOAT_FOOTER_CONTAINER_GAP_PX
-    } else {
-        detached_footer_height
-    }
-}
-
 /// In-stage footer capsule container (GPUI top-left space): one `gap` inset
 /// from the window's sides and bottom, identical on every surface.
 pub(crate) fn main_window_footer_bounds_gpui(

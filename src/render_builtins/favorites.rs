@@ -467,48 +467,4 @@ impl ScriptListApp {
         cx.notify();
         Ok(action.success_message(&id))
     }
-
-    /// Handle keyboard input for the favorites browse view.
-    #[allow(dead_code)] // Called from startup_new_actions.rs interceptor
-    pub(crate) fn handle_favorites_browse_key(
-        &mut self,
-        key: &str,
-        has_cmd: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if !matches!(self.current_view, AppView::FavoritesBrowseView { .. }) {
-            return;
-        }
-
-        if has_cmd && key.eq_ignore_ascii_case("k") {
-            if self.selected_favorite_id().is_some()
-                || self.show_actions_popup
-                || crate::actions::is_actions_window_open()
-            {
-                self.toggle_favorites_actions(window, cx);
-            }
-            return;
-        }
-
-        if crate::ui_foundation::is_key_enter(key) {
-            if let Err(message) = self.run_selected_favorite(window, cx) {
-                self.notice_failed(message, cx);
-            }
-        } else if crate::ui_foundation::is_key_escape(key) {
-            self.go_back_or_close(window, cx);
-        } else if key.eq_ignore_ascii_case("d") && self.filter_text.is_empty() {
-            if let Err(message) = self.remove_selected_favorite(cx) {
-                self.notice_failed(message, cx);
-            }
-        } else if key.eq_ignore_ascii_case("u") && self.filter_text.is_empty() {
-            if let Err(message) = self.move_selected_favorite_up(cx) {
-                self.notice_failed(message, cx);
-            }
-        } else if key.eq_ignore_ascii_case("j") && self.filter_text.is_empty() {
-            if let Err(message) = self.move_selected_favorite_down(cx) {
-                self.notice_failed(message, cx);
-            }
-        }
-    }
 }

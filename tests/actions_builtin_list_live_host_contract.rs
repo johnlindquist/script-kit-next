@@ -45,27 +45,6 @@ fn builtin_list_views_are_filtered_out_of_live_actions_host() {
 }
 
 #[test]
-fn builtin_list_explicit_host_toggle_does_not_open_generic_actions() {
-    let toggle_start = ACTIONS_DIALOG
-        .find("ActionsDialogHost::BuiltinList =>")
-        .expect("toggle_actions_for_host must handle BuiltinList explicitly");
-    let toggle_body = &ACTIONS_DIALOG[toggle_start..];
-    let toggle_end = toggle_body
-        .find("\n    }\n")
-        .expect("BuiltinList is the last branch of toggle_actions_for_host");
-    let builtin_list_branch = &toggle_body[..toggle_end];
-
-    assert!(
-        builtin_list_branch.contains("actions_host_toggle_ignored_builtin_list"),
-        "BuiltinList explicit host toggle must log that generic open was ignored"
-    );
-    assert!(
-        !builtin_list_branch.contains("self.toggle_actions(cx, window)"),
-        "BuiltinList explicit host toggle must not open the generic script-list actions dialog"
-    );
-}
-
-#[test]
 fn toggle_actions_uses_live_host_not_static_support_map() {
     let helper_start = ACTIONS_TOGGLE
         .find("fn actions_dialog_host_for_current_view")

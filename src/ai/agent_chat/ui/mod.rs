@@ -31,7 +31,6 @@ pub(crate) mod labels;
 pub(crate) mod mock_fixture;
 pub(crate) mod notifications;
 pub(crate) mod permission_broker;
-pub(crate) mod popup_automation;
 pub(crate) mod portal_contract;
 pub(crate) mod preflight;
 pub(crate) mod setup_state;

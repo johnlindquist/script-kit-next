@@ -199,8 +199,8 @@ fn script_issues_view_keeps_native_footer_and_fix_in_agent_primary_action() {
 #[test]
 fn native_footer_visual_effect_refresh_invalidates_without_synchronous_redisplay() {
     // The shared host-refresh body lives in `refresh_footer_host_impl`;
-    // `refresh_main_footer_host` / `refresh_window_footer_host` are thin
-    // wrappers that only choose glyph ownership.
+    // `refresh_main_footer_host` is a thin wrapper that only chooses glyph
+    // ownership.
     let refresh = function_body(FOOTER_POPUP_SOURCE, "unsafe fn refresh_footer_host_impl");
     let invalidate = function_body(
         FOOTER_POPUP_SOURCE,

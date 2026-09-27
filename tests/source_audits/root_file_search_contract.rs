@@ -9,6 +9,11 @@
 mod tests {
     use std::fs;
 
+    fn actions_toggle_source() -> String {
+        fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("read src/app_impl/actions_toggle.rs")
+    }
+
     fn production_source(source: &str) -> &str {
         source.split("#[cfg(test)]").next().unwrap_or(source)
     }
@@ -1161,8 +1166,7 @@ mod tests {
 
     #[test]
     fn root_file_actions_are_main_list_only() {
-        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
-            .expect("read src/app_impl/actions_dialog.rs");
+        let source = actions_toggle_source();
         let simulate_key_source = fs::read_to_string("src/app_impl/simulate_key_dispatch.rs")
             .expect("read src/app_impl/simulate_key_dispatch.rs");
         let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -1173,7 +1177,7 @@ mod tests {
 
         assert!(
             normalized.contains(
-                "ActionsDialogHost::MainList => self.one_window_owns_list() && self.one_window_stage(cx),"
+                "if matches!(&self.current_view, AppView::ScriptList) { return self.one_window_owns_list() && self.one_window_stage(cx); }"
             ),
             "MainList ⌘K should stage the row in place"
         );
@@ -1183,7 +1187,7 @@ mod tests {
             "stdin simulateKey Cmd+K on ScriptList should use the shared dispatcher so root-file rows get their actions"
         );
         assert!(
-            normalized.contains("ActionsDialogHost::FileSearch => { let selected = self.selected_file_search_result_owned();")
+            normalized.contains("if matches!(&self.current_view, AppView::FileSearchView { .. }) { let selected = self.selected_file_search_result_owned();")
                 && normalized.contains("self.toggle_file_search_actions("),
             "dedicated FileSearch actions should keep using the file-search action route"
         );
@@ -1402,8 +1406,7 @@ mod tests {
 
     #[test]
     fn root_file_search_in_folder_action_is_directory_only() {
-        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
-            .expect("read src/app_impl/actions_toggle.rs");
+        let source = actions_toggle_source();
         let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
 
         assert!(
@@ -1429,8 +1432,7 @@ mod tests {
 
     #[test]
     fn root_file_browse_parent_folder_action_is_file_only_and_opens_dedicated_file_search() {
-        let actions_source = fs::read_to_string("src/app_impl/actions_toggle.rs")
-            .expect("read src/app_impl/actions_toggle.rs");
+        let actions_source = actions_toggle_source();
         let selection_source = fs::read_to_string("src/app_impl/selection_fallback.rs")
             .expect("read src/app_impl/selection_fallback.rs");
         let actions_normalized = actions_source

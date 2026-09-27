@@ -52,6 +52,22 @@ unsafe fn configure_snap_overlay_window_native(window: cocoa::base::id) {
     let _: () = msg_send![window, orderFrontRegardless];
 }
 
+/// Return the native `NSWindow` backing a live GPUI window, or `None` when the
+/// raw-handle lookup fails.
+#[cfg(target_os = "macos")]
+fn snap_overlay_ns_window(window: &mut Window) -> Option<cocoa::base::id> {
+    use objc::{msg_send, sel, sel_impl};
+
+    let window_handle = raw_window_handle::HasWindowHandle::window_handle(window).ok()?;
+    let raw_window_handle::RawWindowHandle::AppKit(appkit) = window_handle.as_raw() else {
+        return None;
+    };
+    let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
+    // SAFETY: `ns_view` comes from the live GPUI window on the main thread.
+    let ns_window: cocoa::base::id = unsafe { msg_send![ns_view, window] };
+    (!ns_window.is_null()).then_some(ns_window)
+}
+
 // ---------------------------------------------------------------------------
 // Per-display overlay window registry
 // ---------------------------------------------------------------------------
@@ -254,7 +270,7 @@ pub(crate) fn open_snap_overlay_window(
         if !host_policy.is_hidden() {
             crate::runtime_policy::check(ExternalEffect::NativeVisibility)?;
             handle.update(cx, |_, window, _| -> Result<()> {
-                let native = crate::components::inline_popup_window::inline_popup_ns_window(window)
+                let native = snap_overlay_ns_window(window)
                     .ok_or_else(|| anyhow::anyhow!("snap_native_window_missing"))?;
                 // SAFETY: native is the exact newly-created live GPUI window.
                 unsafe {

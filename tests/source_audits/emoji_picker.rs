@@ -43,33 +43,6 @@ fn test_render_emoji_picker_handles_enter_copy() {
 }
 
 #[test]
-fn test_render_emoji_picker_delegates_arrow_navigation_to_navigate_emoji_picker() {
-    let source = read_emoji_picker_source();
-
-    // Arrow keys are now handled exclusively via navigate_emoji_picker called
-    // from the interceptor in startup_new_arrow.rs — no local arrow handling.
-    assert!(
-        source.contains("navigate_emoji_picker"),
-        "emoji picker should define navigate_emoji_picker method"
-    );
-    assert!(
-        source.contains("crate::emoji::EmojiNavDirection"),
-        "navigate_emoji_picker should use EmojiNavDirection from emoji module"
-    );
-    assert!(
-        source.contains("crate::emoji::build_display_grid_layout"),
-        "navigate_emoji_picker should use row-aware build_display_grid_layout \
-         so it accounts for the Frequently Used head block AND category \
-         boundaries (the legacy build_emoji_grid_layout did not understand \
-         the head block)"
-    );
-    assert!(
-        source.contains("scroll_row_for_index"),
-        "navigate_emoji_picker should use row-aware scroll position"
-    );
-}
-
-#[test]
 fn test_render_emoji_picker_no_duplicate_arrow_handling() {
     let source = read_emoji_picker_source();
 

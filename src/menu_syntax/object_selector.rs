@@ -213,6 +213,9 @@ pub fn apply_object_selector_intent(
     }
 }
 
+/// Maximum rows the object selector shows before scrolling.
+const OBJECT_SELECTOR_MAX_VISIBLE_ROWS: usize = 8;
+
 pub fn object_selector_visible_start_for_selection(
     visible_start: usize,
     selected_index: usize,
@@ -222,7 +225,7 @@ pub fn object_selector_visible_start_for_selection(
         visible_start,
         selected_index,
         item_count,
-        crate::components::inline_popup_window::INLINE_POPUP_MAX_VISIBLE_ROWS,
+        OBJECT_SELECTOR_MAX_VISIBLE_ROWS,
     )
     .start
 }

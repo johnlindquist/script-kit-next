@@ -169,11 +169,6 @@ fn action_canonical_shortcut(action: &Action) -> Option<String> {
     }
 }
 
-fn action_matches_keystroke_shortcut(action: &Action, normalized_keystroke_shortcut: &str) -> bool {
-    action_canonical_shortcut(action)
-        .is_some_and(|canonical| canonical == normalized_keystroke_shortcut)
-}
-
 pub(crate) fn visible_action_shortcut_bindings(
     actions: &[Action],
     filtered_actions: &[usize],
@@ -533,32 +528,6 @@ pub(super) fn build_grouped_items_static(
     let _ = prev_category;
 
     grouped
-}
-
-/// Whether a separator line should be shown before a filtered item index.
-///
-/// Used for `SectionStyle::Separators` so we can visually group sections
-/// without injecting explicit header rows.
-pub(super) fn should_render_section_separator(
-    actions: &[Action],
-    filtered_actions: &[usize],
-    filter_idx: usize,
-) -> bool {
-    if filter_idx == 0 {
-        return false;
-    }
-
-    let current_action = filtered_actions
-        .get(filter_idx)
-        .and_then(|&idx| actions.get(idx));
-    let previous_action = filtered_actions
-        .get(filter_idx - 1)
-        .and_then(|&idx| actions.get(idx));
-
-    match (previous_action, current_action) {
-        (Some(prev), Some(curr)) => prev.section != curr.section,
-        _ => false,
-    }
 }
 
 const ACTIONS_DIALOG_FOOTER_HEIGHT: f32 = 32.0;
@@ -5053,6 +5022,7 @@ pub(crate) struct ActionsDialogChromeAudit {
 
 impl ActionsDialogChromeAudit {
     /// Audit the live dialog defaults against the `.impeccable.md` spec.
+    #[cfg(test)]
     pub(crate) fn from_live_defaults() -> Self {
         let style = actions_dialog_default_style();
         Self {

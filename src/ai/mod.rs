@@ -38,7 +38,6 @@ pub(crate) mod context_selector_row;
 pub(crate) mod conversations;
 pub(crate) mod current_app_automation_memory;
 pub mod entry_contract;
-pub(crate) mod explicit_target_handoff;
 pub mod focused_text;
 pub(crate) mod harness;
 pub(crate) mod local_llm;
@@ -165,7 +164,6 @@ pub use self::context_selector::types::{
 pub use self::context_selector::{
     context_selector_rows, score_builtin, score_builtin_with_trigger, slash_command_rows,
 };
-pub(crate) use self::explicit_target_handoff::request_explicit_agent_chat_handoff_from_secondary_window;
 
 // ---------------------------------------------------------------------------
 // Pending explicit Agent Chat target — cross-window handoff slot

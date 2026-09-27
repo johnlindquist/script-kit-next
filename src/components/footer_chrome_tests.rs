@@ -337,8 +337,6 @@ mod tests {
         assert_eq!(FOOTER_ACTION_CONTENT_PADDING_X_PX, 4.0);
         assert_eq!(FOOTER_ACTION_BUTTON_RADIUS_PX, 6.0);
         assert_eq!(footer_centered_action_edge_padding_x(), 10.0);
-        assert_eq!(FOOTER_RUN_SLOT_MIN_WIDTH_PX, 92.0);
-        assert_eq!(FOOTER_RUN_SLOT_MAX_WIDTH_PX, 242.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Actions), 92.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Ai), 52.0);
         assert_eq!(footer_action_slot_width(FooterActionSlot::Apply), 84.0);

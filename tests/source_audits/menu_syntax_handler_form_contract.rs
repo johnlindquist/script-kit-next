@@ -432,7 +432,7 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
         "preflight tabAction must be None for handler forms before emitting Ask AI"
     );
 
-    for path in ["src/app_impl/startup.rs", "src/app_impl/startup_new_tab.rs"] {
+    for path in ["src/app_impl/startup.rs"] {
         let source = read(path);
         assert!(
             source.contains("menu_syntax_capture_form_owns_input()"),

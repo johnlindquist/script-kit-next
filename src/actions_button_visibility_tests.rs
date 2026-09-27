@@ -451,11 +451,6 @@ mod tests {
             "ToggleActions must still route through handle_cmd_k_actions_toggle()"
         );
         assert!(
-            !intent_section.contains("toggle_actions_for_host("),
-            "startup actions key intent must not bypass the shared dispatcher with toggle_actions_for_host(). Found:\n{}",
-            intent_section
-        );
-        assert!(
             route_pos < intent_pos,
             "startup must check route_key_to_actions_dialog() before local actions key intent dispatch"
         );

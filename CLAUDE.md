@@ -80,7 +80,7 @@ Before adding or changing UI:
 
 Shared UI entry points to check first:
 
-- Inputs/search/menu fields: `src/components/text_input.rs`, `src/components/text_input/**`, `src/components/inline_prompt_input.rs`, `src/components/inline_dropdown/**`, `src/components/inline_picker.rs`, and `src/components/inline_popup_window.rs`.
+- Inputs/search/menu fields: `src/components/text_input.rs`, `src/components/text_input/**`, `src/components/inline_prompt_input.rs`, `src/components/inline_dropdown/**`, and `src/components/inline_picker.rs`.
 - List rows and sections: `src/components/unified_list_item/**`; preserve existing `crate::list_item` usage where that is the current surface contract, but do not invent a third row system.
 - Prompt shells and prompt chrome: `src/components/prompt_layout_shell.rs`, `src/components/prompt_container.rs`, `src/components/prompt_footer.rs`, and `src/components/minimal_prompt_shell.rs`.
 - Footer and hint strips: `src/components/hint_strip.rs`, `src/components/footer_chrome.rs`, `src/footer_popup.rs`, and native footer handling in `src/app_impl/ui_window.rs`.
@@ -143,7 +143,7 @@ the Actions menu, Notes, and every other window. The contract:
   visible window is a contract violation (runtime tripwire
   `glass_hidden_park_on_visible_window`);
 - every window uses the window material; the untinted popup material
-  (`NativeGlassSurfaceRole::PopupBackdrop`) has no window left, since ⌘K acts
+  (formerly `NativeGlassSurfaceRole::PopupBackdrop`) is deleted, since ⌘K acts
   in place and confirm modals are retired;
 - the Notes window is retired (2026-09-27): notes open as a view under the main
   input, so there is no Notes reveal or resize unlock;

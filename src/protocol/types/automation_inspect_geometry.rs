@@ -4,68 +4,21 @@
 //! suggested click targets from resolved automation window metadata.
 
 use super::automation_inspect::{InspectBoundsInScreenshot, InspectPoint, SuggestedHitPoint};
-use super::automation_window::{
-    AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
-};
+use super::automation_window::{AutomationWindowInfo, AutomationWindowKind};
 
 /// Compute the bounding rectangle of the target surface inside the
-/// captured screenshot.
-///
-/// For attached surfaces (ActionsDialog, PromptPopup), this is offset
-/// from the recorded parent window's origin. For detached windows, the
+/// captured screenshot. Every automation target owns its own window, so the
 /// origin is `(0, 0)`.
-///
-/// Uses the popup's `parent_window_id` metadata to resolve the parent.
-/// Falls back to `AutomationWindowTarget::Main` only when no parent
-/// metadata is recorded (legacy popups registered without a parent).
-/// For test isolation, prefer [`target_bounds_in_screenshot_with_main`].
 pub fn target_bounds_in_screenshot(
     resolved: &AutomationWindowInfo,
 ) -> Option<InspectBoundsInScreenshot> {
-    let parent_bounds = match resolved.kind {
-        AutomationWindowKind::ActionsDialog | AutomationWindowKind::PromptPopup => {
-            // Prefer the popup's recorded parent; fall back to Main for
-            // legacy registrations without parent metadata.
-            let parent_target = match resolved.parent_window_id.as_ref() {
-                Some(pid) => AutomationWindowTarget::Id { id: pid.clone() },
-                None => AutomationWindowTarget::Main,
-            };
-            let parent = crate::windows::resolve_automation_window(Some(&parent_target)).ok()?;
-            parent.bounds
-        }
-        _ => None,
-    };
-    target_bounds_in_screenshot_with_main(resolved, parent_bounds.as_ref())
-}
-
-/// Like [`target_bounds_in_screenshot`] but accepts explicit main-window
-/// bounds instead of resolving from the global registry.
-///
-/// Useful for deterministic tests and for callers that already hold the
-/// main window metadata.
-pub fn target_bounds_in_screenshot_with_main(
-    resolved: &AutomationWindowInfo,
-    main_bounds: Option<&super::automation_window::AutomationWindowBounds>,
-) -> Option<InspectBoundsInScreenshot> {
     let bounds = resolved.bounds.as_ref()?;
-
-    match resolved.kind {
-        AutomationWindowKind::ActionsDialog | AutomationWindowKind::PromptPopup => {
-            let main_bounds = main_bounds?;
-            Some(InspectBoundsInScreenshot {
-                x: bounds.x - main_bounds.x,
-                y: bounds.y - main_bounds.y,
-                width: bounds.width,
-                height: bounds.height,
-            })
-        }
-        _ => Some(InspectBoundsInScreenshot {
-            x: 0.0,
-            y: 0.0,
-            width: bounds.width,
-            height: bounds.height,
-        }),
-    }
+    Some(InspectBoundsInScreenshot {
+        x: 0.0,
+        y: 0.0,
+        width: bounds.width,
+        height: bounds.height,
+    })
 }
 
 /// Return the center of the given screenshot-relative bounds.
@@ -88,8 +41,6 @@ pub fn default_suggested_hit_points(
     let center = default_surface_hit_point(bounds);
 
     let semantic_id = match resolved.kind {
-        AutomationWindowKind::ActionsDialog => "panel:actions-dialog",
-        AutomationWindowKind::PromptPopup => "panel:prompt-popup",
         AutomationWindowKind::Notes => "input:notes-editor",
         _ => "panel:window",
     };

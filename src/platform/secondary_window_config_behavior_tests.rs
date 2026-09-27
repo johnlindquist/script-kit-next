@@ -63,20 +63,6 @@ fn main_backdrop_fills_the_window_but_keeps_the_partitioned_host_policy() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn only_actions_use_the_popup_backdrop() {
-    assert!(super::window_name_uses_popup_backdrop("Actions popup"));
-    for window_name in [
-        "Main window",
-        "Notes",
-        "Inline popup",
-        "Shortcut recorder popup",
-    ] {
-        assert!(!super::window_name_uses_popup_backdrop(window_name));
-    }
-}
-
-#[cfg(target_os = "macos")]
-#[test]
 fn notes_backdrop_layout_can_toggle_without_changing_outer_frame() {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
 
@@ -198,39 +184,13 @@ fn native_glass_style_locks_tint_floor_and_preserves_requested_tint_semantics() 
     assert_ne!(backdrop.signature, explicit.signature);
 }
 
-/// The Actions popup composites over the already-tinted main glass; its own
-/// stability tint read as a washed-out gray settle (2026-09-23 owner report).
-/// Its backdrop stays untinted even when a theme requests tint, while the
-/// window backdrop keeps the floor and the requested value.
-#[cfg(target_os = "macos")]
-#[test]
-fn popup_backdrop_stays_untinted_regardless_of_requested_tint() {
-    let mut inherited = crate::theme::Theme::default();
-    inherited.opacity.as_mut().unwrap().glass_tint_opacity = None;
-    let mut requested = inherited.clone();
-    requested.opacity.as_mut().unwrap().glass_tint_opacity = Some(0.72);
-    for theme in [&inherited, &requested] {
-        let popup =
-            super::resolve_native_glass_style(theme, super::NativeGlassSurfaceRole::PopupBackdrop);
-        assert_eq!(popup.effective_tint_alpha, 0.0);
-        assert_eq!(popup.veil_alpha, 0.0);
-        assert_eq!(popup.rim_width, 0.0);
-    }
-    let window = |theme: &crate::theme::Theme| {
-        super::resolve_native_glass_style(theme, super::NativeGlassSurfaceRole::WindowBackdrop)
-            .effective_tint_alpha
-    };
-    assert_eq!(window(&inherited), 0.35);
-    assert_eq!(window(&requested), 0.72);
-}
-
 /// The material stack must be STATIC between morph start and settle: only
 /// the initial installation and explicitly recorded theme refreshes may
 /// apply native styles. A per-frame tint/veil/opacity animation during
 /// entry would land here as an in-span `Install` re-application — the
-/// ledger flags it so runtime receipts (and probes reading
-/// `native_glass_style_mutation_during_entry` error events) can prove
-/// `styleMutationCountDuringEntry == 0`.
+/// ledger flags it so probes reading
+/// `native_glass_style_mutation_during_entry` error events can prove a
+/// healthy entry emits none.
 #[cfg(target_os = "macos")]
 #[test]
 fn native_glass_style_ledger_flags_only_mid_entry_reapplications() {
@@ -264,7 +224,6 @@ fn native_glass_style_ledger_flags_only_mid_entry_reapplications() {
     assert!(!ledger.record_application(application(7, 71, 1_100, Install)));
     // Theme refresh mid-span is the explicitly recorded exception.
     assert!(!ledger.record_application(application(7, 70, 1_200, ThemeRefresh)));
-    assert_eq!(ledger.style_mutation_count_during_entry(7), 0);
     assert!(ledger.has_identical_surface_style_during_entry(7, 70, 1_300, signature));
     assert!(!ledger.has_identical_surface_style_during_entry(7, 72, 1_300, signature));
     // A tint/veil/opacity animation during entry looks exactly like this:
@@ -272,18 +231,14 @@ fn native_glass_style_ledger_flags_only_mid_entry_reapplications() {
     // the span. It must be flagged — this is the assertion that fails if
     // anyone temporarily mutates capsule tint during entry.
     assert!(ledger.record_application(application(7, 70, 1_500, Install)));
-    assert_eq!(ledger.style_mutation_count_during_entry(7), 1);
     // After settle, re-applications are outside the entry contract.
     assert!(!ledger.record_application(application(7, 70, 2_500, Install)));
-    assert_eq!(ledger.style_mutation_count_during_entry(7), 1);
     // A first-ever installation landing inside its own span (window whose
     // backdrop is created mid-morph) is the initial install, not a
     // mutation.
     ledger.record_entry_span(9, 1_000, 2_000);
     assert!(!ledger.record_application(application(9, 90, 1_050, Install)));
-    assert_eq!(ledger.style_mutation_count_during_entry(9), 0);
     assert!(ledger.record_application(application(9, 90, 1_060, Install)));
-    assert_eq!(ledger.style_mutation_count_during_entry(9), 1);
 }
 
 #[cfg(target_os = "macos")]

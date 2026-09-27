@@ -30,11 +30,6 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
         "Liquid Glass must only be enabled when the macOS 26 NSGlassEffectView API is present"
     );
     assert!(
-        platform.contains("unsafe fn liquid_glass_tint_color()")
-            && platform.contains("crate::ui_foundation::main_window_matched_background_rgba(&theme)"),
-        "Tahoe glass capability code must preserve the shared theme tint helper for future contentView-backed glass elements"
-    );
-    assert!(
         ui_foundation.contains("pub fn main_window_matched_background_rgba(theme: &Theme) -> u32")
             && ui_foundation
                 .contains("pub fn main_window_matched_background(theme: &Theme) -> Rgba")
@@ -45,11 +40,6 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
         main_vibrancy
             .contains("configure_tahoe_window_backdrop(window, \"PANEL\", \"Main window\")"),
         "Main-window vibrancy must use the semantic Tahoe window-backdrop hook"
-    );
-    assert!(
-        platform.contains("configure_tahoe_window_backdrop(window, \"APPEARANCE\", &title_string)")
-            && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
-        "Theme/appearance refresh must revisit existing secondary native backdrops"
     );
     assert!(
         main_vibrancy

@@ -1,7 +1,7 @@
 //! Secondary-surface semantic element collectors.
 //!
 //! Provides [`collect_surface_snapshot`] which returns semantic elements for
-//! non-main automation windows (PromptPopup).
+//! non-main automation windows (the snap overlay).
 //!
 //! Used by both `getElements` and `inspectAutomationWindow` so agents see one
 //! consistent semantic model regardless of which protocol command they use.
@@ -215,21 +215,7 @@ pub struct SurfaceElementSnapshot {
     pub quality: SnapshotQuality,
 }
 
-impl SurfaceElementSnapshot {
-    /// Returns semantic fallback warnings relevant to popup capture receipts.
-    ///
-    /// These are the `panel_only_*` warnings that indicate the surface could
-    /// not be fully introspected and only a panel-level element was collected.
-    /// Agents use these to know when semantic receipts are degraded for a
-    /// popup surface.
-    pub fn popup_semantic_warnings(&self) -> Vec<String> {
-        self.warnings
-            .iter()
-            .filter(|w| w.starts_with("panel_only_"))
-            .cloned()
-            .collect()
-    }
-}
+impl SurfaceElementSnapshot {}
 
 fn element(
     semantic_id: &str,
@@ -576,7 +562,6 @@ fn collect_registered_surface_layout_inner(
     let mut required = Vec::<String>::new();
     let mut layout = match target.kind {
         AutomationWindowKind::Notes => anyhow::bail!("no_notes_window"),
-        AutomationWindowKind::ActionsDialog => anyhow::bail!("actions_are_staged_in_place"),
         AutomationWindowKind::SnapOverlay => {
             let entity = exact_root::<crate::window_control::SnapOverlayView>(&target, cx)
                 .ok_or_else(|| anyhow::anyhow!("snap_layout_owner_missing"))?;
@@ -659,7 +644,6 @@ pub fn surface_revision_facts(
     }
     match resolved.kind {
         AutomationWindowKind::Notes => None,
-        AutomationWindowKind::ActionsDialog => None,
         AutomationWindowKind::SnapOverlay => read_window_root(
             handle.downcast::<crate::window_control::SnapOverlayView>()?,
             window,
@@ -667,18 +651,6 @@ pub fn surface_revision_facts(
             |view, _| view.revision_facts(),
         )
         .ok(),
-        AutomationWindowKind::PromptPopup => {
-            if let Some(state) = crate::footer_popup::footer_runtime_state(&resolved.id, generation)
-            {
-                return Some((
-                    state.semantic_revision,
-                    state.semantic_revision,
-                    state.presentation_revision,
-                    state.applied_theme_revision,
-                ));
-            }
-            None
-        }
         _ => None,
     }
 }
@@ -705,7 +677,6 @@ pub fn close_owned_registered_surface(
     );
     match resolved.kind {
         AutomationWindowKind::Notes => anyhow::bail!("no_notes_window"),
-        AutomationWindowKind::ActionsDialog => anyhow::bail!("actions_are_staged_in_place"),
         AutomationWindowKind::SnapOverlay => {
             let handle = handle
                 .downcast::<crate::window_control::SnapOverlayView>()
@@ -731,8 +702,6 @@ pub fn collect_surface_snapshot(
     let resolved = &current;
     let mut snapshot = match resolved.kind {
         AutomationWindowKind::Notes => return None,
-        AutomationWindowKind::ActionsDialog => return None,
-        AutomationWindowKind::PromptPopup => collect_exact_prompt_popup_snapshot(resolved)?,
         AutomationWindowKind::SnapOverlay => collect_snap_snapshot(resolved, cx)?,
         _ => return None,
     };

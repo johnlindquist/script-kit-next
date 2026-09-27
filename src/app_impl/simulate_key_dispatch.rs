@@ -625,7 +625,7 @@ impl ScriptListApp {
                     // File-search key handling. Mirrors the GPUI live
                     // handler arms at src/render_builtins/file_search.rs
                     // (Cmd+K / Enter) and the arrow interceptor at
-                    // src/app_impl/startup_new_arrow.rs (Up/Down).
+                    // src/app_impl/startup.rs (Up/Down).
                     logging::log(
                         "STDIN",
                         &format!("SimulateKey: Dispatching '{}' to FileSearchView", key_lower),
