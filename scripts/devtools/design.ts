@@ -55,7 +55,7 @@ export const CORE_FIXTURES: Record<CoreJourneyId, readonly string[]> = {
   "editable-prompt-validation": ["prompt.form", "prompt.fields", "prompt.editor", "prompt.template"],
   "actions-popup-activation": ["main.script-list"],
   "conversation-recovery-stop": [...CONVERSATION_FIXTURE_IDS],
-  "theme-publication-revert": ["main.script-list", "notes.editor", "main.theme-chooser"],
+  "theme-publication-revert": ["main.script-list", "main.theme-chooser"],
   "close-reopen-stale": ["main.script-list"],
 };
 export function readArtifactReference(path: string): ArtifactReference {
@@ -496,7 +496,7 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
         break;
       }
       case "theme-publication-revert": {
-        const main = await mount("main.script-list"); const notes = await mount("notes.editor");
+        const main = await mount("main.script-list");
         const tokenId = "theme.colors.accent.selected";
         const resolvedValue = (result: { resolved: readonly LiveThemeEdit[] }) => {
           const matches = Array.isArray(result.resolved) ? result.resolved.filter(edit => edit.tokenId === tokenId) : [];
@@ -523,7 +523,7 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
         const baseline = await captureSelected("baseline", initial.liveTheme.revision);
         const publication = await active.applyTheme(initial.liveTheme.revision, [{ tokenId, value: requestedValue }]);
         // Assert publication cause before any explicit frame can mask lost delivery.
-        assertStory(receipt, "two_family_causal_invalidation", publicationCausalityIssues(publication, [main, notes]).length === 0);
+        assertStory(receipt, "causal_invalidation", publicationCausalityIssues(publication, [main]).length === 0);
         assertStory(receipt, "requested_token_resolved", resolvedValue(publication) === requestedValue && requestedValue !== baselineValue);
         const edited = await captureSelected("edited", publication.revision);
         const editedRegionSame = JSON.stringify(edited.selectedRegion) === JSON.stringify(baseline.selectedRegion);
@@ -532,9 +532,8 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
           baselineHash: baseline.sha256, observedHash: edited.sha256, sameRegion: editedRegionSame, pixelsChanged: editChangedPixels });
         assertStory(receipt, "edit_preserves_selected_region", editedRegionSame);
         assertStory(receipt, "edit_changes_selected_region_pixels", editChangedPixels);
-        receipt.frames.push(await active.frame(notes)); await active.capture(notes, false);
         const reverted = await active.revertTheme(publication.revision);
-        assertStory(receipt, "same_lifetime_revert", publicationCausalityIssues(reverted, [main, notes]).length === 0);
+        assertStory(receipt, "same_lifetime_revert", publicationCausalityIssues(reverted, [main]).length === 0);
         assertStory(receipt, "revert_restores_resolved_token", resolvedValue(reverted) === baselineValue);
         const restored = await captureSelected("reverted", reverted.revision);
         const revertedRegionSame = JSON.stringify(restored.selectedRegion) === JSON.stringify(baseline.selectedRegion);
@@ -543,21 +542,20 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
           baselineHash: baseline.sha256, observedHash: restored.sha256, sameRegion: revertedRegionSame, pixelsRestored: revertRestoredPixels });
         assertStory(receipt, "revert_preserves_selected_region", revertedRegionSame);
         assertStory(receipt, "revert_restores_selected_region_pixels", revertRestoredPixels);
-        receipt.frames.push(await active.frame(notes)); await active.capture(notes, false);
-        await fixtureControl(active, notes, { family: "fault", operation: "suppressThemeNotification", target: notes });
+        await fixtureControl(active, main, { family: "fault", operation: "suppressThemeNotification", target: main });
         const negative = await active.applyTheme(reverted.revision, [{ tokenId: "theme.colors.accent.selected", value: 0x72c1a8 }]);
-        const detected = publicationCausalityIssues(negative, [main, notes]).length > 0;
-        await active.inspect(notes); await active.frame(notes);
+        const detected = publicationCausalityIssues(negative, [main]).length > 0;
+        await active.inspect(main); await active.frame(main);
         assertStory(receipt, "missing_notification_negative_after_explicit_frame", detected);
         const finalRevert = await active.revertTheme(negative.revision);
         assertStory(receipt, "negative_control_restores_resolved_token", resolvedValue(finalRevert) === baselineValue);
         receipt.effects.push(publication, reverted, negative, finalRevert);
         let wrongThemeTargetRefused = false;
-        try { await fixtureControl(active, notes, { family: "theme", operation: "armSaveFailure" }); }
+        try { await fixtureControl(active, main, { family: "theme", operation: "armSaveFailure" }); }
         catch (error) {
           if (!(error instanceof EvaluationContractError || error instanceof DriverCommandRefused)) throw error;
           wrongThemeTargetRefused = error.code === "theme_chooser_fixture_required";
-          receipt.effects.push({ kind: "themeFixtureWrongTarget", target: notes, refusedCode: error.code });
+          receipt.effects.push({ kind: "themeFixtureWrongTarget", target: main, refusedCode: error.code });
         }
         assertStory(receipt, "theme_fault_requires_actual_theme_chooser", wrongThemeTargetRefused);
         const chooser = await mount("main.theme-chooser");

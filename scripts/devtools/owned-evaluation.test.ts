@@ -62,7 +62,7 @@ test("owned permits require verified feature capability, cannot serialize, and a
   expect(Object.isFrozen(facts.claim)).toBe(true);
   expect(Object.isFrozen(facts.claim.owner)).toBe(true);
   expect(() => consumeOwnedEvaluationPermit(permit)).toThrow("forged or consumed permit");
-  expect(() => assertOwnedEvaluationCommand(permit, { type: "design", command: { operation: "mount", fixtureId: "notes.editor" } })).toThrow("fixture outside sealed subset");
+  expect(() => assertOwnedEvaluationCommand(permit, { type: "design", command: { operation: "mount", fixtureId: "main.theme-chooser" } })).toThrow("fixture outside sealed subset");
   expect(() => assertOwnedEvaluationCommand(permit, { type: "show" })).toThrow("operation is not evaluator-local");
   expect(() => assertOwnedEvaluationCommand(permit, { type: "getState", target: { type: "main" } })).toThrow("exact mounted instance required");
   expect(() => assertOwnedEvaluationCommand(permit, { type: "getState", target: { type: "instance", id: "main", generation: 1 } })).not.toThrow();

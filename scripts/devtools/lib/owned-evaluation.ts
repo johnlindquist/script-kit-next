@@ -29,7 +29,7 @@ export interface ScopedActionReceipt {
 export interface FixtureDescriptor {
   readonly id: string;
   readonly family: string;
-  readonly root: "main" | "notes" | "agentChat" | "secondary";
+  readonly root: "main" | "agentChat" | "secondary";
   readonly owner: string;
   readonly parentFixtureId?: string;
   readonly proofBoundary: "owned-production-runtime";
@@ -78,7 +78,6 @@ export type FixtureControl =
       { operation: "emitText"; messageId: string; text: string } |
       { operation: "complete" | "fail"; messageId: string } |
       { operation: "retry" | "stop" }))
-  | { family: "notes"; operation: "toggleTask"; markerStart: number; markerEnd: number; checked: boolean }
   | { family: "oneWindow"; operation: "talkTo"; destination: "chat" | "note" }
   | ({ family: "search" } & ({ operation: "prepare"; scenario: string } |
       { operation: "release"; runIds: readonly number[] } | { operation: "advance"; milliseconds: number }))
