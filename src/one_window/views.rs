@@ -131,9 +131,11 @@ impl ScriptListApp {
             leave_text: None,
         };
         self.one_window_host.view = Some(view);
-        self.one_window_handle(Event::View(ViewOp::Open(spec)), cx);
         let px = self.one_window_natural_height();
-        self.one_window_handle(Event::Content { px }, cx);
+        self.one_window_handle_turn(
+            vec![Event::View(ViewOp::Open(spec)), Event::Content { px }],
+            cx,
+        );
     }
 
     /// The view the reducer has on top, when it's one of these.
@@ -422,17 +424,29 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let question = result.raw_input.clone();
-        if self.one_window.text() != question {
-            self.one_window_handle(Event::Text(question.clone()), cx);
-        }
         let mut answer = Answer::asking(question.clone());
-        self.one_window_open_view(HostedView::Answer(answer.clone()), None, cx);
         answer.arrived(vec![Fact::new(
             result.formatted.clone(),
             format!("{} · {}", result.operation_name, result.words),
             Source::YourWords,
         )]);
-        self.one_window_answer_arrived(answer, cx);
+        let view = HostedView::Answer(answer);
+        let spec = ViewSpec {
+            name: view.name().to_string(),
+            label: view.label(),
+            enter: Some(view.enter()),
+            takes_input: true,
+            text: None,
+            leave_text: None,
+        };
+        self.one_window_host.view = Some(view);
+        let px = self.one_window_natural_height();
+        let mut turn = Vec::new();
+        if self.one_window.text() != question {
+            turn.push(Event::Text(question));
+        }
+        turn.extend([Event::View(ViewOp::Open(spec)), Event::Content { px }]);
+        self.one_window_handle_turn(turn, cx);
     }
 
     /// What was copied, as a card: the answer to "what did I copy".

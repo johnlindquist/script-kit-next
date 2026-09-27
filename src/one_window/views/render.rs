@@ -145,15 +145,21 @@ impl ScriptListApp {
         let colors = ListItemColors::from_theme(&self.theme);
         let theme = self.current_main_menu_theme;
         let header_h = crate::list_item::effective_first_section_header_height_for_theme(theme);
-        let mut list = div().w_full().h_full().flex().flex_col().child(
-            div()
-                .flex_none()
-                .debug_selector(|| "oneWindowSectionHeader:0".to_string())
-                .h(px(header_h))
-                .child(crate::list_item::render_section_header(
-                    &head, None, colors, true,
-                )),
-        );
+        let mut list = div()
+            .w_full()
+            .h_full()
+            .flex()
+            .flex_col()
+            .pt(crate::main_list_header_overlay_height(theme.def()))
+            .child(
+                div()
+                    .flex_none()
+                    .debug_selector(|| "oneWindowSectionHeader:0".to_string())
+                    .h(px(header_h))
+                    .child(crate::list_item::render_section_header(
+                        &head, None, colors, true,
+                    )),
+            );
         for (ix, row) in rows.into_iter().enumerate() {
             let selector = format!("list-row:{}", row.id);
             let icon =
@@ -174,6 +180,21 @@ impl ScriptListApp {
             );
         }
         Some(list.into_any_element())
+    }
+
+    /// The row the drawn view has selected, which is the window's selected row while it's drawn.
+    pub(crate) fn one_window_view_selected_id(&self) -> Option<String> {
+        let rows = match self.one_window_hosted_view() {
+            Some(view) => view_rows(view),
+            None if self.one_window.staged().is_some()
+                && !self.one_window.in_view()
+                && self.filter_text.trim().is_empty() =>
+            {
+                self.one_window_staged_rows()?.1
+            }
+            None => return None,
+        };
+        rows.into_iter().find(|row| row.selected).map(|row| row.id)
     }
 
     /// The staged subject's rows as the reducer lays them out, the first under its header.

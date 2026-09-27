@@ -172,7 +172,11 @@ impl ScriptListApp {
     }
 
     /// Feeds events that happen in one turn: the reducer sees them at the same moment.
-    fn one_window_handle_turn(&mut self, events: Vec<Event>, cx: &mut Context<Self>) -> Handled {
+    pub(super) fn one_window_handle_turn(
+        &mut self,
+        events: Vec<Event>,
+        cx: &mut Context<Self>,
+    ) -> Handled {
         let mut queue = VecDeque::from(events);
         let mut handled = Handled::default();
         let mut runs = Vec::new();
@@ -212,9 +216,9 @@ impl ScriptListApp {
                     ),
                 }
             }
-            self.one_window_views_follow();
             queue.extend(self.one_window_view_typed());
         }
+        self.one_window_views_follow();
         for row in runs {
             handled.ran = true;
             if let Err(error) = self.one_window_run(row, cx) {

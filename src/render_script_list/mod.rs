@@ -1311,15 +1311,13 @@ impl ScriptListApp {
                                     let mut item_name = "inline-calculator";
                                     let item_element = if let Some(calculator) = inline_calculator
                                     {
-                                        let _legacy_calculator_renderer = render_calculator_item;
                                         render_inline_calc_list_item(
                                             calculator,
                                             row_semantic_id,
+                                            ix,
                                             is_selected,
-                                            &this.theme,
-                                            this.current_main_menu_theme.def().list,
-                                            this.current_design,
-                                            color_resolver,
+                                            theme_colors,
+                                            current_main_menu_theme,
                                         )
                                     } else if let Some(result) = flat_results_clone.get(*result_idx)
                                     {

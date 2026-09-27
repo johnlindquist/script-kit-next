@@ -653,7 +653,8 @@ impl ScriptListApp {
                     .checked_sub(1)
                     .and_then(semantic_id_at),
                 selected_row.map(|row| row.stable_key.clone()),
-                selected_row.map(|row| row.semantic_id.clone()),
+                self.one_window_view_selected_id()
+                    .or_else(|| selected_row.map(|row| row.semantic_id.clone())),
                 self.hovered_index.and_then(semantic_id_at),
             )
         };
