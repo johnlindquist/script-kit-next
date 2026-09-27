@@ -4,6 +4,8 @@ const CLIPBOARD: &str = include_str!("../src/render_builtins/clipboard.rs");
 const BROWSER_TABS: &str = include_str!("../src/render_builtins/browser_tabs.rs");
 const NOTES_BROWSE: &str = include_str!("../src/render_builtins/notes_browse.rs");
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
+const COLLECT_ELEMENTS_SURFACE_ROWS: &str =
+    include_str!("../src/app_layout/collect_elements_surface_rows.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const APP_VIEW_STATE: &str = include_str!("../src/main_sections/app_view_state.rs");
 
@@ -66,13 +68,47 @@ fn adjacent_get_elements_paths_use_visible_row_label_helpers() {
     for helper in [
         "clipboard_history_visible_row_labels",
         "browser_tabs_visible_row_labels",
-        "notes_browse_visible_row_labels",
     ] {
         assert!(
             COLLECT_ELEMENTS.contains(helper),
             "getElements must use visible-row label helper {helper}"
         );
     }
+
+    // Notes results carry per-row metadata, so getElements walks the same
+    // `search.state.rows()` titles the label helper reads instead of the
+    // bare labels.
+    assert!(
+        COLLECT_ELEMENTS.contains("self.collect_notes_browse_elements(search, limit)"),
+        "getElements must collect notes browse rows through collect_notes_browse_elements"
+    );
+    let collector = source_between(
+        COLLECT_ELEMENTS_SURFACE_ROWS,
+        "fn collect_notes_browse_elements(",
+        "\n    }\n",
+    );
+    let labels = source_between(
+        NOTES_BROWSE,
+        "fn notes_browse_visible_row_labels(",
+        "\n    }\n",
+    );
+    for source in [collector, labels] {
+        let compact: String = source.split_whitespace().collect();
+        assert!(
+            compact.contains("search.state.rows()") && compact.contains("row.title.clone()"),
+            "notes browse getElements and its label helper must read the same visible rows"
+        );
+    }
+}
+
+fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let start = source
+        .find(start)
+        .unwrap_or_else(|| panic!("missing {start}"));
+    let end = source[start..]
+        .find(end)
+        .unwrap_or_else(|| panic!("missing end after {start}"));
+    &source[start..start + end]
 }
 
 #[test]

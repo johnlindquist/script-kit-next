@@ -4,6 +4,8 @@
 //! surfaces no longer rely on Claude-specific copy or loaders.
 
 const AGENT_CHAT_CONFIG_SOURCE: &str = include_str!("../src/ai/agent_chat/ui/config.rs");
+const AGENT_CHAT_CONFIG_TESTS_SOURCE: &str =
+    include_str!("../src/ai/agent_chat/ui/config_tests.rs");
 const CONFIG_TYPES_SOURCE: &str = include_str!("../src/config/types.rs");
 const RELEASE_WORKFLOW_SOURCE: &str = include_str!("../.github/workflows/release.yml");
 const VERIFY_MACOS_BUNDLE_SOURCE: &str = include_str!("../scripts/verify-macos-bundle.sh");
@@ -197,7 +199,8 @@ fn codex_setup_normalizes_stale_absolute_adapter_paths() {
         "absolute stale codex-agent_chat paths must be detected by filename"
     );
     assert!(
-        AGENT_CHAT_CONFIG_SOURCE.contains("missing_adapter_does_not_normalize_to_npx_runtime"),
+        AGENT_CHAT_CONFIG_TESTS_SOURCE
+            .contains("fn missing_adapter_does_not_normalize_to_npx_runtime()"),
         "config tests must pin stale absolute codex-agent_chat migration away from npx"
     );
 }

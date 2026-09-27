@@ -76,7 +76,7 @@ fn generic_filterable_elements_do_not_fall_back_to_current_view_panel() {
     for needle in [
         "AppView::SearchAiPresetsView",
         "AppView::FavoritesBrowseView",
-        "collect_generic_filterable_rows",
+        "collect_filterable_rows_with_info_empty",
         "\"ai-presets-filter\"",
         "\"favorites-filter\"",
         "\"ai-presets\"",

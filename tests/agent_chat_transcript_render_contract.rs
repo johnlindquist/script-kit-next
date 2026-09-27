@@ -13,10 +13,19 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 
 #[test]
 fn main_view_main_slot_is_a_flex_column_viewport() {
-    let body = source_between(
+    let entry = source_between(
         MAIN_VIEW_CHROME_SOURCE,
         "pub(crate) fn render_main_view_main_slot(",
-        "\n}\n\npub(crate) fn main_view_input_text_inset_left",
+        "\n}\n",
+    );
+    assert!(
+        entry.contains("render_main_view_main_slot_with_bottom_inset(def, main, true)"),
+        "MainViewMain must render through the shared bottom-inset slot"
+    );
+    let body = source_between(
+        MAIN_VIEW_CHROME_SOURCE,
+        "fn render_main_view_main_slot_with_bottom_inset(",
+        "\n}\n",
     );
 
     assert!(

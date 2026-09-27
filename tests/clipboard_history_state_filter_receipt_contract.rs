@@ -50,6 +50,7 @@
 //! verification time.
 
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
+const CLIPBOARD: &str = include_str!("../src/render_builtins/clipboard.rs");
 
 #[test]
 fn clipboard_history_state_arm_destructures_variant_filter_and_selected_index() {
@@ -79,99 +80,92 @@ fn clipboard_history_state_arm_destructures_variant_filter_and_selected_index() 
     );
 }
 
-#[test]
-fn clipboard_history_state_arm_computes_filtered_count_from_variant_filter_case_insensitively() {
-    // The narrowing computation must live inside the arm and key on the
-    // destructured `filter` (NOT `self.filter_text`). It must also use
-    // `to_lowercase().contains(...)` so the case-insensitive semantics
-    // users see in `handle_filter_input_change` carry over to the stdin
-    // `setFilter` path and its state receipt.
+fn clipboard_history_state_arm() -> &'static str {
     let arm_pos = PROMPT_HANDLER
         .find("AppView::ClipboardHistoryView {\n                        filter,")
         .expect("ClipboardHistoryView arm must exist — see sibling contract");
     // Bound the body at the next `AppView::` arm so nothing downstream
     // can accidentally satisfy this contract.
-    let body_end_rel = PROMPT_HANDLER[arm_pos..]
-        .find("\n                    AppView::AgentChatHistoryView")
-        .expect(
-            "`ClipboardHistoryView` arm must be immediately followed by \
-             `AppView::AgentChatHistoryView` in the getState match — if that \
-             ordering changes, amend this contract rather than silently \
-             widening the body search.",
-        );
-    let body = &PROMPT_HANDLER[arm_pos..arm_pos + body_end_rel];
+    let body_start = arm_pos + "AppView::ClipboardHistoryView".len();
+    let body_end_rel = PROMPT_HANDLER[body_start..]
+        .find("\n                    AppView::")
+        .expect("`ClipboardHistoryView` arm must be followed by another getState arm");
+    &PROMPT_HANDLER[arm_pos..body_start + body_end_rel]
+}
 
+fn clipboard_fn_body(signature: &str) -> &'static str {
+    let start = CLIPBOARD
+        .find(signature)
+        .unwrap_or_else(|| panic!("src/render_builtins/clipboard.rs must define {signature}"));
+    let end_rel = CLIPBOARD[start..]
+        .find("\n    }\n")
+        .unwrap_or_else(|| panic!("{signature} body must close"));
+    &CLIPBOARD[start..start + end_rel]
+}
+
+#[test]
+fn clipboard_history_state_arm_computes_filtered_count_from_variant_filter_case_insensitively() {
+    // The narrowing computation must key on the destructured `filter`
+    // (NOT `self.filter_text`). It must also be case-insensitive so the
+    // semantics users see in `handle_filter_input_change` carry over to
+    // the stdin `setFilter` path and its state receipt.
+    let body = clipboard_history_state_arm();
     assert!(
-        body.contains("let entries = &self.cached_clipboard_entries;"),
-        "`ClipboardHistoryView` getState arm must read the full dataset \
-         from `self.cached_clipboard_entries` — this is the value that \
-         feeds the `choiceCount` position of the returned tuple, and \
+        body.contains("self.clipboard_history_dataset_and_visible_counts(filter)"),
+        "`ClipboardHistoryView` getState arm must count through the shared \
+         visible-row helper keyed on the destructured `filter`. Reading \
+         `self.filter_text` instead would reintroduce the stale-filter bug \
+         Pass #34 fixed."
+    );
+
+    let counts = clipboard_fn_body("fn clipboard_history_dataset_and_visible_counts(");
+    assert!(
+        counts.contains("self.cached_clipboard_entries.len()"),
+        "the dataset count must read the full dataset from \
+         `self.cached_clipboard_entries` — this feeds `choiceCount`, and \
          `empty-clipboard-state` distinguishes \"filter narrowed to zero\" \
          (choiceCount>0, visibleChoiceCount=0) from \"clipboard genuinely \
          empty\" (choiceCount=0, visibleChoiceCount=0) via this receipt."
     );
-
     assert!(
-        body.contains("let filter_lower = filter.to_lowercase();"),
-        "`ClipboardHistoryView` getState arm must lowercase the \
-         destructured `filter` before matching (`let filter_lower = \
-         filter.to_lowercase();`). Lowercasing `self.filter_text` instead \
-         would reintroduce the stale-filter bug Pass #34 fixed; \
-         switching to a case-sensitive match would break the user-facing \
-         semantics established by `handle_filter_input_change`."
+        counts.contains("self.clipboard_history_visible_rows(filter).len()"),
+        "the visible count must come from the same visible rows the list renders"
     );
 
+    let parse = clipboard_fn_body("fn parse(raw: &str) -> Self {");
     assert!(
-        body.contains(".contains(&filter_lower)"),
-        "`ClipboardHistoryView` getState arm must narrow via \
-         `.contains(&filter_lower)` on the entries. Changing to \
-         `.starts_with(...)` or `.eq(...)` would silently tighten \
-         filter semantics and break parity with the text-change path \
-         (`handle_filter_input_change`), which users expect the stdin \
-         `setFilter` receipt to mirror."
+        parse.contains("let raw_lower = raw.to_lowercase();"),
+        "the clipboard filter must lowercase the typed filter before matching; \
+         a case-sensitive match would break the user-facing semantics \
+         established by `handle_filter_input_change`."
     );
-
+    let text_matches = clipboard_fn_body("fn entry_text_matches(");
     assert!(
-        body.contains("e.text_preview.to_lowercase().contains(&filter_lower)"),
-        "`ClipboardHistoryView` getState arm must compare against \
-         `e.text_preview.to_lowercase()` — the `text_preview` field is \
-         what the UI renders and what the user sees narrow. Comparing \
-         against `e.full_text` or `e.app_name` here would drift the \
-         receipt away from the rendered list and the \
-         visibleChoiceCount=0 clause of `empty-clipboard-state` could \
-         hit on entries the user cannot see."
+        text_matches.contains("entry.text_preview.to_lowercase().contains(filter_lower)"),
+        "the clipboard filter must narrow via a case-insensitive `contains` on \
+         `text_preview` — the field the UI renders and the user sees narrow. \
+         Changing to `.starts_with(...)` or `.eq(...)` would silently tighten \
+         filter semantics and break parity with the text-change path."
     );
 }
 
 #[test]
 fn clipboard_history_state_arm_returns_dataset_len_and_filtered_count_in_correct_tuple_slots() {
-    // The 6-tuple returned by the arm is destructured at
-    // `src/prompt_handler/mod.rs:1899` as
+    // The tuple returned by the arm is destructured in `collect_state` as
     //   (prompt_type, prompt_id, placeholder, input_value,
     //    choice_count, visible_choice_count, selected_index, selected_value)
     //
     // For `empty-clipboard-state`'s corrected acceptance clause, slot 4
-    // (`choice_count`) MUST be `entries.len()` and slot 5
-    // (`visible_choice_count`) MUST be `filtered_count`. Swapping these
+    // (`choice_count`) MUST be the dataset count and slot 5
+    // (`visible_choice_count`) MUST be the visible count. Swapping these
     // would make the narrowing receipt indistinguishable from a genuine
     // empty-clipboard state.
-    let arm_pos = PROMPT_HANDLER
-        .find("AppView::ClipboardHistoryView {\n                        filter,")
-        .expect("ClipboardHistoryView arm must exist — see sibling contract");
-    let body_end_rel = PROMPT_HANDLER[arm_pos..]
-        .find("\n                    AppView::AgentChatHistoryView")
-        .expect("ClipboardHistoryView arm must precede AgentChatHistoryView");
-    let body = &PROMPT_HANDLER[arm_pos..arm_pos + body_end_rel];
+    let body = clipboard_history_state_arm();
 
-    // Pin the exact tuple shape: after the `(` and the `"clipboardHistory"`
-    // prompt type, two `None,` placeholder slots, then `filter.clone(),`
-    // (inputValue), then `entries.len(),` (choiceCount), then
-    // `filtered_count,` (visibleChoiceCount), then `*selected_index as i32,`.
-    //
-    // The literal newline-and-indent between the fields lets us pin
-    // positional semantics without being brittle to the surrounding
-    // `(` placement — inserting a whitespace-only line between tuple
-    // elements would still parse, and this contract would still pass.
+    assert!(
+        body.contains("let (dataset_count, visible_count) ="),
+        "arm must name the helper's (dataset, visible) pair in that order"
+    );
     assert!(
         body.contains("\"clipboardHistory\".to_string(),"),
         "arm must return `\"clipboardHistory\"` as the first tuple slot \
@@ -190,30 +184,24 @@ fn clipboard_history_state_arm_returns_dataset_len_and_filtered_count_in_correct
          or `write_filter_to_current_subview` fires."
     );
 
-    // Slot 4 (choiceCount) = entries.len(); Slot 5 (visibleChoiceCount) = filtered_count.
-    // Pin the literal ordering between these two lines in the tuple so
-    // a transposition would fail this test.
-    let entries_len_pos = body.find("entries.len(),").expect(
-        "arm must emit `entries.len(),` as slot 4 (choiceCount). If this \
-         becomes `filtered_count,` the narrowing receipt collapses: a \
-         filter-miss would look identical to an empty clipboard, and \
-         `empty-clipboard-state`'s acceptance clause fails at the \
-         source-semantic level.",
+    let tuple = &body[body
+        .find("\"clipboardHistory\".to_string(),")
+        .expect("arm must return the clipboardHistory tuple")..];
+    let dataset_pos = tuple.find("dataset_count,").expect(
+        "arm must emit `dataset_count,` as slot 4 (choiceCount). If this \
+         becomes the visible count the narrowing receipt collapses: a \
+         filter-miss would look identical to an empty clipboard.",
     );
-    let filtered_count_pos = body.find("filtered_count,").expect(
-        "arm must emit `filtered_count,` as slot 5 (visibleChoiceCount). \
-         Removing or renaming this variable would lose the narrowing \
-         receipt that Pass #33 promoted to first-class protocol field \
-         and Pass #34's routing makes reachable via stdin.",
-    );
+    let visible_pos = tuple
+        .find("visible_count,")
+        .expect("arm must emit `visible_count,` as slot 5 (visibleChoiceCount).");
     assert!(
-        entries_len_pos < filtered_count_pos,
-        "`entries.len(),` (slot 4, choiceCount) must appear BEFORE \
-         `filtered_count,` (slot 5, visibleChoiceCount) in the returned \
-         tuple. Transposing the two flips the semantics: `choiceCount` \
-         would track the narrowed count and `visibleChoiceCount` would \
-         track the dataset, and `empty-clipboard-state` would no longer \
-         be able to distinguish filter-miss from empty-clipboard."
+        dataset_pos < visible_pos,
+        "`dataset_count,` (slot 4, choiceCount) must appear BEFORE \
+         `visible_count,` (slot 5, visibleChoiceCount) in the returned \
+         tuple. Transposing the two flips the semantics and \
+         `empty-clipboard-state` could no longer distinguish filter-miss \
+         from empty-clipboard."
     );
 
     assert!(
