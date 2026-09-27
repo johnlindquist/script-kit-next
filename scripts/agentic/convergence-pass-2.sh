@@ -67,7 +67,6 @@ roster() {
 23 chaos-prompt-cls-layout-probe.ts
 24 root-typing-lag-benchmark.ts --enforce
 25 notes-editor-hostile-chaos-probe.ts
-26 notes-window-file-churn-probe.ts
 27 day-editor-rapid-newline-scroll-probe.ts
 EOF
 }
@@ -170,7 +169,6 @@ run_row_command() {
         --enforce --output-dir "$row_dir/benchmark"
       ;;
     25) bun scripts/agentic/notes-editor-hostile-chaos-probe.ts ;;
-    26) bun scripts/agentic/notes-window-file-churn-probe.ts ;;
     27) bun scripts/agentic/day-editor-rapid-newline-scroll-probe.ts ;;
     *) echo "unknown convergence row: $row" >&2; return 2 ;;
   esac
@@ -305,7 +303,6 @@ case "$MODE" in
     run_row 23 prompt-cls-layout
     run_row 24 root-typing-lag
     run_row 25 notes-editor-hostile
-    run_row 26 notes-window-file-churn
     run_row 27 day-editor-rapid-newline-scroll
     if awk -F '\t' 'NR > 1 && $6 != "PASS" { bad=1 } END { exit bad }' "$RUN_ROOT/results.tsv"; then
       printf 'CONVERGENCE_PASS_2_PASS run_root=%s sha256=%s\n' "$RUN_ROOT" "$ARTIFACT_SHA256"

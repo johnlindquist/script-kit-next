@@ -1426,7 +1426,16 @@ pub(crate) fn file_view_directory_stream<F>(
             return;
         }
     };
-    let policy = crate::runtime_policy::owned_evaluation().expect("validated owned source root");
+    let Some(policy) = crate::runtime_policy::owned_evaluation() else {
+        on_event(crate::file_search::SearchEvent::Done(Err(
+            std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "owned_evaluation_required",
+            )
+            .into(),
+        )));
+        return;
+    };
     crate::file_search::list_directory_streaming_with_path_guard(
         directory,
         cancel,
@@ -1788,7 +1797,8 @@ pub(crate) fn retire(app: &mut crate::ScriptListApp) -> Result<()> {
     gate.retire();
     reset_source_stores(app)?;
     crate::runtime_policy::disable_owned_root_search_clock()?;
-    let policy = crate::runtime_policy::owned_evaluation().expect("owned fixture authority");
+    let policy = crate::runtime_policy::owned_evaluation()
+        .ok_or_else(|| anyhow::anyhow!("owned_evaluation_required"))?;
     let crate::MainServices::OwnedFixtures(sources) = &mut app.main_services else {
         unreachable!()
     };
@@ -1846,8 +1856,10 @@ pub(crate) fn prepare(
     app.cached_windows.clear();
     super::conversation_fixtures::seed_owned_flow_catalogue()?;
     app.reset_owned_search_catalogues(cx)?;
-    let mut config = crate::config::UnifiedSearchConfig::default();
-    config.enabled = true;
+    let mut config = crate::config::UnifiedSearchConfig {
+        enabled: true,
+        ..Default::default()
+    };
     config.files.enabled = true;
     config.files.global_search = true;
     config.files.directory_browse = true;

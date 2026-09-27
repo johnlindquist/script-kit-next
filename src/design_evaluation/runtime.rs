@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use anyhow::{ensure, Context as _, Result};
 use gpui::{
     point, px, size, AnyWindowHandle, App, AppContext, Bounds, Entity, Pixels,
-    VisualTestAppContext, Window, WindowHandle,
+    VisualTestAppContext, Window,
 };
 use gpui_component::Root;
 use serde_json::{json, Value};
@@ -314,9 +314,7 @@ impl Evaluator {
                 let handle =
                     crate::windows::get_runtime_window_handle_for_generation(&id, generation)
                         .context("runtime_handle_missing")?;
-                let owner = match info.semantic_surface.as_deref() {
-                    _ => RootOwner::RegisteredChild,
-                };
+                let owner = RootOwner::RegisteredChild;
                 self.mounted.insert(
                     id,
                     Mounted {

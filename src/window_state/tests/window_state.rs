@@ -371,10 +371,8 @@ mod tests {
     #[test]
     fn test_main_entry_dispatchers_never_app_hide() {
         for file in [
-            "main_entry/runtime_stdin.rs",
-            "main_entry/runtime_stdin_match_core.rs",
-            "main_entry/runtime_stdin_match_simulate_key.rs",
             "main_entry/app_run_setup.rs",
+            "app_impl/simulate_key_dispatch.rs",
         ] {
             let content = read_source_file(file);
             let offenders: Vec<_> = content

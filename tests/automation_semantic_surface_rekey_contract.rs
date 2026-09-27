@@ -25,12 +25,8 @@
 //!    variant is added (e.g., a future `ThemeChooserSurface`), it gets a
 //!    wire string in one place.
 //!
-//! 3. The three stdin `TriggerBuiltin` dispatchers
-//!    (`runtime_stdin_match_core.rs`, `runtime_stdin.rs`,
-//!    `app_run_setup.rs` — the dual/triple-embedded pattern noted in
-//!    memory 6330/6331) must each invoke the re-key after the inner
-//!    match. If only one of the three picks up the call, half the
-//!    stdin entry points silently regress.
+//! 3. The stdin `TriggerBuiltin` dispatcher in `app_run_setup.rs` must
+//!    invoke the re-key after the inner match.
 //!
 //! A live verification (`triggerBuiltin file-search` → `getState` →
 //! `windows[0].semanticSurface == "fileSearch"`) is the intended end-to-
@@ -41,8 +37,6 @@
 const REGISTRY_SOURCE: &str = include_str!("../src/windows/automation_registry.rs");
 const WINDOWS_MOD_SOURCE: &str = include_str!("../src/windows/mod.rs");
 const APP_VIEW_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
-const STDIN_CORE_SOURCE: &str = include_str!("../src/main_entry/runtime_stdin_match_core.rs");
-const STDIN_SOURCE: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../src/main_entry/app_run_setup.rs");
 
 fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
@@ -170,24 +164,14 @@ fn app_view_defines_semantic_surface_mapping() {
 #[test]
 fn trigger_builtin_dispatchers_call_rekey_after_inner_match() {
     let snippet = "view\n                                    .rekey_main_automation_surface_after_trigger_builtin_dispatch();";
-    for (name, source) in [
-        (
-            "src/main_entry/runtime_stdin_match_core.rs",
-            STDIN_CORE_SOURCE,
-        ),
-        ("src/main_entry/runtime_stdin.rs", STDIN_SOURCE),
-        ("src/main_entry/app_run_setup.rs", APP_RUN_SETUP_SOURCE),
-    ] {
+    for (name, source) in [("src/main_entry/app_run_setup.rs", APP_RUN_SETUP_SOURCE)] {
         assert!(
             source.contains(snippet),
             "{name} must re-key the main window's semantic surface \
              after the TriggerBuiltin dispatch via the named \
              `rekey_main_automation_surface_after_trigger_builtin_dispatch` \
-             helper. \
-             The three dispatcher files share the same protocol arms \
-             (see memory 6330/6331 — dual/triple-embedded stdin \
-             pattern); losing the call in any one of them silently \
-             drops re-key for that entry point."
+             helper; losing the call silently drops re-key for the \
+             stdin entry point."
         );
     }
 }

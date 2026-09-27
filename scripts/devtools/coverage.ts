@@ -633,7 +633,7 @@ export const coverageProfiles: CoverageProfile[] = [
       "src/dictation/capture.rs",
       "src/dictation/device.rs",
       "src/dictation/transcription.rs",
-      "src/main_entry/runtime_tray_hotkeys.rs",
+      "src/main_entry/app_run_setup.rs",
     ],
     features: [
       ...dictationPhaseCoverage,

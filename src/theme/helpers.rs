@@ -162,29 +162,6 @@ impl PromptColors {
 // Theme-aware overlay utilities
 // =============================================================================
 
-/// Get a modal overlay color derived from theme colors.
-///
-/// Uses whichever of the theme's background/text colors is darker so modal dimming
-/// remains consistent for both light and dark themes.
-///
-/// # Arguments
-/// * `theme` - The theme to use for dark/light detection
-/// * `opacity` - Alpha value (0-255), e.g., 0x80 for 50%
-///
-/// # Returns
-/// A Rgba color suitable for use with `.bg()`
-pub fn modal_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
-    let background_color = theme.colors.background.main;
-    let foreground_color = theme.colors.text.primary;
-    let base_color =
-        if relative_luminance_srgb(background_color) <= relative_luminance_srgb(foreground_color) {
-            background_color
-        } else {
-            foreground_color
-        };
-    rgba((base_color << 8) | (opacity as u32))
-}
-
 /// Get a hover overlay color derived from theme text color.
 ///
 /// Hover overlays track `text.primary` so hover affordances stay theme-consistent.
@@ -203,28 +180,9 @@ pub fn hover_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
 #[cfg(test)]
 mod tests {
     use super::{
-        accent_color_name, hover_overlay_bg, modal_overlay_bg, ColorScheme, PromptColors, Theme,
-        ACCENT_PALETTE,
+        accent_color_name, hover_overlay_bg, ColorScheme, PromptColors, Theme, ACCENT_PALETTE,
     };
     use gpui::rgba;
-
-    #[test]
-    fn test_modal_overlay_bg_uses_darker_theme_color_when_background_is_darker() {
-        let mut theme = Theme::dark_default();
-        theme.colors.background.main = 0x101820;
-        theme.colors.text.primary = 0xf0f4f8;
-
-        assert_eq!(modal_overlay_bg(&theme, 0x80), rgba(0x10182080));
-    }
-
-    #[test]
-    fn test_modal_overlay_bg_uses_darker_theme_color_when_text_is_darker() {
-        let mut theme = Theme::light_default();
-        theme.colors.background.main = 0xf8fafc;
-        theme.colors.text.primary = 0x1f2937;
-
-        assert_eq!(modal_overlay_bg(&theme, 0x66), rgba(0x1f293766));
-    }
 
     #[test]
     fn test_hover_overlay_bg_uses_theme_primary_text_as_base_color() {

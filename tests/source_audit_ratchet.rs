@@ -47,16 +47,8 @@ const ALLOWLIST: &[(&str, &str)] = &[
         "exactly-once on a single-line comment anchor; comments survive rustfmt",
     ),
     (
-        "tests/actions_popup_parent_preserves_semantic_surface_contract.rs",
-        "singleton on function signature",
-    ),
-    (
         "tests/agent_chat_conversation_export_single_path_contract.rs",
         "singleton on `pub(crate) fn export_conversation` signature",
-    ),
-    (
-        "tests/detached_agent_chat_concurrent_close_safety_contract.rs",
-        "singleton on stable single-line token (close-path ownership)",
     ),
     (
         "tests/features_doc_contract.rs",
@@ -106,20 +98,12 @@ const ALLOWLIST: &[(&str, &str)] = &[
         "pre-policy survivor: floor over stable call token",
     ),
     (
-        "tests/agent_chat_surface_state_contract.rs",
-        "pre-policy survivor: counts over stable qualified event paths",
-    ),
-    (
         "tests/current_app_commands_visible_rows_contract.rs",
         "pre-policy survivor: exact counts over stable call tokens",
     ),
     (
         "tests/design_picker_actions_contract.rs",
         "pre-policy survivor: count over stable enum-variant token",
-    ),
-    (
-        "tests/detached_agent_chat_close_cleanup_contract.rs",
-        "pre-policy survivor: exact count over stable call token",
     ),
     (
         "tests/filter_input_preflight_contract.rs",
