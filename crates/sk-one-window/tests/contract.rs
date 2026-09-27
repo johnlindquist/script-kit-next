@@ -69,6 +69,15 @@ fn counts_and_geometry_match_the_prototype() {
     if let Some(n) = num(&c, "counts.maxMatches") {
         assert_eq!(n as usize, contract::MAX_MATCHES);
     }
+    let thresholds = [
+        ("thresholds.askLeadP", contract::ASK_LEAD_P),
+        ("thresholds.jevRowMinP", contract::MIN_READING_P),
+        ("thresholds.weakMatchScore", f32::from(contract::WEAK_SCORE)),
+    ];
+    for (path, ours) in thresholds {
+        let theirs = num(&c, path).unwrap_or_else(|| panic!("{path} in contract.json"));
+        assert_eq!(theirs as f32, ours, "{path}");
+    }
     let geometry = [
         ("geometry.prototype.inputRowPx", prototype::INPUT_ROW_PX),
         ("geometry.prototype.slotLinePx", prototype::SLOT_LINE_PX),
@@ -168,6 +177,8 @@ fn words_match_the_prototype() {
     if let Some(holding) = text(&c, "slot.labels.holding") {
         assert_eq!(holding.replace("{s}", "8"), words::sending_in(8));
     }
+    let ask = text(&c, "enterLabels.askOnce").expect("enterLabels.askOnce in contract.json");
+    assert_eq!(ask.replace("{title}", "Lunch"), words::ask_again("Lunch"));
 }
 
 #[test]

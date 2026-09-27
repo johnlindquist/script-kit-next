@@ -40,6 +40,12 @@ impl ViewStack {
         self.frames.last_mut()
     }
 
+    /// The nearest open view named `name` under the top one.
+    pub fn below_mut(&mut self, name: &str) -> Option<&mut ViewFrame> {
+        let n = self.frames.len().saturating_sub(1);
+        self.frames[..n].iter_mut().rev().find(|f| f.name == name)
+    }
+
     /// The sentence the open views came from.
     pub fn first_saved_text(&self) -> Option<&str> {
         self.frames.first().map(|f| f.saved_text.as_str())

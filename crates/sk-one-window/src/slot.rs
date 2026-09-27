@@ -90,7 +90,7 @@ pub struct SlotStyle {
 impl SlotStyle {
     pub fn new(kind: SlotKind, typing: bool, in_view: bool) -> Self {
         use crate::contract::slot_opacity as o;
-        if in_view && !matches!(kind, SlotKind::Holding | SlotKind::Typing) {
+        if in_view && kind != SlotKind::Holding {
             return Self {
                 opacity: o::IN_VIEW_NOT_HOLDING,
                 hints: false,
@@ -147,14 +147,14 @@ mod tests {
     }
 
     #[test]
-    fn inside_a_view_only_a_waiting_message_or_dictated_words_keep_strength_and_hints() {
-        let focused = SlotStyle::new(SlotKind::Focused, false, true);
-        assert_eq!(focused.opacity, o::IN_VIEW_NOT_HOLDING);
-        assert!(!focused.hints);
-        for kind in [SlotKind::Holding, SlotKind::Typing] {
+    fn inside_a_view_only_a_waiting_message_keeps_strength_and_hints() {
+        for kind in [SlotKind::Focused, SlotKind::Typing] {
             let style = SlotStyle::new(kind, false, true);
-            assert_eq!(style.opacity, 1.0);
-            assert!(style.hints);
+            assert_eq!(style.opacity, o::IN_VIEW_NOT_HOLDING);
+            assert!(!style.hints);
         }
+        let holding = SlotStyle::new(SlotKind::Holding, false, true);
+        assert_eq!(holding.opacity, 1.0);
+        assert!(holding.hints);
     }
 }

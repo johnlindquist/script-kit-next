@@ -41,6 +41,9 @@ pub const MAX_MATCHES: usize = 3;
 pub const WEAK_SCORE: u8 = 50;
 /// Jev's readings less likely than this don't get a row.
 pub const MIN_READING_P: f32 = 0.03;
+/// An Enter that waited for Jev runs its row only if that row is Jev's top reading by at least
+/// this much; otherwise it asks once.
+pub const ASK_LEAD_P: f32 = 0.15;
 
 /// App geometry per prototype pixel.
 pub const GEOMETRY_SCALE: f32 = 44.0 / 52.0;
@@ -121,6 +124,11 @@ pub mod words {
     /// "Sending in 8s".
     pub fn sending_in(seconds: u64) -> String {
         format!("Sending in {seconds}s")
+    }
+
+    /// What ↵ says while it asks once: "Lunch with Sarah is at 1:00 PM — ↵ again".
+    pub fn ask_again(title: &str) -> String {
+        format!("{title} — ↵ again")
     }
 }
 

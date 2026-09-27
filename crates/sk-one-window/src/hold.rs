@@ -16,7 +16,11 @@ pub struct Held {
     pub left: u64,
     pub total: u64,
     pub entry: Option<u64>,
+    /// The run that sent it, while its words are still the run's: sending it is the run finishing.
+    pub run: Option<u64>,
     pub state: HeldState,
+    /// Waiting while you type. A rewritten message starts over unpaused.
+    pub paused: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -97,7 +101,9 @@ impl Holds {
             left: self.hold_ms,
             total: self.hold_ms,
             entry: None,
+            run: None,
             state: HeldState::Waiting,
+            paused: false,
         });
         self.next_id
     }
@@ -105,6 +111,12 @@ impl Holds {
     pub fn set_entry(&mut self, id: u64, entry: u64) {
         if let Some(h) = self.get_mut(id) {
             h.entry = Some(entry);
+        }
+    }
+
+    pub fn set_run(&mut self, id: u64, run: u64) {
+        if let Some(h) = self.get_mut(id) {
+            h.run = Some(run);
         }
     }
 
@@ -156,18 +168,21 @@ impl Holds {
         changes
     }
 
-    /// Typing with the list showing pauses every wait; clearing the words resumes them.
+    /// Typing with the list showing pauses every wait; clearing the words resumes the ones it paused.
     pub fn set_paused(&mut self, now: Ms, paused: bool) -> Vec<HeldChange> {
         let mut changes = self.advance(now);
-        if paused != self.paused {
-            self.paused = paused;
-            for h in self.live() {
-                changes.push(if paused {
-                    HeldChange::Paused { id: h.id }
-                } else {
-                    HeldChange::Resumed { id: h.id }
-                });
-            }
+        self.paused = paused;
+        for h in self
+            .items
+            .iter_mut()
+            .filter(|h| h.live() && h.paused != paused)
+        {
+            h.paused = paused;
+            changes.push(if paused {
+                HeldChange::Paused { id: h.id }
+            } else {
+                HeldChange::Resumed { id: h.id }
+            });
         }
         changes
     }
@@ -205,6 +220,8 @@ impl Holds {
                 h.request = request;
                 h.left = hold_ms;
                 h.total = hold_ms;
+                h.paused = false;
+                h.run = None;
                 true
             }
             _ => false,
@@ -281,6 +298,29 @@ mod tests {
         h.advance(7_000);
         assert!(h.rewrite(7_000, id, "To Sarah: “thursday”".into(), String::new()));
         assert_eq!(h.newest().unwrap().left, 8_000);
+    }
+
+    #[test]
+    fn a_rewritten_message_starts_over_unpaused() {
+        let mut h = Holds::new(8_000);
+        let a = h.start(0, "To Sarah: “friday”".into(), String::new());
+        let b = h.start(0, "To #launcher: “slipped”".into(), String::new());
+        h.set_run(a, 9);
+        assert_eq!(
+            h.set_paused(100, true),
+            vec![HeldChange::Paused { id: a }, HeldChange::Paused { id: b }]
+        );
+        h.rewrite(200, a, "To Sarah: “thursday”".into(), String::new());
+        assert_eq!(
+            h.get(a).unwrap().run,
+            None,
+            "its words aren't the run's any more"
+        );
+        assert_eq!(
+            h.set_paused(300, false),
+            vec![HeldChange::Resumed { id: b }],
+            "only what typing paused resumes"
+        );
     }
 
     #[test]

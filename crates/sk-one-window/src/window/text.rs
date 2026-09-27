@@ -15,6 +15,11 @@ impl OneWindow {
                 self.cause = Some((ContentCause::Home, now));
             }
         }
+        if !typed && self.list.text == text {
+            self.text = text;
+            self.refresh_rows();
+            return;
+        }
         self.text = text;
         self.host_names.clear();
         self.list.on_text(&self.text);

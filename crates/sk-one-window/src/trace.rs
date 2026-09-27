@@ -12,11 +12,12 @@ use crate::Ms;
 use crate::enter::EnterTarget;
 use crate::height::HeightMode;
 use crate::ledger::{Entry, EntryState, Risk};
+use crate::list::Item;
 use crate::row::Row;
 use crate::slot::{SlotKind, SlotLine};
 use crate::stage::{Subject, SubjectKind};
 use crate::window::{
-    Done, Effect, Event, HeldOp, Key, OneWindow, RunHow, Snapshot, ViewOp, ViewSpec,
+    Done, Effect, Event, HeldOp, Key, OneWindow, Outcome, RunHow, Snapshot, ViewOp, ViewSpec,
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -76,6 +77,8 @@ pub struct ListRowOut {
     pub jev: bool,
     #[serde(default)]
     pub reading: bool,
+    #[serde(default)]
+    pub stale: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -111,7 +114,7 @@ pub fn slot_kind_words(kind: SlotKind) -> &'static str {
         Recent => "recent",
         Staged => "staged",
         Holding => "holding",
-        Typing => "typing",
+        Typing => "voice",
     }
 }
 
@@ -119,6 +122,10 @@ pub fn slot_kind_words(kind: SlotKind) -> &'static str {
 #[derive(Clone, Debug, Default)]
 pub struct Observer {
     last: Option<Snapshot>,
+    /// The header as the page reports it: the list's first header, or the open view's own crumb
+    /// words without the trail.
+    last_header: Option<(String, Option<String>)>,
+    last_list: Option<Out>,
     lines: Vec<OutLine>,
     /// Each held message's words as last reported: the page names a rewrite by the words it had.
     held_labels: HashMap<u64, String>,
@@ -136,38 +143,46 @@ impl Observer {
         self.lines.push(OutLine { t, out });
     }
 
-    pub fn observe(&mut self, now: Ms, win: &OneWindow, effects: &[Effect]) {
-        for fx in effects {
-            let out = match fx {
-                Effect::Run { row, how } => Out::Run {
-                    key: row.key.clone(),
-                    title: row.title.clone(),
-                    how: match how {
-                        RunHow::Match => "match",
-                        RunHow::Slot => "slot",
+    /// Records what one page turn showed: `outcomes` are the reducer's answers to that turn's events.
+    pub fn observe(&mut self, now: Ms, win: &OneWindow, outcomes: &[Outcome]) {
+        for outcome in outcomes {
+            if let Some((row, how)) = &outcome.picked {
+                self.push(
+                    now,
+                    Out::Run {
+                        key: row.key.clone(),
+                        title: row.title.clone(),
+                        how: match how {
+                            RunHow::Match => "match",
+                            RunHow::Slot => "slot",
+                        }
+                        .into(),
+                    },
+                );
+            }
+            for fx in &outcome.effects {
+                let out = match fx {
+                    Effect::EnterIgnored => Out::Ignored {
+                        key: "Enter".into(),
+                    },
+                    Effect::Height(d) => Out::Height {
+                        px: d.px,
+                        mode: mode_words(d.mode).into(),
+                    },
+                    Effect::Held { op, id, label, .. } => {
+                        let was = self.held_labels.insert(*id, label.clone());
+                        Out::Held {
+                            op: held_words(*op).into(),
+                            label: match op {
+                                HeldOp::Rewritten => was.unwrap_or_else(|| label.clone()),
+                                _ => label.clone(),
+                            },
+                        }
                     }
-                    .into(),
-                },
-                Effect::EnterIgnored => Out::Ignored {
-                    key: "Enter".into(),
-                },
-                Effect::Height(d) => Out::Height {
-                    px: d.px,
-                    mode: mode_words(d.mode).into(),
-                },
-                Effect::Held { op, id, label, .. } => {
-                    let was = self.held_labels.insert(*id, label.clone());
-                    Out::Held {
-                        op: held_words(*op).into(),
-                        label: match op {
-                            HeldOp::Rewritten => was.unwrap_or_else(|| label.clone()),
-                            _ => label.clone(),
-                        },
-                    }
-                }
-                _ => continue,
-            };
-            self.push(now, out);
+                    _ => continue,
+                };
+                self.push(now, out);
+            }
         }
         let snap = win.snapshot(now);
         let prev = self.last.take();
@@ -185,19 +200,23 @@ impl Observer {
                 },
             );
         }
-        let (words, view) = match &snap.view {
-            Some(v) => (snap.crumb.clone(), Some(v.clone())),
-            None => (snap.header.clone(), None),
+        let header = match (&snap.view, win.views().top()) {
+            (Some(v), Some(top)) => (top.label.clone(), Some(v.clone())),
+            _ => (snap.header.clone(), None),
         };
-        let header_changed = prev.as_ref().is_none_or(|p| {
-            let (pw, pv) = match &p.view {
-                Some(v) => (p.crumb.as_str(), Some(v)),
-                None => (p.header.as_str(), None),
-            };
-            pw != words || pv != view.as_ref()
-        });
-        if header_changed {
+        if self.last_header.as_ref() != Some(&header) {
+            self.last_header = Some(header.clone());
+            let (words, view) = header;
             self.push(now, Out::Header { words, view });
+        }
+        if snap.view.is_none() {
+            let list = list_out(win);
+            if self.last_list.as_ref() != Some(&list) {
+                self.last_list = Some(list.clone());
+                self.push(now, list);
+            }
+        } else {
+            self.last_list = None;
         }
         if prev
             .as_ref()
@@ -221,6 +240,43 @@ impl Observer {
 
     pub fn drain(&mut self) -> Vec<OutLine> {
         std::mem::take(&mut self.lines)
+    }
+}
+
+/// The main list's rows as the page reports them: every selectable row in order, Jev's places
+/// marked (empty while reading), and which one is selected.
+fn list_out(win: &OneWindow) -> Out {
+    let list = win.list();
+    let rows = list
+        .visible()
+        .iter()
+        .map(|item| match item {
+            Item::Slot(i) => {
+                let slot = list.jev.get(*i);
+                let row = slot.and_then(|s| s.row.as_ref());
+                ListRowOut {
+                    key: row.map(|r| r.key.clone()),
+                    title: row.map(|r| r.title.clone()).unwrap_or_default(),
+                    jev: true,
+                    reading: row.is_none() && !list.jev.settled_for(&list.text),
+                    stale: slot.is_some_and(|s| s.stale),
+                }
+            }
+            item => {
+                let row = list.row(item);
+                ListRowOut {
+                    key: row.map(|r| r.key.clone()),
+                    title: row.map(|r| r.title.clone()).unwrap_or_default(),
+                    jev: false,
+                    reading: false,
+                    stale: false,
+                }
+            }
+        })
+        .collect();
+    Out::List {
+        rows,
+        sel: list.sel,
     }
 }
 
@@ -255,6 +311,8 @@ pub struct RowIn {
     #[serde(default)]
     pub verb: Option<String>,
     #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
     pub fill: Option<String>,
 }
 
@@ -266,6 +324,7 @@ impl From<RowIn> for Row {
         row.p = r.p;
         row.target = r.target;
         row.verb = r.verb;
+        row.source = r.source;
         row.fill = r.fill;
         row.icon = r.icon;
         row.score = r.score.map(|s| s.clamp(0.0, 255.0) as u8).unwrap_or(100);
@@ -346,10 +405,12 @@ pub enum Ev {
         #[serde(default)]
         down: bool,
     },
+    #[serde(rename_all = "camelCase")]
     View {
         op: String,
+        /// `null` on a `back` that leaves no view open.
         #[serde(default)]
-        name: String,
+        name: Option<String>,
         #[serde(default)]
         label: String,
         #[serde(default)]
@@ -357,15 +418,19 @@ pub enum Ev {
         #[serde(default)]
         text: Option<String>,
         #[serde(default)]
-        takes_input: Option<bool>,
+        takes_input: bool,
         #[serde(default)]
         leave: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
     ViewEnter {
         #[serde(default)]
         id: String,
         #[serde(default)]
         label: String,
+        /// Whether the view that set it was on top.
+        #[serde(default = "on_top")]
+        on_top: bool,
     },
     Done {
         #[serde(default)]
@@ -439,20 +504,22 @@ pub struct EvLine {
 }
 
 /// Whether a recorded input is something the host does (and a replay must feed), rather than a
-/// consequence the reducer produces itself from an earlier input.
-pub fn replayable(line: &EvLine) -> bool {
+/// consequence the reducer produces itself from an earlier input: Esc, ⌘K and ↑ go back or home on
+/// their own, a finished form goes home and holds its message, a stopped message finishes.
+fn replayable(line: &EvLine) -> bool {
     let via = line.via.as_deref().unwrap_or("");
     let by_key = via.starts_with("key:");
     match &line.ev {
-        Ev::View { op, .. } => match op.as_str() {
+        Ev::View { op, text, .. } => match op.as_str() {
             "home" => {
                 via.is_empty()
-                    || matches!(&line.ev, Ev::View { text: Some(t), .. } if !t.is_empty())
+                    || via == "key:Enter"
+                    || text.as_deref().is_some_and(|t| !t.is_empty())
             }
-            "back" => !by_key,
+            "back" => via != "key:Escape",
             _ => true,
         },
-        Ev::Done { .. } => via != "unsend",
+        Ev::Done { .. } => !matches!(via, "unsend" | "rewrite"),
         Ev::Hold { .. } => via != "done",
         Ev::Key { .. } => !by_key,
         _ => true,
@@ -525,6 +592,7 @@ pub fn subject_of(f: FocusedIn) -> Subject {
         "message" => SubjectKind::Message,
         "entry" => SubjectKind::Entry,
         "script" => SubjectKind::Script,
+        "answer" => SubjectKind::Answer,
         _ => SubjectKind::Thing,
     };
     Subject {
@@ -564,32 +632,23 @@ pub fn history_entry(h: HistoryIn) -> Entry {
     }
 }
 
-/// Which of the prototype's views read typing themselves (the rest close when you type), for
-/// traces recorded before views carried `takesInput`.
-fn prototype_view_takes_input(name: &str) -> bool {
-    matches!(
-        name,
-        "form"
-            | "agent"
-            | "note"
-            | "note-open"
-            | "dictation"
-            | "steps"
-            | "set"
-            | "save"
-            | "list"
-            | "chat"
-    )
-}
-
 /// Which of the prototype's views clear the input on the way back rather than restore what was typed.
 fn prototype_view_leaves_empty(name: &str) -> bool {
     matches!(name, "agent" | "dictation" | "shape")
 }
 
-/// The reducer events one input line stands for. `last_run` is the last row the reducer ran, for
-/// dismissals that follow launching it.
-pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
+/// The reducer events one input line stands for, given the host row the reducer ran earlier in
+/// the same page turn (`turn_run`) and the window as it is now.
+///
+/// A launch that hides the window records the row that ran; a dismissal nothing ran is the user
+/// going elsewhere. Going home right after a host row ran means the row finished on the spot. While
+/// something is staged, the rows the host pins for the empty input are what it offers to do with it.
+pub fn events_of(line: EvLine, turn_run: Option<&Row>, win: &OneWindow) -> Vec<Event> {
+    if !replayable(&line) {
+        return Vec::new();
+    }
+    let by_key = line.via.as_deref().is_some_and(|v| v.starts_with("key:"));
+    let ev = line.ev;
     match ev {
         Ev::Init { focused, .. } => focused
             .map(|f| Event::Focused(subject_of(f)))
@@ -600,10 +659,10 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
         Ev::Names { text, rows } => {
             let pinned = !rows.is_empty() && rows.iter().all(|r| r.pinned);
             let rows: Vec<Row> = rows.into_iter().map(Row::from).collect();
-            if pinned && text.trim().is_empty() {
-                vec![Event::Suggested(rows)]
-            } else {
-                vec![Event::Names(rows)]
+            match (pinned && text.trim().is_empty(), win.staged().is_some()) {
+                (true, true) => vec![Event::Actions(rows)],
+                (true, false) => vec![Event::Suggested(rows)],
+                (false, _) => vec![Event::Names(rows)],
             }
         }
         Ev::Jev { text, rows, down } => {
@@ -625,7 +684,7 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
             takes_input,
             leave,
         } => {
-            let takes_input = takes_input.unwrap_or_else(|| prototype_view_takes_input(&name));
+            let name = name.unwrap_or_default();
             let leave_text = leave.or_else(|| prototype_view_leaves_empty(&name).then(String::new));
             let spec = ViewSpec {
                 label: if label.is_empty() {
@@ -643,8 +702,18 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
                 "open" => ViewOp::Open(spec),
                 "replace" => ViewOp::Replace(spec),
                 "back" => ViewOp::Back,
-                "home" => ViewOp::Home {
-                    text: spec.text.unwrap_or_default(),
+                "home" => match (spec.text, turn_run) {
+                    (Some(text), _) if !text.is_empty() => ViewOp::Home { text },
+                    (_, Some(row)) if by_key => {
+                        return vec![Event::Ran {
+                            row: row.clone(),
+                            app: None,
+                        }];
+                    }
+                    (_, None) if by_key => return Vec::new(),
+                    (text, _) => ViewOp::Home {
+                        text: text.unwrap_or_default(),
+                    },
                 },
                 "park" => ViewOp::Park,
                 "reopen" => ViewOp::Reopen(spec),
@@ -652,7 +721,17 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
             };
             vec![Event::View(op)]
         }
-        Ev::ViewEnter { id, label } => vec![Event::ViewEnter(EnterTarget::new(id, label))],
+        Ev::ViewEnter { id, label, on_top } => {
+            if on_top {
+                return vec![Event::ViewEnter(EnterTarget::new(id, label))];
+            }
+            // The prototype's Enter ids start with their view's name ("steps:all").
+            let view = id.split(':').next().unwrap_or_default().to_string();
+            vec![Event::ViewEnterBelow {
+                view,
+                target: EnterTarget::new(id, label),
+            }]
+        }
         Ev::Done {
             title,
             icon,
@@ -679,20 +758,22 @@ pub fn events_of(ev: Ev, last_run: Option<&Row>) -> Vec<Event> {
             target: (label != "all").then_some(label),
         }],
         Ev::Content { px } => vec![Event::Content { px }],
-        Ev::Dismiss { app } => {
-            let row = last_run.cloned().unwrap_or_else(|| {
-                Row::new("dismiss", app.clone().unwrap_or_default()).with_icon("app")
-            });
-            vec![Event::Ran {
-                row,
+        Ev::Dismiss { app } => match turn_run {
+            Some(row) if by_key => vec![Event::Ran {
+                row: row.clone(),
                 app: Some(app.unwrap_or_default()),
-            }]
-        }
+            }],
+            _ => vec![Event::Dismissed],
+        },
         Ev::Summon => vec![Event::Summon],
         Ev::Focused(f) => vec![Event::Focused(subject_of(f))],
         Ev::Line(l) => vec![Event::Line(line_of(l))],
         Ev::ViewLabel { label } => vec![Event::View(ViewOp::Label(label))],
     }
+}
+
+fn on_top() -> bool {
+    true
 }
 
 fn line_of(l: LineIn) -> Option<SlotLine> {
@@ -703,7 +784,7 @@ fn line_of(l: LineIn) -> Option<SlotLine> {
         "focused" => SlotKind::Focused,
         "recent" => SlotKind::Recent,
         "holding" => SlotKind::Holding,
-        "voice" | "typing" => SlotKind::Typing,
+        "voice" => SlotKind::Typing,
         _ => SlotKind::Staged,
     };
     let mut line = SlotLine::new(kind, l.label, l.title)
@@ -725,7 +806,7 @@ mod tests {
             let Line::Ev(line) = parse_line(text).expect("json") else {
                 panic!("not an input: {text}");
             };
-            for ev in events_of(line.ev, None) {
+            for ev in events_of(line, None, &win) {
                 win.handle(t as Ms, ev);
             }
         }
@@ -739,6 +820,19 @@ mod tests {
             r#"{"t":1,"ev":"viewLabel","label":"How Jev reads it"}"#,
         ]);
         assert_eq!(win.snapshot(2).crumb, "How Jev reads it");
+    }
+
+    #[test]
+    fn an_enter_set_under_the_top_view_waits_for_it() {
+        let mut win = fed(&[
+            r#"{"t":0,"ev":"view","op":"open","name":"steps","label":"Steps","takesInput":true,"enter":{"id":"steps:all","label":"Connect it first"}}"#,
+            r#"{"t":1,"ev":"view","op":"open","name":"connect","label":"Connect Google Calendar","takesInput":false,"enter":{"id":"connect","label":"Connect"}}"#,
+            r#"{"t":2,"ev":"viewEnter","id":"steps:all","label":"Do all 3","onTop":false}"#,
+            r#"{"t":3,"ev":"viewEnter","id":"agent:running","label":"It's working","onTop":false}"#,
+        ]);
+        assert_eq!(win.enter_target(4).label, "Connect");
+        win.handle(5, Event::View(ViewOp::Back));
+        assert_eq!(win.enter_target(5).label, "Do all 3");
     }
 
     #[test]
@@ -768,6 +862,18 @@ mod tests {
     }
 
     #[test]
+    fn an_open_answer_is_what_this_means() {
+        let mut win = fed(&[
+            r#"{"t":0,"ev":"focused","kind":"answer","label":"Focused","title":"Sarah, Mo, Priya","sub":"in Standup · the open answer","icon":"same-for"}"#,
+        ]);
+        assert_eq!(win.slot_line(1).title, "Sarah, Mo, Priya");
+        win.handle(2, Event::Key(Key::CmdK));
+        let staged = win.staged().expect("⌘K stages the answer");
+        assert_eq!(staged.subject.kind, SubjectKind::Answer);
+        assert_eq!(staged.rows[0].title, "Open it");
+    }
+
+    #[test]
     fn a_rewrite_is_reported_by_the_words_it_had() {
         let mut win = OneWindow::default();
         let mut obs = Observer::new();
@@ -778,7 +884,7 @@ mod tests {
                 request: "tell Sarah It'll be friday".into(),
             },
         );
-        obs.observe(0, &win, &out.effects);
+        obs.observe(0, &win, &[out]);
         let out = win.handle(
             10,
             Event::Rewrite {
@@ -786,7 +892,7 @@ mod tests {
                 text: "It'll be thursday".into(),
             },
         );
-        obs.observe(10, &win, &out.effects);
+        obs.observe(10, &win, &[out]);
         let held: Vec<String> = obs
             .drain()
             .into_iter()

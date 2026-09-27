@@ -86,7 +86,7 @@ impl SlotLineView {
             ),
             SlotKind::Focused | SlotKind::Recent | SlotKind::Typing => (None, colors.text.muted),
         };
-        let title_color = if line.dimmed() {
+        let title_color = if matches!(line.kind, SlotKind::Focused | SlotKind::Recent) {
             colors.text.secondary
         } else {
             colors.text.primary

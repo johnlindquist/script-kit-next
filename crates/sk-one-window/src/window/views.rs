@@ -70,6 +70,7 @@ impl OneWindow {
         let target = spec
             .enter
             .unwrap_or_else(|| EnterTarget::new(spec.name.clone(), ""));
+        self.guard.forget_view();
         self.guard.observe_view(now, &target.id, user);
         if let Some(text) = spec.text {
             if text != self.text {

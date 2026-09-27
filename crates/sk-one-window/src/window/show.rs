@@ -5,6 +5,7 @@ use super::*;
 impl OneWindow {
     /// The line above the input: a set line, what's staged, a message about to go, the last thing
     /// that ran (dimmed), or what's focused (dimmed). It is always there and always one height.
+    /// A message a view held on its own is that view's to show until the view finishes with it.
     pub fn slot_line(&self, now: Ms) -> SlotLine {
         let _ = now;
         if let Some(line) = &self.line {
@@ -21,8 +22,13 @@ impl OneWindow {
                 .with_sub(s.sub.clone())
                 .with_hint("esc", "let go");
         }
-        if let Some(m) = self.holds.newest() {
-            let live = self.holds.live_count();
+        let shown: Vec<&Held> = self
+            .holds
+            .live()
+            .filter(|h| h.entry.is_some() || self.views.is_empty())
+            .collect();
+        if let Some(m) = shown.last() {
+            let live = shown.len();
             let paused = self.holds.paused();
             let label = if paused {
                 words::PAUSED.to_string()
@@ -106,7 +112,7 @@ impl OneWindow {
 
     /// How strongly the line above the input is drawn now. Context (what's focused, what ran last)
     /// reads as background and fainter while you type; in a view everything steps back except a
-    /// message waiting to go and words landing by voice.
+    /// message waiting to go.
     pub fn slot_style(&self, now: Ms) -> SlotStyle {
         self.style_of(&self.slot_line(now))
     }

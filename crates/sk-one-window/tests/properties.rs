@@ -200,8 +200,8 @@ impl Run {
             );
         }
         let live = match snap.slot.kind {
-            SlotKind::Holding | SlotKind::Typing => true,
-            SlotKind::Staged => snap.view.is_none(),
+            SlotKind::Holding => true,
+            SlotKind::Staged | SlotKind::Typing => snap.view.is_none(),
             SlotKind::Focused | SlotKind::Recent => false,
         };
         assert_eq!(

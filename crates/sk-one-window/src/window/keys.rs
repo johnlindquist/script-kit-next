@@ -103,6 +103,21 @@ impl OneWindow {
         true
     }
 
+    /// The highlight moves to the row at `pos` among the rows, or the last one. It is the user's
+    /// own change, so Enter isn't guarded; a different row drops an Enter waiting on Jev.
+    pub(super) fn on_select(&mut self, pos: usize) -> bool {
+        if self.in_view() || self.list.visible().is_empty() {
+            return false;
+        }
+        if pos != self.list.sel {
+            self.list.held = None;
+            self.list.asking = false;
+        }
+        self.list.sel = 0;
+        self.list.move_sel(i32::try_from(pos).unwrap_or(i32::MAX));
+        true
+    }
+
     pub(super) fn activate(&mut self, now: Ms, fx: &mut Vec<Effect>) {
         let Some(item) = self.list.current() else {
             return;
@@ -124,6 +139,7 @@ impl OneWindow {
     }
 
     pub(super) fn run(&mut self, now: Ms, row: Row, how: RunHow, fx: &mut Vec<Effect>) {
+        self.picked = Some((row.clone(), how));
         let staged_entry = self.staged.as_ref().and_then(|s| s.subject.entry);
         let from_staged = self
             .staged
@@ -133,12 +149,18 @@ impl OneWindow {
             self.staged = None;
             self.refresh_rows();
         }
+        if row.takes_back_last() && self.take_back(now, row.target.as_deref(), fx) {
+            return;
+        }
         match row.act {
             RowAct::Host => fx.push(Effect::Run { row, how }),
             RowAct::AskJevAgain => {
                 self.list.jev.reset();
                 self.list.sel = 0;
-                self.jev_due = Some((now, self.text.clone()));
+                self.jev_due = None;
+                fx.push(Effect::AskJev {
+                    text: self.text.clone(),
+                });
             }
             act => {
                 let Some(entry) = staged_entry.and_then(|id| self.ledger.get(id).cloned()) else {
@@ -147,6 +169,30 @@ impl OneWindow {
                 };
                 self.entry_act(now, act, &entry, fx);
             }
+        }
+    }
+
+    /// A reading that takes something back: it stops the waiting messages it names, or else undoes
+    /// the last thing that ran if that can be undone. Returns whether it did either.
+    fn take_back(&mut self, now: Ms, target: Option<&str>, fx: &mut Vec<Effect>) -> bool {
+        let ids: Vec<u64> = self
+            .holds
+            .live()
+            .filter(|h| target.is_some_and(|t| t == "all" || t == h.label))
+            .map(|h| h.id)
+            .collect();
+        if !ids.is_empty() {
+            self.staged = None;
+            self.unsend(now, &ids, fx);
+            return true;
+        }
+        match self.ledger.last().cloned() {
+            Some(e) if e.risk == Risk::Undo && e.state == EntryState::Done => {
+                self.staged = None;
+                self.entry_act(now, RowAct::Undo, &e, fx);
+                true
+            }
+            _ => false,
         }
     }
 
@@ -159,13 +205,7 @@ impl OneWindow {
             }
             RowAct::SendNow => {
                 if let Some(h) = entry.held.and_then(|id| self.holds.send_now(now, id)) {
-                    self.ledger.mark_sent(entry.id, now);
-                    fx.push(Effect::Held {
-                        op: HeldOp::Sent,
-                        id: h.id,
-                        label: h.label,
-                        request: h.request,
-                    });
+                    self.sent(now, h.id, fx);
                 }
                 self.home(now, String::new(), fx);
             }
