@@ -89,10 +89,11 @@ proptest! {
                     let sure = |words: &str, type_p: f32, ask_p: f32| {
                         words.trim() == before.heard.trim() && type_p >= ask_p && type_p >= TALK_SURE_P
                     };
-                    let jev_sure = match &event {
-                        Event::Talk(TalkEvent::Read { words, type_p, ask_p, .. }) => sure(words, *type_p, *ask_p),
-                        _ => before.answer.as_ref().is_some_and(|a| sure(&a.words, a.type_p, a.ask_p)),
-                    };
+                    // The clock runs before any event lands, so when the Enter guard runs out an
+                    // answer that was already sure acts even if the event is a newer answer.
+                    let was_sure = before.answer.as_ref().is_some_and(|a| sure(&a.words, a.type_p, a.ask_p));
+                    let jev_sure = was_sure
+                        || matches!(&event, Event::Talk(TalkEvent::Read { words, type_p, ask_p, .. }) if sure(words, *type_p, *ask_p));
                     prop_assert!(picked || jev_sure, "pasted without a pick or a sure answer: {:?}", before);
                     prop_assert!(!matches!(step, TalkStep::Escape), "Esc pastes nothing");
                 }
