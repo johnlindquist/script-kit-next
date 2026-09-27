@@ -27,7 +27,12 @@ describe("steps", () => {
     expect(() => parseSteps([{ name: "a" }, { name: "a" }])).toThrow();
     expect(() => parseSteps([{ name: "a", text: "x" }])).toThrow();
     expect(() => parseSteps([{ name: "a", type: "x", key: "down" }])).toThrow();
-    expect(parseSteps([{ name: "to-note", control: { family: "oneWindow", operation: "talkTo", destination: "note" } }])[0]?.control?.destination).toBe("note");
+    expect(parseSteps([{ name: "to-note", control: { family: "oneWindow", operation: "talkTo", destination: "note" } }])[0]?.control)
+      .toEqual({ family: "oneWindow", operation: "talkTo", destination: "note" });
+    expect(parseSteps([{ name: "back", control: { family: "oneWindow", operation: "summon" } }])[0]?.control)
+      .toEqual({ family: "oneWindow", operation: "summon" });
+    expect(() => parseSteps([{ name: "a", control: { family: "oneWindow", operation: "summon", destination: "note" } }])).toThrow();
+    expect(() => parseSteps([{ name: "a", control: { family: "notes", operation: "summon" } }])).toThrow();
     expect(() => parseSteps([{ name: "a", control: { family: "oneWindow", operation: "talkTo", destination: "slack" } }])).toThrow();
     expect(() => parseSteps([{ name: "a", key: "enter", control: { family: "oneWindow", operation: "talkTo", destination: "chat" } }])).toThrow();
     expect(() => parseSteps([{ name: "a", waitMs: -1 }])).toThrow();

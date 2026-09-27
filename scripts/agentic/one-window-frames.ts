@@ -27,8 +27,11 @@ const MAX_WAIT_MS = 10_000;
 
 /** A voice session to a destination, started the way "Start Dictation to Agent Chat/Notes" starts one. */
 export interface TalkToControl { family: "oneWindow"; operation: "talkTo"; destination: "chat" | "note" }
+/** The window coming back the way the main hotkey brings it, after a launch or a voice session let it go. */
+export interface SummonControl { family: "oneWindow"; operation: "summon" }
+export type OneWindowControl = TalkToControl | SummonControl;
 /** `click` names a painted node (its debug selector); the step clicks its center with an owned GPUI mouse event. */
-export interface Step { name: string; type?: string; append?: string; key?: string; click?: string; control?: TalkToControl; waitMs?: number }
+export interface Step { name: string; type?: string; append?: string; key?: string; click?: string; control?: OneWindowControl; waitMs?: number }
 const MODIFIERS = new Set(["cmd", "ctrl", "alt", "shift"]);
 const NAMED_KEYS = new Set(["escape", "enter", "down", "up", "left", "right", "tab", "backspace", "space", "home", "end", "pageup", "pagedown"]);
 
@@ -56,8 +59,11 @@ export function parseSteps(value: unknown): Step[] {
       throw new EvaluationContractError("step_has_type_and_key", [step.name]);
     if (step.control !== undefined) {
       const control = step.control as Record<string, unknown> | null;
-      if (!control || typeof control !== "object" || Object.keys(control).sort().join(",") !== "destination,family,operation" ||
-          control.family !== "oneWindow" || control.operation !== "talkTo" || !["chat", "note"].includes(control.destination as string))
+      const keys = control && typeof control === "object" ? Object.keys(control).sort().join(",") : "";
+      const talkTo = keys === "destination,family,operation" && control!.operation === "talkTo" &&
+        ["chat", "note"].includes(control!.destination as string);
+      const summon = keys === "family,operation" && control!.operation === "summon";
+      if (control?.family !== "oneWindow" || !(talkTo || summon))
         throw new EvaluationContractError("invalid_step_control", [step.name]);
     }
     for (const text of [step.type, step.append])
@@ -71,7 +77,7 @@ export function parseSteps(value: unknown): Step[] {
     return { name: step.name, ...(step.type !== undefined ? { type: step.type as string } : {}),
       ...(step.append !== undefined ? { append: step.append as string } : {}),
       ...(step.key !== undefined ? { key: step.key as string } : {}), ...(step.click !== undefined ? { click: step.click as string } : {}),
-      ...(step.control !== undefined ? { control: step.control as TalkToControl } : {}),
+      ...(step.control !== undefined ? { control: step.control as OneWindowControl } : {}),
       ...(step.waitMs !== undefined ? { waitMs: step.waitMs as number } : {}) };
   });
 }
@@ -579,8 +585,9 @@ export async function runFrames(argv: string[]): Promise<number> {
   if (!["platform-default", "disabled"].includes(nativeGlass)) throw new EvaluationContractError("invalid_native_glass", [nativeGlass]);
   if (argv[0] !== "run" || argv.includes("--help") || argv.includes("-h") || !arg("--artifact") || !arg("--out") || !arg("--steps")) {
     console.log("one-window-frames run --artifact <app.reference.json> --out <new-or-empty-dir> --steps <steps.json> [--fixture <id>] [--native-glass disabled]\n" +
-      "steps: [{name, type?: text, append?: text, key?: 'cmd-k'|'escape'|'down'..., click?: <painted node>, control?: {family:'oneWindow', operation:'talkTo', destination:'chat'|'note'}, waitMs?}].\n" +
-      "type replaces the filter (cmd-a + one GPUI key per char); control starts a voice session to that destination,\n" +
+      "steps: [{name, type?: text, append?: text, key?: 'cmd-k'|'escape'|'down'..., click?: <painted node>, control?: {family:'oneWindow', operation:'talkTo', destination:'chat'|'note'} | {family:'oneWindow', operation:'summon'}, waitMs?}].\n" +
+      "type replaces the filter (cmd-a + one GPUI key per char); control starts a voice session to that destination or\n" +
+      "brings the window back the way the main hotkey does,\n" +
       `default waitMs ${DEFAULT_TYPE_WAIT_MS} for type steps, 0 otherwise. Owned evaluator only: hidden windows, GPU readback, no OS input.`);
     return argv[0] === "run" ? 2 : 0;
   }
