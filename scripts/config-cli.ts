@@ -617,7 +617,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     key: "notesHotkey",
     type: "HotkeyConfig",
     default: { modifiers: ["meta", "ctrl"], key: "KeyN" },
-    description: "Hotkey for opening the Notes window (defaults to Cmd+Ctrl+N when enabled)",
+    description: "Hotkey for opening today's note under the main input (defaults to Cmd+Ctrl+N when enabled)",
     example: '{"modifiers": ["meta", "ctrl"], "key": "KeyN"}'
   },
   {
