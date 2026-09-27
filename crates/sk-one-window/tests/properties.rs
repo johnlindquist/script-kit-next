@@ -1216,6 +1216,32 @@ mod views {
         assert_eq!(win.list().sel, 0);
     }
 
+    /// What was copied lists the window's own actions for it; the host is never asked, so its
+    /// actions for a highlighted row can't replace them.
+    #[test]
+    fn a_paste_lists_what_you_can_do_with_it_without_asking_the_host() {
+        let mut win = OneWindow::default();
+        let out = win.handle(0, Event::Paste("github.com/script-kit/app/pull/812".into()));
+        assert!(
+            !out.effects
+                .iter()
+                .any(|fx| matches!(fx, Effect::ActionsFor(_)))
+        );
+        let staged = win.staged().expect("staged");
+        assert!(!staged.waiting_for_rows);
+        let titles: Vec<&str> = staged.rows.iter().map(|r| r.title.as_str()).collect();
+        assert_eq!(
+            titles,
+            [
+                "Open it",
+                "Send it to someone",
+                "Remind me about it",
+                "Add it to today's note",
+                "Show all of it"
+            ]
+        );
+    }
+
     proptest! {
         /// A form shows each slot once, in the order the sentence said them, and the caret starts
         /// on the first field nobody filled; Enter never submits while one is empty.
