@@ -452,7 +452,7 @@ fn search(text: &str) -> Vec<Row> {
             Some((score, *name))
         })
         .collect();
-    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.sort_by_key(|f| std::cmp::Reverse(f.0));
     found
         .into_iter()
         .take(3)
@@ -577,7 +577,7 @@ proptest! {
             if let Some(key) = t.owners.first().filter(|k| key.echo && !names.iter().any(|n| &n.key == *k)) {
                 let name = key.trim_start_matches("name:");
                 names.push(Row::new(key.clone(), name).with_score(70));
-                names.sort_by(|a, b| b.score.cmp(&a.score));
+                names.sort_by_key(|n| std::cmp::Reverse(n.score));
             }
             t.feed(Event::Names(names));
             t.look();
