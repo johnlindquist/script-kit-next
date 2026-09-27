@@ -283,6 +283,9 @@ impl ScriptListApp {
         match view {
             HostedView::Form(form) => {
                 let field = form.caret.and_then(|i| form.fields.get_mut(i))?;
+                if field.value == text.trim() {
+                    return None;
+                }
                 field.value = text.trim().to_string();
                 field.from = (!field.value.is_empty()).then_some(Source::YourWords);
                 field.state = if field.value.is_empty() {
@@ -326,11 +329,19 @@ impl ScriptListApp {
         true
     }
 
-    /// After every turn: a view the reducer closed is gone here too.
-    pub(crate) fn one_window_views_follow(&mut self) {
+    /// After every turn: a view the reducer closed is gone here too, and when what's drawn in
+    /// place of the list changed size (a view opened or closed, a subject was staged or let go)
+    /// the reducer hears the window's new natural height.
+    pub(crate) fn one_window_views_follow(&mut self, cx: &mut Context<Self>) {
         if self.one_window_host.view.is_some() && self.one_window_hosted_view().is_none() {
             self.one_window_host.view = None;
             self.one_window_host.view_text = None;
+        }
+        let drawn = self.one_window_view_height();
+        if drawn != self.one_window_host.view_px {
+            self.one_window_host.view_px = drawn;
+            let px = self.one_window_natural_height();
+            self.one_window_handle(Event::Content { px }, cx);
         }
     }
 

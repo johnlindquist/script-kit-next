@@ -11,6 +11,7 @@ impl OneWindow {
         match crate::clipboard::subject(&text).filter(|_| stages) {
             Some(subject) => {
                 self.stage(now, subject, None, words::STAGED, fx);
+                self.list.sel = 0;
                 true
             }
             None => {

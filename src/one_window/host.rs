@@ -53,6 +53,8 @@ pub(crate) struct OneWindowHost {
     pub(super) view_text: Option<String>,
     /// What was staged when this turn began: the subject a staged row that ran acts on.
     pub(super) acting_on: Option<sk_one_window::Subject>,
+    /// The height last reported for what's drawn in place of the list, while something is.
+    pub(super) view_px: Option<f32>,
 }
 
 /// What the reducer did with one event.
@@ -218,13 +220,13 @@ impl ScriptListApp {
             }
             queue.extend(self.one_window_view_typed());
         }
-        self.one_window_views_follow();
         for row in runs {
             handled.ran = true;
             if let Err(error) = self.one_window_run(row, cx) {
                 handled.run_error = Some(error);
             }
         }
+        self.one_window_views_follow(cx);
         cx.notify();
         handled
     }

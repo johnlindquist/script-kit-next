@@ -446,6 +446,20 @@ mod views {
             })
     }
 
+    /// Something pasted again starts at its first action, wherever the last paste was left.
+    #[test]
+    fn a_new_paste_starts_at_the_first_action() {
+        let mut win = OneWindow::default();
+        win.handle(0, Event::Paste("84".into()));
+        win.handle(10, Event::Key(Key::Down));
+        win.handle(20, Event::Key(Key::Down));
+        assert_eq!(win.list().sel, 2);
+        win.handle(30, Event::Key(Key::Escape));
+        assert!(win.staged().is_none());
+        win.handle(40, Event::Paste("84".into()));
+        assert_eq!(win.list().sel, 0);
+    }
+
     proptest! {
         /// A form shows each slot once, in the order the sentence said them, and the caret starts
         /// on the first field nobody filled; Enter never submits while one is empty.
