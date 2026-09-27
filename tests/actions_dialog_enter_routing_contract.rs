@@ -1,6 +1,6 @@
 //! Source-level structural contract: `ActionsDialog`'s Enter-key
 //! routing MUST preserve the "drill-down-before-execute" ordering
-//! AND the three-outcome contract of `ActionsDialogActivation`.
+//! AND the four-outcome contract of `ActionsDialogActivation`.
 //!
 //! # Why this matters (UX)
 //!
@@ -8,7 +8,9 @@
 //! the third-most-fired user gesture on every Cmd+K host (after
 //! typing and arrow navigation). The routing inside
 //! `activate_selected` (line 1175) + `activate_action_id` (line 1189)
-//! must return EXACTLY ONE of three outcomes per press:
+//! must return EXACTLY ONE of four outcomes per press (the fourth,
+//! `Blocked { action_id, reason }`, keeps a disabled row selected and
+//! runs nothing):
 //!
 //!   - `NoSelection` — header row or empty filter. `get_selected_action_id`
 //!     returns `None`, caller decides what to do (typically no-op).
@@ -67,12 +69,12 @@
 //!       drill-down arm AND `ActionsDialogActivation::Executed`
 //!       in the terminal arm — distinct variants so callers can
 //!       decide whether to close.
-//!   (5) `ActionsDialogActivation` enum MUST declare exactly three
-//!       variants: `DrillDownPushed`, `Executed`, `NoSelection`.
-//!       A new variant like `Failed` or `Canceled` is the shape
-//!       this regression would take at the enum level — adding
-//!       one requires updating this test AND the rustdoc on the
-//!       enum so new outcomes are not introduced silently.
+//!   (5) `ActionsDialogActivation` enum MUST declare exactly four
+//!       variants: `DrillDownPushed`, `Executed`, `Blocked` (a disabled
+//!       row stays selected so its explanation can be read), and
+//!       `NoSelection`. A new variant like `Failed` or `Canceled` is the
+//!       shape this regression would take at the enum level — the
+//!       exhaustive match in this test stops compiling until it is named.
 
 const DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
 
@@ -244,98 +246,37 @@ fn app_activation_captures_parent_subject_before_close_actions_popup() {
     );
 }
 
+/// Adding or removing an Enter outcome must be a deliberate edit here: the
+/// match has no wildcard arm, so a new variant fails to compile until it is
+/// named, and callers cannot silently fold drill-down into execute.
 #[test]
-fn actions_dialog_activation_has_exactly_three_variants() {
-    // Mirror of the Pass #11
-    // `actions_dialog_escape_outcome_has_exactly_two_variants` test
-    // but for the Enter side. A new variant like `Failed` or
-    // `Canceled` or `Deferred` is the shape this regression takes
-    // at the enum level even if the body anchors above pass. Adding
-    // a fourth outcome requires updating this test AND the rustdoc
-    // at `src/actions/dialog.rs:380` so new outcomes are not
-    // introduced silently.
-    // Struct-like variants (`DrillDownPushed { action_id: String, ... }`)
-    // introduce inner `{ ... }` pairs, so a naïve `.find('}')` would
-    // match the first inner close-brace instead of the enum's. Use
-    // a brace-counter from the enum's opening `{` instead.
-    let marker = "pub enum ActionsDialogActivation {";
-    let start = DIALOG_SOURCE.find(marker).expect(
-        "pub enum ActionsDialogActivation not found in src/actions/dialog.rs — \
-         the enum may have been renamed. Update the contract anchors.",
-    );
-    let after_brace = start + marker.len();
-    let mut depth: i32 = 1;
-    let mut close_rel: Option<usize> = None;
-    for (offset, &b) in DIALOG_SOURCE.as_bytes()[after_brace..].iter().enumerate() {
-        match b {
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    close_rel = Some(offset);
-                    break;
-                }
-            }
-            _ => {}
+fn actions_dialog_activation_has_exactly_four_variants() {
+    use script_kit_gpui::actions::ActionsDialogActivation;
+
+    fn outcome(activation: &ActionsDialogActivation) -> &'static str {
+        match activation {
+            ActionsDialogActivation::DrillDownPushed { .. } => "drill_down_pushed",
+            ActionsDialogActivation::Executed { .. } => "executed",
+            ActionsDialogActivation::Blocked { .. } => "blocked",
+            ActionsDialogActivation::NoSelection => "no_selection",
         }
     }
-    let close_rel = close_rel.expect("no matching `}` for ActionsDialogActivation enum");
-    let enum_body = &DIALOG_SOURCE[after_brace..after_brace + close_rel];
 
-    assert!(
-        enum_body.contains("DrillDownPushed"),
-        "ActionsDialogActivation must declare `DrillDownPushed`. Body was:\n{enum_body}"
-    );
-    assert!(
-        enum_body.contains("Executed"),
-        "ActionsDialogActivation must declare `Executed`. Body was:\n{enum_body}"
-    );
-    assert!(
-        enum_body.contains("NoSelection"),
-        "ActionsDialogActivation must declare `NoSelection`. Body was:\n{enum_body}"
-    );
-
-    // Count variant headers — lines that start with an uppercase
-    // identifier and end with either `{` (struct-like variant),
-    // `,` (unit variant), or `(` (tuple variant). Comments and
-    // whitespace are skipped. The rustfmt-canonical shape for
-    // struct-variants splits across multiple lines, so count
-    // opening-line occurrences only.
-    let variant_count = enum_body
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim();
-            if trimmed.is_empty()
-                || trimmed.starts_with("//")
-                || trimmed.starts_with("/*")
-                || trimmed.starts_with('*')
-            {
-                return false;
-            }
-            // Variant header: an identifier followed by `{`, `(`, or a
-            // trailing `,`. Exclude inner struct fields like `action_id: String,`.
-            let first_token = trimmed
-                .split(|c: char| c == ' ' || c == '{' || c == '(' || c == ',')
-                .next()
-                .unwrap_or("");
-            // Variant names start with an uppercase letter; inner fields are snake_case.
-            first_token
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_uppercase())
-                && (trimmed.ends_with('{') || trimmed.ends_with('(') || trimmed.ends_with(','))
-        })
-        .count();
-
-    assert_eq!(
-        variant_count, 3,
-        "ActionsDialogActivation must have EXACTLY 3 variants \
-         (`DrillDownPushed`, `Executed`, `NoSelection`). A new \
-         variant like `Failed` / `Canceled` / `Deferred` is the \
-         shape the regression this contract blocks would take at \
-         the enum level. Adding a fourth outcome requires updating \
-         this test AND the documentation at \
-         `src/actions/dialog.rs:380`. Found {variant_count} variants. \
-         Body was:\n{enum_body}"
-    );
+    let outcomes = [
+        ActionsDialogActivation::DrillDownPushed {
+            action_id: "a".into(),
+            route_id: "r".into(),
+        },
+        ActionsDialogActivation::Executed {
+            action_id: "a".into(),
+            should_close: true,
+        },
+        ActionsDialogActivation::Blocked {
+            action_id: "a".into(),
+            reason: "r".into(),
+        },
+        ActionsDialogActivation::NoSelection,
+    ];
+    let names: std::collections::BTreeSet<_> = outcomes.iter().map(outcome).collect();
+    assert_eq!(names.len(), 4, "each Enter outcome must stay distinct");
 }

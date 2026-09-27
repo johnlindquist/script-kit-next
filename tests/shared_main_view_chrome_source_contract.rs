@@ -26,7 +26,7 @@ fn header_info_bar_reuses_footer_key_button_components() {
     assert!(shared.contains("FooterHintButtonSpec"));
     assert!(shared.contains("label: cwd_label.clone().into()"));
     assert!(shared.contains("key: if tab_key_active { \"⇥\" } else { \"\" }.into()"));
-    assert!(shared.contains("if labels.shift_tab_key_active"));
+    assert!(shared.contains("agent_model_enabled && labels.shift_tab_key_active"));
     assert!(shared.contains("\"⇧⇥\""));
     assert!(!shared.contains("key: \"Tab\".into()"));
     assert!(!shared.contains("key: \"Shift+Tab\".into()"));
@@ -110,7 +110,7 @@ fn layout_model_exposes_shared_main_view_chrome_names() {
     }
     assert!(
         layout.contains(
-            "let input_width = (window_width - (shell_horizontal_padding * 2.0)).max(0.0);"
+            "let input_width = (main_width - (shell_horizontal_padding * 2.0)).max(0.0);"
         ),
         "layout model should derive MainViewInput width from shared header padding, not stale button edges"
     );
@@ -129,15 +129,17 @@ fn main_view_layout_models_use_shared_context_chrome() {
     let layout = read_source("src/app_layout/build_layout_info.rs");
     let bounds = read_source("src/app_layout/build_component_bounds.rs");
 
-    for model in [&layout, &bounds] {
-        assert!(model.contains("main_view_header_input_policy()"));
-        assert!(model.contains("main_view_header_metrics(menu_def, input_height)"));
-        assert!(model.contains("self.current_view.native_footer_surface().is_some()"));
-        assert!(model.contains("\"MainViewHeader\""));
-        assert!(model.contains("\"MainViewContextZone\""));
-        assert!(model.contains("\"MainViewInput\""));
-        assert!(model.contains("\"MainViewMain\""));
-    }
+    assert!(layout.contains("main_view_header_input_policy()"));
+    assert!(layout.contains("main_view_header_metrics(menu_def, input_height)"));
+    assert!(layout.contains("self.current_view.native_footer_surface().is_some()"));
+    assert!(layout.contains("\"MainViewHeader\""));
+    assert!(layout.contains("\"MainViewContextZone\""));
+    assert!(layout.contains("\"MainViewInput\""));
+    assert!(layout.contains("\"MainViewMain\""));
+    assert!(
+        bounds.contains("self.build_layout_info(") && !bounds.contains("main_view_header_metrics("),
+        "debug-grid bounds must project the layout model instead of owning main-view geometry"
+    );
 
     let shared_footer = layout
         .find("LayoutComponentInfo::new(\"MainViewFooter\"")
@@ -167,7 +169,7 @@ fn main_window_footer_keeps_header_context_out_of_action_zone() {
         .nth(1)
         .and_then(|tail| tail.split("fn main_window_footer_buttons_blocked").next())
         .expect("standard_main_window_footer_buttons body should be present");
-    assert!(standard_footer.contains("FooterAction::Run"));
+    assert!(standard_footer.contains("main_window_run_footer_button("));
     assert!(standard_footer.contains("FooterAction::Actions"));
     assert!(standard_footer.contains("FooterAction::Ai"));
     assert!(standard_footer.contains("matches!(self.current_view, AppView::ScriptList)"));

@@ -470,7 +470,7 @@ function likelyOwners(surface: string | undefined, targetKind: string, missing: 
   }
   if (missing.includes("target_state")) {
     owners.add("src/prompt_handler/mod.rs");
-    owners.add("src/main_entry/runtime_stdin.rs");
+    owners.add("src/main_entry/app_run_setup.rs");
   }
   return [...owners];
 }

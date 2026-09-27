@@ -3,28 +3,27 @@ use super::read_source;
 #[test]
 fn root_unified_source_actions_contract() {
     let actions_dialog = read_source("src/app_impl/actions_dialog.rs");
-    let actions_toggle = read_source("src/app_impl/actions_toggle.rs");
+    let staging = read_source("src/one_window/staging.rs");
     let root_actions = read_source("src/app_impl/root_unified_result_actions.rs");
     let app_state = read_source("src/main_sections/app_state.rs");
     let preflight = read_source("src/prompt_handler/mod.rs");
 
-    let main_list = actions_dialog
-        .find("ActionsDialogHost::MainList => {")
-        .expect("MainList host branch should exist");
-    let root_owner = actions_dialog[main_list..]
+    let actions_for = staging
+        .find("fn one_window_actions_for(")
+        .expect("⌘K on the main list should build the staged subject's actions");
+    let root_owner = staging[actions_for..]
         .find("root_unified_action_owner_for_result")
         .expect("MainList should inspect the focused root result before generic fallback");
-    let generic = actions_dialog[main_list..]
-        .find("self.has_actions()")
+    let generic = staging[actions_for..]
+        .find("crate::actions::get_script_context_actions(")
         .expect("MainList should retain generic script action fallback");
     assert!(
         root_owner < generic,
-        "root result action owner must run before generic has_actions/toggle_actions fallback"
+        "root result action owner must run before the generic script actions fallback"
     );
 
     assert!(
-        actions_toggle.contains("toggle_root_unified_result_actions")
-            && actions_toggle.contains("pending_root_unified_actions_subject")
+        staging.contains("self.pending_root_unified_actions_subject = Some(*owned);")
             && root_actions.contains("RootUnifiedActionSubject::File"),
         "root files should be represented in the shared root result subject model"
     );
@@ -87,7 +86,7 @@ fn root_unified_source_actions_contract() {
     );
     assert!(
         root_actions.contains("ExistingScriptActions")
-            && actions_toggle.contains("ExistingScriptActions"),
+            && staging[actions_for..].contains("get_scriptlet_context_actions_with_custom("),
         "script/scriptlet rows should delegate to existing script action ownership"
     );
     assert!(
@@ -107,6 +106,6 @@ fn root_unified_source_actions_contract() {
     );
     assert!(
         app_state.contains("pending_root_unified_actions_subject"),
-        "app state should snapshot the subject while the popup is open"
+        "app state should snapshot the subject while it is staged"
     );
 }

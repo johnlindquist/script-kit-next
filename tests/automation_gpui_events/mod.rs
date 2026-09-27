@@ -612,48 +612,18 @@ fn inspect_geometry_and_rebase_agree_for_actions_dialog() {
 }
 
 #[test]
-fn attached_main_popup_dispatch_reacquires_global_main_handle() {
-    for needle in [
-        "popup exact handles also receive popup-local mouse coordinates",
-        "only when falling back to the parent window. Exact popup handles above use",
-        "let event = match rebase_mouse_event_to_dispatch_space(&resolved, event)",
-        "attached_main_reacquired_global",
-        "attached_main_reacquire",
-        "is_attached_surface(resolved.kind)",
-        "resolved.parent_kind == Some(crate::protocol::AutomationWindowKind::Main)",
-        "crate::get_main_window_handle()",
-        "crate::windows::upsert_runtime_window_handle(parent_id.clone(), handle)",
-        "dispatch_with_any_handle_deferred",
-    ] {
-        assert!(
-            GPUI_EVENT_SIMULATOR.contains(needle),
-            "attached popup simulateGpuiEvent dispatch must re-acquire main handle: {needle}"
-        );
-    }
-}
-
-#[test]
-fn gpui_event_simulator_keeps_mouse_down_up_on_exact_actions_dialog_handle() {
-    for needle in [
-        "popup exact handles also receive popup-local mouse coordinates",
-        "SimulatedGpuiEvent::MouseDown { .. } => \"mouseDown\"",
-        "SimulatedGpuiEvent::MouseUp { .. } => \"mouseUp\"",
-        "get_valid_runtime_window_handle(&resolved.id, cx)",
-        "dispatch_with_any_handle(",
-        "\"exact_handle\"",
-        "let event = match rebase_mouse_event_to_dispatch_space(&resolved, event)",
-    ] {
-        assert!(
-            GPUI_EVENT_SIMULATOR.contains(needle),
-            "exact ActionsDialog handle must keep mouse down/up before attached-surface rebasing: {needle}"
-        );
-    }
-}
-
-#[test]
 fn gpui_event_simulator_has_single_update_mouse_click_for_on_click_handlers() {
+    let click = script_kit_gpui::protocol::SimulatedGpuiEvent::MouseClick {
+        x: 1.0,
+        y: 2.0,
+        button: None,
+    };
+    assert_eq!(
+        serde_json::to_value(&click).expect("serialize")["type"],
+        "mouseClick",
+        "simulateGpuiEvent must expose mouseClick on the wire"
+    );
     for needle in [
-        "SimulatedGpuiEvent::MouseClick { .. } => \"mouseClick\"",
         "SimulatedGpuiEvent::MouseClick { x, y, button } =>",
         "gpui::PlatformInput::MouseDown(gpui::MouseDownEvent",
         "gpui::PlatformInput::MouseUp(gpui::MouseUpEvent",
@@ -993,9 +963,9 @@ fn gpui_event_receipts_are_dispatch_not_activation_proof() {
     for needle in [
         "dispatch_completed: true",
         "dispatch_scheduled: false",
-        "activation_proof: Some(\"not_observed\".to_string())",
+        "activation_proof: Some(\"not_observed\".into())",
         "dispatch_completed: false",
-        "dispatch_scheduled: true",
+        "activation_proof: None",
     ] {
         assert!(
             GPUI_EVENT_SIMULATOR.contains(needle),

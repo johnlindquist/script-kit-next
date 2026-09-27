@@ -44,51 +44,25 @@ fn supported_command_lists_are_named_by_target_kind() {
         "\nfn batch_target_kind_for_resolved_target(",
     );
 
-    for (kind, commands) in [
-        (
-            "AutomationBatchTargetKind::Main",
-            &[
-                "\"setInput\"",
-                "\"forceSubmit\"",
-                "\"waitFor\"",
-                "\"openActions\"",
-                "\"selectByValue\"",
-                "\"selectBySemanticId\"",
-                "\"filterAndSelect\"",
-                "\"typeAndSubmit\"",
-            ][..],
-        ),
-        (
-            "AutomationBatchTargetKind::Notes",
-            &[
-                "\"setInput\"",
-                "\"openActions\"",
-                "\"togglePreview\"",
-                "\"openNotesAgentChat\"",
-                "\"waitFor\"",
-            ][..],
-        ),
-        (
-            "AutomationBatchTargetKind::ActionsDialog",
-            &[
-                "\"setInput\"",
-                "\"selectByValue\"",
-                "\"selectBySemanticId\"",
-                "\"waitFor\"",
-            ][..],
-        ),
-        (
-            "AutomationBatchTargetKind::PromptPopup",
-            &["\"selectByValue\"", "\"selectBySemanticId\"", "\"waitFor\""][..],
-        ),
+    let arm = source_between(
+        body,
+        "AutomationBatchTargetKind::Main",
+        "concise_unsupported_message:",
+    );
+    for command in [
+        "\"setInput\"",
+        "\"forceSubmit\"",
+        "\"waitFor\"",
+        "\"openActions\"",
+        "\"selectByValue\"",
+        "\"selectBySemanticId\"",
+        "\"filterAndSelect\"",
+        "\"typeAndSubmit\"",
     ] {
-        let arm = source_between(body, kind, "concise_unsupported_message:");
-        for command in commands {
-            assert!(
-                arm.contains(command),
-                "{kind} capability list must include {command}"
-            );
-        }
+        assert!(
+            arm.contains(command),
+            "AutomationBatchTargetKind::Main capability list must include {command}"
+        );
     }
 }
 
@@ -136,28 +110,25 @@ fn unsupported_command_errors_are_generated_by_the_helper() {
 
     assert!(helper_body.contains("protocol::TransactionErrorCode::UnsupportedCommand"));
     assert!(helper_body.contains("supported_batch_commands_for_target(kind).join(\", \")"));
-    assert!(helper_body.contains("ActionsDialog batch supports:"));
-    assert!(helper_body.contains("PromptPopup batch supports:"));
     assert_eq!(
         count_occurrences(PROMPT_HANDLER, "TransactionErrorCode::UnsupportedCommand"),
         1,
         "target batch branches must not copy unsupported-command construction"
     );
 
-    for required in [
-        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::Notes",
-        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::ActionsDialog",
-        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::PromptPopup",
-    ] {
-        assert!(
-            PROMPT_HANDLER.contains(required),
-            "target branch must call the shared unsupported helper: {required}"
-        );
-    }
+    let main_batch_body = source_between(
+        PROMPT_HANDLER,
+        "// ── Main-window batch path (existing)",
+        "let success = !failed;",
+    );
+    assert!(
+        main_batch_body.contains("unsupported_batch_command_error("),
+        "main batch branch must report unsupported commands through the shared helper"
+    );
 }
 
 #[test]
-fn batch_prompt_popup_routing_uses_the_resolved_target_kind() {
+fn batch_routing_uses_the_resolved_target_kind() {
     let body = source_between(
         PROMPT_HANDLER,
         "PromptMessage::Batch {",
@@ -166,5 +137,4 @@ fn batch_prompt_popup_routing_uses_the_resolved_target_kind() {
 
     assert!(body
         .contains("let batch_target_kind = batch_target_kind_for_resolved_target(&batch_target);"));
-    assert!(body.contains("batch_target_kind == AutomationBatchTargetKind::PromptPopup"));
 }

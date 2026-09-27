@@ -7,7 +7,6 @@
 const CHAT_STATE_SOURCE: &str = include_str!("../src/prompts/chat/state.rs");
 const CHAT_RENDER_CORE_SOURCE: &str = include_str!("../src/prompts/chat/render_core.rs");
 const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
-const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
 const LIST_ITEM_SOURCE: &str = include_str!("../src/list_item/mod.rs");
 const FILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
 const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");
@@ -110,22 +109,6 @@ fn actions_dialog_does_not_gate_hover_through_local_state() {
             "unexpected legacy hover-state pattern still present: {needle}"
         );
     }
-}
-
-#[test]
-fn actions_window_consumes_handled_popup_keys() {
-    assert!(
-        ACTIONS_WINDOW_SOURCE.contains("let handled = match actions_window_key_intent")
-            && ACTIONS_WINDOW_SOURCE
-                .contains("if handled {\n                cx.stop_propagation();\n            }"),
-        "detached actions window should stop propagation after handling popup-owned keys"
-    );
-    assert!(
-        ACTIONS_WINDOW_SOURCE.contains("actions_window_shortcut_matched")
-            && ACTIONS_WINDOW_SOURCE
-                .contains("true\n                    } else {\n                        false"),
-        "matched action shortcuts should count as handled so they do not leak to the parent"
-    );
 }
 
 // ---------------------------------------------------------------------------

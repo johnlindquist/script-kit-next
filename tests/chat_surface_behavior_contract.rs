@@ -87,13 +87,13 @@ struct RenderedDoc {
 }
 
 /// Render `source` through the markdown engine and return the captured document
-/// scope. Uses the synchronous `markdown_for_fidelity_test` constructor so the
+/// scope. Uses the synchronous `markdown_immediate` constructor so the
 /// parse has completed before we read the fidelity summaries.
 fn render_markdown(cx: &mut TestAppContext, source: &str) -> RenderedDoc {
     let window = cx.update(|cx| {
         gpui_component::init(cx);
         cx.open_window(Default::default(), |_, cx| {
-            let state = cx.new(|cx| TextViewState::markdown_for_fidelity_test(source, cx));
+            let state = cx.new(|cx| TextViewState::markdown_immediate(source, cx));
             cx.new(|_| MarkdownProbeView { state })
         })
         .unwrap()
@@ -283,13 +283,13 @@ fn markdown_parser_smoke_full_parse_counter_moves(cx: &mut TestAppContext) {
     let state = cx.update(|cx| {
         gpui_component::init(cx);
         cx.new(|cx| {
-            let mut state = TextViewState::markdown_for_fidelity_test("", cx);
+            let mut state = TextViewState::markdown_immediate("", cx);
             state.set_hot_metered(true);
             state
         })
     });
     state.update(cx, |state, cx| {
-        state.set_markdown_text_immediate(source, cx);
+        state.set_text(source, cx);
     });
     let after = text_state_hot_counter_snapshot();
 

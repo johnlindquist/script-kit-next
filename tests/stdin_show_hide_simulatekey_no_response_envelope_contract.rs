@@ -16,10 +16,8 @@
 //! transient artifact — likely a stale view left by a prior pass in
 //! that long-running pid 30450 session — NOT a show-restore bug. The
 //! Show handler in every dispatcher is inspectable at source and does
-//! not mutate `view.current_view`; the Hide handler calls
-//! `view.reset_to_script_list(ctx)` (see
-//! `src/main_entry/runtime_stdin_match_core.rs:138`), so Hide + Show
-//! correctly lands back in ScriptList.
+//! not mutate `view.current_view`; the Hide handler resets to ScriptList,
+//! so Hide + Show correctly lands back in ScriptList.
 //!
 //! The current invariant is split:
 //! * `show` / `hide` use their dedicated `windowVisibilityAck` envelope.
@@ -44,17 +42,10 @@
 //!
 //! These asserts catch such a refactor before merge by forbidding
 //! broad response-emission sinks inside the Show / Hide arm bodies and pin
-//! the simulateKey response ordering across dispatcher copies:
-//!   - `src/main_entry/runtime_stdin_match_core.rs` (Show + Hide arms)
-//!   - `src/main_entry/runtime_stdin_match_simulate_key.rs` (whole file;
-//!     the file is a single match arm for `ExternalCommand::SimulateKey`)
-//!   - `src/main_entry/runtime_stdin.rs` (live SimulateKey arm)
-//!   - `src/main_entry/app_run_setup.rs` (Show + Hide + SimulateKey arms,
-//!     scoped via sibling-variant anchors)
+//! the simulateKey response ordering in the stdin dispatcher,
+//! `src/main_entry/app_run_setup.rs` (Show + Hide + SimulateKey arms, scoped
+//! via sibling-variant anchors).
 
-const MATCH_CORE: &str = include_str!("../src/main_entry/runtime_stdin_match_core.rs");
-const SIMULATE_KEY: &str = include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 
 const SHOW_ANCHOR: &str = "ExternalCommand::Show { ref request_id } => {";
@@ -66,10 +57,9 @@ const SIMKEY_ANCHOR: &str =
 const OPEN_NOTES_ANCHOR: &str = "ExternalCommand::OpenNotes";
 
 /// Slice the `ExternalCommand::Show` arm body — start at the `Show`
-/// anchor, end at the `Hide` anchor (the next sibling variant). Both
-/// `runtime_stdin_match_core.rs` and `app_run_setup.rs` place Hide
-/// immediately after Show; a contributor reordering sibling variants
-/// must update this anchor.
+/// anchor, end at the `Hide` anchor (the next sibling variant).
+/// `app_run_setup.rs` places Hide immediately after Show; a contributor
+/// reordering sibling variants must update this anchor.
 fn show_arm<'a>(source: &'a str, file_name: &str) -> &'a str {
     let start = source.find(SHOW_ANCHOR).unwrap_or_else(|| {
         panic!(
@@ -106,7 +96,7 @@ fn hide_arm<'a>(source: &'a str, file_name: &str) -> &'a str {
 }
 
 /// Slice the `ExternalCommand::SimulateKey` arm body. Sibling-variant anchor
-/// is `OpenNotes`, which follows SimulateKey in both dispatcher copies.
+/// is `OpenNotes`, which follows SimulateKey in the dispatcher.
 fn simulatekey_arm<'a>(source: &'a str, file_name: &str) -> &'a str {
     let start = source.find(SIMKEY_ANCHOR).unwrap_or_else(|| {
         panic!(
@@ -187,12 +177,6 @@ fn assert_no_response_sink(arm: &str, label: &str) {
 
 #[test]
 fn show_arm_emits_no_response_envelope() {
-    // Both source-audit snippets AND the mega-dispatcher must keep
-    // the Show arm body free of response-emission sinks.
-    assert_no_response_sink(
-        show_arm(MATCH_CORE, "runtime_stdin_match_core.rs"),
-        "runtime_stdin_match_core.rs (Show arm)",
-    );
     assert_no_response_sink(
         show_arm(APP_RUN_SETUP, "app_run_setup.rs"),
         "app_run_setup.rs (Show arm)",
@@ -206,20 +190,10 @@ fn show_arm_emits_no_response_envelope() {
 /// without a GPUI first responder.
 #[test]
 fn show_arm_rearms_main_filter_after_native_reveal() {
-    for (label, arm) in [
-        (
-            "runtime_stdin_match_core.rs (Show arm)",
-            show_arm(MATCH_CORE, "runtime_stdin_match_core.rs"),
-        ),
-        (
-            "runtime_stdin.rs (Show arm)",
-            show_arm(RUNTIME_STDIN, "runtime_stdin.rs"),
-        ),
-        (
-            "app_run_setup.rs (Show arm)",
-            show_arm(APP_RUN_SETUP, "app_run_setup.rs"),
-        ),
-    ] {
+    for (label, arm) in [(
+        "app_run_setup.rs (Show arm)",
+        show_arm(APP_RUN_SETUP, "app_run_setup.rs"),
+    )] {
         let native_show = arm
             .find("platform::show_main_window_without_activation();")
             .unwrap_or_else(|| panic!("{label} must reveal the native main panel"));
@@ -253,10 +227,6 @@ fn show_arm_rearms_main_filter_after_native_reveal() {
 #[test]
 fn hide_arm_emits_no_response_envelope() {
     assert_no_response_sink(
-        hide_arm(MATCH_CORE, "runtime_stdin_match_core.rs"),
-        "runtime_stdin_match_core.rs (Hide arm)",
-    );
-    assert_no_response_sink(
         hide_arm(APP_RUN_SETUP, "app_run_setup.rs"),
         "app_run_setup.rs (Hide arm)",
     );
@@ -264,26 +234,16 @@ fn hide_arm_emits_no_response_envelope() {
 
 #[test]
 fn simulatekey_arm_snapshots_sender_before_dispatch_and_acks_after() {
-    for (label, arm) in [
-        (
-            "runtime_stdin_match_simulate_key.rs (whole file = SimulateKey arm)",
-            SIMULATE_KEY,
-        ),
-        (
-            "runtime_stdin.rs (SimulateKey arm)",
-            simulatekey_arm(RUNTIME_STDIN, "runtime_stdin.rs"),
-        ),
-        (
-            "app_run_setup.rs (SimulateKey arm)",
-            simulatekey_arm(APP_RUN_SETUP, "app_run_setup.rs"),
-        ),
-    ] {
+    for (label, arm) in [(
+        "app_run_setup.rs (SimulateKey arm)",
+        simulatekey_arm(APP_RUN_SETUP, "app_run_setup.rs"),
+    )] {
         let capture_idx = arm
             .find("let simulate_key_response = request_id")
             .unwrap_or_else(|| panic!("{label} must snapshot request_id before dispatch"));
-        // The live dispatcher answers on `default_response_sender` (the app's
-        // stdout, never reassigned while a script runs); the orphan copies
-        // still name `response_sender`. Either way it is snapshotted first.
+        // The dispatcher answers on `default_response_sender` (the app's
+        // stdout, never reassigned while a script runs) or `response_sender`;
+        // either way it is snapshotted first.
         let sender_capture_idx = arm
             .find("view.default_response_sender")
             .or_else(|| arm.find("view.response_sender"))
@@ -327,31 +287,5 @@ fn simulatekey_arm_snapshots_sender_before_dispatch_and_acks_after() {
                 && !arm[dispatch_idx..ack_idx].contains("view.default_response_sender"),
             "{label} must not look up view.response_sender after dispatch"
         );
-    }
-}
-
-#[test]
-fn dispatcher_snippets_do_not_import_response_sender() {
-    // Show/Hide source-audit snippets remain response-channel-free.
-    // SimulateKey is intentionally excluded: it owns a narrow
-    // `externalCommandResult` envelope and has its own ordering contract above.
-    //
-    // `app_run_setup.rs` is NOT covered here — as the mega-dispatcher
-    // it legitimately hosts other arms (e.g. GetConfigFingerprint)
-    // that emit structured `config_fingerprint_result` tracing, and
-    // transitively imports plenty of `mpsc`/`Message` names. The Show
-    // / Hide / SimulateKey arms within it are pinned above at body
-    // granularity.
-    for (name, source) in [("runtime_stdin_match_core.rs", MATCH_CORE)] {
-        for binding in ["response_tx", "response_sender", "reader_response_tx"] {
-            assert!(
-                !source.contains(binding),
-                "{name} must not reference `{binding}` — the source-audit \
-                 snippet dispatchers are response-channel-free by design. \
-                 Introducing a binding is the first step of the echo-\
-                 envelope refactor; Run 9 Pass #5 pins this structural \
-                 property to force that conversation at review time."
-            );
-        }
     }
 }

@@ -164,18 +164,13 @@ fn test_browser_tabs_builtin_is_available_to_stdin_trigger_routes() {
         );
     }
 
-    // Dispatcher parity: the three stdin ingress sites (the real one +
-    // the two orphan audit mirrors) MUST all delegate to the shared
-    // helper so the match arms can never drift apart again. They must
-    // pass the whole `ExternalCommand` through the wrapper (not the raw
-    // `name`), so the canonical-vs-deprecated `builtin_id` / `name`
-    // normalization in `ExternalCommand::trigger_builtin_ref` runs in
-    // exactly one place.
-    for path in [
-        "src/main_entry/runtime_stdin_match_core.rs",
-        "src/main_entry/runtime_stdin.rs",
-        "src/main_entry/app_run_setup.rs",
-    ] {
+    // Dispatcher parity: the stdin ingress site MUST delegate to the shared
+    // helper so the match arms live in one place. It must pass the whole
+    // `ExternalCommand` through the wrapper (not the raw `name`), so the
+    // canonical-vs-deprecated `builtin_id` / `name` normalization in
+    // `ExternalCommand::trigger_builtin_ref` runs in exactly one place.
+    {
+        let path = "src/main_entry/app_run_setup.rs";
         let source = fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
         assert!(
             source.contains("view.dispatch_trigger_builtin(cmd, window, ctx)"),
@@ -262,17 +257,14 @@ fn simulate_key_tab_does_not_use_plain_tab_agent_chat_helper() {
         .expect("Failed to read src/app_impl/simulate_key_dispatch.rs");
     let app_run_setup = fs::read_to_string("src/main_entry/app_run_setup.rs")
         .expect("Failed to read src/main_entry/app_run_setup.rs");
-    let runtime_match = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
-        .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
 
     assert!(
         !helper_source.contains("try_route_plain_tab_to_agent_chat_context_capture"),
         "simulateKey Tab must not route through the deprecated plain-Tab Agent Chat helper"
     );
     assert!(
-        app_run_setup.contains("dispatch_simulate_key")
-            && runtime_match.contains("dispatch_simulate_key"),
-        "Both entry points must delegate to dispatch_simulate_key helper"
+        app_run_setup.contains("dispatch_simulate_key"),
+        "The stdin entry point must delegate to dispatch_simulate_key helper"
     );
 }
 

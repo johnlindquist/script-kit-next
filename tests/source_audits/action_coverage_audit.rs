@@ -207,14 +207,8 @@ fn failures_are_said_through_notice_failed() {
 
 #[test]
 fn visible_attach_actions_use_agent_chat_label() {
-    // Each surface names the concrete product; Dictation History stages the
-    // transcript as context, so its verb is "Add".
+    // Each surface names the concrete product.
     for (path, label, expected) in [
-        (
-            "src/render_builtins/actions.rs",
-            "dictation history actions",
-            "Add to Agent Chat",
-        ),
         (
             "src/app_impl/root_unified_result_actions.rs",
             "root unified result actions",

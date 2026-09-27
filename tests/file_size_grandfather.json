@@ -1,6 +1,5 @@
 {
   "src/actions/dialog.rs": 5426,
-  "src/actions/window.rs": 2348,
   "src/ai/agent_chat/ui/thread.rs": 4051,
   "src/ai/tab_context.rs": 2942,
   "src/app_actions/handle_action/mod.rs": 2450,

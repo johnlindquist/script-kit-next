@@ -7,10 +7,6 @@ const APP_STATE: &str = include_str!("../src/main_sections/app_state.rs");
 const STARTUP: &str = include_str!("../src/app_impl/startup.rs");
 const FILTER_INPUT_UPDATES: &str = include_str!("../src/app_impl/filter_input_updates.rs");
 const SELECTION_FALLBACK: &str = include_str!("../src/app_impl/selection_fallback.rs");
-const RENDER_SCRIPT_LIST: &str = include_str!("../src/render_script_list/mod.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
-const RUNTIME_STDIN_MATCH_SIMULATE_KEY: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
 
 fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
     let start = source
@@ -92,26 +88,4 @@ fn startup_and_filtering_route_through_fallback_owner() {
         SELECTION_FALLBACK.contains("self.main_menu_fallback_state.selected_item().cloned()"),
         "Fallback execution must resolve the selected fallback through the owner."
     );
-}
-
-#[test]
-fn keyboard_and_stdin_navigation_route_through_fallback_owner() {
-    for (name, source) in [
-        ("render_script_list", RENDER_SCRIPT_LIST),
-        ("runtime_stdin", RUNTIME_STDIN),
-        (
-            "runtime_stdin_match_simulate_key",
-            RUNTIME_STDIN_MATCH_SIMULATE_KEY,
-        ),
-    ] {
-        assert!(
-            source.contains("main_menu_fallback_state.is_active()"),
-            "{name} must branch on the fallback owner."
-        );
-        assert!(
-            source.contains("main_menu_fallback_state.move_up()")
-                && source.contains("main_menu_fallback_state.move_down()"),
-            "{name} fallback navigation must move selection through the owner."
-        );
-    }
 }

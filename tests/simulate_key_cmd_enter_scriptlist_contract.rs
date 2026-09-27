@@ -5,8 +5,6 @@ const CANONICAL_SIMULATEKEY: &str = include_str!("../src/app_impl/simulate_key_d
 const TAB_AI_MODE: &str = include_str!("../src/app_impl/agent_handoff/mod.rs");
 const STARTUP_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const RUNTIME_MATCH_SIMULATEKEY: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
 
 fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source.find(signature).expect("signature must exist");
@@ -70,19 +68,11 @@ fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_agent_chat_context_
         "simulate_key_dispatch.rs `AppView::ScriptList` must call try_route_global_cmd_enter_to_agent_chat_context_capture"
     );
 
-    // 2. Verify that the entry points delegate to the unified helper.
-    for (name, source) in [
-        ("src/main_entry/app_run_setup.rs", APP_RUN_SETUP),
-        (
-            "src/main_entry/runtime_stdin_match_simulate_key.rs",
-            RUNTIME_MATCH_SIMULATEKEY,
-        ),
-    ] {
-        assert!(
-            source.contains("dispatch_simulate_key"),
-            "{name} must delegate to dispatch_simulate_key helper"
-        );
-    }
+    // 2. Verify that the stdin entry point delegates to the unified helper.
+    assert!(
+        APP_RUN_SETUP.contains("dispatch_simulate_key"),
+        "src/main_entry/app_run_setup.rs must delegate to dispatch_simulate_key helper"
+    );
 }
 
 #[test]

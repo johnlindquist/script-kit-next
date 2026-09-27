@@ -108,12 +108,24 @@ fn coerce_action_selection_filters_on_item_variant() {
     // (clipboard-history being the canonical case).
     let body = extract_fn_body(DIALOG_SOURCE, "fn coerce_action_selection(");
     assert!(
-        body.contains("GroupedActionItem::Item("),
-        "`coerce_action_selection` MUST match on `GroupedActionItem::Item(` \
-         to identify selectable rows. Without this predicate the helper \
-         becomes a no-op bounds clamp and every caller (construction, \
-         reset, refilter fallback) would land the cursor on a \
-         `SectionHeader` whenever index 0 is one. Body was:\n{body}"
+        body.contains(
+            "crate::list_item::coerce_eligibility_selection(&grouped_action_eligibilities(rows), ix)"
+        ),
+        "`coerce_action_selection` MUST coerce through the grouped-row \
+         eligibilities, where section headers are inert. Without that \
+         predicate the helper becomes a no-op bounds clamp and every caller \
+         (construction, reset, refilter fallback) would land the cursor on \
+         a `SectionHeader` whenever index 0 is one. Body was:\n{body}"
+    );
+    let eligibility = extract_fn_body(
+        DIALOG_SOURCE,
+        "pub(super) fn grouped_action_item_eligibility(",
+    );
+    assert!(
+        eligibility.contains(
+            "GroupedActionItem::SectionHeader(_) => crate::list_item::RowEligibility::inert()"
+        ),
+        "section headers MUST be inert so the coercion skips them. Body was:\n{eligibility}"
     );
 }
 
@@ -127,23 +139,29 @@ fn coerce_action_selection_searches_both_directions() {
     // filtered list whose surviving rows are all BEFORE `ix`, a
     // forward-only search returns `None` and the caller falls back
     // to 0, which may itself be a header.
-    let body = extract_fn_body(DIALOG_SOURCE, "fn coerce_action_selection(");
-    assert!(
-        body.contains(".skip(ix + 1)"),
-        "`coerce_action_selection` MUST contain a forward search \
-         (`iter().enumerate().skip(ix + 1)`) — otherwise leading-header \
-         cases land on the header. Body was:\n{body}"
+    use script_kit_gpui::list_item::{coerce_eligibility_selection, RowEligibility};
+    let header = RowEligibility::inert();
+    let item = RowEligibility::enabled_action();
+
+    assert_eq!(
+        coerce_eligibility_selection(&[header, item, item], 0),
+        Some(1),
+        "a leading header must coerce forward to the first item"
     );
-    // The backward search uses `.take(ix).rev()` in the current
-    // implementation. Accept either `take(ix)` or `.rev()` as the
-    // anchor — if both disappear the helper is single-direction.
-    assert!(
-        body.contains(".take(ix)") && body.contains(".rev()"),
-        "`coerce_action_selection` MUST contain a backward search \
-         (`iter().enumerate().take(ix).rev()`) — otherwise trailing-header \
-         cases land on the header. A unidirectional helper silently \
-         regresses on filtered lists whose surviving items all live \
-         before `ix`. Body was:\n{body}"
+    assert_eq!(
+        coerce_eligibility_selection(&[item, item, header], 2),
+        Some(1),
+        "a trailing header must coerce backward to the last item before it"
+    );
+    assert_eq!(
+        coerce_eligibility_selection(&[item, header, header], 5),
+        Some(0),
+        "an out-of-range index must clamp and then search backward"
+    );
+    assert_eq!(
+        coerce_eligibility_selection(&[header, header], 0),
+        None,
+        "a list of only headers has no selection"
     );
 }
 
@@ -179,12 +197,29 @@ fn refilter_clamps_selection_via_coerce() {
     // rebuilt around the filtered items).
     let body = extract_fn_body(DIALOG_SOURCE, "fn refilter(");
     assert!(
-        body.contains("coerce_action_selection("),
-        "`refilter` MUST use `coerce_action_selection(` to clamp \
-         `selected_index` after a filter-driven rebuild of \
-         `grouped_items`. A raw `self.selected_index = 0` fallback \
-         would land the cursor on a `SectionHeader` any time the \
-         newly-filtered list starts with one. Body was:\n{body}"
+        body.contains("self.refilter_with_previous_selection("),
+        "`refilter` MUST delegate to `refilter_with_previous_selection`. Body was:\n{body}"
+    );
+    let rebuild = extract_fn_body(DIALOG_SOURCE, "fn refilter_with_previous_selection(");
+    assert!(
+        rebuild.contains("self.apply_refresh_selection("),
+        "`refilter_with_previous_selection` MUST pick the selection through \
+         `apply_refresh_selection` after rebuilding `grouped_items`. Body was:\n{rebuild}"
+    );
+    let apply = extract_fn_body(DIALOG_SOURCE, "pub(super) fn apply_refresh_selection(");
+    assert!(
+        apply.contains("coerce_action_selection(&self.grouped_items, index)")
+            && apply.contains("initial_selection_index(&self.grouped_items)"),
+        "`apply_refresh_selection` MUST clamp `selected_index` through \
+         `coerce_action_selection` / `initial_selection_index` after a \
+         filter-driven rebuild of `grouped_items`. A raw \
+         `self.selected_index = 0` fallback would land the cursor on a \
+         `SectionHeader` any time the newly-filtered list starts with one. \
+         Body was:\n{apply}"
+    );
+    assert!(
+        !rebuild.contains("self.selected_index = ") && !apply.contains("Some(0)"),
+        "refilter's selection must only come from the coercion helpers"
     );
 }
 

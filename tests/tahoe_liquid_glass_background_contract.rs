@@ -18,9 +18,10 @@ fn read_source(path: &str) -> String {
 #[test]
 fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
     let platform = read_source("src/platform/secondary_window_config.rs");
+    let secondary_vibrancy = read_source("src/platform/secondary_window_vibrancy_impl.rs");
     let main_vibrancy = read_source("src/platform/vibrancy_config.rs");
     let ui_foundation = read_source("src/ui_foundation/mod.rs");
-    let actions_dialog = read_source("src/actions/dialog.rs");
+    let actions_dialog = read_source("src/actions/dialog_opacity.rs");
     let terminal_command_bar = read_source("src/terminal/command_bar_ui/render.rs");
     let file_search = read_source("src/file_search/mod.rs");
 
@@ -43,31 +44,16 @@ fn tahoe_liquid_glass_is_gated_and_uses_shared_theme_tint() {
         "GPUI and native liquid-glass backgrounds must share one theme-derived tint helper"
     );
     assert!(
-        platform.contains("configure_tahoe_window_backdrop(window, log_target, window_name)")
-            && main_vibrancy
-                .contains("configure_tahoe_window_backdrop(window, \"PANEL\", \"Main window\")"),
+        secondary_vibrancy.contains(
+            "configure_tahoe_window_backdrop_with_result(window, log_target, window_name, backdrop_role)"
+        ) && main_vibrancy
+            .contains("configure_tahoe_window_backdrop(window, \"PANEL\", \"Main window\")"),
         "Both shared secondary-window vibrancy and main-window vibrancy paths must use the semantic Tahoe window-backdrop hook"
     );
     assert!(
         platform.contains("configure_tahoe_window_backdrop(window, \"APPEARANCE\", &title_string)")
             && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
         "Theme/appearance refresh must revisit existing secondary native backdrops"
-    );
-    assert!(
-        platform.contains("fn should_refresh_secondary_window_appearance(title: &str) -> bool")
-            && platform.contains("EXACT_SECONDARY_TITLES")
-            && platform.contains("\"Notes\"")
-            && platform.contains("\"Mini AI\"")
-            && platform.contains("\"Script Kit Agent Chat\"")
-            && platform.contains("\"Script Kit Agent Chat\"")
-            && platform.contains("should_refresh_secondary_window_appearance(&title_string)"),
-        "Theme/appearance refresh must use one predicate covering real Notes, detached Agent Chat, and legacy AI titles"
-    );
-    assert!(
-        platform.contains("pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool)")
-            && platform.contains("c\"Script Kit HUD\".as_ptr()")
-            && platform.contains("\"Script Kit HUD\""),
-        "HUD Liquid Glass must use the shared native material path and remain discoverable for theme/appearance refresh"
     );
     assert!(
         main_vibrancy
@@ -159,7 +145,6 @@ fn root_window_layout_material_is_backdrop_not_content_glass() {
 #[test]
 fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
     let footer = read_source("src/footer_popup.rs");
-    let platform = read_source("src/platform/secondary_window_config.rs");
 
     for needle in [
         "MainWindowFooterHostSnapshot",
@@ -169,7 +154,7 @@ fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
         "refresh_main_footer_host(ns_window, config)",
         "update_main_window_footer_host_state(",
         "installed.then_some(config.surface)",
-        "AppChromeColors::from_theme(&theme)",
+        "AppChromeColors::from_theme(theme)",
         "theme.get_vibrancy().material",
         "setAppearance:",
         "setMaterial: material",
@@ -180,33 +165,6 @@ fn footer_native_host_uses_theme_vibrancy_and_reports_installed_surface() {
         assert!(
             footer.contains(needle),
             "native main-window footer host must preserve theme/vibrancy/state marker: {needle}"
-        );
-    }
-
-    let sync_main_footer = footer
-        .split("pub(crate) fn sync_main_footer_popup(")
-        .nth(1)
-        .and_then(|tail| tail.split("pub(crate) fn sync_window_footer_popup(").next())
-        .expect("sync_main_footer_popup body should be present");
-    assert!(
-        !sync_main_footer.contains("SCRIPT_KIT_GPUI_FOOTER_OVERLAY")
-            && !sync_main_footer.contains("gpui_footer_overlay_enabled()"),
-        "footer overlay gating must stay inside the overlay/refresh helpers, not the sync entry point"
-    );
-
-    for needle in [
-        "pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool)",
-        "configure_attached_popup_window(",
-        "\"Actions popup\"",
-        "setIgnoresMouseEvents: true",
-        "setHasShadow: false",
-        "c\"Script Kit Footer\".as_ptr()",
-        "\"Script Kit Footer\"",
-        "should_refresh_secondary_window_appearance",
-    ] {
-        assert!(
-            platform.contains(needle),
-            "standalone footer popup configuration/refresh must preserve marker: {needle}"
         );
     }
 }

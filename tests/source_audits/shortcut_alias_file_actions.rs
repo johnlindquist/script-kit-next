@@ -28,7 +28,7 @@ fn shortcut_add_opens_recorder_for_non_script_types() {
     let actions = super::read_all_handle_action_sources();
 
     assert!(
-        actions.contains("self.show_shortcut_recorder(command_id, command_name, window, cx)"),
+        actions.contains("self.show_shortcut_recorder(command_id, command_name, cx)"),
         "Expected shortcut actions to use show_shortcut_recorder for bindable launcher results"
     );
 }

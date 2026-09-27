@@ -1,9 +1,7 @@
 //! Source-level contract for TemplatePrompt automation and actions parity.
 
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
-const RUNTIME_STDIN_MATCH_SIMULATE_KEY: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
+const SIMULATE_KEY_DISPATCH: &str = include_str!("../src/app_impl/simulate_key_dispatch.rs");
 const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const ACTIONS_DIALOG: &str = include_str!("../src/app_impl/actions_dialog.rs");
 const ACTIONS_TOGGLE: &str = include_str!("../src/app_impl/actions_toggle.rs");
@@ -28,26 +26,20 @@ fn force_submit_branch<'a>(source: &'a str, marker: &str) -> &'a str {
 }
 
 #[test]
-fn template_prompt_has_explicit_simulate_key_arm_in_live_and_mirror_dispatchers() {
-    for source in [
-        APP_RUN_SETUP,
-        RUNTIME_STDIN,
-        RUNTIME_STDIN_MATCH_SIMULATE_KEY,
-    ] {
-        let arm = template_prompt_simulate_key_arm(source);
+fn template_prompt_has_explicit_simulate_key_arm() {
+    let arm = template_prompt_simulate_key_arm(SIMULATE_KEY_DISPATCH);
 
-        assert!(arm.contains("SimulateKey: Dispatching"));
-        assert!(arm.contains("TemplatePrompt"));
-        assert!(arm.contains("prompt.submit(cx)"));
-        assert!(arm.contains("prompt.next_input(cx)"));
-        assert!(arm.contains("prompt.prev_input(cx)"));
-        assert!(arm.contains("prompt.handle_backspace(cx)"));
-        assert!(arm.contains("prompt.handle_char(ch, cx)"));
-        assert!(arm.contains("submit_prompt_response"));
-        assert!(arm.contains("cancel_script_execution(ctx)"));
-        assert!(arm.contains("dispatch_actions_toggle_for_current_view"));
-        assert!(arm.contains("stdin_simulate_key_template_prompt"));
-    }
+    assert!(arm.contains("SimulateKey: Dispatching"));
+    assert!(arm.contains("TemplatePrompt"));
+    assert!(arm.contains("prompt.submit(cx)"));
+    assert!(arm.contains("prompt.next_input(cx)"));
+    assert!(arm.contains("prompt.prev_input(cx)"));
+    assert!(arm.contains("prompt.handle_backspace(cx)"));
+    assert!(arm.contains("prompt.handle_text(&key_lower, cx)"));
+    assert!(arm.contains("submit_prompt_response"));
+    assert!(arm.contains("cancel_script_execution(ctx)"));
+    assert!(arm.contains("dispatch_actions_toggle_for_current_view"));
+    assert!(arm.contains("stdin_simulate_key_template_prompt"));
 }
 
 #[test]

@@ -64,8 +64,9 @@
 //!   (4) The shared helpers in `src/actions/dialog.rs`
 //!       (`first_selectable_index`, `last_selectable_index`,
 //!       `selectable_index_at_or_before`, `selectable_index_at_or_after`)
-//!       still filter via `is_selectable_row` which checks
-//!       `matches!(row, GroupedActionItem::Item(_))`. MoveHome /
+//!       still filter via `grouped_action_eligibilities`, where
+//!       `grouped_action_item_eligibility` maps
+//!       `GroupedActionItem::SectionHeader(_)` to an inert row. MoveHome /
 //!       MoveEnd / MovePageUp / MovePageDown all delegate to these
 //!       helpers — if the helpers lose the filter, all four page
 //!       intents would regress in one commit.
@@ -77,7 +78,6 @@
 //!       test red before the regression ships.
 
 const DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
-const WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
 
 fn extract_fn_body<'a>(src: &'a str, header: &str) -> &'a str {
     let header_pos = src.find(header).unwrap_or_else(|| {
@@ -191,44 +191,38 @@ fn grouped_action_item_enum_declares_both_variants() {
 
 #[test]
 fn shared_selectable_helpers_filter_on_item_variant() {
-    // The `is_selectable_row` helper is the single source of truth
+    // `grouped_action_item_eligibility` is the single source of truth
     // for "is this row selectable?" across MoveHome, MoveEnd,
-    // MovePageUp, MovePageDown, and Up/Down. If it stops checking for
-    // `GroupedActionItem::Item(_)`, the whole helper family regresses
-    // in one commit.
-    let body = extract_fn_body(DIALOG_SOURCE, "pub(super) fn is_selectable_row(");
-    assert!(
-        body.contains("GroupedActionItem::Item(_)"),
-        "is_selectable_row in src/actions/dialog.rs MUST match on \
-         `GroupedActionItem::Item(_)`. Relaxing the pattern would \
-         let MoveHome / MoveEnd / MovePageUp / MovePageDown / Up / Down land \
-         on section headers in one commit. Body was:\n{body}"
+    // MovePageUp, MovePageDown, and Up/Down. If headers stop mapping to
+    // an inert eligibility, the whole helper family regresses in one
+    // commit.
+    let body = extract_fn_body(
+        DIALOG_SOURCE,
+        "pub(super) fn grouped_action_item_eligibility(",
     );
     assert!(
-        !WINDOW_SOURCE.contains("fn selectable_index_at_or_before(")
-            && !WINDOW_SOURCE.contains("fn selectable_index_at_or_after("),
-        "selectable-row helpers should be owned beside GroupedActionItem in \
-         src/actions/dialog.rs, not redeclared in src/actions/window.rs"
+        body.contains(
+            "GroupedActionItem::SectionHeader(_) => crate::list_item::RowEligibility::inert()"
+        ),
+        "grouped_action_item_eligibility in src/actions/dialog.rs MUST map \
+         `GroupedActionItem::SectionHeader(_)` to an inert row. Relaxing it \
+         would let MoveHome / MoveEnd / MovePageUp / MovePageDown / Up / Down \
+         land on section headers in one commit. Body was:\n{body}"
     );
 
-    // Confirm the page-intent paths actually delegate to the filtered
-    // helpers (not a raw index). This is the symmetric half of the
-    // move_up/move_down anchors above.
-    // Anchor on the dispatch arm (`=>`), NOT the key-intent producer
-    // that returns `Some(ActionsWindowKeyIntent::MoveHome)` from the
-    // parser above.
-    let move_home_block = "Some(ActionsWindowKeyIntent::MoveHome) =>";
-    let mh_start = WINDOW_SOURCE
-        .find(move_home_block)
-        .expect("MoveHome dispatch arm not found in src/actions/window.rs — update anchors");
-    // Scope to the next 600 bytes so we don't false-match on other arms.
-    let mh_window = &WINDOW_SOURCE[mh_start..mh_start + 600.min(WINDOW_SOURCE.len() - mh_start)];
-    assert!(
-        mh_window.contains("first_selectable_index("),
-        "MoveHome arm MUST delegate to `first_selectable_index`. \
-         Inlining a raw `selected_index = 0` would skip the \
-         section-header filter. Window was:\n{mh_window}"
-    );
+    for header in [
+        "pub(super) fn first_selectable_index(",
+        "pub(super) fn last_selectable_index(",
+        "pub(super) fn selectable_index_at_or_before(",
+        "pub(super) fn selectable_index_at_or_after(",
+    ] {
+        let body = extract_fn_body(DIALOG_SOURCE, header);
+        assert!(
+            body.contains("grouped_action_eligibilities(rows)"),
+            "`{header}` MUST filter through the grouped-row eligibilities \
+             so headers are skipped. Body was:\n{body}"
+        );
+    }
 }
 
 #[test]

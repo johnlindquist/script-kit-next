@@ -2,8 +2,7 @@
 //!
 //! Background: six copies of the `PANEL_CONFIGURED.load → configure_as_floating_panel
 //! → swizzle_gpui_blurred_view → configure_window_vibrancy_material_for_appearance
-//! → PANEL_CONFIGURED.store(true)` block lived in `app_run_setup.rs`,
-//! `runtime_stdin_match_core.rs`, `runtime_stdin.rs`, and
+//! → PANEL_CONFIGURED.store(true)` block lived in `app_run_setup.rs` and
 //! `window_visibility.rs`. If any panel knob drifted in just one copy — or if
 //! an early return inside the configure sequence flipped the one-shot before
 //! the NSPanel was actually correctly configured — the launcher would ship a
@@ -23,9 +22,6 @@
 const PANEL_INVARIANTS: &str = include_str!("../src/platform/panel_invariants.rs");
 const APP_WINDOW_MGMT: &str = include_str!("../src/platform/app_window_management.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
-const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
-const RUNTIME_STDIN_MATCH_CORE: &str =
-    include_str!("../src/main_entry/runtime_stdin_match_core.rs");
 const WINDOW_VISIBILITY: &str = include_str!("../src/main_sections/window_visibility.rs");
 const WINDOW_ORCHESTRATOR_EXECUTOR: &str = include_str!("../src/window_orchestrator/executor.rs");
 const BUILTIN_EXECUTION: &str = include_str!("../src/app_execute/builtin_execution.rs");
@@ -101,11 +97,6 @@ fn only_ensure_main_panel_configured_writes_panel_configured() {
     // anything else re-introduces the early-flip bug.
     for (label, source) in [
         ("main_entry/app_run_setup.rs", APP_RUN_SETUP),
-        ("main_entry/runtime_stdin.rs", RUNTIME_STDIN),
-        (
-            "main_entry/runtime_stdin_match_core.rs",
-            RUNTIME_STDIN_MATCH_CORE,
-        ),
         ("main_sections/window_visibility.rs", WINDOW_VISIBILITY),
     ] {
         assert!(
@@ -141,11 +132,6 @@ fn former_inline_configure_sequence_is_gone() {
     // gate on it here.
     for (label, source) in [
         ("main_entry/app_run_setup.rs", APP_RUN_SETUP),
-        ("main_entry/runtime_stdin.rs", RUNTIME_STDIN),
-        (
-            "main_entry/runtime_stdin_match_core.rs",
-            RUNTIME_STDIN_MATCH_CORE,
-        ),
         ("main_sections/window_visibility.rs", WINDOW_VISIBILITY),
     ] {
         // Match the call, not mentions in comments. The old inline site
@@ -171,16 +157,6 @@ fn every_show_path_routes_through_ensure_main_panel_configured() {
             "main_entry/app_run_setup.rs",
             APP_RUN_SETUP,
             "app_run_setup",
-        ),
-        (
-            "main_entry/runtime_stdin.rs",
-            RUNTIME_STDIN,
-            "runtime_stdin",
-        ),
-        (
-            "main_entry/runtime_stdin_match_core.rs",
-            RUNTIME_STDIN_MATCH_CORE,
-            "runtime_stdin_match_core",
         ),
         (
             "main_sections/window_visibility.rs",

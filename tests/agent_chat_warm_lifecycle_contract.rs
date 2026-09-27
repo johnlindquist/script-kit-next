@@ -34,7 +34,7 @@ fn warm_ready_requires_bounded_prepare_readiness_event() {
         "wait_for_prepare_ready",
         "AgentChatEvent::ModelsAvailable",
         "AgentChatEvent::SetupRequired",
-        "AgentChatEvent::Failed",
+        "AgentChatEvent::TurnFailed",
         "agent_chat_warm_prepare_ready_timeout",
     ] {
         assert!(WARM_SESSION_SOURCE.contains(symbol), "missing {}", symbol);
