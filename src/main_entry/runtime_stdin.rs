@@ -1507,7 +1507,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
                             ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
-                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), window, ctx);
+                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
                             }
                         },
                         StdinCommand::Protocol(message) => {

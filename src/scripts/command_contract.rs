@@ -728,6 +728,11 @@ impl SearchResult {
                 digest.text(&item.subtitle);
                 digest.text(item.verb);
             }
+            Self::OneWindow(item) => {
+                digest.text(&item.row.key);
+                digest.text(&item.row.title);
+                digest.optional_text(item.row.sub.as_deref());
+            }
             Self::SpineProjection(row) => digest.spine(row),
         }
         digest.finish()
@@ -945,7 +950,7 @@ impl SearchResult {
             Self::Agent(_) => CommandSource::Agent,
             Self::Fallback(_) => CommandSource::Fallback,
             Self::ScriptIssue(_) => CommandSource::ValidationIssue,
-            Self::Intent(_) => CommandSource::Intent,
+            Self::Intent(_) | Self::OneWindow(_) => CommandSource::Intent,
             Self::SpineProjection(_) => CommandSource::Spine,
         }
     }
@@ -1137,7 +1142,8 @@ impl SearchResult {
             | Self::DictationHistory(_)
             | Self::Fallback(_)
             | Self::ScriptIssue(_)
-            | Self::Intent(_) => {}
+            | Self::Intent(_)
+            | Self::OneWindow(_) => {}
         }
         descriptor.validate()?;
         Ok(descriptor)

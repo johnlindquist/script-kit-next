@@ -1,29 +1,6 @@
-use super::fixture_ids::{main_fixture_ids, MAIN_OVERLAY_FIXTURE_IDS, SHORTCUT_FIXTURE_IDS};
+use super::fixture_ids::{main_fixture_ids, MAIN_OVERLAY_FIXTURE_IDS};
 use crate::*;
 use anyhow::Context as _;
-
-pub(crate) fn mount_shortcut_fixture(
-    fixture_id: &str,
-    app: Entity<ScriptListApp>,
-    parent: &crate::protocol::AutomationWindowInfo,
-    parent_handle: gpui::AnyWindowHandle,
-    cx: &mut App,
-) -> anyhow::Result<crate::protocol::AutomationWindowInfo> {
-    anyhow::ensure!(
-        SHORTCUT_FIXTURE_IDS.contains(&fixture_id),
-        "unknown_shortcut_fixture"
-    );
-    crate::shortcut_recorder::mount_owned_shortcut_recorder(app, parent, parent_handle, cx)
-}
-
-pub(crate) fn close_shortcut_fixture(
-    id: &str,
-    generation: u64,
-    cx: &mut App,
-) -> anyhow::Result<()> {
-    anyhow::ensure!(id == "shortcut-recorder-popup", "not_shortcut_recorder");
-    crate::shortcut_recorder::close_shortcut_recorder_instance(generation, cx)
-}
 
 /// Data injection into the real ScriptListApp route; never normal startup followed by clearing.
 pub(crate) fn mount_main_fixture(
@@ -92,6 +69,7 @@ pub(crate) fn mount_main_fixture(
                 }]);
             }
             prepare_launcher_files(app, root)?;
+            app.one_window_seed_owned_fixture();
             AppView::ScriptList
         }
         "main.menu-syntax-trigger" | "main.menu-syntax-object" | "main.menu-syntax-history" => {
@@ -553,9 +531,14 @@ fn prepare_launcher_files(app: &ScriptListApp, root: &std::path::Path) -> anyhow
             if let Some(parent) = script.path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
+            let schedule = match script.name.as_str() {
+                "Omega Report" => "// Schedule: every friday at 4pm\n",
+                "Launch Beta" => "// Cron: 0 9 * * 1-5\n",
+                _ => "",
+            };
             std::fs::write(
                 &script.path,
-                "// Synthetic catalogue source; never executed.\n",
+                format!("{schedule}// Synthetic catalogue source; never executed.\n"),
             )?;
         }
     }

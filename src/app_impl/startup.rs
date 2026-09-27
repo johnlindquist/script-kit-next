@@ -715,7 +715,6 @@ impl ScriptListApp {
             // Shortcut recorder state - starts as None (no recorder showing)
             shortcut_recorder_state: None,
             // Shortcut recorder entity - persisted to maintain focus
-            shortcut_recorder_entity: None,
             // Alias input state - starts as None (no alias input showing)
             alias_input_state: None,
             pending_tab_ai_execution: None,
@@ -826,20 +825,13 @@ impl ScriptListApp {
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                let is_shortcut_recorder =
-                    super::shortcut_recorder::is_shortcut_recorder_window(window);
-                if is_notes
-                    || is_detached_agent_chat
-                    || is_actions
-                    || is_shortcut_recorder
-                {
+                if is_notes || is_detached_agent_chat || is_actions {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
                         is_notes,
                         is_detached_agent_chat,
                         is_actions,
-                        is_shortcut_recorder,
                     );
                     return;
                 }
@@ -2370,7 +2362,6 @@ impl ScriptListApp {
                         is_notes = secondary_window.is_notes,
                         is_detached_agent_chat = secondary_window.is_detached_agent_chat,
                         is_actions,
-                        is_shortcut_recorder = secondary_window.is_shortcut_recorder,
                         key = %key,
                         is_actions_close_key,
                     );

@@ -4550,6 +4550,7 @@ impl ScriptListApp {
             scripts::SearchResult::Fallback(_) => "fallback",
             scripts::SearchResult::ScriptIssue(_) => "scriptIssue",
             scripts::SearchResult::Intent(_) => "intent",
+            scripts::SearchResult::OneWindow(_) => "oneWindow",
             scripts::SearchResult::SpineProjection(_) => "spineProjection",
         };
         let metadata = match result {
@@ -4702,6 +4703,10 @@ impl ScriptListApp {
                 "failedCount": m.failed_count,
                 "fatalCount": m.fatal_count,
                 "warningCount": m.warning_count,
+            }),
+            scripts::SearchResult::OneWindow(m) => serde_json::json!({
+                "title": m.row.title,
+                "key": m.row.key,
             }),
             scripts::SearchResult::Intent(m) => serde_json::json!({
                 "title": m.title,

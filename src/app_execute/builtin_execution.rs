@@ -5158,9 +5158,9 @@ impl ScriptListApp {
                 },
                 cx,
             );
-            self.start_dictation_overlay_session(cx);
+            self.one_window_talk_began(true, cx);
         } else {
-            self.start_dictation_overlay_session(cx);
+            self.one_window_talk_began(true, cx);
             self.dispatch_window_event(
                 crate::window_orchestrator::WindowEvent::StartDictation {
                     target: orch_target,
@@ -5247,7 +5247,18 @@ impl ScriptListApp {
         );
     }
 
-    fn request_active_dictation_stop(
+    /// Starts listening the way the voice key does, with the words going to the main window's
+    /// voice view.
+    pub(crate) fn start_dictation_session(&mut self, cx: &mut Context<Self>) {
+        let action = DictationBuiltinAction::FrontmostApp;
+        if self.prepare_dictation_builtin_start(action, None, cx) == DictationStartPreflight::Ready
+        {
+            let target = self.dictation_start_target(action);
+            self.start_ready_dictation_builtin_action(action, target, None, cx);
+        }
+    }
+
+    pub(crate) fn request_active_dictation_stop(
         &mut self,
         reason: crate::dictation::DictationStopReason,
         dictation_target: crate::dictation::DictationTarget,
@@ -5270,7 +5281,7 @@ impl ScriptListApp {
                 // presses that arrive after it will toggle the queued restart
                 // state rather than being silently ignored.
                 *pending_dictation_restart().lock() = None;
-                if transcribe {
+                if transcribe && !self.one_window_talking() {
                     let _ = crate::dictation::begin_overlay_session();
                     let _ = crate::dictation::open_dictation_overlay(cx);
                     // Keep the recognized-so-far text visible while the final
@@ -5352,6 +5363,9 @@ impl ScriptListApp {
                                     cx,
                                 );
                             }
+                            Ok(_) if this.one_window_talking() => {
+                                this.one_window_talk_final(String::new(), cx);
+                            }
                             Ok(_) => {
                                 let _ = crate::dictation::close_dictation_overlay(cx);
                                 this.dispatch_window_event(
@@ -5368,6 +5382,10 @@ impl ScriptListApp {
                                     ?reason,
                                     "Failed to stop dictation capture"
                                 );
+                                if this.one_window_talking() {
+                                    this.one_window_talk_final(String::new(), cx);
+                                    return;
+                                }
                                 let _ = crate::dictation::open_dictation_overlay(cx);
                                 let _ = crate::dictation::update_dictation_overlay(
                                     crate::dictation::DictationOverlayState {
@@ -5454,18 +5472,20 @@ impl ScriptListApp {
         session_generation: u64,
         cx: &mut Context<Self>,
     ) {
-        let _ = crate::dictation::update_dictation_overlay(
-            crate::dictation::DictationOverlayState {
-                phase: crate::dictation::DictationSessionPhase::Transcribing,
-                elapsed: capture.audio_duration,
-                transcript: crate::dictation::last_partial_transcript()
-                    .unwrap_or_default()
-                    .into(),
-                target,
-                ..Default::default()
-            },
-            cx,
-        );
+        if !self.one_window_talking() {
+            let _ = crate::dictation::update_dictation_overlay(
+                crate::dictation::DictationOverlayState {
+                    phase: crate::dictation::DictationSessionPhase::Transcribing,
+                    elapsed: capture.audio_duration,
+                    transcript: crate::dictation::last_partial_transcript()
+                        .unwrap_or_default()
+                        .into(),
+                    target,
+                    ..Default::default()
+                },
+                cx,
+            );
+        }
         let audio_duration = capture.audio_duration;
         let chunks = capture.chunks;
         cx.spawn(async move |this, cx| {
@@ -6274,6 +6294,10 @@ impl ScriptListApp {
                             String::new()
                         }
                     });
+                if self.one_window_talking() {
+                    self.one_window_talk_final(transcript, cx);
+                    return;
+                }
                 // Show the recognized text while it is being delivered so the
                 // user gets confirmation of what was heard.
                 let _ = crate::dictation::update_dictation_overlay(
@@ -6742,6 +6766,9 @@ impl ScriptListApp {
                     .detach();
                 }
             }
+            Ok(None) if self.one_window_talking() => {
+                self.one_window_talk_final(String::new(), cx);
+            }
             Ok(None) => {
                 // No speech detected — close overlay quietly and treat the
                 // session as an abort. For Agent Chat dictation, a successful finish
@@ -6761,6 +6788,10 @@ impl ScriptListApp {
                     crate::window_orchestrator::WindowEvent::AbortDictation,
                     cx,
                 );
+            }
+            Err(error) if self.one_window_talking() => {
+                tracing::error!(category = "DICTATION", error = %error, "talk_transcription_failed");
+                self.one_window_talk_final(String::new(), cx);
             }
             Err(error) => {
                 let error_text = error.to_string();

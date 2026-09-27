@@ -386,9 +386,7 @@ impl Render for ScriptListApp {
         // No need to render it as part of this view
         let view_owns_main_window_shell = self.current_view.uses_view_owned_main_window_shell(&*cx);
         let current_view = self.current_view.clone();
-        let main_window_modal_dim_active = confirm::is_confirm_window_open()
-            || self.shortcut_recorder_state.is_some()
-            || self.shortcut_recorder_entity.is_some();
+        let main_window_modal_dim_active = confirm::is_confirm_window_open();
         let main_window_modal_dim_layer =
             crate::components::modal_dim::render_main_window_modal_dim_layer(
                 main_window_modal_dim_active,

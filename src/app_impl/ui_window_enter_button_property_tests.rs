@@ -923,3 +923,6 @@ mod one_window;
 
 #[path = "ui_window_one_window_work_tests.rs"]
 mod work;
+
+#[path = "ui_window_one_window_learns_tests.rs"]
+mod learns;

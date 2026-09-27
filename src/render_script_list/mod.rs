@@ -1537,6 +1537,7 @@ impl ScriptListApp {
                 )
                 .into_any_element()
         };
+        let list_element = self.one_window_view_under_list(list_element, theme_colors);
 
         // Log panel - uses pre-extracted theme values to avoid borrow conflicts
         let log_panel = if self.show_logs {

@@ -128,20 +128,7 @@ pub(crate) fn registered_surface_ui_snapshot(
         }
         _ => {
             let (elements, focused_semantic_id, selected_semantic_id) =
-                if target.id == "shortcut-recorder-popup" {
-                    let elements = crate::shortcut_recorder::shortcut_fixture_elements(
-                        &target.id, generation, cx,
-                    )?;
-                    let focused = elements
-                        .iter()
-                        .find(|element| element.focused == Some(true))
-                        .map(|element| element.semantic_id.clone());
-                    let selected = elements
-                        .iter()
-                        .find(|element| element.selected == Some(true))
-                        .map(|element| element.semantic_id.clone());
-                    (elements, focused, selected)
-                } else if target.semantic_surface.as_deref() == Some("footerOverlay") {
+                if target.semantic_surface.as_deref() == Some("footerOverlay") {
                     (
                         crate::footer_popup::footer_fixture_elements(&target.id, generation, cx)?,
                         None,

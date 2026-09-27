@@ -55,7 +55,7 @@ export const CORE_FIXTURES: Record<CoreJourneyId, readonly string[]> = {
   "launcher-ranking-provider": [SEARCH_FIXTURE_ID],
   "choice-prompt-completion": ["prompt.arg", "prompt.mini", "prompt.select"],
   "editable-prompt-validation": ["prompt.form", "prompt.fields", "prompt.editor", "prompt.template"],
-  "actions-popup-activation": ["main.script-list", "secondary.actions", "secondary.confirm", "dictation.recording", "dictation.microphone-picker", "secondary.footer", "secondary.shortcut-recorder"],
+  "actions-popup-activation": ["main.script-list", "secondary.actions", "secondary.confirm", "dictation.recording", "dictation.microphone-picker", "secondary.footer"],
   "notes-day-roundtrip": [...NOTES_ACCEPTANCE_FIXTURES],
   "conversation-recovery-stop": [...CONVERSATION_FIXTURE_IDS],
   "dictation-delivery-refusal": ["main.script-list", "dictation.recording", "agent-chat.standard.populated", "agent-chat.popup.history", "day-page.today"],
@@ -489,7 +489,7 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
           return diagnosis.targets.map(value => `${value.windowId}:${value.windowGeneration}`).sort();
         };
         let disabledTargetsExercised = 0;
-        for (const fixture of ["secondary.confirm", "dictation.microphone-picker", "secondary.shortcut-recorder", "secondary.footer"]) {
+        for (const fixture of ["secondary.confirm", "dictation.microphone-picker", "secondary.footer"]) {
           const host = fixture === "dictation.microphone-picker" ? await mount("dictation.recording") : parent;
           const child = await mount(fixture, host);
           const deferred = await active.probeSafety(child, "deferredDispatch"); receipt.effects.push(deferred);
@@ -497,7 +497,7 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
           const controls = nodes(await active.query(child, "elements"));
           const semanticId = fixture === "secondary.confirm" ? "button:0:confirm"
             : fixture === "dictation.microphone-picker" ? "choice:1:dictation-mic-row-1"
-            : fixture === "secondary.shortcut-recorder" ? "shortcut-cancel-button" : "footer-action:actions";
+            : "footer-action:actions";
           assertStory(receipt, `${fixture}:production_control_present`, controls.some(node => node.semanticId === semanticId && !node.actionDisabled));
           const before = await active.inspect(child); const windows = await windowLifetimes();
           const parentBefore = (await active.inspect(host)).fixtureObservation;

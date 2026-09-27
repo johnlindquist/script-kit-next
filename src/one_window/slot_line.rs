@@ -219,7 +219,7 @@ fn slot_icon(name: &str) -> IconName {
         "append" => IconName::Plus,
         "move" => IconName::ArrowRight,
         "learned" => IconName::StarFilled,
-        "selection" => IconName::Pencil,
+        "selection" | "type" => IconName::Pencil,
         other => icon_name_from_str(other).unwrap_or(IconName::Check),
     }
 }
@@ -254,7 +254,7 @@ mod tests {
     #[test]
     fn every_spec_icon_resolves_to_an_app_icon() {
         for name in [
-            "window", "message", "builtin", "check", "ask", "again", "append",
+            "window", "message", "builtin", "check", "ask", "again", "append", "type",
         ] {
             assert!(!slot_icon(name).asset_path().is_empty(), "{name}");
         }

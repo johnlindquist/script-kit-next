@@ -407,6 +407,14 @@ pub struct IntentMatch {
     pub score: i32,
 }
 
+/// A row the one-window reducer lists itself: the voice view's two readings, a staged subject's
+/// actions, a view's rows. `icon` is a name the list's icon resolver knows.
+#[derive(Clone, Debug)]
+pub struct OneWindowMatch {
+    pub row: sk_one_window::Row,
+    pub icon: &'static str,
+}
+
 /// Represents a fallback command match for the "Use with..." section
 ///
 /// Fallbacks are always shown at the bottom of search results when there's a filter query.
@@ -621,6 +629,8 @@ pub enum SearchResult {
     Intent(IntentMatch),
     /// In-place Spine prompt-builder row projected into the main list.
     SpineProjection(crate::spine::SpineListRow),
+    /// A row the one-window reducer lists itself.
+    OneWindow(OneWindowMatch),
 }
 
 impl SearchResult {
@@ -659,7 +669,10 @@ impl SearchResult {
             SearchResult::DictationHistory(_) => Some(RootUnifiedSourceFilter::Dictation),
             SearchResult::BrowserTab(_) => Some(RootUnifiedSourceFilter::BrowserTabs),
             SearchResult::BrowserHistory(_) => Some(RootUnifiedSourceFilter::BrowserHistory),
-            SearchResult::Agent(_) | SearchResult::Fallback(_) | SearchResult::Intent(_) => None,
+            SearchResult::Agent(_)
+            | SearchResult::Fallback(_)
+            | SearchResult::Intent(_)
+            | SearchResult::OneWindow(_) => None,
             SearchResult::SpineProjection(_) => None,
         }
     }
@@ -694,6 +707,7 @@ impl SearchResult {
                 .unwrap_or_else(|| fm.fallback.name()),
             SearchResult::ScriptIssue(issue) => &issue.title,
             SearchResult::Intent(m) => &m.title,
+            SearchResult::OneWindow(m) => &m.row.title,
             SearchResult::SpineProjection(row) => row.title.as_ref(),
         }
     }
@@ -732,6 +746,7 @@ impl SearchResult {
                 .or_else(|| Some(fm.fallback.description())),
             SearchResult::ScriptIssue(issue) => issue.description.as_deref(),
             SearchResult::Intent(m) => Some(m.subtitle.as_str()),
+            SearchResult::OneWindow(m) => m.row.sub.as_deref(),
             SearchResult::SpineProjection(row) => row.subtitle.as_ref().map(|s| s.as_ref()),
         }
     }
@@ -761,6 +776,7 @@ impl SearchResult {
             SearchResult::Fallback(fm) => fm.score,
             SearchResult::ScriptIssue(issue) => issue.score,
             SearchResult::Intent(m) => m.score,
+            SearchResult::OneWindow(m) => i32::from(m.row.score),
             SearchResult::SpineProjection(row) => row.score,
         }
     }
@@ -799,6 +815,7 @@ impl SearchResult {
             SearchResult::Fallback(_) => "Fallback",
             SearchResult::ScriptIssue(_) => "Issues",
             SearchResult::Intent(_) => "Intent",
+            SearchResult::OneWindow(_) => "Action",
             SearchResult::SpineProjection(row) => row.kind.type_label(),
         }
     }
@@ -839,7 +856,9 @@ impl SearchResult {
             | SearchResult::Skill(_)
             | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
-            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) => None,
+            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) | SearchResult::OneWindow(_) => {
+                None
+            }
             SearchResult::SpineProjection(_) => None,
         }
     }
@@ -887,7 +906,9 @@ impl SearchResult {
             SearchResult::BrowserTab(_) => None,
             SearchResult::BrowserHistory(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::Fallback(_) | SearchResult::Agent(_) => None,
-            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) => None,
+            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) | SearchResult::OneWindow(_) => {
+                None
+            }
             _ => self.launcher_command_id(),
         }
     }
@@ -929,6 +950,7 @@ impl SearchResult {
             SearchResult::BrowserTab(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::ScriptIssue(_) => Some("script-issue/catalog-validation".to_string()),
             SearchResult::Intent(m) => Some(jev_slot_key(m.slot)),
+            SearchResult::OneWindow(m) => Some(format!("one-window/{}", m.row.key)),
             SearchResult::SpineProjection(row) => Some(row.id.to_string()),
             _ => self
                 .history_result_key()
@@ -971,6 +993,7 @@ impl SearchResult {
             SearchResult::Fallback(_) => ("Fallback", "zap"),
             SearchResult::ScriptIssue(_) => ("Issues", "triangle-alert"),
             SearchResult::Intent(_) => ("Intent", "sparkles"),
+            SearchResult::OneWindow(m) => ("Action", m.icon),
             SearchResult::SpineProjection(row) => row.kind.type_accessory_info(),
         }
     }
@@ -1025,7 +1048,9 @@ impl SearchResult {
             SearchResult::BrowserTab(_) => Some("Browser Tabs"),
             SearchResult::BrowserHistory(_) => Some("Browser History"),
             SearchResult::Window(_) => Some("Windows"),
-            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) => None,
+            SearchResult::ScriptIssue(_) | SearchResult::Intent(_) | SearchResult::OneWindow(_) => {
+                None
+            }
             SearchResult::SpineProjection(_) => Some("Spine"),
             _ => None,
         }
@@ -1119,6 +1144,7 @@ impl SearchResult {
             }
             SearchResult::ScriptIssue(_) => "Inspect Issues",
             SearchResult::Intent(m) => m.verb,
+            SearchResult::OneWindow(_) => "Run",
             SearchResult::SpineProjection(row) => row.default_action_text(),
         }
     }

@@ -40,7 +40,6 @@ pub(super) enum RootOwner {
     Dictation(Entity<crate::dictation::DictationOverlay>),
     Secondary(Rc<secondary_fixtures::MountedSecondaryFixture>),
     Footer,
-    ShortcutRecorder,
     ConversationPopup,
     RegisteredChild,
 }
@@ -325,7 +324,6 @@ impl Evaluator {
                         .context("runtime_handle_missing")?;
                 let owner = match info.semantic_surface.as_deref() {
                     Some("footerOverlay") => RootOwner::Footer,
-                    Some("shortcutRecorder") => RootOwner::ShortcutRecorder,
                     _ => RootOwner::RegisteredChild,
                 };
                 self.mounted.insert(
@@ -806,7 +804,7 @@ impl Evaluator {
                     owner: RootOwner::Secondary(fixture),
                 }
             }
-            "footer" | "shortcutRecorder" | "agentChatPopup" => {
+            "footer" | "agentChatPopup" => {
                 self.mount_auxiliary(fixture_id, &descriptor.family, parent.as_ref())?
             }
             _ => anyhow::bail!("catalogue_root_owner_mismatch"),
@@ -1530,9 +1528,6 @@ impl Evaluator {
                     generation,
                     &mut app,
                 )?,
-                RootOwner::ShortcutRecorder => {
-                    main_fixtures::close_shortcut_fixture(&mounted.info.id, generation, &mut app)?
-                }
                 RootOwner::Main(entity) => {
                     entity.update(&mut **app, |app, _| super::search_fixtures::retire(app))?;
                     mounted

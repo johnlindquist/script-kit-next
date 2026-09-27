@@ -207,7 +207,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             "secondary.hud-action" => ("hud", &["panel:hud", "hud:primary-action"]),
             "secondary.snap" => ("snapOverlay", &["panel:snap-overlay", "snap:target:*"]),
             "secondary.footer" => ("footerOverlay", &["footer-action:*"]),
-            "secondary.shortcut-recorder" => ("shortcutRecorder", &["shortcut-key-display"]),
             id if fixture_ids::DICTATION_FIXTURE_IDS.contains(&id) => (
                 "dictation",
                 &["panel:dictation-overlay", "panel:dictation-signal-band"],
@@ -526,13 +525,6 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "secondary",
             "src/footer_popup.rs",
             "src/footer_popup.rs::GpuiFooterOverlay",
-            Some("main.script-list"),
-        ),
-        "secondary.shortcut-recorder" => (
-            "shortcutRecorder",
-            "secondary",
-            "src/app_impl/shortcut_recorder.rs",
-            "src/components/shortcut_recorder.rs",
             Some("main.script-list"),
         ),
         _ => return None,

@@ -222,3 +222,51 @@ mod tests {
         }
     }
 }
+
+/// Jev first reads what's heard at this many words, then again at each clause end.
+pub const TALK_FIRST_READ_WORDS: usize = 4;
+/// Letting go of the voice key acts without asking only when Jev is at least this sure.
+pub const TALK_SURE_P: f32 = 0.65;
+/// A learned sentence matches once this many letters of it are typed.
+pub const LEARNED_MIN_CHARS: usize = 2;
+/// A learned row's strength with one letter typed; it rises to 100 as the sentence fills in.
+pub const LEARNED_SCORE_FLOOR: u8 = 70;
+/// Sentences kept as lessons.
+pub const MAX_LESSONS: usize = 200;
+/// A learned row's strength once two words of its sentence are typed: above a name that only
+/// starts with the words or matches them at word boundaries.
+pub const LEARNED_SENTENCE_SCORE: u8 = 96;
+
+/// Words the voice view shows.
+pub mod talk_words {
+    pub const LISTENING: &str = "Listening…";
+    pub const SOUNDS_LIKE_REQUEST: &str = "Sounds like a request";
+    pub const PICKED_TYPING: &str = "You picked typing · Jev won't switch it";
+    pub const PICKED_REQUEST: &str = "You picked a request · Jev won't switch it";
+    pub const TOO_CLOSE: &str = "Too close to call · pick one";
+    pub const PICK_ONE: &str = "Pick one · ⌘1 or ⌘2";
+    pub const WAITS_FOR_JEV: &str = "Waits for Jev";
+    pub const DO_IT_AS_REQUEST: &str = "Do it as a request";
+    pub const LIKE_ONE_YOU_TYPE: &str = "a sentence, like one you type";
+    pub const AT_YOUR_CURSOR: &str = "at your cursor";
+    pub const TYPING_INTO: &str = "Typing into";
+    pub const VIEW_LABEL: &str = "Listening";
+
+    /// "Sounds like you're writing to Sarah".
+    pub fn writing_to(to: Option<&str>) -> String {
+        match to {
+            Some(to) => format!("Sounds like you're writing to {to}"),
+            None => "Sounds like you're writing".to_string(),
+        }
+    }
+
+    /// "Type it into Mail".
+    pub fn type_into(app: &str) -> String {
+        format!("Type it into {app}")
+    }
+
+    /// "Typed 20 words into Mail".
+    pub fn typed_into(words: usize, app: &str) -> String {
+        format!("Typed {words} words into {app}")
+    }
+}

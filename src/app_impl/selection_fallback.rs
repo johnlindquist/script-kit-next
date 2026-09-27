@@ -645,7 +645,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Fallback(_) => None,
                     // Script Issues is a synthetic diagnostic row — no frecency.
                     scripts::SearchResult::ScriptIssue(_) => None,
-                    scripts::SearchResult::Intent(_) => None,
+                    scripts::SearchResult::Intent(_) | scripts::SearchResult::OneWindow(_) => None,
                     // Spine projections don't track frecency.
                     scripts::SearchResult::SpineProjection(_) => None,
                 };
@@ -945,6 +945,9 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Intent(_) => {
                         anyhow::bail!("main_menu_jev_row_runs_through_one_window");
+                    }
+                    scripts::SearchResult::OneWindow(_) => {
+                        anyhow::bail!("main_menu_one_window_row_runs_through_one_window");
                     }
                     scripts::SearchResult::SpineProjection(_) => {
                         anyhow::bail!("main_menu_spine_action_requires_live_window");

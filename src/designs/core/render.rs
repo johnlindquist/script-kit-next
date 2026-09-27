@@ -425,6 +425,12 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("ExclamationTriangle".to_string())),
                 ),
+                SearchResult::OneWindow(m) => (
+                    m.row.title.clone(),
+                    m.row.sub.clone(),
+                    None,
+                    Some(IconKind::Svg(m.icon.to_string())),
+                ),
                 SearchResult::Intent(m) => (
                     m.title.clone(),
                     (!m.subtitle.is_empty()).then(|| m.subtitle.clone()),

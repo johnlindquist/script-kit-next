@@ -48,8 +48,6 @@ pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
     ]
 }
 
-pub(crate) const SHORTCUT_FIXTURE_IDS: &[&str] = &["secondary.shortcut-recorder"];
-
 pub(crate) const MAIN_OVERLAY_FIXTURE_IDS: &[&str] = &[
     "main-overlay.alias",
     "main-overlay.tab-ai-save-offer",
@@ -176,5 +174,4 @@ pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
                 .iter()
                 .copied(),
         )
-        .chain(SHORTCUT_FIXTURE_IDS.iter().copied())
 }

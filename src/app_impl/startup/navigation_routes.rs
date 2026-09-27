@@ -1,7 +1,6 @@
 struct SecondarySurfaceWindowState {
     is_notes: bool,
     is_detached_agent_chat: bool,
-    is_shortcut_recorder: bool,
 }
 
 impl SecondarySurfaceWindowState {
@@ -9,12 +8,11 @@ impl SecondarySurfaceWindowState {
         Self {
             is_notes: crate::notes::is_notes_window(window),
             is_detached_agent_chat: crate::ai::agent_chat::ui::chat_window::is_chat_window(window),
-            is_shortcut_recorder: super::shortcut_recorder::is_shortcut_recorder_window(window),
         }
     }
 
     fn is_secondary(&self) -> bool {
-        self.is_notes || self.is_detached_agent_chat || self.is_shortcut_recorder
+        self.is_notes || self.is_detached_agent_chat
     }
 }
 

@@ -6,8 +6,10 @@
 
 mod finishing;
 mod keys;
+mod learning;
 mod show;
 mod staging;
+mod talking;
 #[cfg(test)]
 mod tests;
 mod text;
@@ -183,6 +185,8 @@ pub enum Event {
     Tick,
     /// Something happened to the model's chat, the steps, a service or an agent.
     Work(crate::work::WorkEvent),
+    /// Holding the voice key.
+    Talk(crate::talk::TalkEvent),
 }
 
 impl Event {
@@ -267,6 +271,20 @@ pub enum Effect {
     SetInput(String),
     /// Work for the host: ask the model, read or run steps, sign in, start or park an agent.
     Work(crate::work::WorkEffect),
+    /// Ask Jev whether the heard words are writing or a request; `last` for the final words.
+    TalkAsk {
+        words: String,
+        last: bool,
+    },
+    /// Paste the words at the front app's cursor.
+    Paste {
+        text: String,
+        app: String,
+    },
+    /// The voice session is over: stop listening and let go of what was heard.
+    TalkEnded,
+    /// Something new was learned; the host keeps it for the next session.
+    Learned,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -333,6 +351,10 @@ pub struct OneWindow {
     wake: Option<Ms>,
     now: Ms,
     work: crate::work::Work,
+    lessons: crate::lessons::Lessons,
+    talk: Option<crate::talk::Talk>,
+    /// Voice sessions so far, so each one's Enter targets are new.
+    talks: u64,
 }
 
 impl Default for OneWindow {
@@ -375,6 +397,9 @@ impl OneWindow {
             wake: None,
             now: 0,
             work: crate::work::Work::default(),
+            lessons: crate::lessons::Lessons::default(),
+            talk: None,
+            talks: 0,
         }
     }
 
@@ -448,6 +473,7 @@ impl OneWindow {
             self.line = None;
             self.line_from_view = false;
         }
+        self.settle_lessons(&mut fx);
         self.schedule(now, &mut fx);
         Outcome {
             effects: fx,
@@ -672,6 +698,7 @@ impl OneWindow {
             }
             Event::Tick => true,
             Event::Work(ev) => self.on_work(now, ev, fx),
+            Event::Talk(ev) => self.on_talk(now, ev, fx),
         }
     }
 }

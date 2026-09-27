@@ -50,6 +50,7 @@ pub(crate) struct OneWindowHost {
     /// What was highlighted when ⌘K staged something.
     pub(super) staged_from: Option<super::staging::StagedFrom>,
     pub(crate) work: super::work::WorkHost,
+    pub(crate) learns: super::learns::LearnsHost,
 }
 
 /// What the reducer did with one event.
@@ -228,22 +229,24 @@ impl ScriptListApp {
                                 key,
                             )));
                         }
-                        _ => tracing::info!(
-                            target: "script_kit::one_window",
-                            event = "effect_not_hosted",
-                            effect = ?Effect::ViewKey(key),
-                        ),
+                        _ => self.one_window_view_key(key, cx),
                     },
                     Effect::Work(work) => works.push(work),
-                    effect @ (Effect::Held { .. }
-                    | Effect::Undo { .. }
-                    | Effect::Again { .. }
-                    | Effect::OpenScript { .. }
-                    | Effect::SaveScript { .. }) => tracing::info!(
-                        target: "script_kit::one_window",
-                        event = "effect_not_hosted",
-                        effect = ?effect,
-                    ),
+                    Effect::OpenScript { name } => self.one_window_open_script(name, cx),
+                    Effect::SaveScript { name, said, .. } => {
+                        self.one_window_save_script(name, said)
+                    }
+                    Effect::TalkAsk { words, last } => self.one_window_talk_ask(words, last, cx),
+                    Effect::Paste { text, app } => self.one_window_paste(text, app, cx),
+                    Effect::TalkEnded => self.one_window_talk_ended(),
+                    Effect::Learned => self.one_window_learned(),
+                    effect @ (Effect::Held { .. } | Effect::Undo { .. } | Effect::Again { .. }) => {
+                        tracing::info!(
+                            target: "script_kit::one_window",
+                            event = "effect_not_hosted",
+                            effect = ?effect,
+                        )
+                    }
                 }
             }
         }
@@ -399,6 +402,7 @@ impl ScriptListApp {
         for row in self.one_window.staged().iter().flat_map(|s| &s.rows) {
             row.key.hash(&mut hasher);
         }
+        self.one_window_own_token().hash(&mut hasher);
         hasher.finish()
     }
 
@@ -417,6 +421,9 @@ impl ScriptListApp {
         if !self.one_window_owns(text) {
             return (grouped, flat, false);
         }
+        if let Some((grouped, flat)) = self.one_window_own_list() {
+            return (grouped, flat, true);
+        }
         if self.one_window.text() != text {
             self.one_window_handle(Event::Text(text.to_string()), cx);
         }
@@ -426,6 +433,7 @@ impl ScriptListApp {
             results
         } else {
             let (rows, results) = self.one_window_names(&grouped, &flat, text);
+            let (rows, results) = self.one_window_more_names(text, rows, results, cx);
             self.one_window_handle(Event::Names(rows), cx);
             results
         };
@@ -614,6 +622,7 @@ impl ScriptListApp {
         self.one_window_follow_host_selection(cx);
         let px = self.one_window_natural_height();
         self.one_window_handle(Event::Content { px }, cx);
+        self.one_window_follow_own_selection(cx);
     }
 
     /// How tall the launcher may get in its current mode.
@@ -641,7 +650,7 @@ impl ScriptListApp {
                 self.current_main_menu_theme.def(),
             ))
             + crate::footer_popup::main_window_footer_reservation_height();
-        (chrome + list).min(self.one_window_height_ceiling())
+        (chrome + list + self.one_window_view_extra_height()).min(self.one_window_height_ceiling())
     }
 
     // ------------------------------------------------------------------ height
@@ -791,6 +800,7 @@ impl ScriptListApp {
                 let readings = crate::intent::readings(plan);
                 self.intent_launcher.remember(&text, screen, &readings);
                 self.intent_launcher.show(&text, &readings);
+                self.one_window_talk_reading(&text, &readings, cx);
                 tracing::info!(
                     target: "script_kit::intent",
                     event = "jev_answered",
@@ -843,6 +853,9 @@ impl ScriptListApp {
             return Ok(());
         }
         let text = self.one_window.text().to_string();
+        if let Some(ran) = self.one_window_run_own(&row, cx) {
+            return ran;
+        }
         if let Some(ran) = self.run_jev_row(&row.key, &text, cx) {
             return ran.map_err(anyhow::Error::msg);
         }

@@ -717,26 +717,6 @@ impl Evaluator {
                         self.tick(true)?;
                     }
                 }
-                if matches!(mounted.owner, RootOwner::ShortcutRecorder) {
-                    let crate::protocol::BatchCommand::SelectBySemanticId {
-                        semantic_id,
-                        submit,
-                    } = command
-                    else {
-                        anyhow::bail!("recorder_requires_semantic_selection_or_gpui_key");
-                    };
-                    ensure!(
-                        crate::shortcut_recorder::shortcut_fixture_select(
-                            &mounted.info.id,
-                            generation,
-                            semantic_id,
-                            *submit,
-                            &mut self.cx.app.borrow_mut()
-                        )?,
-                        "recorder_action_not_found"
-                    );
-                    return Ok(Some(semantic_id.clone()));
-                }
                 crate::windows::with_runtime_window_dispatch(mounted.handle, || {
                     crate::apply_registered_surface_command(
                         &mounted.info,
@@ -837,10 +817,7 @@ impl Evaluator {
         let observation = if after.is_none()
             && matches!(
                 mounted.owner,
-                RootOwner::Main(_)
-                    | RootOwner::Notes(_)
-                    | RootOwner::ShortcutRecorder
-                    | RootOwner::Footer
+                RootOwner::Main(_) | RootOwner::Notes(_) | RootOwner::Footer
             ) {
             Value::Null
         } else {
@@ -1043,20 +1020,6 @@ impl Evaluator {
                 )?,
                 RootOwner::Footer,
             ),
-            "shortcutRecorder" => {
-                let main: Entity<ScriptListApp> =
-                    self.main.clone().context("shortcut_main_owner_missing")?;
-                (
-                    super::main_fixtures::mount_shortcut_fixture(
-                        fixture_id,
-                        main,
-                        &parent.info,
-                        parent.handle,
-                        &mut cx,
-                    )?,
-                    RootOwner::ShortcutRecorder,
-                )
-            }
             _ => anyhow::bail!("unknown_auxiliary_family"),
         };
         let handle = crate::windows::get_runtime_window_handle_for_generation(

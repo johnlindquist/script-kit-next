@@ -865,3 +865,176 @@ mod work {
         }
     }
 }
+
+const SENTENCES: &[&str] = &[
+    "put the pr on my second screen",
+    "put chrome on the left",
+    "mute slack for an hour",
+];
+
+#[derive(Clone, Debug)]
+enum LearnStep {
+    Type(usize),
+    /// A sentence, Jev's reading of it, Enter, and the row finishing.
+    Ran(usize),
+    Clear,
+}
+
+fn learn_step() -> impl Strategy<Value = LearnStep> {
+    prop_oneof![
+        4 => (0..WORDS.len() + SENTENCES.len()).prop_map(LearnStep::Type),
+        2 => (0..SENTENCES.len()).prop_map(LearnStep::Ran),
+        1 => Just(LearnStep::Clear),
+    ]
+}
+
+proptest! {
+    /// Learning never changes the list under the cursor: within one query (from the first word
+    /// until the input is empty again) the learned rows for the same words never change.
+    #[test]
+    fn learned_rows_change_only_between_queries(steps in prop::collection::vec(learn_step(), 1..40)) {
+        let mut win = OneWindow::default();
+        let mut seen: HashMap<String, Vec<String>> = HashMap::new();
+        let mut now = 0;
+        for step in steps {
+            now += 500;
+            match step {
+                LearnStep::Type(i) => {
+                    let text = WORDS.iter().chain(SENTENCES).nth(i).unwrap().to_string();
+                    win.handle(now, Event::Text(text));
+                }
+                LearnStep::Ran(i) => {
+                    let said = SENTENCES[i];
+                    let row = Row::new(format!("jev:{i}"), format!("Reading {i}"));
+                    win.handle(now, Event::Text(said.into()));
+                    win.handle(now + 100, Event::Jev { text: said.into(), rows: vec![row.clone()] });
+                    win.handle(now + 600, Event::Key(Key::Enter));
+                    win.handle(now + 700, Event::Ran { row, app: None });
+                    now += 700;
+                }
+                LearnStep::Clear => {
+                    win.handle(now, Event::Text(String::new()));
+                }
+            }
+            let text = win.text().to_string();
+            if text.trim().is_empty() {
+                seen.clear();
+                continue;
+            }
+            let keys: Vec<String> = win.learned_rows(&text).into_iter().map(|r| r.key).collect();
+            let first = seen.entry(text.clone()).or_insert_with(|| keys.clone());
+            prop_assert_eq!(&*first, &keys, "learned rows for {:?} changed mid-query", text);
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum TalkStep {
+    Word,
+    Read { words_back: usize, type_p: u8 },
+    Pick(u8),
+    Release,
+    Escape,
+    Wait(u16),
+    Start,
+}
+
+fn talk_step() -> impl Strategy<Value = TalkStep> {
+    prop_oneof![
+        5 => Just(TalkStep::Word),
+        4 => (0usize..3, 0u8..=100).prop_map(|(words_back, type_p)| TalkStep::Read { words_back, type_p }),
+        1 => (1u8..=2).prop_map(TalkStep::Pick),
+        2 => Just(TalkStep::Release),
+        1 => Just(TalkStep::Escape),
+        2 => (1u16..800).prop_map(TalkStep::Wait),
+        1 => Just(TalkStep::Start),
+    ]
+}
+
+const SPOKEN: &[&str] = &[
+    "Hi",
+    "Sarah,",
+    "the",
+    "review",
+    "moved",
+    "to",
+    "Thursday.",
+    "remind",
+    "me",
+    "at",
+    "ten",
+];
+
+proptest! {
+    /// While talking: the two rows never reorder; Jev's answers change the highlighted reading at
+    /// most once per session, and never after it was picked; and the words paste only when the
+    /// user picked typing or Jev's answer to exactly the final words agrees with typing and is at
+    /// least 65 % sure.
+    #[test]
+    fn voice_readings_are_steady_and_letting_go_acts_only_when_sure(
+        steps in prop::collection::vec(talk_step(), 1..60)
+    ) {
+        use sk_one_window::talk::{Reading, TalkEvent};
+        use sk_one_window::contract::TALK_SURE_P;
+        let mut win = OneWindow::default();
+        let mut now = 0;
+        let mut spoken: Vec<&str> = Vec::new();
+        let mut changes = 0;
+        for step in steps {
+            now += 30;
+            let before = win.talk().cloned();
+            let event = match &step {
+                TalkStep::Start => {
+                    spoken.clear();
+                    changes = 0;
+                    Event::Talk(TalkEvent::Start { app: "Mail".into(), field: "Reply".into(), to: None })
+                }
+                TalkStep::Word => {
+                    spoken.push(SPOKEN[spoken.len() % SPOKEN.len()]);
+                    Event::Talk(TalkEvent::Heard(spoken.join(" ")))
+                }
+                TalkStep::Read { words_back, type_p } => {
+                    let n = spoken.len().saturating_sub(*words_back);
+                    let p = f32::from(*type_p) / 100.0;
+                    Event::Talk(TalkEvent::Read { words: spoken[..n].join(" "), type_p: p, ask_p: 1.0 - p, ask: None })
+                }
+                TalkStep::Pick(d) => Event::Key(Key::CmdDigit(*d)),
+                TalkStep::Release => Event::Talk(TalkEvent::Release),
+                TalkStep::Escape => Event::Key(Key::Escape),
+                TalkStep::Wait(ms) => {
+                    now += u64::from(*ms);
+                    Event::Tick
+                }
+            };
+            let out = win.handle(now, event.clone());
+            let pasted = out.effects.iter().any(|fx| matches!(fx, Effect::Paste { .. }));
+            if let Some(before) = &before {
+                if pasted {
+                    let picked = matches!(step, TalkStep::Pick(1)) || before.locked == Some(Reading::Type);
+                    let sure = |words: &str, type_p: f32, ask_p: f32| {
+                        words.trim() == before.heard.trim() && type_p >= ask_p && type_p >= TALK_SURE_P
+                    };
+                    let jev_sure = match &event {
+                        Event::Talk(TalkEvent::Read { words, type_p, ask_p, .. }) => sure(words, *type_p, *ask_p),
+                        _ => before.answer.as_ref().is_some_and(|a| sure(&a.words, a.type_p, a.ask_p)),
+                    };
+                    prop_assert!(picked || jev_sure, "pasted without a pick or a sure answer: {:?}", before);
+                    prop_assert!(!matches!(step, TalkStep::Escape), "Esc pastes nothing");
+                }
+            }
+            if let Some(talk) = win.talk() {
+                let rows = talk.rows();
+                prop_assert_eq!(rows[0].key.as_str(), "talk:type");
+                prop_assert_eq!(rows[1].key.as_str(), "talk:ask");
+                let answered = matches!(step, TalkStep::Read { .. });
+                if let Some(before) = &before {
+                    if answered && before.reading.is_some() && before.reading != talk.reading {
+                        prop_assert!(before.locked.is_none(), "a picked reading changed");
+                        changes += 1;
+                    }
+                }
+                prop_assert!(changes <= 1, "the reading changed {} times", changes);
+            }
+        }
+    }
+}
