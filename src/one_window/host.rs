@@ -186,6 +186,7 @@ impl ScriptListApp {
         let now = self.one_window_now(cx);
         self.one_window_host.acting_on = self.one_window.staged().map(|s| s.subject.clone());
         while let Some(event) = queue.pop_front() {
+            let typed = matches!(event, Event::Text(_));
             let outcome = self.one_window.handle(now, event);
             if std::mem::take(&mut first) {
                 handled.consumed = outcome.consumed;
@@ -218,7 +219,9 @@ impl ScriptListApp {
                     ),
                 }
             }
-            queue.extend(self.one_window_view_typed());
+            if typed {
+                queue.extend(self.one_window_view_typed());
+            }
         }
         for row in runs {
             handled.ran = true;
@@ -401,7 +404,7 @@ impl ScriptListApp {
             }
             return (grouped, flat, false);
         }
-        if self.one_window.text() != text {
+        if self.one_window.text() != text && !self.one_window.in_view() {
             self.one_window_handle(Event::Text(text.to_string()), cx);
         }
         let (rows, results) = self.one_window_names(&grouped, &flat, text);

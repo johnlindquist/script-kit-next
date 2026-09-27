@@ -122,6 +122,10 @@ impl ScriptListApp {
         text: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.one_window_host.view_text = Some(
+            text.clone()
+                .unwrap_or_else(|| self.one_window.text().to_string()),
+        );
         let spec = ViewSpec {
             name: view.name().to_string(),
             label: view.label(),
@@ -429,7 +433,6 @@ impl ScriptListApp {
             lines: day_note_lines(),
             line: line.clone(),
         };
-        self.one_window_host.view_text = Some(line.clone());
         self.one_window_open_view(HostedView::Note(note), Some(line), cx);
     }
 
