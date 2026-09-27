@@ -86,7 +86,7 @@ fn edit_script_shows_toast_on_editor_launch_failure() {
     let block = &content[edit_pos..content.len().min(edit_pos + 4000)];
 
     assert!(
-        block.contains("show_error_toast_with_code("),
+        block.contains("notice_failed_with_code("),
         "edit_script should show error toast when editor launch fails"
     );
 }
@@ -111,10 +111,6 @@ fn reload_scripts_refreshes_and_shows_hud() {
     assert!(
         block.contains("management_action.success_hud()") && content.contains("Scripts reloaded"),
         "reload_scripts should show HUD confirming reload"
-    );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "reload_scripts should use named HUD duration constant"
     );
 }
 
@@ -170,7 +166,7 @@ fn settings_shows_error_when_editor_fails() {
         "settings should derive error toast copy from the named editor launch plan"
     );
     assert!(
-        block.contains("show_error_toast("),
-        "settings should use show_error_toast for consistent error reporting"
+        block.contains("notice_failed("),
+        "settings should use notice_failed for consistent error reporting"
     );
 }

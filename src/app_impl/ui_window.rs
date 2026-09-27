@@ -291,7 +291,7 @@ impl ScriptListApp {
                     let prompt_id = id.clone();
                     let validation_message = entity.read(cx).submit_validation_message(cx);
                     if let Some(message) = validation_message {
-                        self.show_hud(message, Some(HUD_LONG_MS), cx);
+                        self.one_window_notice(crate::line_notice::INFO, message, cx);
                         return;
                     }
                     let values = entity.read(cx).collect_values(cx);
@@ -673,7 +673,7 @@ impl ScriptListApp {
     }
 
     fn main_window_footer_buttons_blocked(&self) -> bool {
-        crate::confirm::is_confirm_window_open()
+        self.main_window_modal_owns_keyboard()
     }
 
     fn main_window_selected_command_block_reason(&self) -> Option<&'static str> {
@@ -2225,7 +2225,7 @@ impl ScriptListApp {
                 let results = match ScriptListApp::resolve_file_search_results(&text) {
                     Ok(results) => results,
                     Err(error) => {
-                        self.show_error_toast(format!("File search failed: {error}"), cx);
+                        self.notice_failed(format!("File search failed: {error}"), cx);
                         return true;
                     }
                 };

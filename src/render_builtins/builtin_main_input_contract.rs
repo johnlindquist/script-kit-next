@@ -49,11 +49,8 @@ pub(crate) fn resolved_builtin_main_input_count_label_style(
 ) -> BuiltinMainInputCountLabelStyle {
     BuiltinMainInputCountLabelStyle {
         font_size_px: BUILTIN_MAIN_INPUT_COUNT_FONT_SIZE_PX,
-        // Reuse the shared GPUI default-line-height bridge extracted for the
-        // confirm surface instead of duplicating the phi formula.
-        line_height_px: crate::confirm::confirm_prompt_line_height_px(
-            BUILTIN_MAIN_INPUT_COUNT_FONT_SIZE_PX,
-        ),
+        // Reuse the shared GPUI default-line-height bridge instead of duplicating the phi formula.
+        line_height_px: crate::theme::default_line_height_px(BUILTIN_MAIN_INPUT_COUNT_FONT_SIZE_PX),
         font_weight: gpui::FontWeight::NORMAL,
         inset_right: def.search.text_inset_x,
         text_rgba: chrome.text_hint_rgba,
@@ -85,7 +82,7 @@ mod builtin_main_input_count_label_contract {
         assert_eq!(style.font_size_px, 14.0);
         assert_eq!(
             style.line_height_px,
-            crate::confirm::confirm_prompt_line_height_px(14.0)
+            crate::theme::default_line_height_px(14.0)
         );
         assert_eq!(style.line_height_px, 23.0);
         // Normal/default weight — never the search body's 430.

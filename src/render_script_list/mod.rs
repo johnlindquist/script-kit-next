@@ -2320,9 +2320,6 @@ impl ScriptListApp {
             }
         };
 
-        // Note: Toast notifications are now handled by gpui-component's NotificationList
-        // via the Root wrapper. Toasts are flushed in render() via flush_pending_toasts().
-
         // Note: HUD overlay is added at the top-level render() method for all views
 
         // Log total render_script_list time and update tracking state (only if state changed)

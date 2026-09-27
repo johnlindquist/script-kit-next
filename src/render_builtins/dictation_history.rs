@@ -380,9 +380,9 @@ impl ScriptListApp {
                             cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                                 entry.transcript,
                             ));
-                            this.show_hud(
+                            this.one_window_notice(
+                                crate::line_notice::INFO,
                                 "Copied dictation to clipboard".to_string(),
-                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }

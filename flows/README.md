@@ -47,7 +47,7 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 
 ## Roster
 
-- **[actions.md](./actions.md)** (workspace-write): Actions menu, trigger picker, confirm popup, action builders, and keyboard affordances.
+- **[actions.md](./actions.md)** (workspace-write): Actions menu, trigger picker, action builders, and keyboard affordances (holds, undo and questions live in the line above the input: `src/one_window/ledger_view.rs`).
 - **[agent-chat.md](./agent-chat.md)** (workspace-write): Agent Chat portal, AI context picker, file attachment parity, context mentions, and goose handoff.
 - **[ai-core.md](./ai-core.md)** (workspace-write): AI capabilities outside Agent Chat: local LLM (ghost completion backend), dictation/whisper capture, computer use, OCR, camera, and AI vault.
 - **[auditor.md](./auditor.md)** (read-only): Read-only audit sweeps: UX inconsistencies, shared-component bypasses, hardcoded theme values, policy violations; prioritized findings, never edits.
@@ -55,7 +55,7 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 - **[build-doctor.md](./build-doctor.md)** (workspace-write): Build and toolchain medic: agent-cargo pools, cargo lock contention, target-agent disk budget, clippy and fmt debt, stuck or slow builds.
 - **[builtins.md](./builtins.md)** (workspace-write): Launcher-accessible built-in utility surfaces: file search, app launcher, emoji, calculator, browser history, process manager, window switcher, permissions wizard.
 - **[clipboard.md](./clipboard.md)** (workspace-write): Clipboard history, quiet sediment rules, post-copy tracker, and no-popup brain capture contracts.
-- **[components.md](./components.md)** (workspace-write): Shared UI primitives, prompt shells, rows, forms, buttons, toasts, theme, chrome, and design tokens.
+- **[components.md](./components.md)** (workspace-write): Shared UI primitives, prompt shells, rows, forms, buttons, theme, chrome, and design tokens (notices go to the line above the input via `src/line_notice.rs`).
 - **[devex.md](./devex.md)** (workspace-write): Repo process docs, project flows bootstrap, agent-cargo usage, dev probes, source-audit ratchets.
 - **[devtools.md](./devtools.md)** (workspace-write): DevTools operator (converted from the script-kit-devtools skill): drives protocol/MCP/CLI primitives — driver library, inspect/investigate, elements/layout/scroll/focus/text/keyboard, events, red/green compare — to inspect, measure, and prove real app behavior; produces fail-closed investigation receipts that feed oracle-packx-conversation bundles.
 - **[escape.md](./escape.md)** (workspace-write): Escape/dismiss medic: owns the cross-surface Escape grammar — the ScriptList escape ladder, the opened_from_main_menu origin flag, DismissPolicy, go_back_or_close vs close_and_reset_window, and the 'extra Escape needed' bug family.

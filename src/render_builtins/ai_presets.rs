@@ -463,12 +463,12 @@ impl ScriptListApp {
                             match outcome {
                                 Ok(outcome) => {
                                     if let Err(error) = binding.try_complete(outcome) {
-                                        self.show_error_toast(form_action.failure_message(error), cx);
+                                        self.notice_failed(form_action.failure_message(error), cx);
                                         return;
                                     }
                                 }
                                 Err(error) => {
-                                    self.show_error_toast(form_action.failure_message(error), cx);
+                                    self.notice_failed(form_action.failure_message(error), cx);
                                     return;
                                 }
                             }
@@ -476,7 +476,7 @@ impl ScriptListApp {
                         if crate::runtime_policy::is_owned_evaluation() {
                             cx.notify();
                         } else {
-                            self.show_hud(form_action.success_hud(&preset.name), Some(HUD_SHORT_MS), cx);
+                            self.one_window_notice(crate::line_notice::INFO, form_action.success_hud(&preset.name), cx);
                             self.go_back_or_close(window, cx);
                         }
                     }
@@ -488,13 +488,13 @@ impl ScriptListApp {
                             action = "create_preset_failed",
                             "Failed to create preset"
                         );
-                        self.show_error_toast(form_action.failure_message(e), cx);
+                        self.notice_failed(form_action.failure_message(e), cx);
                     }
                 }
             } else if crate::ui_foundation::is_key_escape(key) {
                 if let Some(binding) = &self.prompt_completion {
                     if let Err(error) = binding.try_complete(crate::prompt_completion::PromptOutcome::Cancelled) {
-                        self.show_error_toast(format!("Preset cancellation failed: {error}"), cx);
+                        self.notice_failed(format!("Preset cancellation failed: {error}"), cx);
                         return;
                     }
                 }

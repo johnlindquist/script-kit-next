@@ -52,15 +52,11 @@ impl TahoeBackdropLayout {
 }
 
 /// Windows whose glass resolves as an untinted popup material
-/// (`NativeGlassSurfaceRole::PopupBackdrop`): the Actions menu, modals, and
-/// attached toasts.
+/// (`NativeGlassSurfaceRole::PopupBackdrop`): the Actions menu.
 /// Keyed by the same label the close paths already pass.
 #[cfg(target_os = "macos")]
 fn window_name_uses_popup_backdrop(window_name: &str) -> bool {
-    matches!(
-        window_name,
-        "Actions popup" | "Confirm popup" | "Toast popup"
-    )
+    window_name == "Actions popup"
 }
 
 /// Windows whose DEFAULT backdrop reserves the detached-footer band. Notes is

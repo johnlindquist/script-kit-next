@@ -3,54 +3,6 @@
 use super::read_source as read;
 
 #[test]
-fn clipboard_delete_multiple_requires_confirmation_before_delete() {
-    let actions = super::read_all_handle_action_sources();
-
-    assert!(
-        actions.contains("\"clipboard_delete_multiple\""),
-        "Expected handle_action/ to handle clipboard_delete_multiple"
-    );
-    assert!(
-        actions.contains("Are you sure you want to delete these")
-            && actions.contains("matching clipboard entries"),
-        "Expected clipboard_delete_multiple to show a count-aware confirmation message"
-    );
-    assert!(
-        actions.contains("crate::confirm::confirm_with_parent_dialog("),
-        "Expected clipboard_delete_multiple to call confirm_with_parent_dialog directly"
-    );
-}
-
-#[test]
-fn clipboard_delete_all_requires_confirmation_before_delete() {
-    let actions = super::read_all_handle_action_sources();
-
-    assert!(
-        actions.contains("\"clipboard_delete_all\""),
-        "Expected handle_action/ to handle clipboard_delete_all"
-    );
-    assert!(
-        actions.contains("Are you sure you want to delete all")
-            && actions.contains("unpinned clipboard entries"),
-        "Expected clipboard_delete_all to show a confirmation warning before deleting all unpinned entries"
-    );
-    assert!(
-        actions.contains("crate::confirm::confirm_with_parent_dialog("),
-        "Expected clipboard_delete_all to call confirm_with_parent_dialog directly"
-    );
-}
-
-#[test]
-fn clipboard_actions_do_not_use_confirm_with_modal() {
-    let actions = super::read_all_handle_action_sources();
-
-    assert!(
-        !actions.contains("confirm_with_modal("),
-        "Clipboard actions should call confirm_with_parent_dialog directly, not confirm_with_modal"
-    );
-}
-
-#[test]
 fn builtin_confirmation_modal_failure_does_not_auto_confirm() {
     let content = read("src/app_execute.rs");
 

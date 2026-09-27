@@ -550,22 +550,15 @@ impl NotesApp {
         true
     }
 
-    pub(super) fn save_before_window_close(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
+    pub(super) fn save_before_window_close(&mut self, cx: &mut Context<Self>) -> bool {
         if self.save_current_note() {
             return true;
         }
 
-        super::render::show_notes_toast(
-            window,
-            super::render::NOTES_SAVE_FAILURE_TOAST_KEY,
-            super::navigation::NOTES_SAVE_FAILURE_MESSAGE,
-            crate::toast_popup::ToastPopupKind::Error,
-            None,
+        crate::line_notice::say(
             cx,
+            crate::line_notice::FAILED,
+            super::navigation::NOTES_SAVE_FAILURE_MESSAGE,
         );
         cx.notify();
         false

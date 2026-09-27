@@ -494,57 +494,6 @@ impl NotesApp {
         self.select_note_internal(id, false, window, cx);
     }
 
-    /// Clamp dialog width so it never exceeds the available space in a
-    /// narrow Notes popup window.  The `24.0` accounts for horizontal
-    /// padding (12px each side).
-    fn clamp_notes_delete_dialog_width(window_width: f32) -> f32 {
-        let available_width = (window_width - 24.0).max(0.0);
-        available_width.min(448.0)
-    }
-
-    /// Minimum width (px) to trust a viewport or bounds measurement as a real
-    /// window size.  Tiny positive values during startup produce an invisible
-    /// 0 px dialog, so we fall through to the default instead.
-    const MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH: f32 = 240.0;
-
-    /// Default source width when neither viewport nor bounds are viable.
-    /// Produces a 448 px dialog after the 24 px padding clamp.
-    const DEFAULT_NOTES_DELETE_DIALOG_SOURCE_WIDTH: f32 = 472.0;
-
-    /// Resolve the source width for the Notes delete dialog.
-    ///
-    /// Prefer the viewport width when available, but fall back to bounds
-    /// width for the "open window -> immediate delete shortcut" path where
-    /// viewport size can still be zero before the first stable layout.
-    /// Tiny positive values (< 240) are rejected so startup measurements
-    /// like 12 px don't produce an invisible dialog.
-    pub(crate) fn resolve_notes_delete_dialog_source_width(
-        viewport_width: f32,
-        bounds_width: f32,
-    ) -> f32 {
-        if viewport_width.is_finite()
-            && viewport_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH
-        {
-            return viewport_width;
-        }
-
-        if bounds_width.is_finite() && bounds_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH {
-            return bounds_width;
-        }
-
-        Self::DEFAULT_NOTES_DELETE_DIALOG_SOURCE_WIDTH
-    }
-
-    /// Compute dialog width clamped to the Notes window so the dialog
-    /// never overflows a narrow popup window.
-    fn notes_delete_dialog_width(window: &Window) -> gpui::Pixels {
-        let viewport_width: f32 = window.viewport_size().width.into();
-        let bounds_width: f32 = window.bounds().size.width.into();
-        let source_width =
-            Self::resolve_notes_delete_dialog_source_width(viewport_width, bounds_width);
-        gpui::px(Self::clamp_notes_delete_dialog_width(source_width))
-    }
-
     /// Restore keyboard focus to the editor after modal dismissal.
     pub(super) fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.editor_state.update(cx, |state, cx| {
@@ -555,7 +504,7 @@ impl NotesApp {
     /// Delete the currently selected note.
     ///
     /// In All Notes this moves the note to Trash right away and offers Undo.
-    /// In Trash it deletes permanently, which asks first with Cancel focused.
+    /// In Trash it deletes permanently after a wait in the line above the main input.
     pub(super) fn request_delete_selected_note(
         &mut self,
         window: &mut Window,
@@ -587,121 +536,25 @@ impl NotesApp {
             return;
         }
 
-        let viewport_width: f32 = window.viewport_size().width.into();
-        let bounds_width: f32 = window.bounds().size.width.into();
-        let source_width =
-            Self::resolve_notes_delete_dialog_source_width(viewport_width, bounds_width);
-        let dialog_width = Self::notes_delete_dialog_width(window);
-        let dialog_width_value: f32 = dialog_width.into();
-
-        let viewport_viable = viewport_width.is_finite()
-            && viewport_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH;
-        let bounds_viable =
-            bounds_width.is_finite() && bounds_width >= Self::MIN_NOTES_DELETE_DIALOG_SOURCE_WIDTH;
-
-        tracing::info!(
-            event = "notes_delete_confirmation_requested",
-            note_id = %note_id.as_str(),
-            note_title_length = note_title.chars().count(),
-            note_title_fingerprint = %Self::devtools_text_fingerprint(&note_title),
-            viewport_width,
-            bounds_width,
-            viewport_viable,
-            bounds_viable,
-            source_width,
-            dialog_width = dialog_width_value,
-            "notes_delete_confirmation_requested"
-        );
-
-        let body: gpui::SharedString = if note_title.is_empty() {
-            "Delete this note permanently? This cannot be undone.".into()
-        } else {
-            format!(
-                "Delete \"{}\" permanently? This cannot be undone.",
-                note_title
-            )
-            .into()
-        };
-
-        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
-
+        let notes_window = window.window_handle();
         let weak_notes = cx.entity().downgrade();
-        let confirm_note_id = note_id;
-        let cancel_note_id = note_id;
-        let weak_notes_for_cancel = weak_notes.clone();
-
-        // Non-entity-bound: avoids keep_open_while closing dialog on re-render.
-        // Pin the popup explicitly to the Notes window so AppKit attaches it as
-        // a child of the Notes NSPanel and bottom-aligns to *its* frame instead
-        // of whichever window happens to be the current key window.
-        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
-            window,
-            cx,
-            "notes",
-            crate::confirm::ParentConfirmOptions {
-                width: dialog_width,
-                ..crate::confirm::ParentConfirmOptions::irreversible(
-                    "Delete note permanently",
-                    body,
-                    "Delete permanently",
-                )
-            },
-            {
-                let weak_notes = weak_notes.clone();
-                move |window, cx| {
-                    tracing::info!(
-                        event = "notes_delete_confirmed",
-                        note_id = %confirm_note_id.as_str(),
-                        "notes_delete_confirmed"
-                    );
-
-                    let Some(entity) = weak_notes.upgrade() else {
-                        return;
-                    };
-                    let deleted = entity.update(cx, |this, cx| {
-                        this.permanently_delete_note_by_id(confirm_note_id, window, cx)
-                    });
-                    if !deleted {
-                        return;
-                    }
-
-                    super::render::show_notes_toast(
-                        window,
-                        "notes-deleted-permanently",
-                        "Note deleted permanently",
-                        crate::toast_popup::ToastPopupKind::Success,
-                        Some(ACTION_FEEDBACK_MS),
-                        cx,
-                    );
-                }
-            },
-            move |window, cx| {
-                tracing::info!(
-                    event = "notes_delete_cancelled",
-                    note_id = %cancel_note_id.as_str(),
-                    "notes_delete_cancelled"
-                );
-
-                if let Some(entity) = weak_notes_for_cancel.upgrade() {
+        let title = if note_title.is_empty() {
+            "Delete this note permanently".to_string()
+        } else {
+            format!("Delete \"{note_title}\" permanently")
+        };
+        crate::line_notice::hold(cx, "trash", title, move |cx| {
+            let _ = notes_window.update(cx, |_, window, cx| {
+                if let Some(entity) = weak_notes.upgrade() {
                     entity.update(cx, |this, cx| {
-                        this.restore_primary_focus_after_dialog(window, cx);
+                        this.permanently_delete_note_by_id(note_id, window, cx);
                     });
                 }
-            },
-        );
-
-        cx.notify();
-
-        tracing::info!(
-            event = "notes_delete_confirmation_opened",
-            note_id = %note_id.as_str(),
-            has_active_dialog = window.has_active_dialog(cx),
-            pending_focus_surface = ?self.pending_focus_surface,
-            "notes_delete_confirmation_opened"
-        );
+            });
+        });
     }
 
-    /// Move a note to Trash and offer Undo in the Notes window.
+    /// Move a note to Trash; the line above the main input offers ⌘Z.
     fn trash_note_with_undo(
         &mut self,
         note_id: NoteId,
@@ -721,17 +574,14 @@ impl NotesApp {
             format!("Moved \"{note_title}\" to Trash")
         };
         let weak_notes = cx.entity().downgrade();
-        crate::undo_offer::offer_undo(
-            crate::undo_offer::UndoSurface::Notes,
-            message,
-            move |window, cx| {
+        let notes_window = window.window_handle();
+        crate::line_notice::undoable(cx, "trash", message, move |cx| {
+            let _ = notes_window.update(cx, |_, window, cx| {
                 if let Some(entity) = weak_notes.upgrade() {
                     entity.update(cx, |this, cx| this.restore_note_by_id(note_id, window, cx));
                 }
-            },
-            window,
-            cx,
-        );
+            });
+        });
     }
 
     /// Soft-delete a note by ID: it moves to Trash and can be restored.
@@ -1158,32 +1008,6 @@ mod notes_search_and_delete_regression_tests {
         assert!(
             focus_capture_idx < focus_restore_idx,
             "on_search_change should capture focus state before refresh and restore it afterward"
-        );
-    }
-
-    #[test]
-    fn test_notes_delete_dialog_width_shrinks_for_narrow_windows() {
-        // 240px window → available = 216, no min clamp → 216
-        assert_eq!(
-            super::NotesApp::clamp_notes_delete_dialog_width(240.0),
-            216.0
-        );
-        // 320px window → available = 296, under cap → 296
-        assert_eq!(
-            super::NotesApp::clamp_notes_delete_dialog_width(320.0),
-            296.0
-        );
-        // 600px window → available = 576, capped at 448
-        assert_eq!(
-            super::NotesApp::clamp_notes_delete_dialog_width(600.0),
-            448.0
-        );
-        // Very narrow: 10px window → available = 0 (clamped to 0)
-        assert_eq!(super::NotesApp::clamp_notes_delete_dialog_width(10.0), 0.0);
-        // Exactly at cap boundary: 472 → 448
-        assert_eq!(
-            super::NotesApp::clamp_notes_delete_dialog_width(472.0),
-            448.0
         );
     }
 }

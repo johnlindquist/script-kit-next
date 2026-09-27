@@ -91,8 +91,6 @@ impl ScriptListApp {
 impl ScriptListApp {
     pub(crate) fn main_window_modal_owns_keyboard(&self) -> bool {
         self.shortcut_recorder_state.is_some()
-            || self.alias_input_state.is_some()
-            || crate::confirm::is_confirm_window_open()
     }
 
     pub(crate) fn edit_script(&mut self, path: &std::path::Path) {
@@ -307,7 +305,7 @@ export default {
                 shortcut = %conflict.shortcut,
                 "Shortcut save blocked by live route conflict"
             );
-            self.show_error_toast(
+            self.notice_failed(
                 format!("Shortcut already used by {}", conflict.command_name),
                 cx,
             );
@@ -330,11 +328,7 @@ export default {
                 match crate::hotkeys::update_script_hotkey(&command_id, None, Some(&shortcut_str)) {
                     Ok(()) => {
                         logging::log("SHORTCUT", "Registered config shortcut immediately");
-                        self.show_hud(
-                            format!("Shortcut set: {} (active now)", shortcut.display()),
-                            Some(HUD_MEDIUM_MS),
-                            cx,
-                        );
+                        self.one_window_notice(crate::line_notice::INFO, format!("Shortcut set: {} (active now)", shortcut.display()), cx);
                     }
                     Err(e) => {
                         // Shortcut saved but couldn't register, so the config remains durable while
@@ -346,18 +340,14 @@ export default {
                                 e
                             ),
                         );
-                        self.show_hud(
-                            format!("Shortcut saved: {} (not active now)", shortcut.display()),
-                            Some(HUD_LONG_MS),
-                            cx,
-                        );
+                        self.one_window_notice(crate::line_notice::INFO, format!("Shortcut saved: {} (not active now)", shortcut.display()), cx);
                     }
                 }
                 self.refresh_scripts(cx);
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to save shortcut");
-                self.show_error_toast(format!("Failed to save shortcut: {}", e), cx);
+                self.notice_failed(format!("Failed to save shortcut: {}", e), cx);
             }
         }
 

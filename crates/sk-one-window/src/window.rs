@@ -7,6 +7,7 @@
 mod finishing;
 mod keys;
 mod learning;
+mod ledger_rules;
 mod show;
 mod staging;
 mod talking;
@@ -187,6 +188,12 @@ pub enum Event {
     Work(crate::work::WorkEvent),
     /// Holding the voice key.
     Talk(crate::talk::TalkEvent),
+    /// Word from the app (a script's `toast()` or `hud()`, a failure): it lands in the ledger.
+    Notice(crate::notice::Notice),
+    /// The host is about to run something that can't be taken back: it waits in the line first.
+    Irreversible(crate::notice::Irreversible),
+    /// A view put something in the line (history's Enter stages the entry it's on).
+    Stage(Subject),
 }
 
 impl Event {
@@ -355,6 +362,8 @@ pub struct OneWindow {
     talk: Option<crate::talk::Talk>,
     /// Voice sessions so far, so each one's Enter targets are new.
     talks: u64,
+    /// Waiting things that are runs rather than messages.
+    runs_held: Vec<u64>,
 }
 
 impl Default for OneWindow {
@@ -400,6 +409,7 @@ impl OneWindow {
             lessons: crate::lessons::Lessons::default(),
             talk: None,
             talks: 0,
+            runs_held: Vec::new(),
         }
     }
 
@@ -699,6 +709,18 @@ impl OneWindow {
             Event::Tick => true,
             Event::Work(ev) => self.on_work(now, ev, fx),
             Event::Talk(ev) => self.on_talk(now, ev, fx),
+            Event::Notice(notice) => {
+                self.on_notice(now, notice);
+                true
+            }
+            Event::Irreversible(run) => {
+                self.on_irreversible(now, run, fx);
+                true
+            }
+            Event::Stage(subject) => {
+                self.stage(now, subject, None, words::STAGED, fx);
+                true
+            }
         }
     }
 }

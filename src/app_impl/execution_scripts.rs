@@ -284,15 +284,13 @@ impl ScriptListApp {
                 issue = ?issue.kind,
                 "scriptlet_capability_preflight_refused_before_execution"
             );
-            self.toast_manager.push(
-                components::toast::Toast::error(
-                    format!(
-                        "{} · {} unavailable: {}",
-                        plugin_source, scriptlet.name, issue.message
-                    ),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_MS)),
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                format!(
+                    "{} · {} unavailable: {}",
+                    plugin_source, scriptlet.name, issue.message
+                ),
+                cx,
             );
             cx.notify();
             return;
@@ -333,12 +331,10 @@ impl ScriptListApp {
                         "ERROR",
                         &format!("Failed to write temp scriptlet file: {}", e),
                     );
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
+                        cx,
                     );
                     cx.notify();
                     return;
@@ -408,12 +404,10 @@ impl ScriptListApp {
                         "ERROR",
                         &format!("Failed to write temp extension file: {}", e),
                     );
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
+                        cx,
                     );
                     cx.notify();
                     return;
@@ -424,12 +418,10 @@ impl ScriptListApp {
                 Ok(shell_command) => self.open_terminal_with_command(shell_command, cx),
                 Err(e) => {
                     logging::log("ERROR", &format!("Failed to build terminal command: {}", e));
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
+                        cx,
                     );
                     cx.notify();
                 }
@@ -531,15 +523,13 @@ impl ScriptListApp {
                         &format!("Scriptlet '{}' failed: {}", scriptlet.name, error_msg),
                     );
 
-                    self.toast_manager.push(
-                        components::toast::Toast::error(
-                            format!(
-                                "{} · {} failed: {}",
-                                plugin_source, scriptlet.name, error_msg
-                            ),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!(
+                            "{} · {} failed: {}",
+                            plugin_source, scriptlet.name, error_msg
+                        ),
+                        cx,
                     );
                     cx.notify();
                 }
@@ -550,12 +540,10 @@ impl ScriptListApp {
                     &format!("Failed to execute scriptlet '{}': {}", scriptlet.name, e),
                 );
 
-                self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
+                    cx,
                 );
                 cx.notify();
             }
@@ -712,7 +700,7 @@ impl ScriptListApp {
                         Ok(apps) => apps,
                         Err(error) => {
                             tracing::error!(%error, bundle_id = %identifier, "app_command_catalogue_unavailable");
-                            self.show_error_toast_with_code(
+                            self.notice_failed_with_code(
                                 format!("Application catalogue unavailable: {error:#}"),
                                 Some(crate::action_helpers::ERROR_ACTION_FAILED),
                                 cx,
@@ -750,7 +738,7 @@ impl ScriptListApp {
                             );
                         }
                         Err(error) => {
-                            self.show_error_toast_with_code(
+                            self.notice_failed_with_code(
                                 error.user_message(),
                                 Some(crate::action_helpers::ERROR_ACTION_FAILED),
                                 cx,
@@ -777,7 +765,7 @@ impl ScriptListApp {
                             );
                         }
                         Err(error) => {
-                            self.show_error_toast_with_code(
+                            self.notice_failed_with_code(
                                 error.user_message(),
                                 Some(crate::action_helpers::ERROR_ACTION_FAILED),
                                 cx,

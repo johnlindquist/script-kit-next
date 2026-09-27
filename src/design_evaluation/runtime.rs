@@ -773,7 +773,7 @@ impl Evaluator {
                     owner: RootOwner::Dictation(entity),
                 }
             }
-            "actions" | "confirm" | "hud" | "snap" => {
+            "actions" | "snap" => {
                 let parent = if descriptor.parent_fixture_id.is_some() {
                     let mounted = match parent.as_ref() {
                         Some(target) => self.resolve(target)?.clone(),

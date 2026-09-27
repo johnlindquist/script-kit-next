@@ -51,6 +51,7 @@ pub(crate) struct OneWindowHost {
     pub(super) staged_from: Option<super::staging::StagedFrom>,
     pub(crate) work: super::work::WorkHost,
     pub(crate) learns: super::learns::LearnsHost,
+    pub(super) ledger: super::ledger_view::LedgerHost,
 }
 
 /// What the reducer did with one event.
@@ -229,7 +230,7 @@ impl ScriptListApp {
                                 key,
                             )));
                         }
-                        _ => self.one_window_view_key(key, cx),
+                        _ => self.one_window_ledger_effect(Effect::ViewKey(key), cx),
                     },
                     Effect::Work(work) => works.push(work),
                     Effect::OpenScript { name } => self.one_window_open_script(name, cx),
@@ -241,11 +242,7 @@ impl ScriptListApp {
                     Effect::TalkEnded => self.one_window_talk_ended(),
                     Effect::Learned => self.one_window_learned(),
                     effect @ (Effect::Held { .. } | Effect::Undo { .. } | Effect::Again { .. }) => {
-                        tracing::info!(
-                            target: "script_kit::one_window",
-                            event = "effect_not_hosted",
-                            effect = ?effect,
-                        )
+                        self.one_window_ledger_effect(effect, cx)
                     }
                 }
             }
@@ -259,6 +256,7 @@ impl ScriptListApp {
         for work in works {
             self.one_window_apply_work(work, cx);
         }
+        self.one_window_let_go(cx);
         cx.notify();
         handled
     }
@@ -403,6 +401,7 @@ impl ScriptListApp {
             row.key.hash(&mut hasher);
         }
         self.one_window_own_token().hash(&mut hasher);
+        self.one_window_ledger_token(&mut hasher);
         hasher.finish()
     }
 
@@ -421,7 +420,10 @@ impl ScriptListApp {
         if !self.one_window_owns(text) {
             return (grouped, flat, false);
         }
-        if let Some((grouped, flat)) = self.one_window_own_list() {
+        if let Some((grouped, flat)) = self
+            .one_window_own_list()
+            .or_else(|| self.one_window_ledger_list(text))
+        {
             return (grouped, flat, true);
         }
         if self.one_window.text() != text {
@@ -455,8 +457,11 @@ impl ScriptListApp {
     ) -> (Vec<Row>, HashMap<String, SearchResult>) {
         let frontmost = crate::ui_window::footer_frontmost_app_name();
         let mut head = None;
-        let mut rows = Vec::new();
-        let mut results = HashMap::new();
+        let mut rows = self.one_window_setup_rows();
+        let mut results: HashMap<String, SearchResult> = rows
+            .iter()
+            .map(|row| (row.key.clone(), super::ledger_view::own_row_result(row)))
+            .collect();
         for item in grouped {
             let index = match item {
                 GroupedListItem::SectionHeader(label, _) => {
@@ -556,11 +561,12 @@ impl ScriptListApp {
                     continue;
                 }
                 Item::Slot(slot) => SearchResult::Intent(self.one_window_jev_match(*slot, text)),
-                item => match list.row(item).and_then(|row| {
+                item => match list.row(item).map(|row| {
                     results
                         .get(&row.key)
                         .cloned()
                         .or_else(|| Self::one_window_action_result(row))
+                        .unwrap_or_else(|| super::ledger_view::own_row_result(row))
                 }) {
                     Some(result) => result,
                     None => continue,
@@ -853,7 +859,10 @@ impl ScriptListApp {
             return Ok(());
         }
         let text = self.one_window.text().to_string();
-        if let Some(ran) = self.one_window_run_own(&row, cx) {
+        if let Some(ran) = self.one_window_run_ledger_row(&row, cx) {
+            return ran;
+        }
+        if let Some(ran) = self.one_window_run_learns_row(&row, cx) {
             return ran;
         }
         if let Some(ran) = self.run_jev_row(&row.key, &text, cx) {
@@ -874,6 +883,7 @@ impl ScriptListApp {
         if grouped_index != self.selected_index {
             self.select_main_menu_row(grouped_index, MainMenuSelectionOrigin::Keyboard, cx);
         }
+        self.one_window_remember_rerun(&row);
         let observation = self.selected_row_dispatch_observation();
         self.run_selected_row(observation, cx).map(|_| ())
     }

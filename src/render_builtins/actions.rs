@@ -1552,81 +1552,30 @@ impl ScriptListApp {
                         };
                         let turns = meta.selected_turns().len();
                         format!(
-                            "Delete the {kind} conversation with {turns} {}? Other archives are preserved.",
+                            "Delete the {kind} conversation ({turns} {})",
                             if turns == 1 { "turn" } else { "turns" }
                         )
                     })
-                    .unwrap_or_else(|| "Delete this conversation?".to_string());
-                let owner = cx.entity().downgrade();
-                let owner_for_confirm = owner.clone();
-                // Closing the Actions NSPanel explicitly activates its parent.
-                // Record that requested state before opening the attached popup,
-                // so the resulting focus event is not mistaken for a later user
-                // click on the parent and used to auto-cancel the confirmation.
-                self.was_window_focused = true;
-                crate::confirm::open_parent_confirm_dialog_for_entity(
-                    window,
+                    .unwrap_or_else(|| "Delete this conversation".to_string());
+                self.one_window_hold(
+                    "trash",
+                    summary,
+                    Box::new(move |this, cx| {
+                        this.delete_selected_flow_conversation(
+                            id,
+                            ConfirmedFlowThreadDeletion(()),
+                            cx,
+                        );
+                    }),
                     cx,
-                    owner,
-                    crate::confirm::ParentConfirmOptions::irreversible(
-                        "Delete Conversation?",
-                        summary,
-                        "Delete",
-                    ),
-                    move |_window, cx| {
-                        if let Some(entity) = owner_for_confirm.upgrade() {
-                            entity.update(cx, |this, cx| {
-                                this.delete_selected_flow_conversation(
-                                    id,
-                                    ConfirmedFlowThreadDeletion(()),
-                                    cx,
-                                );
-                            });
-                        }
-                    },
-                    |_window, _cx| {},
                 );
             }
             ("flow_desk_session_terminate", Some(FlowDeskSubject::Session { id, .. })) => {
-                let owner = cx.entity().downgrade();
-                let owner_for_confirm = owner.clone();
-                // Match Delete Conversation: Actions has requested parent
-                // activation, so acknowledge that expected transition before
-                // the new child popup enters the focus-dismiss state machine.
-                self.was_window_focused = true;
-                crate::confirm::open_parent_confirm_dialog_for_entity(
-                    window,
-                    cx,
-                    owner,
-                    crate::confirm::ParentConfirmOptions::destructive(
-                        "Terminate Runtime?",
-                        "Stop and forget only the runtime. Conversation history and drafts are preserved.",
-                        "Terminate Runtime",
-                    ),
-                    move |window, cx| {
-                        if let Some(entity) = owner_for_confirm.upgrade() {
-                            entity.update(cx, |this, cx| {
-                                this.terminate_flow_session(
-                                    id,
-                                    ConfirmedFlowRuntimeTermination(()),
-                                    window,
-                                    cx,
-                                );
-                            });
-                        }
-                    },
-                    |_window, _cx| {},
-                );
+                self.terminate_flow_session(id, ConfirmedFlowRuntimeTermination(()), window, cx);
             }
             ("flow_desk_run_cancel", Some(FlowDeskSubject::Run(id))) => {
                 crate::flows::runner::cancel_run(id);
-                self.toast_manager.push(
-                    crate::components::toast::Toast::success(
-                        "Cancelling run…".to_string(),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(1500)),
-                );
+                self.one_window_notice(crate::line_notice::DONE, "Cancelling run…".to_string(), cx);
             }
             ("flow_desk_run_copy_output", Some(FlowDeskSubject::Run(id))) => {
                 if let Some(run) = crate::flows::run_registry::flow_run_registry().get(id) {

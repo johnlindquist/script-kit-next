@@ -247,7 +247,6 @@ impl ScriptListApp {
         &mut self,
         action_id: &str,
         dctx: &DispatchContext,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         let trace_id = &dctx.trace_id;
@@ -281,9 +280,9 @@ impl ScriptListApp {
                                 duration_ms = start.elapsed().as_millis() as u64,
                                 "Async action completed: create_script"
                             );
-                            this.show_hud(
+                            this.one_window_notice(
+                                crate::line_notice::INFO,
                                 management_action.success_hud().to_string(),
-                                Some(HUD_SHORT_MS),
                                 cx,
                             );
                             this.hide_main_and_reset(cx);
@@ -297,7 +296,7 @@ impl ScriptListApp {
                                 "Async action failed: create_script"
                             );
                             if let Some(message) = management_action.open_failure_message(e) {
-                                this.show_error_toast(message, cx);
+                                this.notice_failed(message, cx);
                             }
                         }
                     });
@@ -376,7 +375,7 @@ impl ScriptListApp {
                                         error = %message,
                                         "Async action failed: edit_script"
                                     );
-                                    this.show_error_toast_with_code(
+                                    this.notice_failed_with_code(
                                         message,
                                         Some(crate::action_helpers::ERROR_LAUNCH_FAILED),
                                         cx,
@@ -455,7 +454,7 @@ impl ScriptListApp {
                                 error = %e,
                                 "Action failed: remove_script"
                             );
-                            self.show_error_toast_with_code(
+                            self.notice_failed_with_code(
                                 removal_action.failure_message(e),
                                 Some(crate::action_helpers::ERROR_TRASH_FAILED),
                                 cx,
@@ -476,35 +475,20 @@ impl ScriptListApp {
                 self.refresh_scripts(cx);
                 cx.notify();
 
-                let owner = cx.entity().downgrade();
-                crate::undo_offer::offer_undo(
-                    crate::undo_offer::UndoSurface::Main,
+                self.one_window_done_undoable(
+                    "trash",
                     removal_action.success_hud(&target),
-                    move |_window, cx| {
-                        let restored =
-                            crate::file_search::restore_from_trash(&trashed, &target.path);
-                        let Some(owner) = owner.upgrade() else {
-                            return;
-                        };
-                        owner.update(cx, |this, cx| {
-                            match restored {
-                                Ok(()) => {
-                                    this.refresh_scripts(cx);
-                                    this.show_success_toast(
-                                        removal_action.restored_message(&target),
-                                        cx,
-                                    );
-                                }
-                                Err(e) => this.show_error_toast_with_code(
-                                    removal_action.restore_failure_message(e),
-                                    Some(crate::action_helpers::ERROR_TRASH_FAILED),
-                                    cx,
-                                ),
-                            }
-                            cx.notify();
-                        });
-                    },
-                    window,
+                    Box::new(move |this, cx| {
+                        match crate::file_search::restore_from_trash(&trashed, &target.path) {
+                            Ok(()) => this.refresh_scripts(cx),
+                            Err(e) => this.notice_failed_with_code(
+                                removal_action.restore_failure_message(e),
+                                Some(crate::action_helpers::ERROR_TRASH_FAILED),
+                                cx,
+                            ),
+                        }
+                        cx.notify();
+                    }),
                     cx,
                 );
                 DispatchOutcome::success()
@@ -517,9 +501,9 @@ impl ScriptListApp {
                 };
                 tracing::info!(category = "UI", "reload scripts action");
                 self.refresh_scripts(cx);
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     management_action.success_hud().to_string(),
-                    Some(HUD_SHORT_MS),
                     cx,
                 );
                 DispatchOutcome::success()
@@ -556,9 +540,9 @@ impl ScriptListApp {
                                 editor = %editor_for_hud,
                                 "Async action completed: settings"
                             );
-                            this.show_hud(
+                            this.one_window_notice(
+                                crate::line_notice::INFO,
                                 launch_plan.success_hud(&editor_for_hud),
-                                Some(HUD_SHORT_MS),
                                 cx,
                             );
                             this.hide_main_and_reset(cx);
@@ -574,10 +558,7 @@ impl ScriptListApp {
                             );
                             let launch_plan =
                                 SettingsEditorLaunchPlan::from_editor(&editor_for_hud);
-                            this.show_error_toast(
-                                launch_plan.failure_message(&editor_for_hud, e),
-                                cx,
-                            );
+                            this.notice_failed(launch_plan.failure_message(&editor_for_hud, e), cx);
                         }
                     });
                 })
@@ -610,7 +591,7 @@ impl ScriptListApp {
                 let guide_file = format!("{kit_dir}/GUIDE.md");
 
                 if !std::path::Path::new(&guide_file).exists() {
-                    self.show_error_toast(
+                    self.notice_failed(
                         "GUIDE.md not found — run Script Kit setup to restore it".to_string(),
                         cx,
                     );
@@ -630,9 +611,9 @@ impl ScriptListApp {
                         .await;
                     let _ = this.update(cx, |this, cx| match result {
                         Ok((launch_plan, _)) => {
-                            this.show_hud(
+                            this.one_window_notice(
+                                crate::line_notice::INFO,
                                 launch_plan.success_hud(&editor_for_hud),
-                                Some(HUD_SHORT_MS),
                                 cx,
                             );
                             this.hide_main_and_reset(cx);
@@ -640,10 +621,7 @@ impl ScriptListApp {
                         Err(e) => {
                             let launch_plan =
                                 SettingsEditorLaunchPlan::from_editor(&editor_for_hud);
-                            this.show_error_toast(
-                                launch_plan.failure_message(&editor_for_hud, e),
-                                cx,
-                            );
+                            this.notice_failed(launch_plan.failure_message(&editor_for_hud, e), cx);
                         }
                     });
                 })
@@ -660,24 +638,16 @@ impl ScriptListApp {
             }
             "quit" => {
                 tracing::info!(category = "UI", "quit action");
-
-                let owner = cx.entity().downgrade();
-
-                crate::confirm::open_parent_confirm_dialog_for_entity(
-                    window,
-                    cx,
-                    owner,
-                    Self::quit_script_kit_confirm_options(),
-                    move |_window, cx| {
-                        tracing::info!(category = "UI", event = "quit_confirmed", "quit_confirmed");
+                self.one_window_hold(
+                    "power",
+                    "Quit Script Kit",
+                    Box::new(|_, cx| {
+                        tracing::info!(category = "UI", event = "quit_held_ran_out", "quit");
                         Self::prepare_script_kit_shutdown();
                         cx.quit();
-                    },
-                    move |_window, _cx| {
-                        tracing::info!(category = "UI", event = "quit_cancelled", "quit_cancelled");
-                    },
+                    }),
+                    cx,
                 );
-
                 DispatchOutcome::success()
             }
             "copy_content" => {
@@ -742,16 +712,16 @@ impl ScriptListApp {
                         });
                         if removed {
                             tracing::info!(category = "UI", name = %script_info.name, "reset ranking");
-                            self.show_hud(
+                            self.one_window_notice(
+                                crate::line_notice::INFO,
                                 ranking_action.reset_hud(&script_info.name),
-                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         } else {
                             tracing::info!(category = "UI", frecency_path = %frecency_path, "no frecency entry found");
-                            self.show_hud(
+                            self.one_window_notice(
+                                crate::line_notice::INFO,
                                 ranking_action.no_ranking_message().to_string(),
-                                Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         }

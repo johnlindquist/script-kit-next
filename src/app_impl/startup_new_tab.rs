@@ -46,15 +46,6 @@
                     && !has_alt
                     && !has_ctrl;
 
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
-
                 if let Some(app) = app_entity.upgrade() {
                     let mut handled = false;
                     app.update(cx, |this, cx| {

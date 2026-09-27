@@ -448,8 +448,9 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open the shared confirm modal over the main window with fixture copy,
-    /// for visual, layout, and keyboard proof.
+    /// Hold an irreversible fixture in the line above the main input, named by `title`,
+    /// for visual, layout, and keyboard proof. `body` and the button words are accepted
+    /// and unused: nothing asks first any more.
     OpenConfirmPrompt {
         #[serde(default)]
         title: Option<String>,

@@ -376,17 +376,17 @@ impl Evaluator {
                 );
                 app.note_main_route_changed();
                 let previous_route = app.tab_ai_harness_apply_back_route.take();
-                let previous_toasts = std::mem::take(&mut app.toast_manager);
+                let previous_window = app.one_window.clone();
                 // This is the real terminal entrypoint. Owned policy refuses
                 // synchronously before priming or scheduling its read callback.
                 app.apply_tab_ai_result_from_terminal(terminal.clone(), cx);
                 let observation = probe.observation();
                 // Restore the exact owner state before any fallible progress or
-                // proof assertions. No fixture state or error toast is retained.
+                // proof assertions. No fixture state or error notice is retained.
                 app.current_view = previous_view;
                 app.note_main_route_changed();
                 app.tab_ai_harness_apply_back_route = previous_route;
-                app.toast_manager = previous_toasts;
+                app.one_window = previous_window;
                 drop(terminal);
                 if matches!(app.current_view, crate::AppView::ScriptList) {
                     app.flush_pending_main_menu_query(cx);

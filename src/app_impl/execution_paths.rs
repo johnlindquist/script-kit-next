@@ -79,9 +79,9 @@ impl ScriptListApp {
                             "UI",
                             &format!("Revealed in {}: {}", file_manager, path_info.path),
                         );
-                        self.show_hud(
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
                             format!("Opened in {}", file_manager),
-                            Some(HUD_SHORT_MS),
                             cx,
                         );
                         self.hide_main_and_reset(cx);
@@ -91,7 +91,7 @@ impl ScriptListApp {
                             "ERROR",
                             &format!("Failed to reveal in {}: {}", file_manager, e),
                         );
-                        self.show_error_toast(
+                        self.notice_failed(
                             format!("Failed to open in {}: {}", file_manager, e),
                             cx,
                         );
@@ -110,12 +110,16 @@ impl ScriptListApp {
                 match std::process::Command::new(&editor).arg(&path_str).spawn() {
                     Ok(_) => {
                         logging::log("UI", &format!("Opened in editor: {}", path_str));
-                        self.show_hud(format!("Opened in {}", editor), Some(HUD_SHORT_MS), cx);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            format!("Opened in {}", editor),
+                            cx,
+                        );
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open in editor: {}", e));
-                        self.show_error_toast(format!("Failed to open in {}: {}", editor, e), cx);
+                        self.notice_failed(format!("Failed to open in {}: {}", editor, e), cx);
                     }
                 }
             }
@@ -132,7 +136,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to open Quick Terminal: {}", e));
-                        self.show_error_toast(format!("Failed to open Quick Terminal: {}", e), cx);
+                        self.notice_failed(format!("Failed to open Quick Terminal: {}", e), cx);
                     }
                 }
             }
@@ -146,37 +150,28 @@ impl ScriptListApp {
                             Some(SharedString::from(format!("Moved to Trash: {}", name)));
                         Self::refresh_path_prompt(path_prompt_entity, cx);
 
-                        let owner = cx.entity().downgrade();
                         let path_prompt_entity = path_prompt_entity.clone();
-                        crate::undo_offer::offer_main_window_undo(
+                        self.one_window_done_undoable(
+                            "trash",
                             format!("Moved \"{}\" to Trash", name),
-                            move |_window, cx| {
-                                let restored = crate::file_search::restore_from_trash(
+                            Box::new(
+                                move |this, cx| match crate::file_search::restore_from_trash(
                                     &trashed,
                                     std::path::Path::new(&path_str),
-                                );
-                                let Some(owner) = owner.upgrade() else {
-                                    return;
-                                };
-                                owner.update(cx, |this, cx| match restored {
-                                    Ok(()) => {
-                                        Self::refresh_path_prompt(&path_prompt_entity, cx);
-                                        this.show_success_toast(
-                                            format!("Restored \"{}\"", name),
-                                            cx,
-                                        );
+                                ) {
+                                    Ok(()) => Self::refresh_path_prompt(&path_prompt_entity, cx),
+                                    Err(e) => {
+                                        this.notice_failed(format!("Couldn't restore: {}", e), cx)
                                     }
-                                    Err(e) => this
-                                        .show_error_toast(format!("Couldn't restore: {}", e), cx),
-                                });
-                            },
+                                },
+                            ),
                             cx,
                         );
                     }
                     Err(e) => {
                         logging::log("ERROR", &format!("Failed to move to trash: {}", e));
                         self.last_output = Some(SharedString::from("Failed to move to Trash"));
-                        self.show_error_toast(format!("Failed to move to Trash: {}", e), cx);
+                        self.notice_failed(format!("Failed to move to Trash: {}", e), cx);
                     }
                 }
             }

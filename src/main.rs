@@ -54,7 +54,6 @@ mod camera;
 pub mod chat_hot_counters;
 mod components;
 mod config;
-mod confirm;
 mod context_snapshot;
 mod design_evaluation;
 mod designs;
@@ -79,6 +78,7 @@ mod icons;
 #[allow(unused_imports)]
 #[cfg(test)]
 mod keyboard_routing_tests;
+mod line_notice;
 mod list_item;
 #[cfg(test)]
 mod list_item_tests;
@@ -123,7 +123,6 @@ mod ui;
 mod ui_foundation;
 mod updates;
 mod utils;
-mod warning_banner;
 mod watcher;
 mod window_manager;
 mod window_ops;
@@ -138,9 +137,6 @@ mod windows;
 mod clipboard_history;
 mod clipboard_preview_helpers;
 mod file_search;
-mod toast_manager;
-mod toast_popup;
-mod undo_offer;
 mod window_control;
 
 // Render helper data (proper modules so tests are discoverable)
@@ -221,9 +217,6 @@ mod script_sharing;
 // Startup profile for dev-fast mode and deferred service bootstrap
 mod startup_profile;
 
-// HUD manager - system-level overlay notifications (separate floating windows)
-mod hud_manager;
-
 // Debug grid overlay for visual testing
 mod debug_grid;
 
@@ -250,12 +243,10 @@ mod mcp_streaming;
 mod notes;
 
 use crate::components::text_input::TextInputState;
-use crate::components::toast::{Toast, ToastAction};
 use crate::error::ErrorSeverity;
 use crate::filter_coalescer::FilterCoalescer;
 use crate::form_prompt::FormPromptState;
 use crate::navigation::{NavCoalescer, NavDirection};
-use crate::toast_manager::ToastManager;
 use editor::EditorPrompt;
 use prompts::{
     ContainerOptions, ContainerPadding, DivPrompt, DropPrompt, EnvPrompt, PathInfo, PathPrompt,
@@ -263,7 +254,6 @@ use prompts::{
 };
 use tray::{TrayManager, TrayMenuAction};
 use ui_foundation::get_vibrancy_background;
-use warning_banner::{WarningBanner, WarningBannerColors};
 use window_resize::{reset_resize_debounce, resize_to_view_sync, ViewType};
 
 use components::{PromptFooterColors, PromptFooterConfig};

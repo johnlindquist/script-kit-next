@@ -5,6 +5,7 @@ pub(crate) mod automations;
 pub(crate) mod connections;
 pub(crate) mod host;
 pub(crate) mod learns;
+pub(crate) mod ledger_view;
 pub(crate) mod lessons_host;
 pub(crate) mod marks;
 pub(crate) mod saved_scripts;

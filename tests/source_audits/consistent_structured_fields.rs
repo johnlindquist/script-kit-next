@@ -177,45 +177,45 @@ fn handler_files_do_not_define_own_error_constants() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. show_error_toast_with_code pairs error_code with user-facing message
+// 4. notice_failed_with_code pairs error_code with user-facing message
 // ---------------------------------------------------------------------------
 
 /// The canonical error helper must log both `error_code` and `message` as
 /// structured fields — not just one or the other.
 #[test]
-fn show_error_toast_with_code_logs_both_error_code_and_message() {
+fn notice_failed_with_code_logs_both_error_code_and_message() {
     let content = read("src/app_actions/handle_action/mod.rs");
 
     let fn_start = content
-        .find("fn show_error_toast_with_code(")
-        .expect("Expected show_error_toast_with_code function");
+        .find("fn notice_failed_with_code(")
+        .expect("Expected notice_failed_with_code function");
     let fn_body = &content[fn_start..content.len().min(fn_start + 500)];
 
     assert!(
         fn_body.contains("error_code ="),
-        "show_error_toast_with_code must log error_code as a structured field"
+        "notice_failed_with_code must log error_code as a structured field"
     );
     assert!(
         fn_body.contains("message ="),
-        "show_error_toast_with_code must log message as a structured field"
+        "notice_failed_with_code must log message as a structured field"
     );
 }
 
-/// `show_error_toast_with_code` must use `tracing::warn!` (not println or
+/// `notice_failed_with_code` must use `tracing::warn!` (not println or
 /// log crate) so that structured fields are captured by the tracing
 /// subscriber.
 #[test]
-fn show_error_toast_with_code_uses_tracing() {
+fn notice_failed_with_code_uses_tracing() {
     let content = read("src/app_actions/handle_action/mod.rs");
 
     let fn_start = content
-        .find("fn show_error_toast_with_code(")
-        .expect("Expected show_error_toast_with_code function");
+        .find("fn notice_failed_with_code(")
+        .expect("Expected notice_failed_with_code function");
     let fn_body = &content[fn_start..content.len().min(fn_start + 500)];
 
     assert!(
         fn_body.contains("tracing::warn!("),
-        "show_error_toast_with_code must use tracing::warn! for structured logging"
+        "notice_failed_with_code must use tracing::warn! for structured logging"
     );
 }
 

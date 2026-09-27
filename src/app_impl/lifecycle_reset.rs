@@ -1,8 +1,5 @@
 use super::*;
 
-static KEYBOARD_FEEDBACK_FIXTURE_ENQUEUED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
 struct HiddenMainWindowResetRequest {
     _native_hidden: crate::platform::NativeMainWindowHidden,
     visibility_generation: u64,
@@ -188,91 +185,6 @@ impl ScriptListApp {
         logging::log("EXEC", "=== Script cancellation complete ===");
     }
 
-    fn enqueue_keyboard_feedback_fixture_if_requested(
-        &mut self,
-        window: &gpui::Window,
-        cx: &gpui::App,
-    ) {
-        use std::sync::atomic::Ordering;
-
-        if std::env::var("SCRIPT_KIT_TEST_KEYBOARD_FEEDBACK")
-            .ok()
-            .as_deref()
-            != Some("1")
-            || window.focused(cx).is_none()
-            || KEYBOARD_FEEDBACK_FIXTURE_ENQUEUED.swap(true, Ordering::AcqRel)
-        {
-            return;
-        }
-
-        let first = crate::components::Toast::new(
-            "Duplicate status",
-            crate::components::ToastColors::from_theme(
-                self.theme.as_ref(),
-                crate::components::ToastVariant::Info,
-            ),
-        )
-        .with_id("ux16-runtime-a")
-        .variant(crate::components::ToastVariant::Info)
-        .persistent()
-        .action(crate::components::ToastAction::new(
-            "open-local",
-            "Open",
-            Box::new(|_, _, _| logging::log("UX16_FIXTURE", "action=open-local")),
-        ))
-        .action(crate::components::ToastAction::new(
-            "open-details",
-            "Open",
-            Box::new(|_, _, _| logging::log("UX16_FIXTURE", "action=open-details")),
-        ))
-        .on_dismiss(Box::new(|_, _| {
-            logging::log("UX16_FIXTURE", "dismiss=ux16-runtime-a")
-        }));
-        let second = crate::components::Toast::new(
-            "Duplicate status",
-            crate::components::ToastColors::from_theme(
-                self.theme.as_ref(),
-                crate::components::ToastVariant::Warning,
-            ),
-        )
-        .with_id("ux16-runtime-b")
-        .variant(crate::components::ToastVariant::Warning)
-        .persistent()
-        .action(crate::components::ToastAction::new(
-            "open-remote",
-            "Open",
-            Box::new(|_, _, _| logging::log("UX16_FIXTURE", "action=open-remote")),
-        ));
-
-        self.toast_manager.push(first);
-        self.toast_manager.push(second);
-    }
-
-    /// Flush pending toasts from ToastManager to gpui-component's NotificationList
-    ///
-    /// This should be called at the start of render() where we have window access.
-    /// The ToastManager acts as a staging queue for toasts pushed from callbacks
-    /// that don't have window access.
-    pub(crate) fn flush_pending_toasts(&mut self, window: &mut gpui::Window, cx: &mut gpui::App) {
-        use gpui_component::WindowExt;
-
-        self.enqueue_keyboard_feedback_fixture_if_requested(window, cx);
-        let pending = self.toast_manager.drain_pending();
-        let count = pending.len();
-        if count > 0 {
-            logging::log(
-                "UI",
-                &format!("Flushing {} pending toast(s) to NotificationList", count),
-            );
-        }
-        for toast in pending {
-            logging::log("UI", &format!("Pushing notification: {}", toast.message));
-            let notification =
-                crate::toast_manager::notification::pending_toast_to_notification(toast);
-            window.push_notification(notification, cx);
-        }
-    }
-
     /// Close window and reset to default state (Cmd+W global handler)
     ///
     /// This method handles the global Cmd+W shortcut which should work
@@ -309,7 +221,7 @@ impl ScriptListApp {
                 if let Err(error) =
                     binding.try_complete(crate::prompt_completion::PromptOutcome::Cancelled)
                 {
-                    self.show_error_toast(
+                    self.notice_failed(
                         format!("Prompt cancellation was not delivered: {error}"),
                         cx,
                     );
@@ -578,16 +490,10 @@ impl ScriptListApp {
                                                         preset_number,
                                                     ) {
                                                         Ok(()) => {
-                                                            app.toast_manager.push(
-                                                                components::toast::Toast::success(
-                                                                    format!("Animation {:02} — {}", preset_number, app.main_preferences.animation.preset.name()),
-                                                                    &app.theme,
-                                                                )
-                                                                .duration_ms(Some(1800)),
-                                                            );
+                                                            app.one_window_notice(crate::line_notice::DONE, format!("Animation {:02} — {}", preset_number, app.main_preferences.animation.preset.name()), cx);
                                                             cx.notify();
                                                         }
-                                                        Err(error) => app.show_error_toast(format!("Animation replay could not reopen the launcher: {error}"), cx),
+                                                        Err(error) => app.notice_failed(format!("Animation replay could not reopen the launcher: {error}"), cx),
                                                     }
                                                 }
                                             });
@@ -793,7 +699,6 @@ impl ScriptListApp {
             && self.is_dismissable_view()
             && script_kit_gpui::is_main_window_visible()
             && !self.is_pinned
-            && !confirm::is_confirm_window_open()
             && !ai::agent_chat::ui::chat_window::is_chat_window_open()
             && !crate::dictation::is_dictation_overlay_open()
             && !crate::dictation::is_dictation_recording()

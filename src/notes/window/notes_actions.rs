@@ -2,8 +2,7 @@ use super::*;
 use std::path::PathBuf;
 
 use crate::notes::deeplink_activation::{
-    resolve_activation, run_deeplink_confirm_options, Activation, ActivationErrorReason,
-    ActivationSurface,
+    resolve_activation, Activation, ActivationErrorReason, ActivationSurface,
 };
 
 impl NotesApp {
@@ -99,35 +98,29 @@ impl NotesApp {
         cx: &mut Context<Self>,
     ) {
         match activation {
-            Activation::ConfirmBeforeRun {
+            Activation::HoldBeforeRun {
                 command_id,
-                raw_href,
-            } => self.open_run_deeplink_confirm(command_id, raw_href, window, cx),
+                raw_href: _,
+            } => self.hold_run_deeplink(command_id, cx),
             Activation::Error(error) => {
                 let body = format!(
                     "{}\n\n{}",
                     error.raw_href,
                     activation_error_message(&error.reason)
                 );
-                self.open_deeplink_info_dialog(
-                    "Can't open this link",
-                    body,
-                    error.raw_href,
-                    window,
-                    cx,
-                );
+                self.say_deeplink("Can't open this link", body, cx);
             }
             Activation::OpenExternalUrl { href } => {
-                self.open_external_deeplink_url(href, window, cx);
+                self.open_external_deeplink_url(href, cx);
             }
             Activation::OpenFile { path, raw_href } => {
-                self.open_file_deeplink(path, raw_href, window, cx);
+                self.open_file_deeplink(path, raw_href, cx);
             }
             Activation::OpenNote { note_id } => {
-                self.open_note_deeplink(note_id, window, cx);
+                self.open_note_deeplink(note_id, cx);
             }
             Activation::ScopedSearch { source, query } => {
-                self.open_scoped_search_deeplink(source, query, window, cx);
+                self.open_scoped_search_deeplink(source, query, cx);
             }
             Activation::KitResourcePreview { uri, .. } => {
                 self.open_kit_resource_preview(uri, window, cx);
@@ -158,13 +151,9 @@ impl NotesApp {
                 self.show_action_feedback("Opened read-only resource preview", false);
                 cx.notify();
             }
-            Err(error) => self.open_deeplink_error_dialog(
-                "Can't open this link",
-                format!("{uri}\n\n{error}"),
-                uri,
-                window,
-                cx,
-            ),
+            Err(error) => {
+                self.say_deeplink("Can't open this link", format!("{uri}\n\n{error}"), cx)
+            }
         }
     }
 
@@ -214,26 +203,15 @@ impl NotesApp {
             return false;
         };
         self.close_kit_resource_preview(window, cx);
-        self.open_note_deeplink(note_id, window, cx);
+        self.open_note_deeplink(note_id, cx);
         true
     }
 
-    fn open_external_deeplink_url(
-        &mut self,
-        href: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_external_deeplink_url(&mut self, href: String, cx: &mut Context<Self>) {
         if let Err(error) =
             crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::OpenExternal)
         {
-            self.open_deeplink_error_dialog(
-                "Can't open this link",
-                error.to_string(),
-                href,
-                window,
-                cx,
-            );
+            self.say_deeplink("Can't open this link", error.to_string(), cx);
             return;
         }
         match open::that(&href) {
@@ -242,38 +220,24 @@ impl NotesApp {
                 self.show_action_feedback("Opened link", false);
                 cx.notify();
             }
-            Err(error) => self.open_deeplink_error_dialog(
+            Err(error) => self.say_deeplink(
                 "Can't open this link",
                 format!("{href}\n\nFailed to open URL: {error}"),
-                href,
-                window,
                 cx,
             ),
         }
     }
 
-    fn open_file_deeplink(
-        &mut self,
-        path: PathBuf,
-        raw_href: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_file_deeplink(&mut self, path: PathBuf, raw_href: String, cx: &mut Context<Self>) {
         if let Err(error) =
             crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::OpenExternal)
         {
-            self.open_deeplink_error_dialog(
-                "Can't open this link",
-                error.to_string(),
-                raw_href,
-                window,
-                cx,
-            );
+            self.say_deeplink("Can't open this link", error.to_string(), cx);
             return;
         }
         let path_display = path.to_string_lossy().to_string();
         if !path.exists() {
-            self.open_missing_file_deeplink_dialog(path, raw_href, window, cx);
+            self.open_missing_file_deeplink_dialog(path, raw_href, cx);
             return;
         }
 
@@ -287,11 +251,9 @@ impl NotesApp {
                 self.show_action_feedback("Opened file", false);
                 cx.notify();
             }
-            Err(error) => self.open_deeplink_error_dialog(
+            Err(error) => self.say_deeplink(
                 "Can't open this link",
                 format!("{raw_href}\n\nFailed to open file:\n{path_display}\n\n{error}"),
-                raw_href,
-                window,
                 cx,
             ),
         }
@@ -301,7 +263,6 @@ impl NotesApp {
         &mut self,
         path: PathBuf,
         raw_href: String,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let path_display = path.to_string_lossy().to_string();
@@ -310,63 +271,50 @@ impl NotesApp {
             .filter(|parent| parent.exists())
             .map(|parent| parent.to_path_buf());
         let Some(parent) = parent else {
-            self.open_deeplink_error_dialog(
+            self.say_deeplink(
                 "Can't open this link",
                 format!("{raw_href}\n\nFile does not exist:\n{path_display}"),
-                raw_href,
-                window,
                 cx,
             );
             return;
         };
 
         let parent_display = parent.to_string_lossy().to_string();
-        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
-        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
-            window,
-            cx,
-            "notes",
-            crate::confirm::ParentConfirmOptions {
-                title: "Can't open this link".into(),
-                body: format!(
-                    "{raw_href}\n\nFile does not exist:\n{path_display}\n\nParent folder exists:\n{parent_display}"
-                )
-                .into(),
-                confirm_text: "Reveal parent".into(),
-                cancel_text: "Dismiss".into(),
-                risk: crate::confirm::ConfirmRisk::Safe,
-                width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-            },
-            move |_window, cx| {
-                if let Err(error) = crate::file_search::reveal_in_finder(&parent_display) {
-                    tracing::warn!(
-                        event = "notes_deeplink_reveal_parent_failed",
-                        parent = %parent_display,
-                        %error
-                    );
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(raw_href.clone()));
-                }
-            },
-            |_window, _cx| {},
-        );
+        match crate::file_search::reveal_in_finder(&parent_display) {
+            Ok(()) => crate::line_notice::say(
+                cx,
+                crate::line_notice::FAILED,
+                format!("That file doesn't exist; showing its folder: {path_display}"),
+            ),
+            Err(error) => {
+                tracing::warn!(
+                    event = "notes_deeplink_reveal_parent_failed",
+                    parent = %parent_display,
+                    %error
+                );
+                crate::line_notice::say(
+                    cx,
+                    crate::line_notice::FAILED,
+                    format!("Can't open this link: {raw_href}"),
+                );
+            }
+        }
     }
 
-    fn open_note_deeplink(&mut self, note_id: NoteId, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_note_deeplink(&mut self, note_id: NoteId, cx: &mut Context<Self>) {
         match crate::notes::open_note_in_notes_window(cx, note_id) {
             Ok(()) => {
                 tracing::info!(event = "notes_deeplink_note_opened", note_id = %note_id);
                 self.show_action_feedback("Opened note", false);
                 cx.notify();
             }
-            Err(error) => self.open_deeplink_error_dialog(
+            Err(error) => self.say_deeplink(
                 "Can't open this link",
                 format!(
                     "scriptkit://notes/{}\n\nCould not open note: {}",
                     note_id.as_str(),
                     error
                 ),
-                format!("scriptkit://notes/{}", note_id.as_str()),
-                window,
                 cx,
             ),
         }
@@ -376,7 +324,6 @@ impl NotesApp {
         &mut self,
         source: crate::spine::catalog_subsearch::ContextSubsearchSource,
         query: String,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let context_link = format!("@{}:{query}", source.prefix());
@@ -387,7 +334,7 @@ impl NotesApp {
         ) {
             let path = PathBuf::from(query.trim());
             if path.exists() {
-                self.open_file_deeplink(path, context_link, window, cx);
+                self.open_file_deeplink(path, context_link, cx);
                 return;
             }
         }
@@ -395,128 +342,44 @@ impl NotesApp {
         if source == crate::spine::catalog_subsearch::ContextSubsearchSource::BrowserHistory
             && (query.starts_with("http://") || query.starts_with("https://"))
         {
-            self.open_external_deeplink_url(query, window, cx);
+            self.open_external_deeplink_url(query, cx);
             return;
         }
 
-        self.open_deeplink_info_dialog(
-            "Open context search",
-            format!(
+        self.say_deeplink("Open context search", format!(
                 "{context_link}\n\nUse this scoped context token to search {} for matching context. Exact file/project paths and exact browser URLs open directly.",
                 source.search_hint_noun()
-            ),
-            context_link,
-            window,
-            cx,
-        );
+            ), cx);
     }
 
-    fn open_run_deeplink_confirm(
-        &mut self,
-        command_id: String,
-        raw_href: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
-        let weak_notes = cx.entity().downgrade();
-        let weak_notes_for_confirm = weak_notes.clone();
-        let weak_notes_for_cancel = weak_notes.clone();
-        let command_id_for_confirm = command_id.clone();
-        let command_id_for_cancel = command_id.clone();
-        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
-            window,
-            cx,
-            "notes",
-            run_deeplink_confirm_options(&command_id, &raw_href),
-            move |_window, cx| {
-                let execution_result =
-                    super::execute_notes_run_command_deeplink(&command_id_for_confirm, cx);
-                match &execution_result {
-                    Ok(needs_main_window) => {
-                        tracing::info!(
-                            event = "notes_deeplink_run_confirmed",
-                            command_id = %command_id_for_confirm,
-                            needs_main_window = *needs_main_window,
-                            "notes_deeplink_run_confirmed",
-                        );
-                    }
-                    Err(error) => {
-                        tracing::warn!(
-                            event = "notes_deeplink_run_execute_failed",
-                            command_id = %command_id_for_confirm,
-                            error = %error,
-                            "notes_deeplink_run_execute_failed",
-                        );
-                    }
-                }
-                let feedback = if execution_result.is_ok() {
-                    ("Run link submitted", false)
-                } else {
-                    ("Could not run link", true)
-                };
-                if let Some(entity) = weak_notes_for_confirm.upgrade() {
-                    entity.update(cx, |this, cx| {
-                        this.show_action_feedback(feedback.0, feedback.1);
-                        cx.notify();
-                    });
-                }
-            },
-            {
-                move |_window, cx| {
-                    tracing::info!(
-                        event = "notes_deeplink_run_cancelled",
-                        command_id = %command_id_for_cancel,
-                        "notes_deeplink_run_cancelled",
+    /// A note link that runs a command waits in the line before it runs.
+    fn hold_run_deeplink(&mut self, command_id: String, cx: &mut Context<Self>) {
+        crate::line_notice::hold(cx, "play", format!("Run {command_id}"), move |cx| {
+            match super::execute_notes_run_command_deeplink(&command_id, cx) {
+                Ok(needs_main_window) => tracing::info!(
+                    event = "notes_deeplink_run_held_ran",
+                    command_id = %command_id,
+                    needs_main_window,
+                ),
+                Err(error) => {
+                    tracing::warn!(
+                        event = "notes_deeplink_run_execute_failed",
+                        command_id = %command_id,
+                        error = %error,
                     );
-                    if let Some(entity) = weak_notes_for_cancel.upgrade() {
-                        entity.update(cx, |this, cx| {
-                            this.show_action_feedback("Run link cancelled", false);
-                            cx.notify();
-                        });
-                    }
+                    crate::line_notice::say(cx, crate::line_notice::FAILED, "Could not run link");
                 }
-            },
-        );
+            }
+        });
     }
 
-    fn open_deeplink_info_dialog(
-        &mut self,
-        title: &'static str,
-        body: String,
-        copy_link: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
-        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
-            window,
+    /// A link that can't do what it says says why in the line above the main input.
+    fn say_deeplink(&mut self, title: &'static str, body: String, cx: &mut Context<Self>) {
+        crate::line_notice::say(
             cx,
-            "notes",
-            crate::confirm::ParentConfirmOptions {
-                title: title.into(),
-                body: body.into(),
-                confirm_text: "Copy link".into(),
-                cancel_text: "Dismiss".into(),
-                risk: crate::confirm::ConfirmRisk::Safe,
-                width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-            },
-            move |_window, cx| {
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_link.clone()));
-            },
-            |_window, _cx| {},
+            crate::line_notice::INFO,
+            crate::notes::deeplink_activation::deeplink_notice(title, &body),
         );
-    }
-
-    fn open_deeplink_error_dialog(
-        &mut self,
-        title: &'static str,
-        body: String,
-        copy_link: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.open_deeplink_info_dialog(title, body, copy_link, window, cx);
     }
 
     /// Cycle sort mode: Updated → Created → Alphabetical → Updated
@@ -555,7 +418,7 @@ impl NotesApp {
         cx.notify();
     }
 
-    pub(super) fn request_empty_trash(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn request_empty_trash(&mut self, cx: &mut Context<Self>) {
         let count = self.deleted_notes.len();
         let confirmed_ids: Vec<NoteId> = self.deleted_notes.iter().map(|note| note.id).collect();
         if count == 0 {
@@ -564,39 +427,20 @@ impl NotesApp {
             return;
         }
 
-        self.request_focus_surface(NotesFocusSurface::Dialog, window, cx);
         let weak_notes = cx.entity().downgrade();
-        let weak_notes_for_cancel = weak_notes.clone();
-        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
-            window,
+        crate::line_notice::hold(
             cx,
-            "notes",
-            crate::confirm::ParentConfirmOptions {
-                title: "Empty Trash".into(),
-                body: format!(
-                    "Permanently delete {count} {}? This cannot be undone.",
-                    if count == 1 { "note" } else { "notes" }
-                )
-                .into(),
-                confirm_text: "Empty Trash".into(),
-                cancel_text: "Cancel".into(),
-                risk: crate::confirm::ConfirmRisk::Irreversible,
-                width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-            },
-            move |_window, cx| {
+            "trash",
+            format!(
+                "Empty Notes Trash ({count} {})",
+                if count == 1 { "note" } else { "notes" }
+            ),
+            move |cx| {
                 if let Some(entity) = weak_notes.upgrade() {
                     entity.update(cx, |this, cx| this.empty_trash_targets(&confirmed_ids, cx));
                 }
             },
-            move |window, cx| {
-                if let Some(entity) = weak_notes_for_cancel.upgrade() {
-                    entity.update(cx, |this, cx| {
-                        this.restore_primary_focus_after_dialog(window, cx);
-                    });
-                }
-            },
         );
-        cx.notify();
     }
 
     /// Empty the entire trash — permanently deletes all trashed notes after confirmation.

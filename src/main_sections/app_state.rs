@@ -1143,7 +1143,6 @@ impl Default for MainRevisionFacts {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ArgPromptGeometry {
     revision: MainRevisionFacts,
-    warning_visible: bool,
     window_size: gpui::Size<gpui::Pixels>,
     shell_bounds: gpui::Bounds<gpui::Pixels>,
     inputs: crate::window_resize::arg_layout::ArgLayoutInputs,
@@ -1154,14 +1153,10 @@ impl ArgPromptGeometry {
     fn is_current(
         &self,
         revision: MainRevisionFacts,
-        warning_visible: bool,
         window_size: gpui::Size<gpui::Pixels>,
         inputs: crate::window_resize::arg_layout::ArgLayoutInputs,
     ) -> bool {
-        self.revision == revision
-            && self.warning_visible == warning_visible
-            && self.window_size == window_size
-            && self.inputs == inputs
+        self.revision == revision && self.window_size == window_size && self.inputs == inputs
     }
 }
 
@@ -1170,7 +1165,7 @@ mod arg_prompt_geometry_tests {
     use super::*;
 
     #[test]
-    fn prompt_geometry_rejects_changed_route_window_warning_and_theme_inputs() {
+    fn prompt_geometry_rejects_changed_route_window_and_theme_inputs() {
         use crate::window_resize::arg_layout::{
             arg_layout_inputs_from_rendered_content, current_arg_layout_inputs,
             resolved_arg_layout, ArgPresentationMode,
@@ -1179,7 +1174,6 @@ mod arg_prompt_geometry_tests {
         let inputs = current_arg_layout_inputs(ArgPresentationMode::Mini, 6, 380.5);
         let geometry = ArgPromptGeometry {
             revision: MainRevisionFacts::default(),
-            warning_visible: true,
             window_size: gpui::size(gpui::px(750.0), gpui::px(380.5)),
             shell_bounds: gpui::Bounds::new(
                 gpui::point(gpui::px(1.0), gpui::px(61.5)),
@@ -1190,7 +1184,7 @@ mod arg_prompt_geometry_tests {
                 inputs, 278.0, true,
             )),
         };
-        assert!(geometry.is_current(geometry.revision, true, geometry.window_size, inputs,));
+        assert!(geometry.is_current(geometry.revision, geometry.window_size, inputs));
         for revision in [
             MainRevisionFacts {
                 surface_generation: 2,
@@ -1205,14 +1199,13 @@ mod arg_prompt_geometry_tests {
                 ..geometry.revision
             },
         ] {
-            assert!(!geometry.is_current(revision, true, geometry.window_size, inputs));
+            assert!(!geometry.is_current(revision, geometry.window_size, inputs));
         }
-        assert!(!geometry.is_current(geometry.revision, false, geometry.window_size, inputs,));
         for window_size in [
             gpui::size(gpui::px(751.0), geometry.window_size.height),
             gpui::size(geometry.window_size.width, gpui::px(381.0)),
         ] {
-            assert!(!geometry.is_current(geometry.revision, true, window_size, inputs));
+            assert!(!geometry.is_current(geometry.revision, window_size, inputs));
         }
         for changed_inputs in [
             crate::window_resize::arg_layout::ArgLayoutInputs {
@@ -1232,12 +1225,7 @@ mod arg_prompt_geometry_tests {
                 ..inputs
             },
         ] {
-            assert!(!geometry.is_current(
-                geometry.revision,
-                true,
-                geometry.window_size,
-                changed_inputs,
-            ));
+            assert!(!geometry.is_current(geometry.revision, geometry.window_size, changed_inputs));
         }
     }
 }
@@ -1746,8 +1734,6 @@ pub(crate) struct ScriptListApp {
     current_design: DesignVariant,
     // Live cohesive theme variation for the main menu.
     pub(crate) current_main_menu_theme: crate::designs::MainMenuThemeVariant,
-    // Toast manager for notification queue
-    toast_manager: ToastManager,
     // Cache for decoded clipboard images (entry_id -> RenderImage)
     clipboard_image_cache: std::collections::HashMap<String, Arc<gpui::RenderImage>>,
     // Frecency store for tracking script usage
@@ -1858,8 +1844,8 @@ pub(crate) struct ScriptListApp {
     /// Focus coordinator - centralized focus management with push/pop overlay semantics.
     /// This is the new unified focus system that replaces focused_input + pending_focus.
     focus_coordinator: focus_coordinator::FocusCoordinator,
-    // Show warning banner when bun is not available
-    show_bun_warning: bool,
+    /// bun isn't on this Mac: the empty list leads with a "Needs setup" row.
+    bun_missing: bool,
     // Scroll stabilization: track last scrolled-to index for each scroll handle
     #[allow(dead_code)]
     last_scrolled_main: Option<usize>,

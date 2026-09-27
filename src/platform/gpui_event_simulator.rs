@@ -200,8 +200,7 @@ fn automation_kind_to_window_role(
         // when available and do not map to the shared role registry.
         AutomationWindowKind::ActionsDialog
         | AutomationWindowKind::Dictation
-        | AutomationWindowKind::PromptPopup
-        | AutomationWindowKind::Hud => None,
+        | AutomationWindowKind::PromptPopup => None,
         // Each display overlay has its own exact runtime handle, not a shared role.
         AutomationWindowKind::SnapOverlay => None,
     }

@@ -372,7 +372,7 @@ fn file_search_actions_show_success_hud() {
 }
 
 #[test]
-fn file_search_actions_show_error_toast_on_failure() {
+fn file_search_actions_notice_failed_on_failure() {
     let actions = super::read_all_handle_action_sources();
 
     assert!(
@@ -538,29 +538,3 @@ fn file_search_error_path_logs_with_tracing_error() {
 // ---------------------------------------------------------------------------
 // HUD duration constants: verify consistent usage
 // ---------------------------------------------------------------------------
-
-#[test]
-fn shortcut_and_alias_success_use_hud_medium_ms() {
-    let actions = super::read_all_handle_action_sources();
-
-    // Both "Shortcut removed" and "Alias removed" should use HUD_MEDIUM_MS
-    // The show_hud call is split across lines, so check for the string and duration separately
-    assert!(
-        actions.contains("\"Shortcut removed\"") && actions.contains("HUD_MEDIUM_MS"),
-        "Expected shortcut removal success HUD to use HUD_MEDIUM_MS"
-    );
-    assert!(
-        actions.contains("\"Alias removed\"") && actions.contains("HUD_MEDIUM_MS"),
-        "Expected alias removal success HUD to use HUD_MEDIUM_MS"
-    );
-}
-
-#[test]
-fn file_search_success_uses_hud_short_ms() {
-    let actions = super::read_all_handle_action_sources();
-
-    assert!(
-        actions.contains("Some(HUD_SHORT_MS)"),
-        "Expected file search success HUD to use HUD_SHORT_MS"
-    );
-}

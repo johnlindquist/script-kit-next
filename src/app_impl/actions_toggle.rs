@@ -474,12 +474,10 @@ impl ScriptListApp {
                         let _ = this.update(cx, |app, cx| {
                             app.clear_actions_popup_state();
                             app.pop_focus_overlay(cx);
-                            app.toast_manager.push(
-                                components::toast::Toast::error(
-                                    format!("{}: {}", failed_prefix, e),
-                                    &app.theme,
-                                )
-                                .duration_ms(Some(TOAST_ERROR_MS)),
+                            app.one_window_notice(
+                                crate::line_notice::FAILED,
+                                format!("{}: {}", failed_prefix, e),
+                                cx,
                             );
                             cx.notify();
                         });
@@ -614,7 +612,7 @@ impl ScriptListApp {
             );
             // The footer advertises ⌘K — a dead press must explain itself.
             if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
-                self.show_hud(reason.to_string(), None, cx);
+                self.one_window_notice(crate::line_notice::INFO, reason.to_string(), cx);
             }
             return false;
         }
@@ -635,7 +633,7 @@ impl ScriptListApp {
                 "Ignored shared actions toggle because dictation history has no selected entry"
             );
             if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
-                self.show_hud(reason.to_string(), None, cx);
+                self.one_window_notice(crate::line_notice::INFO, reason.to_string(), cx);
             }
             return false;
         }
@@ -655,7 +653,7 @@ impl ScriptListApp {
                 "Ignored shared actions toggle because favorites has no selected item"
             );
             if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
-                self.show_hud(reason.to_string(), None, cx);
+                self.one_window_notice(crate::line_notice::INFO, reason.to_string(), cx);
             }
             return false;
         }

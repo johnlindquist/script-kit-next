@@ -191,7 +191,7 @@ impl NotesApp {
             has_active_dialog = window.has_active_dialog(cx),
         );
 
-        if !self.save_before_window_close(window, cx) {
+        if !self.save_before_window_close(cx) {
             cx.stop_propagation();
             return;
         }
@@ -582,7 +582,7 @@ impl NotesApp {
             // Escape close must have the same data-loss profile as Cmd+W:
             // the autosave debounce (SAVE_DEBOUNCE_MS) cannot outrun
             // remove_window(), so save synchronously first.
-            if !self.save_before_window_close(window, cx) {
+            if !self.save_before_window_close(cx) {
                 return;
             }
             self.maybe_save_stable_bounds_for_exit(window);

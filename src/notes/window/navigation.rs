@@ -4,8 +4,8 @@ use super::*;
 use gpui::ScrollHandle;
 
 /// The one user-facing notice for a failed Notes save. Every path that reports
-/// the failure (autosave, view switch, close) shows this same notice under the
-/// `NOTES_SAVE_FAILURE_TOAST_KEY` toast, so repeats replace it.
+/// the failure (autosave, view switch, close) says this same notice in the line above the main
+/// input.
 pub(super) const NOTES_SAVE_FAILURE_MESSAGE: &str =
     "Couldn't save the note. Your changes are still open. Use Retry Save in Actions.";
 

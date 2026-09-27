@@ -310,7 +310,7 @@ impl ScriptListApp {
         Ok(())
     }
 
-    fn live_script_list_flat_selection_for_submit(&mut self) -> Option<(usize, usize)> {
+    pub(crate) fn live_script_list_flat_selection_for_submit(&mut self) -> Option<(usize, usize)> {
         match self.resolved_main_menu_selected_subject() {
             Some(ResolvedMainMenuSelection::SearchResult { row, .. })
                 if row.eligibility.activatable =>
@@ -431,9 +431,9 @@ impl ScriptListApp {
             if let Some(handler) = ranked_handlers.drain(..).next() {
                 self.execute_menu_syntax_capture_script(handler.script, invocation, cx);
             } else {
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
                     format!("No capture handler for +{}", invocation.target),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
                 anyhow::bail!("main_menu_capture_handler_missing");
@@ -445,9 +445,9 @@ impl ScriptListApp {
             .menu_syntax_mode
             .capture_composer_owns_input_for(&self.filter_text)
         {
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 "Type something to capture".to_string(),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             anyhow::bail!("main_menu_capture_input_missing");
@@ -457,9 +457,9 @@ impl ScriptListApp {
             .menu_syntax_mode
             .command_owns_input_for(&self.filter_text)
         {
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 "Choose a Script Kit command".to_string(),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             anyhow::bail!("main_menu_command_input_missing");
@@ -499,9 +499,9 @@ impl ScriptListApp {
                 self.update_main_menu_dispatch_status("refused", Some("calculator_copy_failed"));
                 anyhow::anyhow!("calculator_copy_failed: {error}")
             })?;
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 receipt.feedback(format!("Copied: {}", formatted_value)),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             self.close_and_reset_window(cx);
@@ -526,7 +526,7 @@ impl ScriptListApp {
                         reason,
                         "launcher_command_refused_before_frecency_or_execution"
                     );
-                    self.show_hud(reason.to_string(), Some(HUD_MEDIUM_MS), cx);
+                    self.one_window_notice(crate::line_notice::INFO, reason.to_string(), cx);
                     self.record_blocked_script_list_submit(reason);
                     anyhow::bail!(reason);
                 }
@@ -906,9 +906,9 @@ impl ScriptListApp {
                             owner,
                             "Skill selected from main menu"
                         );
-                        self.show_hud(
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
                             format!("Opening {} \u{b7} {}", owner, skill_match.skill.title),
-                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                         tracing::info!(
@@ -993,7 +993,11 @@ impl ScriptListApp {
             }
             Err(error) => {
                 logging::log("ERROR", &format!("Failed to open root note: {error}"));
-                self.show_hud("Failed to open note".to_string(), Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    "Failed to open note".to_string(),
+                    cx,
+                );
                 Err("main_menu_note_open_failed")
             }
         }
@@ -1018,7 +1022,11 @@ impl ScriptListApp {
                             "ERROR",
                             &format!("Brain hit has invalid note id: {}", hit.source_id),
                         );
-                        self.show_hud("Failed to open note".to_string(), Some(HUD_MEDIUM_MS), cx);
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
+                            "Failed to open note".to_string(),
+                            cx,
+                        );
                         Err("brain_note_id_invalid")
                     }
                 };
@@ -1302,9 +1310,9 @@ impl ScriptListApp {
                     crate::logging::log_private_user_value(&error.to_string()),
                 ),
             );
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::FAILED,
                 format!("Failed to open {}", file.name),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             return;
@@ -1339,9 +1347,9 @@ impl ScriptListApp {
                     "ERROR",
                     &format!("Failed to copy root clipboard entry: {error}"),
                 );
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
                     "Failed to paste clipboard entry".to_string(),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -1360,7 +1368,7 @@ impl ScriptListApp {
         };
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
         logging::log("EXEC", &format!("Copied root todo: {}", hit.stable_key));
-        self.show_hud("Copied todo".to_string(), Some(HUD_SHORT_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, "Copied todo".to_string(), cx);
     }
 
     pub(crate) fn execute_root_dictation_history_paste(
@@ -1373,9 +1381,9 @@ impl ScriptListApp {
                 "ERROR",
                 &format!("Root dictation history entry not found: {entry_id}"),
             );
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::FAILED,
                 "Failed to paste dictation".to_string(),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             return;
@@ -1414,9 +1422,9 @@ impl ScriptListApp {
                     "ERROR",
                     &format!("Failed to open root browser history URL: {error}"),
                 );
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
                     "Failed to open browser history page".to_string(),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -1444,9 +1452,9 @@ impl ScriptListApp {
                     "ERROR",
                     &format!("Failed to focus root browser tab: {error}"),
                 );
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
                     "Failed to switch browser tab".to_string(),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -1536,9 +1544,9 @@ impl ScriptListApp {
                             crate::logging::log_private_user_value(&error.to_string()),
                         ),
                     );
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
                         format!("Failed to reveal {}", file.name),
-                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return true;
@@ -1549,18 +1557,18 @@ impl ScriptListApp {
             }
             crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID => {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(file.path.clone()));
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     format!("Copied path: {}", file.path),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
                 true
             }
             crate::action_helpers::ROOT_FILE_COPY_NAME_ACTION_ID => {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(file.name.clone()));
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     format!("Copied name: {}", file.name),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
                 true
@@ -1568,7 +1576,11 @@ impl ScriptListApp {
             crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID => {
                 match crate::file_search::quick_look(&file.path) {
                     Ok(()) => {
-                        self.show_hud(format!("Previewing {}", file.name), Some(HUD_MEDIUM_MS), cx);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            format!("Previewing {}", file.name),
+                            cx,
+                        );
                     }
                     Err(error) => {
                         logging::log(
@@ -1579,9 +1591,9 @@ impl ScriptListApp {
                                 crate::logging::log_private_user_value(&error.to_string()),
                             ),
                         );
-                        self.show_hud(
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
                             format!("Failed to preview {}: {}", file.name, error),
-                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -1590,9 +1602,9 @@ impl ScriptListApp {
             }
             crate::action_helpers::ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID => {
                 let Some(query) = Self::root_file_search_in_folder_query(file) else {
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
                         format!("Not a folder: {}", file.name),
-                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return true;
@@ -1603,9 +1615,9 @@ impl ScriptListApp {
             }
             crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID => {
                 let Some(query) = Self::root_file_browse_parent_folder_query(file) else {
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
                         format!("No parent folder for {}", file.name),
-                        Some(HUD_MEDIUM_MS),
                         cx,
                     );
                     return true;
@@ -1749,10 +1761,10 @@ impl ScriptListApp {
                     logging::log("FALLBACK", &format!("Copy: {} chars", text.len()));
                     let item = gpui::ClipboardItem::new_string(text);
                     cx.write_to_clipboard(item);
-                    crate::hud_manager::show_hud(
-                        "Copied to clipboard".to_string(),
-                        Some(HUD_SHORT_MS),
+                    crate::line_notice::say(
                         cx,
+                        crate::line_notice::INFO,
+                        "Copied to clipboard".to_string(),
                     );
                 }
                 FallbackResult::OpenUrl { url } => {
@@ -1776,16 +1788,16 @@ impl ScriptListApp {
                         Ok(result) => {
                             let item = gpui::ClipboardItem::new_string(result.to_string());
                             cx.write_to_clipboard(item);
-                            crate::hud_manager::show_hud(
-                                format!("{} = {}", expression, result),
-                                Some(HUD_LONG_MS),
+                            crate::line_notice::say(
                                 cx,
+                                crate::line_notice::INFO,
+                                format!("{} = {}", expression, result),
                             );
                         }
                         Err(e) => {
                             logging::log("FALLBACK", &format!("Calculate error: {}", e));
                             let message = calculate_fallback_error_message(&expression);
-                            crate::hud_manager::show_hud(message, Some(HUD_LONG_MS), cx);
+                            crate::line_notice::say(cx, crate::line_notice::INFO, message);
                         }
                     }
                 }
@@ -1878,10 +1890,10 @@ impl ScriptListApp {
     /// to the launcher or Cmd+C to copy diagnostics to the clipboard.
     pub(crate) fn open_script_issues_view(&mut self, cx: &mut Context<Self>) {
         let Some(report) = self.script_validation_report.clone() else {
-            crate::hud_manager::show_hud(
-                "No script validation report available".to_string(),
-                Some(2500),
+            crate::line_notice::say(
                 cx,
+                crate::line_notice::FAILED,
+                "No script validation report available".to_string(),
             );
             return;
         };

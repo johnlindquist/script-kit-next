@@ -157,15 +157,6 @@
                     return;
                 }
 
-                if confirm::consume_main_window_key_while_confirm_open(
-                    key,
-                    &event.keystroke.modifiers,
-                    cx,
-                ) {
-                    cx.stop_propagation();
-                    return;
-                }
-
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
                         tracing::debug!(
@@ -306,13 +297,7 @@
                             if has_cmd && !has_shift && key.eq_ignore_ascii_case("m") {
                                 logging::log("KEY", "Interceptor: Cmd+M -> cycle vibrancy material");
                                 let description = platform::cycle_vibrancy_material();
-                                this.toast_manager.push(
-                                    components::toast::Toast::info(
-                                        description,
-                                        &this.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, description, cx);
                                 cx.notify();
                                 cx.stop_propagation();
                                 return;
@@ -322,13 +307,7 @@
                             if has_cmd && has_shift && key.eq_ignore_ascii_case("a") {
                                 logging::log("KEY", "Interceptor: Cmd+Shift+A -> cycle vibrancy appearance");
                                 let description = platform::cycle_appearance();
-                                this.toast_manager.push(
-                                    components::toast::Toast::info(
-                                        description,
-                                        &this.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, description, cx);
                                 cx.notify();
                                 cx.stop_propagation();
                                 return;

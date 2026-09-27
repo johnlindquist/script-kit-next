@@ -21,6 +21,7 @@ fn system_action_hotkeys_execute_without_opening_main_menu() {
     assert!(execution.contains("Volume shortcuts should execute headlessly"));
 
     let builtin_execution = read_source("src/app_execute/builtin_execution.rs");
-    assert!(builtin_execution.contains("self.show_hud(message, Some(HUD_MEDIUM_MS), cx);"));
+    assert!(builtin_execution
+        .contains("self.one_window_notice(crate::line_notice::INFO, message, cx);"));
     assert!(builtin_execution.contains("self.hide_main_and_reset(cx);"));
 }

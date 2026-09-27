@@ -1167,7 +1167,7 @@ fn delivery_paste_failure_surfaces_error() {
         "paste failure must log an error describing what failed"
     );
     assert!(
-        after_paste.contains("show_error_toast"),
+        after_paste.contains("notice_failed"),
         "paste failure must show an error toast to the user"
     );
 }
@@ -1670,12 +1670,12 @@ fn delivery_frontmost_app_aborts_paste_on_focus_yield_failure() {
     let err_check_pos = frontmost_src
         .find("if let Err(error) = yield_focus_result")
         .expect("frontmost-app branch must check yield_focus_result for errors");
-    // Search for show_error_toast AFTER the yield_focus_result error check,
-    // since the tracker guard earlier in the branch also uses show_error_toast.
+    // Search for notice_failed AFTER the yield_focus_result error check,
+    // since the tracker guard earlier in the branch also uses notice_failed.
     let post_err_src = &frontmost_src[err_check_pos..];
     let show_error_pos = err_check_pos
         + post_err_src
-            .find("show_error_toast")
+            .find("notice_failed")
             .expect("frontmost-app branch must show error toast on focus-yield failure");
     let cleanup_in_err = err_check_pos
         + post_err_src
@@ -2219,7 +2219,7 @@ fn delivery_frontmost_app_surfaces_missing_tracked_target() {
         "frontmost-app path must log a typed redacted refusal"
     );
     assert!(
-        handler_src.contains("show_error_toast"),
+        handler_src.contains("notice_failed"),
         "frontmost-app path must show the user a tracked-target failure"
     );
 }
@@ -2967,7 +2967,7 @@ fn dictation_start_preflight_surfaces_unavailable_target() {
         "preflight failures must be logged"
     );
     assert!(
-        dictation_src.contains("self.show_error_toast"),
+        dictation_src.contains("self.notice_failed"),
         "preflight failures must surface a toast"
     );
 }
@@ -3501,7 +3501,7 @@ fn missing_model_error_path_never_attempts_paste_or_prompt_delivery() {
 
     // Confirm the error arm DOES show a toast and update overlay to Failed.
     assert!(
-        err_arm_src.contains("show_error_toast"),
+        err_arm_src.contains("notice_failed"),
         "Err arm must surface the error to the user via toast"
     );
     assert!(
@@ -5616,7 +5616,7 @@ fn missing_model_transcription_recovery_opens_download_prompt() {
     let branch_before_return =
         &branch_src[..branch_src.find("return;").unwrap_or(branch_src.len())];
     assert!(
-        !branch_before_return.contains("show_error_toast"),
+        !branch_before_return.contains("notice_failed"),
         "Parakeet-missing branch must NOT show a dead-end toast — the prompt is the recovery UX"
     );
 }

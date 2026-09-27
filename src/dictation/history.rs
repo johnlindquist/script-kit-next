@@ -87,11 +87,12 @@ pub struct DictationHistoryEntry {
     pub audio_duration_ms: u64,
 }
 
-pub fn delete_history_confirmation_body(pending_in_agent_chat: bool) -> &'static str {
+/// What waits in the line before a saved transcript is deleted.
+pub fn delete_history_held_title(pending_in_agent_chat: bool) -> &'static str {
     if pending_in_agent_chat {
-        "This transcript is staged in Agent Chat. Deleting it will make that pending attachment unavailable. Sent-turn receipts are preserved."
+        "Delete this transcript staged in Agent Chat"
     } else {
-        "Delete this saved transcript from Dictation History? Sent-turn receipts are preserved."
+        "Delete this saved transcript"
     }
 }
 
@@ -1566,15 +1567,9 @@ mod tests {
     }
 
     #[test]
-    fn deletion_confirmation_distinguishes_pending_context_without_claiming_sent_turn_loss() {
-        let ordinary = delete_history_confirmation_body(false);
-        assert!(ordinary.contains("Sent-turn receipts are preserved"));
-        assert!(!ordinary.contains("staged in Agent Chat"));
-
-        let pending = delete_history_confirmation_body(true);
-        assert!(pending.contains("staged in Agent Chat"));
-        assert!(pending.contains("pending attachment unavailable"));
-        assert!(pending.contains("Sent-turn receipts are preserved"));
+    fn deletion_hold_names_a_transcript_staged_in_agent_chat() {
+        assert!(!delete_history_held_title(false).contains("staged in Agent Chat"));
+        assert!(delete_history_held_title(true).contains("staged in Agent Chat"));
     }
 
     #[test]

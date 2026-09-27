@@ -287,7 +287,7 @@ impl ScriptListApp {
     }
 
     /// Runs a row this module owns. `None` when the row is someone else's.
-    pub(crate) fn one_window_run_own(
+    pub(crate) fn one_window_run_learns_row(
         &mut self,
         row: &Row,
         cx: &mut Context<Self>,

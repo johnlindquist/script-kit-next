@@ -1488,7 +1488,7 @@ impl ScriptListApp {
                 }
                 Err(e) => {
                     let message = action_state.failure_message(&e);
-                    self.show_error_toast(message.clone(), cx);
+                    self.notice_failed(message.clone(), cx);
                     Self::builtin_error(
                         dctx,
                         crate::action_helpers::ERROR_ACTION_FAILED,
@@ -1500,7 +1500,7 @@ impl ScriptListApp {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            self.show_unsupported_platform_toast("Menu bar actions", cx);
+            self.notice_unsupported_platform("Menu bar actions", cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
@@ -1608,7 +1608,7 @@ impl ScriptListApp {
         #[cfg(not(target_os = "macos"))]
         {
             let _ = action_type;
-            self.show_unsupported_platform_toast("System actions", cx);
+            self.notice_unsupported_platform("System actions", cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
@@ -1643,7 +1643,7 @@ impl ScriptListApp {
                 );
                 if let Some(message) = self.system_action_feedback_message(action_type) {
                     cx.notify();
-                    self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                    self.one_window_notice(crate::line_notice::INFO, message, cx);
                     self.hide_main_and_reset(cx);
                 } else {
                     self.close_and_reset_window(cx);
@@ -1663,7 +1663,7 @@ impl ScriptListApp {
                     error = %error,
                     "system_action_dispatch"
                 );
-                self.show_error_toast(format!("System action failed: {}", error), cx);
+                self.notice_failed(format!("System action failed: {}", error), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -1684,78 +1684,21 @@ impl ScriptListApp {
         PROCESS_MANAGER.remove_main_pid();
     }
 
-    fn quit_script_kit_confirm_options() -> crate::confirm::ParentConfirmOptions {
-        crate::confirm::ParentConfirmOptions::destructive(
-            "Quit Script Kit",
-            "Quit Script Kit and stop all running processes?",
-            "Quit",
-        )
-    }
-
-    fn builtin_confirmation_options(
-        entry_id: &str,
-        entry_name: &str,
-    ) -> crate::confirm::ParentConfirmOptions {
-        match entry_id {
-            "builtin/quit-script-kit" => Self::quit_script_kit_confirm_options(),
-            "builtin/shut-down" => crate::confirm::ParentConfirmOptions::destructive(
-                "Shut Down Mac",
-                "Shut down this Mac now?",
-                "Shut Down",
-            ),
-            "builtin/restart" => crate::confirm::ParentConfirmOptions::destructive(
-                "Restart Mac",
-                "Restart this Mac now?",
-                "Restart",
-            ),
-            "builtin/log-out" => crate::confirm::ParentConfirmOptions::destructive(
-                "Log Out",
-                "Log out of the current macOS session?",
-                "Log Out",
-            ),
-            "builtin/empty-trash" => crate::confirm::ParentConfirmOptions::irreversible(
-                "Empty Trash",
-                "Empty Trash now? This cannot be undone.",
-                "Empty Trash",
-            ),
-            "builtin/sleep" => crate::confirm::ParentConfirmOptions {
-                title: "Sleep Mac".into(),
-                body: "Put this Mac to sleep now?".into(),
-                confirm_text: "Sleep".into(),
-                cancel_text: "Cancel".into(),
-                ..Default::default()
-            },
-            "builtin/force-quit" => crate::confirm::ParentConfirmOptions {
-                title: "Open Force Quit Apps".into(),
-                body: "Open Force Quit Apps?".into(),
-                confirm_text: "Open".into(),
-                ..Default::default()
-            },
-            "builtin/stop-all-processes" => crate::confirm::ParentConfirmOptions::destructive(
-                "Stop All Processes",
-                "Stop all running Script Kit processes?",
-                "Stop All",
-            ),
-            "builtin/clear-suggested" => crate::confirm::ParentConfirmOptions::irreversible(
-                "Clear Suggested",
-                "Clear suggested items and reset their ranking data?",
-                "Clear Suggested",
-            ),
-            "builtin/sync-to-github" => crate::confirm::ParentConfirmOptions {
-                title: "Sync to GitHub".into(),
-                body: "Write safe .gitignore exclusions, commit Script Kit changes, and sync this workspace to GitHub?".into(),
-                confirm_text: "Sync".into(),
-                cancel_text: "Cancel".into(),
-                ..Default::default()
-            },
-            _ => crate::confirm::ParentConfirmOptions {
-                title: "Confirm".into(),
-                body: format!("Are you sure you want to {}?", entry_name).into(),
-                confirm_text: "Continue".into(),
-                cancel_text: "Cancel".into(),
-                ..Default::default()
-            },
-        }
+    /// Changing the background effect happens at once; ⌘Z puts the previous one back.
+    fn change_background_effect_undoably(
+        &mut self,
+        effect: Option<crate::effects::BackgroundEffect>,
+        cx: &mut Context<Self>,
+    ) {
+        let previous = self.background_effect;
+        self.set_background_effect(effect, cx);
+        let name = effect.map_or("Off", |effect| effect.name());
+        self.one_window_done_undoable(
+            "sparkles",
+            format!("Background Effect: {name}"),
+            Box::new(move |this, cx| this.set_background_effect(previous, cx)),
+            cx,
+        );
     }
 
     pub(crate) fn execute_builtin(
@@ -1774,6 +1717,17 @@ impl ScriptListApp {
     ) -> Option<crate::action_helpers::DispatchOutcome> {
         let start = std::time::Instant::now();
         let dctx = crate::action_helpers::DispatchContext::for_builtin(&entry.id);
+        if let Some(key) = crate::one_window::ledger_view::own_row_key(&entry.id) {
+            return Some(match self.one_window_activate_own_row(key, cx) {
+                Ok(()) => Self::builtin_success(&dctx, "one_window_row"),
+                Err(error) => Self::builtin_error(
+                    &dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    "That row isn't listed any more",
+                    error.to_string(),
+                ),
+            });
+        }
 
         tracing::info!(
             category = "BUILTIN",
@@ -1787,96 +1741,21 @@ impl ScriptListApp {
         // Clear any stale actions popup from previous view
         self.clear_actions_popup_state();
 
-        // Check if this command requires confirmation - open modal if so.
-        // Quit Script Kit goes through this same path (see builtin_confirmation_options
-        // and DEFAULT_CONFIRMATION_COMMANDS) — the parent confirm popup is a separate
-        // native window with its own focus, so Tab/Esc work without competing with the
-        // launcher or any other view's key handlers.
         if self.config.requires_confirmation(&entry.id) {
-            let confirmation_start = std::time::Instant::now();
             let entry_id = entry.id.clone();
-            let query_owned = query_override.map(|s| s.to_string());
+            let query_owned = query_override.map(str::to_string);
             let dctx_owned = dctx.clone();
-            let confirm_options = Self::builtin_confirmation_options(&entry.id, &entry.name);
-
-            // Spawn a task to show confirmation dialog via shared parent dialog helper
-            cx.spawn(async move |this, cx| {
-                match crate::confirm::confirm_with_parent_dialog(
-                    cx,
-                    confirm_options,
-                    &dctx_owned.trace_id,
-                )
-                .await
-                {
-                    Ok(true) => {
-                        let _ = this.update(cx, |this, cx| {
-                            this.handle_builtin_confirmation(
-                                entry_id,
-                                true,
-                                query_owned,
-                                &dctx_owned,
-                                cx,
-                            );
-                        });
-                    }
-                    Ok(false) => {
-                        let outcome = crate::action_helpers::DispatchOutcome::cancelled()
-                            .with_trace_id(dctx_owned.trace_id.clone())
-                            .with_detail("builtin_confirmation_cancelled");
-                        let _ = this.update(cx, |this, _| {
-                            this.clear_menu_origin_after_script_list_confirm_cancel(
-                                "builtin_confirmation_cancelled",
-                            );
-                            Self::log_builtin_outcome(
-                                &entry_id,
-                                &dctx_owned,
-                                "confirmation_gate",
-                                &outcome,
-                                &confirmation_start,
-                            );
-                        });
-                    }
-                    Err(e) => {
-                        let _ = this.update(cx, |this, cx| {
-                            tracing::error!(
-                                builtin_id = %entry_id,
-                                trace_id = %dctx_owned.trace_id,
-                                error = %e,
-                                "failed to open confirmation modal"
-                            );
-                            this.show_error_toast_with_code(
-                                "Failed to open confirmation dialog",
-                                Some(crate::action_helpers::ERROR_MODAL_FAILED),
-                                cx,
-                            );
-                            let outcome = Self::builtin_error(
-                                &dctx_owned,
-                                crate::action_helpers::ERROR_MODAL_FAILED,
-                                "Failed to open confirmation dialog",
-                                format!("confirmation_modal_error={e}"),
-                            );
-                            Self::log_builtin_outcome(
-                                &entry_id,
-                                &dctx_owned,
-                                "confirmation_gate",
-                                &outcome,
-                                &confirmation_start,
-                            );
-                        });
-                    }
-                }
-            })
-            .detach();
-
-            tracing::info!(
-                category = "BUILTIN",
-                trace_id = %dctx.trace_id,
-                builtin_id = %entry.id,
-                status = "awaiting_confirmation",
-                duration_ms = start.elapsed().as_millis() as u64,
-                "Builtin execution deferred to confirmation modal"
+            self.one_window_hold(
+                entry.icon.as_deref().unwrap_or(crate::line_notice::FAILED),
+                entry.name.clone(),
+                Box::new(move |this, cx| {
+                    this.run_held_builtin(entry_id, query_owned, &dctx_owned, cx)
+                }),
+                cx,
             );
-            return None; // Confirmation is pending, not a completed action.
+            let outcome = Self::builtin_success(&dctx, "held_before_it_runs");
+            Self::log_builtin_outcome(&entry.id, &dctx, "hold", &outcome, &start);
+            return Some(outcome);
         }
 
         // All builtins now return DispatchOutcome — system actions are handled
@@ -2246,9 +2125,9 @@ impl ScriptListApp {
             "current_app_commands.session_switched"
         );
         self.present_current_app_commands_session(refreshed, filter, cx);
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             format!("Current app changed: {previous_app_name} -> {refreshed_app_name}"),
-            Some(HUD_SHORT_MS),
             cx,
         );
         tracing::info!(
@@ -2311,7 +2190,7 @@ impl ScriptListApp {
                     entry_index = original_entry_index,
                     "current_app_commands.refresh_failed_before_execute"
                 );
-                self.show_error_toast(
+                self.notice_failed(
                     UtilityCurrentAppCommandsBuiltinAction::Open.refresh_failure_message(&error),
                     cx,
                 );
@@ -2357,7 +2236,7 @@ impl ScriptListApp {
                         preset.number(),
                         preset.name()
                     );
-                    self.show_error_toast(message.clone(), cx);
+                    self.notice_failed(message.clone(), cx);
                     return Self::builtin_error(
                         dctx,
                         crate::action_helpers::ERROR_ACTION_FAILED,
@@ -2378,7 +2257,7 @@ impl ScriptListApp {
                     preset.number(),
                     preset.name()
                 );
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 return Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -2388,12 +2267,10 @@ impl ScriptListApp {
             }
         } else {
             self.animation_replay_generation = self.animation_replay_generation.wrapping_add(1);
-            self.toast_manager.push(
-                components::toast::Toast::success(
-                    format!("Animation {:02} — {}", preset.number(), preset.name()),
-                    &self.theme,
-                )
-                .duration_ms(Some(1800)),
+            self.one_window_notice(
+                crate::line_notice::DONE,
+                format!("Animation {:02} — {}", preset.number(), preset.name()),
+                cx,
             );
             cx.notify();
         }
@@ -2498,14 +2375,7 @@ impl ScriptListApp {
                     .map(|effect| effect.next())
                     .or_else(|| crate::effects::BackgroundEffect::all().first().copied())
                     .unwrap_or(crate::effects::BackgroundEffect::Aurora);
-                self.set_background_effect(Some(next), cx);
-                self.toast_manager.push(
-                    components::toast::Toast::success(
-                        format!("Background Effect: {}", next.name()),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(1500)),
-                );
+                self.change_background_effect_undoably(Some(next), cx);
                 Self::builtin_success(dctx, format!("background_effect::{}", next.slug()))
             }
             builtins::BuiltInFeature::BackgroundEffectPrevious => {
@@ -2514,22 +2384,11 @@ impl ScriptListApp {
                     .map(|effect| effect.prev())
                     .or_else(|| crate::effects::BackgroundEffect::all().last().copied())
                     .unwrap_or(crate::effects::BackgroundEffect::SoftPrism);
-                self.set_background_effect(Some(prev), cx);
-                self.toast_manager.push(
-                    components::toast::Toast::success(
-                        format!("Background Effect: {}", prev.name()),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(1500)),
-                );
+                self.change_background_effect_undoably(Some(prev), cx);
                 Self::builtin_success(dctx, format!("background_effect::{}", prev.slug()))
             }
             builtins::BuiltInFeature::BackgroundEffectOff => {
-                self.set_background_effect(None, cx);
-                self.toast_manager.push(
-                    components::toast::Toast::info("Background Effect: Off", &self.theme)
-                        .duration_ms(Some(1500)),
-                );
+                self.change_background_effect_undoably(None, cx);
                 Self::builtin_success(dctx, "background_effect::off")
             }
 
@@ -2780,6 +2639,10 @@ impl ScriptListApp {
                     .unwrap_or(SurfaceOpenBuiltinAction::Tips);
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
+            builtins::BuiltInFeature::RunHistory => {
+                self.one_window_open_history(cx);
+                Self::builtin_success(dctx, "open_run_history")
+            }
             // =========================================================================
             // New Script from Template — browse kit://script-templates catalog, pick
             // a starter, then hand off to the naming prompt with template metadata
@@ -2885,7 +2748,7 @@ impl ScriptListApp {
                     Ok(apps) => apps,
                     Err(error) => {
                         let message = format!("Application catalogue unavailable: {error:#}");
-                        self.show_error_toast(message.clone(), cx);
+                        self.notice_failed(message.clone(), cx);
                         return Self::builtin_error(
                             dctx,
                             crate::action_helpers::ERROR_ACTION_FAILED,
@@ -3151,7 +3014,7 @@ impl ScriptListApp {
             }
             Err(error) => {
                 let message = action.failure_message(&error);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 cx.notify();
                 Self::builtin_error(
                     dctx,
@@ -3181,7 +3044,7 @@ impl ScriptListApp {
             Ok(apps) => apps,
             Err(error) => {
                 let message = format!("Application catalogue unavailable: {error:#}");
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 return Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -3193,7 +3056,7 @@ impl ScriptListApp {
         if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
             if let Err(error) = app_launcher::launch_application(app) {
                 let message = action.launch_failure_message(app_name, &error);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -3206,7 +3069,7 @@ impl ScriptListApp {
             }
         } else {
             let message = action.not_found_message(app_name);
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_ACTION_FAILED,
@@ -3234,9 +3097,6 @@ impl ScriptListApp {
         );
 
         // Close companion UI before hiding so it does not stay stale.
-        if crate::confirm::is_confirm_window_open() {
-            crate::confirm::route_key_to_confirm_popup("escape", cx);
-        }
         if crate::actions::is_actions_window_open() {
             crate::actions::close_actions_window(cx);
             self.mark_actions_popup_closed();
@@ -3247,7 +3107,7 @@ impl ScriptListApp {
         self.pending_focus = None;
         if let Err(error) = notes::open_notes_window_without_launcher_restore(cx) {
             let message = action.failure_message(&error);
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -3272,7 +3132,7 @@ impl ScriptListApp {
             "{}",
             action.request_log_message()
         );
-        self.show_hud(action.start_hud().to_string(), Some(HUD_SHORT_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, action.start_hud().to_string(), cx);
 
         let dctx_owned = dctx.clone();
         let action_for_task = action;
@@ -3293,7 +3153,7 @@ impl ScriptListApp {
                         "{}",
                         action_for_task.completed_log_message()
                     );
-                    this.show_hud(report.summary_message(), Some(HUD_MEDIUM_MS), cx);
+                    this.one_window_notice(crate::line_notice::INFO, report.summary_message(), cx);
                     this.close_and_reset_window(cx);
                 }
                 Err(error) => {
@@ -3304,7 +3164,7 @@ impl ScriptListApp {
                         "{}",
                         action_for_task.failed_log_message()
                     );
-                    this.show_error_toast(action_for_task.failure_message(&error), cx);
+                    this.notice_failed(action_for_task.failure_message(&error), cx);
                     cx.notify();
                 }
             });
@@ -3376,7 +3236,7 @@ impl ScriptListApp {
             }
             Err(error) => {
                 let message = action.failure_message(&error);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 cx.notify();
                 Self::builtin_error(
                     dctx,
@@ -3451,9 +3311,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
         let message = action.message();
-        self.toast_manager.push(
-            components::toast::Toast::error(message, &self.theme).duration_ms(Some(TOAST_ERROR_MS)),
-        );
+        self.one_window_notice(crate::line_notice::FAILED, message, cx);
         cx.notify();
         Self::builtin_error(
             dctx,
@@ -3503,9 +3361,9 @@ impl ScriptListApp {
                     "{}",
                     action.persistence_failure_log()
                 );
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     action.persistence_failure_hud(&error),
-                    Some(HUD_SHORT_MS),
                     cx,
                 );
                 return Self::builtin_error(
@@ -3545,7 +3403,7 @@ impl ScriptListApp {
             "Updated snap mode from built-in command"
         );
 
-        self.show_hud(action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, action.hud_text().to_string(), cx);
         Self::builtin_success(dctx, action.success_detail())
     }
 
@@ -3679,7 +3537,7 @@ impl ScriptListApp {
                     "{}",
                     action.enumeration_failure_log()
                 );
-                self.show_hud(action.failure_hud(&error), Some(HUD_SHORT_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, action.failure_hud(&error), cx);
                 return Self::builtin_error(
                     dctx,
                     action.failure_code(),
@@ -3778,7 +3636,7 @@ impl ScriptListApp {
         });
         if let Err(e) = save_result {
             let message = action.failure_message(&e);
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             cx.notify();
             Self::builtin_error(
                 dctx,
@@ -3795,7 +3653,7 @@ impl ScriptListApp {
                 self.reset_to_script_list(cx);
                 resize_to_view_sync(ViewType::ScriptList, 0);
             }
-            self.show_hud(action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
+            self.one_window_notice(crate::line_notice::INFO, action.hud_text().to_string(), cx);
             cx.notify();
             Self::builtin_success(dctx, action.success_detail())
         }
@@ -3808,9 +3666,6 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
         // Close companion UI before hiding so it does not stay stale.
-        if crate::confirm::is_confirm_window_open() {
-            crate::confirm::route_key_to_confirm_popup("escape", cx);
-        }
         if crate::actions::is_actions_window_open() {
             crate::actions::close_actions_window(cx);
             self.mark_actions_popup_closed();
@@ -3833,7 +3688,7 @@ impl ScriptListApp {
 
         if let Err(e) = result {
             let message = action.failure_message(&e);
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -3944,12 +3799,12 @@ impl ScriptListApp {
 
         let outcome = action.outcome(process_count);
         if !outcome.should_stop_processes() {
-            self.show_hud(action.empty_hud().to_string(), Some(HUD_2200_MS), cx);
+            self.one_window_notice(crate::line_notice::INFO, action.empty_hud().to_string(), cx);
         } else {
             crate::process_manager::PROCESS_MANAGER.kill_all_processes();
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 action.success_hud(outcome.process_count()),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             self.close_and_reset_window(cx);
@@ -3970,7 +3825,7 @@ impl ScriptListApp {
             state = %state,
             "script_kit_selfie.capture_requested"
         );
-        self.show_hud(action.starting_hud(&state), Some(HUD_2200_MS), cx);
+        self.one_window_notice(crate::line_notice::INFO, action.starting_hud(&state), cx);
 
         match crate::platform::capture_script_kit_selfie(&state) {
             Ok(receipt) => {
@@ -3986,7 +3841,7 @@ impl ScriptListApp {
                     receipt_path_sha256 = %safe_receipt_path.sha256,
                     "script_kit_selfie.capture_saved"
                 );
-                self.show_hud(action.saved_hud(&receipt), Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, action.saved_hud(&receipt), cx);
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(error) => {
@@ -3997,7 +3852,7 @@ impl ScriptListApp {
                     error = %error,
                     "script_kit_selfie.capture_failed"
                 );
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4026,7 +3881,7 @@ impl ScriptListApp {
         if effective_query.is_empty() {
             let message =
                 "Type what you want to automate after \"Turn This Into a Command\"".to_string();
-            self.show_error_toast(message.clone(), cx);
+            self.notice_failed(message.clone(), cx);
             return Self::builtin_error(
                 dctx,
                 crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4089,9 +3944,9 @@ impl ScriptListApp {
 
                         cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
 
-                        self.show_hud(
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
                             action.copied_recipe_hud(&recipe.suggested_script_name),
-                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
 
@@ -4110,7 +3965,7 @@ impl ScriptListApp {
                             error = %e,
                             "turn_this_into_command.serialize_failed"
                         );
-                        self.show_error_toast(message.clone(), cx);
+                        self.notice_failed(message.clone(), cx);
                         Self::builtin_error(
                             dctx,
                             crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4130,7 +3985,7 @@ impl ScriptListApp {
                     error = %e,
                     "turn_this_into_command.capture_failed"
                 );
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4280,7 +4135,7 @@ impl ScriptListApp {
                                     total_entries = entries.len(),
                                     "do_in_current_app.execute_entry — index out of bounds"
                                 );
-                                self.show_error_toast(message.clone(), cx);
+                                self.notice_failed(message.clone(), cx);
                                 return Self::builtin_error(
                                     dctx,
                                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4341,7 +4196,7 @@ impl ScriptListApp {
             }
             Err(e) => {
                 let message = action.capture_failure_message(&e);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4389,7 +4244,7 @@ impl ScriptListApp {
                     error = %e,
                     "current_app_commands.capture_failed"
                 );
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -4421,18 +4276,16 @@ impl ScriptListApp {
                     .map(|card| card.kind.name())
                     .collect();
                 if ungranted.is_empty() {
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
                         action.all_permissions_granted_hud().to_string(),
-                        Some(HUD_SHORT_MS),
                         cx,
                     );
                 } else {
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            format!("Not yet granted: {}", ungranted.join(", ")),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_WARNING_MS)),
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("Not yet granted: {}", ungranted.join(", ")),
+                        cx,
                     );
                     self.open_permissions_wizard(cx);
                 }
@@ -4447,18 +4300,16 @@ impl ScriptListApp {
             PermissionCommandBuiltinAction::RequestAccessibility => {
                 let granted = permissions_wizard::request_accessibility_permission();
                 if granted {
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
                         action.accessibility_granted_hud().to_string(),
-                        Some(HUD_SHORT_MS),
                         cx,
                     );
                 } else {
-                    self.toast_manager.push(
-                        components::toast::Toast::warning(
-                            action.accessibility_not_granted_warning(),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_WARNING_MS)),
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        action.accessibility_not_granted_warning(),
+                        cx,
                     );
                 }
                 cx.notify();
@@ -4467,7 +4318,7 @@ impl ScriptListApp {
             PermissionCommandBuiltinAction::OpenAccessibilitySettings => {
                 if let Err(e) = permissions_wizard::open_accessibility_settings() {
                     let message = action.open_settings_failure_message(&e);
-                    self.show_error_toast(message.clone(), cx);
+                    self.notice_failed(message.clone(), cx);
                     Self::builtin_error(
                         dctx,
                         crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -4493,12 +4344,16 @@ impl ScriptListApp {
     ) -> crate::action_helpers::DispatchOutcome {
         match platform::permiso::PermisoAssistant::present_retained(action.panel()) {
             Ok(()) => {
-                self.show_hud(action.success_hud().to_string(), Some(HUD_SHORT_MS), cx);
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    action.success_hud().to_string(),
+                    cx,
+                );
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(error) => {
                 let message = action.failure_message(&error);
-                self.show_error_toast(message.clone(), cx);
+                self.notice_failed(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
                     crate::action_helpers::ERROR_LAUNCH_FAILED,
@@ -4566,12 +4421,10 @@ impl ScriptListApp {
                             trace_id = %dctx.trace_id,
                             "Paste worker is not running"
                         );
-                        self.toast_manager.push(
-                            components::toast::Toast::error(
-                                "Paste worker crashed — restart Script Kit",
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_CRITICAL_MS)),
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
+                            "Paste worker crashed — restart Script Kit",
+                            cx,
                         );
                         cx.notify();
                         Self::builtin_error(
@@ -4592,7 +4445,7 @@ impl ScriptListApp {
                     "{}", paste_action.log_message()
                 );
                 if let Some(message) = paste_action.hud_message() {
-                    self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
+                    self.one_window_notice(crate::line_notice::INFO, message.to_string(), cx);
                 }
                 Self::builtin_success(dctx, paste_action.success_detail())
             }
@@ -4722,7 +4575,7 @@ impl ScriptListApp {
                     error = %error,
                     "Dictation destination could not be frozen"
                 );
-                self.show_error_toast(format!("Dictation destination unavailable: {error}"), cx);
+                self.notice_failed(format!("Dictation destination unavailable: {error}"), cx);
                 return;
             }
         };
@@ -4845,7 +4698,7 @@ impl ScriptListApp {
                 action = ?action,
                 "{}", action.preflight_failure_message()
             );
-            self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
+            self.notice_failed(format!("Dictation unavailable: {error_text}"), cx);
             return DictationStartPreflight::Failed;
         }
 
@@ -5349,7 +5202,7 @@ impl ScriptListApp {
                                         request_id,
                                         "Capture collection timed out; transcribing partial audio"
                                     );
-                                    this.show_error_toast(
+                                    this.notice_failed(
                                         "Dictation stop timed out — the tail of the recording may be missing"
                                             .to_string(),
                                         cx,
@@ -5539,9 +5392,9 @@ impl ScriptListApp {
                         "Dictation reached its configured max duration; auto-stopping"
                     );
                     let _ = this.update(cx, |this, cx| {
-                        this.show_hud(
+                        this.one_window_notice(
+                            crate::line_notice::INFO,
                             "Dictation reached its time limit — transcribing".to_string(),
-                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                         let target = crate::dictation::get_dictation_target()
@@ -5730,7 +5583,7 @@ impl ScriptListApp {
                         reason = ?error.kind(),
                         "dictation_history_recovery_entry_not_saved"
                     );
-                    self.show_error_toast(
+                    self.notice_failed(
                         "Dictation History could not save this transcript. Copy it before closing.",
                         cx,
                     );
@@ -5779,7 +5632,11 @@ impl ScriptListApp {
                         clipboard.set_text(work.request.transcript.text().to_string())
                     })
                     .map_err(|error| format!("Could not copy the saved transcript: {error}"))?;
-                self.show_hud("Transcript copied".to_string(), Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    "Transcript copied".to_string(),
+                    cx,
+                );
                 Ok(())
             }
             crate::dictation::DictationRecoveryAction::OpenDictationHistory => {
@@ -6278,7 +6135,7 @@ impl ScriptListApp {
                                         reason = ?error.kind(),
                                         "dictation_history_entry_not_saved_before_delivery"
                                     );
-                                    self.show_error_toast(
+                                    self.notice_failed(
                                         "Dictation History could not save this transcript. Your spoken text can still be delivered.",
                                         cx,
                                     );
@@ -7016,9 +6873,9 @@ impl ScriptListApp {
             )
             .is_err()
         {
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 "Dictation model download already in progress".to_string(),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             return;
@@ -7066,9 +6923,9 @@ impl ScriptListApp {
                                     speed_bytes_per_sec,
                                     eta_seconds,
                                 );
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     format!("Downloading model\u{2026} {summary}"),
-                                    Some(HUD_SHORT_MS),
                                     cx,
                                 );
                             }
@@ -7080,9 +6937,9 @@ impl ScriptListApp {
                                 cx,
                             );
                             if !prompt_visible {
-                                this.show_hud(
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
                                     "Extracting dictation model\u{2026}".to_string(),
-                                    Some(HUD_SHORT_MS),
                                     cx,
                                 );
                             }
@@ -7230,7 +7087,7 @@ impl ScriptListApp {
                             .unwrap_or_else(|| {
                                 "Dictation model ready — press hotkey to dictate".to_string()
                             });
-                        this.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                        this.one_window_notice(crate::line_notice::INFO, message, cx);
                     }
                     Err(error) if error.to_string().contains("cancelled") => {
                         let cancelled = "model download cancelled".to_string();
@@ -7242,9 +7099,9 @@ impl ScriptListApp {
                             crate::dictation::DictationModelStatus::DownloadFailed(cancelled),
                             cx,
                         );
-                        this.show_hud(
+                        this.one_window_notice(
+                            crate::line_notice::INFO,
                             "Dictation model download cancelled".to_string(),
-                            Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
@@ -7264,7 +7121,7 @@ impl ScriptListApp {
                             ),
                             cx,
                         );
-                        this.show_error_toast(
+                        this.notice_failed(
                             format!("Dictation model download failed: {error_text}"),
                             cx,
                         );
@@ -7690,9 +7547,9 @@ impl ScriptListApp {
                     if let Some(cancel) = parakeet_model_download_cancel_slot().lock().clone() {
                         cancel.store(true, std::sync::atomic::Ordering::Release);
                     }
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
                         "Cancelling dictation model download\u{2026}".to_string(),
-                        Some(HUD_SHORT_MS),
                         cx,
                     );
                 } else {
@@ -7723,9 +7580,9 @@ impl ScriptListApp {
                         crate::action_helpers::DispatchContext::for_builtin(action.builtin_id());
                     let _ = self.execute_dictation_builtin_action(action, &dctx, cx);
                 } else {
-                    self.show_hud(
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
                         "No pending dictation action".to_string(),
-                        Some(HUD_SHORT_MS),
                         cx,
                     );
                     self.reset_to_script_list(cx);
@@ -8024,15 +7881,15 @@ impl ScriptListApp {
                 if let Err(refusal) =
                     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Device)
                 {
-                    self.show_error_toast(refusal.to_string(), cx);
+                    self.notice_failed(refusal.to_string(), cx);
                     return;
                 }
                 crate::dictation::request_microphone_permission_nonblocking(|status| {
                     tracing::info!(category = "DICTATION", status = ?status, "Microphone permission prompt resolved from setup prompt");
                 });
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     "Choose Allow when macOS asks for microphone access".to_string(),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
             }
@@ -8040,20 +7897,17 @@ impl ScriptListApp {
                 if let Err(refusal) = crate::runtime_policy::check(
                     crate::runtime_policy::ExternalEffect::OpenExternal,
                 ) {
-                    self.show_error_toast(refusal.to_string(), cx);
+                    self.notice_failed(refusal.to_string(), cx);
                     return;
                 }
                 let url = crate::permissions_wizard::PermissionKind::Microphone.settings_url();
                 if let Err(error) = open::that(url) {
-                    self.show_error_toast(
-                        format!("Could not open Microphone settings: {error}"),
-                        cx,
-                    );
+                    self.notice_failed(format!("Could not open Microphone settings: {error}"), cx);
                 }
             }
-            _ => self.show_hud(
+            _ => self.one_window_notice(
+                crate::line_notice::INFO,
                 "Setup item is informational".to_string(),
-                Some(HUD_SHORT_MS),
                 cx,
             ),
         }
@@ -8123,7 +7977,7 @@ impl ScriptListApp {
                     .unwrap_or_else(|| {
                         "Saved microphone unavailable — using System Default".to_string()
                     });
-                self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, message, cx);
                 return false;
             }
             crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
@@ -8145,22 +7999,14 @@ impl ScriptListApp {
                     if let Ok(status) = permission_rx.recv().await {
                         let _ = this.update(cx, |this, cx| {
                             if matches!(status, crate::dictation::DictationMicrophonePermissionStatus::Granted) {
-                                this.show_hud(
-                                    "Microphone ready — start dictation again".to_string(),
-                                    Some(HUD_MEDIUM_MS),
-                                    cx,
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, "Microphone ready — start dictation again".to_string(), cx);
                             } else {
-                                this.show_hud(
-                                    "Microphone access denied — enable it in System Settings → Privacy & Security → Microphone".to_string(),
-                                    Some(HUD_MEDIUM_MS),
-                                    cx,
-                                );
+                                this.one_window_notice(crate::line_notice::INFO, "Microphone access denied — enable it in System Settings → Privacy & Security → Microphone".to_string(), cx);
                             }
                         });
                     }
                 }).detach();
-                self.show_error_toast(
+                self.notice_failed(
                     "Choose Allow when macOS asks for microphone access, then start dictation again.",
                     cx,
                 );
@@ -8169,21 +8015,21 @@ impl ScriptListApp {
             crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
                 crate::dictation::DictationMicrophonePermissionStatus::Denied,
             ) => {
-                self.show_error_toast(
+                self.notice_failed(
                     "Microphone access is off. Enable Script Kit in System Settings → Privacy & Security → Microphone.",
                     cx,
                 );
                 self.open_dictation_setup_prompt(cx);
             }
             crate::dictation::DictationMicrophoneStatus::NoDevices => {
-                self.show_error_toast(
+                self.notice_failed(
                     "No microphone found. Connect an input device or choose one in macOS Sound settings.",
                     cx,
                 );
                 self.open_dictation_setup_prompt(cx);
             }
             crate::dictation::DictationMicrophoneStatus::EnumerationFailed(error) => {
-                self.show_error_toast(format!("Could not list microphones: {error}"), cx);
+                self.notice_failed(format!("Could not list microphones: {error}"), cx);
                 self.open_dictation_setup_prompt(cx);
             }
             crate::dictation::DictationMicrophoneStatus::Ready { .. }

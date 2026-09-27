@@ -294,99 +294,50 @@ impl ScriptListApp {
                     }
                     cx.stop_propagation();
                 } else if key.eq_ignore_ascii_case("backspace") && has_cmd {
-                    // Cmd+Backspace is irreversible: capture the exact
-                    // conversation, confirm in the owning window, then
-                    // revalidate the still-selected session before mutation.
+                    // Cmd+Backspace is irreversible: the exact conversation waits in the line
+                    // above the input, and goes when the wait runs out untouched.
                     if let Some(entry) = filtered.get(current_selected) {
                         let session_id = entry.session_id.clone();
                         let conversation_title = entry.title_display().to_string();
-                        let owner = cx.entity().downgrade();
-                        let confirm_owner = owner.clone();
-                        this.was_window_focused = true;
-
-                        crate::confirm::open_parent_confirm_dialog_for_entity(
-                            window,
-                            cx,
-                            owner,
-                            crate::confirm::ParentConfirmOptions::irreversible(
-                                "Delete Conversation",
-                                format!(
-                                    "Permanently delete \"{conversation_title}\"? This cannot be undone."
-                                ),
-                                "Delete",
-                            ),
-                            move |_window, cx| {
-                                let Some(entity) = confirm_owner.upgrade() else {
+                        this.one_window_hold(
+                            "trash",
+                            format!("Delete \"{conversation_title}\""),
+                            Box::new(move |this, cx| {
+                                if let Err(error) =
+                                    crate::ai::agent_chat::ui::history::delete_conversation(
+                                        &session_id,
+                                    )
+                                {
+                                    let safe_error =
+                                        crate::logging::log_private_user_value(&error.to_string());
+                                    tracing::warn!(
+                                        event = "agent_chat_history_delete_failed",
+                                        error_bytes = safe_error.raw_bytes,
+                                        error_sha256 = %safe_error.sha256,
+                                    );
                                     return;
-                                };
-
-                                entity.update(cx, |this, cx| {
-                                    let (filter, selected_index) = match &this.current_view {
-                                        AppView::AgentChatHistoryView {
-                                            filter,
-                                            selected_index,
-                                        } => (filter.clone(), *selected_index),
-                                        _ => return,
-                                    };
-                                    let current_entries =
+                                }
+                                if let AppView::AgentChatHistoryView {
+                                    filter,
+                                    selected_index,
+                                } = &mut this.current_view
+                                {
+                                    let new_len =
                                         crate::ai::agent_chat::ui::history::search_history(
-                                            &filter,
-                                            100,
-                                        );
-                                    let current_session = current_entries
-                                        .get(selected_index)
-                                        .map(|hit| hit.entry.session_id.clone());
-                                    let decision = crate::window_orchestrator::interaction::
-                                        plan_confirmed_destructive_action(
-                                            true,
-                                            &session_id,
-                                            current_session.as_ref(),
-                                        );
-                                    if decision
-                                        != crate::window_orchestrator::interaction::
-                                            ConfirmedDestructiveActionDecision::ExecuteCapturedTarget
-                                    {
-                                        tracing::warn!(
-                                            event = "agent_chat_history_delete_target_rejected",
-                                            ?decision,
-                                        );
-                                        return;
-                                    }
-
-                                    if let Err(error) =
-                                        crate::ai::agent_chat::ui::history::delete_conversation(
-                                            &session_id,
+                                            filter, 100,
                                         )
-                                    {
-                                        let safe_error = crate::logging::log_private_user_value(
-                                            &error.to_string(),
-                                        );
-                                        tracing::warn!(
-                                            event = "agent_chat_history_delete_failed",
-                                            error_bytes = safe_error.raw_bytes,
-                                            error_sha256 = %safe_error.sha256,
-                                        );
-                                        return;
+                                        .len();
+                                    if *selected_index >= new_len && new_len > 0 {
+                                        *selected_index = new_len - 1;
+                                    } else if new_len == 0 {
+                                        *selected_index = 0;
                                     }
-
-                                    let new_len = current_entries.len().saturating_sub(1);
-                                    if let AppView::AgentChatHistoryView { selected_index, .. } =
-                                        &mut this.current_view
-                                    {
-                                        if *selected_index >= new_len && new_len > 0 {
-                                            *selected_index = new_len - 1;
-                                        } else if new_len == 0 {
-                                            *selected_index = 0;
-                                        }
-                                        this.agent_chat_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                    }
-                                    cx.notify();
-                                });
-                            },
-                            |_window, _cx| {
-                                tracing::info!(event = "agent_chat_history_delete_cancelled");
-                            },
+                                    this.agent_chat_history_scroll_handle
+                                        .scroll_to_item(*selected_index);
+                                }
+                                cx.notify();
+                            }),
+                            cx,
                         );
                     }
                     cx.stop_propagation();

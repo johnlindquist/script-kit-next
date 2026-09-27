@@ -616,7 +616,7 @@ impl ScriptListApp {
                 issue = ?issue.kind,
                 "script_capability_preflight_refused_before_process_spawn"
             );
-            self.show_hud(issue.message.clone(), Some(HUD_MEDIUM_MS), cx);
+            self.one_window_notice(crate::line_notice::INFO, issue.message.clone(), cx);
             return;
         }
 

@@ -52,11 +52,8 @@ pub(crate) const MAIN_OVERLAY_FIXTURE_IDS: &[&str] = &[
     "main-overlay.alias",
     "main-overlay.tab-ai-save-offer",
     "main-overlay.root-dialog",
-    "main-overlay.root-notification",
-    "main-overlay.warning",
     "main-overlay.logs",
     "main-overlay.loading",
-    "main-overlay.toast",
     "main-overlay.effects",
     "main-overlay.debug-grid",
 ];
@@ -145,14 +142,7 @@ pub(crate) const DICTATION_FIXTURE_IDS: &[&str] = &[
     "dictation.microphone-picker",
 ];
 
-pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &[
-    "secondary.actions",
-    "secondary.confirm",
-    "secondary.confirm-three-button",
-    "secondary.hud",
-    "secondary.hud-action",
-    "secondary.snap",
-];
+pub(crate) const SECONDARY_FIXTURE_IDS: &[&str] = &["secondary.actions", "secondary.snap"];
 
 pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
     main_fixture_ids()

@@ -60,16 +60,7 @@ pub fn handle_notes_editor_key_for_automation(
             let mut action = "unsupportedNotesEditorKey";
             let mut handled = false;
 
-            if !platform
-                && !shift
-                && !control
-                && !alt
-                && crate::ui_foundation::is_key_escape(&key)
-                && crate::confirm::is_confirm_window_open()
-            {
-                action = "cancelNotesParentConfirm";
-                handled = crate::confirm::route_key_to_confirm_popup("escape", cx);
-            } else if let Some(descriptor) = crate::notes::notes_action_for_keystroke(
+            if let Some(descriptor) = crate::notes::notes_action_for_keystroke(
                 app.notes_action_context(),
                 &key,
                 &gpui::Modifiers {

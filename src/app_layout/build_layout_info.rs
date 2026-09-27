@@ -112,7 +112,6 @@ impl ScriptListApp {
                 actual_window_size.is_some()
                     && geometry.is_current(
                         self.main_revisions,
-                        self.show_bun_warning,
                         gpui::size(gpui::px(window_width), gpui::px(window_height)),
                         inputs,
                     )

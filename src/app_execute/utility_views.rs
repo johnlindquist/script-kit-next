@@ -337,10 +337,7 @@ impl ScriptListApp {
             Err(e) => {
                 let failure_message = terminal_action.open_failure_message(&e);
                 tracing::error!(message = %terminal_action.creation_failure_log(&e));
-                self.toast_manager.push(
-                    components::toast::Toast::error(failure_message, &self.theme)
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                );
+                self.one_window_notice(crate::line_notice::FAILED, failure_message, cx);
                 cx.notify();
             }
         }
@@ -830,10 +827,7 @@ impl ScriptListApp {
             Err(e) => {
                 let failure_message = terminal_action.open_failure_message(&e);
                 tracing::error!(message = %terminal_action.creation_failure_log(&e));
-                self.toast_manager.push(
-                    components::toast::Toast::error(failure_message, &self.theme)
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                );
+                self.one_window_notice(crate::line_notice::FAILED, failure_message, cx);
                 cx.notify();
             }
         }
@@ -986,7 +980,7 @@ impl ScriptListApp {
             prompt.set_error("Webcam capture is only supported on macOS".to_string(), cx);
         });
 
-        self.show_error_toast("Webcam capture is only supported on macOS", cx);
+        self.notice_failed("Webcam capture is only supported on macOS", cx);
 
         self.current_view = AppView::WebcamView { entity };
         self.note_main_route_changed();

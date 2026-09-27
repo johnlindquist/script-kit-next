@@ -115,10 +115,6 @@ impl ScriptListApp {
         }
     }
 
-    // NOTE: render_toasts() removed - now using gpui-component's NotificationList
-    // via the Root wrapper. Toasts are flushed via flush_pending_toasts() in render().
-    // See toast_manager.rs for the queue and main.rs for the flush logic.
-
     /// Get the command ID for a search result, used for config lookups (shortcuts, etc.)
     ///
     /// Source-owned identity agrees with newly written shortcut preferences;

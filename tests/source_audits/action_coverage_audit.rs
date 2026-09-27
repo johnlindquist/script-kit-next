@@ -158,7 +158,7 @@ fn sdk_actions_has_no_unwrap_or_expect() {
 // ===========================================================================
 
 #[test]
-fn error_paths_use_show_error_toast_not_show_hud() {
+fn error_paths_use_notice_failed_not_show_hud() {
     let content = handle_action_content();
 
     // Find all show_hud calls and verify none contain error-like messages
@@ -180,7 +180,7 @@ fn error_paths_use_show_error_toast_not_show_hud() {
                         !trimmed.contains("\"Failed to")
                             && !trimmed.contains("\"Error:")
                             && !trimmed.contains("\"Cannot "),
-                        "Error message found in show_hud() call — should use show_error_toast() instead:\n  {}",
+                        "Error message found in show_hud() call — should use notice_failed() instead:\n  {}",
                         trimmed
                     );
                 }
@@ -190,49 +190,20 @@ fn error_paths_use_show_error_toast_not_show_hud() {
 }
 
 #[test]
-fn all_show_error_toast_calls_use_toast_not_hud() {
+fn failures_are_said_through_notice_failed() {
     let content = handle_action_content();
 
-    // Verify show_error_toast exists and is the standard error path
-    let error_toast_count = count_occurrences(&content, "show_error_toast(");
+    // Verify notice_failed exists and is the standard error path
+    let error_toast_count = count_occurrences(&content, "notice_failed(");
     assert!(
         error_toast_count >= 10,
-        "Expected at least 10 show_error_toast() calls in handle_action/ (found {error_toast_count})"
-    );
-
-    // Verify the show_error_toast helper uses Toast::error with TOAST_ERROR_MS
-    let helper_content = handle_action_content();
-    assert!(
-        helper_content.contains("Toast::error(msg, &self.theme)")
-            && helper_content.contains("TOAST_ERROR_MS"),
-        "show_error_toast helper must use Toast::error with TOAST_ERROR_MS"
+        "Expected at least 10 notice_failed() calls in handle_action/ (found {error_toast_count})"
     );
 }
 
 // ===========================================================================
 // Source-scanning: named duration constants (no raw ms values)
 // ===========================================================================
-
-#[test]
-fn handle_action_uses_only_named_duration_constants() {
-    let content = handle_action_content();
-
-    // Look for raw numeric literals in show_hud() calls
-    let re = regex::Regex::new(r"show_hud\([^)]*Some\(\d+\)").expect("regex");
-    let violations: Vec<&str> = content
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim();
-            !trimmed.starts_with("//") && re.is_match(trimmed)
-        })
-        .collect();
-
-    assert!(
-        violations.is_empty(),
-        "show_hud() calls must use named constants (HUD_SHORT_MS, etc.), not raw numbers:\n{}",
-        violations.join("\n")
-    );
-}
 
 #[test]
 fn visible_attach_actions_use_agent_chat_label() {
@@ -331,27 +302,6 @@ fn theme_chooser_actions_do_not_advertise_dialog_reserved_escape_shortcut() {
     );
 }
 
-#[test]
-fn handle_action_uses_only_named_toast_duration_constants() {
-    let content = handle_action_content();
-
-    // Look for raw numeric literals in duration_ms() calls
-    let re = regex::Regex::new(r"duration_ms\(Some\(\d+\)").expect("regex");
-    let violations: Vec<&str> = content
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim();
-            !trimmed.starts_with("//") && re.is_match(trimmed)
-        })
-        .collect();
-
-    assert!(
-        violations.is_empty(),
-        "duration_ms() calls must use named constants (TOAST_ERROR_MS, etc.), not raw numbers:\n{}",
-        violations.join("\n")
-    );
-}
-
 // ===========================================================================
 // Action variant coverage: clipboard_pin / clipboard_unpin
 // ===========================================================================
@@ -369,10 +319,6 @@ fn clipboard_pin_unpin_uses_hud_short_ms_on_success() {
         block.contains("pin_action.success_hud()"),
         "clipboard_pin/unpin should use ClipboardPinHandlerAction for success message"
     );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "clipboard_pin/unpin success should use HUD_SHORT_MS"
-    );
 }
 
 #[test]
@@ -386,8 +332,8 @@ fn clipboard_pin_unpin_shows_error_toast_on_failure() {
 
     assert!(
         block.contains("pin_action.failure_message(e)")
-            && block.contains("self.show_error_toast(pin_action.failure_message(e), cx)"),
-        "clipboard_pin/unpin error should use show_error_toast"
+            && block.contains("self.notice_failed(pin_action.failure_message(e), cx)"),
+        "clipboard_pin/unpin error should use notice_failed"
     );
 }
 
@@ -425,10 +371,6 @@ fn clipboard_copy_shows_hud_on_success() {
             && content.contains("Copied to clipboard"),
         "clipboard_copy should show 'Copied to clipboard' HUD"
     );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "clipboard_copy should use HUD_SHORT_MS"
-    );
 }
 
 #[test]
@@ -443,7 +385,7 @@ fn clipboard_copy_shows_error_toast_on_failure() {
     assert!(
         block.contains("copy_paste_action.failure_message(e)")
             && content.contains("Self::CopyOnly => \"Failed to copy\""),
-        "clipboard_copy error should use show_error_toast"
+        "clipboard_copy error should use notice_failed"
     );
 }
 
@@ -504,7 +446,7 @@ fn clipboard_quick_look_shows_error_toast_on_failure() {
     let block = &content[ql_pos..content.len().min(ql_pos + 3000)];
 
     assert!(
-        block.contains("show_error_toast(external_action.quick_look_failure_message(e), cx)"),
+        block.contains("notice_failed(external_action.quick_look_failure_message(e), cx)"),
         "clipboard_quick_look error should use named action state feedback"
     );
 }
@@ -645,10 +587,6 @@ fn clipboard_delete_single_shows_hud_on_success() {
         block.contains("delete_action.success_hud()"),
         "clipboard_delete should show success HUD through named action state"
     );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "clipboard_delete should use HUD_SHORT_MS"
-    );
 }
 
 #[test]
@@ -661,8 +599,8 @@ fn clipboard_delete_single_shows_error_toast_on_failure() {
     let block = &content[delete_pos..content.len().min(delete_pos + 3000)];
 
     assert!(
-        block.contains("show_error_toast("),
-        "clipboard_delete error should use show_error_toast"
+        block.contains("notice_failed("),
+        "clipboard_delete error should use notice_failed"
     );
 }
 
@@ -683,10 +621,6 @@ fn clipboard_save_file_shows_hud_on_success() {
         block.contains("save_file_action.saved_hud(&save_path)"),
         "clipboard_save_file should show saved-path HUD through named action state"
     );
-    assert!(
-        block.contains("HUD_LONG_MS"),
-        "clipboard_save_file should use HUD_LONG_MS"
-    );
 }
 
 #[test]
@@ -699,8 +633,8 @@ fn clipboard_save_file_shows_error_toast_on_failure() {
     let block = &content[save_pos..content.len().min(save_pos + 3000)];
 
     assert!(
-        block.contains("show_error_toast("),
-        "clipboard_save_file error should use show_error_toast"
+        block.contains("notice_failed("),
+        "clipboard_save_file error should use notice_failed"
     );
 }
 
@@ -722,10 +656,6 @@ fn create_script_shows_hud_on_success() {
             && content.contains("Opened scripts folder"),
         "create_script should show 'Opened scripts folder' HUD"
     );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "create_script should use HUD_SHORT_MS"
-    );
 }
 
 #[test]
@@ -739,8 +669,8 @@ fn create_script_shows_error_toast_on_failure() {
 
     assert!(
         block.contains("management_action.open_failure_message(e)")
-            && block.contains("show_error_toast("),
-        "create_script failure should use show_error_toast"
+            && block.contains("notice_failed("),
+        "create_script failure should use notice_failed"
     );
 }
 
@@ -795,10 +725,6 @@ fn reveal_in_finder_shows_hud_on_success() {
     assert!(
         block.contains("reveal_action.success_hud()"),
         "reveal_in_finder should show success HUD through named action state"
-    );
-    assert!(
-        block.contains("HUD_SHORT_MS"),
-        "reveal_in_finder should use HUD_SHORT_MS"
     );
 }
 
@@ -967,58 +893,12 @@ fn all_clipboard_actions_guard_on_no_entry_selected() {
 }
 
 // ===========================================================================
-// Cross-cutting: all error messages are surfaced via show_error_toast
+// Cross-cutting: all error messages are surfaced via notice_failed
 // ===========================================================================
-
-#[test]
-fn error_toast_helper_is_defined_and_uses_correct_duration() {
-    let content = handle_action_content();
-
-    assert!(
-        content.contains("fn show_error_toast("),
-        "show_error_toast helper should be defined in handle_action/"
-    );
-    assert!(
-        content.contains("TOAST_ERROR_MS"),
-        "show_error_toast should use TOAST_ERROR_MS"
-    );
-}
 
 // ===========================================================================
 // Cross-cutting: all HUD calls use named constants
 // ===========================================================================
-
-#[test]
-fn all_show_hud_calls_use_named_duration_constants() {
-    let content = handle_action_content();
-
-    let named_constants = [
-        "HUD_FLASH_MS",
-        "HUD_SHORT_MS",
-        "HUD_MEDIUM_MS",
-        "HUD_2200_MS",
-        "HUD_2500_MS",
-        "HUD_LONG_MS",
-        "HUD_CONFLICT_MS",
-        "HUD_SLOW_MS",
-    ];
-
-    // Every show_hud call with Some() should use a named constant
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("//") || trimmed.starts_with("///") {
-            continue;
-        }
-        if trimmed.contains("show_hud(") && trimmed.contains("Some(") {
-            let uses_named = named_constants.iter().any(|c| trimmed.contains(c));
-            assert!(
-                uses_named,
-                "show_hud() call must use a named duration constant:\n  {}",
-                trimmed
-            );
-        }
-    }
-}
 
 // ===========================================================================
 // Completeness: every action string literal has a handler
@@ -1121,60 +1001,6 @@ fn all_action_file_contents() -> Vec<(&'static str, String)> {
         .collect()
 }
 
-#[test]
-fn no_raw_duration_ms_values_in_any_action_file() {
-    let re = regex::Regex::new(r"duration_ms\(Some\(\d+\)").expect("regex");
-
-    let mut violations = Vec::new();
-    for (path, content) in all_action_file_contents() {
-        // Only check production code — skip everything after #[cfg(test)]
-        let production_code = content.split("#[cfg(test)]").next().unwrap_or(&content);
-
-        for (line_no, line) in production_code.lines().enumerate() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("//") || trimmed.starts_with("///") {
-                continue;
-            }
-            if re.is_match(trimmed) {
-                violations.push(format!("{}:L{}: {}", path, line_no + 1, trimmed));
-            }
-        }
-    }
-
-    assert!(
-        violations.is_empty(),
-        "duration_ms() calls must use named constants (TOAST_ERROR_MS, HUD_SHORT_MS, etc.), \
-         not raw numbers:\n{}",
-        violations.join("\n")
-    );
-}
-
-#[test]
-fn no_raw_show_hud_duration_values_in_any_action_file() {
-    let re = regex::Regex::new(r"show_hud\([^)]*Some\(\d+\)").expect("regex");
-
-    let mut violations = Vec::new();
-    for (path, content) in all_action_file_contents() {
-        let production_code = content.split("#[cfg(test)]").next().unwrap_or(&content);
-
-        for (line_no, line) in production_code.lines().enumerate() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("//") || trimmed.starts_with("///") {
-                continue;
-            }
-            if re.is_match(trimmed) {
-                violations.push(format!("{}:L{}: {}", path, line_no + 1, trimmed));
-            }
-        }
-    }
-
-    assert!(
-        violations.is_empty(),
-        "show_hud() calls must use named constants, not raw numbers:\n{}",
-        violations.join("\n")
-    );
-}
-
 // ===========================================================================
 // Source-scanning: tracing calls use structured fields, not format strings
 // ===========================================================================
@@ -1215,13 +1041,13 @@ fn tracing_calls_use_structured_fields_not_format_strings() {
 }
 
 // ===========================================================================
-// Source-scanning: no show_hud + show_error_toast in the same action arm
+// Source-scanning: no show_hud + notice_failed in the same action arm
 // ===========================================================================
 
 #[test]
 fn no_mixed_hud_and_error_toast_in_same_action_function() {
     // Each handle_*_action function should not have any single match arm
-    // that calls both show_hud for success AND show_error_toast for an
+    // that calls both show_hud for success AND notice_failed for an
     // error *outside* of a proper Ok/Err or if/else branch. This test
     // catches the gross case: a function that calls both in a way that
     // suggests the same code path uses both feedback types.
@@ -1235,15 +1061,15 @@ fn no_mixed_hud_and_error_toast_in_same_action_function() {
     let arms: Vec<_> = action_re.split(&content).collect();
 
     // We don't need to flag arms that properly separate success/error paths.
-    // The test catches arms that call show_hud THEN show_error_toast (or vice
+    // The test catches arms that call show_hud THEN notice_failed (or vice
     // versa) at the same nesting level — a sign of mixed feedback.
     //
     // For now we just verify the aggregate: in the helper methods, show_hud
-    // is never directly followed by show_error_toast in the same method body.
+    // is never directly followed by notice_failed in the same method body.
     // This is a safeguard, not a perfect static analysis.
     for (i, arm) in arms.iter().enumerate() {
         let has_hud = arm.contains("show_hud(");
-        let has_error_toast = arm.contains("show_error_toast(");
+        let has_error_toast = arm.contains("notice_failed(");
 
         if has_hud && has_error_toast {
             // Acceptable if they're on different branches (Ok/Err, if/else).
@@ -1257,9 +1083,9 @@ fn no_mixed_hud_and_error_toast_in_same_action_function() {
 
             assert!(
                 is_branched,
-                "Match arm #{} appears to call both show_hud and show_error_toast \
+                "Match arm #{} appears to call both show_hud and notice_failed \
                  without a clear success/error branch separation. \
-                 Use show_hud for success, show_error_toast for errors, never both on the same path.\n\
+                 Use show_hud for success, notice_failed for errors, never both on the same path.\n\
                  Arm preview: {}",
                 i,
                 &arm[..arm.len().min(300)]

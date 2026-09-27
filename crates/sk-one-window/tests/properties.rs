@@ -6,6 +6,7 @@ use proptest::prelude::*;
 use sk_one_window::contract::words;
 use sk_one_window::contract::{ENTER_GUARD_MS, READING_SETTLE_MS, SHRINK_HOLD_MS};
 use sk_one_window::list::Item;
+use sk_one_window::notice::{Irreversible, Notice};
 use sk_one_window::window::{
     Done, Effect, Event, HeldOp, Key, OneWindow, RunHow, ViewOp, ViewSpec,
 };
@@ -30,6 +31,8 @@ enum Step {
     Open,
     OpenUnprompted,
     Wait(u16),
+    Notice,
+    Irreversible,
 }
 
 const WORDS: &[&str] = &[
@@ -78,6 +81,8 @@ fn step() -> impl Strategy<Value = Step> {
         1 => Just(Step::Open),
         1 => Just(Step::OpenUnprompted),
         4 => (1u16..2_000).prop_map(Step::Wait),
+        1 => Just(Step::Notice),
+        1 => Just(Step::Irreversible),
     ]
 }
 
@@ -91,6 +96,7 @@ struct Run {
     guard_until: u64,
     sent: HashSet<u64>,
     unsent: HashSet<u64>,
+    undone: HashSet<u64>,
     wake: Option<u64>,
 }
 
@@ -111,6 +117,7 @@ impl Run {
             guard_until: 0,
             sent: HashSet::new(),
             unsent: HashSet::new(),
+            undone: HashSet::new(),
             wake: None,
         }
     }
@@ -203,6 +210,9 @@ impl Run {
                     );
                     self.unsent.insert(*id);
                 }
+                Effect::Undo { entry } => {
+                    assert!(self.undone.insert(*entry), "entry {entry} undone twice");
+                }
                 _ => {}
             }
         }
@@ -230,6 +240,13 @@ impl Run {
             !snap.slot.label.is_empty(),
             "the line above the input always says something"
         );
+        if snap.view.is_none() && self.win.staged().is_none() && self.win.holds().live_count() > 0 {
+            assert_eq!(
+                snap.slot.kind,
+                SlotKind::Holding,
+                "nothing covers something waiting to go"
+            );
+        }
     }
 
     fn step(&mut self, s: Step) {
@@ -295,6 +312,19 @@ impl Run {
                 }
             }
             Step::Content(px) => self.send(Event::Content { px: px as f32 }),
+            Step::Notice => {
+                self.advance(self.now + 1);
+                self.send(Event::Notice(Notice::new("check", "Copied")));
+            }
+            Step::Irreversible => {
+                self.advance(self.now + 1);
+                self.send(Event::Irreversible(Irreversible::new(
+                    "trash",
+                    "Empty Trash",
+                )));
+                self.nav_at = Some(self.now);
+                self.guard_until = self.guard_until.max(self.now + ENTER_GUARD_MS);
+            }
             Step::Open | Step::OpenUnprompted => {
                 self.advance(self.now + 1);
                 let target_before = self.win.enter_target(self.now).id;
@@ -1036,5 +1066,55 @@ proptest! {
                 prop_assert!(changes <= 1, "the reading changed {} times", changes);
             }
         }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 256, ..ProptestConfig::default() })]
+
+    /// Something that can't be taken back runs only once its whole wait has passed untouched,
+    /// and never once it was stopped.
+    #[test]
+    fn an_irreversible_run_goes_only_after_its_wait(
+        ticks in prop::collection::vec(1u64..3_000, 1..12),
+        stop_at in prop::option::of(0usize..12),
+    ) {
+        let mut win = OneWindow::default();
+        let out = win.handle(0, Event::Irreversible(Irreversible::new("trash", "Empty Trash")));
+        let id = out.effects.iter().find_map(|e| match e {
+            Effect::Held { op: HeldOp::Start, id, .. } => Some(*id),
+            _ => None,
+        }).expect("it waits");
+        let (mut now, mut stopped, mut sent) = (0u64, false, 0);
+        for (i, dt) in ticks.into_iter().enumerate() {
+            now += dt;
+            let ev = if stop_at == Some(i) { Event::Key(Key::CmdZ) } else { Event::Tick };
+            stopped |= stop_at == Some(i) && now < sk_one_window::contract::MESSAGE_HOLD_MS;
+            for fx in win.handle(now, ev).effects {
+                if let Effect::Held { op: HeldOp::Sent, id: sent_id, .. } = fx {
+                    prop_assert_eq!(sent_id, id);
+                    prop_assert!(now >= sk_one_window::contract::MESSAGE_HOLD_MS, "ran early at {}", now);
+                    prop_assert!(!stopped, "ran after it was stopped");
+                    sent += 1;
+                }
+            }
+        }
+        prop_assert!(sent <= 1, "ran {} times", sent);
+    }
+
+    /// A notice is the line's last thing at once, whether the window shows or comes back later.
+    #[test]
+    fn a_notice_is_what_the_line_says_next(hidden in any::<bool>(), later in 0u64..60_000) {
+        let mut win = OneWindow::default();
+        if hidden {
+            win.handle(0, Event::Dismissed);
+        }
+        win.handle(1, Event::Notice(Notice::new("check", "Backup finished")));
+        if hidden {
+            win.handle(1 + later, Event::Summon);
+        }
+        let line = win.slot_line(1 + later);
+        prop_assert_eq!(line.kind, SlotKind::Recent);
+        prop_assert_eq!(line.title.as_str(), "Backup finished");
     }
 }

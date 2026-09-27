@@ -387,15 +387,11 @@ fn actions_dialog_fallback_preserves_panel_only_warning() {
 
 #[test]
 fn prompt_popup_collector_tries_known_popup_types() {
-    // The PromptPopup collector must try history, and confirm.
+    // The PromptPopup collector must try the history popup.
     let source = include_str!("../../src/windows/automation_surface_collector.rs");
     assert!(
         source.contains("collect_history_popup_snapshot"),
         "PromptPopup collector must try history popup"
-    );
-    assert!(
-        source.contains("collect_confirm_popup_snapshot"),
-        "PromptPopup collector must try confirm popup"
     );
 }
 
@@ -405,19 +401,6 @@ fn prompt_popup_fallback_preserves_panel_only_warning() {
     assert!(
         source.contains("\"panel_only_prompt_popup\""),
         "PromptPopup must preserve panel_only_prompt_popup fallback warning"
-    );
-}
-
-#[test]
-fn confirm_popup_collector_has_button_elements() {
-    let source = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        source.contains("\"button:0:confirm\""),
-        "Confirm popup must define button:0:confirm"
-    );
-    assert!(
-        source.contains("\"button:1:cancel\""),
-        "Confirm popup must define button:1:cancel"
     );
 }
 
@@ -622,47 +605,6 @@ fn actions_dialog_records_parent_identity_from_non_main_host() {
 }
 
 #[test]
-fn confirm_popup_records_parent_identity() {
-    let p = prefix();
-    let main = AutomationWindowInfo {
-        id: format!("{p}:main"),
-        kind: AutomationWindowKind::Main,
-        title: Some("Script Kit".into()),
-        focused: true,
-        visible: true,
-        semantic_surface: Some("scriptList".into()),
-        bounds: None,
-        parent_window_id: None,
-        parent_window_generation: None,
-        parent_kind: None,
-        pid: None,
-        generation: None,
-    };
-    script_kit_gpui::windows::upsert_automation_window(main);
-    script_kit_gpui::windows::register_attached_popup(
-        format!("{p}:confirm"),
-        AutomationWindowKind::PromptPopup,
-        Some("Confirm".into()),
-        Some("confirmDialog".into()),
-        None,
-        Some(&format!("{p}:main")),
-    )
-    .expect("should register confirm with main parent");
-    let resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Id {
-            id: format!("{p}:confirm"),
-        }))
-        .expect("should resolve");
-    assert_eq!(resolved.kind, AutomationWindowKind::PromptPopup);
-    assert_eq!(
-        resolved.parent_window_id.as_deref(),
-        Some(format!("{p}:main").as_str())
-    );
-    assert_eq!(resolved.parent_kind, Some(AutomationWindowKind::Main));
-    cleanup(&p, &["main", "confirm"]);
-}
-
-#[test]
 fn attached_popup_parent_fails_closed_on_unknown_parent() {
     let p = prefix();
     let result = script_kit_gpui::windows::register_attached_popup(
@@ -742,20 +684,6 @@ fn open_actions_window_registers_in_automation_registry() {
 fn close_actions_window_unregisters_from_automation_registry() {
     let source = include_str!("../../src/actions/window.rs");
     assert!(source.contains("remove_automation_window(\"actions-dialog\")"));
-}
-
-#[test]
-fn open_confirm_popup_registers_in_automation_registry() {
-    let source = include_str!("../../src/confirm/window.rs");
-    assert!(source.contains("register_attached_popup("));
-    assert!(source.contains("\"confirm-popup\""));
-}
-
-#[test]
-fn close_confirm_popup_unregisters_from_automation_registry() {
-    let source = include_str!("../../src/confirm/window.rs");
-    assert!(source.contains("CONFIRM_POPUP_AUTOMATION_ID"));
-    assert!(source.contains("remove_automation_window(CONFIRM_POPUP_AUTOMATION_ID)"));
 }
 
 // ---------------------------------------------------------------------------

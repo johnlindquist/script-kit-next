@@ -38,8 +38,8 @@
                                 );
                                 view.open_creation_feedback_payload(payload, ctx);
                             }
-                            ExternalCommand::OpenConfirmPrompt { title, body, confirm_text, cancel_text, request_id: _ } => {
-                                logging::log("STDIN", "Opening confirm modal fixture via stdin command");
+                            ExternalCommand::OpenConfirmPrompt { title, body: _, confirm_text: _, cancel_text: _, request_id: _ } => {
+                                logging::log("STDIN", "Holding an irreversible fixture in the line via stdin command");
                                 script_kit_gpui::set_main_window_visible(true);
                                 script_kit_gpui::mark_window_shown();
                                 platform::show_main_window_without_activation();
@@ -59,24 +59,15 @@
                                     ctx,
                                 );
                                 sync_main_automation_window(current_main_automation_bounds(), true, true);
-                                let options = crate::confirm::ParentConfirmOptions {
-                                    title: title.unwrap_or_else(|| "Delete saved item?".to_string()).into(),
-                                    body: body.unwrap_or_else(|| "This action changes local Script Kit state. Confirm to continue or cancel to return to the launcher.".to_string()).into(),
-                                    confirm_text: confirm_text.unwrap_or_else(|| "Delete".to_string()).into(),
-                                    cancel_text: cancel_text.unwrap_or_else(|| "Cancel".to_string()).into(),
-                                    risk: crate::confirm::ConfirmRisk::Destructive,
-                                    width: gpui::px(crate::confirm::PARENT_MODAL_WIDTH_PX),
-                                };
-                                view.open_main_window_confirm(
-                                    options,
-                                    || true,
-                                    |confirmed, _| {
+                                view.one_window_hold(
+                                    "trash",
+                                    title.unwrap_or_else(|| "Delete saved item".to_string()),
+                                    Box::new(|_, _| {
                                         tracing::info!(
                                             category = "STDIN",
-                                            event = "confirm_modal_fixture_resolved",
-                                            confirmed,
+                                            event = "held_fixture_ran",
                                         );
-                                    },
+                                    }),
                                     ctx,
                                 );
                             }

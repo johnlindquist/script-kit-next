@@ -18,41 +18,6 @@ struct AgentChatWarmRetryLaunch {
     open_started_at: std::time::Instant,
 }
 
-fn open_agent_chat_recovery_dialog_deferred(
-    cx: &mut Context<ScriptListApp>,
-    options: crate::confirm::ParentActionDialogOptions,
-    on_primary: impl Fn(&mut Window, &mut App) + 'static,
-    on_secondary: impl Fn(&mut Window, &mut App) + 'static,
-    on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
-) {
-    let Some(window_handle) = crate::get_main_window_handle() else {
-        tracing::error!(
-            target: "script_kit::tab_ai",
-            event = "agent_chat_recovery_parent_missing",
-        );
-        return;
-    };
-    cx.spawn(async move |_this, cx| {
-        if let Err(error) = cx.update_window(window_handle, move |_, window, cx| {
-            crate::confirm::open_parent_action_dialog(
-                window,
-                cx,
-                options,
-                on_primary,
-                on_secondary,
-                on_dismiss,
-            );
-        }) {
-            tracing::error!(
-                target: "script_kit::tab_ai",
-                event = "agent_chat_recovery_modal_open_failed",
-                error = ?error,
-            );
-        }
-    })
-    .detach();
-}
-
 fn agent_chat_hot_prewarm_enabled_from(disabled: Option<&str>, enabled: Option<&str>) -> bool {
     let truthy = |value: Option<&str>| {
         value
@@ -399,10 +364,7 @@ impl ScriptListApp {
         user_message: &'static str,
         cx: &mut Context<Self>,
     ) {
-        self.toast_manager.push(
-            crate::components::toast::Toast::error(user_message, &self.theme)
-                .duration_ms(Some(TOAST_ERROR_MS)),
-        );
+        self.one_window_notice(crate::line_notice::FAILED, user_message, cx);
         cx.notify();
     }
 
@@ -694,7 +656,7 @@ impl ScriptListApp {
             crate::ai::agent_chat::agent_chat_recovery::warm_recovery_spec(&recovery_state)
         else {
             tracing::error!(attempts, "agent_chat.warm_recovery_projection_missing");
-            self.show_error_toast(
+            self.notice_failed(
                 "Agent Chat could not prepare recovery. Please try again.",
                 cx,
             );
@@ -728,49 +690,30 @@ impl ScriptListApp {
             ),
             None => "No settled failure was recorded for this warm session.".to_string(),
         };
-        let app = cx.entity().downgrade();
         let retry_launch = launch.clone();
-        let details_launch = launch;
         let retry_snapshot = snapshot.clone();
-        let details_snapshot = snapshot;
-        open_agent_chat_recovery_dialog_deferred(
+        self.one_window_ask(
+            "ai",
+            title,
+            body,
+            vec![
+                (
+                    "Retry".to_string(),
+                    Box::new(move |this, cx| {
+                        this.begin_agent_chat_warm_retry(retry_launch, retry_snapshot, attempts, cx)
+                    }),
+                ),
+                (
+                    "Details".to_string(),
+                    Box::new(move |this, cx| {
+                        this.show_agent_chat_warm_recovery_details(
+                            launch, snapshot, attempts, detail, cx,
+                        )
+                    }),
+                ),
+            ],
+            None,
             cx,
-            crate::confirm::ParentActionDialogOptions {
-                title: title.into(),
-                body: body.into(),
-                primary_text: "Retry".into(),
-                secondary_text: Some("Details (⌘I)".into()),
-                dismiss_text: "Back".into(),
-                ..Default::default()
-            },
-            {
-                let app = app.clone();
-                move |_window, cx| {
-                    if let Some(app) = app.upgrade() {
-                        let launch = retry_launch.clone();
-                        let snapshot = retry_snapshot.clone();
-                        app.update(cx, |this, cx| {
-                            this.begin_agent_chat_warm_retry(launch, snapshot, attempts, cx);
-                        });
-                    }
-                }
-            },
-            {
-                let app = app.clone();
-                move |_window, cx| {
-                    if let Some(app) = app.upgrade() {
-                        let launch = details_launch.clone();
-                        let snapshot = details_snapshot.clone();
-                        let detail = detail.clone();
-                        app.update(cx, |this, cx| {
-                            this.show_agent_chat_warm_recovery_details(
-                                launch, snapshot, attempts, detail, cx,
-                            );
-                        });
-                    }
-                }
-            },
-            |_window, _cx| {},
         );
     }
 
@@ -785,41 +728,22 @@ impl ScriptListApp {
         let body = format!(
             "{detail}\n\nRepair the local helper, then retry:\nbash scripts/agentic/ensure-pi-sidecar.sh --repair"
         );
-        let app_retry = cx.entity().downgrade();
-        let app_back = app_retry.clone();
         let retry_launch = launch.clone();
         let retry_snapshot = snapshot.clone();
-        let back_launch = launch;
-        let back_snapshot = snapshot;
-        open_agent_chat_recovery_dialog_deferred(
+        self.one_window_ask(
+            "ai",
+            "Agent Chat details",
+            body,
+            vec![(
+                "Retry".to_string(),
+                Box::new(move |this, cx| {
+                    this.begin_agent_chat_warm_retry(retry_launch, retry_snapshot, attempts, cx)
+                }),
+            )],
+            Some(Box::new(move |this, cx| {
+                this.show_agent_chat_warm_recovery(launch, snapshot, attempts, cx)
+            })),
             cx,
-            crate::confirm::ParentActionDialogOptions {
-                title: "Agent Chat details".into(),
-                body: body.into(),
-                primary_text: "Retry".into(),
-                secondary_text: None,
-                dismiss_text: "Back".into(),
-                ..Default::default()
-            },
-            move |_window, cx| {
-                if let Some(app) = app_retry.upgrade() {
-                    let launch = retry_launch.clone();
-                    let snapshot = retry_snapshot.clone();
-                    app.update(cx, |this, cx| {
-                        this.begin_agent_chat_warm_retry(launch, snapshot, attempts, cx);
-                    });
-                }
-            },
-            |_window, _cx| {},
-            move |_window, cx| {
-                if let Some(app) = app_back.upgrade() {
-                    let launch = back_launch.clone();
-                    let snapshot = back_snapshot.clone();
-                    app.update(cx, |this, cx| {
-                        this.show_agent_chat_warm_recovery(launch, snapshot, attempts, cx);
-                    });
-                }
-            },
         );
     }
 
@@ -865,27 +789,22 @@ impl ScriptListApp {
         );
 
         let dismissed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let dismissed_primary = dismissed.clone();
+        let dismissed_back = dismissed.clone();
         let dismissed_cancel = dismissed.clone();
-        open_agent_chat_recovery_dialog_deferred(
+        self.one_window_ask(
+            "ai",
+            "Retrying Agent Chat…",
+            "Checking the AI engine and available models. Your current screen remains open.",
+            vec![(
+                "Back".to_string(),
+                Box::new(move |_, _| {
+                    dismissed_back.store(true, std::sync::atomic::Ordering::SeqCst)
+                }),
+            )],
+            Some(Box::new(move |_, _| {
+                dismissed_cancel.store(true, std::sync::atomic::Ordering::SeqCst)
+            })),
             cx,
-            crate::confirm::ParentActionDialogOptions {
-                title: "Retrying Agent Chat…".into(),
-                body:
-                    "Checking the AI engine and available models. Your current screen remains open."
-                        .into(),
-                primary_text: "Back".into(),
-                secondary_text: None,
-                dismiss_text: "Back".into(),
-                ..Default::default()
-            },
-            move |_window, _cx| {
-                dismissed_primary.store(true, std::sync::atomic::Ordering::SeqCst);
-            },
-            |_window, _cx| {},
-            move |_window, _cx| {
-                dismissed_cancel.store(true, std::sync::atomic::Ordering::SeqCst);
-            },
         );
 
         let app = cx.entity().downgrade();
@@ -918,9 +837,7 @@ impl ScriptListApp {
                     continue;
                 }
                 cx.update(|cx| {
-                    if dismissed.load(std::sync::atomic::Ordering::SeqCst)
-                        || !crate::confirm::is_confirm_window_open()
-                    {
+                    if dismissed.load(std::sync::atomic::Ordering::SeqCst) {
                         tracing::info!(
                             target: "script_kit::tab_ai",
                             event = "agent_chat_recovery_dismissed",
@@ -929,10 +846,10 @@ impl ScriptListApp {
                         );
                         return;
                     }
-                    crate::confirm::close_parent_action_dialog_programmatically(cx);
                     let Some(app) = app.upgrade() else {
                         return;
                     };
+                    app.update(cx, |this, cx| this.one_window_withdraw_ask(cx));
                     app.update(cx, |this, cx| match snapshot.state {
                         AgentChatWarmSessionState::Ready => {
                             tracing::info!(

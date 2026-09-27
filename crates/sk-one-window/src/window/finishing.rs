@@ -125,6 +125,7 @@ impl OneWindow {
 
     pub(super) fn unsend(&mut self, now: Ms, ids: &[u64], fx: &mut Vec<Effect>) {
         let mut labels = Vec::new();
+        let mut runs = 0;
         for id in ids {
             if let Some(h) = self.holds.unsend(now, *id) {
                 if let Some(entry) = h.entry {
@@ -136,6 +137,7 @@ impl OneWindow {
                     label: h.label.clone(),
                     request: h.request,
                 });
+                runs += usize::from(self.holds_a_run(h.id));
                 labels.push(h.label);
             }
         }
@@ -143,7 +145,7 @@ impl OneWindow {
             return;
         }
         let title = if labels.len() == 1 {
-            format!("Didn't send: {}", labels[0])
+            crate::contract::ledger_words::stopped(&labels[0], runs == 1)
         } else {
             format!("Didn't send {} messages", labels.len())
         };

@@ -76,9 +76,9 @@ impl ScriptListApp {
                 match_count,
                 "Script Kit command head matched multiple registered commands"
             );
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 MenuSyntaxCommandInvocationAction::AmbiguousCommand.hud_message(&head),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             return;
@@ -135,9 +135,9 @@ impl ScriptListApp {
             command_head = %head,
             "No Script Kit command matched ! invocation"
         );
-        self.show_hud(
+        self.one_window_notice(
+            crate::line_notice::INFO,
             MenuSyntaxCommandInvocationAction::MissingCommand.hud_message(&head),
-            Some(HUD_MEDIUM_MS),
             cx,
         );
     }
@@ -165,7 +165,7 @@ impl ScriptListApp {
                     hud = %hud_message,
                     "Capture validation gate blocked Enter — no payload written"
                 );
-                self.show_hud(hud_message, Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(crate::line_notice::INFO, hud_message, cx);
                 return;
             }
         }
@@ -235,9 +235,9 @@ impl ScriptListApp {
                 dir = %payload_dir.display(),
                 "Failed to create menu-syntax payload directory"
             );
-            self.show_hud(
+            self.one_window_notice(
+                crate::line_notice::INFO,
                 format!("Menu syntax: failed to create payload dir: {err}"),
-                Some(HUD_MEDIUM_MS),
                 cx,
             );
             return;
@@ -254,9 +254,9 @@ impl ScriptListApp {
                     dir = %payload_dir.display(),
                     "Failed to write menu-syntax payload"
                 );
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     format!("Menu syntax: failed to write payload: {err}"),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
                 return;
@@ -292,9 +292,9 @@ impl ScriptListApp {
                     "Capture handler spawned detached"
                 );
                 crate::brain::record_capture_signals(&payload.target, &payload.body, &payload.tags);
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::INFO,
                     format!("Captured to {}", payload.target),
-                    Some(HUD_MEDIUM_MS),
                     cx,
                 );
                 self.close_and_reset_window(cx);
@@ -307,7 +307,11 @@ impl ScriptListApp {
                     error = %err,
                     "Failed to spawn capture handler"
                 );
-                self.show_hud(format!("Capture failed: {err}"), Some(HUD_MEDIUM_MS), cx);
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    format!("Capture failed: {err}"),
+                    cx,
+                );
             }
         }
     }

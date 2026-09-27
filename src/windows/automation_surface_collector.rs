@@ -36,11 +36,7 @@ fn paint_measurement_component_type(stable_id: &str) -> protocol::LayoutComponen
     match stable_id {
         "main-view-context-cwd-button"
         | "main-view-context-model-button"
-        | "agent-chat-send-button"
-        | "hud:primary-action"
-        | "confirm-ok-button"
-        | "confirm-secondary-button"
-        | "confirm-cancel-button" => LayoutComponentType::Button,
+        | "agent-chat-send-button" => LayoutComponentType::Button,
         "main-view-input-shell"
         | "main-view-input-body"
         | "focused-text-mini-input-row"
@@ -52,12 +48,9 @@ fn paint_measurement_component_type(stable_id: &str) -> protocol::LayoutComponen
         | "actions-list-viewport"
         | "agent_chat-history-popup-list"
         | "dictation-microphone-popup-list" => LayoutComponentType::List,
-        "native-main-window-footer-spacer" | "hud-pill" | "snap-overlay-root" => {
-            LayoutComponentType::Panel
-        }
+        "native-main-window-footer-spacer" | "snap-overlay-root" => LayoutComponentType::Panel,
         "main-view-header"
         | "notes-titlebar"
-        | "confirm-modal-header"
         | "actions-context-header"
         | "agent_chat-history-popup-header"
         | "dictation-header" => LayoutComponentType::Header,
@@ -67,9 +60,6 @@ fn paint_measurement_component_type(stable_id: &str) -> protocol::LayoutComponen
         | "notes-window-root"
         | "actions-window-root"
         | "actions-dialog-root"
-        | "confirm-popup-root"
-        | "confirm-modal-stack"
-        | "confirm-modal-action-row"
         | "dictation-overlay"
         | "dictation-content" => LayoutComponentType::Container,
         _ => LayoutComponentType::Other,
@@ -923,18 +913,6 @@ fn collect_registered_surface_layout_inner(
             required.extend(["dictation-overlay".into(), "dictation-content".into()]);
             crate::dictation::automation_layout_info(&target)
         }
-        AutomationWindowKind::Hud => {
-            let entity = exact_root::<crate::hud_manager::HudView>(&target, cx)
-                .ok_or_else(|| anyhow::anyhow!("hud_layout_owner_missing"))?;
-            required.extend(["hud-pill".into(), "hud-pill-label-ellipsis".into()]);
-            if entity.read(cx).semantic_state().1.is_some() {
-                required.push("hud:primary-action".into());
-            }
-            protocol::LayoutInfo {
-                prompt_type: "hud".into(),
-                ..Default::default()
-            }
-        }
         AutomationWindowKind::SnapOverlay => {
             let entity = exact_root::<crate::window_control::SnapOverlayView>(&target, cx)
                 .ok_or_else(|| anyhow::anyhow!("snap_layout_owner_missing"))?;
@@ -955,12 +933,6 @@ fn collect_registered_surface_layout_inner(
         }
         AutomationWindowKind::PromptPopup => {
             match target.id.as_str() {
-                "confirm-popup" => {
-                    let snapshot = crate::confirm::get_confirm_popup_snapshot(cx, generation, None).ok_or_else(|| anyhow::anyhow!("confirm_layout_owner_missing"))?;
-                    required.extend(["confirm-popup-root", "confirm-modal-header", "confirm-modal-stack", "confirm-modal-action-row", "confirm-ok-button", "confirm-cancel-button"].into_iter().map(str::to_string));
-                    if snapshot.secondary_text.is_some() { required.push("confirm-secondary-button".into()); }
-                    if !snapshot.body.trim().is_empty() { required.push("confirm-modal-body".into()); }
-                }
                 crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => {
                     anyhow::ensure!(crate::ai::agent_chat::ui::history_popup::get_history_popup_snapshot_for_generation(generation, cx).is_some(), "history_layout_owner_missing");
                     required.extend(["agent_chat-history-popup", "agent_chat-history-popup-header", "agent_chat-history-popup-list"].into_iter().map(str::to_string));
@@ -1076,13 +1048,6 @@ pub fn surface_revision_facts(
             |root, cx| root.dialog.read(cx).revision_facts(),
         )
         .ok(),
-        AutomationWindowKind::Hud => read_window_root(
-            handle.downcast::<crate::hud_manager::HudView>()?,
-            window,
-            cx,
-            |view, _| view.revision_facts(),
-        )
-        .ok(),
         AutomationWindowKind::SnapOverlay => read_window_root(
             handle.downcast::<crate::window_control::SnapOverlayView>()?,
             window,
@@ -1101,7 +1066,6 @@ pub fn surface_revision_facts(
                 ));
             }
             match resolved.id.as_str() {
-                "confirm-popup" => Some(crate::confirm::get_confirm_popup_snapshot(cx, generation, window)?.revisions),
                 crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => crate::ai::agent_chat::ui::history_popup::history_popup_revision_facts(generation, window, cx),
                 crate::dictation::DICTATION_MICROPHONE_POPUP_AUTOMATION_ID => crate::dictation::dictation_microphone_popup_revision_facts(generation, window, cx),
                 _ => None,
@@ -1161,9 +1125,6 @@ pub fn close_owned_registered_surface(
             );
             crate::actions::close_actions_window(cx);
         }
-        AutomationWindowKind::Hud => {
-            crate::hud_manager::dismiss_owned_hud_instance(&resolved.id, generation, cx)?
-        }
         AutomationWindowKind::SnapOverlay => {
             let handle = handle
                 .downcast::<crate::window_control::SnapOverlayView>()
@@ -1171,7 +1132,6 @@ pub fn close_owned_registered_surface(
             handle.update(cx, |view, window, _| view.close_owned(window))??;
         }
         AutomationWindowKind::PromptPopup => match resolved.id.as_str() {
-            "confirm-popup" => crate::confirm::close_owned_confirm_window(generation, cx)?,
             crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID => {
                 anyhow::ensure!(crate::ai::agent_chat::ui::history_popup::get_history_popup_snapshot_for_generation(generation, cx).is_some(), "history_target_stale");
                 crate::ai::agent_chat::ui::history_popup::close_history_popup_window_for_owner_loss(
@@ -1208,7 +1168,6 @@ pub fn collect_surface_snapshot(
         AutomationWindowKind::ActionsDialog => collect_actions_dialog_snapshot(resolved, cx)?,
         AutomationWindowKind::PromptPopup => collect_exact_prompt_popup_snapshot(resolved, cx)?,
         AutomationWindowKind::Dictation => collect_dictation_snapshot(resolved, cx)?,
-        AutomationWindowKind::Hud => collect_hud_snapshot(resolved, cx)?,
         AutomationWindowKind::SnapOverlay => collect_snap_snapshot(resolved, cx)?,
         _ => return None,
     };
@@ -1248,14 +1207,6 @@ fn collect_notes_snapshot(
         .ok()?;
     let mut snapshot = collect_notes_elements(&entity, usize::MAX, cx);
     append_root_layer_elements(&mut snapshot, &layers);
-    if let Some(toast) = crate::toast_popup::semantic_element(handle.into()) {
-        snapshot.elements.push(toast);
-        snapshot.total_count = snapshot.elements.len();
-    }
-    if let Some(undo) = crate::undo_offer::semantic_element(crate::undo_offer::UndoSurface::Notes) {
-        snapshot.elements.push(undo);
-        snapshot.total_count = snapshot.elements.len();
-    }
     Some(snapshot)
 }
 

@@ -68,59 +68,16 @@ impl NotesApp {
 
         if let Some((message, kind)) = self.action_feedback.take() {
             use crate::components::document_status::DocumentFeedbackKind;
-            use crate::toast_popup::ToastPopupKind;
-            let (key, toast_kind, duration_ms) = match kind {
-                DocumentFeedbackKind::SaveFailure => {
-                    (NOTES_SAVE_FAILURE_TOAST_KEY, ToastPopupKind::Error, None)
+            let icon = match kind {
+                DocumentFeedbackKind::SaveFailure | DocumentFeedbackKind::Error => {
+                    crate::line_notice::FAILED
                 }
-                DocumentFeedbackKind::Error => (
-                    "notes-action-error",
-                    ToastPopupKind::Error,
-                    Some(NOTES_ERROR_TOAST_MS),
-                ),
-                DocumentFeedbackKind::SaveRecovered => (
-                    "notes-action-feedback",
-                    ToastPopupKind::Success,
-                    Some(ACTION_FEEDBACK_MS),
-                ),
-                DocumentFeedbackKind::Information => (
-                    "notes-action-feedback",
-                    ToastPopupKind::Info,
-                    Some(ACTION_FEEDBACK_MS),
-                ),
+                DocumentFeedbackKind::SaveRecovered => crate::line_notice::DONE,
+                DocumentFeedbackKind::Information => crate::line_notice::INFO,
             };
-            show_notes_toast(window, key, message, toast_kind, duration_ms, cx);
+            crate::line_notice::say(cx, icon, message);
         }
     }
-}
-
-/// Key of the save-failure toast, which stays until a save succeeds.
-pub(super) const NOTES_SAVE_FAILURE_TOAST_KEY: &str = "notes-save-failure";
-
-/// How long a Notes error toast stays before it hides itself.
-pub(super) const NOTES_ERROR_TOAST_MS: u64 = 8_000;
-
-/// Notes toasts open in an attached popup window: a toast drawn inside the
-/// window has no blur over the editor text behind it.
-pub(super) fn show_notes_toast(
-    window: &mut Window,
-    key: &'static str,
-    message: impl Into<gpui::SharedString>,
-    kind: crate::toast_popup::ToastPopupKind,
-    duration_ms: Option<u64>,
-    cx: &mut App,
-) {
-    crate::toast_popup::show_toast_popup(
-        window,
-        crate::toast_popup::ToastPopupRequest {
-            key: key.into(),
-            message: message.into(),
-            kind,
-            duration_ms,
-            action: None,
-        },
-        cx,
-    );
 }
 
 impl Render for NotesApp {
@@ -206,9 +163,6 @@ impl Render for NotesApp {
                 }
                 if this.note_switcher.is_open() {
                     this.close_browse_panel(window, cx);
-                }
-                if confirm::is_confirm_window_open() {
-                    confirm::route_key_to_confirm_popup("escape", cx);
                 }
             }))
             .on_hover(cx.listener(|this, hovered, _, cx| {

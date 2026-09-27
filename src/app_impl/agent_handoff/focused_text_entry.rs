@@ -437,9 +437,9 @@ impl ScriptListApp {
                     event = "instant_rewrite_nothing_to_rewrite",
                     source,
                 );
-                self.show_hud(
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
                     "Nothing to rewrite — select text or focus a text field".to_string(),
-                    Some(2200),
                     cx,
                 );
             }
@@ -458,9 +458,9 @@ impl ScriptListApp {
             Some(snapshot) => {
                 self.open_focused_text_agent_chat_from_snapshot(snapshot, None, source, cx)
             }
-            None => self.show_hud(
+            None => self.one_window_notice(
+                crate::line_notice::INFO,
                 "Selected text is no longer available".to_string(),
-                Some(2200),
                 cx,
             ),
         }

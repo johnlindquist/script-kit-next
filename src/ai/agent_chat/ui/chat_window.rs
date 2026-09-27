@@ -1325,70 +1325,25 @@ fn request_detached_agent_chat_history_deletion(
         tracing::warn!(event = "detached_history_deletion_owner_missing");
         return false;
     }
-
-    let handle = {
-        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
-        let Ok(guard) = slot.lock() else {
-            tracing::warn!(event = "detached_history_deletion_window_unavailable");
-            return false;
-        };
-        let Some(state) = guard.as_ref() else {
-            tracing::warn!(event = "detached_history_deletion_window_unavailable");
-            return false;
-        };
-        state.handle
-    };
-
-    let dialog_owner = owner.clone();
-    let owner_for_confirm = owner.clone();
-    if handle
-        .update(cx, move |_root, window, cx| {
-            crate::confirm::open_parent_confirm_dialog_for_entity(
-                window,
-                cx,
-                dialog_owner,
-                crate::confirm::ParentConfirmOptions::irreversible(
-                    "Delete All History?",
-                    "Permanently delete every saved Agent Chat conversation and submitted prompt. This cannot be undone.",
-                    "Delete All History",
-                ),
-                move |_window, cx| {
-                    let Some(entity) = owner_for_confirm.upgrade() else {
-                        tracing::warn!(event = "detached_history_deletion_owner_lost");
-                        return;
-                    };
-
-                    let kit_path = crate::setup::get_kit_path();
-                    match clear_agent_chat_history_at(
-                        &kit_path,
-                        Some(ConfirmedAgentChatHistoryDeletion),
-                    ) {
-                        Ok(()) => {
-                            super::history::invalidate_history_cache();
-                            entity.update(cx, |_chat, cx| cx.notify());
-                            tracing::info!(event = "detached_history_deletion_confirmed");
-                        }
-                        Err(error) => {
-                            tracing::warn!(
-                                event = "detached_history_deletion_failed",
-                                reason = error.safe_code(),
-                                error_kind = ?error.io_error_kind(),
-                            );
-                        }
-                    }
-                },
-                |_window, _cx| {
-                    tracing::info!(event = "detached_history_deletion_cancelled");
-                },
-            );
-        })
-        .is_err()
-    {
-        tracing::warn!(event = "detached_history_deletion_window_update_failed");
-        return false;
-    }
-
-    tracing::info!(event = "detached_history_deletion_confirmation_requested");
+    let owner = owner.clone();
+    crate::line_notice::hold(cx, "trash", "Delete all Agent Chat history", move |cx| {
+        let kit_path = crate::setup::get_kit_path();
+        match clear_agent_chat_history_at(&kit_path, Some(ConfirmedAgentChatHistoryDeletion)) {
+            Ok(()) => {
+                super::history::invalidate_history_cache();
+                if let Some(entity) = owner.upgrade() {
+                    entity.update(cx, |_chat, cx| cx.notify());
+                }
+                tracing::info!(event = "detached_history_deletion_held_ran");
+            }
+            Err(error) => tracing::warn!(
+                event = "detached_history_deletion_failed",
+                reason = error.safe_code(),
+                error_kind = ?error.io_error_kind(),
+            ),
+        }
+    });
+    tracing::info!(event = "detached_history_deletion_held");
     true
 }
 

@@ -623,13 +623,7 @@ impl ScriptListApp {
             .0
             .selected_is_archived()
         {
-            self.toast_manager.push(
-                crate::components::toast::Toast::info(
-                    "Archived conversations are read-only — use Continue as New".to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(2500)),
-            );
+            self.one_window_notice(crate::line_notice::INFO, "Archived conversations are read-only — use Continue as New".to_string(), cx);
             cx.notify();
             return FlowChatSubmitResult::ReadOnlyArchive;
         }
@@ -640,13 +634,7 @@ impl ScriptListApp {
             .active_turn
             .is_some()
         {
-            self.toast_manager.push(
-                crate::components::toast::Toast::error(
-                    "Still working — stop the current turn first (⌘K)".to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(2500)),
-            );
+            self.one_window_notice(crate::line_notice::FAILED, "Still working — stop the current turn first (⌘K)".to_string(), cx);
             cx.notify();
             return FlowChatSubmitResult::Busy;
         }
