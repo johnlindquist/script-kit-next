@@ -81,6 +81,18 @@ fn compose_decorations(
     Some(gpui::combine_highlights(styles, visible_decorations).collect())
 }
 
+/// Script Kit: host highlight ranges spread over the whole visible text. Without a highlighter
+/// these ranges become the line's runs, so a gap or an overlap between them would drop text.
+fn cover_visible(
+    styles: Vec<(Range<usize>, HighlightStyle)>,
+    visible_byte_range: Range<usize>,
+) -> Vec<(Range<usize>, HighlightStyle)> {
+    if styles.is_empty() {
+        return styles;
+    }
+    gpui::combine_highlights([(visible_byte_range, HighlightStyle::default())], styles).collect()
+}
+
 fn compose_decoration_collections<'a>(
     mut styles: Vec<(Range<usize>, HighlightStyle)>,
     collections: impl IntoIterator<Item = &'a [TextDecoration]>,
@@ -1521,7 +1533,10 @@ impl<M: InputModeKind> TextElement<M> {
                     .then(|| {
                         // Script Kit: host highlight ranges under decorations.
                         compose_decoration_collections(
-                            state.script_kit_highlight_styles(&visible_byte_range),
+                            cover_visible(
+                                state.script_kit_highlight_styles(&visible_byte_range),
+                                visible_byte_range.clone(),
+                            ),
                             state.extras.decoration_layers().into_iter(),
                             visible_byte_range,
                         )
@@ -1534,7 +1549,10 @@ impl<M: InputModeKind> TextElement<M> {
                 .then(|| {
                     // Script Kit: host highlight ranges under decorations.
                     compose_decoration_collections(
-                        state.script_kit_highlight_styles(&visible_byte_range),
+                        cover_visible(
+                            state.script_kit_highlight_styles(&visible_byte_range),
+                            visible_byte_range.clone(),
+                        ),
                         state.extras.decoration_layers().into_iter(),
                         visible_byte_range,
                     )
@@ -2838,6 +2856,29 @@ mod tests {
 
         assert_eq!(styles.len(), 1);
         assert_eq!(styles[0].1.background_color, Some(gpui::red()));
+    }
+
+    #[test]
+    fn test_host_ranges_with_gaps_and_overlaps_still_cover_the_text() {
+        let accent = HighlightStyle {
+            color: Some(gpui::blue()),
+            ..Default::default()
+        };
+        let mark = HighlightStyle {
+            color: Some(gpui::red()),
+            ..Default::default()
+        };
+
+        let styles = cover_visible(vec![(0..9, accent), (5..16, mark)], 0..32);
+
+        let mut at = 0;
+        for (range, _) in &styles {
+            assert_eq!(range.start, at);
+            at = range.end;
+        }
+        assert_eq!(at, 32);
+        assert_eq!(styles[0].1.color, Some(gpui::blue()));
+        assert_eq!(styles.last().unwrap().1.color, None);
     }
 
     #[test]
