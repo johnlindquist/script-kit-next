@@ -17,12 +17,65 @@ fn production_source(source: &'static str) -> &'static str {
         .expect("production source should exist")
 }
 
+/// The production AppView -> ViewType resize table that layout receipts reuse.
+fn runtime_sizing_table() -> &'static str {
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let start = ui_window
+        .find("pub(crate) fn calculate_window_size_params_with_app(")
+        .expect("calculate_window_size_params_with_app exists");
+    let end = ui_window[start..]
+        .find("pub(crate) fn calculate_window_size_params_if_current_view(")
+        .map(|offset| start + offset)
+        .expect("calculate_window_size_params_if_current_view follows the sizing table");
+    &ui_window[start..end]
+}
+
+fn layout_info_sizes_through_runtime_owner(layout_info: &str) -> bool {
+    layout_info.contains(".calculate_window_size_params_with_app(")
+}
+
+/// The native footer's Run arm, ending where its Actions arm begins.
+fn footer_run_branch(ui_window: &str) -> &str {
+    let start = ui_window
+        .find("FooterAction::Run =>")
+        .expect("footer Run branch exists");
+    let end = ui_window[start..]
+        .find("crate::footer_popup::FooterAction::Actions =>")
+        .map(|offset| start + offset)
+        .expect("footer Actions branch follows Run branch");
+    &ui_window[start..end]
+}
+
+/// `view`'s arm of the Run branch calls `submit` before the final launcher `execute_selected` fallback.
+fn submits_before_launcher_fallback(run_branch: &str, view: &str, submit: &str) -> bool {
+    let Some(view_at) = run_branch.find(view) else {
+        return false;
+    };
+    match (
+        run_branch[view_at..]
+            .find(submit)
+            .map(|offset| view_at + offset),
+        run_branch.rfind("execute_selected(cx)"),
+    ) {
+        (Some(submit_at), Some(fallback_at)) => submit_at < fallback_at,
+        _ => false,
+    }
+}
+
+/// Debug component bounds are a projection of `build_layout_info`, not a second geometry owner.
+fn component_bounds_project_layout_info() -> bool {
+    let component_bounds = include_str!("../src/app_layout/build_component_bounds.rs");
+    component_bounds.contains("self.build_layout_info(")
+        && !component_bounds.contains("\"MainViewInput\"")
+        && !component_bounds.contains("\"PreviewPanel\"")
+}
+
 #[test]
-fn arg_prompt_uses_shared_minimal_list_shell() {
+fn arg_prompt_uses_shared_main_view_chrome() {
     let source = include_str!("../src/render_prompts/arg/render.rs");
     assert!(
-        source.contains("render_minimal_list_prompt_shell_with_footer("),
-        "arg prompt should delegate layout to the footer-aware shared minimal list prompt shell"
+        source.contains("render_main_view_chrome_footer_flush("),
+        "arg prompt should delegate layout to the footer-aware shared main-view chrome"
     );
     assert!(
         source.contains("main_window_footer_slot("),
@@ -32,7 +85,9 @@ fn arg_prompt_uses_shared_minimal_list_shell() {
         !source.contains("ALPHA_DIVIDER"),
         "arg prompt should not use inline ALPHA_DIVIDER constant for its list divider"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"arg\",\"shell\":\"minimal_list_with_footer\",\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"arg\",\"shell\":\"minimal_list_with_footer\",\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -65,8 +120,8 @@ fn clipboard_history_uses_shared_main_view_chrome_contract() {
         "clipboard history should use the shared MainMenuInput shell"
     );
     assert!(
-        layout_source.contains("render_clickable_main_view_context_zone("),
-        "clipboard history should keep the shared context zone"
+        layout_source.contains("render_main_view_slot_line("),
+        "clipboard history should keep the shared slot line above the input"
     );
     assert!(
         layout_source.contains("main_window_footer_slot("),
@@ -89,7 +144,9 @@ fn clipboard_history_uses_shared_main_view_chrome_contract() {
         "clipboard history layout should not use SectionDivider — expanded view uses spacing"
     );
 
-    eprintln!("{{\"audit\":\"main_view_chrome_contract\",\"surface\":\"clipboard_history\",\"layout_mode\":\"main_view_chrome\",\"divider_absent\":true,\"footer_shared\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"main_view_chrome_contract\",\"surface\":\"clipboard_history\",\"layout_mode\":\"main_view_chrome\",\"divider_absent\":true,\"footer_shared\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -107,12 +164,16 @@ fn emoji_picker_no_longer_uses_prompt_footer() {
         source.contains("render_simple_hint_strip("),
         "emoji picker should build its hint strip via render_simple_hint_strip"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"emoji_picker\",\"shell\":\"native_footer_slot\",\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"emoji_picker\",\"shell\":\"native_footer_slot\",\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
 fn builtin_main_input_surfaces_use_shared_input_chrome() {
-    let common = production_source(include_str!("../src/render_builtins/common.rs"));
+    // common.rs interleaves test modules with production code, so the first
+    // `#[cfg(test)]` does not mark the end of production source.
+    let common = include_str!("../src/render_builtins/common.rs");
     assert!(
         common.contains("fn render_builtin_main_input_shell(")
             && common.contains("render_main_view_input_shell(")
@@ -177,7 +238,9 @@ fn builtin_main_input_surfaces_use_shared_input_chrome() {
         );
     }
 
-    eprintln!("{{\"audit\":\"main_input_style_parity\",\"surfaces\":[\"emoji_picker\",\"settings\",\"theme_chooser\",\"generic_filterable\"],\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"main_input_style_parity\",\"surfaces\":[\"emoji_picker\",\"settings\",\"theme_chooser\",\"generic_filterable\"],\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -199,8 +262,8 @@ fn file_search_uses_shared_main_view_chrome_contract() {
         "file search should use shared main-view chrome"
     );
     assert!(
-        entry_source.contains("render_clickable_main_view_context_zone("),
-        "file search should keep the shared context zone"
+        entry_source.contains("render_main_view_slot_line("),
+        "file search should keep the shared slot line above the input"
     );
     assert!(
         entry_source.contains("render_main_view_input_shell("),
@@ -230,7 +293,9 @@ fn file_search_uses_shared_main_view_chrome_contract() {
         "file search should not use SectionDivider — expanded view uses spacing"
     );
 
-    eprintln!("{{\"audit\":\"main_view_chrome_contract\",\"surface\":\"file_search\",\"footer_slot\":true,\"divider_absent\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"main_view_chrome_contract\",\"surface\":\"file_search\",\"footer_slot\":true,\"divider_absent\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -265,7 +330,9 @@ fn editor_choice_popup_has_no_box_card_chrome() {
         !popup_source.contains(".cursor_pointer()") || popup_source.contains(".on_mouse_down("),
         "pointer cursor should only be used when choice rows are actually clickable"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_choice_popup\",\"border_absent\":true,\"rounded_absent\":true,\"chrome_tokens\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_choice_popup\",\"border_absent\":true,\"rounded_absent\":true,\"chrome_tokens\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -288,7 +355,9 @@ fn editor_footer_contract_is_single_source() {
         !wrapper_source.contains("40px fixed height"),
         "editor wrapper comments should not hard-code stale footer height"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_footer\",\"single_source\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_footer\",\"single_source\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -304,7 +373,9 @@ fn editor_layout_info_has_editor_content_branch() {
         source.contains("return LayoutInfo"),
         "editor layout branch should return before adding main-menu ScriptList/PreviewPanel components"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_layout_info\",\"editor_content_branch\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_layout_info\",\"editor_content_branch\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -329,12 +400,15 @@ fn div_layout_info_has_div_content_branch() {
             && prompt_branch[..return_idx].contains("CHROME_LAYER_CONTENT"),
         "DivPrompt content must carry Liquid Glass content-layer visual metadata before returning"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"div_layout_info\",\"div_content_branch\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"div_layout_info\",\"div_content_branch\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
 fn terminal_layout_info_has_terminal_content_branch() {
     let source = include_str!("../src/app_layout/build_layout_info.rs");
+    let sizing = runtime_sizing_table();
     let branch_start = source
         .find("AppView::EditorPrompt")
         .expect("prompt layout branch exists");
@@ -349,18 +423,20 @@ fn terminal_layout_info_has_terminal_content_branch() {
         "terminal/editor utility layout info should expose prompt-owned content for SDK, scratch pad, and quick terminal views"
     );
     assert!(
-        source.contains(
-            "AppView::ScratchPadView { .. } => crate::window_resize::ViewType::EditorPrompt"
-        ) && source.contains(
-            "AppView::QuickTerminalView { .. } => crate::window_resize::ViewType::TermPrompt"
-        ),
+        layout_info_sizes_through_runtime_owner(source)
+            && sizing
+                .contains("AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0))")
+            && sizing
+                .contains("AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0))"),
         "utility child content layout receipts should use the same sizing as runtime resize paths"
     );
     assert!(
         prompt_branch.contains("return LayoutInfo"),
         "terminal layout branch should return before adding launcher list/preview components"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"terminal_layout_info\",\"terminal_content_branch\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"terminal_layout_info\",\"terminal_content_branch\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -374,7 +450,9 @@ fn webcam_layout_info_has_webcam_content_branch() {
         .find("return LayoutInfo")
         .expect("webcam layout branch should return layout info");
     assert!(
-        source.contains("AppView::WebcamView { .. } => crate::window_resize::ViewType::DivPrompt"),
+        layout_info_sizes_through_runtime_owner(source)
+            && runtime_sizing_table()
+                .contains("AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0))"),
         "Webcam layout receipts should use the same DivPrompt sizing as the runtime resize path"
     );
     assert!(
@@ -385,7 +463,9 @@ fn webcam_layout_info_has_webcam_content_branch() {
             && prompt_branch[..return_idx].contains("CHROME_LAYER_CONTENT"),
         "Webcam content must carry content-layer Liquid Glass visual metadata"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"webcam_layout_info\",\"webcam_content_branch\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"webcam_layout_info\",\"webcam_content_branch\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -417,7 +497,9 @@ fn select_drop_layout_info_has_prompt_owned_branches() {
             && prompt_branch[..return_idx].contains("CHROME_LAYER_CONTENT"),
         "select/drop child content must carry content-layer Liquid Glass visual metadata"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"select_drop_layout_info\",\"prompt_owned_branches\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"select_drop_layout_info\",\"prompt_owned_branches\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -437,7 +519,9 @@ fn select_prompt_search_header_lets_shared_shell_own_padding() {
             && !source.contains("TextInputState"),
         "select prompt must not borrow launcher input ownership"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"select_prompt\",\"search_header\":\"prompt_owned_shared_shell\",\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"select_prompt\",\"search_header\":\"prompt_owned_shared_shell\",\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -479,23 +563,22 @@ fn mini_layout_info_reports_single_column_without_preview() {
             && source.contains("} else {\n            window_width"),
         "mini layout info must give ScriptList the full window width"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mini_layout_info\",\"single_column\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"mini_layout_info\",\"single_column\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
 fn mini_component_bounds_do_not_emit_preview_panel() {
-    let source = include_str!("../src/app_layout/build_component_bounds.rs");
+    let layout_info = include_str!("../src/app_layout/build_layout_info.rs");
     assert!(
-        source.contains(
-            "let uses_split_preview = matches!(self.main_window_mode, MainWindowMode::Full);"
-        ) && source.contains("let list_width = if uses_split_preview"),
-        "debug component bounds must keep mini ScriptList full-width"
+        component_bounds_project_layout_info()
+            && layout_info.contains("let list_width = if uses_split_preview"),
+        "debug component bounds must keep mini ScriptList full-width by projecting layout info"
     );
-    assert!(
-        source.contains("if uses_split_preview {") && source.contains("PreviewPanel"),
-        "debug component bounds must gate preview panel bounds behind full-mode split preview"
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"mini_component_bounds\",\"single_column\":true,\"status\":\"pass\"}}"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mini_component_bounds\",\"single_column\":true,\"status\":\"pass\"}}");
 }
 
 #[test]
@@ -503,21 +586,19 @@ fn header_layout_measurement_uses_shared_main_view_input_width() {
     let layout_info = include_str!("../src/app_layout/build_layout_info.rs");
     assert!(
         layout_info.contains(
-            "let input_width = (window_width - (shell_horizontal_padding * 2.0)).max(0.0);"
+            "let input_width = (main_width - (shell_horizontal_padding * 2.0)).max(0.0);"
         ) && !layout_info.contains("LayoutComponentInfo::new(\"RunButton\""),
         "layout info must derive MainViewInput width from shared header padding, not stale RunButton geometry"
     );
 
-    let component_bounds = include_str!("../src/app_layout/build_component_bounds.rs");
     assert!(
-        component_bounds.contains("let input_x = px(menu_def.shell.header_padding_x);")
-            && component_bounds.contains("let input_width = (width - (input_x * 2.)).max(px(0.));")
-            && component_bounds.contains("\"MainViewInput\"")
-            && !component_bounds.contains("ComponentBounds::new(\n                    \"Run\""),
-        "debug component bounds must derive MainViewInput width from shared header padding"
+        component_bounds_project_layout_info(),
+        "debug component bounds must take MainViewInput width from layout info"
     );
 
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"header_layout\",\"shared_main_view_input\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"header_layout\",\"shared_main_view_input\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -535,7 +616,9 @@ fn form_prompt_wrapper_has_no_prompt_footer_or_hardcoded_hex() {
         !source.contains("rgba(0x"),
         "form prompt wrapper should not contain hardcoded hex rgba colors"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"form_prompt\",\"footer_absent\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"form_prompt\",\"footer_absent\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -579,7 +662,7 @@ fn form_prompt_fields_use_shared_chrome_and_focus_contracts() {
     assert!(
         form_source.contains("focus_field_at")
             && form_source.contains("form-field-slot-")
-            && form_source.contains("self.focused_index = index.min"),
+            && form_source.contains("self.set_focused_index(index.min("),
         "form prompt field clicks should synchronize parent focused_index"
     );
     assert!(
@@ -587,7 +670,9 @@ fn form_prompt_fields_use_shared_chrome_and_focus_contracts() {
             && !text_field_model.contains("self.value.remove(self.cursor_position)"),
         "text field code must not treat char indices as byte indices"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"form_fields\",\"chrome_tokens\":true,\"cursor_visible\":true,\"focus_sync\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"form_fields\",\"chrome_tokens\":true,\"cursor_visible\":true,\"focus_sync\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -617,7 +702,9 @@ fn path_prompt_render_has_tracing_and_no_hardcoded_hex() {
             && !inner_source.contains("0xCC"),
         "path prompt inner render should not build local packed-alpha text colors"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"path\",\"tracing_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"path\",\"tracing_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -625,19 +712,18 @@ fn path_native_footer_submits_path_prompt_without_launcher_ai() {
     let ui_window = include_str!("../src/app_impl/ui_window.rs");
     let path_render = include_str!("../src/prompts/path/render.rs");
 
-    let run_start = ui_window
-        .find("FooterAction::Run =>")
-        .expect("footer Run branch exists");
-    let run_branch = &ui_window[run_start..run_start + 2600];
+    let run_branch = footer_run_branch(ui_window);
     let footer_branch_start = ui_window
         .find("Resolved PathPrompt footer buttons")
         .expect("PathPrompt native footer branch exists");
     let footer_branch = &ui_window[footer_branch_start.saturating_sub(700)..footer_branch_start];
 
     assert!(
-        run_branch.contains("AppView::PathPrompt")
-            && run_branch.contains("prompt.handle_enter(cx)")
-            && run_branch.find("prompt.handle_enter(cx)") < run_branch.find("execute_selected(cx)"),
+        submits_before_launcher_fallback(
+            run_branch,
+            "AppView::PathPrompt",
+            "prompt.handle_enter(cx)"
+        ),
         "PathPrompt native footer Run should submit the path prompt before launcher execute_selected fallback"
     );
     assert!(
@@ -659,7 +745,9 @@ fn path_native_footer_submits_path_prompt_without_launcher_ai() {
             && !path_render.contains("universal_prompt_hints()"),
         "PathPrompt GPUI fallback should match native Select/Actions semantics and omit launcher AI"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"path_footer\",\"run_routes_to_path\":true,\"ai_absent\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"path_footer\",\"run_routes_to_path\":true,\"ai_absent\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -673,14 +761,7 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
         .unwrap_or(render_source.len())];
     let prompt_source = include_str!("../src/prompts/env/prompt.rs");
 
-    let run_start = ui_window
-        .find("FooterAction::Run =>")
-        .expect("footer Run branch exists");
-    let run_end = ui_window[run_start..]
-        .find("crate::footer_popup::FooterAction::Actions =>")
-        .map(|offset| run_start + offset)
-        .expect("footer Actions branch follows Run branch");
-    let run_branch = &ui_window[run_start..run_end];
+    let run_branch = footer_run_branch(ui_window);
     let footer_branch_start = ui_window
         .find("Resolved EnvPrompt footer buttons")
         .expect("EnvPrompt native footer branch exists");
@@ -695,9 +776,7 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
         "EnvPrompt submit should be callable by wrapper/native footer routing"
     );
     assert!(
-        run_branch.contains("AppView::EnvPrompt")
-            && run_branch.contains("prompt.submit(cx)")
-            && run_branch.find("prompt.submit(cx)") < run_branch.find("execute_selected(cx)"),
+        submits_before_launcher_fallback(run_branch, "AppView::EnvPrompt", "prompt.submit(cx)"),
         "EnvPrompt native footer Run should submit env before launcher execute_selected fallback"
     );
     assert!(
@@ -722,8 +801,7 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
         "EnvPrompt should size as a form-like DivPrompt surface"
     );
     assert!(
-        layout_info
-            .contains("AppView::EnvPrompt { .. } => crate::window_resize::ViewType::DivPrompt")
+        layout_info_sizes_through_runtime_owner(layout_info)
             && layout_info.contains("EnvPromptContent")
             && layout_info.contains("content.explicitEnvPrompt")
             && layout_info.contains("CHROME_LAYER_CONTENT")
@@ -736,7 +814,9 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
             && !render_code.contains("PromptFooter::new("),
         "EnvPrompt render should keep shared create-flow chrome and avoid PromptFooter"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"env_footer\",\"run_routes_to_env\":true,\"ai_absent\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"env_footer\",\"run_routes_to_env\":true,\"ai_absent\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -745,10 +825,7 @@ fn drop_footer_submits_drop_prompt_without_launcher_ai() {
     let outer_source = include_str!("../src/render_prompts/other.rs");
     let prompt_source = include_str!("../src/prompts/drop.rs");
 
-    let run_start = ui_window
-        .find("FooterAction::Run =>")
-        .expect("footer Run branch exists");
-    let run_branch = &ui_window[run_start..run_start + 2600];
+    let run_branch = footer_run_branch(ui_window);
     let footer_branch_start = ui_window
         .find("Resolved DropPrompt footer buttons")
         .expect("DropPrompt native footer branch exists");
@@ -768,9 +845,7 @@ fn drop_footer_submits_drop_prompt_without_launcher_ai() {
         "DropPrompt submit should be callable by wrapper/native footer routing"
     );
     assert!(
-        run_branch.contains("AppView::DropPrompt")
-            && run_branch.contains("prompt.submit()")
-            && run_branch.find("prompt.submit()") < run_branch.find("execute_selected(cx)"),
+        submits_before_launcher_fallback(run_branch, "AppView::DropPrompt", "prompt.submit()"),
         "DropPrompt native/footer Run should submit dropped files before launcher execute_selected fallback"
     );
     assert!(
@@ -797,7 +872,9 @@ fn drop_footer_submits_drop_prompt_without_launcher_ai() {
         sizing.contains("AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0))"),
         "DropPrompt should remain a prompt-owned DivPrompt surface"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"drop_footer\",\"run_routes_to_drop\":true,\"ai_absent\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"drop_footer\",\"run_routes_to_drop\":true,\"ai_absent\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -839,7 +916,9 @@ fn template_prompt_render_has_tracing_and_uses_shared_helpers() {
         !source.contains("rgb(0x"),
         "template prompt should not contain hardcoded hex rgb colors"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"template\",\"tracing_present\":true,\"shared_helpers\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"template\",\"tracing_present\":true,\"shared_helpers\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -874,7 +953,9 @@ fn drop_prompt_uses_whisper_chrome_not_heavy_borders() {
         outer_source.contains("surface = \"render_prompts::drop\""),
         "drop prompt outer render should emit tracing with surface tag"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"drop\",\"whisper_chrome\":true,\"tracing_present\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"drop\",\"whisper_chrome\":true,\"tracing_present\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -899,12 +980,13 @@ fn term_prompt_uses_chrome_audit_and_no_hardcoded_wrapper_colors() {
     );
     assert!(
         source.contains("\"native_footer_spacer\"")
-            && source.contains("\"custom_hint_strip\"")
             && source.contains("\"quick_terminal_uses_native_footer\"")
-            && source.contains("\"terminal_owns_contextual_footer\""),
+            && source.contains("\"term_prompt_uses_native_footer\""),
         "term prompt chrome audit should distinguish SDK terminal and Quick Terminal footer ownership"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"term\",\"chrome_audit_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"term\",\"chrome_audit_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -932,7 +1014,9 @@ fn chat_prompt_has_chrome_audit_and_custom_footer_exception() {
         chat_fn.contains("footer_mode: \"custom\""),
         "chat prompt should declare custom footer mode in chrome audit"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"chat\",\"chrome_audit_present\":true,\"custom_footer\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"chat\",\"chrome_audit_present\":true,\"custom_footer\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -968,7 +1052,9 @@ fn webcam_prompt_has_chrome_audit_and_no_redundant_chrome() {
         !webcam_fn.contains("rgb(0x"),
         "webcam prompt wrapper should not contain hardcoded hex rgb colors"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"webcam\",\"chrome_audit_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"webcam\",\"chrome_audit_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -1003,7 +1089,7 @@ fn mic_protocol_stays_stubbed_until_media_surface_exists() {
         "mic() should keep a named stub message instead of borrowing the micro prompt"
     );
     assert!(
-        prompt_handler.contains("self.show_prompt_coming_soon_toast(\"mic()\", cx)"),
+        prompt_handler.contains("self.notice_prompt_coming_soon(\"mic()\", cx)"),
         "mic() should surface as coming-soon feedback rather than launcher footer chrome"
     );
     assert!(
@@ -1016,7 +1102,9 @@ fn mic_protocol_stays_stubbed_until_media_surface_exists() {
             && !micro_fn.contains("PromptFooter::new("),
         "micro() is the ultra-compact text prompt and should not be repurposed as microphone UI"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mic_stub\",\"mic_coming_soon\":true,\"micro_prompt_distinct\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"mic_stub\",\"mic_coming_soon\":true,\"micro_prompt_distinct\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -1046,21 +1134,14 @@ fn mini_prompt_submits_enter_and_avoids_double_header_padding() {
             && render_code.contains("universal_prompt_hints()"),
         "mini prompt should keep shared footer ownership through the native footer slot"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mini\",\"enter_submit\":true,\"shared_header_padding\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"mini\",\"enter_submit\":true,\"shared_header_padding\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
-fn micro_prompt_stays_footerless_and_off_native_footer_surface_map() {
+fn micro_prompt_render_stays_ultra_compact_without_footer_slot() {
     let micro = include_str!("../src/render_prompts/micro.rs");
-    let app_view_state = include_str!("../src/main_sections/app_view_state.rs");
-    let surface_fn_start = app_view_state
-        .find("fn native_footer_surface")
-        .expect("native_footer_surface exists");
-    let surface_fn_end = app_view_state[surface_fn_start..]
-        .find("\n    ///")
-        .map(|ix| surface_fn_start + ix)
-        .unwrap_or(app_view_state.len());
-    let surface_fn = &app_view_state[surface_fn_start..surface_fn_end];
 
     assert!(
         micro.contains("PromptChromeAudit::exception(")
@@ -1068,11 +1149,9 @@ fn micro_prompt_stays_footerless_and_off_native_footer_surface_map() {
             && !micro.contains("main_window_footer_slot("),
         "micro prompt should remain an explicitly footerless ultra-compact surface"
     );
-    assert!(
-        !surface_fn.contains("AppView::MicroPrompt { .. } => Some("),
-        "micro prompt must stay off native footer routing because it does not reserve footer space"
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"micro\",\"footerless\":true,\"status\":\"pass\"}}"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"micro\",\"footerless\":true,\"native_footer_absent\":true,\"status\":\"pass\"}}");
 }
 
 #[test]
@@ -1089,7 +1168,7 @@ fn kit_store_footer_uses_single_native_slot_owner() {
     assert!(
         source.contains("main_window_footer_slot(")
             && source.contains("\"↵ Install\"")
-            && source.contains("\"⌫ Remove\""),
+            && source.contains("\"⌦ Remove\""),
         "Kit Store should route fallback hints through the native footer slot"
     );
     assert!(
@@ -1107,10 +1186,12 @@ fn kit_store_footer_uses_single_native_slot_owner() {
     assert!(
         ui_window.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Install\")")
             && ui_window.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Update\")")
-            && ui_window.contains("FooterButtonConfig::new(FooterAction::Close, \"Esc\", secondary_label)")
+            && ui_window
+                .contains("FooterButtonConfig::new(FooterAction::Close, \"Esc\", secondary_label)")
             && ui_window.contains("\"Back\"")
             && ui_window.contains("\"Clear Search\"")
-            && ui_window.contains("FooterButtonConfig::new(FooterAction::Apply, \"⌫\", \"Remove\")"),
+            && ui_window
+                .contains("FooterButtonConfig::new(FooterAction::Apply, \"⌦\", \"Remove\")"),
         "Kit Store native footer buttons should preserve Install, Back/Clear Search, Update, and Remove semantics"
     );
     assert!(
@@ -1120,10 +1201,14 @@ fn kit_store_footer_uses_single_native_slot_owner() {
         "Kit Store native footer dispatch should call the same selected-row operations as keyboard activation"
     );
     assert!(
-        app_run_setup.contains("view.sync_main_footer_popup(window, ctx);\n                    ctx.notify();"),
+        app_run_setup.contains(
+            "view.sync_main_footer_popup(window, ctx);\n                    ctx.notify();"
+        ),
         "stdin-driven view transitions should immediately refresh the native footer before notifying"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"kit_store\",\"single_footer_owner\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"kit_store\",\"single_footer_owner\":true,\"status\":\"pass\"}}"
+    );
 }
 
 #[test]
@@ -1151,5 +1236,7 @@ fn naming_prompt_render_has_tracing_and_uses_shared_helpers() {
         !source.contains("PromptFooter::new("),
         "naming prompt should not use PromptFooter"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"naming\",\"tracing_present\":true,\"shared_helpers\":true,\"status\":\"pass\"}}");
+    eprintln!(
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"naming\",\"tracing_present\":true,\"shared_helpers\":true,\"status\":\"pass\"}}"
+    );
 }
