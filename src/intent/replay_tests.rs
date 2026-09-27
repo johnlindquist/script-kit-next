@@ -208,6 +208,47 @@ fn every_recorded_request_composes_the_plan_the_prototype_composed() {
     );
 }
 
+#[test]
+fn jevs_rows_lead_with_its_choice_and_every_alternative_runs() {
+    let fixture = fixture();
+    let mut with_alternatives = 0;
+    for case in &fixture.cases {
+        let oracle = Recorded {
+            answers: &case.answers,
+        };
+        let plan = understand(
+            &case.request,
+            &fixture.contexts[&case.ctx],
+            &fixture.catalog,
+            &oracle,
+            &EngineOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("{:?}: {error}", case.request));
+        let top = (plan.pathway != super::engine::Pathway::None).then(|| plan.title.clone());
+        with_alternatives += usize::from(!plan.alternatives.is_empty());
+        let rows = super::readings(plan);
+        assert!(rows.len() <= super::READINGS, "{:?}", case.request);
+        let keys: std::collections::HashSet<&str> = rows.iter().map(|r| r.key.as_str()).collect();
+        assert_eq!(keys.len(), rows.len(), "{:?} repeats a row", case.request);
+        if let Some(title) = &top {
+            assert_eq!(&rows[0].plan.title, title, "{:?}", case.request);
+        }
+        for alternative in rows.iter().skip(usize::from(top.is_some())) {
+            assert!(
+                alternative.plan.missing.is_none() && !alternative.plan.steps.is_empty(),
+                "{:?}: alternative {:?} can't run",
+                case.request,
+                alternative.plan.title
+            );
+            assert!(alternative.plan.alternatives.is_empty());
+        }
+    }
+    assert!(
+        with_alternatives > 0,
+        "no recorded plan weighs alternatives"
+    );
+}
+
 /// Keys sorted by UTF-16 code unit, as JavaScript's default sort orders them.
 fn canonical_value(value: &serde_json::Value) -> String {
     match value {
