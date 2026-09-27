@@ -1793,6 +1793,10 @@ impl ScriptListApp {
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key);
         #[cfg(all(feature = "owned-ui-evaluation", target_os = "macos"))]
+        #[expect(
+            clippy::expect_used,
+            reason = "The FileSearch renderer always owns FileSearch frame evidence; a missing owner is an evaluator bug that must fail closed."
+        )]
         let root = root.when(crate::runtime_policy::is_owned_evaluation(), |root| {
             let metadata = std::rc::Rc::new(
                 self.owned_file_search_frame_evidence()

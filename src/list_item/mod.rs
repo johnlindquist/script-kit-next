@@ -1710,8 +1710,8 @@ impl RenderOnce for ListItem {
                     .map(str::to_owned)
                     .unwrap_or_else(|| format!("list-item:{item_index}"));
                 let metadata = std::rc::Rc::new(serde_json::json!({
-                    "selectedSurfaceColor": icon_tile.then(||
-                        (colors.accent_selected << 8) | icon_tile_alpha),
+                    "selectedSurfaceColor": icon_tile
+                        .then_some((colors.accent_selected << 8) | icon_tile_alpha),
                 }));
                 icon_element
                     .relative()

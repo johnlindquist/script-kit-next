@@ -619,6 +619,7 @@ mod native_glass {
             }
         }
 
+        #[allow(clippy::too_many_arguments)]
         unsafe fn place_glass(
             view: id,
             content_height: f64,
