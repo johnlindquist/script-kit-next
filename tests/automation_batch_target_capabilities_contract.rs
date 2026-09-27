@@ -47,7 +47,7 @@ fn supported_command_lists_are_named_by_target_kind() {
     let arm = source_between(
         body,
         "AutomationBatchTargetKind::Main",
-        "concise_unsupported_message:",
+        "AutomationBatchTargetKind::Notes =>",
     );
     for command in [
         "\"setInput\"",

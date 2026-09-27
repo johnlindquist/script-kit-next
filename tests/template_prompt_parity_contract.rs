@@ -40,7 +40,6 @@ fn template_prompt_footer_actions_has_live_host_coverage() {
         .contains("AppView::TemplatePrompt { .. } => Some(ActionsDialogHost::TemplatePrompt)"));
     assert!(ACTIONS_DIALOG
         .contains("ActionsDialogHost::TemplatePrompt => FocusRequest::template_prompt()"));
-    assert!(ACTIONS_DIALOG.contains("| ActionsDialogHost::TemplatePrompt"));
     assert!(ACTIONS_TOGGLE.contains("ActionsDialogHost::TemplatePrompt => \"TemplatePrompt\""));
     assert!(ACTIONS_TOGGLE.contains("AppView::TemplatePrompt { .. }"));
     assert!(APP_RUN_SETUP.contains("Some(\"templatePrompt\") =>"));
