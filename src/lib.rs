@@ -186,6 +186,19 @@ pub mod alias_validation;
 #[path = "app_impl/routes.rs"]
 pub mod routes;
 
+// What `getElements` lists for Notes Browse. Same `#[path]` pattern as
+// `path_action`: the binary's element collector calls it; the lib carries it
+// only so its tests run under `cargo test --lib`.
+#[cfg(test)]
+#[path = "app_layout/notes_browse_elements.rs"]
+mod notes_browse_elements;
+
+// Which buttons the Quick Terminal's native footer shows. Same pattern: the
+// binary's footer calls it; the lib carries it only for its tests.
+#[cfg(test)]
+#[path = "app_impl/quick_terminal_footer.rs"]
+mod quick_terminal_footer;
+
 // Pure menu-syntax trigger picker state machine + row adapter. Same
 // `#[path]` re-export pattern as `path_action` and `routes` — the
 // binary consumes it via `app_impl::menu_syntax_trigger_picker` while

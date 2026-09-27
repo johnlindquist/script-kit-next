@@ -9,8 +9,6 @@ const QUICK_TERMINAL_WARM_SOURCE: &str = include_str!("../src/app_impl/quick_ter
 const THEME_FOCUS_SOURCE: &str = include_str!("../src/app_impl/theme_focus.rs");
 const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
-const UI_WINDOW_FOOTER_HELPERS_SOURCE: &str =
-    include_str!("../src/app_impl/ui_window_footer_helpers.rs");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const RENDER_TERM_PROMPT_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
@@ -155,11 +153,6 @@ fn quick_terminal_apply_keyboard_and_footer_share_visibility_predicate() {
         "Quick Terminal must expose one apply-back predicate"
     );
     assert!(
-        UI_WINDOW_FOOTER_HELPERS_SOURCE
-            .contains("let can_apply = self.quick_terminal_can_apply_back();"),
-        "Quick Terminal footer buttons must use the shared apply-back predicate"
-    );
-    assert!(
         TAB_AI_MODE_SOURCE.contains("pub(crate) fn dispatch_quick_terminal_cmd_enter")
             && TAB_AI_MODE_SOURCE.contains("self.quick_terminal_can_apply_back()"),
         "Quick Terminal Cmd+Enter must guard apply-back through the shared dispatcher"
@@ -250,17 +243,6 @@ fn quick_terminal_context_capture_pumps_pending_pty_output_before_snapshot() {
             && capture.contains("TerminalEvent::Title(title)")
             && capture.contains("TerminalEvent::Exit(code)"),
         "Quick Terminal context capture must process pending PTY output before snapshotting text"
-    );
-}
-
-#[test]
-fn quick_terminal_footer_offers_agent_when_apply_unavailable() {
-    assert!(
-        UI_WINDOW_FOOTER_HELPERS_SOURCE.contains(
-            "let can_attach_to_agent = self.quick_terminal_can_attach_to_agent_chat();"
-        ) && UI_WINDOW_FOOTER_HELPERS_SOURCE
-            .contains("FooterButtonConfig::new(FooterAction::Ai, \"⌘↩\", \"Agent\")"),
-        "Standalone Quick Terminal footer must expose Cmd+Enter Agent handoff when Apply is unavailable"
     );
 }
 

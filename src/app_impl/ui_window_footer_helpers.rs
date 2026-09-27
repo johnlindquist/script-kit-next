@@ -452,25 +452,15 @@ impl ScriptListApp {
     }
 
     fn quick_terminal_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
-        use crate::footer_popup::{FooterAction, FooterButtonConfig};
-
         let footer_disabled = self.main_window_footer_buttons_blocked();
-        let enabled = !footer_disabled;
         let can_apply = self.quick_terminal_can_apply_back();
         let can_attach_to_agent = self.quick_terminal_can_attach_to_agent_chat();
 
-        let mut buttons = Vec::with_capacity(if can_apply || can_attach_to_agent {
-            2
-        } else {
-            1
-        });
-        if can_apply {
-            buttons
-                .push(FooterButtonConfig::new(FooterAction::Apply, "⌘↩", "Apply").enabled(enabled));
-        } else if can_attach_to_agent {
-            buttons.push(FooterButtonConfig::new(FooterAction::Ai, "⌘↩", "Agent").enabled(enabled));
-        }
-        buttons.push(FooterButtonConfig::new(FooterAction::Close, "⌘W", "Close").enabled(enabled));
+        let buttons = quick_terminal_footer::quick_terminal_footer_buttons(
+            can_apply,
+            can_attach_to_agent,
+            !footer_disabled,
+        );
 
         tracing::info!(
             target: "script_kit::footer_popup",
