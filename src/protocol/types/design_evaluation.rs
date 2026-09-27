@@ -275,7 +275,7 @@ pub enum OneWindowFixtureCommand {
     },
     /// Brings the window back the way the main hotkey does after a launch or a voice session
     /// let it go; evaluation windows stay hidden, so only the one-window state comes back.
-    Summon,
+    Summon {},
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

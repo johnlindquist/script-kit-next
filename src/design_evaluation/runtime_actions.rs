@@ -234,7 +234,7 @@ impl Evaluator {
                     app.one_window_talk_began(false, Some(dest), cx)
                 });
             }
-            FixtureControl::OneWindow(crate::protocol::OneWindowFixtureCommand::Summon) => {
+            FixtureControl::OneWindow(crate::protocol::OneWindowFixtureCommand::Summon {}) => {
                 let RootOwner::Main(main) = &mounted.owner else {
                     anyhow::bail!("one_window_host_required");
                 };
