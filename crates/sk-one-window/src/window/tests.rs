@@ -301,6 +301,109 @@ fn selecting_is_the_users_own_change_and_never_arms_enter() {
 }
 
 #[test]
+fn jev_going_down_under_an_unchanged_enter_keeps_enter_live() {
+    let mut win = OneWindow::default();
+    win.handle(0, Event::Text("open notes".into()));
+    win.handle(1, Event::Names(vec![Row::new("open-notes", "Open Notes")]));
+    assert_eq!(win.enter_target(1).id, "open-notes");
+    win.handle(
+        150,
+        Event::JevDown {
+            text: "open notes".into(),
+        },
+    );
+    assert_eq!(win.enter_target(150).id, "open-notes");
+    assert!(!win.enter_armed(150));
+    let out = win.handle(185, Event::Key(Key::Enter));
+    assert!(
+        matches!(out.effects.first(), Some(Effect::Run { row, .. }) if row.key == "open-notes"),
+        "{:?}",
+        out.effects
+    );
+}
+
+#[test]
+fn jev_going_down_under_its_own_row_guards_enter() {
+    let mut win = OneWindow::default();
+    win.handle(0, Event::Text("book a table".into()));
+    win.handle(
+        1,
+        Event::Names(vec![
+            Row::new("fallback-google:book a table", "Search Google").fallback(),
+            Row::new("fallback-ai:book a table", "Ask AI").fallback(),
+        ]),
+    );
+    win.handle(
+        150,
+        Event::JevDown {
+            text: "book a table".into(),
+        },
+    );
+    assert!(win.enter_armed(150));
+    let out = win.handle(185, Event::Key(Key::Enter));
+    assert_eq!(out.effects.first(), Some(&Effect::EnterIgnored));
+}
+
+#[test]
+fn words_typed_in_a_view_never_read_into_the_list() {
+    let mut win = OneWindow::default();
+    win.handle(0, Event::Text("open notes".into()));
+    win.handle(1, Event::Names(vec![Row::new("open-notes", "Open Notes")]));
+    win.handle(
+        10,
+        Event::View(ViewOp::Open(ViewSpec {
+            name: "note".into(),
+            label: "Note".into(),
+            takes_input: true,
+            text: Some(String::new()),
+            ..ViewSpec::default()
+        })),
+    );
+    win.handle(20, Event::Text("call the venue".into()));
+    win.handle(
+        20,
+        Event::JevDown {
+            text: "call the venue".into(),
+        },
+    );
+    win.handle(21, Event::Names(Vec::new()));
+    win.handle(900, Event::View(ViewOp::Back));
+    win.handle(
+        901,
+        Event::Names(vec![Row::new("open-notes", "Open Notes")]),
+    );
+    assert_eq!(win.text(), "open notes");
+    assert_eq!(win.list().header(), words::MATCHES);
+    assert_eq!(win.enter_target(901).id, "open-notes");
+}
+
+#[test]
+fn jev_answering_the_lists_words_during_a_view_lands_in_the_list() {
+    let mut win = OneWindow::default();
+    win.handle(0, Event::Text("book a table".into()));
+    win.handle(
+        10,
+        Event::View(ViewOp::Open(ViewSpec {
+            name: "note".into(),
+            label: "Note".into(),
+            takes_input: true,
+            text: Some(String::new()),
+            ..ViewSpec::default()
+        })),
+    );
+    let out = win.handle(
+        500,
+        Event::JevDown {
+            text: "book a table".into(),
+        },
+    );
+    assert!(out.consumed);
+    assert!(!win.enter_armed(500), "the view's Enter didn't change");
+    win.handle(600, Event::View(ViewOp::Back));
+    assert!(win.list().jev.settled_for("book a table"));
+}
+
+#[test]
 fn asking_jev_again_asks_at_once() {
     let mut win = OneWindow::default();
     win.handle(0, Event::Text("book a table".into()));
