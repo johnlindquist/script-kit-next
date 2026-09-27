@@ -14,8 +14,6 @@ impl ScriptListApp {
         let theme = render_context.theme;
         let design_colors = render_context.design_colors;
         let design_typography = render_context.design_typography;
-        let actions_dialog_top = render_context.actions_dialog_top;
-        let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
 
         // Get prompt ID and field count from entity for tracing
@@ -148,22 +146,6 @@ impl ScriptListApp {
         .font_family(design_typography.font_family)
         .key_context("form_prompt")
         .on_key_down(handle_key)
-        .when_some(
-            render_actions_backdrop(
-                self.show_actions_popup,
-                self.actions_dialog.clone(),
-                actions_dialog_top,
-                actions_dialog_right,
-                ActionsBackdropConfig {
-                    backdrop_id: "form-actions-backdrop",
-                    close_host: ActionsDialogHost::FormPrompt,
-                    backdrop_log_message: "Form actions backdrop clicked - dismissing dialog",
-                    show_pointer_cursor: true,
-                },
-                cx,
-            ),
-            |d, backdrop_overlay| d.child(backdrop_overlay),
-        )
         .into_any_element()
     }
 }
@@ -171,26 +153,6 @@ impl ScriptListApp {
 #[cfg(test)]
 mod form_prompt_render_backdrop_tests {
     const FORM_RENDER_SOURCE: &str = include_str!("render.rs");
-
-    #[test]
-    fn test_form_actions_backdrop_uses_shared_helper_with_clickable_cursor() {
-        assert!(
-            FORM_RENDER_SOURCE.contains("render_actions_backdrop("),
-            "form render should delegate backdrop overlay creation to shared helper"
-        );
-        assert!(
-            FORM_RENDER_SOURCE.contains("\"form-actions-backdrop\""),
-            "form render should pass its backdrop id to shared helper"
-        );
-        assert!(
-            FORM_RENDER_SOURCE.contains("ActionsDialogHost::FormPrompt"),
-            "form render should preserve actions host routing when helper is used"
-        );
-        assert!(
-            FORM_RENDER_SOURCE.contains("show_pointer_cursor: true"),
-            "form render should keep backdrop cursor pointer enabled"
-        );
-    }
 
     #[test]
     fn test_form_key_handler_uses_shared_preamble_helper() {

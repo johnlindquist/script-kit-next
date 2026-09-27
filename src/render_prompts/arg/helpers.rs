@@ -10,14 +10,6 @@ fn arg_input_visible_chars_for_width(usable_width: f64, char_width: f64) -> usiz
     visible_chars.clamp(ARG_INPUT_MIN_VISIBLE_CHARS, ARG_INPUT_MAX_VISIBLE_CHARS)
 }
 
-#[inline]
-fn prompt_actions_dialog_offsets(padding_sm: f32, border_thin: f32) -> (f32, f32) {
-    // Keep dialog anchored just below the shared header + divider.
-    let top = crate::panel::HEADER_TOTAL_HEIGHT + padding_sm - border_thin;
-    let right = padding_sm;
-    (top, right)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BuiltinPromptSubmitTransition {
     ReturnToScriptList,
@@ -45,8 +37,6 @@ struct PromptRenderContext<'a> {
     design_spacing: crate::designs::DesignSpacing,
     design_typography: crate::designs::DesignTypography,
     design_visual: crate::designs::DesignVisual,
-    actions_dialog_top: f32,
-    actions_dialog_right: f32,
 }
 
 impl<'a> PromptRenderContext<'a> {
@@ -57,8 +47,6 @@ impl<'a> PromptRenderContext<'a> {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        let (actions_dialog_top, actions_dialog_right) =
-            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
 
         Self {
             theme,
@@ -66,113 +54,8 @@ impl<'a> PromptRenderContext<'a> {
             design_spacing,
             design_typography,
             design_visual,
-            actions_dialog_top,
-            actions_dialog_right,
         }
     }
-}
-
-#[derive(Clone, Copy)]
-struct ActionsBackdropConfig {
-    backdrop_id: &'static str,
-    close_host: ActionsDialogHost,
-    backdrop_log_message: &'static str,
-    show_pointer_cursor: bool,
-}
-
-#[derive(Clone, Copy)]
-enum ActionsBackdropVerticalAnchor {
-    Top(f32),
-    Bottom(f32),
-}
-
-#[inline]
-fn render_actions_backdrop_with_vertical_anchor(
-    show_actions_popup: bool,
-    actions_dialog: Option<Entity<ActionsDialog>>,
-    actions_dialog_right: f32,
-    vertical_anchor: ActionsBackdropVerticalAnchor,
-    config: ActionsBackdropConfig,
-    cx: &mut Context<ScriptListApp>,
-) -> Option<gpui::Div> {
-    if !show_actions_popup {
-        return None;
-    }
-
-    let dialog = actions_dialog?;
-    let backdrop_click = cx.listener(
-        move |this: &mut ScriptListApp,
-              _event: &gpui::ClickEvent,
-              window: &mut Window,
-              cx: &mut Context<ScriptListApp>| {
-            logging::log("FOCUS", config.backdrop_log_message);
-            this.close_actions_popup(config.close_host, window, cx);
-        },
-    );
-
-    let dialog_container = match vertical_anchor {
-        ActionsBackdropVerticalAnchor::Top(actions_dialog_top) => div()
-            .absolute()
-            .top(px(actions_dialog_top))
-            .right(px(actions_dialog_right)),
-        ActionsBackdropVerticalAnchor::Bottom(actions_dialog_bottom) => div()
-            .absolute()
-            .bottom(px(actions_dialog_bottom))
-            .right(px(actions_dialog_right)),
-    };
-
-    Some(
-        div()
-            .absolute()
-            .inset_0()
-            .child(
-                div()
-                    .id(config.backdrop_id)
-                    .absolute()
-                    .inset_0()
-                    .when(config.show_pointer_cursor, |d| d.cursor_pointer())
-                    .on_click(backdrop_click),
-            )
-            .child(dialog_container.child(dialog)),
-    )
-}
-
-#[inline]
-fn render_actions_backdrop(
-    show_actions_popup: bool,
-    actions_dialog: Option<Entity<ActionsDialog>>,
-    actions_dialog_top: f32,
-    actions_dialog_right: f32,
-    config: ActionsBackdropConfig,
-    cx: &mut Context<ScriptListApp>,
-) -> Option<gpui::Div> {
-    render_actions_backdrop_with_vertical_anchor(
-        show_actions_popup,
-        actions_dialog,
-        actions_dialog_right,
-        ActionsBackdropVerticalAnchor::Top(actions_dialog_top),
-        config,
-        cx,
-    )
-}
-
-#[inline]
-fn render_actions_backdrop_bottom_anchored(
-    show_actions_popup: bool,
-    actions_dialog: Option<Entity<ActionsDialog>>,
-    actions_dialog_bottom: f32,
-    actions_dialog_right: f32,
-    config: ActionsBackdropConfig,
-    cx: &mut Context<ScriptListApp>,
-) -> Option<gpui::Div> {
-    render_actions_backdrop_with_vertical_anchor(
-        show_actions_popup,
-        actions_dialog,
-        actions_dialog_right,
-        ActionsBackdropVerticalAnchor::Bottom(actions_dialog_bottom),
-        config,
-        cx,
-    )
 }
 
 #[allow(dead_code)]

@@ -63,7 +63,7 @@ fn staged_rows(dialog: &Entity<ActionsDialog>, cx: &App) -> Vec<Row> {
 /// The icon the line shows beside what a view staged.
 fn subject_icon(host: ActionsDialogHost) -> &'static str {
     match host {
-        ActionsDialogHost::FileSearch => "file",
+        ActionsDialogHost::FileSearch | ActionsDialogHost::PathPrompt => "file",
         ActionsDialogHost::ClipboardHistory => "copy",
         ActionsDialogHost::ArgPrompt
         | ActionsDialogHost::DivPrompt
@@ -139,6 +139,27 @@ impl ScriptListApp {
             },
             cx,
         );
+    }
+
+    /// Runs `f` in the main window once the current update is done, for a view whose ⌘K
+    /// arrives as an entity event, where there is no window to stage in.
+    pub(crate) fn one_window_in_window_later(
+        &self,
+        cx: &mut Context<Self>,
+        f: impl FnOnce(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+    ) {
+        let Some(handle) = self.one_window_host.window else {
+            return;
+        };
+        let app = cx.entity().downgrade();
+        cx.defer(move |cx| {
+            let Some(app) = app.upgrade() else {
+                return;
+            };
+            let _ = cx.update_window(handle, |_, window, cx| {
+                app.update(cx, |app, cx| f(app, window, cx));
+            });
+        });
     }
 
     /// Surfaces that don't own this app (Agent Chat's view, the command bars) reach what's

@@ -249,6 +249,7 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
         ActionsDialogHost::ThemeChooser => "ThemeChooser",
         ActionsDialogHost::EmojiPicker => "EmojiPicker",
         ActionsDialogHost::FileSearch => "FileSearch",
+        ActionsDialogHost::PathPrompt => "PathPrompt",
         ActionsDialogHost::ChatPrompt => "ChatPrompt",
         ActionsDialogHost::ArgPrompt => "ArgPrompt",
         ActionsDialogHost::DivPrompt => "DivPrompt",
@@ -477,10 +478,14 @@ impl ScriptListApp {
         }
 
         if let AppView::PathPrompt { entity, .. } = &self.current_view {
-            let entity = entity.clone();
-            entity.update(cx, |prompt, cx| {
-                prompt.toggle_actions(cx);
-            });
+            if self.show_actions_popup {
+                self.close_actions_popup(ActionsDialogHost::PathPrompt, window, cx);
+            } else {
+                let entity = entity.clone();
+                entity.update(cx, |prompt, cx| {
+                    prompt.toggle_actions(cx);
+                });
+            }
             return true;
         }
 

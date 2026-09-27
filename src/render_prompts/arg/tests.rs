@@ -30,35 +30,18 @@ mod arg_prompt_render_tests {
     }
 
     #[test]
-    fn prompt_actions_dialog_offsets_match_legacy_defaults() {
-        let tokens = get_tokens(DesignVariant::Default);
-        let spacing = tokens.spacing();
-        let visual = tokens.visual();
-
-        let (top, right) = prompt_actions_dialog_offsets(spacing.padding_sm, visual.border_thin);
-        assert_eq!(top, 52.0);
-        assert_eq!(right, 8.0);
-    }
-
-    #[test]
-    fn test_prompt_render_context_new_extracts_design_tokens_and_offsets() {
+    fn test_prompt_render_context_new_extracts_design_tokens() {
         let theme = Theme::default();
         let variant = DesignVariant::Default;
         let tokens = get_tokens(variant);
 
         let context = PromptRenderContext::new(&theme, variant);
-        let (expected_top, expected_right) = prompt_actions_dialog_offsets(
-            context.design_spacing.padding_sm,
-            context.design_visual.border_thin,
-        );
 
         assert!(std::ptr::eq(context.theme, &theme));
         assert_eq!(context.design_colors, tokens.colors());
         assert_eq!(context.design_spacing, tokens.spacing());
         assert_eq!(context.design_typography, tokens.typography());
         assert_eq!(context.design_visual, tokens.visual());
-        assert_eq!(context.actions_dialog_top, expected_top);
-        assert_eq!(context.actions_dialog_right, expected_right);
     }
 
     #[test]

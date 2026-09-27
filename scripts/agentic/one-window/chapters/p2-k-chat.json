@@ -1,0 +1,3 @@
+[{"name":"chat-open","waitMs":800},
+ {"name":"chat-actions-staged","key":"cmd-k","waitMs":500},
+ {"name":"chat-esc","key":"escape","waitMs":500}]

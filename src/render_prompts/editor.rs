@@ -50,8 +50,6 @@ impl ScriptListApp {
     ) -> AnyElement {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let actions_dialog_top = render_context.actions_dialog_top;
-        let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
 
         tracing::info!(
@@ -265,23 +263,6 @@ impl ScriptListApp {
             .when_some(self.main_window_footer_slot(editor_footer), |d, footer| {
                 d.child(footer)
             })
-            // Actions dialog overlay
-            .when_some(
-                render_actions_backdrop(
-                    self.show_actions_popup,
-                    self.actions_dialog.clone(),
-                    actions_dialog_top,
-                    actions_dialog_right,
-                    ActionsBackdropConfig {
-                        backdrop_id: "editor-actions-backdrop",
-                        close_host: ActionsDialogHost::EditorPrompt,
-                        backdrop_log_message: "Editor actions backdrop clicked - dismissing dialog",
-                        show_pointer_cursor: true,
-                    },
-                    cx,
-                ),
-                |d, backdrop_overlay| d.child(backdrop_overlay),
-            )
             .into_any_element()
     }
 }
@@ -386,28 +367,6 @@ mod editor_prompt_tests {
         assert!(
             EDITOR_RENDER_SOURCE.contains("\"render_prompts::editor\""),
             "editor chrome audit should use correct surface name"
-        );
-    }
-
-    #[test]
-    fn test_editor_actions_backdrop_uses_cursor_pointer_when_clickable() {
-        const EDITOR_RENDER_SOURCE: &str = include_str!("editor.rs");
-
-        assert!(
-            EDITOR_RENDER_SOURCE.contains("render_actions_backdrop("),
-            "editor render should delegate backdrop overlay creation to shared helper"
-        );
-        assert!(
-            EDITOR_RENDER_SOURCE.contains("\"editor-actions-backdrop\""),
-            "editor render should pass its backdrop id to shared helper"
-        );
-        assert!(
-            EDITOR_RENDER_SOURCE.contains("ActionsDialogHost::EditorPrompt"),
-            "editor render should preserve actions host routing when helper is used"
-        );
-        assert!(
-            EDITOR_RENDER_SOURCE.contains("show_pointer_cursor: true"),
-            "editor render should keep backdrop cursor pointer enabled"
         );
     }
 

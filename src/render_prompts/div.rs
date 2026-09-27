@@ -16,8 +16,6 @@ impl ScriptListApp {
     ) -> AnyElement {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let actions_dialog_top = render_context.actions_dialog_top;
-        let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
 
         tracing::info!(surface = "render_prompts::div", "prompt_surface_rendered");
@@ -83,23 +81,6 @@ impl ScriptListApp {
                 self.main_window_footer_slot(self.clickable_universal_footer_action_rail(cx)),
                 |d, footer| d.child(footer),
             )
-            // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
-            .when_some(
-                render_actions_backdrop(
-                    self.show_actions_popup,
-                    self.actions_dialog.clone(),
-                    actions_dialog_top,
-                    actions_dialog_right,
-                    ActionsBackdropConfig {
-                        backdrop_id: "div-actions-backdrop",
-                        close_host: ActionsDialogHost::DivPrompt,
-                        backdrop_log_message: "Div actions backdrop clicked - dismissing dialog",
-                        show_pointer_cursor: true,
-                    },
-                    cx,
-                ),
-                |d, backdrop_overlay| d.child(backdrop_overlay),
-            )
             .into_any_element()
     }
 }
@@ -107,26 +88,6 @@ impl ScriptListApp {
 #[cfg(test)]
 mod div_prompt_render_tests {
     const DIV_RENDER_SOURCE: &str = include_str!("div.rs");
-
-    #[test]
-    fn test_div_actions_backdrop_uses_shared_helper_with_clickable_cursor() {
-        assert!(
-            DIV_RENDER_SOURCE.contains("render_actions_backdrop("),
-            "div render should delegate backdrop overlay creation to shared helper"
-        );
-        assert!(
-            DIV_RENDER_SOURCE.contains("\"div-actions-backdrop\""),
-            "div render should pass its backdrop id to shared helper"
-        );
-        assert!(
-            DIV_RENDER_SOURCE.contains("ActionsDialogHost::DivPrompt"),
-            "div render should preserve actions host routing when helper is used"
-        );
-        assert!(
-            DIV_RENDER_SOURCE.contains("show_pointer_cursor: true"),
-            "div render should keep backdrop cursor pointer enabled"
-        );
-    }
 
     #[test]
     fn test_div_key_handling_uses_preamble_helper() {

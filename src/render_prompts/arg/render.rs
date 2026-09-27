@@ -84,8 +84,6 @@ impl ScriptListApp {
         let theme = render_context.theme;
         let design_spacing = render_context.design_spacing;
         let design_typography = render_context.design_typography;
-        let actions_dialog_top = render_context.actions_dialog_top;
-        let actions_dialog_right = render_context.actions_dialog_right;
         let menu_def = self.current_main_menu_theme.def();
         let _filtered = self.filtered_arg_choices();
         #[allow(clippy::unnecessary_map_or)]
@@ -276,22 +274,6 @@ impl ScriptListApp {
             self.render_main_view_slot_line(menu_def),
             header,
         );
-        let mut overlays = Vec::new();
-        if let Some(backdrop) = render_actions_backdrop(
-            self.show_actions_popup,
-            self.actions_dialog.clone(),
-            actions_dialog_top,
-            actions_dialog_right,
-            ActionsBackdropConfig {
-                backdrop_id: "arg-actions-backdrop",
-                close_host: ActionsDialogHost::ArgPrompt,
-                backdrop_log_message: "Arg actions backdrop clicked - dismissing dialog",
-                show_pointer_cursor: true,
-            },
-            cx,
-        ) {
-            overlays.push(backdrop.into_any_element());
-        }
         crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
             crate::components::main_view_chrome::render_main_view_shell()
                 .text_color(rgb(text_primary))
@@ -310,7 +292,7 @@ impl ScriptListApp {
                 },
                 main: content.into_any_element(),
                 footer,
-                overlays,
+                overlays: Vec::new(),
             },
         )
     }
@@ -319,26 +301,6 @@ impl ScriptListApp {
 #[cfg(test)]
 mod arg_prompt_render_backdrop_tests {
     const ARG_RENDER_SOURCE: &str = include_str!("render.rs");
-
-    #[test]
-    fn test_arg_actions_backdrop_uses_shared_helper_with_clickable_cursor() {
-        assert!(
-            ARG_RENDER_SOURCE.contains("render_actions_backdrop("),
-            "arg render should delegate backdrop overlay creation to shared helper"
-        );
-        assert!(
-            ARG_RENDER_SOURCE.contains("\"arg-actions-backdrop\""),
-            "arg render should pass its backdrop id to shared helper"
-        );
-        assert!(
-            ARG_RENDER_SOURCE.contains("ActionsDialogHost::ArgPrompt"),
-            "arg render should preserve actions host routing when helper is used"
-        );
-        assert!(
-            ARG_RENDER_SOURCE.contains("show_pointer_cursor: true"),
-            "arg render should keep backdrop cursor pointer enabled"
-        );
-    }
 
     #[test]
     fn test_arg_key_handler_uses_shared_preamble_helper() {

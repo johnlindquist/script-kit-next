@@ -836,6 +836,7 @@ fn canonical_resolver_covers_all_focus_restore_hosts() {
         "ActionsDialogHost::ThemeChooser",
         "ActionsDialogHost::ChatPrompt",
         "ActionsDialogHost::ArgPrompt",
+        "ActionsDialogHost::PathPrompt",
         "ActionsDialogHost::WebcamPrompt",
     ] {
         assert!(

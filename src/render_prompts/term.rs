@@ -202,13 +202,9 @@ impl ScriptListApp {
 
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let actions_dialog_right = render_context.actions_dialog_right;
-        let actions_dialog_bottom = window_resize::layout::FOOTER_HEIGHT
-            + render_context.design_spacing.padding_sm
-            - render_context.design_visual.border_thin;
         let actions_mode = term_prompt_actions_mode(has_actions);
 
-        // Sync suppress_keys with actions popup state so terminal ignores keys when popup is open
+        // The terminal ignores keys while its actions are staged in the main window
         let show_actions = self.show_actions_popup;
         entity.update(cx, |term, _| {
             term.suppress_keys = show_actions;
@@ -376,10 +372,6 @@ impl ScriptListApp {
             },
         );
 
-        // Terminal actions open as a separate vibrancy popup window, so the
-        // inline backdrop is not needed (the dialog renders in its own window).
-        let show_inline_actions_backdrop = false;
-
         // Container with explicit height. We wrap the entity in a sized div because
         // GPUI entities don't automatically inherit parent flex sizing.
         // NOTE: No rounded corners for terminal - it should fill edge-to-edge
@@ -438,23 +430,6 @@ impl ScriptListApp {
                 },
                 |d, footer| d.child(footer),
             )
-            // Actions dialog overlay
-            .when_some(
-                render_actions_backdrop_bottom_anchored(
-                    show_inline_actions_backdrop,
-                    self.actions_dialog.clone(),
-                    actions_dialog_bottom,
-                    actions_dialog_right,
-                    ActionsBackdropConfig {
-                        backdrop_id: "term-actions-backdrop",
-                        close_host: ActionsDialogHost::TermPrompt,
-                        backdrop_log_message: "Term actions backdrop clicked - dismissing dialog",
-                        show_pointer_cursor: false,
-                    },
-                    cx,
-                ),
-                |d, backdrop_overlay| d.child(backdrop_overlay),
-            )
             .into_any_element()
     }
 }
@@ -476,40 +451,6 @@ mod term_prompt_render_tests {
         assert_eq!(
             term_prompt_actions_mode(false),
             TermPromptActionsMode::TerminalCommands,
-        );
-    }
-
-    #[test]
-    fn test_term_prompt_actions_backdrop_uses_shared_helper() {
-        const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
-
-        assert!(
-            TERM_RENDER_SOURCE.contains("render_actions_backdrop_bottom_anchored("),
-            "term render should delegate backdrop overlay creation to shared helper"
-        );
-        assert!(
-            TERM_RENDER_SOURCE.contains("\"term-actions-backdrop\""),
-            "term render should pass its backdrop id to shared helper"
-        );
-        assert!(
-            TERM_RENDER_SOURCE.contains("ActionsDialogHost::TermPrompt"),
-            "term render should preserve actions host routing when helper is used"
-        );
-        assert!(
-            TERM_RENDER_SOURCE.contains("show_pointer_cursor: false"),
-            "term render should keep backdrop cursor pointer disabled"
-        );
-        assert!(
-            TERM_RENDER_SOURCE.contains("let actions_dialog_bottom ="),
-            "term render should derive a footer-relative actions popup offset"
-        );
-        assert!(
-            TERM_RENDER_SOURCE.contains("window_resize::layout::FOOTER_HEIGHT"),
-            "term actions popup should stay anchored from the shared footer height constant"
-        );
-        assert!(
-            TERM_RENDER_SOURCE.contains("let show_inline_actions_backdrop = false;"),
-            "term render should disable inline backdrop since terminal uses a vibrancy popup window"
         );
     }
 

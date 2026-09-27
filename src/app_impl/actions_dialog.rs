@@ -46,6 +46,7 @@ impl ScriptListApp {
             AppView::ThemeChooserView { .. } => Some(ActionsDialogHost::ThemeChooser),
             AppView::EmojiPickerView { .. } => Some(ActionsDialogHost::EmojiPicker),
             AppView::FileSearchView { .. } => Some(ActionsDialogHost::FileSearch),
+            AppView::PathPrompt { .. } => Some(ActionsDialogHost::PathPrompt),
             AppView::ChatPrompt { .. } => Some(ActionsDialogHost::ChatPrompt),
             AppView::ArgPrompt { .. } => Some(ActionsDialogHost::ArgPrompt),
             AppView::DivPrompt { .. } => Some(ActionsDialogHost::DivPrompt),
@@ -295,6 +296,14 @@ impl ScriptListApp {
                 self.handle_action(action_id, window, cx);
             }
             ActionsDialogHost::ChatPrompt => self.execute_chat_action(&action_id, cx),
+            ActionsDialogHost::PathPrompt => {
+                if let AppView::PathPrompt { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    if let Some(info) = entity.read(cx).get_selected_path_info() {
+                        self.execute_path_action(&action_id, &info, &entity, cx);
+                    }
+                }
+            }
             ActionsDialogHost::ArgPrompt => {
                 self.trigger_action_by_name(&action_id, cx);
             }
@@ -1178,6 +1187,7 @@ impl ScriptListApp {
 
         match host {
             ActionsDialogHost::ArgPrompt => FocusRequest::arg_prompt(),
+            ActionsDialogHost::PathPrompt => FocusRequest::path_prompt(),
             ActionsDialogHost::ChatPrompt => FocusRequest::chat_prompt(),
             ActionsDialogHost::EditorPrompt => FocusRequest::editor_prompt(),
             ActionsDialogHost::TemplatePrompt => FocusRequest::template_prompt(),
@@ -1241,6 +1251,10 @@ impl ScriptListApp {
         if matches!(host, ActionsDialogHost::MainList) {
             self.pending_root_file_actions_file = None;
             self.pending_root_unified_actions_subject = None;
+        }
+        if matches!(host, ActionsDialogHost::PathPrompt) {
+            self.path_prompt_update_actions_showing(false, "actions_let_go");
+            self.path_prompt_update_actions_search_text("", "actions_let_go");
         }
     }
 

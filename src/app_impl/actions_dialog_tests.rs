@@ -153,6 +153,7 @@ mod actions_host_focus_restore_tests {
     fn prompt_hosts_restore_their_own_inputs() {
         let cases = [
             (ActionsDialogHost::ArgPrompt, FocusRequest::arg_prompt()),
+            (ActionsDialogHost::PathPrompt, FocusRequest::path_prompt()),
             (ActionsDialogHost::ChatPrompt, FocusRequest::chat_prompt()),
             (
                 ActionsDialogHost::EditorPrompt,

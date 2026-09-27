@@ -1692,6 +1692,8 @@ enum ActionsDialogHost {
     MainList,
     /// Actions in file search (restore focus to file search input)
     FileSearch,
+    /// Actions in path prompt (restore focus to the path prompt)
+    PathPrompt,
     /// Actions in clipboard history (restore focus to clipboard search input)
     ClipboardHistory,
     /// Actions in favorites browser (restore focus to favorites search input)

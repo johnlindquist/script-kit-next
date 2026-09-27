@@ -1,7 +1,7 @@
 mod __render_prompts_path_docs {
-    //! Path prompt rendering and actions-popup synchronization for filesystem entries.
-    //! Key methods include `render_path_prompt`, `handle_show_path_actions`, and close/sync helpers.
-    //! It depends on `PathPrompt` state, actions dialog plumbing, and focus handling in `ScriptListApp`.
+    //! Path prompt rendering and in-place ⌘K staging for filesystem entries.
+    //! Key methods include `render_path_prompt`, `handle_show_path_actions`, and the shared-state sync helpers.
+    //! It depends on `PathPrompt` state, the one-window view staging, and focus handling in `ScriptListApp`.
 }
 
 // Path prompt render method - extracted from render_prompts.rs
@@ -110,31 +110,8 @@ impl ScriptListApp {
         self.path_prompt_update_actions_search_text(&next_search_text, source);
     }
 
-    fn path_prompt_focus_after_actions_close(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if let AppView::PathPrompt { focus_handle, .. } = &self.current_view {
-            window.focus(focus_handle, cx);
-        }
-    }
-
-    fn path_prompt_close_actions_popup(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        source: &str,
-    ) {
-        let correlation_id = logging::current_correlation_id();
-        logging::log_debug(
-            "ACTIONS",
-            &format!(
-                "{PATH_PROMPT_KEY_CONTEXT}: closing actions popup (source={source}, correlation_id={correlation_id})"
-            ),
-        );
-        self.handle_close_path_actions(cx);
-        self.path_prompt_focus_after_actions_close(window, cx);
-    }
-
-    /// Handle showing path actions dialog - called from PathPrompt callback.
-    /// This method is called directly instead of polling a mutex in render.
+    /// ⌘K on a path prompt, from its own key or its event: the highlighted entry goes in the
+    /// line above the input and the prompt's list becomes that entry's actions.
     fn handle_show_path_actions(&mut self, path_info: PathInfo, cx: &mut Context<Self>) {
         logging::log(
             "UI",
@@ -143,36 +120,52 @@ impl ScriptListApp {
                 path_info.path, path_info.is_dir
             ),
         );
+        self.one_window_in_window_later(cx, move |app, window, cx| {
+            app.stage_path_actions(path_info, window, cx)
+        });
+    }
 
-        // Create ActionsDialog for this path
+    fn stage_path_actions(
+        &mut self,
+        path_info: PathInfo,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(self.current_view, AppView::PathPrompt { .. })
+            || self.one_window_view_staged().is_some()
+        {
+            return;
+        }
         let theme_arc = std::sync::Arc::clone(&self.theme);
         let dialog = cx.new(|cx| {
-            // Use a no-op callback - action execution is handled directly in key handler
+            // Action execution is handled by execute_action_for_actions_host.
             let noop_callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =
                 std::sync::Arc::new(|_| {});
             let focus_handle = cx.focus_handle();
             let mut dialog =
                 ActionsDialog::with_path(focus_handle, noop_callback, &path_info, theme_arc);
-            // Hide search in the dialog - we show it in the header instead
-            dialog.set_hide_search(true);
             dialog.set_match_main_window_background(true);
             dialog
         });
-
-        self.actions_dialog = Some(dialog);
-        self.mark_actions_popup_opening();
+        self.one_window_stage_in_view(
+            ActionsDialogHost::PathPrompt,
+            dialog,
+            Some(path_info.name.clone()),
+            window,
+            cx,
+        );
         self.path_prompt_update_actions_showing(true, "handle_show_path_actions");
         self.path_prompt_sync_actions_search_from_dialog(cx, "handle_show_path_actions");
-        cx.notify();
     }
 
-    /// Close path actions dialog - called from PathPrompt callback or key handler.
+    /// The path prompt's own ⌘K while its entry is staged lets go of it.
     fn handle_close_path_actions(&mut self, cx: &mut Context<Self>) {
         logging::log("UI", "handle_close_path_actions called");
-        self.mark_actions_popup_closed();
-        self.path_prompt_update_actions_showing(false, "handle_close_path_actions");
-        self.path_prompt_update_actions_search_text("", "handle_close_path_actions");
-        cx.notify();
+        self.one_window_in_window_later(cx, |app, window, cx| {
+            if app.one_window_view_staged().is_some() {
+                app.close_actions_popup(ActionsDialogHost::PathPrompt, window, cx);
+            }
+        });
     }
 
     fn render_path_prompt(
@@ -194,31 +187,13 @@ impl ScriptListApp {
             ),
         );
 
-        // Use design tokens for GLOBAL theming
-        let tokens = get_tokens(self.current_design);
-        let design_spacing = tokens.spacing();
-        let design_visual = tokens.visual();
-        let (actions_dialog_top, actions_dialog_right) =
-            prompt_actions_dialog_offsets(design_spacing.padding_sm, design_visual.border_thin);
-
-        // NOTE: No side-effects in render! Dialog creation and action execution
-        // are handled by handle_show_path_actions() and execute_path_action()
-        // which are called from callbacks and key handlers.
-
-        // Get actions dialog if showing
-        let actions_dialog = if self.show_actions_popup {
-            self.actions_dialog.clone()
-        } else {
-            None
-        };
-
-        // Key handler for when actions dialog is showing
-        // This intercepts keys and routes them to the dialog (like main menu does)
+        // While an entry's actions are staged the main window draws them in this prompt's
+        // place, and their keys route there; this handler only sees the prompt itself.
         let path_entity = entity.clone();
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
-                  window: &mut Window,
+                  _window: &mut Window,
                   cx: &mut Context<Self>| {
                 // Hide cursor while typing - automatically shows when mouse moves
                 this.hide_mouse_cursor(cx);
@@ -235,156 +210,21 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let key_str = key.to_lowercase();
-                let has_cmd = event.keystroke.modifiers.platform;
-                let modifiers = &event.keystroke.modifiers;
-                let correlation_id = logging::current_correlation_id();
-
-                logging::log_debug(
-                    "KEY",
-                    &format!(
-                        "{PATH_PROMPT_KEY_CONTEXT}: key='{}' actions_open={} correlation_id={correlation_id}",
-                        key_str, this.show_actions_popup
-                    ),
-                );
-
-                // Cmd+K toggles actions from anywhere
-                if has_cmd && crate::ui_foundation::is_key_k(key) {
-                    let (current_path, filtered_count) = {
-                        let prompt = path_entity.read(cx);
-                        (prompt.current_path.clone(), prompt.filtered_entries.len())
-                    };
+                if event.keystroke.modifiers.platform && crate::ui_foundation::is_key_k(key) {
+                    let correlation_id = logging::current_correlation_id();
                     logging::log(
                         "KEY",
                         &format!(
-                            "{PATH_PROMPT_KEY_CONTEXT}: Cmd+K toggle (actions_open={}, current_path={}, filtered_count={}, correlation_id={correlation_id})",
-                            this.show_actions_popup, current_path, filtered_count
+                            "{PATH_PROMPT_KEY_CONTEXT}: Cmd+K stages the highlighted entry (correlation_id={correlation_id})"
                         ),
                     );
-
-                    // Toggle the actions dialog
-                    if this.show_actions_popup {
-                        this.path_prompt_close_actions_popup(window, cx, "cmd+k");
-                    } else {
-                        // Open actions - trigger the callback in PathPrompt
-                        path_entity.update(cx, |prompt, cx| {
-                            prompt.toggle_actions(cx);
-                        });
-                    }
-                    return;
+                    path_entity.update(cx, |prompt, cx| {
+                        prompt.toggle_actions(cx);
+                    });
                 }
-
-                // If actions popup is open, route keyboard events to it
-                if this.show_actions_popup {
-                    let Some(ref dialog) = this.actions_dialog else {
-                        logging::log(
-                            "WARN",
-                            &format!(
-                                "{PATH_PROMPT_KEY_CONTEXT}: actions popup open without dialog entity (correlation_id={correlation_id})"
-                            ),
-                        );
-                        return;
-                    };
-
-                    if crate::ui_foundation::is_key_up(key) {
-                        dialog.update(cx, |d, cx| d.move_up(cx));
-                    } else if crate::ui_foundation::is_key_down(key) {
-                        dialog.update(cx, |d, cx| d.move_down(cx));
-                    } else if crate::ui_foundation::is_key_enter(key) {
-                        // Get the selected action and execute it
-                        let action_id = dialog.read(cx).get_selected_action_id();
-                        let should_close = dialog.read(cx).selected_action_should_close();
-                        if let Some(action_id) = action_id {
-                            logging::log(
-                                "ACTIONS",
-                                &format!(
-                                    "{PATH_PROMPT_KEY_CONTEXT}: action selected via Enter (action_id={action_id}, close={should_close}, correlation_id={correlation_id})"
-                                ),
-                            );
-
-                            // Get path info from PathPrompt
-                            let path_info = path_entity.read(cx).get_selected_path_info();
-
-                            // Close dialog if action says so (built-in path actions always close)
-                            if should_close {
-                                this.path_prompt_close_actions_popup(window, cx, "enter");
-                            }
-
-                            // Execute the action if we have path info
-                            if let Some(info) = path_info {
-                                this.execute_path_action(&action_id, &info, &path_entity, cx);
-                            }
-                        }
-                    } else if crate::ui_foundation::is_key_escape(key) {
-                        this.path_prompt_close_actions_popup(window, cx, "escape");
-                    } else if key.eq_ignore_ascii_case("backspace") {
-                        dialog.update(cx, |d, cx| {
-                            d.backspace_search_input(window, cx);
-                        });
-                        this.path_prompt_sync_actions_search_from_dialog(cx, "backspace");
-                    } else {
-                        // Check for printable character input (only when no modifiers are held)
-                        // This prevents Cmd+E from being treated as typing 'e' into the search
-                        if !modifiers.platform && !modifiers.control && !modifiers.alt {
-                            if let Some(ref key_char) = event.keystroke.key_char {
-                                if let Some(ch) = key_char.chars().next() {
-                                    if !ch.is_control() {
-                                        dialog.update(cx, |d, cx| {
-                                            d.insert_search_text(ch.to_string(), window, cx);
-                                        });
-                                        this.path_prompt_sync_actions_search_from_dialog(
-                                            cx,
-                                            "printable_char",
-                                        );
-                                    }
-                                }
-                            }
-                            return;
-                        }
-
-                        // Check if keystroke matches any action shortcut in the dialog
-                        let keystroke_shortcut =
-                            shortcuts::keystroke_to_shortcut(&key_str, modifiers);
-
-                        // Read dialog actions and look for matching shortcut
-                        let dialog_ref = dialog.read(cx);
-                        let mut matched_action: Option<String> = None;
-                        for action in &dialog_ref.actions {
-                            if let Some(ref display_shortcut) = action.shortcut {
-                                let normalized = Self::normalize_display_shortcut(display_shortcut);
-                                if normalized == keystroke_shortcut {
-                                    matched_action = Some(action.id.clone());
-                                    break;
-                                }
-                            }
-                        }
-                        let _ = dialog_ref;
-
-                        if let Some(action_id) = matched_action {
-                            logging::log(
-                                "ACTIONS",
-                                &format!(
-                                    "{PATH_PROMPT_KEY_CONTEXT}: actions shortcut matched (shortcut={keystroke_shortcut}, action_id={action_id}, correlation_id={correlation_id})"
-                                ),
-                            );
-
-                            // Get path info before closing dialog
-                            let path_info = path_entity.read(cx).get_selected_path_info();
-                            this.path_prompt_close_actions_popup(window, cx, "shortcut");
-
-                            // Execute the action
-                            if let Some(info) = path_info {
-                                this.execute_path_action(&action_id, &info, &path_entity, cx);
-                            }
-                        }
-                    }
-                }
-                // If actions not showing, let PathPrompt handle the keys via its own handler
             },
         );
 
-        // PathPrompt entity has its own track_focus and on_key_down in its render method.
-        // We add an outer key handler to intercept events when actions are showing.
         crate::components::prompt_shell_container(
             0.0,
             crate::ui_foundation::get_vibrancy_background(&self.theme),
@@ -392,19 +232,6 @@ impl ScriptListApp {
         .key_context("path_prompt_container")
         .on_key_down(handle_key)
         .child(div().size_full().child(entity))
-        // Actions dialog overlays on top (upper-right corner, below the header bar)
-        .when_some(actions_dialog, |d, dialog| {
-            d.child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .flex()
-                    .justify_end()
-                    .pt(px(actions_dialog_top))
-                    .pr(px(actions_dialog_right))
-                    .child(dialog),
-            )
-        })
         .into_any_element()
     }
 }
@@ -448,24 +275,22 @@ mod path_prompt_shared_state_tests {
     }
 
     #[test]
-    fn test_path_prompt_actions_key_routing_uses_shared_key_helpers() {
+    fn test_path_prompt_actions_stage_in_place() {
         const PATH_RENDER_SOURCE: &str = include_str!("path.rs");
 
+        let render = PATH_RENDER_SOURCE
+            .split("fn render_path_prompt(")
+            .nth(1)
+            .and_then(|rest| rest.split("#[cfg(test)]").next())
+            .expect("render_path_prompt should exist");
+
         assert!(
-            PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_up(key)"),
-            "path prompt key routing should use shared up-key helper"
+            PATH_RENDER_SOURCE.contains("self.one_window_stage_in_view(\n            ActionsDialogHost::PathPrompt,"),
+            "path prompt Cmd+K should stage the highlighted entry in the main window"
         );
         assert!(
-            PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_down(key)"),
-            "path prompt key routing should use shared down-key helper"
-        );
-        assert!(
-            PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_enter(key)"),
-            "path prompt key routing should use shared enter-key helper"
-        );
-        assert!(
-            PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_escape(key)"),
-            "path prompt key routing should use shared escape-key helper"
+            !render.contains(".child(dialog)"),
+            "path prompt should not draw its actions as an overlay"
         );
     }
 
