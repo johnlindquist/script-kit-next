@@ -203,6 +203,10 @@ impl ScriptListApp {
                 let context_count = context.len();
                 let (list_elements, list_total) = if self.one_window_work_view_open() {
                     self.collect_one_window_work_elements(limit.saturating_sub(context_count))
+                } else if let Some(hosted) =
+                    self.collect_one_window_hosted_elements(limit.saturating_sub(context_count))
+                {
+                    hosted
                 } else {
                     self.collect_script_list_elements(
                         limit.saturating_sub(context_count),

@@ -13,6 +13,8 @@ use crate::ScriptListApp;
 
 mod render;
 
+pub(crate) use render::header_element;
+
 pub(crate) const FORM: &str = "form";
 pub(crate) const ANSWER: &str = "answer";
 pub(crate) const NOTE: &str = "note";

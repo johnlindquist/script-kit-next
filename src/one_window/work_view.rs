@@ -463,13 +463,7 @@ impl ScriptListApp {
         limit: usize,
     ) -> (Vec<crate::protocol::ElementInfo>, usize) {
         use crate::protocol::{ElementContentKind, ElementInfo};
-        let header = |ix: usize, label: &str| ElementInfo {
-            semantic_id: crate::protocol::generate_semantic_id("section", ix, label),
-            role: Some("sectionHeader".to_string()),
-            kind: Some("sectionHeader".to_string()),
-            selectable: Some(false),
-            ..ElementInfo::panel(label)
-        };
+        let header = super::views::header_element;
         let product = |id: String, ix: usize, title: &str, selected: bool| ElementInfo {
             semantic_id: id,
             ..ElementInfo::product_static_choice(ix, title, title, selected)

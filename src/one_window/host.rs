@@ -884,7 +884,7 @@ impl ScriptListApp {
         serde_json::json!({
             "owned": self.one_window_owns_list(),
             "text": self.one_window.text(),
-            "header": list.header(),
+            "header": self.one_window_drawn_header(),
             "enter": self.one_window.enter_target(self.one_window_host.now),
             "enterArmed": self.one_window_enter_arming(),
             "selected": list.sel,

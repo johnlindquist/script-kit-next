@@ -8,7 +8,8 @@ use sk_one_window::form::{FieldState, SlotName};
 
 use super::HostedView;
 use crate::list_item::{IconKind, ListItem, ListItemColors};
-use crate::ScriptListApp;
+use crate::protocol::{ElementContentKind, ElementInfo};
+use crate::{FocusedInput, ScriptListApp};
 
 /// One drawn row: its id, words, icon, and whether it's the one Enter or typing acts on.
 struct ViewRow {
@@ -273,6 +274,81 @@ impl ScriptListApp {
                 + row_h * rows as f32
                 + crate::footer_popup::main_window_footer_reservation_height(),
         )
+    }
+
+    /// The first header the window draws: an open form, answer or note's words, a work view's
+    /// crumb, or the list's.
+    pub(crate) fn one_window_drawn_header(&self) -> String {
+        if let Some(view) = self.one_window_hosted_view() {
+            view.label()
+        } else if self.one_window_work_view_open() {
+            self.one_window.views().crumb()
+        } else {
+            self.one_window.list().header()
+        }
+    }
+
+    /// What automation sees while a form, answer or note covers the list: the input, the view's
+    /// header and its rows, from the same rows the view draws. Row words are the user's own or
+    /// read from their data, so they're redacted.
+    pub(crate) fn collect_one_window_hosted_elements(
+        &self,
+        limit: usize,
+    ) -> Option<(Vec<ElementInfo>, usize)> {
+        let view = self.one_window_hosted_view()?;
+        let label = view.label();
+        let mut out = vec![
+            ElementInfo::input(
+                "filter",
+                Some(self.filter_text.as_str()),
+                self.focused_input != FocusedInput::None,
+            ),
+            header_element(0, &label),
+        ];
+        out.extend(
+            view_rows(view)
+                .into_iter()
+                .enumerate()
+                .map(|(ix, row)| ElementInfo {
+                    semantic_id: row.id,
+                    ..ElementInfo::redacted_choice(
+                        ix,
+                        &row.title,
+                        &row.title,
+                        row.selected,
+                        ElementContentKind::UserContent,
+                    )
+                }),
+        );
+        let total = out.len();
+        out.truncate(limit);
+        Some((out, total))
+    }
+}
+
+/// A view's header as automation sees it: the words `render_section_header` draws for `label`.
+pub(crate) fn header_element(ix: usize, label: &str) -> ElementInfo {
+    let (name, count) = label
+        .split_once(" · ")
+        .map_or((label, None), |(name, count)| (name, Some(count)));
+    let presentation = crate::list_item::resolve_section_header_presentation(
+        name,
+        None,
+        count,
+        crate::list_item::SectionPresentationFamily::Launcher,
+    );
+    let text = match &presentation.count {
+        Some(count) => format!("{} · {count}", presentation.display_label),
+        None => presentation.display_label.to_string(),
+    };
+    ElementInfo {
+        semantic_id: crate::protocol::generate_semantic_id("section", ix, label),
+        text: Some(text),
+        value: Some(label.to_string()),
+        role: Some("sectionHeader".to_string()),
+        kind: Some("sectionHeader".to_string()),
+        selectable: Some(false),
+        ..ElementInfo::panel(label)
     }
 }
 
