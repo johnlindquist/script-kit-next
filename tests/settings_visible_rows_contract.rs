@@ -23,15 +23,9 @@ fn settings_defines_visible_row_helper_family() {
 fn collect_elements_has_settings_arm_without_fallback() {
     assert!(COLLECT_ELEMENTS.contains("AppView::SettingsView"));
     assert!(COLLECT_ELEMENTS.contains("settings_visible_row_names(filter)"));
-    let settings_arm = COLLECT_ELEMENTS
-        .find("AppView::SettingsView")
-        .expect("Settings arm must exist");
-    let fallback = COLLECT_ELEMENTS
-        .find("collector_used_current_view_fallback")
-        .expect("fallback warning must exist");
     assert!(
-        settings_arm < fallback,
-        "Settings must be handled before the catch-all fallback"
+        !COLLECT_ELEMENTS.contains("collector_used_current_view_fallback"),
+        "the collector match must stay exhaustive, with no catch-all current-view fallback"
     );
 }
 

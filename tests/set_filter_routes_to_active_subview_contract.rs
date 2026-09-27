@@ -37,6 +37,24 @@
 
 const FILTER_INPUT_UPDATES: &str = include_str!("../src/app_impl/filter_input_updates.rs");
 
+/// `set_filter_text_immediate` delegates to the cursor-aware owner, whose
+/// body ends where the next sibling method starts.
+fn set_filter_receiver_body() -> &'static str {
+    let start = FILTER_INPUT_UPDATES
+        .find("pub(crate) fn set_filter_text_and_cursor_immediate(")
+        .expect(
+            "src/app_impl/filter_input_updates.rs `set_filter_text_and_cursor_immediate` \
+             receiver must exist — this is the single choke-point the \
+             stdin `SetFilter` command routes through across all three \
+             embedded dispatchers.",
+        );
+    let body = &FILTER_INPUT_UPDATES[start..];
+    let end = body[1..]
+        .find("\n    pub(crate) fn ")
+        .expect("the receiver must be followed by a sibling `pub(crate) fn`");
+    &body[..=end]
+}
+
 #[test]
 fn set_filter_text_immediate_delegates_to_subview_router_helper() {
     // The stdin-driven receiver MUST call `write_filter_to_current_subview`
@@ -46,22 +64,17 @@ fn set_filter_text_immediate_delegates_to_subview_router_helper() {
     // only `self.filter_text`, leaving the variant's own `filter` field
     // stale and `getState.visibleChoiceCount` stuck on the pre-filter
     // dataset size.
-    let receiver_pos = FILTER_INPUT_UPDATES
-        .find("fn set_filter_text_immediate(")
-        .expect(
-            "src/app_impl/filter_input_updates.rs `set_filter_text_immediate` \
-             receiver must exist — this is the single choke-point the \
-             stdin `SetFilter` command routes through across all three \
-             embedded dispatchers.",
-        );
-    // Scope the search to the receiver body so a stray usage elsewhere
-    // cannot satisfy the contract accidentally.
-    let body = &FILTER_INPUT_UPDATES[receiver_pos..];
-    let body_end = body
-        .find("\n    pub(crate) fn write_filter_to_current_subview(")
-        .or_else(|| body.find("\n    pub(crate) fn clear_filter("))
-        .unwrap_or(body.len());
-    let receiver_body = &body[..body_end];
+    let wrapper_pos = FILTER_INPUT_UPDATES
+        .find("pub(crate) fn set_filter_text_immediate(")
+        .expect("set_filter_text_immediate must exist");
+    let wrapper = &FILTER_INPUT_UPDATES[wrapper_pos..];
+    let wrapper = &wrapper[..wrapper.find("\n    }\n").expect("wrapper body must close")];
+    assert!(
+        wrapper.contains("self.set_filter_text_and_cursor_immediate(text, cursor, window, cx);"),
+        "`set_filter_text_immediate` must delegate to `set_filter_text_and_cursor_immediate`"
+    );
+
+    let receiver_body = set_filter_receiver_body();
 
     assert!(
         receiver_body.contains("self.write_filter_to_current_subview(&text)"),
@@ -85,26 +98,19 @@ fn set_filter_text_immediate_delegates_to_subview_router_helper() {
 
     let compact_receiver_body: String = receiver_body.split_whitespace().collect();
     assert!(
-        compact_receiver_body.contains("if!handled_by_subview&&!text.is_empty()"),
-        "src/app_impl/filter_input_updates.rs `set_filter_text_immediate` must \
-         guard its fallback-mode branch with `!handled_by_subview && !text.is_empty()`. \
-         `get_filtered_results_cached` and `collect_fallbacks` are ScriptList-only; \
-         running them on a builtin subview would cache stale script results and \
-         activate the main-menu fallback state against the wrong surface."
+        compact_receiver_body
+            .contains("if!handled_by_subview&&matches!(self.current_view,AppView::ScriptList)"),
+        "src/app_impl/filter_input_updates.rs `set_filter_text_and_cursor_immediate` must \
+         guard its ScriptList-only branch with \
+         `!handled_by_subview && matches!(self.current_view, AppView::ScriptList)`. \
+         The menu-syntax and root-search work there is ScriptList-only; running it \
+         on a builtin subview would cache stale script results against the wrong surface."
     );
 }
 
 #[test]
 fn set_filter_at_stays_in_shared_spine_route() {
-    let receiver_pos = FILTER_INPUT_UPDATES
-        .find("fn set_filter_text_immediate(")
-        .expect("set_filter_text_immediate receiver must exist");
-    let body = &FILTER_INPUT_UPDATES[receiver_pos..];
-    let body_end = body
-        .find("\n    pub(crate) fn write_filter_to_current_subview(")
-        .or_else(|| body.find("\n    pub(crate) fn clear_filter("))
-        .unwrap_or(body.len());
-    let receiver_body = &body[..body_end];
+    let receiver_body = set_filter_receiver_body();
 
     for needle in [
         "Self::special_entry_from_script_list_filter(&text)",
@@ -198,7 +204,7 @@ fn write_filter_to_current_subview_covers_all_shared_input_builtin_views() {
     // caret pointing at an out-of-range row after a narrowing filter,
     // a bug class `handle_filter_input_change` already defends against.
     let arm_count = router_section
-        .match_indices("Self::sync_builtin_query_state(filter, selected_index, text);")
+        .match_indices("Self::sync_builtin_query_state(filter, selected_index, text)")
         .count();
     assert!(
         arm_count >= required_subviews.len(),
