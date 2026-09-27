@@ -2069,9 +2069,9 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
     )
 }
 
-/// Refresh a reusable (non-main) window footer host — detached Agent Chat and
-/// the dictation overlay. These windows have no GPUI overlay child, so AppKit
-/// always renders the glyphs natively.
+/// Refresh a reusable (non-main) window footer host — detached Agent Chat.
+/// These windows have no GPUI overlay child, so AppKit always renders the
+/// glyphs natively.
 #[cfg(target_os = "macos")]
 unsafe fn refresh_window_footer_host(ns_window: id, config: &MainWindowFooterConfig) -> bool {
     sync_float_footer_child_frame(ns_window);

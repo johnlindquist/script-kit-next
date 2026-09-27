@@ -16,6 +16,9 @@ struct CurrentAppCapturedContext {
 struct DictationDeliveryTiming {
     audio_duration: std::time::Duration,
     target: crate::dictation::DictationTarget,
+    /// The transcript still has to go into Dictation History; false when the voice view already
+    /// put it there and hands the words back to be typed.
+    record_history: bool,
 }
 
 /// Typed progress events sent from the blocking download thread to the

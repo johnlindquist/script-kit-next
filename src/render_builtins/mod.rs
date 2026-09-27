@@ -28,7 +28,6 @@ include!("permissions_wizard.rs");
 include!("favorites.rs");
 include!("agent_chat_history.rs");
 include!("browser_history.rs");
-include!("dictation_history.rs");
 include!("notes_browse.rs");
 include!("sdk_reference.rs");
 include!("tips.rs");

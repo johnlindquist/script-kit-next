@@ -14,8 +14,8 @@ use serde_json::{json, Value};
 use super::bootstrap::{Bootstrap, GUARDS};
 use super::runtime_query::QueryMode;
 use super::{
-    catalog, conversation_fixtures, dictation_fixtures, main_fixtures, notes_fixtures,
-    prompt_fixtures, secondary_fixtures,
+    catalog, conversation_fixtures, main_fixtures, notes_fixtures, prompt_fixtures,
+    secondary_fixtures,
 };
 use crate::computer_use::gpui_runtime_bridge::{
     capture_render_window_on_gpui_thread, forget_owned_render_frame, publish_owned_render_frame,
@@ -37,7 +37,6 @@ pub(super) enum RootOwner {
     Main(Entity<ScriptListApp>),
     Notes(Entity<crate::notes::NotesApp>),
     AgentChat(Entity<crate::ai::agent_chat::ui::AgentChatView>),
-    Dictation(Entity<crate::dictation::DictationOverlay>),
     Secondary(Rc<secondary_fixtures::MountedSecondaryFixture>),
     Footer,
     ConversationPopup,
@@ -59,7 +58,6 @@ pub(super) struct Evaluator {
     pub mounted: BTreeMap<String, Mounted>,
     pub sdk_controls: BTreeMap<String, conversation_fixtures::SdkChatFixtureControl>,
     pub sdk_prompt_controls: BTreeMap<String, super::runtime_sdk::SdkPromptControl>,
-    pub dictation_controls: BTreeMap<String, crate::dictation::DictationFixtureControl>,
     pub flow_controls: BTreeMap<String, u64>,
     pub(super) theme_fixture: super::runtime_theme::ThemeFixtureState,
     pub(super) frames: super::runtime_frames::RuntimeFrames,
@@ -99,7 +97,6 @@ impl Evaluator {
             mounted: BTreeMap::new(),
             sdk_controls: BTreeMap::new(),
             sdk_prompt_controls: BTreeMap::new(),
-            dictation_controls: BTreeMap::new(),
             flow_controls: BTreeMap::new(),
             theme_fixture: Default::default(),
             frames: Default::default(),
@@ -290,7 +287,6 @@ impl Evaluator {
             }
             self.sdk_controls.remove(&id);
             self.sdk_prompt_controls.remove(&id);
-            self.dictation_controls.remove(&id);
             self.flow_controls.remove(&id);
             if id == "main" {
                 self.main = None;
@@ -556,21 +552,6 @@ impl Evaluator {
             "fixture_outside_launch_subset"
         );
         let descriptor = catalog::fixture(fixture_id).context("unknown_fixture")?;
-        if descriptor.family == "dictationMicrophone" {
-            let parent = self
-                .resolve(parent.as_ref().context("dictation_parent_required")?)?
-                .clone();
-            let RootOwner::Dictation(view) = &parent.owner else {
-                anyhow::bail!("dictation_parent_required");
-            };
-            let info = dictation_fixtures::open_owned_dictation_microphone_fixture(
-                view,
-                &parent.info,
-                parent.handle,
-                &mut self.cx.app.borrow_mut(),
-            )?;
-            return self.finish_registered_presentation(fixture_id, info);
-        }
         if matches!(
             descriptor.family.as_str(),
             "notesAuxiliary" | "dayPageAuxiliary"
@@ -755,22 +736,6 @@ impl Evaluator {
                     info,
                     handle,
                     owner: RootOwner::AgentChat(entity),
-                }
-            }
-            "dictation" => {
-                let (entity, info) = dictation_fixtures::open_owned_dictation_fixture(
-                    fixture_id,
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                let generation = info.generation.context("dictation_generation_missing")?;
-                let handle =
-                    crate::windows::get_runtime_window_handle_for_generation(&info.id, generation)
-                        .context("dictation_runtime_missing")?;
-                Mounted {
-                    fixture_id: fixture_id.into(),
-                    info,
-                    handle,
-                    owner: RootOwner::Dictation(entity),
                 }
             }
             "actions" | "confirm" | "hud" | "snap" => {
@@ -1547,7 +1512,6 @@ impl Evaluator {
             forget_owned_render_frame(&mounted.info.id, generation);
             self.sdk_controls.remove(&mounted.info.id);
             self.sdk_prompt_controls.remove(&mounted.info.id);
-            self.dictation_controls.remove(&mounted.info.id);
             self.flow_controls.remove(&mounted.info.id);
             if mounted.info.id == "main" {
                 self.main = None;

@@ -522,47 +522,6 @@
                                     }
                                     cx.stop_propagation();
                                 }
-                                AppView::DictationHistoryView {
-                                    selected_index,
-                                    filter,
-                                    visible_limit,
-                                } => {
-                                    let retained_len = this
-                                        .dictation_history_previous_page
-                                        .as_ref()
-                                        .map(|page| page.rows.len())
-                                        .unwrap_or(0);
-                                    let filtered_len = crate::dictation::search_history_page(
-                                        filter,
-                                        0,
-                                        *visible_limit,
-                                    )
-                                    .map(|page| page.rows.len())
-                                    .unwrap_or(retained_len);
-
-                                    if filtered_len == 0 {
-                                        *selected_index = 0;
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-
-                                    if *selected_index >= filtered_len {
-                                        *selected_index = filtered_len - 1;
-                                    }
-
-                                    if is_up && *selected_index > 0 {
-                                        *selected_index -= 1;
-                                        this.dictation_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    } else if is_down && *selected_index + 1 < filtered_len {
-                                        *selected_index += 1;
-                                        this.dictation_history_scroll_handle
-                                            .scroll_to_item(*selected_index);
-                                        cx.notify();
-                                    }
-                                    cx.stop_propagation();
-                                }
                                 AppView::SearchAiPresetsView {
                                     selected_index,
                                     filter,

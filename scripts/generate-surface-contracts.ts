@@ -97,11 +97,8 @@ const SECONDARY_FACTORIES = [
   ["NotesApp", ["src/notes/window/window_ops.rs"]],
   ["AgentChatView", ["src/ai/agent_chat/ui/chat_window.rs"]],
   ["AgentChatHistoryPopup", ["src/ai/agent_chat/ui/history_popup.rs"]],
-  ["DictationOverlay", ["src/dictation/window.rs"]],
-  ["DictationMicrophonePopup", ["src/dictation/microphone_popup_window.rs"]],
   ["HudView", ["src/hud_manager/mod.rs"]],
   ["GpuiFooterOverlay", ["src/footer_popup.rs"]],
-  ["ShortcutRecorder", ["src/app_impl/shortcut_recorder.rs"]],
   ["SnapOverlayView", ["src/window_control/snap_overlay.rs"]],
 ] as const;
 

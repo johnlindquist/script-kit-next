@@ -8,7 +8,7 @@ impl ScriptListApp {
     ///
     /// Every modal is the shared confirm popup (confirmations, sign-in, the
     /// alias editor, the Tab AI save offer). It never becomes the key window,
-    /// so the keys meant for it arrive at its parent — main, Notes, Dictation,
+    /// so the keys meant for it arrive at its parent — main, Notes,
     /// or detached Agent Chat — and are routed to it here.
     ///
     /// With no modal open, ⌘Z takes a pending Undo offer (see

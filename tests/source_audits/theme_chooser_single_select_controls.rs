@@ -404,7 +404,6 @@ fn theme_gradients_propagate_to_secondary_windows() {
     let main_window = read_source("src/main_sections/render_impl.rs");
     let notes = read_source("src/notes/window/render.rs");
     let hud = read_source("src/hud_manager/mod.rs");
-    let dictation = read_source("src/dictation/window.rs");
 
     assert!(ui_foundation.contains("pub fn get_theme_background_gradients(theme: &Theme)"));
     assert!(ui_foundation.contains("pub fn theme_background_gradient_layers("));
@@ -414,18 +413,12 @@ fn theme_gradients_propagate_to_secondary_windows() {
         ("main window", main_window.as_str(), "\"bg-layer\""),
         ("Notes", notes.as_str(), "\"notes-bg-layer\""),
         ("HUD", hud.as_str(), "\"hud-bg-layer\""),
-        ("Dictation", dictation.as_str(), "\"dictation-bg-layer\""),
     ] {
         assert!(
             source.contains("theme_background_gradient_layers(") && source.contains(id_prefix),
             "{surface} must render the active theme gradient through the shared layer helper"
         );
     }
-
-    assert!(
-        dictation.contains("\"dictation-preview-bg-layer\""),
-        "Dictation Storybook/static preview must use the same active theme gradient path"
-    );
 }
 
 #[test]

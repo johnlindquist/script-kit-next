@@ -56,7 +56,6 @@ fn kind_rank(kind: AutomationWindowKind) -> u8 {
         AutomationWindowKind::Main => 0,
         AutomationWindowKind::Notes => 1,
         AutomationWindowKind::AgentChatDetached => 4,
-        AutomationWindowKind::Dictation => 5,
         AutomationWindowKind::ActionsDialog => 7,
         AutomationWindowKind::PromptPopup => 8,
         AutomationWindowKind::Hud => 9,

@@ -126,8 +126,7 @@ pub(crate) use info_state::{
 #[allow(unused_imports)]
 pub(crate) use inline_dropdown::{
     inline_dropdown_clamp_selected_index, inline_dropdown_visible_range,
-    inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors,
-    InlineDropdownEmptyState, InlineDropdownSynopsis,
+    inline_dropdown_visible_range_from_start, InlineDropdownColors,
 };
 #[allow(unused_imports)]
 pub use inline_prompt_input::InlinePromptInput;

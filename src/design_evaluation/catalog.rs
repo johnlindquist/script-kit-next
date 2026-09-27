@@ -158,9 +158,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             ("agentChatHistory", &["input:*", "list:agent-chat-history"])
         }
         Some("BrowserHistoryView") => ("browserHistory", &["input:*", "list:browser-history"]),
-        Some("DictationHistoryView") => {
-            ("dictationHistory", &["input:*", "list:dictation-history"])
-        }
         Some("NotesBrowseView") => ("notesBrowse", &["input:notes-browse-filter"]),
         Some("DayPage") => ("dayPage", &["input:day-page-editor"]),
         Some("AgentChatView") => ("agentChat", &["input:*"]),
@@ -178,13 +175,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             "agent-chat.popup.history" => (
                 "promptPopup",
                 &["panel:history-popup", "list:history-entries"],
-            ),
-            "dictation.microphone-picker" => (
-                "dictationMicrophonePopup",
-                &[
-                    "choice:0:dictation-mic-row-0",
-                    "choice:1:dictation-mic-row-1",
-                ],
             ),
             "secondary.confirm" => (
                 "confirmDialog",
@@ -207,10 +197,6 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
             "secondary.hud-action" => ("hud", &["panel:hud", "hud:primary-action"]),
             "secondary.snap" => ("snapOverlay", &["panel:snap-overlay", "snap:target:*"]),
             "secondary.footer" => ("footerOverlay", &["footer-action:*"]),
-            id if fixture_ids::DICTATION_FIXTURE_IDS.contains(&id) => (
-                "dictation",
-                &["panel:dictation-overlay", "panel:dictation-signal-band"],
-            ),
             _ => panic!("missing fixture semantic contract: {id}"),
         },
         _ => panic!("missing fixture route contract: {id}"),
@@ -319,10 +305,6 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         "main.browser-history" => (
             "BrowserHistoryView",
             "src/render_builtins/browser_history.rs",
-        ),
-        "main.dictation-history" => (
-            "DictationHistoryView",
-            "src/render_builtins/dictation_history.rs",
         ),
         "main.notes-browse"
         | "main.notes-browse-no-match"
@@ -472,25 +454,6 @@ fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
             "src/ai/agent_chat/ui/history_popup.rs",
             "src/ai/agent_chat/ui/history_popup.rs::AgentChatHistoryPopupWindow",
             Some("agent-chat.standard.populated"),
-        ),
-        "dictation.recording"
-        | "dictation.confirming"
-        | "dictation.transcribing"
-        | "dictation.delivering"
-        | "dictation.finished"
-        | "dictation.failed" => (
-            "dictation",
-            "dictation",
-            "src/dictation/window.rs",
-            "src/dictation/window.rs::DictationOverlay",
-            None,
-        ),
-        "dictation.microphone-picker" => (
-            "dictationMicrophone",
-            "secondary",
-            "src/dictation/microphone_popup_window.rs",
-            "src/dictation/microphone_popup_window.rs::DictationMicrophonePopupWindow",
-            Some("dictation.recording"),
         ),
         "secondary.actions" => (
             "actions",

@@ -4338,7 +4338,6 @@ impl ScriptListApp {
             | AppView::FavoritesBrowseView { .. }
             | AppView::AgentChatHistoryView { .. }
             | AppView::BrowserHistoryView { .. }
-            | AppView::DictationHistoryView { .. }
             | AppView::NotesBrowseView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::CreationFeedback { .. }
@@ -5716,7 +5715,6 @@ impl ScriptListApp {
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands".to_string(),
             AppView::AgentChatHistoryView { .. } => "AgentChatHistoryView".to_string(),
             AppView::BrowserHistoryView { .. } => "BrowserHistoryView".to_string(),
-            AppView::DictationHistoryView { .. } => "DictationHistoryView".to_string(),
             AppView::NotesBrowseView { .. } => "NotesBrowse".to_string(),
             AppView::AgentChatView { .. } => "AgentChatView".to_string(),
             AppView::DayPage { .. } => "DayPage".to_string(),
@@ -5762,7 +5760,6 @@ impl ScriptListApp {
             | AppView::CurrentAppCommandsView { filter, .. }
             | AppView::AgentChatHistoryView { filter, .. }
             | AppView::BrowserHistoryView { filter, .. }
-            | AppView::DictationHistoryView { filter, .. }
             | AppView::SdkReferenceView { filter, .. }
             | AppView::TipsView { filter, .. }
             | AppView::ScriptTemplateCatalogView { filter, .. }

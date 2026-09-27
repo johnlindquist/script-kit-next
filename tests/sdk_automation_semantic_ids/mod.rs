@@ -2,7 +2,7 @@
 //! semantic IDs on their choices, so `getElements()` returns non-empty
 //! `semanticId` values for automation consumers.
 
-use script_kit_gpui::protocol::{generate_semantic_id, Choice};
+use script_kit_gpui::protocol::generate_semantic_id;
 
 // ---------------------------------------------------------------------------
 // Helper: mirrors the `builtin_choice_semantic_id` function in
@@ -13,85 +13,6 @@ use script_kit_gpui::protocol::{generate_semantic_id, Choice};
 fn expected_builtin_semantic_id(prompt_id: &str, index: usize, value: &str) -> String {
     // prompt_id already contains the `builtin:` prefix
     generate_semantic_id(&format!("{prompt_id}:choice"), index, value)
-}
-
-// ---------------------------------------------------------------------------
-// Select Microphone prompt
-// ---------------------------------------------------------------------------
-
-/// Constants duplicated from `builtin_execution.rs` for test assertions.
-const MIC_PROMPT_ID: &str = "builtin:select-microphone";
-const MIC_DEFAULT_VALUE: &str = "__system_default__";
-
-#[test]
-fn microphone_semantic_id_format_is_stable() {
-    let id = expected_builtin_semantic_id(MIC_PROMPT_ID, 0, MIC_DEFAULT_VALUE);
-    // Should be non-empty, lowercase, hyphenated slug format
-    assert!(!id.is_empty(), "semantic ID must not be empty");
-    assert!(
-        id.starts_with("builtin:select-microphone:choice:"),
-        "semantic ID must include the prompt namespace: {id}"
-    );
-    assert!(
-        id.contains(":0:"),
-        "semantic ID must include the choice index: {id}"
-    );
-}
-
-#[test]
-fn microphone_semantic_ids_are_unique_across_indices() {
-    let id0 = expected_builtin_semantic_id(MIC_PROMPT_ID, 0, MIC_DEFAULT_VALUE);
-    let id1 = expected_builtin_semantic_id(MIC_PROMPT_ID, 1, "some-device-uid");
-    let id2 = expected_builtin_semantic_id(MIC_PROMPT_ID, 2, "another-device");
-    assert_ne!(id0, id1);
-    assert_ne!(id1, id2);
-    assert_ne!(id0, id2);
-}
-
-#[test]
-fn microphone_choice_with_semantic_id_roundtrips_serde() {
-    let choice = Choice {
-        name: "System Default (current)".to_string(),
-        value: MIC_DEFAULT_VALUE.to_string(),
-        description: Some("Built-in Microphone".to_string()),
-        key: None,
-        semantic_id: Some(expected_builtin_semantic_id(
-            MIC_PROMPT_ID,
-            0,
-            MIC_DEFAULT_VALUE,
-        )),
-    };
-    let json = serde_json::to_string(&choice).expect("serialize choice");
-    let parsed: serde_json::Value = serde_json::from_str(&json).expect("parse json");
-
-    let sid = parsed
-        .get("semanticId")
-        .and_then(|v| v.as_str())
-        .expect("semanticId field must be present in serialized JSON");
-    assert!(
-        !sid.is_empty(),
-        "semanticId in JSON must not be empty string"
-    );
-    assert!(
-        sid.starts_with("builtin:select-microphone:choice:"),
-        "serialized semanticId must preserve full format: {sid}"
-    );
-}
-
-#[test]
-fn dictation_microphone_popup_semantic_ids_are_safe_source_contract() {
-    let popup = include_str!("../../src/dictation/microphone_popup_window.rs");
-    let collector = include_str!("../../src/windows/automation_surface_collector.rs");
-    assert!(
-        popup.contains("let row_id = format!(\"dictation-mic-row-{idx}\");")
-            && popup.contains("let semantic_id = format!(\"choice:{idx}:{row_id}\");"),
-        "dictation mic popup semantic IDs must be based on safe row IDs"
-    );
-    assert!(
-        collector.contains("Some(row.row_id.clone())")
-            && !collector.contains("device_selection_value(&row.action)"),
-        "dictation mic popup automation values must not expose raw device IDs"
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -287,10 +208,10 @@ fn agent_chat_and_notes_semantic_ids_do_not_collide() {
 
 #[test]
 fn semantic_ids_are_unique_across_different_prompts() {
-    let mic_id = expected_builtin_semantic_id(MIC_PROMPT_ID, 0, MIC_DEFAULT_VALUE);
+    let snap_id = expected_builtin_semantic_id("builtin:configure-snap-mode", 0, "off");
     let dictation_id = expected_builtin_semantic_id(DICTATION_PROMPT_ID, 0, DICTATION_DOWNLOAD);
     assert_ne!(
-        mic_id, dictation_id,
+        snap_id, dictation_id,
         "semantic IDs from different prompts must not collide"
     );
 }

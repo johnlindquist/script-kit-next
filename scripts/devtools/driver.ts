@@ -302,7 +302,7 @@ export const RESPONSE_TYPES: Readonly<Record<string, string>> = {
     "setAgentChatTranscriptScroll", "agentChatEscape", "openAgentChatKitchenSinkFixture", "openAgentChatDetachedFixture",
     "openFocusedTextAgentChatWithPiData", "openAiWithMockData", "openAi", "simulateMainHotkeyGesture",
     "openMiniAiWithMockData", "triggerBuiltin", "openNotes", "openAbout", "pushDictationResult",
-    "setMenuSyntaxFormField", "openDictationOverlayFixture", "openConfirmPrompt", "showAiCommandBar",
+    "setMenuSyntaxFormField", "openConfirmPrompt", "showAiCommandBar",
     "injectClipboardCaptureFixture", "openCreationFeedback",
   ].map(type => [type, "externalCommandResult"])),
 };

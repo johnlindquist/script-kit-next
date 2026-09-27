@@ -772,30 +772,6 @@
       ]
     },
     {
-      "id": "main.dictation-history",
-      "family": "main",
-      "root": "main",
-      "owner": "src/main_entry/app_run_setup.rs",
-      "factoryOwners": [
-        "src/main_entry/app_run_setup.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "appViewVariant": "DictationHistoryView",
-      "presentationOwner": "src/render_builtins/dictation_history.rs",
-      "expectedSemanticSurface": "dictationHistory",
-      "requiredSemanticIds": [
-        "input:*",
-        "list:dictation-history"
-      ]
-    },
-    {
       "id": "main.notes-browse",
       "family": "main",
       "root": "main",
@@ -2529,168 +2505,6 @@
       ]
     },
     {
-      "id": "dictation.recording",
-      "family": "dictation",
-      "root": "dictation",
-      "owner": "src/dictation/window.rs",
-      "factoryOwners": [
-        "src/dictation/window.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/dictation/window.rs::DictationOverlay",
-      "expectedSemanticSurface": "dictation",
-      "requiredSemanticIds": [
-        "panel:dictation-overlay",
-        "panel:dictation-signal-band"
-      ]
-    },
-    {
-      "id": "dictation.confirming",
-      "family": "dictation",
-      "root": "dictation",
-      "owner": "src/dictation/window.rs",
-      "factoryOwners": [
-        "src/dictation/window.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/dictation/window.rs::DictationOverlay",
-      "expectedSemanticSurface": "dictation",
-      "requiredSemanticIds": [
-        "panel:dictation-overlay",
-        "panel:dictation-signal-band"
-      ]
-    },
-    {
-      "id": "dictation.transcribing",
-      "family": "dictation",
-      "root": "dictation",
-      "owner": "src/dictation/window.rs",
-      "factoryOwners": [
-        "src/dictation/window.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/dictation/window.rs::DictationOverlay",
-      "expectedSemanticSurface": "dictation",
-      "requiredSemanticIds": [
-        "panel:dictation-overlay",
-        "panel:dictation-signal-band"
-      ]
-    },
-    {
-      "id": "dictation.delivering",
-      "family": "dictation",
-      "root": "dictation",
-      "owner": "src/dictation/window.rs",
-      "factoryOwners": [
-        "src/dictation/window.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/dictation/window.rs::DictationOverlay",
-      "expectedSemanticSurface": "dictation",
-      "requiredSemanticIds": [
-        "panel:dictation-overlay",
-        "panel:dictation-signal-band"
-      ]
-    },
-    {
-      "id": "dictation.finished",
-      "family": "dictation",
-      "root": "dictation",
-      "owner": "src/dictation/window.rs",
-      "factoryOwners": [
-        "src/dictation/window.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/dictation/window.rs::DictationOverlay",
-      "expectedSemanticSurface": "dictation",
-      "requiredSemanticIds": [
-        "panel:dictation-overlay",
-        "panel:dictation-signal-band"
-      ]
-    },
-    {
-      "id": "dictation.failed",
-      "family": "dictation",
-      "root": "dictation",
-      "owner": "src/dictation/window.rs",
-      "factoryOwners": [
-        "src/dictation/window.rs"
-      ],
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/dictation/window.rs::DictationOverlay",
-      "expectedSemanticSurface": "dictation",
-      "requiredSemanticIds": [
-        "panel:dictation-overlay",
-        "panel:dictation-signal-band"
-      ]
-    },
-    {
-      "id": "dictation.microphone-picker",
-      "family": "dictationMicrophone",
-      "root": "secondary",
-      "owner": "src/dictation/microphone_popup_window.rs",
-      "factoryOwners": [
-        "src/dictation/microphone_popup_window.rs"
-      ],
-      "parentFixtureId": "dictation.recording",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/dictation/microphone_popup_window.rs::DictationMicrophonePopupWindow",
-      "expectedSemanticSurface": "dictationMicrophonePopup",
-      "requiredSemanticIds": [
-        "choice:0:dictation-mic-row-0",
-        "choice:1:dictation-mic-row-1"
-      ]
-    },
-    {
       "id": "secondary.actions",
       "family": "actions",
       "root": "secondary",
@@ -2854,29 +2668,6 @@
       "expectedSemanticSurface": "footerOverlay",
       "requiredSemanticIds": [
         "footer-action:*"
-      ]
-    },
-    {
-      "id": "secondary.shortcut-recorder",
-      "family": "shortcutRecorder",
-      "root": "secondary",
-      "owner": "src/app_impl/shortcut_recorder.rs",
-      "factoryOwners": [
-        "src/app_impl/shortcut_recorder.rs"
-      ],
-      "parentFixtureId": "main.script-list",
-      "proofBoundary": "owned-production-runtime",
-      "nativeExclusions": [
-        "WindowServer composition and desktop capture",
-        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
-        "Native focus, activation, IME and global input",
-        "System clipboard, device access, TCC and external-app insertion",
-        "Live providers, credentials, network and operator storage"
-      ],
-      "presentationOwner": "src/components/shortcut_recorder.rs",
-      "expectedSemanticSurface": "shortcutRecorder",
-      "requiredSemanticIds": [
-        "shortcut-key-display"
       ]
     }
   ],
@@ -3454,17 +3245,6 @@
       "proofBoundary": "owned-production-runtime"
     },
     {
-      "appViewVariant": "DictationHistoryView",
-      "surfaceKind": "AttachmentPortalBrowser",
-      "fixtureIds": [
-        "main.dictation-history"
-      ],
-      "presentationOwners": [
-        "src/render_builtins/dictation_history.rs"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
       "appViewVariant": "NotesBrowseView",
       "surfaceKind": "AttachmentPortalBrowser",
       "fixtureIds": [
@@ -3597,37 +3377,6 @@
       "proofBoundary": "owned-production-runtime"
     },
     {
-      "rootOwner": "DictationOverlay",
-      "factorySources": [
-        "src/dictation/window.rs"
-      ],
-      "fixtureIds": [
-        "dictation.confirming",
-        "dictation.delivering",
-        "dictation.failed",
-        "dictation.finished",
-        "dictation.recording",
-        "dictation.transcribing"
-      ],
-      "presentationOwners": [
-        "src/dictation/window.rs::DictationOverlay"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "rootOwner": "DictationMicrophonePopup",
-      "factorySources": [
-        "src/dictation/microphone_popup_window.rs"
-      ],
-      "fixtureIds": [
-        "dictation.microphone-picker"
-      ],
-      "presentationOwners": [
-        "src/dictation/microphone_popup_window.rs::DictationMicrophonePopupWindow"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
       "rootOwner": "HudView",
       "factorySources": [
         "src/hud_manager/mod.rs"
@@ -3651,19 +3400,6 @@
       ],
       "presentationOwners": [
         "src/footer_popup.rs::GpuiFooterOverlay"
-      ],
-      "proofBoundary": "owned-production-runtime"
-    },
-    {
-      "rootOwner": "ShortcutRecorder",
-      "factorySources": [
-        "src/app_impl/shortcut_recorder.rs"
-      ],
-      "fixtureIds": [
-        "secondary.shortcut-recorder"
-      ],
-      "presentationOwners": [
-        "src/components/shortcut_recorder.rs"
       ],
       "proofBoundary": "owned-production-runtime"
     },
@@ -4858,18 +4594,12 @@
       "surfaceKind": "AttachmentPortalBrowser",
       "appViewVariants": [
         "BrowserHistoryView",
-        "DictationHistoryView",
         "NotesBrowseView"
       ],
       "appViewFooters": [
         {
           "variant": "BrowserHistoryView",
           "nativeFooterSurface": "browser_history",
-          "meaning": "routeLabelOnly"
-        },
-        {
-          "variant": "DictationHistoryView",
-          "nativeFooterSurface": "dictation_history",
           "meaning": "routeLabelOnly"
         },
         {

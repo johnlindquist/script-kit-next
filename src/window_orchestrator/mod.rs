@@ -19,7 +19,6 @@ pub enum SurfaceId {
     Main,
     Notes,
     DetachedAiChat,
-    DictationOverlay,
 }
 
 // ---------------------------------------------------------------------------
@@ -79,46 +78,6 @@ pub struct AuxSurfaceState {
 }
 
 // ---------------------------------------------------------------------------
-// Dictation surface
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DictationPhase {
-    Recording,
-    Confirming,
-    Transcribing,
-    Delivering,
-    Finished,
-    Failed,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DictationTarget {
-    MainWindowFilter,
-    MainWindowPrompt,
-    NotesEditor,
-    AiChatComposer,
-    TabAiHarness,
-    ExternalApp,
-    /// Background append to today's Day Page — no surface reveal on finish.
-    DayPageToday,
-    /// Quick AI question — the delivery path opens/focuses the AI window
-    /// itself, so the orchestrator treats it like other aux-surface targets.
-    QuickAiQuestion,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DictationSurfaceState {
-    Hidden,
-    Visible {
-        phase: DictationPhase,
-        target: DictationTarget,
-        return_to: FocusToken,
-        restore_main_visibility: bool,
-    },
-}
-
-// ---------------------------------------------------------------------------
 // Top-level orchestrator state
 // ---------------------------------------------------------------------------
 
@@ -127,7 +86,6 @@ pub struct OrchestratorState {
     pub main: MainSurfaceState,
     pub notes: AuxSurfaceState,
     pub detached_ai: AuxSurfaceState,
-    pub dictation: DictationSurfaceState,
     pub key_surface: Option<SurfaceId>,
 }
 
@@ -142,7 +100,6 @@ impl Default for OrchestratorState {
             },
             notes: AuxSurfaceState::default(),
             detached_ai: AuxSurfaceState::default(),
-            dictation: DictationSurfaceState::Hidden,
             key_surface: Some(SurfaceId::Main),
         }
     }
@@ -163,13 +120,6 @@ pub fn current_return_focus(state: &OrchestratorState) -> FocusToken {
         Some(SurfaceId::Main) => state.main.return_focus,
         Some(SurfaceId::Notes) => FocusToken::NotesEditor,
         Some(SurfaceId::DetachedAiChat) => FocusToken::DetachedAiComposer,
-        Some(SurfaceId::DictationOverlay) => {
-            if let DictationSurfaceState::Visible { return_to, .. } = &state.dictation {
-                *return_to
-            } else {
-                FocusToken::None
-            }
-        }
         None => FocusToken::None,
     }
 }
@@ -194,13 +144,6 @@ pub enum WindowEvent {
 
     OpenDetachedAiChat,
     CloseDetachedAiChat,
-
-    StartDictation {
-        target: DictationTarget,
-    },
-    DictationPhaseChanged(DictationPhase),
-    FinishDictation,
-    AbortDictation,
 
     SurfaceClosedBySystem(SurfaceId),
 
@@ -235,11 +178,6 @@ pub enum WindowCommand {
     // Detached AI
     OpenDetachedAiChatWindow,
     CloseDetachedAiChatWindow,
-
-    // Dictation
-    OpenDictationOverlay { phase: DictationPhase },
-    UpdateDictationOverlay { phase: DictationPhase },
-    CloseDictationOverlay,
 }
 
 // ---------------------------------------------------------------------------
@@ -363,190 +301,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
         }
 
         // ---------------------------------------------------------------
-        // Dictation
-        // ---------------------------------------------------------------
-        WindowEvent::StartDictation { target } => {
-            // Idempotent — if already visible, no-op.
-            if matches!(next.dictation, DictationSurfaceState::Visible { .. }) {
-                return Transition {
-                    next,
-                    commands: cmds,
-                };
-            }
-
-            // Close actions if open.
-            if next.main.actions_open {
-                next.main.actions_open = false;
-                cmds.push(WindowCommand::CloseActions);
-            }
-
-            let return_to = current_return_focus(state);
-            let restore_main = next.main.visibility == MainVisibility::Visible;
-
-            // Conceal main if visible.
-            if restore_main {
-                cmds.push(WindowCommand::SaveMainBounds);
-                next.main.visibility = MainVisibility::Hidden(HiddenReason::Concealed);
-                cmds.push(WindowCommand::ConcealMain);
-            }
-
-            next.dictation = DictationSurfaceState::Visible {
-                phase: DictationPhase::Recording,
-                target,
-                return_to,
-                restore_main_visibility: restore_main,
-            };
-            next.key_surface = Some(SurfaceId::DictationOverlay);
-            cmds.push(WindowCommand::OpenDictationOverlay {
-                phase: DictationPhase::Recording,
-            });
-        }
-
-        WindowEvent::DictationPhaseChanged(phase) => {
-            if let DictationSurfaceState::Visible {
-                phase: ref mut p, ..
-            } = next.dictation
-            {
-                *p = phase;
-                cmds.push(WindowCommand::UpdateDictationOverlay { phase });
-            }
-        }
-
-        WindowEvent::FinishDictation => {
-            if let DictationSurfaceState::Visible {
-                target,
-                return_to,
-                restore_main_visibility,
-                ..
-            } = next.dictation
-            {
-                cmds.push(WindowCommand::CloseDictationOverlay);
-                next.dictation = DictationSurfaceState::Hidden;
-
-                if target == DictationTarget::TabAiHarness {
-                    next.main.visibility = MainVisibility::Visible;
-                    next.main.content = MainContentKind::AgentChat;
-                    next.main.return_focus = FocusToken::ChatComposer;
-                    next.key_surface = Some(SurfaceId::Main);
-                    cmds.push(WindowCommand::RevealMain {
-                        activate_app: false,
-                        make_key: true,
-                    });
-                    cmds.push(WindowCommand::FocusMain(FocusToken::ChatComposer));
-                } else if target == DictationTarget::ExternalApp {
-                    next.main.visibility = MainVisibility::Hidden(HiddenReason::Dismissed);
-                    if next.key_surface == Some(SurfaceId::DictationOverlay) {
-                        next.key_surface = next_visible_surface(&next);
-                    }
-                } else {
-                    if restore_main_visibility {
-                        next.main.visibility = MainVisibility::Visible;
-                        let focus_main = matches!(
-                            return_to,
-                            FocusToken::MainFilter
-                                | FocusToken::PromptInput
-                                | FocusToken::ChatComposer
-                                | FocusToken::TermInput
-                        );
-                        cmds.push(WindowCommand::RevealMain {
-                            activate_app: false,
-                            make_key: focus_main,
-                        });
-                        if focus_main {
-                            next.key_surface = Some(SurfaceId::Main);
-                            cmds.push(WindowCommand::FocusMain(return_to));
-                        }
-                    }
-
-                    // If return focus is to an aux surface, focus it.
-                    match return_to {
-                        FocusToken::NotesEditor => {
-                            next.key_surface = Some(SurfaceId::Notes);
-                            cmds.push(WindowCommand::FocusSurface(SurfaceId::Notes));
-                        }
-                        FocusToken::DetachedAiComposer => {
-                            next.key_surface = Some(SurfaceId::DetachedAiChat);
-                            cmds.push(WindowCommand::FocusSurface(SurfaceId::DetachedAiChat));
-                        }
-                        _ => {
-                            // Already handled above for main-bound tokens,
-                            // or FocusToken::None — pick next visible.
-                            if !restore_main_visibility
-                                && !matches!(
-                                    return_to,
-                                    FocusToken::MainFilter
-                                        | FocusToken::PromptInput
-                                        | FocusToken::ChatComposer
-                                        | FocusToken::TermInput
-                                )
-                            {
-                                next.key_surface = next_visible_surface(&next);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        WindowEvent::AbortDictation => {
-            if let DictationSurfaceState::Visible {
-                target,
-                return_to,
-                restore_main_visibility,
-                ..
-            } = next.dictation
-            {
-                cmds.push(WindowCommand::CloseDictationOverlay);
-                next.dictation = DictationSurfaceState::Hidden;
-
-                let should_restore_main = restore_main_visibility
-                    && !matches!(
-                        target,
-                        DictationTarget::TabAiHarness | DictationTarget::ExternalApp
-                    );
-
-                if target == DictationTarget::ExternalApp {
-                    next.main.visibility = MainVisibility::Hidden(HiddenReason::Dismissed);
-                }
-
-                if should_restore_main {
-                    next.main.visibility = MainVisibility::Visible;
-                    let focus_main = matches!(
-                        return_to,
-                        FocusToken::MainFilter
-                            | FocusToken::PromptInput
-                            | FocusToken::ChatComposer
-                            | FocusToken::TermInput
-                    );
-                    cmds.push(WindowCommand::RevealMain {
-                        activate_app: false,
-                        make_key: focus_main,
-                    });
-                    if focus_main {
-                        next.key_surface = Some(SurfaceId::Main);
-                        cmds.push(WindowCommand::FocusMain(return_to));
-                    }
-                }
-
-                match return_to {
-                    FocusToken::NotesEditor => {
-                        next.key_surface = Some(SurfaceId::Notes);
-                        cmds.push(WindowCommand::FocusSurface(SurfaceId::Notes));
-                    }
-                    FocusToken::DetachedAiComposer => {
-                        next.key_surface = Some(SurfaceId::DetachedAiChat);
-                        cmds.push(WindowCommand::FocusSurface(SurfaceId::DetachedAiChat));
-                    }
-                    _ => {
-                        if !should_restore_main {
-                            next.key_surface = next_visible_surface(&next);
-                        }
-                    }
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------
         // System close (user hit native close button, etc.)
         // ---------------------------------------------------------------
         WindowEvent::SurfaceClosedBySystem(surface) => match surface {
@@ -570,12 +324,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
             SurfaceId::DetachedAiChat => {
                 next.detached_ai.visible = false;
                 if next.key_surface == Some(SurfaceId::DetachedAiChat) {
-                    next.key_surface = next_visible_surface(&next);
-                }
-            }
-            SurfaceId::DictationOverlay => {
-                next.dictation = DictationSurfaceState::Hidden;
-                if next.key_surface == Some(SurfaceId::DictationOverlay) {
                     next.key_surface = next_visible_surface(&next);
                 }
             }

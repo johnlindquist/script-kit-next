@@ -276,7 +276,7 @@ pub enum BuiltInFeature {
     FileSearch,
     /// Webcam capture
     Webcam,
-    /// Voice dictation overlay + paste flow
+    /// Voice dictation in the main window's voice view + paste flow
     Dictation,
     /// Voice dictation that always targets the AI harness
     DictationToAiHarness,

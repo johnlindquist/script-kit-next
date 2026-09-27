@@ -392,7 +392,7 @@ pub(crate) fn route_key_to_confirm_popup(key: &str, cx: &mut App) -> bool {
 ///
 /// The popup is a non-activating child panel: it never becomes the key
 /// window, so every key meant for it arrives at its parent (the main window,
-/// Notes, Dictation, or detached Agent Chat). While it is open it owns those
+/// Notes, or detached Agent Chat). While it is open it owns those
 /// keys — and its own, should a click ever make it key — so no shortcut,
 /// text input, or Escape ladder underneath sees them. Keys from unrelated
 /// windows pass through. Returns true when the popup consumed the key.

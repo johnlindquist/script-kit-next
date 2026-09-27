@@ -240,6 +240,7 @@ impl ScriptListApp {
                     Effect::Paste { text, app } => self.one_window_paste(text, app, cx),
                     Effect::TalkEnded => self.one_window_talk_ended(),
                     Effect::Learned => self.one_window_learned(),
+                    Effect::AddToNote { text } => self.one_window_add_to_note(text, cx),
                     effect @ (Effect::Held { .. } | Effect::Undo { .. } | Effect::Again { .. }) => {
                         tracing::info!(
                             target: "script_kit::one_window",

@@ -59,7 +59,6 @@ impl ScriptListApp {
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::AgentChatHistoryView { .. }
                 | AppView::BrowserHistoryView { .. }
-                | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::TipsView { .. }
         )

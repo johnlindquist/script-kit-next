@@ -36,7 +36,6 @@ pub enum AutomationWindowKind {
     Main,
     Notes,
     AgentChatDetached,
-    Dictation,
     ActionsDialog,
     PromptPopup,
     /// Transient HUD notification pill (floating, focusless, auto-dismissing).
@@ -55,7 +54,6 @@ impl AutomationWindowKind {
             AutomationWindowKind::Main => "main",
             AutomationWindowKind::Notes => "notes",
             AutomationWindowKind::AgentChatDetached => "agentChatDetached",
-            AutomationWindowKind::Dictation => "dictation",
             AutomationWindowKind::ActionsDialog => "actionsDialog",
             AutomationWindowKind::PromptPopup => "promptPopup",
             AutomationWindowKind::Hud => "hud",

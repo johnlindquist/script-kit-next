@@ -771,14 +771,13 @@ export const coverageProfiles: CoverageProfile[] = [
   },
   {
     id: "dictation",
-    name: "Dictation window and media flow",
+    name: "Dictation voice view and media flow",
     status: "partial",
     domains: ["targets", "elements", "media", "input", "storage", "screenshots", "accessibility", "investigation"],
     sourceFiles: [
-      "src/dictation/window.rs",
-      "src/dictation/window_visual_primitives.rs",
-      "src/dictation/window_actions.rs",
-      "src/dictation/window_automation.rs",
+      "src/one_window/talk_host.rs",
+      "src/one_window/voice_lists.rs",
+      "crates/sk-one-window/src/talk.rs",
       "src/dictation/runtime.rs",
       "src/dictation/types.rs",
       "src/dictation/setup.rs",
@@ -810,7 +809,7 @@ export const coverageProfiles: CoverageProfile[] = [
       "wrong-target rejection",
       "cleanup without TCC/System Settings mutation",
     ],
-    shortcuts: ["dictation hotkey", "Escape", "Enter", "Space", "Cmd+W", "target badge click"],
+    shortcuts: ["dictation hotkey", "Escape", "Enter", "Cmd+1", "Cmd+2"],
     supportedNow: [
       "dictation story states",
       "kit://dictation",
@@ -847,21 +846,18 @@ export const coverageProfiles: CoverageProfile[] = [
       "src/dictation/history.rs",
       "src/dictation/types.rs",
       "src/mcp_resources/mod.rs",
-      "src/render_builtins/dictation_history.rs",
-      "src/render_builtins/common.rs",
+      "src/one_window/voice_lists.rs",
       "src/app_layout/collect_elements.rs",
       "src/app_layout/collect_elements_surface_rows.rs",
       "src/app_layout/collect_elements_projection_primitives.rs",
       "src/app_layout/build_layout_info.rs",
     ],
-    features: ["transcript rows", "search/filter", "preview", "redaction", "missing audio fallback", "selection reanchor", "portal attachment"],
+    features: ["transcript rows, newest first", "search/filter", "redaction", "portal attachment", "Enter pastes", "Cmd+K stages the row with its actions"],
     shortcuts: ["Enter", "Escape", "Tab", "ArrowUp", "ArrowDown"],
     supportedNow: [
       "kit://dictation-history",
       "filterable surface architecture",
-      "target-scoped Dictation History semantic row and load-more projection",
-      "target-scoped Dictation History split list/preview layout projection",
-      "target-scoped Dictation History selected-row and scroll-anchor state",
+      "Dictation History rows in the main window's list, projected through the launcher's row semantics",
     ],
     missingRuntimePrimitives: [
       "fixture dictation store identity",
@@ -873,13 +869,12 @@ export const coverageProfiles: CoverageProfile[] = [
     ],
     regressionRecipeRole: "Use history recipes to prevent privacy and selection regressions once resource receipts are first-class.",
     // These generic producers already operate against any Main-window
-    // AppView. Dictation History has real semantic, split-layout, and scroll
-    // owners above; specialized store/privacy generation receipts remain
-    // honestly missing and the profile therefore stays partial.
+    // AppView; specialized store/privacy generation receipts remain honestly
+    // missing and the profile therefore stays partial.
     availablePrimitiveIds: [...mainWindowPrimitiveIds],
-    bindingSelectors: [
-      { relation: "Direct", priority: 100, appViewVariants: ["DictationHistoryView"], hostKinds: ["MainWindow"] },
-    ],
+    // Dictation History is a list view inside ScriptList, not a distinct
+    // canonical mapping; giving it a selector would tie with main.
+    bindingSelectors: [],
   },
   ...launcherOwnedSurfaceProfiles,
 ];

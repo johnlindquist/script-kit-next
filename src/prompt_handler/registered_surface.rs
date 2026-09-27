@@ -148,13 +148,6 @@ pub(crate) fn registered_surface_ui_snapshot(
             let input_value = if target.kind == protocol::AutomationWindowKind::Notes {
                 let (entity, _) = registered_notes_owner(&target, cx)?;
                 Some(entity.read(cx).editor_state.read(cx).value().to_string())
-            } else if target.kind == protocol::AutomationWindowKind::Dictation {
-                Some(
-                    crate::dictation::get_dictation_overlay_state_for_instance(generation, cx)
-                        .ok_or_else(|| anyhow::anyhow!("dictation_target_unavailable"))?
-                        .transcript
-                        .to_string(),
-                )
             } else if target.id
                 == crate::ai::agent_chat::ui::history_popup::AGENT_CHAT_HISTORY_POPUP_AUTOMATION_ID
             {
@@ -288,34 +281,6 @@ pub(crate) fn apply_registered_surface_command(
                 _ => return Err(unsupported_batch_command_error(kind, command).into()),
             }
         }
-        protocol::AutomationWindowKind::Dictation => {
-            if let protocol::BatchCommand::SelectBySemanticId {
-                semantic_id,
-                submit,
-            } = command
-            {
-                let actions =
-                    crate::dictation::dictation_recording_actions_for_instance(generation, cx)
-                        .ok_or_else(|| anyhow::anyhow!("dictation_owner_stale"))?;
-                anyhow::ensure!(
-                    actions.iter().any(|action| &action.id == semantic_id
-                        && matches!(
-                            action.id.as_str(),
-                            "dictation_microphone" | "dictation_jump_latest"
-                        )),
-                    "dictation_action_unavailable"
-                );
-                if *submit {
-                    crate::dictation::execute_dictation_overlay_action_for_instance(
-                        generation,
-                        semantic_id,
-                        cx,
-                    )?;
-                }
-                return Ok(Some(semantic_id.clone()));
-            }
-            return Err(unsupported_batch_command_error(kind, command).into());
-        }
         protocol::AutomationWindowKind::ActionsDialog => {
             let entity = crate::windows::automation_surface_collector::exact_actions_dialog_entity(
                 &target, cx,
@@ -381,12 +346,10 @@ pub(crate) fn apply_registered_surface_command(
                 }
                 protocol::BatchCommand::SelectByValue { value, submit } => match subtype {
                     PromptPopupSubtype::Confirm => crate::confirm::batch_select_confirm_button_by_value(generation, value, *submit, cx)?,
-                    PromptPopupSubtype::DictationMicrophone => crate::dictation::batch_select_dictation_microphone_popup_row_by_value(generation, value, *submit, cx)?,
                     PromptPopupSubtype::AgentChatHistory => crate::ai::agent_chat::ui::history_popup::batch_select_history_popup_by_value(generation, value, *submit, cx)?,
                 },
                 protocol::BatchCommand::SelectBySemanticId { semantic_id, submit } => match subtype {
                     PromptPopupSubtype::Confirm => crate::confirm::batch_select_confirm_button_by_semantic_id(generation, semantic_id, *submit, cx)?,
-                    PromptPopupSubtype::DictationMicrophone => crate::dictation::batch_select_dictation_microphone_popup_row_by_semantic_id(generation, semantic_id, *submit, cx)?,
                     PromptPopupSubtype::AgentChatHistory => crate::ai::agent_chat::ui::history_popup::batch_select_history_popup_by_semantic_id(generation, semantic_id, *submit, cx)?,
                 },
                 protocol::BatchCommand::SetThemeControl { control, value } => {
@@ -464,11 +427,6 @@ pub(crate) fn registered_surface_state_result(
     } else {
         None
     };
-    let dictation_state = if target.kind == protocol::AutomationWindowKind::Dictation {
-        Some(crate::dictation::automation_state())
-    } else {
-        None
-    };
     Ok(protocol::Message::StateResult {
         request_id: request_id.to_string(),
         prompt_type: snapshot
@@ -484,7 +442,7 @@ pub(crate) fn registered_surface_state_result(
         window_visible: snapshot.window_visible,
         notes_state,
         actions_dialog,
-        dictation_state,
+        dictation_state: None,
         surface_contract: None,
         active_popup_contract: None,
         active_footer: None,

@@ -830,20 +830,6 @@ impl ScriptListApp {
             .cloned()
     }
 
-    fn selected_dictation_history_entry(&self) -> Option<crate::dictation::DictationHistoryEntry> {
-        let AppView::DictationHistoryView {
-            filter,
-            selected_index,
-            visible_limit,
-        } = &self.current_view
-        else {
-            return None;
-        };
-
-        self.dictation_history_current_or_previous_page(filter, *visible_limit)
-            .and_then(|page| page.rows.into_iter().nth(*selected_index))
-    }
-
     /// Return true when the current view has any available actions.
     fn has_actions(&mut self) -> bool {
         match &self.current_view {
@@ -856,9 +842,6 @@ impl ScriptListApp {
                     "has_actions (clipboard)",
                 );
                 has
-            }
-            AppView::DictationHistoryView { .. } => {
-                self.selected_dictation_history_entry().is_some()
             }
             _ => {
                 let script_info = self.get_focused_script_info();
@@ -2335,30 +2318,6 @@ impl ScriptListApp {
             return;
         }
 
-        let selected_dictation_entry = if action_id_stripped.starts_with("dictation_history_") {
-            self.selected_dictation_history_entry()
-        } else {
-            None
-        };
-        let dictation_outcome = self.handle_dictation_history_action(
-            &action_id_stripped,
-            selected_dictation_entry,
-            &dctx,
-            window,
-            cx,
-        );
-        if dictation_outcome.was_handled() {
-            log_dispatch_outcome(
-                &action_id_stripped,
-                &dctx.trace_id,
-                "dictation_history",
-                &dictation_outcome,
-                &start,
-            );
-            self.show_outcome_feedback(&dictation_outcome, cx);
-            return;
-        }
-
         let favorites_outcome =
             self.handle_favorites_action(&action_id_stripped, &dctx, window, cx);
         if favorites_outcome.was_handled() {
@@ -2474,7 +2433,6 @@ fn log_dispatch_outcome(
 // Include semantic submodules — each adds `impl ScriptListApp` methods.
 include!("clipboard.rs");
 include!("paste.rs");
-include!("dictation_history.rs");
 include!("favorites.rs");
 include!("scripts.rs");
 include!("shortcuts.rs");

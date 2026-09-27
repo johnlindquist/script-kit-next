@@ -203,11 +203,6 @@ fn canonical_input_renderers() -> &'static [(&'static str, &'static str, &'stati
             "render_builtin_main_input_header(",
         ),
         (
-            "DictationHistoryView",
-            "src/render_builtins/dictation_history.rs",
-            "render_builtin_main_input_header(",
-        ),
-        (
             "NotesBrowseView",
             "src/render_builtins/notes_browse.rs",
             "render_builtin_main_input_header(",
@@ -414,7 +409,6 @@ fn split_preview_builtins_do_not_use_legacy_expanded_header_scaffolds() {
     for path in [
         "src/render_builtins/agent_chat_history.rs",
         "src/render_builtins/browser_history.rs",
-        "src/render_builtins/dictation_history.rs",
         "src/render_builtins/notes_browse.rs",
         "src/render_builtins/sdk_reference.rs",
         "src/render_builtins/script_templates.rs",

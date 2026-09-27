@@ -28,36 +28,6 @@ pub fn with_frozen_dictation_destination<T>(
     mutate()
 }
 
-pub fn dictation_outcome_from_insertion_range(
-    request: &crate::dictation::DictationDeliveryRequest,
-    range: &serde_json::Value,
-) -> Result<crate::dictation::DictationDeliveryOutcome, String> {
-    let observed = |key: &str| {
-        range
-            .get(key)
-            .and_then(serde_json::Value::as_u64)
-            .and_then(|value| usize::try_from(value).ok())
-            .ok_or_else(|| format!("Missing observed Dictation mutation {key}"))
-    };
-    let start = observed("start")?;
-    let end = observed("end")?;
-    let inserted_length = observed("insertedLength")?;
-    if end.checked_sub(start) != Some(inserted_length) {
-        return Err("Inconsistent observed Dictation mutation range".into());
-    }
-    Ok(crate::dictation::DictationDeliveryOutcome::Delivered {
-        destination: request.selection.destination.clone(),
-        mutation_receipt: crate::dictation::DictationMutationReceipt {
-            delivery_id: request.delivery_id,
-            destination_kind: request.selection.destination.kind(),
-            identity_fingerprint: request.selection.destination.identity_fingerprint(),
-            insertion_start: Some(start),
-            insertion_end: Some(end),
-            inserted_length,
-            duplicate: false,
-        },
-    })
-}
 fn fingerprint(value: &str) -> String {
     crate::dictation::redacted_transcript_fingerprint(value)
 }
@@ -345,14 +315,8 @@ mod tests {
 }
 #[cfg(test)]
 mod dictation_delivery_coordinator_tests {
-    use super::{
-        dictation_mutation_error_outcome, dictation_outcome_from_insertion_range,
-        with_frozen_dictation_destination,
-    };
-    use crate::dictation::{
-        DictationDeliveryOutcome, DictationDeliveryRequest, DictationTarget,
-        DictationTargetSelection, FrozenDictationDestination, ImmutableDictationTranscript,
-    };
+    use super::{dictation_mutation_error_outcome, with_frozen_dictation_destination};
+    use crate::dictation::{DictationDeliveryOutcome, DictationTarget, FrozenDictationDestination};
 
     fn owner() -> crate::dictation::FrozenMainDictationOwner {
         crate::dictation::FrozenMainDictationOwner {
@@ -469,60 +433,5 @@ mod dictation_delivery_coordinator_tests {
         })
         .unwrap();
         assert_eq!(text, "untouched dictated");
-    }
-
-    fn request() -> DictationDeliveryRequest {
-        DictationDeliveryRequest {
-            delivery_id: 8,
-            session_generation: 4,
-            attempt: 1,
-            history_entry_id: String::new(),
-            selection: DictationTargetSelection {
-                target: DictationTarget::MainWindowFilter,
-                destination: FrozenDictationDestination::MainWindowFilter {
-                    owner: owner(),
-                    input_generation: 9,
-                },
-                display_label: "Filter".into(),
-                icon_identity: None,
-                selection_generation: 6,
-            },
-            transcript: ImmutableDictationTranscript::new("transcript", "one\r\ntwo".into()),
-        }
-    }
-
-    #[test]
-    fn mutation_receipt_reports_observed_sink_range_not_transcript_length() {
-        let request = request();
-        let outcome = dictation_outcome_from_insertion_range(
-            &request,
-            &serde_json::json!({
-                "start": 0, "end": 7, "insertedLength": 7,
-            }),
-        )
-        .unwrap();
-        let DictationDeliveryOutcome::Delivered {
-            destination,
-            mutation_receipt,
-        } = outcome
-        else {
-            panic!("expected delivered");
-        };
-        assert_eq!(destination, request.selection.destination);
-        assert_eq!(mutation_receipt.delivery_id, request.delivery_id);
-        assert_eq!(mutation_receipt.inserted_length, 7);
-        assert_ne!(mutation_receipt.inserted_length, request.transcript.len());
-        assert!(!mutation_receipt.duplicate);
-    }
-
-    #[test]
-    fn missing_or_inconsistent_mutation_evidence_cannot_report_delivery() {
-        for range in [
-            serde_json::json!({}),
-            serde_json::json!({"start": 4, "end": 3, "insertedLength": 1}),
-            serde_json::json!({"start": 0, "end": 3, "insertedLength": 8}),
-        ] {
-            assert!(dictation_outcome_from_insertion_range(&request(), &range).is_err());
-        }
     }
 }

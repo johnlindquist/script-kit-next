@@ -27,6 +27,9 @@ describe("steps", () => {
     expect(() => parseSteps([{ name: "a" }, { name: "a" }])).toThrow();
     expect(() => parseSteps([{ name: "a", text: "x" }])).toThrow();
     expect(() => parseSteps([{ name: "a", type: "x", key: "down" }])).toThrow();
+    expect(parseSteps([{ name: "to-note", control: { family: "oneWindow", operation: "talkTo", destination: "note" } }])[0]?.control?.destination).toBe("note");
+    expect(() => parseSteps([{ name: "a", control: { family: "oneWindow", operation: "talkTo", destination: "slack" } }])).toThrow();
+    expect(() => parseSteps([{ name: "a", key: "enter", control: { family: "oneWindow", operation: "talkTo", destination: "chat" } }])).toThrow();
     expect(() => parseSteps([{ name: "a", waitMs: -1 }])).toThrow();
     expect(() => parseSteps([{ name: "a", key: "hyper-k" }])).toThrow();
     expect(() => parseSteps([{ name: "Bad Name" }])).toThrow();

@@ -26,15 +26,6 @@ impl ScriptListApp {
                     "Run".to_string()
                 };
             }
-            AppView::DictationHistoryView { .. } => {
-                return if !has_selected_dictation_history_entry(self) {
-                    "Run".to_string()
-                } else if self.is_in_attachment_portal() {
-                    "Attach Transcript".to_string()
-                } else {
-                    paste_into_frontmost_app_label(frontmost_app_name.as_deref())
-                };
-            }
             AppView::ThemeChooserView { .. } => {
                 return "Apply".to_string();
             }
@@ -696,9 +687,6 @@ impl ScriptListApp {
     pub(crate) fn actions_toggle_dead_without_selection_reason(&self) -> Option<&'static str> {
         match &self.current_view {
             AppView::ClipboardHistoryView { .. } if !has_selected_clipboard_entry(self) => {
-                Some("Select an entry to see actions")
-            }
-            AppView::DictationHistoryView { .. } if !has_selected_dictation_history_entry(self) => {
                 Some("Select an entry to see actions")
             }
             AppView::FavoritesBrowseView { .. } if self.selected_favorite_id().is_none() => {
@@ -1900,16 +1888,6 @@ impl ScriptListApp {
                     filter,
                 )
                 .len(),
-            )),
-            AppView::DictationHistoryView {
-                filter,
-                visible_limit,
-                ..
-            } => Some((
-                ViewType::MainWindow,
-                self.dictation_history_current_or_previous_page(filter, *visible_limit)
-                    .map(|page| page.visible_count)
-                    .unwrap_or(0),
             )),
             AppView::NotesBrowseView { search } => {
                 Some((ViewType::MainWindow, search.state.rows().len()))

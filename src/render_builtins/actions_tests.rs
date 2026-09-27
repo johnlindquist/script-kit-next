@@ -1,33 +1,4 @@
 #[cfg(test)]
-mod dictation_history_action_model_tests {
-    use super::ScriptListApp;
-
-    #[test]
-    fn standalone_and_portal_actions_advertise_only_performable_verbs() {
-        let standalone = ScriptListApp::dictation_history_actions_for_dialog(false);
-        let standalone_ids = standalone
-            .iter()
-            .map(|action| action.id.as_str())
-            .collect::<Vec<_>>();
-        assert!(standalone_ids.contains(&"dictation_history_paste"));
-        assert!(standalone_ids.contains(&"dictation_history_add_to_agent_chat"));
-        assert!(!standalone
-            .iter()
-            .any(|action| { action.title.contains("Ask") || action.title.contains("Send") }));
-
-        let portal = ScriptListApp::dictation_history_actions_for_dialog(true);
-        let portal_ids = portal
-            .iter()
-            .map(|action| action.id.as_str())
-            .collect::<Vec<_>>();
-        assert!(!portal_ids.contains(&"dictation_history_paste"));
-        assert!(!portal_ids.contains(&"dictation_history_add_to_agent_chat"));
-        assert!(portal_ids.contains(&"dictation_history_copy"));
-        assert!(portal_ids.contains(&"dictation_history_delete"));
-    }
-}
-
-#[cfg(test)]
 mod on_close_reentrancy_tests {
     use std::fs;
 

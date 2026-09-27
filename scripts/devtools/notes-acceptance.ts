@@ -3,7 +3,7 @@ import { DriverCommandRefused, type Json } from "./driver.ts";
 import { EvaluationContractError, type FixtureControl, type OwnedEvaluationClient } from "./lib/owned-evaluation.ts";
 import type { AutomationInstance } from "./lib/target-identity.ts";
 
-export const NOTES_ACCEPTANCE_FIXTURES = ["notes.editor", "day-page.today", "dictation.recording"] as const;
+export const NOTES_ACCEPTANCE_FIXTURES = ["notes.editor", "day-page.today"] as const;
 
 /** Extends the owned runner; never launches, attaches to, or closes a process itself. */
 export async function runNotesAcceptance(client: OwnedEvaluationClient, receipt: RuntimeJourneyReceipt): Promise<void> {
@@ -42,12 +42,6 @@ export async function runNotesAcceptance(client: OwnedEvaluationClient, receipt:
     const exact = result.windows?.filter((entry: Json) => entry.id === target.id && entry.generation === target.generation);
     if (!Array.isArray(exact) || exact.length !== 1) throw new EvaluationContractError("notes_exact_registered_instance_required");
     return exact[0];
-  };
-  const freezeDictation = async (overlay: AutomationInstance, destination: "notes" | "dayPage") => {
-    await control(overlay, { family: "dictation", operation: "begin", destination });
-    await control(overlay, { family: "dictation", operation: "recording", text: "obsolete document delivery", bars: [0.1, 0.2, 0.3, 0.4, 0.5, 0.4, 0.3, 0.2, 0.1] });
-    await control(overlay, { family: "dictation", operation: "confirm" });
-    await control(overlay, { family: "dictation", operation: "transcribe" });
   };
   const staleEvent = async (target: AutomationInstance, retained: Json, id: string) => {
     const before = await client.inspect(target);
@@ -169,15 +163,11 @@ export async function runNotesAcceptance(client: OwnedEvaluationClient, receipt:
   const persistedNote = `${original}\nOwned persisted note edit\n`;
   await input(notes, persistedNote);
   await observe(notes, state => state.inputValue === persistedNote);
-  const overlay = await client.mount("dictation.recording");
-  await freezeDictation(overlay, "notes");
   const retainedNote = await client.inspect(notes);
   const betaId = "d0197594-1111-4000-8000-000000000002";
   const beta = await searchAndSwitch(notes, "Beta", betaId);
   check("notes_search_switch_changes_document", beta.inputValue !== original && beta.notes.surfaceRevision > retainedNote.notes.surfaceRevision);
   await staleEvent(notes, retainedNote, "notes_stale_document_target_refused");
-  const staleNotes = await control(overlay, { family: "dictation", operation: "deliver" });
-  check("notes_stale_dictation_target_refused", staleNotes.observation.deliveryOutcome === "staleTarget" && (await client.inspect(notes)).inputValue === beta.inputValue);
   const reloaded = await searchAndSwitch(notes, "Alpha", revealed.notes.activeNoteId);
   receipt.effects.push({ kind: "notesSaveSwitchReload", targetIdentity: reloaded.targetIdentity,
     activeNoteId: reloaded.notes.activeNoteId, editorFingerprint: reloaded.notes.editor.textFingerprint,
@@ -192,7 +182,6 @@ export async function runNotesAcceptance(client: OwnedEvaluationClient, receipt:
   await key(notes, "f", ["cmd", "shift"]);
   const searchClosed = await observe(notes, state => state.notes?.search?.visible === false && state.notes?.search?.queryLength === 0 && state.notes?.counts?.notes >= 2);
   check("notes_search_close_restores_corpus", searchClosed.inputValue === beta.inputValue);
-  await client.unmount(overlay);
   await client.unmount(notes);
   const reopenedNotes = await client.mount("notes.editor");
   receipt.frames.push(await client.frame(reopenedNotes));
@@ -229,21 +218,15 @@ export async function runNotesAcceptance(client: OwnedEvaluationClient, receipt:
   receipt.effects.push({ kind: "dayCanonicalRoundTrip", before: dayBefore.fixtureObservation, saved: saved.fixtureObservation,
     returned: returnSaved.fixtureObservation, contextReceipt: returned.dayPage.lastContextRoundTripReceipt });
 
-  // A same-window rebind invalidates both retained document commands and frozen dictation.
-  const dayOverlay = await client.mount("dictation.recording");
-  await freezeDictation(dayOverlay, "dayPage");
+  // A same-window rebind invalidates retained document commands.
   const retainedDay = await client.inspect(day);
   await key(day, "p", ["cmd"]);
   for (const character of "Beta") await key(day, character, [], character);
   await observe(day, state => state.dayPage?.noteSwitcher?.selectedActionId === `note_${betaId}`);
   await key(day, "enter");
-  const switchedDay = await observe(day, state => state.dayPage?.surfaceRevision > retainedDay.dayPage.surfaceRevision &&
+  await observe(day, state => state.dayPage?.surfaceRevision > retainedDay.dayPage.surfaceRevision &&
     state.dayPage.documentIdentityFingerprint !== retainedDay.dayPage.documentIdentityFingerprint);
   await staleEvent(day, retainedDay, "day_stale_document_target_refused");
-  const staleDay = await control(dayOverlay, { family: "dictation", operation: "deliver" });
-  check("day_stale_dictation_target_refused", staleDay.observation.deliveryOutcome === "staleTarget" &&
-    (await client.inspect(day)).dayPage.inputFingerprint === switchedDay.dayPage.inputFingerprint);
-  await client.unmount(dayOverlay);
   await client.unmount(day);
   const reopenedDay = await client.mount("day-page.today");
   receipt.frames.push(await client.frame(reopenedDay));

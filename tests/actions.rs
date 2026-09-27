@@ -134,11 +134,9 @@ fn launcher_handoff_builtins_use_submit_reset_not_focus_loss_preserve() {
     let dictation_fn = &dictation_tail[..dictation_end];
 
     assert!(
-        dictation_fn.contains("DictationTarget::ExternalApp")
-            && dictation_fn.contains("self.close_and_reset_window(cx);")
-            && dictation_fn.find("self.close_and_reset_window(cx);")
-                < dictation_fn.find("self.handle_dictation_started(action, dictation_target, cx);"),
-        "external-app dictation starts from the launcher must reset/hide after capture starts but before opening the overlay"
+        dictation_fn.contains("self.handle_dictation_started(action, canonical_target, cx);")
+            && !dictation_fn.contains("self.close_and_reset_window(cx);"),
+        "dictation starts keep the launcher open: the voice view lives in the main window"
     );
 }
 
@@ -1321,33 +1319,6 @@ fn favorites_browse_renderer_uses_named_list_action_states() {
 }
 
 #[test]
-fn dictation_history_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/dictation_history.rs")
-        .expect("Failed to read dictation history action handler");
-
-    assert!(
-        content.contains("enum DictationHistoryHandlerAction")
-            && content.contains("Paste")
-            && content.contains("AddToAgentChat")
-            && content.contains("SaveNote")
-            && content.contains("Copy")
-            && content.contains("Delete"),
-        "dictation history paste/attach/save/copy/delete handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("DictationHistoryHandlerAction::from_action_id(action_id)")
-            && content.contains("history_action.selection_required_message()")
-            && content.contains("history_action.user_message()")
-            && content.contains("history_action.success_hud()")
-            && content.contains("error_prefix()")
-            && content.contains("history_action.failure_message(error)")
-            && content.contains("\"Deleted dictation\"")
-            && content.contains("\"Failed to delete dictation\""),
-        "dictation history handlers should derive empty-selection, user message, HUD, and error copy from named states"
-    );
-}
-
-#[test]
 fn dictation_builtin_execution_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
@@ -1642,21 +1613,10 @@ fn select_microphone_builtin_uses_named_action_states() {
     assert!(
         content.contains("enum SettingsMicrophoneBuiltinAction")
             && content.contains("fn execute_select_microphone_builtin(")
-            && content.contains("action.enumeration_failure_log()")
-            && content.contains("action.failure_hud(&error)")
-            && content.contains("action.failure_code()")
-            && content.contains("action.failure_message()")
-            && content.contains("action.placeholder().to_string()")
-            && content.contains("action.success_detail()"),
-        "Select Microphone should derive failure copy, placeholder text, and success detail from the named state"
-    );
-    assert!(
-        content.contains("\"select_microphone\"")
-            && content.contains("\"select_microphone_failed\"")
-            && content.contains("format!(\"Failed to list microphones: {error}\")")
-            && content.contains("\"Failed to list microphones\"")
-            && content.contains("\"Select microphone...\""),
-        "Select Microphone named state should preserve current success detail, error code, error copy, and placeholder"
+            && content.contains("self.one_window_open_microphones(cx);")
+            && content.contains("action.success_detail()")
+            && content.contains("\"select_microphone\""),
+        "Select Microphone should open the main window's microphone list and report its named success detail"
     );
 }
 
@@ -2081,7 +2041,7 @@ fn surface_open_builtins_use_named_action_states() {
             && content.contains("AppView::SettingsView")
             && content.contains("AppView::AgentChatHistoryView")
             && content.contains("self.open_ai_vault_source_filter(cx)")
-            && content.contains("AppView::DictationHistoryView")
+            && content.contains("self.one_window_open_dictation_history(cx)")
             && content.contains("sdk_reference_entries_for_ui")
             && content.contains("script_template_entries_for_ui")
             && content.contains("action.success_detail()"),

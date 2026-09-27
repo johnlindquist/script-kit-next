@@ -45,25 +45,16 @@ describe("executable PF-009 surface coverage binding inventory", () => {
     );
   });
 
-  test("root launcher and Dictation History resolve to exact direct owners without runtime receipts", async () => {
+  test("root launcher resolves to its exact direct owner without runtime receipts", async () => {
     const pipeline = await runBindingsPipeline();
     const launcher = pipeline.build.set.bindings.find(
       (binding) => binding.contractKind === "ScriptList",
-    );
-    const dictationHistory = pipeline.build.set.bindings.find(
-      (binding) => binding.appViewVariant === "DictationHistoryView",
     );
 
     expect(launcher?.profileId).toBe("main");
     expect(launcher?.relation).toBe("Direct");
     expect(launcher?.evidenceGrade).toBe("Direct");
     expect(launcher?.missingPrimitiveIds).toEqual([]);
-
-    expect(dictationHistory?.profileId).toBe("dictation-history");
-    expect(dictationHistory?.profileStatus).toBe("partial");
-    expect(dictationHistory?.relation).toBe("Direct");
-    expect(dictationHistory?.evidenceGrade).toBe("Direct");
-    expect(dictationHistory?.missingPrimitiveIds).toEqual([]);
 
     const receipt = await passingInventory();
     expect(receipt.summary.freshDirectRuntimeProofCount).toBe(0);

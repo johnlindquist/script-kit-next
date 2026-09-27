@@ -19,12 +19,18 @@ const PASTE_SETTLE: Duration = Duration::from_millis(200);
 /// Bumped whenever the words or the questions change, so a remembered answer is for them.
 const TALK_TAG: &str = "|talk:v1";
 
+/// Types the final words where the recording started, through dictation's own delivery.
+pub(crate) type TalkPaste =
+    Box<dyn FnOnce(&mut ScriptListApp, String, &mut Context<ScriptListApp>)>;
+
 #[derive(Default)]
 pub(crate) struct TalkHost {
     /// Bumped per session, so a pump from an older one stops.
     generation: u64,
     /// The microphone is on for this session (off in the owned evaluator).
     listening: bool,
+    /// How the words are typed when letting go picks typing.
+    paste: Option<TalkPaste>,
 }
 
 fn talk_questions() -> Questions {
@@ -71,25 +77,38 @@ fn talk_state(words: &str, app: &str, still_talking: bool) -> serde_json::Value 
 }
 
 impl ScriptListApp {
-    /// A voice session starts in the main window over `app`.
-    pub(crate) fn one_window_talk_began(&mut self, listening: bool, cx: &mut Context<Self>) {
+    /// A voice session starts in the main window over `app`; one for `dest` sends the words
+    /// there.
+    pub(crate) fn one_window_talk_began(
+        &mut self,
+        listening: bool,
+        dest: Option<sk_one_window::Dest>,
+        cx: &mut Context<Self>,
+    ) {
         let app = crate::ui_window::footer_frontmost_app_name()
             .unwrap_or_else(|| "the front app".to_string());
         if !self.main_services.host_policy().is_hidden() {
-            crate::platform::show_main_window_without_activation();
+            self.dispatch_window_event(
+                crate::window_orchestrator::WindowEvent::ShowMain {
+                    activate_app: false,
+                },
+                cx,
+            );
         }
         let talk = &mut self.one_window_host.learns.talk;
         talk.generation += 1;
         talk.listening = listening;
+        talk.paste = None;
         let generation = talk.generation;
-        self.one_window_handle(
-            Event::Talk(TalkEvent::Start {
+        let start = match dest {
+            Some(dest) => TalkEvent::StartTo { dest },
+            None => TalkEvent::Start {
                 app,
                 field: String::new(),
                 to: None,
-            }),
-            cx,
-        );
+            },
+        };
+        self.one_window_handle(Event::Talk(start), cx);
         self.one_window_republish_own(cx);
         if listening {
             self.one_window_talk_pump(generation, cx);
@@ -102,14 +121,18 @@ impl ScriptListApp {
             let mut heard = String::new();
             loop {
                 cx.background_executor().timer(HEARD_POLL).await;
-                let Some(state) = crate::dictation::snapshot_overlay_state() else {
+                let Some(state) = crate::dictation::snapshot_live_state() else {
                     break;
                 };
-                let now = state.transcript.to_string();
+                let now = state.transcript;
                 let current = this
                     .update(cx, |app, cx| {
                         let current = app.one_window_host.learns.talk.generation == generation
                             && app.one_window.talk().is_some();
+                        if current && crate::dictation::dictation_auto_stop_due() {
+                            tracing::warn!(target: "script_kit::one_window", event = "talk_time_limit");
+                            app.one_window_talk_stop_listening(cx);
+                        }
                         if current && now != heard {
                             app.one_window_handle(Event::Talk(TalkEvent::Heard(now.clone())), cx);
                             app.one_window_republish_own(cx);
@@ -126,9 +149,17 @@ impl ScriptListApp {
         .detach();
     }
 
-    /// The final words came back from the transcriber after the voice key came up.
-    pub(crate) fn one_window_talk_final(&mut self, transcript: String, cx: &mut Context<Self>) {
-        self.one_window_host.learns.talk.listening = false;
+    /// The final words came back from the transcriber after the voice key came up; `paste`
+    /// types them where the recording started if letting go picks typing.
+    pub(crate) fn one_window_talk_final(
+        &mut self,
+        transcript: String,
+        paste: Option<TalkPaste>,
+        cx: &mut Context<Self>,
+    ) {
+        let talk = &mut self.one_window_host.learns.talk;
+        talk.listening = false;
+        talk.paste = paste;
         self.one_window_handle(Event::Talk(TalkEvent::Heard(transcript)), cx);
         self.one_window_handle(Event::Talk(TalkEvent::Release), cx);
         self.one_window_republish_own(cx);
@@ -246,15 +277,8 @@ impl ScriptListApp {
 
     /// Letting go with Enter while the microphone is on: stop and transcribe; the final words
     /// come back through [`Self::one_window_talk_final`].
-    fn one_window_talk_stop_listening(&mut self, cx: &mut Context<Self>) {
-        let target = crate::dictation::get_dictation_target()
-            .unwrap_or(crate::dictation::DictationTarget::ExternalApp);
-        self.request_active_dictation_stop(
-            crate::dictation::DictationStopReason::Hotkey,
-            target,
-            true,
-            cx,
-        );
+    pub(crate) fn one_window_talk_stop_listening(&mut self, cx: &mut Context<Self>) {
+        self.request_active_dictation_stop(crate::dictation::DictationStopReason::Hotkey, true, cx);
     }
 
     /// The voice session is over: whatever is still listening stops, and nothing it heard is
@@ -262,6 +286,7 @@ impl ScriptListApp {
     pub(crate) fn one_window_talk_ended(&mut self) {
         let talk = &mut self.one_window_host.learns.talk;
         talk.generation += 1;
+        talk.paste = None;
         if std::mem::take(&mut talk.listening) {
             if let Err(error) = crate::dictation::abort_dictation() {
                 tracing::warn!(target: "script_kit::one_window", %error, "talk_abort_failed");
@@ -269,23 +294,40 @@ impl ScriptListApp {
         }
     }
 
-    /// Pastes the words at the front app's cursor once the window is out of its way.
+    /// Typing picked: the words go where the recording started, through dictation's delivery.
     pub(crate) fn one_window_paste(&mut self, text: String, app: String, cx: &mut Context<Self>) {
-        tracing::info!(target: "script_kit::one_window", event = "paste", app = %app, chars = text.chars().count());
-        cx.background_executor()
-            .spawn(async move {
-                std::thread::sleep(PASTE_SETTLE);
-                if let Err(error) = crate::text_injector::TextInjector::new().paste_text(&text) {
-                    tracing::warn!(target: "script_kit::one_window", %error, "paste_failed");
-                }
-            })
-            .detach();
+        match self.one_window_host.learns.talk.paste.take() {
+            Some(paste) => paste(self, text, cx),
+            None => tracing::info!(
+                target: "script_kit::one_window",
+                event = "typed_without_recording",
+                app = %app,
+            ),
+        }
+    }
+
+    /// A session for today's note: the words go at its end and the line says so.
+    pub(crate) fn one_window_add_to_note(&mut self, text: String, cx: &mut Context<Self>) {
+        if let Err(error) = crate::intent_launcher::append_capture_to_day("note", &text, None) {
+            tracing::warn!(target: "script_kit::one_window", event = "note_append_failed", error);
+            self.show_error_toast("Couldn't add it to today's note", cx);
+            return;
+        }
+        let said: String = text.chars().take(48).collect();
+        self.one_window_handle(
+            Event::Done(sk_one_window::Done {
+                icon: "append".into(),
+                title: format!("Added to today's note: “{said}”"),
+                ..sk_one_window::Done::default()
+            }),
+            cx,
+        );
     }
 
     /// Starts a voice session from the main window: the same session the voice key starts.
     pub(crate) fn one_window_talk_from_list(&mut self, cx: &mut Context<Self>) {
         if crate::runtime_policy::is_owned_evaluation() {
-            self.one_window_talk_began(false, cx);
+            self.one_window_talk_began(false, None, cx);
         } else {
             self.start_dictation_session(cx);
         }

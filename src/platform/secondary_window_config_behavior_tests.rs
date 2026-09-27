@@ -33,12 +33,10 @@ fn detached_backdrop_excludes_footer_and_exact_eight_point_gutter() {
 #[cfg(target_os = "macos")]
 #[test]
 fn notes_defaults_to_full_backdrop() {
-    // Default (static) partition owner: Dictation only. The main window's
-    // footer floats inside its stage, so its glass fills the window.
-    assert!(super::window_name_owns_detached_footer("Dictation overlay"));
-    for window_name in ["Main window", "Notes", "Actions popup"] {
-        assert!(
-            !super::window_name_owns_detached_footer(window_name),
+    for window_name in ["Notes", "Actions popup"] {
+        assert_eq!(
+            super::tahoe_backdrop_layout(window_name).bottom_inset(),
+            0.0,
             "{window_name} must not reserve a detached footer strip"
         );
     }
@@ -72,7 +70,6 @@ fn only_actions_modals_and_toasts_use_the_popup_backdrop() {
     for window_name in [
         "Main window",
         "Notes",
-        "Dictation overlay",
         "Inline popup",
         "Shortcut recorder popup",
     ] {
