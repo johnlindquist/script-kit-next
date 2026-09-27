@@ -47,7 +47,6 @@ pub mod hint_strip;
 pub(crate) mod info_state;
 pub(crate) mod inline_dropdown;
 pub mod inline_picker;
-pub mod inline_popup_window;
 pub mod inline_prompt_input;
 pub(crate) mod launcher_ask_ai_hint;
 pub(crate) mod list_scroll_affordance;
