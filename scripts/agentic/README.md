@@ -70,16 +70,16 @@ Families, by prefix:
 
 - `brain-*` — brain capture/recall/inbox/substrate probes.
 - `day-*`, `day-page-*` — Day Page editor, handoff, spine, perf.
-- `notes-*` — Notes window, popups, embedded Agent Chat.
+- `notes-*` — the notes editor and the Today switcher.
 - `mini-*` — mini AI window sizing/dismiss/handoff.
-- `main-*` — main window focus, hotkeys, actions sizing.
+- `main-*` — main window focus, hotkeys, Escape.
 - `root-*` — main-menu perf benchmarks and source-filter matrices
   (`root-source-filter-matrix.ts` is the canonical template for porting a
   session.sh probe to the driver).
 - `vibrancy-*` — window backdrop/material measurement.
 - `verify-shot-*` — screenshot verification edge cases.
-- Everything else: one surface each (actions popup, footer, HUD, confirm,
-  clipboard, dictation, theme, process manager, ...).
+- Everything else: one surface each (actions, footer, the line above the
+  input, clipboard, dictation, theme, process manager, ...).
 
 Ground rules:
 

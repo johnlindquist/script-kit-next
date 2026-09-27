@@ -87,7 +87,7 @@ For wrapper changes, run:
 
 ```bash
 scripts/agentic/agy-devtools.sh --help
-scripts/agentic/agy-devtools.sh infer --prompt "Cmd-K opens the actions popup but it is clipped" --surface auto
+scripts/agentic/agy-devtools.sh infer --prompt "Cmd-K actions are clipped" --surface auto
 scripts/agentic/agy-devtools.sh run --dry-run --prompt "inspect the main menu filter" --surface main
 scripts/agentic/agy-devtools.sh run --dry-run --fast --prompt "Open Agent Chat and submit what's for lunch" --surface agent_chat --allow-act --allow-submit
 scripts/agentic/agy-devtools.sh run --dry-run --fast --prompt "Open the theme designer, change the accent color to red" --surface theme --allow-act --allow-submit --allow-real-data

@@ -225,7 +225,7 @@ if hint in surface_map and hint != "auto":
     surface_id = "actions-dialog" if hint == "actions" else hint
     surface_kind, confidence, reasons = surface_map[hint]
 elif re.search(r"\b(action|actions|cmd\+?k|command palette|popup|popover|route stack|deeplink|disabled action|clipped)\b", text):
-    surface_id, surface_kind, confidence, reasons = "actions-dialog", "ActionsDialog", 0.88, ["matched actions/popup vocabulary"]
+    surface_id, surface_kind, confidence, reasons = "actions-dialog", "ActionsDialog", 0.88, ["matched actions vocabulary"]
 elif re.search(r"\b(note|notes|markdown|preview|autosize|dirty state|note editor|command bar)\b", text):
     surface_id, surface_kind, confidence, reasons = "notes", "Notes", 0.88, ["matched notes vocabulary"]
 elif re.search(r"\b(dictation|mic|microphone|transcript|recording|audio|waveform|hotkey)\b", text):

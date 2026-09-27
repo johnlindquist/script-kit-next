@@ -19,12 +19,12 @@ mkdirSync(outDir, { recursive: true });
 const session = arg("--session", "footer-ownership-matrix");
 const timeoutMs = Number(arg("--timeout", "8000"));
 
-type ExpectedOwner = "native" | "prompt" | "popup" | "content" | "none";
+type ExpectedOwner = "native" | "prompt" | "content" | "none";
 
 interface CaseSpec {
   id: string;
   command: Json;
-  entry?: "send" | "search" | "scriptListFilter";
+  entry?: "send" | "search";
   expectSurface: string | null;
   expectOwner: ExpectedOwner;
   expectRows: 0 | 1;
@@ -48,14 +48,12 @@ const cases: CaseSpec[] = [
   { id: "template", command: { type: "template", id: "footer-template", template: "Hello {{name}}" }, expectSurface: "template_prompt", expectOwner: "native", expectRows: 1 },
   { id: "mic-stub", command: { type: "micro", id: "footer-micro", placeholder: "Small", choices: [choice] }, expectSurface: null, expectOwner: "none", expectRows: 0 },
   { id: "about", command: { type: "openAbout" }, expectSurface: null, expectOwner: "content", expectRows: 1 },
-  { id: "actions-popup", command: { type: "arg", id: "footer-actions", placeholder: "Actions", choices: [choice], actions: [action] }, expectSurface: "arg_prompt", expectOwner: "popup", expectRows: 1 },
   { id: "create-flow", command: { type: "triggerBuiltin", builtinId: "builtin/new-script" }, expectSurface: "naming_prompt", expectOwner: "native", expectRows: 1 },
   { id: "sdk-browser", command: { type: "triggerBuiltin", builtinId: "builtin/sdk-reference" }, expectSurface: null, expectOwner: "prompt", expectRows: 1 },
   { id: "sdk-terminal", command: { type: "term", id: "footer-sdk-term", command: "printf sdk", actions: [action] }, expectSurface: null, expectOwner: "prompt", expectRows: 1 },
   { id: "kit-store", command: { type: "triggerBuiltin", builtinId: "builtin/browse-kit-store" }, expectSurface: "kit_store_browse", expectOwner: "native", expectRows: 1 },
   { id: "theme-chooser", command: { type: "triggerBuiltin", builtinId: "builtin/choose-theme" }, expectSurface: "theme_chooser", expectOwner: "native", expectRows: 1 },
   { id: "quick-terminal", command: { type: "triggerBuiltin", builtinId: "builtin/quick-terminal" }, expectSurface: "quick_terminal", expectOwner: "native", expectRows: 1 },
-  { id: "menu-syntax-popup", command: { type: "setFilter", text: ":" }, entry: "scriptListFilter", expectSurface: "script_list", expectOwner: "popup", expectRows: 1 },
 ];
 
 function arg(name: string, fallback: string): string {
@@ -138,13 +136,6 @@ async function openFromSearch(text: string): Promise<void> {
   send({ type: "simulateKey", key: "enter", modifiers: [] });
 }
 
-async function filterScriptList(text: string): Promise<void> {
-  rpc({ type: "hide" }, "windowVisibilityAck");
-  rpc({ type: "show" }, "windowVisibilityAck");
-  await Bun.sleep(150);
-  send({ type: "setFilter", text });
-}
-
 function footerRows(elementsResult: Json): Json[] {
   return (elementsResult.elements ?? []).filter((element: Json) =>
     element.role === "footer" && String(element.kind ?? "").endsWith("FooterRow")
@@ -211,13 +202,8 @@ try {
   run(["bash", "scripts/agentic/session.sh", "start", session]);
   rpc({ type: "show" }, "windowVisibilityAck");
   for (const spec of cases) {
-    if (spec.id === "actions-popup") {
-      send(spec.command);
-      send({ type: "simulateKey", key: "k", modifiers: ["cmd"] });
-    } else if (spec.entry === "search") {
+    if (spec.entry === "search") {
       await openFromSearch(spec.command.text);
-    } else if (spec.entry === "scriptListFilter") {
-      await filterScriptList(spec.command.text);
     } else {
       send(spec.command);
     }
@@ -225,9 +211,6 @@ try {
     const stateResult = await waitForState(spec);
     const elementsResult = elements();
     receipt.cases.push(assertCase(spec, stateResult, elementsResult));
-    if (spec.id === "actions-popup" || spec.id === "menu-syntax-popup") {
-      send({ type: "simulateKey", key: "escape", modifiers: [] });
-    }
   }
   const hide = rpc({ type: "hide" }, "windowVisibilityAck");
   if (hide.windowVisible !== false) {

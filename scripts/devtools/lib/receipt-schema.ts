@@ -683,7 +683,7 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
     commands: ["actions.inspect"],
     requiredPaths: ["target", "actions", "missingPrimitives"],
     forbidMissingPrimitivesOnPass: true,
-    description: "Inspect Actions popup rows, shortcuts, and geometry.",
+    description: "Inspect Cmd+K action rows, shortcuts, and geometry.",
   }),
   schema({
     primitiveId: "devtools.act",

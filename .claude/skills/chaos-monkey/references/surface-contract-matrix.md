@@ -66,7 +66,7 @@ by the next campaign's parity lane.
 | Dictation History | ✓ | TBV | ✓ Esc | |
 | Theme Chooser | ✓ apply ↵ | TBV | ✓ Esc | |
 | Emoji Picker | ✓ insert ↵ | TBV | ✓ Esc | |
-| Notes window (secondary) | — | — | — | OUTSIDE contract until the NotesWindow-chrome ratification lands (open item, final report §7) |
+| Notes (under the main input) | TBV | TBV | TBV | The Notes window was retired 2026-09-27; a note opens as a view under the main input |
 | ActionsDialog overlay (live ⌘K) | n/a (overlay) | self | ✓ Esc + ⌘K toggle (OF-61!) | Overlay keeps the UNDERLYING footer visible; the footerless full-view variant is dead code pending delete-vs-wire ratification |
 
 ## Ratified divergences

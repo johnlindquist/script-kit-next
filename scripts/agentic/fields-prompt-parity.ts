@@ -238,12 +238,7 @@ function proveActions(): Json {
     "fields prompt footer exposes enabled Actions button",
     before.activeFooter,
   );
-
-  const offset = logOffset();
-  send({ type: "simulateKey", key: "k", modifiers: ["cmd"], requestId: `${id}-cmd-k` });
-  const log = waitForLog(offset, "actions popup receipt event=OpenRequested host=FormPrompt", "fields actions open receipt");
-  send({ type: "simulateKey", key: "escape", modifiers: [], requestId: `${id}-escape-actions` });
-  return { id, host: "FormPrompt", openedVia: "simulateKey Cmd+K", logMatched: log.length > 0 };
+  return { id, host: "FormPrompt", footerActions: true };
 }
 
 function proveCancel(): Json {

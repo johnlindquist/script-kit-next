@@ -115,11 +115,11 @@ one back is rude.
 **"Clicking away" is three different events, not one** (ruled 2026-07-25,
 submission `98cab5e5-…641` + Oracle `floating-capsule-entry-material`):
 
-1. **Modal backdrop click** — dismisses that modal ONLY. The topmost modal
-   owns the click, consumes it, and restores parent focus. It never
-   backgrounds the underlying session. This is already the shipped behavior
-   (`src/render_prompts/arg/helpers.rs` closes the actions popup on backdrop
-   click) and the user confirmed it as the general rule.
+1. **Modal backdrop click** — there is no modal left to click past (the
+   2026-09-26 one-window build): Cmd+K stages actions in the line above the
+   input and questions are answered as rows under it, so nothing floats over
+   the session. The ruling still stands for anything that owns a click: it
+   consumes that click and never backgrounds the underlying session.
 2. **In-app click outside a non-modal surface** — follows that surface's
    existing routing. Clicking empty chrome does not auto-background.
 3. **Actual window focus loss with no modal or transient owner** — the only
@@ -157,13 +157,14 @@ places deliberately depend on that:
 better outcome than either current behaviour, but it must be reached by adding
 the new arm, not by inverting a policy two other paths read.
 
-### The modal must not trip the blur handler
+### Nothing may trip the blur handler from inside the app
 
-Opening the parent action dialog is a separate NSPanel, so the main window loses
-key status the instant the dialog appears. The blur handler is guarded by
-`!confirm::is_confirm_window_open()`. **Any new modal must register with that
-same predicate** or the blur path fires underneath it — and, given the arm above,
-would background the session while the user is still deciding whether to.
+The action dialog panel and the confirm window are gone: Cmd+K stages actions in
+place and irreversible actions hold 8 s in the line above the input, so the main
+window keeps key status while the user decides. **A new surface must stay inside
+the main window** rather than open a panel; a panel would take key status, fire
+the blur path underneath it and, given the arm above, background the session
+while the user is still deciding whether to.
 
 ---
 

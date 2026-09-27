@@ -996,11 +996,11 @@ test("action completion records observed after identity, and frames refresh asyn
   expect(Object.hasOwn(requests.at(-1)!.condition, "expected")).toBe(false);
   await expect(client.wait(target, { type: "completedFrame", afterFrameGeneration: 0, expected: initial })).rejects.toMatchObject({ code: "stale_target_identity" });
 });
-test("authoritative target snapshots retire delayed popup closures without promoting stale lifetimes", async () => {
+test("authoritative target snapshots retire delayed secondary-window closures without promoting stale lifetimes", async () => {
   for (const method of ["discover", "diagnose"] as const) {
     const { client, requests } = clientFixture();
     const main = await client.mount("main.script-list");
-    const popup = { ...initial, windowId: "agent_chat-history-popup", windowGeneration: 3, appViewVariant: "promptPopup" };
+    const popup = { ...initial, windowId: "snap-overlay", windowGeneration: 3, appViewVariant: "snapOverlay" };
     const popupTarget = { type: "instance" as const, id: popup.windowId, generation: popup.windowGeneration };
     let targets = [initial, popup];
     const request = client.driver.request.bind(client.driver);

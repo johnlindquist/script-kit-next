@@ -1,5 +1,7 @@
 # Oracle DevTools Scenario Index
 
+> Written before the one-window builds (2026-09-26/27). The Notes window, the Actions popup, prompt popups, the confirm window and the detached Agent Chat window it names are gone: notes, chat and questions open under the main input, and Cmd+K stages actions in the line above it. Read those entries as history, not as current targets.
+
 This index records the corrected 50 Oracle-planned scenario iterations. The detailed Oracle text is preserved in `oracle-devtools-scenario-iterations.md`; this file gives agents a compact routing map.
 
 ## Oracle Session Provenance

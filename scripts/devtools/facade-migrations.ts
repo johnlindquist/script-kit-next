@@ -22,8 +22,6 @@ export const SHARED_COMPONENTS_MODULE = "src/components/mod.rs";
 
 export const REQUIRED_POPUP_CONSUMERS = [
   "src/ai/agent_chat/ui/view.rs",
-  "src/ai/agent_chat/ui/chat_window.rs",
-  "src/ai/agent_chat/ui/history_popup.rs",
   "src/menu_syntax/object_selector.rs",
 ] as const;
 

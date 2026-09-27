@@ -53,7 +53,7 @@ import {
   taskProofPolicy,
 } from "./lib/task-proof-policy.ts";
 import {
-  NOTES_WINDOW_RETIRED_TASK_IDS,
+  RETIRED_WINDOW_TASK_IDS,
   WORKFLOW_TASK_PRIMITIVE_ID,
   WORKFLOW_TASK_PROOF_MODE,
   WORKFLOW_TASK_PROOF_SPECS,
@@ -1516,7 +1516,7 @@ describe("verify-scope and verify-all", () => {
 
   // This aggregate validates all 28 direct runtime receipts against source/artifact
   // bytes in scope and program audits; its observed 56s run needs a bounded 120s deadline.
-  test("every live workflow task passes on exact receipts while the retired Notes-window tasks never do", () => {
+  test("every live workflow task passes on exact receipts while the retired-window tasks never do", () => {
     const tree = setup({ receiptTaskIds: CONS_FLOW_UX_IDS });
     const { receipt, exitCode } = verifyScope({
       scope: "cons-flow-ux",
@@ -1528,8 +1528,8 @@ describe("verify-scope and verify-all", () => {
 
     expect(receipt.scope).toBe("cons-flow-ux");
     expect(receipt.scopeTaskCount).toBe(28);
-    expect(receipt.scopePassedTaskCount).toBe(28 - NOTES_WINDOW_RETIRED_TASK_IDS.size);
-    for (const taskId of NOTES_WINDOW_RETIRED_TASK_IDS) {
+    expect(receipt.scopePassedTaskCount).toBe(28 - RETIRED_WINDOW_TASK_IDS.size);
+    for (const taskId of RETIRED_WINDOW_TASK_IDS) {
       expect(receipt.taskDispositions[taskId]).not.toBe("EVALUABLE_PASS");
     }
     expect(receipt.headCommit).toBe(HEAD);
@@ -1568,7 +1568,7 @@ describe("verify-scope and verify-all", () => {
 
   test("one missing exact workflow receipt names its task without weakening the other live tasks", () => {
     const tree = setup({
-      receiptTaskIds: [...CONS_FLOW_UX_IDS].filter((taskId) => !NOTES_WINDOW_RETIRED_TASK_IDS.has(taskId)),
+      receiptTaskIds: [...CONS_FLOW_UX_IDS].filter((taskId) => !RETIRED_WINDOW_TASK_IDS.has(taskId)),
       skipReceiptsFor: new Set(["SAFE-001"]),
     });
     const { receipt, exitCode } = verifyScope({
@@ -1579,8 +1579,8 @@ describe("verify-scope and verify-all", () => {
       current: tree.current,
     });
 
-    expect(receipt.scopePassedTaskCount).toBe(27 - NOTES_WINDOW_RETIRED_TASK_IDS.size);
-    expect(receipt.missingScopeTaskIds).toEqual(["SAFE-001", ...NOTES_WINDOW_RETIRED_TASK_IDS].sort());
+    expect(receipt.scopePassedTaskCount).toBe(27 - RETIRED_WINDOW_TASK_IDS.size);
+    expect(receipt.missingScopeTaskIds).toEqual(["SAFE-001", ...RETIRED_WINDOW_TASK_IDS].sort());
     expect(receipt.disposition).toBe("BLOCKED_MISSING_PRIMITIVE");
     expect(exitCode).toBe(3);
   });

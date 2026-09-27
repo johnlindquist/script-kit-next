@@ -82,17 +82,6 @@
       "expectedEvidence": { "pass": "Disabled parent reports no child route activation.", "fail": "enabled=false parent opens child route or pending route request." }
     },
     {
-      "id": "skqa-008-actions-popup-resize-stale-anchor",
-      "title": "Nested menu anchor stays at old popup size",
-      "surface": "ActionsDialog",
-      "tags": ["actions", "resize", "anchor", "generation"],
-      "description": "Opening a nested menu resizes the actions popup, but the nested anchor remains positioned for the old size.",
-      "goal": "Compare popup resize generation with anchor generation and child menu bounds.",
-      "risk": "Submenu placement becomes visibly detached after dynamic content changes.",
-      "suggestedProofCommands": ["bun scripts/devtools/actions.ts inspect --session <session> --start --keep-open --open", "bun scripts/devtools/compare.ts redgreen --red <red-receipt.json> --green <green-receipt.json>"],
-      "expectedEvidence": { "pass": "Anchor and menu bounds share the current resize generation.", "fail": "Child menu keeps pre-resize anchor coordinates." }
-    },
-    {
       "id": "skqa-009-hidden-nested-action-shortcut-wins",
       "title": "Visible keycap triggers hidden nested action",
       "surface": "ActionsDialog",
@@ -223,17 +212,6 @@
       "risk": "Shortcut registration UI becomes ambiguous.",
       "suggestedProofCommands": ["bun scripts/devtools/text.ts measure --session <session> --main --strict", "bun scripts/devtools/layout.ts measure --session <session> --main --strict --include overlaps"],
       "expectedEvidence": { "pass": "No overlap pairs among keycaps, instructions, and rows.", "fail": "Shortcut row or keycap overlaps instruction text." }
-    },
-    {
-      "id": "skqa-021-notes-window-wrong-target",
-      "title": "DevTools inspects wrong note after rapid switch",
-      "surface": "Notes",
-      "tags": ["notes", "target", "race", "identity"],
-      "description": "Opening Notes then immediately switching notes sometimes leaves DevTools attached to the old note.",
-      "goal": "Prove active note id, storage generation, selected note, and target identity agree.",
-      "risk": "Automation edits or verifies the wrong note.",
-      "suggestedProofCommands": ["bun scripts/devtools/notes.ts inspect --session <session> --open", "bun scripts/devtools/targets.ts inspect --session <session> --target-kind notes --strict"],
-      "expectedEvidence": { "pass": "Target identity and runtime activeNoteId match the visible note.", "fail": "Focused target or getState note id differs from visible/selected note." }
     },
     {
       "id": "skqa-022-notes-markdown-preview-stale",

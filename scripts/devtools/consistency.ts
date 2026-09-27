@@ -60,7 +60,8 @@ import {
   type TaskProofPolicy,
 } from "./lib/task-proof-policy.ts";
 import {
-  NOTES_WINDOW_RETIRED_TASK_IDS,
+  DICTATION_WINDOW_RETIRED_TASK_IDS,
+  RETIRED_WINDOW_TASK_IDS,
   WORKFLOW_TASK_PRIMITIVE_ID,
   WORKFLOW_TASK_PROOF_SPECS,
   workflowTaskProofErrors,
@@ -1061,11 +1062,12 @@ export function verifyTask(input: VerifyTaskInput): { receipt: JsonObject; exitC
         const workflowSpec = WORKFLOW_TASK_PROOF_SPECS[
           taskId as WorkflowTaskProofId
         ];
-        if (NOTES_WINDOW_RETIRED_TASK_IDS.has(taskId)) {
+        if (RETIRED_WINDOW_TASK_IDS.has(taskId)) {
+          const retiredWindow = DICTATION_WINDOW_RETIRED_TASK_IDS.has(taskId) ? "Dictation" : "Notes";
           errors.push({
             code: "task-workflow-proof-contract-missing",
             detail:
-              `${taskId} ran in the retired Notes window and has no workflow producer; ` +
+              `${taskId} ran in the retired ${retiredWindow} window and has no workflow producer; ` +
               `${entry.path} cannot discharge it`,
           });
         } else if (workflowSpec && primitiveId !== WORKFLOW_TASK_PRIMITIVE_ID) {

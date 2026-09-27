@@ -28,9 +28,6 @@ export const WORKFLOW_TASK_PROOF_SPECS = {
   "SAFE-001": task("context-preparation-probe", [
     "accepted-sanitized-context", "failed-primary-blocked", "failed-supplemental-preserved",
   ], ["base64-context-redacted", "failed-primary-cannot-send", "no-raw-private-content"]),
-  "SAFE-002": task("dictation-dismiss-targets-probe", [
-    "recording-confirm-resume-discard", "processing-hide-reopen",
-  ], ["recording-never-discarded-without-confirmation", "processing-never-cancelled-by-escape"]),
   "SAFE-003": task("flow-history-probe", [
     "core-lifecycle-a", "core-lifecycle-b",
   ], ["new-conversation-preserves-history", "delete-requires-explicit-confirmation"]),
@@ -67,17 +64,11 @@ export const WORKFLOW_TASK_PROOF_SPECS = {
   "WF-011": task("flow-history-probe", [
     "core-lifecycle-a", "core-lifecycle-b", "desk-ready",
   ], ["runtime-termination-preserves-history", "missing-engine-reports-actionable-state"]),
-  "WF-018": task("dictation-dismiss-targets-probe", [
-    "recording-confirm-resume-discard", "processing-hide-reopen",
-  ], ["legacy-destination-never-selectable", "disabled-destination-explains-refusal"]),
-  "WF-019": task("dictation-dismiss-targets-probe", [
-    "recording-confirm-resume-discard", "processing-hide-reopen",
-  ], ["destination-selection-never-delivers", "destination-selection-never-stops-recording"]),
   "WF-020": task("dictation-delivery-probe", [
-    "stale-launcher-input-refuses", "stale-prompt-input-refuses", "stale-notes-editor-refuses",
+    "stale-launcher-input-refuses", "stale-prompt-input-refuses",
   ], ["stale-destination-never-mutates", "stale-destination-never-falls-back"]),
   "WF-021": task("dictation-delivery-probe", [
-    "launcher-filter", "prompt-input", "notes-editor", "captured-day",
+    "launcher-filter", "prompt-input", "captured-day",
     "fresh-agent-chat", "existing-agent-chat", "fresh-quick-ai", "unknown-target-refuses",
   ], ["delivery-occurs-exactly-once", "unknown-destination-never-falls-back"]),
   "WF-022": task("dictation-recovery-focus-probe", [
@@ -100,6 +91,21 @@ export type WorkflowTaskProofId = keyof typeof WORKFLOW_TASK_PROOF_SPECS;
  */
 export const NOTES_WINDOW_RETIRED_TASK_IDS: ReadonlySet<string> = new Set([
   "SAFE-004", "WF-012", "WF-013", "WF-014", "WF-015", "WF-016", "WF-017",
+]);
+
+/**
+ * The Dictation dismissal and destination group: their journeys drove the Dictation window
+ * (its Escape ladder, chips and Actions popup), which no longer exists (dictation opens under
+ * the main input). Like the Notes group they have no producer and stay outstanding.
+ */
+export const DICTATION_WINDOW_RETIRED_TASK_IDS: ReadonlySet<string> = new Set([
+  "SAFE-002", "WF-018", "WF-019",
+]);
+
+/** Every program task whose journey ran in a window that no longer exists. */
+export const RETIRED_WINDOW_TASK_IDS: ReadonlySet<string> = new Set([
+  ...NOTES_WINDOW_RETIRED_TASK_IDS,
+  ...DICTATION_WINDOW_RETIRED_TASK_IDS,
 ]);
 
 export const WORKFLOW_TASK_PRIMITIVE_ID = "devtools.consistency.workflow-task-proof";

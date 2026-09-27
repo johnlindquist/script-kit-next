@@ -1,5 +1,7 @@
 # Oracle DevTools Buildout Plan
 
+> Written before the one-window builds (2026-09-26/27). The Notes window, the Actions popup, prompt popups, the confirm window and the detached Agent Chat window it names are gone: notes, chat and questions open under the main input, and Cmd+K stages actions in the line above it. Read those entries as history, not as current targets.
+
 Oracle browser session `devtools-all-surfaces-buildout-plan-2` reviewed the surface inventory and confirmed the pivot: Script Kit DevTools should be protocol/MCP/CLI primitives for proving real UI behavior, while recipes remain regression wrappers only after direct red/green proof exists.
 
 ## Corrections From Oracle

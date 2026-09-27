@@ -1403,7 +1403,6 @@ describe("noninteractive DevTools operator safety", () => {
     ["dictation-recovery-focus", "cons-flow-ux.dictation-recovery-focus"],
     ["dictation-delivery", "cons-flow-ux.dictation-delivery"],
     ["context-preparation", "cons-flow-ux.context-preparation"],
-    ["dictation-dismiss-targets", "cons-flow-ux.dictation-dismiss-targets"],
     ["flow-history", "cons-flow-ux.flow-history"],
     ["context-lifecycle", "cons-flow-ux.context-lifecycle"],
     ["conversation-hosts", "conversation-hosts.private-pasteboard-archive"],

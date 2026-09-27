@@ -1,12 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Runtime proof for Today editor style parity with Notes.
- *
- * Proves the editor-core contract, not window-shell parity:
- * - Notes and Day Page expose the same shared NotesEditor style owner/path.
- * - Padding/font/theme surface tokens match through semantic metadata.
- * - Day Page remains the main-window Day Page surface and does not inherit
- *   Notes window titlebar/footer semantics.
+ * Runtime proof for the Today editor style contract:
+ * - Day Page remains the main-window Day Page surface and exposes its editor
+ *   style through semantic metadata.
+ * - Sigil input stays plain editor text with the same style and no local
+ *   spine list.
  */
 import { Driver, type Json } from "../devtools/driver";
 import { openDayPage } from "./day-page-open-helper";
@@ -57,25 +55,6 @@ function comparableStyle(style: unknown): Json | null {
   };
 }
 
-function assertStyleEqual(notesStyle: Json | null, dayStyle: Json | null) {
-  const fields = [
-    "owner",
-    "inputRenderPath",
-    "surfaceBackgroundRgb",
-    "occlusionRgba",
-    "paddingX",
-    "paddingY",
-    "fontFamilySource",
-    "textSizeSource",
-  ];
-  for (const field of fields) {
-    check(`style_${field}_matches`, notesStyle?.[field] === dayStyle?.[field], {
-      notes: notesStyle?.[field] ?? null,
-      dayPage: dayStyle?.[field] ?? null,
-    });
-  }
-}
-
 const driver = await Driver.launch({
   binary: BINARY,
   sandboxHome: true,
@@ -85,24 +64,6 @@ const driver = await Driver.launch({
 });
 
 try {
-  driver.send({ type: "openNotes", requestId: `${runId}-open-notes` });
-  await Bun.sleep(600);
-
-  const notesElements = (await driver.getElements(
-    { target: { type: "kind", kind: "notes", index: 0 }, limit: 80 },
-    { timeoutMs: 8000 },
-  )) as Json;
-  const notesEditor = findSemantic(notesElements, "input:notes-editor");
-  const notesPanel = findSemantic(notesElements, "panel:notes-window");
-  const notesStyle = comparableStyle(notesEditor?.style);
-
-  check("notes_editor_present", Boolean(notesEditor), {
-    focusedSemanticId: notesElements.focusedSemanticId ?? null,
-    notesEditor,
-  });
-  check("notes_panel_present", Boolean(notesPanel), { notesPanel });
-  check("notes_style_present", Boolean(notesStyle), { notesStyle });
-
   const dayState = await openDayPage(driver, runId);
   check("day_page_stays_main_surface", dayState.promptType === "dayPage", {
     promptType: dayState.promptType ?? null,
@@ -116,7 +77,6 @@ try {
   const dayEditor = findSemantic(dayElements, "input:day-page-editor");
   const dayPanel = findSemantic(dayElements, "panel:day-page");
   const dayStyle = comparableStyle(dayEditor?.style);
-  const dayFlat = walkElements(dayElements);
 
   check("day_page_editor_present", Boolean(dayEditor), {
     focusedSemanticId: dayElements.focusedSemanticId ?? null,
@@ -124,17 +84,6 @@ try {
   });
   check("day_page_panel_present", Boolean(dayPanel), { dayPanel });
   check("day_page_style_present", Boolean(dayStyle), { dayStyle });
-  assertStyleEqual(notesStyle, dayStyle);
-
-  check(
-    "day_page_does_not_import_notes_chrome",
-    !dayFlat.some((el) =>
-      ["notes-titlebar", "notes-footer", "panel:notes-window", "input:notes-editor"].includes(
-        String(el.semanticId ?? el.id ?? ""),
-      ),
-    ),
-    { semanticIds: dayFlat.map((el) => el.semanticId ?? el.id).filter(Boolean).slice(0, 80) },
-  );
 
   // "/rew" remains plain editor text on the Day Page. The Day surface must not
   // render a local inline spine/prompt-builder list for sigil input.

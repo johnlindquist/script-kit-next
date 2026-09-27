@@ -4,7 +4,6 @@
  * - Day Page Cmd+P lists day notes and regular notes with Notes row actions.
  * - Selecting a past day or regular note stays local in Day Page.
  * - Dirty Today/note content is saved before successful local switches.
- * - The floating Notes Window opens only through explicit Open in Notes Window.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -132,11 +131,6 @@ function isActionsWindow(win: Obj): boolean {
   );
 }
 
-function isNotesWindow(win: Obj): boolean {
-  const text = JSON.stringify(win).toLowerCase();
-  return text.includes("notes") && !text.includes("actions-dialog");
-}
-
 async function listWindows(driver: Driver): Promise<Obj[]> {
   const result = asObj(await driver.listAutomationWindows({ timeoutMs: 5000 }));
   return Array.isArray(result.windows) ? result.windows.map(asObj) : [];
@@ -144,10 +138,6 @@ async function listWindows(driver: Driver): Promise<Obj[]> {
 
 async function actionsWindowRegistered(driver: Driver): Promise<boolean> {
   return (await listWindows(driver)).some(isActionsWindow);
-}
-
-async function notesWindowOpen(driver: Driver): Promise<boolean> {
-  return (await listWindows(driver)).some(isNotesWindow);
 }
 
 async function actionsDialogState(driver: Driver): Promise<Obj> {
@@ -286,16 +276,12 @@ try {
 
   const opened = await openDayPage(driver, runId);
   check("opened_day_page", opened.promptType === "dayPage", { promptType: opened.promptType });
-  check("notes_window_closed_initially", !(await notesWindowOpen(driver)), {
-    windows: await listWindows(driver),
-  });
 
   const dirtyToday = `dirty today before day switch ${runId}`;
   await setDayPageInput(driver, dirtyToday, "dirty_today");
   const dayAction = await activateFilteredAction(driver, "p", `note_day:${pastDate}`, pastDate);
   await waitForInput(driver, pastDayText, "past_day");
   const todayDisk = fileText(todayPath) ?? "";
-  const noNotesAfterDay = !(await notesWindowOpen(driver));
   receipt.selectedRows.push({
     selectedRowKind: "day",
     selectedDate: pastDate,
@@ -315,14 +301,12 @@ try {
     todayPath,
     todayDisk,
   });
-  check("notes_window_closed_after_day_selection", noNotesAfterDay, { windows: await listWindows(driver) });
 
   await driver.simulateKey("escape");
   await waitForInput(driver, dirtyToday, "return_to_today");
 
   const noteAction = await activateFilteredAction(driver, "p", `note_${noteId}`, noteTitle);
   await waitForInput(driver, noteBody, "regular_note");
-  const noNotesAfterNote = !(await notesWindowOpen(driver));
   receipt.selectedRows.push({
     selectedRowKind: "note",
     selectedNoteId: noteId,
@@ -333,7 +317,6 @@ try {
   check("selecting_regular_note_stays_in_day_page", (await getState(driver)).promptType === "dayPage", {
     action: noteAction,
   });
-  check("notes_window_closed_after_note_selection", noNotesAfterNote, { windows: await listWindows(driver) });
 
   const editedNote = `# ${noteTitle} Edited\n\nedited local note body ${runId}\n`;
   await setDayPageInput(driver, editedNote, "dirty_regular_note");
@@ -352,23 +335,6 @@ try {
     savedNoteFiles,
     noteFiles,
     action: secondNoteAction,
-  });
-
-  receipt.notesWindowOpenBeforeExplicitAction = await notesWindowOpen(driver);
-  const explicit = await activateFilteredAction(
-    driver,
-    "k",
-    "day_page:open_in_notes_window",
-    "Open in Notes Window",
-  );
-  const notesOpened = await pollUntil("notes-window-open", async () => notesWindowOpen(driver), 9000);
-  receipt.notesWindowOpenAfterExplicitAction = notesOpened;
-  check("notes_window_closed_before_explicit_action", receipt.notesWindowOpenBeforeExplicitAction === false, {
-    windows: await listWindows(driver),
-  });
-  check("explicit_open_in_notes_window_opens_notes_window", notesOpened, {
-    action: explicit,
-    windows: await listWindows(driver),
   });
 
   receipt.mainWindowKind = "dayPage";

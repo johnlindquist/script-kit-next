@@ -112,7 +112,6 @@ export interface HardScenarioReceipt {
     | "visible-text-clipping-overlap-stress"
     | "layout-measurement-regression-stress"
     | "screenshot-semantics-visual-consistency-stress"
-    | "modal-stack-arbitration-stress"
     | "cross-surface-export-provenance-stress"
     | "dev-session-recovery-stale-target-stress"
     | "menu-syntax-ambiguity-diagnostics-stress"
@@ -239,7 +238,6 @@ export interface HardScenarioReceipt {
   layoutMeasurementRegression?: Record<string, unknown>;
   visualConsistency?: Record<string, unknown>;
   screenshotSemanticsConsistency?: Record<string, unknown>;
-  modalStackArbitration?: Record<string, unknown>;
   crossSurfaceExport?: Record<string, unknown>;
   sessionRecovery?: Record<string, unknown>;
   menuSyntaxAmbiguity?: Record<string, unknown>;
@@ -1788,7 +1786,7 @@ export async function runTemplatePromptAutomationParityStressScenario(opts: {
       return fail(
         "template_prompt_actions_unavailable",
         "cmd-k-actions",
-        "TemplatePrompt Cmd+K did not expose an active actions popup contract or concrete actionsDialog rows.",
+        "TemplatePrompt Cmd+K did not expose an activePopupContract or concrete actionsDialog rows.",
         { actionsStateEnvelope, actionsElementsEnvelope, concreteActionRowCount: concreteActionRows.length },
       );
     }
@@ -3769,86 +3767,6 @@ export async function runScreenshotSemanticsVisualConsistencyStressScenario(opts
   };
 }
 
-export async function runModalStackArbitrationStressScenario(opts: {
-  session: string;
-  host?: string;
-}): Promise<HardScenarioReceipt> {
-  return {
-    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
-    scenario: "modal-stack-arbitration-stress",
-    status: "fail",
-    modalStackArbitration: {
-      session: opts.session,
-      host: opts.host ?? "agentChatChat",
-      requestedStack: ["actionsDialog", "confirmPopup", "promptPopup"],
-      stackSequence: ["actionsDialog", "confirmPopup", "promptPopup"],
-      requiredReceipt: "stateResult.modalStackArbitration",
-      stackGeneration: null,
-      stack: [],
-      topmostOwnerOnly: null,
-      keyDispatches: [
-        {
-          key: "escape",
-          beforeTopOwner: null,
-          handledBy: null,
-          afterTopOwner: null,
-          lowerOwnersMutated: null,
-          parentSelectionFingerprintBefore: null,
-          parentSelectionFingerprintAfter: null,
-          parentFocusBefore: null,
-          parentFocusAfter: null,
-        },
-        {
-          key: "cmd+w",
-          beforeTopOwner: null,
-          handledBy: null,
-          afterTopOwner: null,
-          lowerOwnersMutated: null,
-        },
-        {
-          key: "enter",
-          beforeTopOwner: null,
-          handledBy: null,
-          submittedOwner: null,
-          lowerOwnersMutated: null,
-        },
-      ],
-      restore: {
-        parentSelectionRestored: null,
-        parentFocusRestored: null,
-        actionsDialogRouteRestored: null,
-        promptInputRestored: null,
-      },
-      forbiddenProofModes: ["single_popup_only", "kind_fallback_target", "screenshot_only"],
-    },
-    usage: {
-      stateFirst: true,
-      usedGetState: false,
-      usedGetElements: false,
-      usedWaitFor: false,
-      usedNativeInput: false,
-      usedScreenshot: false,
-      usedFixedSleepMs: 0,
-      mutatedUserData: false,
-    },
-    steps: [{
-      name: "modal-stack-arbitration-receipt-preflight",
-      status: "fail",
-      output: {
-        blockingGap:
-          "The harness cannot yet prove Actions, confirm, and attached prompt popup stacks expose topmost-owner key routing and parent focus/selection restoration receipts.",
-      },
-    }],
-    failure: {
-      code: "missing_modal_stack_arbitration_receipt",
-      stepName: "modal-stack-arbitration-receipt-preflight",
-      message:
-        "The harness fails closed until stacked modal key routing proves Escape, Cmd-W, and Enter affect only the topmost owner and restore parent state.",
-    },
-    warnings: ["file_linear:modal_stack_arbitration_receipts_missing"],
-  };
-}
-
 export async function runCrossSurfaceExportProvenanceStressScenario(opts: {
   session: string;
   source?: string;
@@ -4318,7 +4236,7 @@ export async function runDisplayMigrationVisualBoundsStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   const surfaces = opts.surfaces && opts.surfaces.length > 0
     ? opts.surfaces
-    : ["main", "actionsDialog", "promptPopup", "agentChatDetached", "notes"];
+    : ["main", "actionsDialog", "promptPopup"];
 
   return {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
@@ -5553,7 +5471,7 @@ export async function runVisualContrastReadableStateStressScenario(opts: {
 }): Promise<HardScenarioReceipt> {
   const requestedSurfaces = opts.surfaces && opts.surfaces.length > 0
     ? opts.surfaces
-    : ["main", "actionsDialog", "promptPopup", "agent_chat-composer", "notes"];
+    : ["main", "actionsDialog", "promptPopup", "agent_chat-composer"];
   const requestedThemes = opts.themes && opts.themes.length > 0 ? opts.themes : ["light", "dark"];
   const requestedScaleFactors = opts.scaleFactors && opts.scaleFactors.length > 0 ? opts.scaleFactors : [1, 1.25, 1.5];
   const requestedStates = opts.states && opts.states.length > 0
@@ -6499,7 +6417,7 @@ export async function runActionsCommandDiscoverabilityNoopStressScenario(opts: {
       "--timeout",
       "12000",
     ],
-    "actions-popup-measurement"
+    "actions-row-measurement"
   );
   const matrixReceipt = parseMaybeJson(matrixResult.stdout);
   const cases = asArray(matrixReceipt.cases).map(asRecord);
@@ -6603,7 +6521,7 @@ export async function runActionsCommandDiscoverabilityNoopStressScenario(opts: {
     },
     usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false },
     steps: [{
-      name: "actions-popup-measurement",
+      name: "actions-row-measurement",
       status,
       output: {
         matrixStatus: matrixReceipt.status ?? null,
@@ -6614,8 +6532,8 @@ export async function runActionsCommandDiscoverabilityNoopStressScenario(opts: {
     }],
     failure: status === "pass" ? undefined : {
       code: "missing_actions_command_discoverability_noop_receipt",
-      stepName: "actions-popup-measurement",
-      message: "Actions popup measurement did not produce passing root-source action rows.",
+      stepName: "actions-row-measurement",
+      message: "Actions row measurement did not produce passing root-source action rows.",
     },
     warnings: requestedStates.filter((state) => state !== "actionable").map((state) =>
       `state_not_yet_measured:${state}`
@@ -8128,7 +8046,7 @@ export async function runWindowTitleStatusSemanticsStressScenario(opts: {
       kind: "ux.windowTitleStatusSemantics",
       windowTitleStatusSemanticsStressId: "loop-thirty-window-title-status-semantics",
       session: opts.session,
-      requestedSurfaces: opts.surfaces ?? ["main", "agent_chat-composer", "actionsDialog", "promptPopup", "notes"],
+      requestedSurfaces: opts.surfaces ?? ["main", "agent_chat-composer", "actionsDialog", "promptPopup"],
       requestedStates: opts.states ?? ["idle", "busy", "error", "dirty", "ready"],
       requestedTransitions: opts.transitions ?? ["triggerBuiltin", "cmd-k", "escape", "hide-show"],
       requestedInputModes: opts.inputModes ?? ["protocol-key", "batch"],

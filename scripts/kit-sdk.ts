@@ -2180,7 +2180,7 @@ export interface Config {
   processLimits?: ProcessLimits;
 
   /**
-   * Hotkey for opening the Notes window.
+   * Hotkey for opening today's note under the main input.
    * Falls back to Cmd+Ctrl+N when enabled and unset.
    *
    * @default { modifiers: ["meta", "ctrl"], key: "KeyN" }

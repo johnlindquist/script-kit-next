@@ -3086,7 +3086,6 @@ describe("nonintrusive executed Rust verification", () => {
     "scripts/agentic/cons-flow-ux/dictation-recovery-focus-probe.ts",
     "scripts/agentic/cons-flow-ux/dictation-delivery-probe.ts",
     "scripts/agentic/cons-flow-ux/context-preparation-probe.ts",
-    "scripts/agentic/cons-flow-ux/dictation-dismiss-targets-probe.ts",
     "scripts/agentic/cons-flow-ux/flow-history-probe.ts",
     "scripts/agentic/cons-flow-ux/context-lifecycle-probe.ts",
     "scripts/agentic/day-page-context-roundtrip-probe.ts",

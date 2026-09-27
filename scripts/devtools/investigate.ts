@@ -125,7 +125,7 @@ function findSurface(inventory: SurfaceInventory, requested: string) {
 function scenarioHints(surface: string, bug: string) {
   const text = `${surface} ${bug}`.toLowerCase();
   const hints = new Set<string>();
-  if (/(action|popup|menu|cmd\+k|palette)/.test(text)) hints.add("actions popup route stack, anchor rect, disabled reason, and clipping proof");
+  if (/(action|popup|menu|cmd\+k|palette)/.test(text)) hints.add("Cmd+K actions staged in the line above the input: route stack, disabled reason, and clipping proof");
   if (/(resize|width|height|too tall|scroll|overflow|container|div|md)/.test(text)) hints.add("layout box model, scroll extent, overflow, resize pressure, and before/after bounds proof");
   if (/(note|editor|markdown|preview|selection|cursor)/.test(text)) hints.add("Notes target, editor selection, preview scroll, dirty state, and shortcut focus proof");
   if (/(dictation|mic|transcript|audio|recording|hotkey)/.test(text)) hints.add("passive media readiness, recording generation, target delivery, transcript fingerprint, and cleanup proof");

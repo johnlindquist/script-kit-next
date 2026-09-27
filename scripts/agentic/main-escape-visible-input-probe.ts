@@ -3,8 +3,6 @@
  * Runtime proof for ScriptList Escape behavior:
  * - visible input text clears on the first Escape
  * - empty visible input closes on the next Escape
- * - the real "quit" builtin confirmation path does not swallow an extra Escape
- *   after popup cancel + filter clear
  * - filterInputDiagnostics exposes canonical/computed/raw visual state
  *
  * Usage:
@@ -31,157 +29,6 @@ function check(name: string, ok: boolean, detail: Json) {
 
 function diagnostics(state: Json): Json {
   return (state.filterInputDiagnostics ?? {}) as Json;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function confirmWindows(driver: Driver): Promise<Json[]> {
-  const receipt = await driver.listAutomationWindows({ timeoutMs: 5_000 });
-  const windows = Array.isArray(receipt.windows) ? receipt.windows as Json[] : [];
-  return windows.filter((window) =>
-    String(window.id ?? "") === "confirm-popup"
-    || String(window.semanticSurface ?? "") === "confirmDialog"
-  );
-}
-
-async function waitForConfirmOpen(driver: Driver, label: string) {
-  const deadline = Date.now() + 8_000;
-  let last: Json[] = [];
-  while (Date.now() < deadline) {
-    last = await confirmWindows(driver);
-    if (last.length > 0) return { ok: true, windows: last };
-    await sleep(50);
-  }
-  return { ok: false, windows: last, label };
-}
-
-async function waitForConfirmClosed(driver: Driver, label: string) {
-  const deadline = Date.now() + 8_000;
-  let last: Json[] = [];
-  while (Date.now() < deadline) {
-    last = await confirmWindows(driver);
-    if (last.length === 0) return { ok: true, windows: last };
-    await sleep(50);
-  }
-  return { ok: false, windows: last, label };
-}
-
-async function stateDigest(driver: Driver): Promise<Json> {
-  const state = await driver.getState({ timeoutMs: 5_000 });
-  const contract = (state.surfaceContract ?? {}) as Json;
-  return {
-    windowVisible: state.windowVisible,
-    promptType: state.promptType,
-    inputValue: state.inputValue,
-    surface: contract.surface ?? contract.kind ?? contract.name,
-    diagnostics: diagnostics(state),
-  };
-}
-
-async function relevantLogs(driver: Driver): Promise<Json> {
-  const logs = await driver.getLogs({ limit: 500 }, { timeoutMs: 5_000 });
-  const entries = Array.isArray(logs.logs) ? logs.logs as Json[] : [];
-  return entries.filter((entry) => {
-    const message = String(entry.message ?? "");
-    const target = String(entry.target ?? "");
-    return target.includes("confirm")
-      || message.includes("SimulateKey: Escape")
-      || message.includes("ESC -")
-      || message.includes("Capture Escape")
-      || message.includes("clear_filter")
-      || message.includes("confirm_cancel")
-      || message.includes("Resetting to script list");
-  }) as Json;
-}
-
-async function proveQuitConfirmEscapePath(driver: Driver) {
-  await driver.request({ type: "show" }, { timeoutMs: 8_000 });
-  await driver.waitForState(
-    { windowVisible: true, promptType: "none" },
-    { timeoutMs: 8_000 },
-  );
-
-  await driver.setFilterAndWait("quit", { timeoutMs: 8_000 });
-  const beforeEnter = await stateDigest(driver);
-  driver.simulateKey("enter", []);
-  const confirmOpen = await waitForConfirmOpen(driver, "quit-confirm-open");
-
-  const trace: Json[] = [{ step: "beforeEnter", state: beforeEnter }, { step: "afterEnter", confirmOpen }];
-  if (!confirmOpen.ok) {
-    return {
-      ok: false,
-      classification: "blocked-confirm-did-not-open",
-      trace,
-      logs: await relevantLogs(driver),
-    };
-  }
-
-  driver.simulateKey("escape", []);
-  const confirmClosed = await waitForConfirmClosed(driver, "escape-1-confirm-cancel");
-  await sleep(250);
-  const afterEscape1 = await stateDigest(driver);
-  trace.push({
-    step: "escape1",
-    expected: "confirm popup closes",
-    confirmClosed,
-    state: afterEscape1,
-  });
-
-  driver.simulateKey("escape", []);
-  await driver.waitForState(
-    { windowVisible: true, promptType: "none", inputValue: "" },
-    { timeoutMs: 8_000, pollIntervalMs: 10 },
-  );
-  const afterEscape2 = await stateDigest(driver);
-  trace.push({
-    step: "escape2",
-    expected: "visible filter clears",
-    state: afterEscape2,
-  });
-
-  driver.simulateKey("escape", []);
-  let hiddenAfterThird = false;
-  const thirdDeadline = Date.now() + 2_000;
-  while (Date.now() < thirdDeadline) {
-    const state = await stateDigest(driver);
-    if (state.windowVisible === false) {
-      hiddenAfterThird = true;
-      break;
-    }
-    await sleep(50);
-  }
-  const afterEscape3 = await stateDigest(driver);
-  trace.push({
-    step: "escape3",
-    expected: "main window hides",
-    state: afterEscape3,
-  });
-
-  let afterEscape4: Json | null = null;
-  if (!hiddenAfterThird) {
-    driver.simulateKey("escape", []);
-    await driver.waitForState(
-      { windowVisible: false },
-      { timeoutMs: 8_000, pollIntervalMs: 10 },
-    );
-    afterEscape4 = await stateDigest(driver);
-    trace.push({
-      step: "escape4",
-      expected: "red-path extra Escape hides",
-      state: afterEscape4,
-    });
-  }
-
-  return {
-    ok: hiddenAfterThird,
-    classification: hiddenAfterThird ? "green" : "red-extra-escape-swallowed",
-    trace,
-    escapesAfterConfirmCancelToHide: hiddenAfterThird ? 3 : 4,
-    afterEscape4,
-    logs: await relevantLogs(driver),
-  };
 }
 
 let driver: Driver | null = null;
@@ -247,13 +94,6 @@ try {
     inputValue: afterSecond.inputValue,
     diagnostics: diagnostics(afterSecond),
   });
-
-  receipts.quitConfirmEscapePath = await proveQuitConfirmEscapePath(driver);
-  check(
-    "quit_confirm_escape3_hides_main",
-    (receipts.quitConfirmEscapePath as Json).classification === "green",
-    receipts.quitConfirmEscapePath,
-  );
 
   const output = {
     ok: failures.length === 0,

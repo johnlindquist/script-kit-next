@@ -67,26 +67,22 @@ function footerClearanceProof(metrics: Json | null, windows: Json): Json {
   const minimumMainFooterClearance = 40;
   const list = automationWindows(windows);
   const main = list.find((win) => win.id === "main") ?? null;
-  const footer = list.find((win) => win.id === "footer-overlay") ?? null;
   const mainBounds = boundsOf(main);
-  const footerBounds = boundsOf(footer);
   const mainHeight = num(mainBounds?.height);
-  const footerHeight = num(footerBounds?.height);
   const clientHeight = num(metrics?.clientHeight);
   const reservedOutsideEditor =
     mainHeight != null && clientHeight != null ? mainHeight - clientHeight : null;
-  const requiredFooterHeight = footerHeight ?? minimumMainFooterClearance;
+  const requiredFooterHeight = minimumMainFooterClearance;
   const ok =
     reservedOutsideEditor != null &&
     reservedOutsideEditor >= requiredFooterHeight;
   return {
     ok,
     mainBounds,
-    footerBounds,
     clientHeight,
     reservedOutsideEditor,
     requiredFooterHeight,
-    measurementMode: footerHeight == null ? "main-window-minus-editor-client-height" : "footer-window-bounds",
+    measurementMode: "main-window-minus-editor-client-height",
     windowIds: list.map((win) => win.id),
   };
 }

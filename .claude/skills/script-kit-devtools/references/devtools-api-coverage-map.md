@@ -42,6 +42,8 @@ The coverage map intentionally mirrors Chrome DevTools breadth while using Scrip
 
 ## Notes Coverage Requirements
 
+The Notes window was retired on 2026-09-27: a note opens as a view under the main input and `scripts/devtools/notes.ts` is deleted. The requirements below are the pre-retirement backlog; re-scope them to the note view before building on them.
+
 Notes must be treated as a first-class target, not as a launcher proxy. DevTools coverage must include the floating host, editor mode, browse/list mode, trash mode, markdown editor, markdown preview, editor find, global search, format toolbar, focus mode, pinning, sort cycling, command bar, actions panel, recent-note switcher, note cart, clipboard-backed note creation, embedded AgentChat mode, AgentChat actions popup, AgentChat history portal, attachment and context chips, draft snapshots, auto-resize, autosave and dirty state, history back/forward, scroll collapse after deleting trailing lines, and independent app-hide behavior.
 
 Required Notes shortcuts and ownership paths include `Cmd+K`, `Cmd+P`, `Cmd+Shift+P`, `Cmd+F`, `Cmd+Shift+F`, `Cmd+N`, `Cmd+Shift+N`, `Cmd+Shift+T`, `Cmd+W`, `Cmd+.`, `Cmd+Shift+.`, `Cmd+Shift+S`, `Cmd+Z`, `Cmd+D`, `Cmd+Shift+D`, `Cmd+Shift+X`, `Cmd+Shift+L`, `Cmd+L`, `Cmd+Shift+-`, `Cmd+Shift+H`, `Cmd+V`, `Cmd+Shift+C`, `Cmd+E`, `Cmd+/`, `Cmd+J`, `Cmd+Shift+U`, `Cmd+B`, `Cmd+I`, `Cmd+Shift+I`, `Cmd+Enter`, `Cmd+Shift+A`, `Cmd+Shift+O`, `Cmd+Up`, `Cmd+Down`, `Cmd+Shift+Up`, `Cmd+Shift+Down`, `Cmd+[`, `Cmd+]`, `Cmd+Shift+Backspace`, `Cmd+Shift+Delete`, `Cmd+Shift+7`, `Cmd+Shift+8`, `Cmd+1..Cmd+9`, `Tab`, `Shift+Tab`, `Alt+Up`, `Alt+Down`, `Alt+Shift+Up`, `Alt+Shift+Down`, `Ctrl+Shift+K`, `Escape`, `Enter`, arrows, paging, Home/End, Backspace, and Delete.
@@ -58,7 +60,9 @@ Runtime primitives now support passive Dictation readiness without opening the m
 
 Dictation History coverage must also expose fixture store identity, transcript row generation, preview generation, redacted transcript fingerprints, audio path redaction proof, scroll and selection anchor metrics, and portal attachment receipts.
 
-## Actions Popup Layout Coverage
+## Actions Layout Coverage
+
+Cmd+K now stages actions in the line above the input; an `actionsDialog` target answers `actions_are_staged_in_place`. The paragraph below describes the retired popup.
 
 ActionsDialog and attached action menus must expose runtime-owned layout, not TypeScript-inferred boxes. `getLayoutInfo(target actionsDialog)` returns the ActionsDialog root, search input, optional context header, list viewport, visible grouped rows, and shortcut hint bounds from the same runtime row-geometry model used by `devtools.actions.inspect`. Disabled reason text bounds remain the explicit missing primitive only for routes that render visible disabled explanations.
 

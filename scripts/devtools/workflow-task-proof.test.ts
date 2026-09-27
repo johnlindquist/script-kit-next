@@ -13,7 +13,7 @@ import {
 } from "./consistency.ts";
 import { validateReceipt } from "./lib/receipt-schema.ts";
 import {
-  NOTES_WINDOW_RETIRED_TASK_IDS,
+  RETIRED_WINDOW_TASK_IDS,
   WORKFLOW_TASK_PRIMITIVE_ID,
   WORKFLOW_TASK_PROOF_SPECS,
   workflowTaskProofSourceOwners,
@@ -147,8 +147,8 @@ describe("source-bound canonical safety and workflow task proofs", () => {
 
   test("every live task has one exact executable owner and task-specific observed stages", () => {
     const specIds = new Set(Object.keys(WORKFLOW_TASK_PROOF_SPECS));
-    expect([...NOTES_WINDOW_RETIRED_TASK_IDS].filter((taskId) => specIds.has(taskId))).toEqual([]);
-    expect(new Set([...specIds, ...NOTES_WINDOW_RETIRED_TASK_IDS])).toEqual(new Set(CONS_FLOW_UX_IDS));
+    expect([...RETIRED_WINDOW_TASK_IDS].filter((taskId) => specIds.has(taskId))).toEqual([]);
+    expect(new Set([...specIds, ...RETIRED_WINDOW_TASK_IDS])).toEqual(new Set(CONS_FLOW_UX_IDS));
     for (const [taskId, spec] of Object.entries(WORKFLOW_TASK_PROOF_SPECS)) {
       expect(spec.producerOwner.startsWith("scripts/agentic/cons-flow-ux/")).toBe(true);
       expect(spec.stageIds.length).toBeGreaterThanOrEqual(2);
@@ -196,7 +196,7 @@ describe("source-bound canonical safety and workflow task proofs", () => {
 
   test("another workflow producer cannot claim the same catalog obligation", () => {
     expect(mutate("SAFE-001", (value) => {
-      value.producerOwner = WORKFLOW_TASK_PROOF_SPECS["SAFE-002"].producerOwner;
+      value.producerOwner = WORKFLOW_TASK_PROOF_SPECS["SAFE-003"].producerOwner;
     })).toThrow("exact reviewed runtime owner");
   });
 
@@ -330,7 +330,7 @@ describe("source-bound canonical safety and workflow task proofs", () => {
     const directory = mkdtempSync(join(tmpdir(), "workflow-task-publish-"));
     temporaryDirectories.push(directory);
     const prepared = prepareWorkflowTaskProof("SAFE-001", options("SAFE-001"));
-    expect(() => writeWorkflowTaskProof("SAFE-002", prepared.receipt, directory))
+    expect(() => writeWorkflowTaskProof("SAFE-003", prepared.receipt, directory))
       .toThrow("unrelated or unregistered workflow receipt");
     const path = writeWorkflowTaskProof("SAFE-001", prepared.receipt, directory);
     expect(path).toBe(join(directory, "SAFE-001", "workflow-proof.json"));
