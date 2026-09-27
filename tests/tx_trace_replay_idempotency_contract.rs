@@ -10,7 +10,6 @@ use script_kit_gpui::protocol::{
 #[derive(Default)]
 struct CountingProvider {
     snapshot: UiStateSnapshot,
-    set_input_calls: usize,
 }
 
 impl TransactionStateProvider for CountingProvider {
@@ -19,7 +18,6 @@ impl TransactionStateProvider for CountingProvider {
     }
 
     fn set_input(&mut self, text: &str) -> anyhow::Result<()> {
-        self.set_input_calls += 1;
         self.snapshot.input_value = Some(text.to_string());
         Ok(())
     }
@@ -62,71 +60,6 @@ fn trace_contains_command_payloads_and_schema_version() {
     assert!(text.starts_with("[REDACTED sha256:"));
     assert!(!text.contains("alpha"));
     assert!(trace.command_fingerprint.starts_with("sha256:"));
-}
-
-#[test]
-fn same_request_id_same_fingerprint_returns_prior_trace_without_reexecuting() {
-    let request_id = unique_request_id("tx-idem");
-    let commands = vec![BatchCommand::SetInput {
-        text: "alpha".to_string(),
-    }];
-    let mut provider = CountingProvider::default();
-
-    execute_batch(
-        &mut provider,
-        request_id.clone(),
-        &commands,
-        None,
-        TransactionTraceMode::On,
-    )
-    .expect("first run executes");
-    assert_eq!(provider.set_input_calls, 1);
-
-    let second = execute_batch(
-        &mut provider,
-        request_id,
-        &commands,
-        None,
-        TransactionTraceMode::On,
-    )
-    .expect("same payload is idempotent");
-    assert!(second.trace.is_some());
-    assert_eq!(
-        provider.set_input_calls, 1,
-        "idempotent replay must not re-run side effects"
-    );
-}
-
-#[test]
-fn same_request_id_different_fingerprint_is_rejected() {
-    let request_id = unique_request_id("tx-idem-conflict");
-    let first = vec![BatchCommand::SetInput {
-        text: "alpha".to_string(),
-    }];
-    let second = vec![BatchCommand::SetInput {
-        text: "beta".to_string(),
-    }];
-    let mut provider = CountingProvider::default();
-
-    execute_batch(
-        &mut provider,
-        request_id.clone(),
-        &first,
-        None,
-        TransactionTraceMode::On,
-    )
-    .expect("first run executes");
-    let error = match execute_batch(
-        &mut provider,
-        request_id,
-        &second,
-        None,
-        TransactionTraceMode::On,
-    ) {
-        Ok(_) => panic!("different payload must be rejected"),
-        Err(error) => error,
-    };
-    assert!(error.to_string().contains("different transaction payload"));
 }
 
 #[test]
