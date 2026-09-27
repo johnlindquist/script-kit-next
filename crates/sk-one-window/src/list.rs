@@ -178,6 +178,24 @@ pub fn down_rows(text: &str) -> Vec<Row> {
     ]
 }
 
+/// What the list starts with when its first row brings no header of its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lead {
+    Nothing,
+    Row,
+    Fallback,
+}
+
+/// The words of the header that leads a list whose first row has none.
+pub fn lead_header(has_text: bool, lead: Lead) -> &'static str {
+    match (has_text, lead) {
+        (false, Lead::Nothing) => words::SUGGESTED,
+        (false, Lead::Row | Lead::Fallback) => words::PINNED,
+        (true, Lead::Row) => words::MATCHES,
+        (true, Lead::Nothing | Lead::Fallback) => words::NO_MATCHES,
+    }
+}
+
 /// A row as the list lays it out.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Item {
@@ -272,14 +290,12 @@ impl ListState {
                     if let Some(head) = &row.head {
                         out.push(Item::Header(head.clone()));
                     } else if ix == 0 {
-                        let words = if !self.has_text() {
-                            words::PINNED
-                        } else if row.fallback {
-                            words::NO_MATCHES
+                        let lead = if row.fallback {
+                            Lead::Fallback
                         } else {
-                            words::MATCHES
+                            Lead::Row
                         };
-                        out.push(Item::Header(words.to_string()));
+                        out.push(Item::Header(lead_header(self.has_text(), lead).to_string()));
                     }
                 }
                 Item::Slot(_) => {
@@ -294,12 +310,7 @@ impl ListState {
         }
         if out.is_empty() {
             out.push(Item::Header(
-                if self.has_text() {
-                    words::NO_MATCHES
-                } else {
-                    words::SUGGESTED
-                }
-                .to_string(),
+                lead_header(self.has_text(), Lead::Nothing).to_string(),
             ));
         }
         out
@@ -429,6 +440,23 @@ mod tests {
         l.pinned = vec![Row::new("s", "Slack").with_head(words::SUGGESTED)];
         l.on_text("");
         assert_eq!(l.header(), words::SUGGESTED);
+    }
+
+    #[test]
+    fn typing_changes_the_lead_header_words_never_its_presence() {
+        assert_eq!(lead_header(false, Lead::Nothing), words::SUGGESTED);
+        assert_eq!(lead_header(false, Lead::Row), words::PINNED);
+        assert_eq!(lead_header(true, Lead::Row), words::MATCHES);
+        assert_eq!(lead_header(true, Lead::Fallback), words::NO_MATCHES);
+        assert_eq!(lead_header(true, Lead::Nothing), words::NO_MATCHES);
+        let mut l = ListState::new(false, true);
+        for text in ["", "s", "sl", "", "zzz"] {
+            l.on_text(text);
+            assert!(
+                l.layout()[0].is_header(),
+                "{text:?} must lead with a header"
+            );
+        }
     }
 
     #[test]

@@ -12,7 +12,7 @@ use crate::hold::{HeldChange, HeldState, Holds};
 use crate::ledger::{Entry, EntryState, Ledger, NewEntry, Risk, risk_of};
 use crate::list::{Item, ListState};
 use crate::row::{Row, RowAct};
-use crate::slot::{SlotKind, SlotLine};
+use crate::slot::{SlotKind, SlotLine, SlotStyle};
 use crate::stage::{
     Staged, Subject, SubjectKind, entry_rows, entry_subject, row_subject, script_name, share_rows,
 };
@@ -1352,6 +1352,15 @@ impl OneWindow {
             })
             .with_sub(f.sub.clone())
             .with_hint("⌘K", "act on it")
+    }
+
+    /// How strongly the line above the input is drawn now.
+    pub fn slot_style(&self, now: Ms) -> SlotStyle {
+        SlotStyle::new(
+            self.slot_line(now).kind,
+            !self.text.trim().is_empty(),
+            self.in_view(),
+        )
     }
 
     pub fn enter_target(&self, now: Ms) -> EnterTarget {
