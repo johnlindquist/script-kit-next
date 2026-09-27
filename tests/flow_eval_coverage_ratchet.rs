@@ -25,8 +25,6 @@ const UNCOVERED_LEDGER: &[&str] = &[
     "ai-core",
     "auditor",
     "build-doctor",
-    "builtins",
-    "components",
     "devex",
     "devtools",
     "escape",
