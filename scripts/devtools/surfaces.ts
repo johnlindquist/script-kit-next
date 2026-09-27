@@ -227,16 +227,12 @@ export const EXPECTED_CENSUS = {
 /**
  * Explicit non-counting orientation aliases. An alias exists ONLY here —
  * name normalization, semantic-surface equivalence, or profile-id matching
- * never creates one. `confirm-prompt-popup` records the live popup-confirm
- * orientation (crate::confirm) while the canonical ConfirmPrompt mapping
- * stays the in-window Main AppView.
+ * never creates one.
  */
 export const coverageSurfaceAliases = [
   { alias: "main", resolvesTo: { surfaceKind: "ScriptList" }, countsAsCoverage: false },
   { alias: "actions-dialog", resolvesTo: { surfaceKind: "ActionsDialog" }, countsAsCoverage: false },
   { alias: "dictation-history", resolvesTo: { surfaceKind: "ScriptList" }, countsAsCoverage: false },
-  { alias: "notes-agent_chat", resolvesTo: { surfaceKind: "AgentChat", hostKind: "NotesWindow" }, countsAsCoverage: false },
-  { alias: "confirm-prompt-popup", resolvesTo: { surfaceKind: "ConfirmPrompt", hostKind: "PromptPopup" }, countsAsCoverage: false },
 ] as const;
 
 export const liquidGlassAuditExclusions: readonly { surfaceKind: string; reason: string }[] = [];
