@@ -75,10 +75,6 @@ const ALLOWLIST: &[(&str, &str)] = &[
         "statement-count ceiling (<=1) that fails safe under reformatting",
     ),
     (
-        "tests/trigger_builtin_filterable_route_state_machine_contract.rs",
-        "singleton-assignment invariant on stable token `self.current_view =`",
-    ),
-    (
         "tests/automation_batch_target_capabilities_contract.rs",
         "match_indices singleton on stable token (pre-policy survivor, reviewed)",
     ),
@@ -104,10 +100,6 @@ const ALLOWLIST: &[(&str, &str)] = &[
     (
         "tests/liquid_glass_guideline_assertions_contract.rs",
         "pre-policy survivor: floor over stable token within scoped branch",
-    ),
-    (
-        "tests/main_automation_surface_rekey_owner_contract.rs",
-        "pre-policy survivor: exact counts over stable call tokens",
     ),
     (
         "tests/main_window_preflight.rs",
