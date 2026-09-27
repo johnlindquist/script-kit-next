@@ -5370,16 +5370,20 @@ impl ScriptListApp {
                         .map(|()| None)
                     }
                     crate::dictation::DictationTarget::QuickAiQuestion => {
-                        crate::runtime_policy::check(
-                            crate::runtime_policy::ExternalEffect::Provider,
-                        )
-                        .map_err(|error| error.to_string())?;
-                        self.one_window_open_chat(
-                            crate::one_window::chat_entry::ChatEntry::sending(
-                                request.transcript.text().to_string(),
-                            ),
-                            cx,
-                        );
+                        let words = request.transcript.text().to_string();
+                        let entry = if crate::config::load_user_preferences()
+                            .dictation
+                            .quick_ai_answers()
+                        {
+                            crate::runtime_policy::check(
+                                crate::runtime_policy::ExternalEffect::Provider,
+                            )
+                            .map_err(|error| error.to_string())?;
+                            crate::one_window::chat_entry::ChatEntry::sending(words)
+                        } else {
+                            crate::one_window::chat_entry::ChatEntry::seeded(words)
+                        };
+                        self.one_window_open_chat(entry, cx);
                         Ok(None)
                     }
                     crate::dictation::DictationTarget::ExternalApp => {
