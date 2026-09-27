@@ -8,6 +8,7 @@ pub(crate) mod learns;
 pub(crate) mod ledger_view;
 pub(crate) mod lessons_host;
 pub(crate) mod marks;
+pub(crate) mod notes;
 pub(crate) mod saved_scripts;
 pub(crate) mod share;
 pub(crate) mod shortcut_view;

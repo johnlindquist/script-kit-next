@@ -66,13 +66,10 @@ fn live_gpui_target_identity_from_main(
                     cx,
                 )
                 .context("owner_revision_unavailable")?;
-            let variant = if info.kind == protocol::AutomationWindowKind::Notes {
-                "NotesApp".into()
-            } else {
-                info.semantic_surface
-                    .clone()
-                    .unwrap_or_else(|| info.kind.as_camel_case().to_owned())
-            };
+            let variant = info
+                .semantic_surface
+                .clone()
+                .unwrap_or_else(|| info.kind.as_camel_case().to_owned());
             (surface, data, presentation, theme, variant)
         };
     Ok(protocol::AutomationTargetIdentitySnapshot {

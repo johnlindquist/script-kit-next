@@ -260,7 +260,7 @@ pub(crate) fn note_file_path(id: NoteId) -> Result<Option<PathBuf>> {
         .transpose()
 }
 
-fn notes_substrate() -> Result<Arc<BrainSubstrate>> {
+pub(crate) fn notes_substrate() -> Result<Arc<BrainSubstrate>> {
     if let Some(policy) = crate::runtime_policy::owned_evaluation() {
         policy.require_owned_path(&get_notes_brain_base_path())?;
         if let Some(substrate) = NOTES_SUBSTRATE.get() {

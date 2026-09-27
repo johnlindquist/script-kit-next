@@ -27,8 +27,9 @@ pub(crate) use window::ActionsWindow;
 // - ActionsDialog: the main dialog component
 // - Window functions for separate vibrancy window
 
+#[allow(unused_imports)]
+// The binary's day page switcher uses this; the library has no caller.
 pub(crate) use builders::get_canonical_note_search_actions;
-pub(crate) use builders::get_notes_command_bar_actions_for_context;
 #[allow(unused_imports)] // used by binary target via include!() in main.rs
 pub(crate) use builders::resolve_file_search_secondary_action_id;
 pub(crate) use builders::AgentChatActionsDialogHost;

@@ -277,6 +277,7 @@ impl NotesEditor {
         crate::notes::markdown_highlighting::markdown_editor_runtime_info()
     }
 
+    #[allow(dead_code)] // The binary's day page calls this; the library has no caller.
     pub(crate) fn activation_href_at_cursor(&self, cx: &App) -> Option<String> {
         self.read_input(cx, |state| {
             activation_href_at_cursor_in_text(&state.value(), state.selected_range().start)
@@ -290,6 +291,7 @@ impl NotesEditor {
     /// highlight range maps directly to a link; the href resolves through the
     /// same target parser the click path uses, keeping hover and activation
     /// honest with each other.
+    #[allow(dead_code)] // The binary's day page calls this; the library has no caller.
     pub(crate) fn hovered_deeplink(&self, cx: &App) -> Option<String> {
         self.read_input(cx, |state| {
             let (range, _role) = state.hovered_highlight_range()?;
@@ -390,6 +392,7 @@ impl NotesEditor {
     }
 }
 
+#[allow(dead_code)] // The binary's day page calls this; the library has no caller.
 pub(crate) fn should_activate_deeplink_from_mouse_up(
     event: &gpui::MouseUpEvent,
     selection: Range<usize>,

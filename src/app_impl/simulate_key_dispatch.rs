@@ -20,7 +20,6 @@ impl ScriptListApp {
         let view = self;
         let key = input.key;
         let modifiers = input.modifiers;
-        let target = input.target;
 
         logging::log(
             "STDIN",
@@ -35,106 +34,6 @@ impl ScriptListApp {
 
         // Handle key based on current view
         let key_lower = key.to_lowercase();
-        let simulate_key_target_is_notes = target.map_or_else(
-            || {
-                crate::windows::focused_automation_window().is_some_and(|info| {
-                    matches!(info.kind, crate::protocol::AutomationWindowKind::Notes)
-                })
-            },
-            |target_val| {
-                crate::windows::resolve_automation_window(Some(target_val)).is_ok_and(|info| {
-                    matches!(info.kind, crate::protocol::AutomationWindowKind::Notes)
-                })
-            },
-        );
-
-        // Cmd+K is host chrome rather than a NotesAction descriptor, so its
-        // target-scoped automation arm remains explicit. Cmd+P and every other
-        // advertised Notes chord continue through the descriptor route below.
-        if has_cmd
-            && !has_shift
-            && !_has_alt
-            && !_has_ctrl
-            && simulate_key_target_is_notes
-            && key_lower == "k"
-        {
-            match notes::toggle_notes_popup_for_automation(ctx, "actions") {
-                Ok(result) => {
-                    logging::log(
-                        "STDIN",
-                        &format!("SimulateKey: Cmd+{key_lower} - Notes popup toggle {result}"),
-                    );
-                    return DispatchOutcome::success();
-                }
-                Err(error) => {
-                    logging::log(
-                        "STDIN",
-                        &format!(
-                            "SimulateKey: Cmd+{key_lower} - Notes popup toggle unavailable: {error}"
-                        ),
-                    );
-                }
-            }
-        }
-        if !has_cmd
-            && !_has_alt
-            && !_has_ctrl
-            && simulate_key_target_is_notes
-            && (key_lower == "escape"
-                || key_lower == "esc"
-                || key_lower == "tab"
-                || key_lower == "`"
-                || key_lower == "backtick")
-        {
-            match notes::handle_notes_ghost_key_for_automation(ctx, key) {
-                Ok(result) => {
-                    let handled = result
-                        .get("handled")
-                        .and_then(|value| value.as_bool())
-                        .unwrap_or(false);
-                    logging::log(
-                        "STDIN",
-                        &format!("SimulateKey: {key} - Notes ghost autocomplete {result}"),
-                    );
-                    if handled {
-                        return DispatchOutcome::success();
-                    }
-                }
-                Err(error) => {
-                    logging::log(
-                        "STDIN",
-                        &format!(
-                            "SimulateKey: {key} - Notes ghost autocomplete unavailable: {error}"
-                        ),
-                    );
-                }
-            }
-        }
-        if simulate_key_target_is_notes {
-            match notes::handle_notes_editor_key_for_automation(
-                ctx, key, has_cmd, has_shift, _has_ctrl, _has_alt,
-            ) {
-                Ok(result) => {
-                    let handled = result
-                        .get("handled")
-                        .and_then(|value| value.as_bool())
-                        .unwrap_or(false);
-                    logging::log(
-                        "STDIN",
-                        &format!("SimulateKey: {key} - Notes editor key {result}"),
-                    );
-                    if handled {
-                        return DispatchOutcome::success();
-                    }
-                }
-                Err(error) => {
-                    logging::log(
-                        "STDIN",
-                        &format!("SimulateKey: {key} - Notes editor key unavailable: {error}"),
-                    );
-                }
-            }
-        }
         // Mirror live GPUI Keystroke.key_char: Some(&str) only for
         // single-character keys (printable input like "a", "!", "A"),
         // None for named keys ("Escape", "Up", "Enter"). This lets

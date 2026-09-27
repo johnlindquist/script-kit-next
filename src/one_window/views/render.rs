@@ -103,27 +103,34 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
             }],
         },
         HostedView::Note(note) => note
-            .lines
+            .rows()
+            .into_iter()
+            .map(|row| ViewRow {
+                icon: if row.new_line { "edit" } else { "file" },
+                id: row.id,
+                title: row.title,
+                description: row.description,
+                selected: row.selected,
+            })
+            .collect(),
+        HostedView::Notes(list) if list.found.is_empty() => vec![ViewRow {
+            id: "notes-row:none".into(),
+            title: "No note by that name".into(),
+            description: Some("Type part of a note's name".into()),
+            icon: "search",
+            selected: true,
+        }],
+        HostedView::Notes(list) => list
+            .found
             .iter()
             .enumerate()
-            .map(|(i, line)| ViewRow {
-                id: format!("note-line:{i}"),
-                title: line.clone(),
-                description: None,
+            .map(|(i, found)| ViewRow {
+                id: format!("notes-row:{i}"),
+                title: found.title.clone(),
+                description: Some(found.sub.clone()),
                 icon: "file",
-                selected: false,
+                selected: list.sel == i,
             })
-            .chain(std::iter::once(ViewRow {
-                id: "note-line:new".into(),
-                title: if note.line.trim().is_empty() {
-                    "Write the line…".into()
-                } else {
-                    note.line.clone()
-                },
-                description: Some("↵ adds it".into()),
-                icon: "edit",
-                selected: true,
-            }))
             .collect(),
     }
 }
@@ -145,21 +152,23 @@ impl ScriptListApp {
         let colors = ListItemColors::from_theme(&self.theme);
         let theme = self.current_main_menu_theme;
         let header_h = crate::list_item::effective_first_section_header_height_for_theme(theme);
+        let scroll = &self.one_window_host.view_scroll;
+        let selected = rows.iter().position(|row| row.selected);
+        if selected != self.one_window_host.view_scrolled_to.get() {
+            self.one_window_host.view_scrolled_to.set(selected);
+            if let Some(selected) = selected {
+                scroll.scroll_to_item(selected);
+            }
+        }
         let mut list = div()
-            .w_full()
-            .h_full()
+            .id("one-window-view-rows")
+            .flex_1()
+            .min_h(px(0.))
             .flex()
             .flex_col()
-            .pt(crate::main_list_header_overlay_height(theme.def()))
-            .child(
-                div()
-                    .flex_none()
-                    .debug_selector(|| "oneWindowSectionHeader:0".to_string())
-                    .h(px(header_h))
-                    .child(crate::list_item::render_section_header(
-                        &head, None, colors, true,
-                    )),
-            );
+            .overflow_y_scroll()
+            .track_scroll(scroll)
+            .pb(crate::main_list_footer_overlay_total_padding());
         for (ix, row) in rows.into_iter().enumerate() {
             let selector = format!("list-row:{}", row.id);
             let icon =
@@ -179,7 +188,25 @@ impl ScriptListApp {
                     ),
             );
         }
-        Some(list.into_any_element())
+        Some(
+            div()
+                .w_full()
+                .h_full()
+                .flex()
+                .flex_col()
+                .pt(crate::main_list_header_overlay_height(theme.def()))
+                .child(
+                    div()
+                        .flex_none()
+                        .debug_selector(|| "oneWindowSectionHeader:0".to_string())
+                        .h(px(header_h))
+                        .child(crate::list_item::render_section_header(
+                            &head, None, colors, true,
+                        )),
+                )
+                .child(list)
+                .into_any_element(),
+        )
     }
 
     /// The row the drawn view has selected, which is the window's selected row while it's drawn.

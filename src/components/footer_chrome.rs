@@ -145,13 +145,10 @@ fn glass_capsule_row_with_cleanup(
 
     #[cfg(target_os = "macos")]
     let row = row.on_children_prepainted(move |bounds, window, _cx| {
-        for stale_group in &groups_to_remove {
-            crate::platform::footer_hit_regions::remove_group(window, stale_group);
-        }
-        // Native glass shells and hit regions are not subject to GPUI's clip:
+        // Native glass shells are not subject to GPUI's clip:
         // a row an ancestor clips entirely out of view (a view's own overflow,
-        // the in-stage footer zone boundary) must leave no glass shells or
-        // hit targets behind. Partially visible rows keep every capsule so
+        // the in-stage footer zone boundary) must leave no glass shells
+        // behind. Partially visible rows keep every capsule so
         // hover indices stay aligned with the element order.
         let visible = window.content_mask().bounds;
         let capsule_bounds = bounds
@@ -166,7 +163,6 @@ fn glass_capsule_row_with_cleanup(
         } else {
             Vec::new()
         };
-        crate::platform::footer_hit_regions::sync_for_window(window, group, &capsule_bounds);
 
         if enabled {
             for stale_group in &groups_to_remove {
@@ -210,7 +206,6 @@ pub(crate) fn glass_capsule(
 }
 
 pub(crate) fn remove_glass_capsule_group(window: &Window, group: &'static str) {
-    crate::platform::footer_hit_regions::remove_group(window, group);
     #[cfg(target_os = "macos")]
     crate::platform::glass_button_host::remove_group(window, group);
     #[cfg(not(target_os = "macos"))]
@@ -218,7 +213,6 @@ pub(crate) fn remove_glass_capsule_group(window: &Window, group: &'static str) {
 }
 
 pub(crate) fn remove_glass_capsule_window(window: &Window) {
-    crate::platform::footer_hit_regions::remove_for_window(window);
     #[cfg(target_os = "macos")]
     crate::platform::glass_button_host::remove_for_window(window);
     #[cfg(not(target_os = "macos"))]

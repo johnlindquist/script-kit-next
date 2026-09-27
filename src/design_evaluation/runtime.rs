@@ -35,7 +35,6 @@ pub(super) const BATCH_STEP_REQUEST_ID_PREFIX: &str = "owned-evaluation:batch:";
 #[derive(Clone)]
 pub(super) enum RootOwner {
     Main(Entity<ScriptListApp>),
-    Notes(Entity<crate::notes::NotesApp>),
     AgentChat(Entity<crate::ai::agent_chat::ui::AgentChatView>),
     Dictation(Entity<crate::dictation::DictationOverlay>),
     Secondary(Rc<secondary_fixtures::MountedSecondaryFixture>),
@@ -571,23 +570,11 @@ impl Evaluator {
             )?;
             return self.finish_registered_presentation(fixture_id, info);
         }
-        if matches!(
-            descriptor.family.as_str(),
-            "notesAuxiliary" | "dayPageAuxiliary"
-        ) {
+        if descriptor.family == "dayPageAuxiliary" {
             let parent = self
                 .resolve(parent.as_ref().context("auxiliary_parent_required")?)?
                 .clone();
             let info = match (&parent.owner, descriptor.family.as_str()) {
-                (RootOwner::Notes(entity), "notesAuxiliary") => {
-                    notes_fixtures::mount_notes_fixture_presentation(
-                        fixture_id,
-                        entity,
-                        &parent.info,
-                        parent.handle,
-                        &mut self.cx.app.borrow_mut(),
-                    )?
-                }
                 (RootOwner::Main(entity), "dayPageAuxiliary") => {
                     let day = match &entity.read(&self.cx.app.borrow()).current_view {
                         AppView::DayPage { entity } => entity.clone(),
@@ -704,40 +691,6 @@ impl Evaluator {
             return self.identity(&target);
         }
         let mounted = match descriptor.family.as_str() {
-            "notes" => {
-                let bounds = Bounds::new(point(px(0.0), px(0.0)), size(px(750.0), px(520.0)));
-                let options = crate::notes::window::window_ops::notes_window_options(
-                    bounds,
-                    WindowHostPolicy::OwnedHidden,
-                )?;
-                let mut entity = None;
-                let handle: WindowHandle<Root> =
-                    self.cx
-                        .open_owned_hidden_window_fallible(options, |window, cx| {
-                            let view =
-                                notes_fixtures::create_notes_fixture(fixture_id, window, cx)?;
-                            entity = Some(view.clone());
-                            Ok(cx.new(|cx| Root::new(view, window, cx)))
-                        })?;
-                let entity = entity.context("notes_root_not_created")?;
-                let info = crate::windows::register_runtime_window_instance(
-                    Self::descriptor("notes", AutomationWindowKind::Notes, "notes", bounds),
-                    handle.into(),
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                crate::notes::window::window_ops::bind_owned_notes_host(
-                    handle,
-                    entity.clone(),
-                    info.generation.context("notes_generation_missing")?,
-                    &mut self.cx.app.borrow_mut(),
-                )?;
-                Mounted {
-                    fixture_id: fixture_id.into(),
-                    info,
-                    handle: handle.into(),
-                    owner: RootOwner::Notes(entity),
-                }
-            }
             "agentChat" => {
                 let entity = conversation_fixtures::open_detached_agent_chat_fixture(
                     &mut self.cx.app.borrow_mut(),

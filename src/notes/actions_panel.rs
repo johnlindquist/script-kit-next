@@ -1,9 +1,7 @@
 //! Notes action catalog
 //!
 //! Defines the built-in Notes actions (labels, ids, icons, shortcuts) consumed
-//! by the unified CommandBar (Cmd+K) and the notes action builders. The legacy
-//! `NotesActionsPanel` overlay was removed; the CommandBar in
-//! `src/notes/window/panels.rs` owns presentation and keyboard handling now.
+//! by the notes action builders.
 
 use crate::designs::icon_variations::IconName;
 

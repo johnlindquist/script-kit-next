@@ -31,15 +31,6 @@ pub(crate) enum AgentChatContextPolicy {
     ActionsPayload {
         target: crate::ai::TabAiTargetContext,
     },
-    /// Explicit Notes→main handoff: the selected note (live editor snapshot)
-    /// as the primary focused target, plus persisted cart parts as
-    /// supplemental context chips. Never inherits the source surface's
-    /// implicit focused row and never touches the detached chat window.
-    NotesHandoff {
-        target: crate::ai::TabAiTargetContext,
-        supplemental_parts: Vec<crate::ai::message_parts::AiContextPart>,
-        source: &'static str,
-    },
     /// A plugin skill selected from the main menu. The specialized staging
     /// helper preserves slash-picker identity and cursor semantics.
     PluginSkill { skill: crate::plugins::PluginSkill },
@@ -77,7 +68,6 @@ impl AgentChatContextPolicy {
             | Self::NoContext
             | Self::Parts { .. }
             | Self::ActionsPayload { .. }
-            | Self::NotesHandoff { .. }
             | Self::PluginSkill { .. } => false,
         }
     }

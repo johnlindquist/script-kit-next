@@ -23,17 +23,6 @@ fn detached_agent_chat_window_focuses_view_and_wires_history_callback() {
 }
 
 #[test]
-fn notes_cmd_shift_a_routes_through_shared_main_handoff_path() {
-    let source = include_str!("../src/notes/window/keyboard.rs");
-
-    assert!(
-        source.contains("handoff_selected_note_to_main_agent_chat")
-            && source.contains("\"NotesWindowCmdShiftA\""),
-        "Notes Cmd+Shift+A should reuse the shared notes->main Agent Chat handoff instead of duplicating AI routing"
-    );
-}
-
-#[test]
 fn global_cmd_enter_uses_return_preserving_agent_chat_entry_helper() {
     let source = include_str!("../src/app_impl/agent_handoff/mod.rs");
     let fn_start = source

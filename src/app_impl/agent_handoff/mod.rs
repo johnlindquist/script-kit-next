@@ -163,13 +163,21 @@ impl ScriptListApp {
             &profile_id,
             &ctx,
         ) else {
-            self.one_window_notice(crate::line_notice::FAILED, format!("Agent Chat profile not found: {profile_id}"), cx);
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                format!("Agent Chat profile not found: {profile_id}"),
+                cx,
+            );
             cx.notify();
             return;
         };
 
         if let Err(error) = crate::config::save_user_preferences(&prefs) {
-            self.one_window_notice(crate::line_notice::FAILED, format!("Failed to save Agent Chat profile: {error}"), cx);
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                format!("Failed to save Agent Chat profile: {error}"),
+                cx,
+            );
             cx.notify();
             return;
         }
@@ -591,7 +599,11 @@ impl ScriptListApp {
 
         if prompt.is_empty() && parts.is_empty() {
             if let Some(profile_name) = selected_profile_name {
-                self.one_window_notice(crate::line_notice::INFO, format!("Default Agent Chat profile: {profile_name}"), cx);
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    format!("Default Agent Chat profile: {profile_name}"),
+                    cx,
+                );
                 cx.notify();
                 return true;
             }
@@ -1293,7 +1305,11 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(part) = self.quick_terminal_context_part_from_entity(entity, cx) else {
-            self.one_window_notice(crate::line_notice::FAILED, "No terminal output to attach".to_string(), cx);
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                "No terminal output to attach".to_string(),
+                cx,
+            );
             return false;
         };
 
@@ -1320,7 +1336,11 @@ impl ScriptListApp {
         }
 
         let Some(part) = self.quick_terminal_context_part_from_entity(entity.clone(), cx) else {
-            self.one_window_notice(crate::line_notice::FAILED, "No terminal output to attach".to_string(), cx);
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                "No terminal output to attach".to_string(),
+                cx,
+            );
             return true;
         };
 
@@ -2155,7 +2175,11 @@ impl ScriptListApp {
                                 event = "tab_ai_live_quick_submit_build_failed",
                                 error = %error,
                             );
-                            this.one_window_notice(crate::line_notice::FAILED, format!("Failed to build quick-submit context: {error}"), cx);
+                            this.one_window_notice(
+                                crate::line_notice::FAILED,
+                                format!("Failed to build quick-submit context: {error}"),
+                                cx,
+                            );
                             cx.notify();
                         }
                     }
@@ -3133,7 +3157,11 @@ impl ScriptListApp {
                                 event = "tab_ai_harness_context_build_failed",
                                 error = %error,
                             );
-                            this.one_window_notice(crate::line_notice::FAILED, format!("Failed to build harness context: {error}"), cx);
+                            this.one_window_notice(
+                                crate::line_notice::FAILED,
+                                format!("Failed to build harness context: {error}"),
+                                cx,
+                            );
                             cx.notify();
                         }
                     }
@@ -3803,10 +3831,6 @@ impl ScriptListApp {
     ) {
         match self.agent_chat_return_route.clone() {
             AgentChatReturnRoute::Direct => self.close_agent_chat_main_window_state_first(cx),
-            AgentChatReturnRoute::Notes(snapshot) => {
-                self.close_agent_chat_main_window_state_first(cx);
-                let _ = crate::notes::window::ai_handoff::restore_notes_host_return(snapshot, cx);
-            }
             AgentChatReturnRoute::Source(origin) => {
                 self.tab_ai_harness_return_view = Some(origin.view.clone());
                 self.tab_ai_harness_return_focus_target = Some(origin.focus_target);
@@ -5912,8 +5936,14 @@ impl ScriptListApp {
             "Save this script?",
             format!("Save it as {filename_stem}.ts to run it again from the launcher."),
             vec![
-                ("Save".to_string(), Box::new(|app, cx| app.save_tab_ai_script(cx))),
-                ("Not Now".to_string(), Box::new(|app, cx| app.close_tab_ai_save_offer(cx))),
+                (
+                    "Save".to_string(),
+                    Box::new(|app, cx| app.save_tab_ai_script(cx)),
+                ),
+                (
+                    "Not Now".to_string(),
+                    Box::new(|app, cx| app.close_tab_ai_save_offer(cx)),
+                ),
             ],
             Some(Box::new(|app, cx| app.close_tab_ai_save_offer(cx))),
             cx,
@@ -6013,17 +6043,25 @@ impl ScriptListApp {
                     event = "tab_ai_save_editor_open_failed",
                     error = %error,
                 );
-                self.one_window_notice(crate::line_notice::FAILED, format!("Saved script but failed to open editor: {error}"), cx);
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    format!("Saved script but failed to open editor: {error}"),
+                    cx,
+                );
             }
             None => {
-                self.one_window_notice(crate::line_notice::DONE, if self.main_services.is_production() {
-                            format!("Saved '{}' and opened in editor", state.filename_stem)
-                        } else {
-                            format!(
-                                "Saved '{}' in owned storage; verification not run",
-                                state.filename_stem
-                            )
-                        }, cx);
+                self.one_window_notice(
+                    crate::line_notice::DONE,
+                    if self.main_services.is_production() {
+                        format!("Saved '{}' and opened in editor", state.filename_stem)
+                    } else {
+                        format!(
+                            "Saved '{}' in owned storage; verification not run",
+                            state.filename_stem
+                        )
+                    },
+                    cx,
+                );
             }
         }
 

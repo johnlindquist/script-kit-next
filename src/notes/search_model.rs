@@ -116,7 +116,8 @@ impl NoteSearchRow {
 pub(crate) enum NoteSearchDestination {
     OpenInNotes,
     OpenHere,
-    OpenInNotesWindow,
+    /// Opens the note under the main window's input.
+    OpenNote,
     AttachNote,
 }
 
@@ -125,7 +126,7 @@ impl NoteSearchDestination {
         match self {
             Self::OpenInNotes => "Open in Notes",
             Self::OpenHere => "Open Here",
-            Self::OpenInNotesWindow => "Open in Notes Window",
+            Self::OpenNote => "Open Note",
             Self::AttachNote => "Attach Note",
         }
     }
@@ -134,7 +135,7 @@ impl NoteSearchDestination {
         match self {
             Self::OpenInNotes => "notes.search.open-in-notes",
             Self::OpenHere => "notes.search.open-here",
-            Self::OpenInNotesWindow => "notes.search.open-in-notes-window",
+            Self::OpenNote => "notes.search.open-note",
             Self::AttachNote => "notes.search.attach-note",
         }
     }
@@ -143,7 +144,7 @@ impl NoteSearchDestination {
         match self {
             Self::OpenInNotes => "openInNotes",
             Self::OpenHere => "openHere",
-            Self::OpenInNotesWindow => "openInNotesWindow",
+            Self::OpenNote => "openNote",
             Self::AttachNote => "attachNote",
         }
     }
@@ -617,16 +618,11 @@ mod tests {
             [
                 NoteSearchDestination::OpenInNotes,
                 NoteSearchDestination::OpenHere,
-                NoteSearchDestination::OpenInNotesWindow,
+                NoteSearchDestination::OpenNote,
                 NoteSearchDestination::AttachNote,
             ]
             .map(NoteSearchDestination::primary_verb),
-            [
-                "Open in Notes",
-                "Open Here",
-                "Open in Notes Window",
-                "Attach Note",
-            ]
+            ["Open in Notes", "Open Here", "Open Note", "Attach Note",]
         );
     }
 
@@ -705,7 +701,7 @@ mod tests {
             selected_id: Some(second),
             scroll_anchor: Some(second),
             generation: 1,
-            destination: NoteSearchDestination::OpenInNotesWindow,
+            destination: NoteSearchDestination::OpenNote,
             state: NoteSearchState::Ready {
                 generation: 1,
                 snapshot: NoteSearchSnapshot {

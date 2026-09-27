@@ -1,18 +1,16 @@
 struct SecondarySurfaceWindowState {
-    is_notes: bool,
     is_detached_agent_chat: bool,
 }
 
 impl SecondarySurfaceWindowState {
     fn inspect(window: &Window) -> Self {
         Self {
-            is_notes: crate::notes::is_notes_window(window),
             is_detached_agent_chat: crate::ai::agent_chat::ui::chat_window::is_chat_window(window),
         }
     }
 
     fn is_secondary(&self) -> bool {
-        self.is_notes || self.is_detached_agent_chat
+        self.is_detached_agent_chat
     }
 }
 

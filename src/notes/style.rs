@@ -1,15 +1,8 @@
-//! Typed chrome style for the Notes window.
-//!
-//! This module extracts the Notes window's layout constants into a typed struct
-//! that can be driven by storybook adoption. The real render path consumes
-//! `adopted_style()` which resolves from on-disk storybook selections when the
-//! `storybook` feature is active, otherwise returns `NotesWindowStyle::current()`.
+//! Typed layout style for the notes editor the day page draws: its insets and chrome sizes.
 
-/// Typed chrome style governing Notes window layout dimensions and opacity.
+/// Typed chrome style for the notes editor's layout dimensions and opacity.
 ///
-/// Each field corresponds to a layout constant previously defined inline in
-/// `window.rs`. The struct is `Copy` so it can be cheaply threaded through
-/// render closures.
+/// The struct is `Copy` so it can be cheaply threaded through render closures.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NotesWindowStyle {
     /// Titlebar height in px (macOS traffic light clearance).
@@ -53,7 +46,7 @@ impl NotesLayoutMetrics {
 }
 
 impl NotesWindowStyle {
-    /// The current production defaults — matches the inline constants in `window.rs`.
+    /// The current production defaults.
     pub const fn current() -> Self {
         Self {
             titlebar_height: 36.0,
@@ -87,14 +80,6 @@ impl NotesWindowStyle {
     }
 }
 
-/// Resolve the adopted style from storybook selection (storybook feature gate).
-#[cfg(feature = "storybook")]
-pub(crate) fn adopted_style() -> NotesWindowStyle {
-    crate::storybook::adopted_notes_window_style()
-}
-
-/// Production default — always returns `current()`.
-#[cfg(not(feature = "storybook"))]
 pub(crate) fn adopted_style() -> NotesWindowStyle {
     NotesWindowStyle::current()
 }

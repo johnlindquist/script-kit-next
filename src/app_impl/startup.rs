@@ -841,14 +841,12 @@ impl ScriptListApp {
                 // Skip keystrokes from secondary windows — interceptors are
                 // GLOBAL and fire for ALL windows.  Secondary windows own
                 // their own Tab/Cmd+Enter handling.
-                let is_notes = crate::notes::is_notes_window(window);
                 let is_detached_agent_chat = crate::ai::agent_chat::ui::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_detached_agent_chat || is_actions {
+                if is_detached_agent_chat || is_actions {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "tab_interceptor_skipped_secondary_window",
-                        is_notes,
                         is_detached_agent_chat,
                         is_actions,
                     );
@@ -1442,10 +1440,9 @@ impl ScriptListApp {
                 }
 
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
-                // Keep main list arrow routing scoped to the main window so notes/AI/actions
+                // Keep main list arrow routing scoped to the main window so AI/actions
                 // windows receive their own navigation key events.
-                if crate::notes::is_notes_window(window)
-                    || crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
+                if crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
                 {
                     return;
@@ -2306,8 +2303,7 @@ impl ScriptListApp {
                 }
 
                 // Skip processing if this keystroke is from a secondary window
-                if crate::notes::is_notes_window(window)
-                    || crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
+                if crate::ai::agent_chat::ui::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
                 {
                     return;
@@ -2395,7 +2391,6 @@ impl ScriptListApp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
-                        is_notes = secondary_window.is_notes,
                         is_detached_agent_chat = secondary_window.is_detached_agent_chat,
                         is_actions,
                         key = %key,
@@ -2476,7 +2471,6 @@ impl ScriptListApp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_main_window_hidden",
-                        is_notes = secondary_window.is_notes,
                         is_detached_agent_chat = secondary_window.is_detached_agent_chat,
                         is_actions,
                     );

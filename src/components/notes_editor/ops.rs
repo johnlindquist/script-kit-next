@@ -7,6 +7,7 @@ use tracing::info;
 use super::NotesEditor;
 
 /// Prove a replacement from the observed buffer and caret, not requested length.
+#[allow(dead_code)] // The binary's day page calls this; the library has no caller.
 pub(crate) fn observed_replacement_range(
     before: &str,
     after: &str,

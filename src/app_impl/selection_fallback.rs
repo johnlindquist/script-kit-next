@@ -969,11 +969,8 @@ impl ScriptListApp {
         note_id: crate::notes::NoteId,
         cx: &mut Context<Self>,
     ) -> Result<(), &'static str> {
-        match crate::notes::open_note_in_notes_window(cx, note_id) {
-            Ok(()) => {
-                self.hide_main_and_reset(cx);
-                Ok(())
-            }
+        match self.one_window_open_note_target(crate::notes::NoteTarget::Note(note_id), cx) {
+            Ok(()) => Ok(()),
             Err(error) => {
                 logging::log("ERROR", &format!("Failed to open root note: {error}"));
                 self.one_window_notice(
@@ -1734,11 +1731,7 @@ impl ScriptListApp {
                             content.len(),
                         ),
                     );
-                    let item = gpui::ClipboardItem::new_string(content);
-                    cx.write_to_clipboard(item);
-                    if let Err(e) = crate::notes::open_notes_window(cx) {
-                        logging::log("FALLBACK", &format!("Failed to open Notes: {}", e));
-                    }
+                    self.one_window_open_note(content, cx);
                 }
                 FallbackResult::Copy { text } => {
                     logging::log("FALLBACK", &format!("Copy: {} chars", text.len()));

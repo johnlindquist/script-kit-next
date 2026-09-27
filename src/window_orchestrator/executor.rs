@@ -99,49 +99,27 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
             );
         }
 
-        // -----------------------------------------------------------------
-        // Notes
-        // -----------------------------------------------------------------
-        WindowCommand::OpenNotesWindow => {
-            if let Err(e) = crate::notes::open_notes_window(cx) {
-                tracing::warn!(category = "ORCHESTRATOR", error = %e, "Failed to open notes window");
+        WindowCommand::FocusSurface(surface) => match surface {
+            SurfaceId::DetachedAiChat => {
+                tracing::debug!(
+                    category = "ORCHESTRATOR",
+                    "FocusSurface(DetachedAiChat) — chat window self-manages key status"
+                );
             }
-        }
-
-        WindowCommand::CloseNotesWindow => {
-            crate::notes::close_notes_window(cx);
-        }
-
-        WindowCommand::FocusSurface(surface) => {
-            match surface {
-                SurfaceId::Notes => {
-                    // Notes window manages its own key-window status via AppKit.
-                    tracing::debug!(
-                        category = "ORCHESTRATOR",
-                        "FocusSurface(Notes) — notes window self-manages key status"
-                    );
-                }
-                SurfaceId::DetachedAiChat => {
-                    tracing::debug!(
-                        category = "ORCHESTRATOR",
-                        "FocusSurface(DetachedAiChat) — chat window self-manages key status"
-                    );
-                }
-                SurfaceId::DictationOverlay => {
-                    tracing::debug!(
-                        category = "ORCHESTRATOR",
-                        "FocusSurface(DictationOverlay) — overlay self-manages key status"
-                    );
-                }
-                SurfaceId::Main => {
-                    crate::set_main_window_visible(true);
-                    crate::platform::ensure_main_panel_configured(
-                        "window_orchestrator::executor::FocusSurface/Main",
-                    );
-                    crate::platform::show_main_window_without_activation();
-                }
+            SurfaceId::DictationOverlay => {
+                tracing::debug!(
+                    category = "ORCHESTRATOR",
+                    "FocusSurface(DictationOverlay) — overlay self-manages key status"
+                );
             }
-        }
+            SurfaceId::Main => {
+                crate::set_main_window_visible(true);
+                crate::platform::ensure_main_panel_configured(
+                    "window_orchestrator::executor::FocusSurface/Main",
+                );
+                crate::platform::show_main_window_without_activation();
+            }
+        },
 
         // -----------------------------------------------------------------
         // Detached Agent Chat Chat
@@ -202,13 +180,14 @@ pub(crate) fn to_orchestrator_target(
     target: &crate::dictation::DictationTarget,
 ) -> super::DictationTarget {
     let mapped = match target {
-        crate::dictation::DictationTarget::MainWindowFilter => {
-            super::DictationTarget::MainWindowFilter
-        }
         crate::dictation::DictationTarget::MainWindowPrompt => {
             super::DictationTarget::MainWindowPrompt
         }
-        crate::dictation::DictationTarget::NotesEditor => super::DictationTarget::NotesEditor,
+        // Notes take dictation through the main input, where a note's line is.
+        crate::dictation::DictationTarget::MainWindowFilter
+        | crate::dictation::DictationTarget::NotesEditor => {
+            super::DictationTarget::MainWindowFilter
+        }
         crate::dictation::DictationTarget::AiChatComposer => super::DictationTarget::AiChatComposer,
         crate::dictation::DictationTarget::TabAiHarness => super::DictationTarget::TabAiHarness,
         crate::dictation::DictationTarget::ExternalApp => super::DictationTarget::ExternalApp,

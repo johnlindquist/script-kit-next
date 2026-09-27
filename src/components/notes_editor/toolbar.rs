@@ -8,6 +8,7 @@ use super::NotesEditor;
 #[derive(Clone, Copy)]
 pub struct NotesEditorToolbarAction {
     pub(crate) spec: UiActionSpec,
+    #[allow(dead_code)] // The binary's day page runs these; the library only lists them.
     pub(crate) run: fn(&mut NotesEditor, &mut Window, &mut Context<NotesEditor>),
 }
 

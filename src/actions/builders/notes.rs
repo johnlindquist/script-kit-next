@@ -1065,6 +1065,7 @@ fn truncated_preview(preview: &str) -> String {
 /// All rows intentionally share one section and preserve canonical input order.
 /// ActionsDialog's stable score ties therefore agree with the canonical Notes
 /// ranker instead of regrouping pinned/day rows into a host-local order.
+#[allow(dead_code)] // The binary's day page switcher calls this; the library has no caller.
 pub(crate) fn get_canonical_note_search_actions(
     state: &crate::notes::search_model::NoteSearchState,
     current_id: Option<crate::notes::search_model::NoteSearchDocumentId>,

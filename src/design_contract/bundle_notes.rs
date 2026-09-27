@@ -3,170 +3,38 @@ fn append_notes_design_tokens(
     theme: &Theme,
     _fm: crate::designs::FooterMetricsTokens,
 ) {
-    // ── Notes window (separate NSPanel) ─────────────────────────────────
-    // App-authored chrome + the layout model come from the production
-    // contract (`notes::window::contract`) — the SAME typed source
-    // window_ops, the titlebar renderer, and autosize consume (and
-    // explicitly NOT the feature-sensitive `adopted_style()`). Editor
-    // typography/caret resolve through the notes-editor contract (the
+    // ── Notes editor (the day page's editor) ────────────────────────────
+    // Editor typography/caret resolve through the notes-editor contract (the
     // theme → gpui-component bridge, NOT `FontConfig::default()`), and
     // markdown capture styles through the real highlight-theme resolver.
-    let notes_chrome = crate::notes::window::contract::production_notes_window_contract();
-    let notes_layout = crate::notes::window::contract::production_notes_layout_model();
     let notes_editor =
         crate::components::notes_editor::contract::resolved_notes_editor_metrics(theme);
     let notes_markdown =
         crate::notes::markdown_highlighting::resolved_notes_markdown_styles(theme, true);
     let notes_markdown_runtime =
         crate::notes::markdown_highlighting::markdown_editor_runtime_info();
-    let footer_row = crate::notes::window::layout::production_notes_footer_action_row();
+    let notes_style = crate::notes::style::NotesWindowStyle::current();
 
-    // Source: app-authored Notes chrome (writable leaves).
+    // Source: the editor's insets, which the day page's layout budget reads.
     for (id, var, value, path) in [
-        (
-            "notes.window.defaultWidth",
-            "--sk-notes-window-width",
-            notes_chrome.default_width,
-            "notes::window::contract::NOTES_DEFAULT_WIDTH",
-        ),
-        (
-            "notes.window.defaultHeight",
-            "--sk-notes-window-height",
-            notes_chrome.default_height,
-            "notes::window::contract::NOTES_DEFAULT_HEIGHT",
-        ),
-        (
-            "notes.titlebar.height",
-            "--sk-notes-titlebar-height",
-            notes_chrome.titlebar_height,
-            "NotesWindowStyle::current().titlebar_height",
-        ),
-        (
-            "notes.titlebar.paddingX",
-            "--sk-notes-titlebar-padding-x",
-            notes_chrome.titlebar_padding_x,
-            "notes::window::contract::NOTES_TITLEBAR_PADDING_X",
-        ),
-        (
-            "notes.titlebar.leadingReserveWidth",
-            "--sk-notes-titlebar-traffic-width",
-            notes_chrome.titlebar_leading_reserve_width,
-            "notes::window::TITLEBAR_TRAFFIC_LIGHT_W",
-        ),
-        (
-            "notes.titlebar.trailingReserveWidth",
-            "--sk-notes-titlebar-icons-width",
-            notes_chrome.titlebar_trailing_reserve_width,
-            "notes::window::TITLEBAR_ICONS_W",
-        ),
-        (
-            "notes.titlebar.trafficLightOriginX",
-            "--sk-notes-traffic-x",
-            notes_chrome.traffic_light_origin_x,
-            "notes::window::contract::NOTES_TRAFFIC_LIGHT_ORIGIN_X",
-        ),
-        (
-            "notes.titlebar.trafficLightOriginY",
-            "--sk-notes-traffic-y",
-            notes_chrome.traffic_light_origin_y,
-            "notes::window::contract::NOTES_TRAFFIC_LIGHT_ORIGIN_Y",
-        ),
         (
             "notes.editor.paddingX",
             "--sk-notes-editor-padding-x",
-            notes_chrome.editor_padding_x,
+            notes_style.editor_padding_x,
             "NotesWindowStyle::current().editor_padding_x",
         ),
         (
             "notes.editor.paddingY",
             "--sk-notes-editor-padding-y",
-            notes_chrome.editor_padding_y,
+            notes_style.editor_padding_y,
             "NotesWindowStyle::current().editor_padding_y",
         ),
     ] {
         b.source_len(id, var, value, path);
     }
-    b.add(
-        "notes.window.defaultEdgePadding",
-        TokenStage::Source,
-        None,
-        TokenValue::Length {
-            value: notes_chrome.default_edge_padding as f64,
-        },
-        Some("notes::window::contract::NOTES_DEFAULT_EDGE_PADDING"),
-        true,
-        &[],
-    );
-    b.add(
-        "notes.titlebar.titleRestOpacity",
-        TokenStage::Source,
-        Some("--sk-notes-titlebar-title-rest-opacity"),
-        TokenValue::Number {
-            value: notes_chrome.title_rest_opacity as f64,
-        },
-        Some("notes::window::OPACITY_MUTED"),
-        true,
-        &[],
-    );
-
-    // The same absent row feeds autosize, automation and export; no CSS
-    // alias or hypothetical painted footer is emitted for Notes.
-    b.add(
-        "notes.layout.footerReservationHeight",
-        TokenStage::Resolved,
-        None,
-        TokenValue::Length {
-            value: footer_row.height as f64,
-        },
-        Some("notes::window::layout::production_notes_footer_action_row().height"),
-        false,
-        &["notes.footer.presentation"],
-    );
-    for (id, value, path) in [
-        (
-            "notes.layout.autoResize.maxHeight",
-            notes_layout.auto_resize_max_height as f64,
-            "NotesLayoutMetrics::auto_resize_max_height",
-        ),
-        (
-            "notes.layout.autoResize.assumedLineHeight",
-            notes_layout.auto_resize_assumed_line_height as f64,
-            "NotesLayoutMetrics::auto_resize_line_height — an autosize ASSUMPTION, not the Input's painted line box",
-        ),
-        (
-            "notes.layout.autoResize.applyThreshold",
-            notes_layout.auto_resize_threshold as f64,
-            "NotesLayoutMetrics::auto_resize_threshold",
-        ),
-    ] {
-        b.add(
-            id,
-            TokenStage::Source,
-            None,
-            TokenValue::Length { value },
-            Some(path),
-            false,
-            &[],
-        );
-    }
 
     // Contract facts (JSON-only text records; not visual numbers).
     for (id, value, path) in [
-        (
-            "notes.footer.presentation",
-            crate::notes::window::contract::NOTES_FOOTER_PRESENTATION.to_string(),
-            "notes::window::contract::NOTES_FOOTER_PRESENTATION",
-        ),
-        (
-            "notes.footer.nativeOverlay",
-            crate::notes::window::contract::NOTES_FOOTER_NATIVE_OVERLAY.to_string(),
-            "notes::window::contract::NOTES_FOOTER_NATIVE_OVERLAY",
-        ),
-        (
-            "notes.footer.visibility",
-            crate::notes::window::contract::NOTES_FOOTER_VISIBILITY.to_string(),
-            "notes::window::contract::NOTES_FOOTER_VISIBILITY",
-        ),
         (
             "notes.editor.markdown.language",
             notes_markdown_runtime.language.clone(),
@@ -201,7 +69,7 @@ fn append_notes_design_tokens(
         );
     }
 
-    // Resolved: what the Notes window actually paints (never writable).
+    // Resolved: what the notes editor actually paints (never writable).
     for (id, var, value, derived) in [
         (
             "resolved.notes.editor.baseFontSize",

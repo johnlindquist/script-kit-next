@@ -279,7 +279,7 @@ fn main_window_footer_contract_legacy_view_buttons_match_real_keyboard_actions()
     assert_eq!(
         grammar(&notes_browse_footer_buttons(
             true,
-            crate::notes::search_model::NoteSearchDestination::OpenInNotesWindow,
+            crate::notes::search_model::NoteSearchDestination::OpenNote,
             true,
         )),
         vec![

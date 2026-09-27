@@ -94,7 +94,6 @@ interface NativePeerInventory {
 const SECONDARY_FACTORIES = [
   ["ActionsWindow", ["src/actions/window.rs"]],
   ["ConfirmPopupWindow", ["src/confirm/window.rs", "src/confirm/parent_dialog.rs"]],
-  ["NotesApp", ["src/notes/window/window_ops.rs"]],
   ["AgentChatView", ["src/ai/agent_chat/ui/chat_window.rs"]],
   ["AgentChatHistoryPopup", ["src/ai/agent_chat/ui/history_popup.rs"]],
   ["DictationOverlay", ["src/dictation/window.rs"]],

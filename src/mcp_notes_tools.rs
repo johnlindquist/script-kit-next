@@ -149,7 +149,7 @@ pub fn get_notes_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: NOTES_CREATE_TOOL.to_string(),
-            description: "Create a Script Kit note and optionally open/select it in the Notes window.".to_string(),
+            description: "Create a Script Kit note and optionally open it under the main window's input.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,
@@ -188,7 +188,7 @@ pub fn get_notes_tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: NOTES_UPDATE_TOOL.to_string(),
-            description: "Update a Script Kit note by id and optionally open/select it in the Notes window.".to_string(),
+            description: "Update a Script Kit note by id and optionally open it under the main window's input.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,

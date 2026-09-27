@@ -932,3 +932,6 @@ mod learns;
 
 #[path = "ui_window_enter_button_property_tests_views.rs"]
 mod views;
+
+#[path = "ui_window_enter_button_property_tests_notes.rs"]
+mod notes;

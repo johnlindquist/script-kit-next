@@ -687,7 +687,7 @@ async function t04t05(
 		await driver.request(
 			{
 				type: "triggerAction",
-				actionId: "day_page:open_in_notes_window",
+				actionId: "day_page:open_as_note",
 				host: "mainList",
 				requestId: `${RUN_ID}-t04-t05-open-in-notes`,
 			},

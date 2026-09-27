@@ -901,12 +901,6 @@ impl Evaluator {
                     _ => Ok(Value::Null),
                 }
             }
-            RootOwner::Notes(entity) => super::notes_fixtures::observe_notes_fixture_presentation(
-                entity,
-                &mounted.info,
-                mounted.handle,
-                &cx,
-            ),
             RootOwner::AgentChat(view) => agent_chat_observation(view, &cx),
             RootOwner::Dictation(view) => {
                 let state = view.read(&cx).fixture_state();

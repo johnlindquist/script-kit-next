@@ -619,7 +619,6 @@ pub(crate) struct AgentChatMainReturnState {
 pub(crate) enum AgentChatReturnRoute {
     Source(AgentChatReturnOrigin),
     Main(AgentChatMainReturnState),
-    Notes(crate::notes::window::ai_handoff::NotesHostReturnSnapshot),
     Direct,
 }
 

@@ -1,7 +1,7 @@
 //! Secondary-surface semantic element collectors.
 //!
 //! Provides [`collect_surface_snapshot`] which returns semantic elements for
-//! non-main automation windows (Notes, AgentChatDetached, ActionsDialog, PromptPopup).
+//! non-main automation windows (AgentChatDetached, ActionsDialog, PromptPopup).
 //!
 //! Used by both `getElements` and `inspectAutomationWindow` so agents see one
 //! consistent semantic model regardless of which protocol command they use.
@@ -876,13 +876,7 @@ fn collect_registered_surface_layout_inner(
     });
     let mut required = Vec::<String>::new();
     let mut layout = match target.kind {
-        AutomationWindowKind::Notes => {
-            let (entity, _) =
-                crate::notes::get_notes_app_entity_and_handle_for_generation(generation, cx)
-                    .ok_or_else(|| anyhow::anyhow!("notes_layout_owner_missing"))?;
-            required.extend(["notes-window-root".into(), "notes-titlebar".into()]);
-            entity.read(cx).automation_layout_info(&target)
-        }
+        AutomationWindowKind::Notes => anyhow::bail!("no_notes_window"),
         AutomationWindowKind::AgentChatDetached => {
             let entity = crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
                 &target.id, generation,
@@ -1014,20 +1008,7 @@ pub fn surface_revision_facts(
         return None;
     }
     match resolved.kind {
-        AutomationWindowKind::Notes => {
-            let (entity, handle) =
-                crate::notes::get_notes_app_entity_and_handle_for_generation(generation, cx)?;
-            let layer_revision =
-                read_window_root(handle, window, cx, |root, cx| root.layer_revision_with(cx))
-                    .ok()?;
-            let view = entity.read(cx);
-            Some((
-                view.document_revision().checked_add(layer_revision)?,
-                view.semantic_revision(cx).checked_add(layer_revision)?,
-                view.applied_theme_revision(),
-                view.applied_theme_revision(),
-            ))
-        }
+        AutomationWindowKind::Notes => None,
         AutomationWindowKind::AgentChatDetached => {
             let entity = crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
                 &resolved.id,
@@ -1096,9 +1077,7 @@ pub fn close_owned_registered_surface(
         "owned_native_host_required"
     );
     match resolved.kind {
-        AutomationWindowKind::Notes => {
-            crate::notes::close_owned_notes_window(generation, cx).map_err(anyhow::Error::msg)?
-        }
+        AutomationWindowKind::Notes => anyhow::bail!("no_notes_window"),
         AutomationWindowKind::AgentChatDetached => {
             anyhow::ensure!(
                 crate::ai::agent_chat::ui::chat_window::get_agent_chat_view_for_instance(
@@ -1161,7 +1140,7 @@ pub fn collect_surface_snapshot(
     let current = current_surface_metadata(resolved)?;
     let resolved = &current;
     let mut snapshot = match resolved.kind {
-        AutomationWindowKind::Notes => collect_notes_snapshot(resolved, cx)?,
+        AutomationWindowKind::Notes => return None,
         AutomationWindowKind::AgentChatDetached => {
             collect_agent_chat_detached_snapshot(resolved, cx)?
         }
@@ -1192,25 +1171,7 @@ pub fn collect_surface_snapshot(
     Some(snapshot)
 }
 
-// ---------------------------------------------------------------------------
-// Notes collector
-// ---------------------------------------------------------------------------
-
-fn collect_notes_snapshot(
-    resolved: &AutomationWindowInfo,
-    cx: &gpui::App,
-) -> Option<SurfaceElementSnapshot> {
-    let (entity, handle) =
-        crate::notes::get_notes_app_entity_and_handle_for_generation(resolved.generation?, cx)?;
-    let layers = handle
-        .read_with(cx, |root, cx| root.layer_snapshot(cx))
-        .ok()?;
-    let mut snapshot = collect_notes_elements(&entity, usize::MAX, cx);
-    append_root_layer_elements(&mut snapshot, &layers);
-    Some(snapshot)
-}
-
-/// Project retained Root layers, never synthetic dialogs or notification counts.
+#[allow(dead_code)] // The binary's owned evaluation calls this; the library has no caller.
 pub(crate) fn append_root_layer_elements(
     snapshot: &mut SurfaceElementSnapshot,
     layers: &gpui_component::RootLayerSnapshot,
@@ -1324,114 +1285,6 @@ mod root_layer_projection_tests {
         assert_eq!(snapshot.total_count, 3);
         assert!(snapshot.focused_semantic_id.is_none());
         assert_eq!(layers.revision, 7);
-    }
-}
-
-pub(crate) fn collect_notes_elements(
-    entity: &gpui::Entity<crate::notes::NotesApp>,
-    limit: usize,
-    cx: &gpui::App,
-) -> SurfaceElementSnapshot {
-    let notes = entity.read(cx);
-    let text = notes.editor_text(cx);
-    let metrics = crate::notes::window::style::adopted_metrics();
-    let theme = crate::theme::get_cached_theme();
-    let editor_surface =
-        crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&theme);
-    let editor_runtime = notes.editor_runtime_info(cx);
-    let mut editor = element(
-        "input:notes-editor",
-        ElementType::Input,
-        None,
-        Some(text),
-        None,
-        Some(true),
-        None,
-    )
-    .redact_content(crate::protocol::ElementContentKind::UserContent);
-    editor.style = Some(ElementStyleInfo {
-        owner: editor_surface.owner.to_string(),
-        input_render_path: Some(editor_surface.input_render_path.to_string()),
-        editor_runtime: Some(editor_runtime),
-        surface_background_rgb: Some(editor_surface.background_rgb),
-        occlusion_rgba: Some(editor_surface.occlusion_rgba),
-        padding_x: Some(metrics.editor_padding_x),
-        padding_y: Some(metrics.editor_padding_y),
-        font_family_source: Some("theme.mono_font_family".to_string()),
-        text_size_source: Some("theme.mono_font_size".to_string()),
-    });
-
-    // Titlebar commands are projected from the same mode-sensitive
-    // NotesAction descriptors as the renderer, Actions, and keyboard router.
-    let titlebar_actions = notes.titlebar_action_descriptors();
-    let titlebar_elements = titlebar_actions
-        .into_iter()
-        .enumerate()
-        .map(|(index, descriptor)| {
-            let mut action = element(
-                &descriptor.semantic_action_id,
-                ElementType::Button,
-                Some(descriptor.label.to_string()),
-                descriptor.shortcut.map(str::to_string),
-                None,
-                None,
-                Some(index),
-            );
-            action.role = Some(
-                if descriptor.action == crate::notes::NotesAction::SendToAi {
-                    "handoff"
-                } else {
-                    "action"
-                }
-                .to_string(),
-            );
-            action.kind = Some(
-                if descriptor.action == crate::notes::NotesAction::SendToAi {
-                    "MainAgentChat".to_string()
-                } else {
-                    format!("{:?}", descriptor.action)
-                },
-            );
-            action.selectable = Some(descriptor.availability.is_enabled());
-            action.action_disabled = descriptor.disabled_reason().map(str::to_string);
-            action
-        });
-
-    let identity = collect_semantic_chip_element(&notes.document_identity_spec());
-    let mut elements = vec![element(
-        "panel:notes-window",
-        ElementType::Panel,
-        Some("Notes".to_string()),
-        None,
-        None,
-        None,
-        None,
-    )];
-    elements.extend(titlebar_elements);
-    elements.push(editor);
-    elements.push(identity);
-    let save_status = notes.document_save_status();
-    let mut save = element(
-        "notes.saveStatus",
-        ElementType::Panel,
-        Some(save_status.label().to_string()),
-        None,
-        None,
-        None,
-        None,
-    );
-    save.status_kind = Some(format!("{save_status:?}").to_lowercase());
-    elements.push(save);
-    let total_count = elements.len();
-    elements.truncate(limit);
-
-    SurfaceElementSnapshot {
-        elements,
-        total_count,
-        focused_semantic_id: Some("input:notes-editor".to_string()),
-        selected_semantic_id: None,
-        warnings: Vec::new(),
-        quality: SnapshotQuality::Full,
     }
 }
 

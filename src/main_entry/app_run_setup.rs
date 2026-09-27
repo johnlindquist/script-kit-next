@@ -1,6 +1,5 @@
 {
     initialize_startup_diagnostics();
-    register_startup_window_routers();
     let setup_result = prepare_startup_environment();
 
     let startup_boot_started = std::time::Instant::now();
@@ -757,11 +756,8 @@ app.run(move |cx: &mut App| {
                     Some(TrayMenuAction::OpenNotes) => {
                         logging::log("TRAY", "Open Notes menu item clicked");
                         cx.update(|cx| {
-                            if let Err(e) = notes::open_notes_window_without_launcher_restore(cx) {
-                                logging::log(
-                                    "TRAY",
-                                    &format!("Failed to open Notes window: {}", e),
-                                );
+                            if let Err(e) = notes::open_note(cx, notes::NoteTarget::Today) {
+                                logging::log("TRAY", &format!("Failed to open Notes: {}", e));
                             }
                         });
                     }
@@ -936,10 +932,10 @@ app.run(move |cx: &mut App| {
             // This is more efficient than polling and responds immediately
             while let Ok(hotkey_event) = hotkeys::notes_hotkey_channel().1.recv().await {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
-                logging::log("HOTKEY", "Notes hotkey triggered - opening notes window");
+                logging::log("HOTKEY", "Notes hotkey triggered - opening today's note");
                 cx.update(|cx: &mut gpui::App| {
-                    if let Err(e) = notes::open_notes_window(cx) {
-                        logging::log("HOTKEY", &format!("Failed to open notes window: {}", e));
+                    if let Err(e) = notes::open_note(cx, notes::NoteTarget::Today) {
+                        logging::log("HOTKEY", &format!("Failed to open notes: {}", e));
                     }
                 });
             }
@@ -1179,8 +1175,8 @@ app.run(move |cx: &mut App| {
                     let parsed_note_id = notes::NoteId::parse(note_id);
                     cx.update(move |cx| {
                         let result = match parsed_note_id {
-                            Some(id) => notes::open_note_in_notes_window(cx, id),
-                            None => notes::open_notes_window(cx),
+                            Some(id) => notes::open_note(cx, notes::NoteTarget::Note(id)),
+                            None => notes::open_note(cx, notes::NoteTarget::Today),
                         };
                         if let Err(e) = result {
                             logging::log("DEEPLINK", &format!("Failed to open notes: {}", e));
@@ -2155,19 +2151,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // static AND the registry; idempotent.
                                 crate::actions::close_actions_window(ctx);
 
-                                // Check if Notes is open for logging only.
-                                let notes_open = notes::is_notes_window_open();
-
                                 // CRITICAL: Always hide only the main panel. `ctx.hide()`
-                                // app-hides all windows, so a stale/false-negative Notes
-                                // handle can hide Notes together with main.
-                                logging::log(
-                                    "STDIN",
-                                    &format!(
-                                        "Using defer_hide_main_window() - main-only hide, secondary_windows_open={}",
-                                        notes_open
-                                    ),
-                                );
+                                // app-hides all windows, including ones other surfaces own.
+                                logging::log("STDIN", "Using defer_hide_main_window() - main-only hide");
                                 let visibility_generation =
                                     script_kit_gpui::main_window_visibility_generation();
                                 view.defer_calibrated_main_window_hide(
@@ -2572,9 +2558,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
 
                             ExternalCommand::OpenNotes => {
-                                logging::log("STDIN", "Opening notes window via stdin command");
-                                if let Err(e) = notes::open_notes_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open notes window: {}", e));
+                                logging::log("STDIN", "Opening today's note via stdin command");
+                                if let Err(e) = notes::open_note(ctx, notes::NoteTarget::Today) {
+                                    logging::log("STDIN", &format!("Failed to open notes: {}", e));
                                 }
                             }
                             ExternalCommand::OpenAbout => {

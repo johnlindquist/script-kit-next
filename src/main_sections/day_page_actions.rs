@@ -237,9 +237,9 @@ pub(crate) fn day_page_host_actions_section(
     {
         actions.push(
             Action::new(
-                "day_page:open_in_notes_window",
-                "Open in Notes Window",
-                Some("Open this document in the Notes window".to_string()),
+                "day_page:open_as_note",
+                "Open as a Note",
+                Some("Open this document as a note under the input".to_string()),
                 ActionCategory::ScriptContext,
             )
             .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
@@ -921,7 +921,7 @@ impl ScriptListApp {
                 });
                 true
             }
-            "day_page:open_in_notes_window" => {
+            "day_page:open_as_note" => {
                 let (note_id, day_date) = {
                     let view = entity.read(cx);
                     (
@@ -929,27 +929,22 @@ impl ScriptListApp {
                         view.session.bound_date(),
                     )
                 };
-                if let Some(note_id) = note_id.and_then(|id| crate::notes::NoteId::parse(&id)) {
-                    if let Err(error) = crate::notes::open_note_in_notes_window(cx, note_id) {
-                        tracing::warn!(
-                            target: "script_kit::day_page",
-                            error = %error,
-                            "day_page_open_in_notes_window_failed"
-                        );
-                    }
-                    true
-                } else if let Some(date) = day_date {
-                    if let Err(error) = crate::notes::open_day_note_in_notes_window(cx, date) {
-                        tracing::warn!(
-                            target: "script_kit::day_page",
-                            error = %error,
-                            "day_page_open_day_in_notes_window_failed"
-                        );
-                    }
-                    true
-                } else {
-                    false
+                let target = match (
+                    note_id.and_then(|id| crate::notes::NoteId::parse(&id)),
+                    day_date,
+                ) {
+                    (Some(note_id), _) => crate::notes::NoteTarget::Note(note_id),
+                    (None, Some(date)) => crate::notes::NoteTarget::Day(date),
+                    (None, None) => return false,
+                };
+                if let Err(error) = self.one_window_open_note_target(target, cx) {
+                    tracing::warn!(
+                        target: "script_kit::day_page",
+                        error = %error,
+                        "day_page_open_as_note_failed"
+                    );
                 }
+                true
             }
             DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID => {
                 entity.update(cx, |view, cx| view.open_agent_chat_about_today(window, cx));

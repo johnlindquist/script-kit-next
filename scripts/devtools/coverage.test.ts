@@ -107,8 +107,8 @@ describe("fail-closed coverage ownership registry", () => {
 
     expect(coverageProfileById("notes")?.sourceFiles).toEqual(
       expect.arrayContaining([
-        "src/notes/window/window_ops_automation.rs",
-        "src/notes/window/window_ops_mcp.rs",
+        "src/notes/open.rs",
+        "src/notes/mcp_mutations.rs",
       ]),
     );
   });

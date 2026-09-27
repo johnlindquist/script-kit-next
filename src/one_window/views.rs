@@ -17,21 +17,12 @@ pub(crate) const FORM: &str = "form";
 pub(crate) const ANSWER: &str = "answer";
 pub(crate) const NOTE: &str = "note";
 
-/// A line being added to one of your notes.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct NoteView {
-    pub(crate) title: String,
-    /// What the note already says.
-    pub(crate) lines: Vec<String>,
-    /// The line Enter adds: what's in the input.
-    pub(crate) line: String,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum HostedView {
     Form(Form),
     Answer(Answer),
-    Note(NoteView),
+    Note(super::notes::NoteView),
+    Notes(super::notes::NotesList),
 }
 
 impl HostedView {
@@ -40,6 +31,7 @@ impl HostedView {
             HostedView::Form(_) => FORM,
             HostedView::Answer(_) => ANSWER,
             HostedView::Note(_) => NOTE,
+            HostedView::Notes(_) => super::notes::NOTES,
         }
     }
 
@@ -56,6 +48,7 @@ impl HostedView {
             },
             HostedView::Answer(_) => "Answer".into(),
             HostedView::Note(note) => format!("Note · {}", note.title),
+            HostedView::Notes(_) => "Notes".into(),
         }
     }
 
@@ -63,14 +56,8 @@ impl HostedView {
         match self {
             HostedView::Form(form) => form.enter(),
             HostedView::Answer(answer) => answer.enter(),
-            HostedView::Note(note) => EnterTarget::new(
-                "note:add",
-                if note.line.trim().is_empty() {
-                    "Write the line first".to_string()
-                } else {
-                    format!("Add it to “{}”", note.title)
-                },
-            ),
+            HostedView::Note(note) => note.enter(),
+            HostedView::Notes(list) => list.enter(),
         }
     }
 
@@ -83,28 +70,10 @@ impl HostedView {
                 Some(sk_one_window::answer::Shape::Card { facts, .. }) => 1 + facts.len(),
                 _ => 1,
             },
-            HostedView::Note(note) => note.lines.len() + 1,
+            HostedView::Note(note) => note.row_count(),
+            HostedView::Notes(list) => list.found.len().max(1),
         }
     }
-}
-
-/// The words the day note shows for each of its lines, without their timestamps.
-fn day_note_lines() -> Vec<String> {
-    let substrate = crate::brain::substrate::BrainSubstrate::default_kit();
-    let (date, _) = substrate.capture_day_destination(chrono::Utc::now());
-    let text = std::fs::read_to_string(substrate.paths().day_page(date)).unwrap_or_default();
-    text.lines()
-        .map(str::trim)
-        .filter(|line| line.starts_with("- "))
-        .map(|line| {
-            let line = line.trim_start_matches("- ");
-            let line = line.trim_start_matches("[ ] ").trim_start_matches("[x] ");
-            match line.split_once(' ') {
-                Some((time, rest)) if time.contains(':') && time.len() <= 8 => rest.to_string(),
-                _ => line.to_string(),
-            }
-        })
-        .collect()
 }
 
 fn append_to_day(entry: crate::brain::substrate::DayEntry) -> Result<(), &'static str> {
@@ -165,7 +134,9 @@ impl ScriptListApp {
             .map(|top| top.name.clone())
             .unwrap_or_default();
         match top.as_str() {
-            FORM | ANSWER | NOTE => self.one_window_hosted_key(key, cx),
+            FORM | ANSWER => self.one_window_hosted_key(key, cx),
+            NOTE => self.one_window_note_key(key, cx),
+            super::notes::NOTES => self.one_window_notes_list_key(key, cx),
             _ => {
                 tracing::info!(
                     target: "script_kit::one_window",
@@ -214,21 +185,7 @@ impl ScriptListApp {
                 })
                 .map_err(|_| "one_window_copy_failed")
             }),
-            HostedView::Note(note) if key == Key::Enter && !note.line.trim().is_empty() => {
-                let line = note.line.trim().to_string();
-                let title = note.title.clone();
-                Some(
-                    append_to_day(crate::brain::substrate::DayEntry::Capture {
-                        text: line.clone(),
-                    })
-                    .map(|()| Done {
-                        icon: "append".into(),
-                        title: format!("Added to “{title}” · {line}"),
-                        ..Done::default()
-                    }),
-                )
-            }
-            HostedView::Answer(_) | HostedView::Note(_) => None,
+            HostedView::Answer(_) | HostedView::Note(_) | HostedView::Notes(_) => None,
         };
         let mut events = Vec::new();
         if let Some(words) = caret_words {
@@ -307,16 +264,18 @@ impl ScriptListApp {
                     sk_one_window::form::FieldState::Filled
                 };
             }
-            HostedView::Note(note) => note.line = text,
+            HostedView::Note(note) => note.typed(text),
+            HostedView::Notes(list) => list.typed(text),
             HostedView::Answer(_) => return None,
         }
         let after = view.enter();
         (after != before).then_some(Event::ViewEnter(after))
     }
 
-    /// Tab and ← → belong to an open form: fields and their other values, not the input's caret or
-    /// the launcher's Tab. Enter, Esc and the arrows up and down reach the reducer through the
-    /// list's own paths.
+    /// Keys an open view uses that the input or the launcher would otherwise take: Tab and ← → in a
+    /// form (fields and their other values), and in a note ⌘⌫ on a highlighted line, ⌘P, and ⌘Z
+    /// while one of its lines waits to be deleted.
+    /// Enter, Esc and the arrows up and down reach the reducer through the list's own paths.
     pub(crate) fn one_window_view_takes_key(
         &mut self,
         key: &str,
@@ -324,18 +283,37 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> bool {
         if !matches!(self.current_view, crate::AppView::ScriptList)
-            || !matches!(self.one_window_hosted_view(), Some(HostedView::Form(_)))
-            || modifiers.platform
             || modifiers.alt
             || modifiers.control
         {
             return false;
         }
-        let key = match key.to_ascii_lowercase().as_str() {
-            "tab" if modifiers.shift => Key::Up,
-            "tab" => Key::Tab,
-            "right" | "arrowright" => Key::Right,
-            "left" | "arrowleft" => Key::Other("left".into()),
+        let key = key.to_ascii_lowercase();
+        let key = match self.one_window_hosted_view() {
+            Some(HostedView::Form(_)) if !modifiers.platform => match key.as_str() {
+                "tab" if modifiers.shift => Key::Up,
+                "tab" => Key::Tab,
+                "right" | "arrowright" => Key::Right,
+                "left" | "arrowleft" => Key::Other("left".into()),
+                _ => return false,
+            },
+            Some(HostedView::Note(note)) if modifiers.platform && !modifiers.shift => {
+                match key.as_str() {
+                    "backspace" if note.editing.is_none() && note.sel < note.row_count() - 1 => {
+                        Key::Other(super::notes::DELETE_LINE_KEY.into())
+                    }
+                    "p" => Key::Other(super::notes::FIND_NOTE_KEY.into()),
+                    "z" if self
+                        .one_window_host
+                        .note_deletes
+                        .iter()
+                        .any(|delete| delete.doc == note.doc) =>
+                    {
+                        Key::CmdZ
+                    }
+                    _ => return false,
+                }
+            }
             _ => return false,
         };
         self.one_window_key(key, cx);
@@ -432,12 +410,11 @@ impl ScriptListApp {
 
     /// Today's note under the input, with `line` ready to add.
     pub(crate) fn one_window_open_note(&mut self, line: String, cx: &mut Context<Self>) {
-        let note = NoteView {
-            title: "Today".into(),
-            lines: day_note_lines(),
-            line: line.clone(),
-        };
-        self.one_window_open_hosted(HostedView::Note(note), Some(line), cx);
+        if let Err(error) =
+            self.one_window_open_note_target(crate::notes::NoteTarget::Append(line), cx)
+        {
+            self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx);
+        }
     }
 
     /// The calculator's answer, in place: the number it came to.

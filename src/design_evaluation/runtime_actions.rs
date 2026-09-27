@@ -173,27 +173,7 @@ impl Evaluator {
                         })??;
                 }
             }
-            FixtureControl::Notes(crate::protocol::NotesFixtureCommand::ToggleTask {
-                marker_start,
-                marker_end,
-                checked,
-            }) => {
-                let RootOwner::Notes(view) = &mounted.owner else {
-                    anyhow::bail!("notes_host_required");
-                };
-                mounted
-                    .handle
-                    .update(&mut **self.cx.app.borrow_mut(), |_, window, cx| {
-                        view.update(cx, |view, cx| {
-                            view.toggle_task_marker_for_owned_evaluation(
-                                marker_start..marker_end,
-                                checked,
-                                window,
-                                cx,
-                            )
-                        })
-                    })??;
-            }
+            FixtureControl::Notes(_) => anyhow::bail!("no_notes_window"),
             FixtureControl::Flow(command) => {
                 let RootOwner::Main(main) = &mounted.owner else {
                     anyhow::bail!("flow_host_required");
@@ -400,19 +380,6 @@ impl Evaluator {
                                 reason: crate::dictation::DictationDeliveryFailureReason::DestinationStale,
                             }
                         };
-                        if request.selection.target
-                            == crate::dictation::DictationTarget::NotesEditor
-                            && matches!(
-                                &outcome,
-                                crate::dictation::DictationDeliveryOutcome::Delivered { .. }
-                            )
-                        {
-                            let notes = crate::windows::automation_window_by_id("notes")
-                                .context("delivered_notes_owner_missing")?;
-                            destination_window = Some(
-                                json!({"windowId":notes.id,"windowGeneration":notes.generation}),
-                            );
-                        }
                         completed_delivery = Some(match &outcome {
                             crate::dictation::DictationDeliveryOutcome::Delivered {
                                 mutation_receipt,
@@ -809,15 +776,12 @@ impl Evaluator {
         } else {
             None
         };
-        let observation = if after.is_none()
-            && matches!(
-                mounted.owner,
-                RootOwner::Main(_) | RootOwner::Notes(_) | RootOwner::Footer
-            ) {
-            Value::Null
-        } else {
-            self.fixture_observation(mounted)?
-        };
+        let observation =
+            if after.is_none() && matches!(mounted.owner, RootOwner::Main(_) | RootOwner::Footer) {
+                Value::Null
+            } else {
+                self.fixture_observation(mounted)?
+            };
         let mut delivered = None;
         if let Some(binding) = baseline.completion {
             if let Some(receipt) = binding.observation().receipt {
@@ -1038,7 +1002,8 @@ fn dictation_destination(
     match destination {
         DictationFixtureDestination::MainFilter => DictationTarget::MainWindowFilter,
         DictationFixtureDestination::MainPrompt => DictationTarget::MainWindowPrompt,
-        DictationFixtureDestination::Notes => DictationTarget::NotesEditor,
+        // A note's line is the main input.
+        DictationFixtureDestination::Notes => DictationTarget::MainWindowFilter,
         DictationFixtureDestination::AgentChat => DictationTarget::TabAiHarness,
         DictationFixtureDestination::DayPage => DictationTarget::DayPageToday,
     }

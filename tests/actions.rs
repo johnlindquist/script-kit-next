@@ -1500,10 +1500,9 @@ fn notes_command_builtin_uses_named_action_states() {
     assert!(
         content.contains("NotesCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_notes_command_builtin(")
-            && content.contains(
-                "NotesCommandBuiltinAction::SearchNotes => self.open_standalone_notes_browse(cx)",
-            )
-            && content.contains("keeps_main_window_open")
+            && content
+                .contains("NotesCommandBuiltinAction::SearchNotes => notes::NoteTarget::Search")
+            && content.contains("self.one_window_show_note(target, cx)")
             && content.contains("action.success_detail()")
             && content.contains("action.failure_message(&e)")
             && content.contains("action.failure_detail()"),
@@ -2365,8 +2364,7 @@ fn notes_builtin_uses_named_action_states() {
             && content.contains("crate::actions::close_actions_window(cx)")
             && content.contains("self.mark_filter_resync_after_actions_if_needed()")
             && content.contains("self.pending_focus = None")
-            && content.contains("notes::open_notes_window_without_launcher_restore(cx)")
-            && content.contains("self.close_and_reset_window(cx)"),
+            && content.contains("self.one_window_show_note(notes::NoteTarget::Today, cx)"),
         "Notes should preserve submit-reset handoff, popup cleanup, and focus reset behavior"
     );
     assert!(
@@ -2379,7 +2377,7 @@ fn notes_builtin_uses_named_action_states() {
         "Notes copy, success detail, and failure detail should come from the named state"
     );
     assert!(
-        content.contains("\"Opening Notes window\"")
+        content.contains("\"Opening today's note\"")
             && content.contains("format!(\"Failed to open Notes: {error}\")"),
         "Notes named state should preserve handoff log and failure copy"
     );

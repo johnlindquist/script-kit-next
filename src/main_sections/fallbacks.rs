@@ -87,30 +87,7 @@ fn execute_fallback_action(
 
                 FallbackResult::AddNote { content } => {
                     logging::log("FALLBACK", &format!("AddNote: {}", content));
-                    let receipt = match crate::platform::copy_text(&content) {
-                        Ok(receipt) => receipt,
-                        Err(error) => {
-                            app.notice_failed(error, cx);
-                            return;
-                        }
-                    };
-                    if let Err(e) = notes::open_notes_window(cx) {
-                        logging::log("FALLBACK", &format!("Failed to open Notes: {}", e));
-                    } else {
-                        crate::line_notice::say(
-                            cx,
-                            crate::line_notice::INFO,
-                            match receipt.destination() {
-                                crate::runtime_policy::CopyDestination::SystemClipboard => {
-                                    "Text copied - paste into Notes".to_string()
-                                }
-                                crate::runtime_policy::CopyDestination::OwnedProcessLocal => {
-                                    "Text stored in process-local copy sink; Notes opened"
-                                        .to_string()
-                                }
-                            },
-                        );
-                    }
+                    app.one_window_open_note(content, cx);
                 }
 
                 FallbackResult::Copy { text } => {

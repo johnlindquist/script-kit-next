@@ -1,7 +1,7 @@
 //! gpui-component Theme Integration
 //!
 //! These functions sync Script Kit's theme with gpui-component's ThemeColor system.
-//! Used by both main.rs and notes/window.rs for consistent theming.
+//! Used by main.rs for consistent theming.
 
 use gpui::{hsla, rgb, App, Hsla};
 use gpui_component::highlighter::{

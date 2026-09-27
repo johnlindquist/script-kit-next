@@ -4841,7 +4841,7 @@ fn resolve_dictation_target_exists_in_builtin_execution() {
         "builtin_execution.rs must define resolve_dictation_target"
     );
 
-    // Must check notes and AI windows before falling back to prompt or external.
+    // Must check an open note and the AI window before falling back to prompt or external.
     // Use the exact signature to skip resolve_dictation_target_with_override.
     let resolver_start = src
         .find("fn resolve_dictation_target(&self) ->")
@@ -4849,8 +4849,8 @@ fn resolve_dictation_target_exists_in_builtin_execution() {
     let resolver_src = &src[resolver_start..resolver_start + 1400.min(src.len() - resolver_start)];
 
     assert!(
-        resolver_src.contains("notes::is_notes_window_open()"),
-        "resolver must check notes window"
+        resolver_src.contains("one_window_note_open()"),
+        "resolver must check for a note open under the input"
     );
     assert!(
         resolver_src.contains("agent_chat_dictation_target_active()"),
@@ -4878,8 +4878,8 @@ fn resolve_dictation_target_checks_notes_before_ai() {
     let resolver_src = &src[resolver_start..resolver_start + 1400.min(src.len() - resolver_start)];
 
     let notes_pos = resolver_src
-        .find("notes::is_notes_window_open()")
-        .expect("resolver must check notes");
+        .find("one_window_note_open()")
+        .expect("resolver must check for an open note");
     let ai_pos = resolver_src
         .find("agent_chat_dictation_target_active()")
         .expect("resolver must check Agent Chat");
@@ -4925,7 +4925,7 @@ fn handle_dictation_transcript_accepts_target_parameter() {
 }
 
 #[test]
-fn delivery_routes_notes_transcript_via_inject_text() {
+fn a_stored_notes_editor_target_is_refused_because_notes_take_dictation_in_the_input() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -4940,14 +4940,8 @@ fn delivery_routes_notes_transcript_via_inject_text() {
         "crate::dictation::DictationTarget::AiChatComposer =>",
     ));
     assert!(
-        notes.contains(
-            "FrozenDictationDestination::NotesEditor{notes_instance_id,document_id,editor_generation,insertion_anchor,}=&request.selection.destination"
-        ) && notes.contains(
-            "NotesDictationDestinationSnapshot{notes_instance_id:*notes_instance_id,document_id:document_id.clone(),editor_generation:editor_generation.clone(),insertion_anchor:insertion_anchor.clone(),}"
-        ) && notes.contains(
-            "notes::inject_text_into_frozen_notes(cx,&expected,request.transcript.text(),).map(Some)"
-        ),
-        "Notes delivery must pass the exact frozen instance/document/generation/anchor and observe its insertion"
+        notes.contains("Err(NOTES_TAKE_DICTATION_IN_THE_INPUT.to_string())"),
+        "there is no Notes window to type into; a note's line is the main input"
     );
     assert!(
         dictation_handler_source(&src)
@@ -5470,15 +5464,6 @@ fn main_window_filter_delivery_validates_frozen_input_and_reveals_main() {
         ) && completion.contains("script_kit_gpui::set_main_window_visible(true);")
             && completion.contains("show_main_window_without_activation()"),
         "successful filter delivery must reveal a hidden launcher without activating a different app"
-    );
-}
-
-#[test]
-fn inject_text_into_notes_is_exported() {
-    let src = std::fs::read_to_string("src/notes/mod.rs").expect("read notes/mod.rs");
-    assert!(
-        src.contains("inject_text_into_notes"),
-        "inject_text_into_notes must be re-exported from the notes module"
     );
 }
 

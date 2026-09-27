@@ -82,13 +82,6 @@ pub(crate) const PROMPT_FIXTURE_IDS: &[&str] = &[
     "prompt.creation-feedback",
 ];
 
-pub(crate) const NOTES_FIXTURE_IDS: &[&str] = &["notes.editor"];
-pub(crate) const NOTES_AUXILIARY_FIXTURE_IDS: &[&str] = &[
-    "notes.actions",
-    "notes.recent-switcher",
-    "notes.root-dialog",
-    "notes.root-notification",
-];
 pub(crate) const DAY_PAGE_FIXTURE_IDS: &[&str] = &[
     "day-page.today",
     "day-page.shelf",
@@ -150,8 +143,6 @@ pub(crate) fn fixture_ids() -> impl Iterator<Item = &'static str> {
         .copied()
         .chain(MAIN_OVERLAY_FIXTURE_IDS.iter().copied())
         .chain(PROMPT_FIXTURE_IDS.iter().copied())
-        .chain(NOTES_FIXTURE_IDS.iter().copied())
-        .chain(NOTES_AUXILIARY_FIXTURE_IDS.iter().copied())
         .chain(DAY_PAGE_FIXTURE_IDS.iter().copied())
         .chain(AGENT_CHAT_FIXTURE_IDS.iter().copied())
         .chain(FLOW_FIXTURE_IDS.iter().copied())

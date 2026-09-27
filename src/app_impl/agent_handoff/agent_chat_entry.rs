@@ -18,7 +18,6 @@ pub(crate) enum AgentChatEntryOrigin {
     FileSearch,
     ActionsDialog,
     PluginSkill { skill_id: String },
-    Notes,
     Dictation,
 }
 
@@ -135,17 +134,10 @@ pub(crate) struct AgentChatContextStageOutcome {
 pub(crate) enum AgentChatReturnRouteKind {
     Source,
     Main,
-    Notes,
     Direct,
 }
 
-fn agent_chat_return_route_kind(
-    origin: &AgentChatEntryOrigin,
-    return_origin: Option<&AppView>,
-) -> AgentChatReturnRouteKind {
-    if matches!(origin, AgentChatEntryOrigin::Notes) {
-        return AgentChatReturnRouteKind::Notes;
-    }
+fn agent_chat_return_route_kind(return_origin: Option<&AppView>) -> AgentChatReturnRouteKind {
     match return_origin {
         Some(AppView::ScriptList) => AgentChatReturnRouteKind::Main,
         Some(_) => AgentChatReturnRouteKind::Source,
@@ -370,35 +362,6 @@ impl AgentChatEntryRequest {
             crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
             context_policy,
         )
-    }
-
-    /// Notes→main handoff: open (or reuse) the MAIN window's Agent Chat with
-    /// the selected note staged as an explicit `@note` reference, leaving the
-    /// Notes window open.
-    ///
-    /// CONTRACT: origin is `Notes`; target is main-host-only
-    /// (`CurrentHostEmbedded` — never the detached chat window); the UI
-    /// variant is Standard; nothing auto-submits; no ambient or implicit
-    /// focused context is inherited; no seed text may displace the canonical
-    /// `@note` prefill.
-    pub(crate) fn notes(
-        target: crate::ai::TabAiTargetContext,
-        supplemental_parts: Vec<crate::ai::message_parts::AiContextPart>,
-        source: &'static str,
-    ) -> Self {
-        Self {
-            request_id: next_agent_chat_entry_request_id(),
-            origin: AgentChatEntryOrigin::Notes,
-            target: AgentChatThreadTarget::CurrentHostEmbedded,
-            intent: AgentChatEntryIntent::add(None),
-            ui_variant: crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard,
-            context_policy: AgentChatContextPolicy::NotesHandoff {
-                target,
-                supplemental_parts,
-                source,
-            },
-            return_origin: None,
-        }
     }
 
     /// Promote a bounded Quick AI result into a fresh full Agent Chat without
@@ -673,59 +636,8 @@ impl ScriptListApp {
         self.observe_agent_chat_entry_dispatch(dispatch, cx);
     }
 
-    /// Open the MAIN window's Agent Chat from Notes and synchronously return
-    /// the exact primary/supplemental staging outcomes. Cart consumption is
-    /// owned by Notes and must never infer success from a window-open boolean.
-    pub(crate) fn open_agent_chat_from_notes(
-        &mut self,
-        payload: crate::notes::window::ai_handoff::NotesAiHandoffPayload,
-        cx: &mut Context<Self>,
-    ) -> crate::notes::window::ai_handoff::NotesAiMainHandoffOutcome {
-        let request_id = payload.request_id.clone();
-        let return_snapshot = payload.return_snapshot.clone();
-        let source = payload.source;
-        if self.agent_chat_surface_state.blocks_launcher_ai_entry() {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "notes_handoff_blocked_by_portal",
-                request_id = %request_id,
-            );
-            return crate::notes::window::ai_handoff::NotesAiMainHandoffOutcome {
-                request_id,
-                primary: crate::notes::window::ai_handoff::NotesContextStageOutcome::Failed {
-                    failure: crate::ai::reliability::context_unavailable_failure(
-                        "notes_handoff_portal_active",
-                    ),
-                },
-                supplements: Vec::new(),
-                destination_thread_id: None,
-                destination_generation: self.tab_ai_harness_capture_generation,
-                reused_existing_chat: false,
-            };
-        }
-
-        let outcome = self.open_tab_ai_agent_chat_for_notes_handoff(
-            payload.primary,
-            payload.supplements,
-            source,
-            request_id,
-            cx,
-        );
-        if outcome.primary.is_consumable()
-            && matches!(self.current_view, AppView::AgentChatView { .. })
-        {
-            self.agent_chat_return_route = AgentChatReturnRoute::Notes(return_snapshot);
-        }
-        outcome
-    }
-
     /// Dispatch an entry request, reporting whether the intended destination
     /// received its initial state/context.
-    ///
-    /// Legacy (non-Notes) policies keep their historical fire-and-forget
-    /// semantics and report `true` unconditionally; only the `NotesHandoff`
-    /// branch computes a real staging result, which `open_agent_chat_from_notes`
-    /// surfaces to the Notes window for cart-consumption decisions.
     fn dispatch_agent_chat_entry_request(
         &mut self,
         req: AgentChatEntryRequest,
@@ -754,11 +666,11 @@ impl ScriptListApp {
                     AgentChatSubmissionOutcome::NotRequested
                 },
                 blocked_reason: Some("portal_active"),
-                return_route: agent_chat_return_route_kind(&req.origin, req.return_origin.as_ref()),
+                return_route: agent_chat_return_route_kind(req.return_origin.as_ref()),
             });
         }
 
-        let route_kind = agent_chat_return_route_kind(&req.origin, req.return_origin.as_ref());
+        let route_kind = agent_chat_return_route_kind(req.return_origin.as_ref());
         let source_view = req
             .return_origin
             .clone()
@@ -767,7 +679,7 @@ impl ScriptListApp {
         match route_kind {
             AgentChatReturnRouteKind::Main => self.opened_from_main_menu = true,
             AgentChatReturnRouteKind::Direct => self.opened_from_main_menu = false,
-            AgentChatReturnRouteKind::Source | AgentChatReturnRouteKind::Notes => {}
+            AgentChatReturnRouteKind::Source => {}
         }
         self.seed_agent_chat_return_origin_for_view(&source_view, cx);
         self.opened_from_main_menu = opened_from_main_menu;
@@ -782,7 +694,7 @@ impl ScriptListApp {
                 req.context_policy,
                 AgentChatContextPolicy::SuppressFocused | AgentChatContextPolicy::NoContext
             ),
-            return_route: agent_chat_return_route_kind(&req.origin, req.return_origin.as_ref()),
+            return_route: agent_chat_return_route_kind(req.return_origin.as_ref()),
             baseline: self.agent_chat_entry_baseline(cx),
         };
         tracing::info!(
@@ -799,9 +711,7 @@ impl ScriptListApp {
 
         // Exhaustive on purpose: `CurrentHostEmbedded` means "the main
         // ScriptListApp's own Agent Chat, never the detached chat window" —
-        // it is not an alias for `ExistingDetachedOrEmbedded`. Its only
-        // producer today is the NotesHandoff policy, whose handler below
-        // never consults `chat_window` reuse paths.
+        // it is not an alias for `ExistingDetachedOrEmbedded`.
         let force_fresh = match req.target {
             AgentChatThreadTarget::ExistingDetachedOrEmbedded => false,
             AgentChatThreadTarget::CurrentHostEmbedded => false,
@@ -862,42 +772,6 @@ impl ScriptListApp {
                 self.open_tab_ai_agent_chat_with_explicit_target(target, cx);
                 true
             }
-            AgentChatContextPolicy::NotesHandoff {
-                target,
-                supplemental_parts,
-                source,
-            } => {
-                let label = crate::ai::format_explicit_target_chip_label(&target);
-                let primary = crate::ai::staged_context::StagedContextItem::pending(
-                    crate::ai::message_parts::AiContextPart::FocusedTarget { target, label },
-                    crate::ai::staged_context::ContextProvenance::HostHandoff,
-                    crate::ai::staged_context::ContextRole::Primary,
-                );
-                let supplements = supplemental_parts
-                    .into_iter()
-                    .enumerate()
-                    .map(
-                        |(index, part)| crate::notes::window::ai_handoff::NotesHandoffAttachment {
-                            cart_item_id: format!("legacy-{index}"),
-                            context_item: crate::ai::staged_context::StagedContextItem::pending(
-                                part,
-                                crate::ai::staged_context::ContextProvenance::HostHandoff,
-                                crate::ai::staged_context::ContextRole::Supplemental,
-                            ),
-                            idempotency_key: format!("legacy-notes-entry-{index}"),
-                        },
-                    )
-                    .collect();
-                self.open_tab_ai_agent_chat_for_notes_handoff(
-                    primary,
-                    supplements,
-                    source,
-                    completion_plan.request_id.clone(),
-                    cx,
-                )
-                .primary
-                .is_consumable()
-            }
             AgentChatContextPolicy::PluginSkill { skill } => {
                 self.stage_plugin_skill_from_entry(&skill, cx)
             }
@@ -927,299 +801,6 @@ impl ScriptListApp {
             });
         }
         self.pending_agent_chat_entry_dispatch(completion_plan, cx)
-    }
-
-    fn notes_context_stage_outcome(
-        result: Result<
-            (
-                crate::ai::staged_context::StageContextItemOutcome,
-                crate::ai::staged_context::ContextItemId,
-            ),
-            String,
-        >,
-    ) -> crate::notes::window::ai_handoff::NotesContextStageOutcome {
-        match result {
-            Ok((crate::ai::staged_context::StageContextItemOutcome::Added { .. }, id))
-            | Ok((crate::ai::staged_context::StageContextItemOutcome::Upgraded { .. }, id)) => {
-                crate::notes::window::ai_handoff::NotesContextStageOutcome::Accepted {
-                    context_item_id: id,
-                }
-            }
-            Ok((crate::ai::staged_context::StageContextItemOutcome::Duplicate { .. }, id)) => {
-                crate::notes::window::ai_handoff::NotesContextStageOutcome::Duplicate {
-                    winner_id: id,
-                }
-            }
-            Err(detail) => crate::notes::window::ai_handoff::NotesContextStageOutcome::Failed {
-                failure: crate::ai::reliability::context_unavailable_failure(&detail),
-            },
-        }
-    }
-
-    fn stage_notes_handoff_supplements(
-        entity: &gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-        supplements: Vec<crate::notes::window::ai_handoff::NotesHandoffAttachment>,
-        source: &'static str,
-        cx: &mut Context<Self>,
-    ) -> Vec<crate::notes::window::ai_handoff::NotesSupplementStageOutcome> {
-        if supplements.is_empty() {
-            return Vec::new();
-        }
-        let items = supplements
-            .iter()
-            .map(|attachment| attachment.context_item.clone())
-            .collect::<Vec<_>>();
-        let staged = entity.update(cx, |view, cx| {
-            view.stage_supplemental_context_items_from_host(items, source, cx)
-        });
-        match staged {
-            Ok(results) => supplements
-                .into_iter()
-                .enumerate()
-                .map(|(index, attachment)| {
-                    let result = results
-                        .get(index)
-                        .cloned()
-                        .unwrap_or_else(|| Err("notes_supplement_outcome_missing".to_string()));
-                    crate::notes::window::ai_handoff::NotesSupplementStageOutcome {
-                        cart_item_id: attachment.cart_item_id,
-                        idempotency_key: attachment.idempotency_key,
-                        outcome: Self::notes_context_stage_outcome(result),
-                    }
-                })
-                .collect(),
-            Err(detail) => supplements
-                .into_iter()
-                .map(
-                    |attachment| crate::notes::window::ai_handoff::NotesSupplementStageOutcome {
-                        cart_item_id: attachment.cart_item_id,
-                        idempotency_key: attachment.idempotency_key,
-                        outcome:
-                            crate::notes::window::ai_handoff::NotesContextStageOutcome::Failed {
-                                failure: crate::ai::reliability::context_unavailable_failure(
-                                    &detail,
-                                ),
-                            },
-                    },
-                )
-                .collect(),
-        }
-    }
-
-    fn notes_handoff_destination_thread_id(
-        entity: &gpui::Entity<crate::ai::agent_chat::ui::AgentChatView>,
-        cx: &App,
-    ) -> Option<String> {
-        let view = entity.read(cx);
-        Some(view.thread()?.read(cx).ui_thread_id().to_string())
-    }
-
-    /// Main-window handler for the Notes handoff policy.
-    ///
-    /// Decision order (locked by the Notes handoff contract):
-    /// 1. Attachment portal or save-offer overlay active → fail closed.
-    /// 2. Current view is a usable full-session Standard Agent Chat (not
-    ///    setup, not focused-text mini) → stage into it, preserving messages
-    ///    and any composer draft.
-    /// 3. Otherwise open a Standard Agent Chat through the main-only
-    ///    context-part seam and stage supplemental parts after the view
-    ///    exists.
-    ///
-    /// Never consults the detached chat window; never auto-submits.
-    fn open_tab_ai_agent_chat_for_notes_handoff(
-        &mut self,
-        primary: crate::ai::staged_context::StagedContextItem,
-        supplements: Vec<crate::notes::window::ai_handoff::NotesHandoffAttachment>,
-        source: &'static str,
-        request_id: String,
-        cx: &mut Context<Self>,
-    ) -> crate::notes::window::ai_handoff::NotesAiMainHandoffOutcome {
-        let failed_outcome = |detail: &str, generation: u64| {
-            crate::notes::window::ai_handoff::NotesAiMainHandoffOutcome {
-                request_id: request_id.clone(),
-                primary: crate::notes::window::ai_handoff::NotesContextStageOutcome::Failed {
-                    failure: crate::ai::reliability::context_unavailable_failure(detail),
-                },
-                supplements: Vec::new(),
-                destination_thread_id: None,
-                destination_generation: generation,
-                reused_existing_chat: false,
-            }
-        };
-        if std::env::var("SCRIPT_KIT_TEST_STATUS").ok().as_deref() == Some("1")
-            && std::env::var("SCRIPT_KIT_TEST_NOTES_PRIMARY_STAGE_FAIL")
-                .ok()
-                .as_deref()
-                == Some("1")
-        {
-            return failed_outcome(
-                "notes_handoff_fixture_primary_refused",
-                self.tab_ai_harness_capture_generation,
-            );
-        }
-        if self.tab_ai_save_offer_state.is_some() {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "notes_handoff_blocked_by_save_offer",
-                source,
-                request_id = %request_id,
-            );
-            return failed_outcome(
-                "notes_handoff_save_offer_active",
-                self.tab_ai_harness_capture_generation,
-            );
-        }
-
-        let semantic_id = match &primary.part {
-            crate::ai::message_parts::AiContextPart::FocusedTarget { target, .. } => {
-                target.semantic_id.clone()
-            }
-            _ => {
-                return failed_outcome(
-                    "notes_handoff_primary_not_focused_target",
-                    self.tab_ai_harness_capture_generation,
-                )
-            }
-        };
-        let part = primary.part.clone();
-
-        // Reuse the live main-window Agent Chat when it is a usable full
-        // session: preserve its messages and composer draft.
-        if let AppView::AgentChatView { entity, .. } = &self.current_view {
-            let entity = entity.clone();
-            let reusable = {
-                let view = entity.read(cx);
-                let is_setup = view.is_setup_mode();
-                let is_mini = view.is_focused_text_mini();
-                let variant = view.current_ui_variant();
-                let policy = view.session_policy();
-                let reusable = !is_setup
-                    && !is_mini
-                    && variant
-                        == crate::ai::agent_chat::ui::ui_variant::AgentChatUiVariant::Standard
-                    && policy
-                        == crate::ai::agent_chat::ui::capabilities::AgentChatSessionPolicy::Full;
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "notes_handoff_reuse_gate",
-                    reusable,
-                    is_setup,
-                    is_mini,
-                    variant = variant.state_id(),
-                    policy = ?policy,
-                );
-                reusable
-            };
-            if reusable {
-                let primary_outcome =
-                    Self::notes_context_stage_outcome(entity.update(cx, |view, cx| {
-                        view.stage_primary_context_item_from_host_preserving_composer(
-                            primary.clone(),
-                            source,
-                            cx,
-                        )
-                    }));
-                let supplemental_outcomes = if primary_outcome.is_consumable() {
-                    Self::stage_notes_handoff_supplements(&entity, supplements, source, cx)
-                } else {
-                    Vec::new()
-                };
-                let destination_thread_id = Self::notes_handoff_destination_thread_id(&entity, cx);
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "notes_handoff_main_staged",
-                    source,
-                    request_id = %request_id,
-                    semantic_id = %semantic_id,
-                    primary_outcome = primary_outcome.kind(),
-                    supplemental_count = supplemental_outcomes.len(),
-                    reused_existing_chat = true,
-                );
-                return crate::notes::window::ai_handoff::NotesAiMainHandoffOutcome {
-                    request_id,
-                    primary: primary_outcome,
-                    supplements: supplemental_outcomes,
-                    destination_thread_id,
-                    destination_generation: self.tab_ai_harness_capture_generation,
-                    reused_existing_chat: true,
-                };
-            }
-        }
-
-        // Replacing an unsuitable Agent Chat view must not make Agent Chat its
-        // own return target: derive a non-chat return origin first.
-        let derived_return_origin = match &self.current_view {
-            AppView::AgentChatView { .. } => self
-                .tab_ai_harness_return_view
-                .clone()
-                .filter(|view| !matches!(view, AppView::AgentChatView { .. }))
-                .unwrap_or(AppView::ScriptList),
-            other => other.clone(),
-        };
-
-        self.open_tab_ai_agent_chat_with_context_part(part, source, cx);
-
-        let staged_entity = match &self.current_view {
-            AppView::AgentChatView { entity, .. } if !entity.read(cx).is_setup_mode() => {
-                Some(entity.clone())
-            }
-            _ => None,
-        };
-        let Some(entity) = staged_entity else {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "notes_handoff_main_stage_failed",
-                source,
-                request_id = %request_id,
-                semantic_id = %semantic_id,
-                reason = "no_live_agent_chat_view_after_open",
-            );
-            return failed_outcome(
-                "notes_handoff_no_live_agent_chat_after_open",
-                self.tab_ai_harness_capture_generation,
-            );
-        };
-
-        self.tab_ai_harness_return_view = Some(derived_return_origin);
-        let mut primary_outcome =
-            Self::notes_context_stage_outcome(entity.update(cx, |view, cx| {
-                view.stage_primary_context_item_from_host_preserving_composer(primary, source, cx)
-            }));
-        // The fresh-open seam stages the same primary part while constructing
-        // the first truthful frame. Its immediate duplicate is acceptance by
-        // this request, not pre-existing destination context.
-        if let crate::notes::window::ai_handoff::NotesContextStageOutcome::Duplicate { winner_id } =
-            &primary_outcome
-        {
-            primary_outcome =
-                crate::notes::window::ai_handoff::NotesContextStageOutcome::Accepted {
-                    context_item_id: winner_id.clone(),
-                };
-        }
-        let supplemental_outcomes = if primary_outcome.is_consumable() {
-            Self::stage_notes_handoff_supplements(&entity, supplements, source, cx)
-        } else {
-            Vec::new()
-        };
-        let destination_thread_id = Self::notes_handoff_destination_thread_id(&entity, cx);
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "notes_handoff_main_staged",
-            source,
-            request_id = %request_id,
-            semantic_id = %semantic_id,
-            primary_outcome = primary_outcome.kind(),
-            supplemental_count = supplemental_outcomes.len(),
-            reused_existing_chat = false,
-        );
-        crate::notes::window::ai_handoff::NotesAiMainHandoffOutcome {
-            request_id,
-            primary: primary_outcome,
-            supplements: supplemental_outcomes,
-            destination_thread_id,
-            destination_generation: self.tab_ai_harness_capture_generation,
-            reused_existing_chat: false,
-        }
     }
 }
 
@@ -1350,63 +931,6 @@ mod quick_question_contract {
             assert_eq!(outcome.feedback_verb(), "Refused");
             assert!(!outcome.source_consumed());
         }
-    }
-
-    fn notes_target_fixture() -> crate::ai::TabAiTargetContext {
-        crate::ai::TabAiTargetContext {
-            source: "Notes".to_string(),
-            kind: "note".to_string(),
-            semantic_id: "note:test-fixture".to_string(),
-            label: "Test Note".to_string(),
-            metadata: None,
-        }
-    }
-
-    /// The Notes handoff is main-host-only, composer-only, and fully
-    /// explicit: origin Notes, target CurrentHostEmbedded (never the
-    /// detached chat window), Standard variant, no seed text, no
-    /// auto-submit, and a NotesHandoff context policy.
-    #[test]
-    fn notes_entry_is_main_host_composer_only_and_explicit() {
-        let req = AgentChatEntryRequest::notes(notes_target_fixture(), Vec::new(), "test");
-        assert_eq!(
-            req.target,
-            super::AgentChatThreadTarget::CurrentHostEmbedded,
-            "notes entry must target the main host's own Agent Chat",
-        );
-        assert_ne!(
-            req.target,
-            super::AgentChatThreadTarget::ExistingDetachedOrEmbedded,
-            "notes entry must never target the detached chat window",
-        );
-        assert_eq!(req.intent, AgentChatEntryIntent::Add { seed_text: None });
-        assert!(
-            !req.intent.requests_submission(),
-            "notes entry must never auto-submit",
-        );
-        assert!(
-            matches!(
-                req.context_policy,
-                AgentChatContextPolicy::NotesHandoff { .. }
-            ),
-            "notes entry must carry the NotesHandoff context policy",
-        );
-        assert_eq!(
-            super::agent_chat_return_route_kind(&req.origin, req.return_origin.as_ref()),
-            AgentChatReturnRouteKind::Notes,
-            "Notes handoff must advertise the exact external Notes return route",
-        );
-    }
-
-    /// The launcher's implicitly selected row must never leak into a
-    /// Notes-origin request.
-    #[test]
-    fn notes_entry_never_admits_implicit_focused_context() {
-        let req = AgentChatEntryRequest::notes(notes_target_fixture(), Vec::new(), "test");
-        assert!(
-            !req.context_policy.admits_implicit_focused_part(),
-            "NotesHandoff must suppress the implicit focused row",
-        );
     }
 
     /// Behavior replacement for the former source-string audit that lived in

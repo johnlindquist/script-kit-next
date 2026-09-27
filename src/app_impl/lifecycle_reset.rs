@@ -310,15 +310,11 @@ impl ScriptListApp {
             self.cancel_script_execution_without_view_reset();
         }
 
-        // Check if Notes or Agent Chat windows are open BEFORE hiding
-        let notes_open = notes::is_notes_window_open();
+        // Check if the Agent Chat window is open BEFORE hiding
         let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
         logging::log(
             "VISIBILITY",
-            &format!(
-                "Secondary windows: notes_open={}, agent_chat_open={}",
-                notes_open, agent_chat_open
-            ),
+            &format!("Secondary windows: agent_chat_open={}", agent_chat_open),
         );
 
         // CRITICAL: Always hide only the main window. App-level hide conceals the
@@ -326,7 +322,7 @@ impl ScriptListApp {
         // check can hide Notes together with main.
         // Must be deferred: orderOut: triggers window_did_change_key_status
         // synchronously, which re-enters GPUI's App RefCell and panics.
-        let secondary_windows_open = notes_open || agent_chat_open;
+        let secondary_windows_open = agent_chat_open;
         logging::log(
             "VISIBILITY",
             &format!(
@@ -739,17 +735,13 @@ impl ScriptListApp {
         self.was_window_focused = false;
         mark_main_state_restore_after_focus_loss();
 
-        let notes_open = notes::is_notes_window_open();
         let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
         logging::log(
             "VISIBILITY",
-            &format!(
-                "Secondary windows: notes_open={}, agent_chat_open={}",
-                notes_open, agent_chat_open
-            ),
+            &format!("Secondary windows: agent_chat_open={}", agent_chat_open),
         );
 
-        let secondary_windows_open = notes_open || agent_chat_open;
+        let secondary_windows_open = agent_chat_open;
         logging::log(
             "VISIBILITY",
             &format!(

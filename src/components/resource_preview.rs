@@ -1,17 +1,16 @@
 //! Shared read-only `kit://` resource preview surface.
 //!
-//! The Day Page (main window) and the Notes window both open deeplinked
-//! `kit://` resources in a read-only inspector. This component owns the
-//! preview chrome — a "Preview" mode badge, header, scrollable body, and
-//! optional in-body action/hint rows — so padding, typography, and visual
-//! language cannot drift between windows. Hosts with a native footer (the
-//! Day Page) pass empty `actions`/`footer_hints` and surface those actions
-//! as native footer buttons instead; hosts without one (the Notes window)
-//! keep the in-body rows.
+//! The Day Page opens deeplinked `kit://` resources in a read-only inspector.
+//! This component owns the preview chrome — a "Preview" mode badge, header,
+//! scrollable body, and optional in-body action/hint rows. The Day Page has a
+//! native footer, so it passes empty `actions`/`footer_hints` and surfaces
+//! those actions as native footer buttons instead.
 //!
 //! Horizontal inset contract: callers pass the host editor's own text inset
 //! (`NotesEditorLayout.padding_x`) as `inset_x` so preview text aligns with
 //! prose rendered in the same window.
+
+#![allow(dead_code)] // The binary's day page draws these previews; the library has no caller.
 
 use gpui::{div, prelude::*, px, AnyElement, App, FontWeight, SharedString};
 use gpui_component::theme::ActiveTheme;

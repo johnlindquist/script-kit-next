@@ -68,18 +68,11 @@ fn root_unified_notes_result_is_stable_and_non_bindable() {
 }
 
 #[test]
-fn root_unified_notes_enter_uses_non_toggle_open_helper() {
+fn root_unified_notes_enter_opens_the_note_under_the_input() {
     let selection = include_str!("../../src/app_impl/selection_fallback.rs");
-    let window_ops = include_str!("../../src/notes/window/window_ops.rs");
 
     assert!(selection.contains("SearchResult::Note(note_match)"));
     assert!(selection.contains("execute_root_note_open("));
-    assert!(selection.contains("crate::notes::open_note_in_notes_window(cx, note_id)"));
-    assert!(window_ops.contains("pub fn open_note_in_notes_window("));
-    assert!(window_ops.contains(
-        "open_notes_window_with_close_behavior(cx, NotesCloseBehavior::LeaveLauncherHidden)"
-    ));
-
     let root_exec = selection
         .split("pub(crate) fn execute_root_note_open(")
         .nth(1)
@@ -89,7 +82,8 @@ fn root_unified_notes_enter_uses_non_toggle_open_helper() {
         })
         .expect("execute_root_note_open should exist");
     assert!(
-        !root_exec.contains("open_notes_window("),
-        "root note Enter must not call the toggle-style open_notes_window helper"
+        root_exec
+            .contains("one_window_open_note_target(crate::notes::NoteTarget::Note(note_id), cx)"),
+        "root note Enter opens the note in the main window, under its input"
     );
 }

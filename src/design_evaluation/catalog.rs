@@ -159,13 +159,9 @@ fn semantic_contract(id: &str, route: Option<&str>) -> (&'static str, &'static [
         Some("FlowUxView") => ("flowDesk", &["input:flow-ux-filter", "flow-desk:state"]),
         Some("FlowSessionView") => ("flow-session", &["input:*"]),
         None => match id {
-            "notes.editor" => ("notes", &["input:notes-editor"]),
-            "notes.root-dialog" => ("notes", &["root-dialog:*"]),
-            "notes.root-notification" => ("notes", &["root-notification:*"]),
-            "notes.actions"
-            | "notes.recent-switcher"
-            | "day-page.switcher"
-            | "secondary.actions" => ("actionsDialog", &["input:actions-search", "list:actions"]),
+            "day-page.switcher" | "secondary.actions" => {
+                ("actionsDialog", &["input:actions-search", "list:actions"])
+            }
             "agent-chat.detached.retryable-failure" => ("agentChatChat", &["input:*"]),
             "agent-chat.popup.history" => (
                 "promptPopup",
@@ -378,47 +374,12 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
 
 fn secondary_descriptor(id: &str) -> Option<FixtureDescriptor> {
     let (family, root, owner, presentation, parent) = match id {
-        "notes.editor" => (
-            "notes",
-            "notes",
-            "src/notes/window/window_ops.rs",
-            "src/notes/window/render.rs",
-            None,
-        ),
-        "notes.actions" => (
-            "notesAuxiliary",
-            "secondary",
-            "src/actions/window.rs",
-            "src/notes/window/panels.rs::open_actions_panel",
-            Some("notes.editor"),
-        ),
-        "notes.recent-switcher" => (
-            "notesAuxiliary",
-            "secondary",
-            "src/actions/window.rs",
-            "src/notes/window/panels.rs::open_browse_panel",
-            Some("notes.editor"),
-        ),
         "day-page.switcher" => (
             "dayPageAuxiliary",
             "secondary",
             "src/actions/window.rs",
             "src/main_sections/day_page_switcher.rs::open_day_switcher",
             Some("day-page.today"),
-        ),
-        "notes.root-dialog" => (
-            "notesAuxiliary",
-            "notes",
-            "src/notes/window/window_ops.rs",
-            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_dialog_layer",
-            Some("notes.editor"),
-        ),
-        "notes.root-notification" => (
-            "notesAuxiliary",
-            "notes",
-            "src/notes/window/window_ops.rs",
-            "vendor/gpui-kit/gpui-component/src/root.rs::Root::render_notification_layer",
-            Some("notes.editor"),
         ),
         "agent-chat.detached.retryable-failure" => (
             "agentChat",
@@ -566,16 +527,6 @@ mod tests {
             );
             assert_eq!(fixture.app_view_variant.as_deref(), Some("ScriptList"));
         }
-        for id in [
-            "notes.actions",
-            "notes.recent-switcher",
-            "notes.root-dialog",
-            "notes.root-notification",
-        ] {
-            let fixture = fixture(id).expect("declared Notes auxiliary presentation");
-            assert_eq!(fixture.family, "notesAuxiliary");
-            assert_eq!(fixture.parent_fixture_id.as_deref(), Some("notes.editor"));
-        }
         assert_eq!(
             fixture("day-page.switcher")
                 .unwrap()
@@ -588,7 +539,5 @@ mod tests {
             "dayPageAuxiliary"
         );
         assert_eq!(fixture("day-page.switcher").unwrap().root, "secondary");
-        assert_eq!(fixture("notes.actions").unwrap().root, "secondary");
-        assert_eq!(fixture("notes.root-dialog").unwrap().root, "notes");
     }
 }

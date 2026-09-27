@@ -17,7 +17,6 @@ mod tests;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SurfaceId {
     Main,
-    Notes,
     DetachedAiChat,
     DictationOverlay,
 }
@@ -56,7 +55,6 @@ pub enum FocusToken {
     PromptInput,
     ChatComposer,
     TermInput,
-    NotesEditor,
     DetachedAiComposer,
     None,
 }
@@ -96,7 +94,6 @@ pub enum DictationPhase {
 pub enum DictationTarget {
     MainWindowFilter,
     MainWindowPrompt,
-    NotesEditor,
     AiChatComposer,
     TabAiHarness,
     ExternalApp,
@@ -125,7 +122,6 @@ pub enum DictationSurfaceState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrchestratorState {
     pub main: MainSurfaceState,
-    pub notes: AuxSurfaceState,
     pub detached_ai: AuxSurfaceState,
     pub dictation: DictationSurfaceState,
     pub key_surface: Option<SurfaceId>,
@@ -140,7 +136,6 @@ impl Default for OrchestratorState {
                 return_focus: FocusToken::MainFilter,
                 actions_open: false,
             },
-            notes: AuxSurfaceState::default(),
             detached_ai: AuxSurfaceState::default(),
             dictation: DictationSurfaceState::Hidden,
             key_surface: Some(SurfaceId::Main),
@@ -161,7 +156,6 @@ impl OrchestratorState {
 pub fn current_return_focus(state: &OrchestratorState) -> FocusToken {
     match state.key_surface {
         Some(SurfaceId::Main) => state.main.return_focus,
-        Some(SurfaceId::Notes) => FocusToken::NotesEditor,
         Some(SurfaceId::DetachedAiChat) => FocusToken::DetachedAiComposer,
         Some(SurfaceId::DictationOverlay) => {
             if let DictationSurfaceState::Visible { return_to, .. } = &state.dictation {
@@ -188,9 +182,6 @@ pub enum WindowEvent {
 
     OpenActions,
     CloseActions,
-
-    OpenNotes,
-    CloseNotes,
 
     OpenDetachedAiChat,
     CloseDetachedAiChat,
@@ -227,9 +218,6 @@ pub enum WindowCommand {
     OpenActions,
     CloseActions,
 
-    // Notes
-    OpenNotesWindow,
-    CloseNotesWindow,
     FocusSurface(SurfaceId),
 
     // Detached AI
@@ -317,27 +305,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
             if next.main.actions_open {
                 next.main.actions_open = false;
                 cmds.push(WindowCommand::CloseActions);
-            }
-        }
-
-        // ---------------------------------------------------------------
-        // Notes
-        // ---------------------------------------------------------------
-        WindowEvent::OpenNotes => {
-            next.notes.visible = true;
-            next.key_surface = Some(SurfaceId::Notes);
-            cmds.push(WindowCommand::OpenNotesWindow);
-            cmds.push(WindowCommand::FocusSurface(SurfaceId::Notes));
-        }
-
-        WindowEvent::CloseNotes => {
-            next.notes.visible = false;
-            cmds.push(WindowCommand::CloseNotesWindow);
-            if next.key_surface == Some(SurfaceId::Notes) {
-                next.key_surface = next_visible_surface(&next);
-                if let Some(sid) = next.key_surface {
-                    cmds.push(WindowCommand::FocusSurface(sid));
-                }
             }
         }
 
@@ -460,10 +427,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
 
                     // If return focus is to an aux surface, focus it.
                     match return_to {
-                        FocusToken::NotesEditor => {
-                            next.key_surface = Some(SurfaceId::Notes);
-                            cmds.push(WindowCommand::FocusSurface(SurfaceId::Notes));
-                        }
                         FocusToken::DetachedAiComposer => {
                             next.key_surface = Some(SurfaceId::DetachedAiChat);
                             cmds.push(WindowCommand::FocusSurface(SurfaceId::DetachedAiChat));
@@ -529,10 +492,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
                 }
 
                 match return_to {
-                    FocusToken::NotesEditor => {
-                        next.key_surface = Some(SurfaceId::Notes);
-                        cmds.push(WindowCommand::FocusSurface(SurfaceId::Notes));
-                    }
                     FocusToken::DetachedAiComposer => {
                         next.key_surface = Some(SurfaceId::DetachedAiChat);
                         cmds.push(WindowCommand::FocusSurface(SurfaceId::DetachedAiChat));
@@ -558,12 +517,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
                     next.main.actions_open = false;
                 }
                 if next.key_surface == Some(SurfaceId::Main) {
-                    next.key_surface = next_visible_surface(&next);
-                }
-            }
-            SurfaceId::Notes => {
-                next.notes.visible = false;
-                if next.key_surface == Some(SurfaceId::Notes) {
                     next.key_surface = next_visible_surface(&next);
                 }
             }
@@ -600,13 +553,10 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Pick the next visible surface for key focus (priority: Main > Notes > DetachedAi).
+/// Pick the next visible surface for key focus (priority: Main > DetachedAi).
 fn next_visible_surface(state: &OrchestratorState) -> Option<SurfaceId> {
     if state.main.visibility == MainVisibility::Visible {
         return Some(SurfaceId::Main);
-    }
-    if state.notes.visible {
-        return Some(SurfaceId::Notes);
     }
     if state.detached_ai.visible {
         return Some(SurfaceId::DetachedAiChat);

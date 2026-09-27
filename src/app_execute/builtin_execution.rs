@@ -840,7 +840,7 @@ impl NotesBuiltinAction {
 
     fn opening_message(self) -> &'static str {
         match self {
-            Self::Open => "Opening Notes window",
+            Self::Open => "Opening today's note",
         }
     }
 
@@ -1371,6 +1371,10 @@ fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
 
 include!("builtin_execution_ai_capture.rs");
 include!("builtin_execution_owned_dictation.rs");
+
+/// Why a stored Notes-editor dictation target isn't delivered: notes take dictation in the main input.
+const NOTES_TAKE_DICTATION_IN_THE_INPUT: &str =
+    "Notes take dictation in the main input; open the note and dictate there";
 
 impl ScriptListApp {
     fn system_action_feedback_message(
@@ -3105,7 +3109,7 @@ impl ScriptListApp {
         }
 
         self.pending_focus = None;
-        if let Err(error) = notes::open_notes_window_without_launcher_restore(cx) {
+        if let Err(error) = self.one_window_show_note(notes::NoteTarget::Today, cx) {
             let message = action.failure_message(&error);
             self.notice_failed(message.clone(), cx);
             Self::builtin_error(
@@ -3115,7 +3119,6 @@ impl ScriptListApp {
                 action.failure_detail(),
             )
         } else {
-            self.close_and_reset_window(cx);
             Self::builtin_success(dctx, action.success_detail())
         }
     }
@@ -3675,16 +3678,14 @@ impl ScriptListApp {
 
         self.pending_focus = None;
 
-        let keeps_main_window_open = matches!(action, NotesCommandBuiltinAction::SearchNotes);
-        let result = match action {
-            NotesCommandBuiltinAction::OpenNotes => {
-                notes::open_notes_window_without_launcher_restore(cx)
+        let target = match action {
+            NotesCommandBuiltinAction::OpenNotes | NotesCommandBuiltinAction::QuickCapture => {
+                notes::NoteTarget::Today
             }
-            NotesCommandBuiltinAction::SearchNotes => self.open_standalone_notes_browse(cx),
-            NotesCommandBuiltinAction::NewNote | NotesCommandBuiltinAction::QuickCapture => {
-                notes::quick_capture(cx)
-            }
+            NotesCommandBuiltinAction::SearchNotes => notes::NoteTarget::Search,
+            NotesCommandBuiltinAction::NewNote => notes::NoteTarget::New,
         };
+        let result = self.one_window_show_note(target, cx);
 
         if let Err(e) = result {
             let message = action.failure_message(&e);
@@ -3696,9 +3697,6 @@ impl ScriptListApp {
                 action.failure_detail(),
             )
         } else {
-            if !keeps_main_window_open {
-                self.close_and_reset_window(cx);
-            }
             Self::builtin_success(dctx, action.success_detail())
         }
     }
@@ -4858,13 +4856,7 @@ impl ScriptListApp {
                 }
             }
             DictationTarget::NotesEditor => {
-                let snapshot = notes::capture_notes_dictation_destination(cx)?;
-                FrozenDictationDestination::NotesEditor {
-                    notes_instance_id: snapshot.notes_instance_id,
-                    document_id: snapshot.document_id,
-                    editor_generation: snapshot.editor_generation,
-                    insertion_anchor: snapshot.insertion_anchor,
-                }
+                return Err(NOTES_TAKE_DICTATION_IN_THE_INPUT.to_string());
             }
             DictationTarget::TabAiHarness => {
                 let policy = match &self.current_view {
@@ -5474,9 +5466,7 @@ impl ScriptListApp {
                 });
                 cx.notify();
             }
-            crate::dictation::DictationTarget::NotesEditor => {
-                let _ = crate::notes::open_notes_window(cx);
-            }
+            crate::dictation::DictationTarget::NotesEditor => {}
             crate::dictation::DictationTarget::AiChatComposer
             | crate::dictation::DictationTarget::TabAiHarness
             | crate::dictation::DictationTarget::QuickAiQuestion => {
@@ -5807,29 +5797,7 @@ impl ScriptListApp {
                         )
                     }
                     crate::dictation::DictationTarget::NotesEditor => {
-                        let crate::dictation::FrozenDictationDestination::NotesEditor {
-                            notes_instance_id,
-                            document_id,
-                            editor_generation,
-                            insertion_anchor,
-                        } = &request.selection.destination
-                        else {
-                            return Err(
-                                "Frozen destination type does not match its target".to_string()
-                            );
-                        };
-                        let expected = notes::NotesDictationDestinationSnapshot {
-                            notes_instance_id: *notes_instance_id,
-                            document_id: document_id.clone(),
-                            editor_generation: editor_generation.clone(),
-                            insertion_anchor: insertion_anchor.clone(),
-                        };
-                        notes::inject_text_into_frozen_notes(
-                            cx,
-                            &expected,
-                            request.transcript.text(),
-                        )
-                        .map(Some)
+                        Err(NOTES_TAKE_DICTATION_IN_THE_INPUT.to_string())
                     }
                     crate::dictation::DictationTarget::AiChatComposer => {
                         Err("Legacy AI Chat destination was not canonicalized".to_string())
@@ -8116,7 +8084,7 @@ impl ScriptListApp {
                 crate::dictation::DictationTarget::TabAiHarness,
             ],
             crate::dictation::DictationTarget::NotesEditor => vec![
-                crate::dictation::DictationTarget::NotesEditor,
+                crate::dictation::DictationTarget::MainWindowFilter,
                 crate::dictation::DictationTarget::ExternalApp,
             ],
             crate::dictation::DictationTarget::AiChatComposer => vec![
@@ -8161,8 +8129,8 @@ impl ScriptListApp {
         let has_frontmost_app_target = Self::has_dictation_frontmost_target();
         let target = if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             crate::dictation::DictationTarget::TabAiHarness
-        } else if notes::is_notes_window_open() {
-            crate::dictation::DictationTarget::NotesEditor
+        } else if self.one_window_note_open() {
+            crate::dictation::DictationTarget::MainWindowFilter
         } else if self.agent_chat_dictation_target_active() {
             crate::dictation::DictationTarget::AiChatComposer
         } else if self.can_accept_dictation_into_prompt() {
@@ -8178,7 +8146,7 @@ impl ScriptListApp {
             category = "DICTATION",
             ?target,
             current_view = ?std::mem::discriminant(&self.current_view),
-            notes_open = notes::is_notes_window_open(),
+            note_open = self.one_window_note_open(),
             agent_chat_open = self.agent_chat_dictation_target_active(),
             has_frontmost_app_target,
             accepts_main_filter = self.can_accept_dictation_into_main_filter(),

@@ -13,11 +13,13 @@ pub(crate) mod spine;
 mod toolbar;
 mod types;
 
+#[allow(unused_imports)] // The binary's day page uses these; the library has no caller.
 pub(crate) use component::should_activate_deeplink_from_mouse_up;
 pub use component::NotesEditor;
+#[allow(unused_imports)] // The binary's day page uses these; the library has no caller.
 pub(crate) use ops::observed_replacement_range;
 pub use toolbar::{
-    notes_editor_toolbar_action_by_id, notes_editor_toolbar_action_title, NotesEditorToolbarAction,
+    notes_editor_toolbar_action_by_id, notes_editor_toolbar_action_title,
     NOTES_EDITOR_TOOLBAR_ACTIONS,
 };
 pub use types::{

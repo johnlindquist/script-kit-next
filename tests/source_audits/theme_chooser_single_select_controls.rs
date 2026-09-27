@@ -402,7 +402,6 @@ fn theme_chooser_customize_cards_use_whisper_tokens_not_panel_tokens() {
 fn theme_gradients_propagate_to_secondary_windows() {
     let ui_foundation = read_source("src/ui_foundation/mod.rs");
     let main_window = read_source("src/main_sections/render_impl.rs");
-    let notes = read_source("src/notes/window/render.rs");
     let dictation = read_source("src/dictation/window.rs");
 
     assert!(ui_foundation.contains("pub fn get_theme_background_gradients(theme: &Theme)"));
@@ -411,7 +410,6 @@ fn theme_gradients_propagate_to_secondary_windows() {
 
     for (surface, source, id_prefix) in [
         ("main window", main_window.as_str(), "\"bg-layer\""),
-        ("Notes", notes.as_str(), "\"notes-bg-layer\""),
         ("Dictation", dictation.as_str(), "\"dictation-bg-layer\""),
     ] {
         assert!(

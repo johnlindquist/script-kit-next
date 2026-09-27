@@ -112,9 +112,6 @@ pub use types::{get_cached_theme, get_theme_snapshot};
 // Re-export appearance cache invalidation (called when system appearance changes)
 pub use types::invalidate_appearance_cache;
 
-// Re-export gpui integration
-pub use gpui_integration::sync_gpui_component_theme;
-
 // Keep cross-target theme exports reachable in both lib and binary builds.
 const _: fn(u32) -> f32 = relative_luminance_srgb;
 const _: fn() -> &'static [presets::ThemePreset] = presets::presets_cached;

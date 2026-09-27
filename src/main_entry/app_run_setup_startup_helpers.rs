@@ -24,57 +24,6 @@ fn initialize_startup_diagnostics() {
     );
 }
 
-fn register_startup_window_routers() {
-    // Notes → main Agent Chat handoff: the dual-compiled Notes window code
-    // cannot name `ScriptListApp`, so the binary registers the
-    // downcast-and-stage closure here. Staging happens BEFORE ShowMain so the
-    // first visible main-window frame already has the note chip and prefill.
-    crate::notes::window::ai_handoff::register_notes_ai_main_handoff_hook(|payload, cx| {
-        let Some(handle) = crate::get_main_window_handle() else {
-            return Err(
-                crate::notes::window::ai_handoff::NotesAiMainHandoffFailure::new(
-                    crate::notes::window::ai_handoff::NotesAiHandoffError::MainWindowUnavailable,
-                    "notes_main_window_handle_missing",
-                ),
-            );
-        };
-        handle
-            .update(cx, move |any_view, _window, cx| {
-                let root = any_view.downcast::<gpui_component::Root>().map_err(|_| {
-                    crate::notes::window::ai_handoff::NotesAiMainHandoffFailure::new(
-                        crate::notes::window::ai_handoff::NotesAiHandoffError::MainStagingFailed,
-                        "notes_main_window_root_unavailable",
-                    )
-                })?;
-                let inner = root.read(cx).view().clone();
-                let app = inner.downcast::<ScriptListApp>().map_err(|_| {
-                    crate::notes::window::ai_handoff::NotesAiMainHandoffFailure::new(
-                        crate::notes::window::ai_handoff::NotesAiHandoffError::MainStagingFailed,
-                        "notes_main_window_app_unavailable",
-                    )
-                })?;
-                Ok(app.update(cx, |app, cx| {
-                    let outcome = app.open_agent_chat_from_notes(payload, cx);
-                    if outcome.primary.is_consumable() {
-                        app.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::ShowMain {
-                                activate_app: true,
-                            },
-                            cx,
-                        );
-                    }
-                    outcome
-                }))
-            })
-            .map_err(|_| {
-                crate::notes::window::ai_handoff::NotesAiMainHandoffFailure::new(
-                    crate::notes::window::ai_handoff::NotesAiHandoffError::MainWindowUnavailable,
-                    "notes_main_window_update_failed",
-                )
-            })?
-    });
-}
-
 fn prepare_startup_environment() -> setup::SetupResult {
     // Fail-loud-at-startup validation of the trigger-builtin registry.
     // A duplicate alias or a typoed canonical id would previously only

@@ -66,8 +66,7 @@ impl ScriptListApp {
             }),
             crate::window_orchestrator::FocusToken::ChatComposer => Some(FocusTarget::AgentChat),
             crate::window_orchestrator::FocusToken::TermInput => Some(FocusTarget::TermPrompt),
-            crate::window_orchestrator::FocusToken::NotesEditor
-            | crate::window_orchestrator::FocusToken::DetachedAiComposer
+            crate::window_orchestrator::FocusToken::DetachedAiComposer
             | crate::window_orchestrator::FocusToken::None => None,
         }
     }

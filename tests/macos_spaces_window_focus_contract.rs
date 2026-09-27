@@ -94,39 +94,3 @@ fn panel_invariant_rejects_can_join_all_spaces_for_main() {
         "unit tests must explicitly reject all-spaces behavior"
     );
 }
-
-#[test]
-fn notes_window_is_pinned_to_opening_space() {
-    let source = read("src/notes/window/window_ops.rs");
-    assert!(
-        source.contains("notes_window_collection_behavior"),
-        "Notes Space behavior must be centralized"
-    );
-    let helper = section_between(
-        &source,
-        "notes_window_collection_behavior",
-        "fn ensure_theme_initialized",
-    );
-    let compact_helper = compact(helper);
-    assert!(
-        compact_helper.contains(&compact(
-            "& !NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES"
-        )),
-        "Notes must strip CanJoinAllSpaces"
-    );
-    assert!(
-        compact_helper.contains(&compact(
-            "& !NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE"
-        )),
-        "Notes must strip MoveToActiveSpace"
-    );
-    let configure = section_between(
-        &source,
-        "fn configure_notes_as_floating_panel()",
-        "#[cfg(not(target_os = \"macos\"))]",
-    );
-    assert!(
-        configure.contains("notes_window_collection_behavior(current)"),
-        "Notes native config must apply the pinned-Space helper"
-    );
-}

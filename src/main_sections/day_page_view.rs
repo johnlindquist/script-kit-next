@@ -110,7 +110,7 @@ impl DayPageView {
         cx: &mut Context<Self>,
     ) -> Self {
         let published_theme = crate::theme::get_theme_snapshot();
-        let metrics = crate::notes::window::style::adopted_metrics();
+        let metrics = crate::notes::style::adopted_metrics();
         let (editor_state, notes_editor) = NotesEditor::new_markdown_pair(
             window,
             cx,
@@ -562,10 +562,7 @@ impl DayPageView {
         cx.notify();
     }
 
-    /// Notes-parity autosave: same debounce interval as the Notes window
-    /// (`NotesApp::SAVE_DEBOUNCE_MS`), driven from render side effects the
-    /// same way `NotesApp::process_render_side_effects` drives
-    /// `save_current_note`. A trailing flush timer (scheduled in
+    /// Debounced autosave, driven from render side effects. A trailing flush timer (scheduled in
     /// `on_editor_change`) guarantees the final keystroke also lands on disk
     /// so the footer dirty state always converges to the real disk state.
     const SAVE_DEBOUNCE_MS: u64 = 300;
@@ -1127,7 +1124,7 @@ impl DayPageView {
                 truncated: preview.truncated,
                 // Match the editor's own text inset so preview content aligns
                 // with Day Page prose instead of hugging the window edge.
-                inset_x: crate::notes::window::style::adopted_metrics().editor_padding_x,
+                inset_x: crate::notes::style::adopted_metrics().editor_padding_x,
                 actions: Vec::new(),
                 footer_hints: Vec::new(),
             },
@@ -1476,9 +1473,8 @@ impl DayPageView {
             return;
         }
 
-        // Markdown formatting shortcuts — same bindings as the Notes window
-        // (`src/notes/window/keyboard.rs`), routed through the shared
-        // NotesEditor toolbar action executor.
+        // Markdown formatting shortcuts, routed through the shared NotesEditor
+        // toolbar action executor.
         if exact_cmd && key == "b" {
             self.run_shared_markdown_toolbar_action("bold", window, cx);
             return;
@@ -1713,7 +1709,7 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match crate::notes::open_note_in_notes_window(cx, note_id) {
+        match crate::notes::open_note(cx, crate::notes::NoteTarget::Note(note_id)) {
             Ok(()) => {
                 tracing::info!(event = "day_page_deeplink_note_opened", note_id = %note_id);
                 self.sync_footer(window, cx);

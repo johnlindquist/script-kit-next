@@ -60,6 +60,14 @@ pub(crate) struct OneWindowHost {
     pub(super) acting_on: Option<sk_one_window::Subject>,
     /// The height last reported for what's drawn in place of the list, while something is.
     pub(super) view_px: Option<f32>,
+    /// Lines of notes waiting to be deleted: note views leave them out.
+    pub(super) note_deletes: Vec<super::notes::PendingDelete>,
+    /// A note asked for while the window was hidden, opened once it's shown.
+    pub(super) note_waiting: Option<crate::notes::NoteTarget>,
+    /// Scrolls a long view's rows so the highlighted one stays in sight.
+    pub(super) view_scroll: gpui::ScrollHandle,
+    /// The row it last scrolled to, so the wheel can scroll freely until the highlight moves.
+    pub(super) view_scrolled_to: std::cell::Cell<Option<usize>>,
 }
 
 /// What the reducer did with one event.
@@ -238,6 +246,10 @@ impl ScriptListApp {
                     Effect::Hide { .. } => self.close_and_reset_window(cx),
                     // Summon comes from the show path, which is already showing the window.
                     Effect::Show => {}
+                    // What was pasted already has its acts from the reducer; the launcher's
+                    // actions are for rows and would replace them.
+                    Effect::ActionsFor(subject)
+                        if subject.kind == sk_one_window::SubjectKind::Clipboard => {}
                     Effect::ActionsFor(subject) => {
                         queue.push_back(self.one_window_actions_for(&subject));
                     }
@@ -248,8 +260,13 @@ impl ScriptListApp {
                             )));
                         }
                         Some(top)
-                            if [super::views::FORM, super::views::ANSWER, super::views::NOTE]
-                                .contains(&top.name.as_str()) =>
+                            if [
+                                super::views::FORM,
+                                super::views::ANSWER,
+                                super::views::NOTE,
+                                super::notes::NOTES,
+                            ]
+                            .contains(&top.name.as_str()) =>
                         {
                             queue.extend(self.one_window_hosted_view_key(key, cx));
                         }

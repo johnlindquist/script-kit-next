@@ -547,19 +547,6 @@ impl Render for StoryNotesEditor {
 #[test]
 fn production_story_notes_edit_and_selection() {
     use crate::components::notes_editor::{NotesEditor, NotesEditorMarkdownConfig};
-    use crate::notes::{Note, NoteId, NotesApp};
-
-    let notes = vec![
-        Note::with_content("First fixture"),
-        Note::with_content("Second fixture"),
-    ];
-    let second = notes[1].id;
-    assert_eq!(
-        NotesApp::resolve_selected_note(Some(second), &notes).map(|(id, note)| (id, note.id)),
-        Some((second, second))
-    );
-    assert!(NotesApp::resolve_selected_note(Some(NoteId::new()), &notes).is_none());
-    assert!(NotesApp::resolve_selected_note(None, &notes).is_none());
 
     let mut test = gpui::TestAppContext::single();
     let window = test.update(|cx| {

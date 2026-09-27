@@ -9,7 +9,7 @@ impl ScriptListApp {
             AppView::NotesBrowseView {
                 search: crate::notes::search_model::NoteSearchHostState::load(
                     query.clone(),
-                    crate::notes::search_model::NoteSearchDestination::OpenInNotesWindow,
+                    crate::notes::search_model::NoteSearchDestination::OpenNote,
                     &crate::notes::notes_brain_days_dir(),
                 ),
             },
@@ -122,26 +122,23 @@ impl ScriptListApp {
                     }
                 }
             }
-            crate::notes::search_model::NoteSearchDestination::OpenInNotesWindow => {
-                let result = match row.id {
+            crate::notes::search_model::NoteSearchDestination::OpenNote => {
+                let target = match row.id {
                     crate::notes::search_model::NoteSearchDocumentId::Note(note_id) => {
-                        crate::notes::open_note_in_notes_window(cx, note_id)
+                        crate::notes::NoteTarget::Note(note_id)
                     }
                     crate::notes::search_model::NoteSearchDocumentId::Day(date) => {
-                        crate::notes::open_day_note_in_notes_window(cx, date)
+                        crate::notes::NoteTarget::Day(date)
                     }
                 };
-                match result {
-                    Ok(()) => {
-                        self.close_and_reset_window(cx);
-                        true
-                    }
+                match self.one_window_open_note_target(target, cx) {
+                    Ok(()) => true,
                     Err(error) => {
                         tracing::warn!(
                             target: "script_kit::notes",
                             error = %error,
                             destination = destination.as_str(),
-                            "notes_browse_open_in_notes_window_failed"
+                            "notes_browse_open_note_failed"
                         );
                         self.notice_failed("The selected note couldn’t be opened.".to_string(), cx);
                         false

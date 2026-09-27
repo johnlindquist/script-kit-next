@@ -55,7 +55,6 @@ fn agent_chat_entry_request_is_the_cmd_enter_handoff_choke_point() {
 #[test]
 fn cmd_enter_origins_have_real_source_callers() {
     let tab_ai = read("src/app_impl/agent_handoff/mod.rs");
-    let notes = read("src/notes/window/keyboard.rs");
     for needle in [
         "AgentChatEntryOrigin::MainLauncher",
         "AgentChatEntryOrigin::FileSearch",
@@ -64,10 +63,6 @@ fn cmd_enter_origins_have_real_source_callers() {
     ] {
         assert!(tab_ai.contains(needle), "missing caller for {needle}");
     }
-    assert!(
-        notes.contains("handoff_selected_note_to_main_agent_chat"),
-        "Notes Cmd+Enter must route through the notes->main Agent Chat handoff"
-    );
 }
 
 #[test]

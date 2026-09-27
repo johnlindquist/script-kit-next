@@ -391,6 +391,7 @@ fn show_main_window_helper(
             view.ensure_selection_at_first_item(ctx);
         }
         view.one_window_summon(ctx);
+        view.one_window_open_waiting_note(ctx);
 
         if matches!(view.current_view, AppView::ScriptList)
             && view.main_window_mode == MainWindowMode::Mini
@@ -776,14 +777,10 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     let visibility_generation = crate::main_window_visibility_generation();
 
     // 3. Check secondary windows BEFORE the update closure
-    let notes_open = notes::is_notes_window_open();
     let agent_chat_open = ai::agent_chat::ui::chat_window::is_chat_window_open();
     logging::log(
         "VISIBILITY",
-        &format!(
-            "Secondary windows: notes_open={}, agent_chat_open={}",
-            notes_open, agent_chat_open
-        ),
+        &format!("Secondary windows: agent_chat_open={}", agent_chat_open),
     );
 
     // 4. Cancel prompts without resetting the visible route. The ScriptList reset
@@ -813,7 +810,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
 
     // 5. Hide only the main panel. `cx.hide()` app-hides all windows, so any
     // false-negative secondary-window check can take Notes down with main.
-    let secondary_windows_open = notes_open || agent_chat_open;
+    let secondary_windows_open = agent_chat_open;
     logging::log(
         "VISIBILITY",
         &format!(

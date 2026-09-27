@@ -159,7 +159,7 @@ try {
     [el.semanticId, el.id, el.text, el.value].some(
       (v) =>
         typeof v === "string" &&
-        (v.includes("Open in Notes Window") || v.includes("day_page:open_in_notes_window")),
+        (v.includes("Open as a Note") || v.includes("day_page:open_as_note")),
     ),
   );
   const hasSaveToday = dialogFlat.some((el) =>

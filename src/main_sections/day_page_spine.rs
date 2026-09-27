@@ -13,7 +13,7 @@ impl DayPageView {
         let selection = self.notes_editor.read(cx).selection(cx);
         let mut editor =
             protocol::ElementInfo::input("day-page-editor", Some(content.as_str()), true);
-        let metrics = crate::notes::window::style::adopted_metrics();
+        let metrics = crate::notes::style::adopted_metrics();
         let editor_surface =
             crate::components::notes_editor::NotesEditorSurfaceStyle::from_theme(&app_state.theme);
         editor.role = Some("day_page_editor".to_string());

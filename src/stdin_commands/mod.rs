@@ -431,7 +431,7 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Open the Notes window (for testing)
+    /// Open today's note in the main window (for testing)
     OpenNotes,
     /// Open the About surface in the main window (for testing)
     OpenAbout,

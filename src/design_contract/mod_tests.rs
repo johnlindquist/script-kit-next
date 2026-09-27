@@ -198,7 +198,7 @@ mod tests {
             );
         }
 
-        // ── Notes window ────────────────────────────────────────────────
+        // ── Notes editor ────────────────────────────────────────────────
         let text = |id: &str| match &bundle.tokens.get(id).expect(id).value {
             TokenValue::Text { value } => value.clone(),
             other => panic!("{id} is not text: {other:?}"),
@@ -214,45 +214,6 @@ mod tests {
         };
         let record = |id: &str| bundle.tokens.get(id).expect(id);
 
-        // App-authored chrome (source stage, writable).
-        assert_eq!(length("notes.window.defaultWidth"), 350.0);
-        assert_eq!(length("notes.window.defaultHeight"), 280.0);
-        assert_eq!(length("notes.window.defaultEdgePadding"), 20.0);
-        assert_eq!(length("notes.titlebar.height"), 36.0);
-        assert_eq!(length("notes.titlebar.paddingX"), 12.0);
-        assert_eq!(length("notes.titlebar.leadingReserveWidth"), 60.0);
-        assert_eq!(length("notes.titlebar.trailingReserveWidth"), 100.0);
-        assert_eq!(length("notes.titlebar.trafficLightOriginX"), 8.0);
-        assert_eq!(length("notes.titlebar.trafficLightOriginY"), 7.0);
-        assert_eq!(length("notes.editor.paddingX"), 16.0);
-        assert_eq!(length("notes.editor.paddingY"), 12.0);
-        // Opacity numbers cross the f32→f64 bridge (0.7f32 is not exactly
-        // 0.7), matching the existing exported-number precedent
-        // (--sk-main-menu-context-opacity).
-        assert_eq!(number("notes.titlebar.titleRestOpacity"), 0.7f32 as f64);
-        for id in ["notes.window.defaultWidth", "notes.titlebar.height"] {
-            let r = record(id);
-            assert!(matches!(r.stage, TokenStage::Source), "{id} must be source");
-            assert!(r.writable, "{id} must be writable");
-        }
-
-        // Production Notes has no footer and reserves no footer geometry.
-        assert_eq!(length("notes.layout.footerReservationHeight"), 0.0);
-        assert_eq!(length("notes.layout.autoResize.maxHeight"), 600.0);
-        assert_eq!(length("notes.layout.autoResize.assumedLineHeight"), 20.0);
-        assert_eq!(length("notes.layout.autoResize.applyThreshold"), 5.0);
-        assert!(
-            record("notes.layout.footerReservationHeight")
-                .css_var
-                .is_none(),
-            "absent footer must not emit a CSS footer alias"
-        );
-        assert!(!record("notes.layout.autoResize.assumedLineHeight").writable);
-
-        // Footer presentation facts.
-        assert_eq!(text("notes.footer.presentation"), "absent");
-        assert_eq!(text("notes.footer.nativeOverlay"), "false");
-        assert_eq!(text("notes.footer.visibility"), "never");
         assert_eq!(text("notes.editor.markdown.language"), "markdown");
         for id in [
             "notes.editor.markdown.highlightQueryFingerprint",
@@ -643,16 +604,7 @@ mod tests {
 
         // Every --sk-notes-* var appears exactly once, with resolved values.
         for var in [
-            "--sk-notes-window-width",
-            "--sk-notes-window-height",
-            "--sk-notes-titlebar-height",
-            "--sk-notes-titlebar-padding-x",
-            "--sk-notes-titlebar-traffic-width",
-            "--sk-notes-titlebar-icons-width",
             "--sk-notes-titlebar-title-font-size",
-            "--sk-notes-titlebar-title-rest-opacity",
-            "--sk-notes-traffic-x",
-            "--sk-notes-traffic-y",
             "--sk-notes-editor-padding-x",
             "--sk-notes-editor-padding-y",
             "--sk-notes-editor-font-size",

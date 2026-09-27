@@ -80,27 +80,6 @@ fn registered_surface_target(
     Ok(current)
 }
 
-fn registered_notes_owner(
-    resolved: &protocol::AutomationWindowInfo,
-    cx: &gpui::App,
-) -> anyhow::Result<(
-    gpui::Entity<crate::notes::NotesApp>,
-    gpui::WindowHandle<crate::Root>,
-)> {
-    let generation = resolved
-        .generation
-        .ok_or_else(|| anyhow::anyhow!("notes_generation_missing"))?;
-    let (entity, handle) =
-        crate::notes::get_notes_app_entity_and_handle_for_generation(generation, cx)
-            .ok_or_else(|| anyhow::anyhow!("notes_target_unavailable"))?;
-    anyhow::ensure!(
-        crate::windows::get_runtime_window_handle_for_generation(&resolved.id, generation)
-            == Some(handle.into()),
-        "notes_target_owner_mismatch"
-    );
-    Ok((entity, handle))
-}
-
 pub(crate) fn registered_surface_ui_snapshot(
     resolved: &protocol::AutomationWindowInfo,
     cx: &gpui::App,
@@ -145,10 +124,7 @@ pub(crate) fn registered_surface_ui_snapshot(
                         surface.selected_semantic_id,
                     )
                 };
-            let input_value = if target.kind == protocol::AutomationWindowKind::Notes {
-                let (entity, _) = registered_notes_owner(&target, cx)?;
-                Some(entity.read(cx).editor_state.read(cx).value().to_string())
-            } else if target.kind == protocol::AutomationWindowKind::Dictation {
+            let input_value = if target.kind == protocol::AutomationWindowKind::Dictation {
                 Some(
                     crate::dictation::get_dictation_overlay_state_for_instance(generation, cx)
                         .ok_or_else(|| anyhow::anyhow!("dictation_target_unavailable"))?
@@ -342,28 +318,7 @@ pub(crate) fn apply_registered_surface_command(
             }
         }
         protocol::AutomationWindowKind::Notes => {
-            let (entity, handle) = registered_notes_owner(&target, cx)?;
-            match command {
-                protocol::BatchCommand::SetInput { text } => {
-                    crate::notes::update_notes_window_detached(handle, cx, |window, cx| {
-                        entity.update(cx, |app, cx| {
-                            app.set_editor_text_for_automation(text.clone(), window, cx)
-                        });
-                    })?
-                }
-                protocol::BatchCommand::OpenActions => {
-                    crate::notes::update_notes_window_detached(handle, cx, |window, cx| {
-                        entity.update(cx, |app, cx| app.open_actions_panel(window, cx));
-                    })?
-                }
-                protocol::BatchCommand::TogglePreview => {
-                    crate::notes::update_notes_window_detached(handle, cx, |window, cx| {
-                        entity.update(cx, |app, cx| app.toggle_preview(window, cx));
-                    })?
-                }
-                _ => return Err(unsupported_batch_command_error(kind, command).into()),
-            }
-            return Ok(None);
+            return Err(unsupported_batch_command_error(kind, command).into());
         }
         protocol::AutomationWindowKind::PromptPopup => {
             let subtype = resolve_prompt_popup_subtype(&target)?;
@@ -436,16 +391,6 @@ pub(crate) fn registered_surface_state_result(
 ) -> anyhow::Result<protocol::Message> {
     let target = registered_surface_target(resolved)?;
     let snapshot = registered_surface_ui_snapshot(&target, cx)?;
-    let notes_state = if target.kind == protocol::AutomationWindowKind::Notes {
-        Some(
-            registered_notes_owner(&target, cx)?
-                .0
-                .read(cx)
-                .automation_state(cx),
-        )
-    } else {
-        None
-    };
     let actions_dialog = if target.kind == protocol::AutomationWindowKind::ActionsDialog {
         Some(
             crate::windows::automation_surface_collector::exact_actions_dialog_entity(&target, cx)
@@ -474,7 +419,7 @@ pub(crate) fn registered_surface_state_result(
         selected_value: snapshot.selected_value,
         is_focused: snapshot.window_focused,
         window_visible: snapshot.window_visible,
-        notes_state,
+        notes_state: None,
         actions_dialog,
         dictation_state,
         surface_contract: None,

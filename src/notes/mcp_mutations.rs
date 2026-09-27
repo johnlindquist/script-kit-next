@@ -1,9 +1,19 @@
+//! Notes changed by an MCP client: create, update and delete in storage. The note it asked to
+//! open opens under the main window's input.
+
+use gpui::App;
+
+use super::{storage, Note, NoteId, NoteTarget};
+use crate::mcp_notes_tools::{
+    NotesCreateArgs, NotesDeleteArgs, NotesMutationError, NotesMutationErrorCode,
+    NotesMutationRequest, NotesMutationResult, NotesUpdateArgs, NOTE_BODY_MAX_BYTES,
+};
+
 pub fn apply_mcp_notes_mutation_on_main_thread(
     request: NotesMutationRequest,
     cx: &mut App,
 ) -> Result<NotesMutationResult, NotesMutationError> {
     storage::init_notes_db().map_err(internal_notes_error)?;
-    save_open_notes_window_if_dirty(cx)?;
 
     let result = match request {
         NotesMutationRequest::Create(args) => create_note_from_mcp(args)?,
@@ -11,11 +21,9 @@ pub fn apply_mcp_notes_mutation_on_main_thread(
         NotesMutationRequest::Delete(args) => delete_note_from_mcp(args)?,
     };
 
-    refresh_or_open_notes_window_after_mcp_mutation(
-        result.id,
-        result.open_after && !result.deleted,
-        cx,
-    )?;
+    if result.open_after && !result.deleted {
+        super::open_note(cx, NoteTarget::Note(result.id)).map_err(internal_notes_error)?;
+    }
     Ok(NotesMutationResult {
         id: result.id.as_str(),
         uri: format!("kit://notes/{}", result.id),
@@ -210,74 +218,6 @@ fn delete_note_from_mcp(
         permanent: false,
         open_after: false,
     })
-}
-
-fn save_open_notes_window_if_dirty(cx: &mut App) -> Result<(), NotesMutationError> {
-    let existing_handle = {
-        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| *g)
-    };
-    let existing_app = {
-        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| g.clone())
-    };
-
-    if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app) {
-        update_notes_window_detached(handle, cx, |_window, cx| {
-            notes_app.update(cx, |app, _cx| app.save_current_note())
-        })
-        .map_err(|error| {
-            NotesMutationError::new(
-                NotesMutationErrorCode::Internal,
-                format!("Failed to save open Notes window before MCP mutation: {error}"),
-            )
-        })?
-        .then_some(())
-        .ok_or_else(|| {
-            NotesMutationError::new(
-                NotesMutationErrorCode::Conflict,
-                "Failed to save dirty Notes editor before MCP mutation",
-            )
-        })?;
-    }
-    Ok(())
-}
-
-fn refresh_or_open_notes_window_after_mcp_mutation(
-    note_id: NoteId,
-    open_or_select: bool,
-    cx: &mut App,
-) -> Result<(), NotesMutationError> {
-    if open_or_select {
-        open_note_in_notes_window(cx, note_id).map_err(internal_notes_error)?;
-        return Ok(());
-    }
-
-    let existing_handle = {
-        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| *g)
-    };
-    let existing_app = {
-        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
-        slot.lock().ok().and_then(|g| g.clone())
-    };
-
-    if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app) {
-        update_notes_window_detached(handle, cx, |window, cx| {
-            notes_app.update(cx, |app, cx| {
-                app.reload_after_external_note_mutation(note_id, window, cx)
-            })
-        })
-        .map_err(|error| {
-            NotesMutationError::new(
-                NotesMutationErrorCode::Internal,
-                format!("Failed to refresh Notes window after MCP mutation: {error}"),
-            )
-        })?
-        .map_err(internal_notes_error)?;
-    }
-
-    Ok(())
 }
 
 fn title_from_body(body: &str) -> String {

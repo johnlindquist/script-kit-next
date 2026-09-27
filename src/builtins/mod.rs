@@ -1287,7 +1287,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/open-notes",
             "Open Notes",
-            "Open the Notes window",
+            "Open today's note under the input",
             vec![
                 "open",
                 "notes",
@@ -1311,7 +1311,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/new-note",
             "Create Note",
-            "Create a new note and open the Notes window",
+            "Start a new note under the input",
             vec!["new", "create", "note", "notes", "add", "write"],
             BuiltInFeature::NotesCommand(NotesCommandType::NewNote),
             "file-plus",
@@ -1329,7 +1329,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/quick-capture",
             "Quick Note Capture",
-            "Capture a new note without opening the full Notes window",
+            "Add a line to today's note",
             vec!["quick", "capture", "note", "fast"],
             BuiltInFeature::NotesCommand(NotesCommandType::QuickCapture),
             "zap",
