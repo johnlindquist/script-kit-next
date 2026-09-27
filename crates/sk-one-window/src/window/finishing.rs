@@ -17,7 +17,7 @@ impl OneWindow {
             if holds_it {
                 self.start_hold(now, done.title.clone(), said, Some(done.icon.clone()), fx);
             } else {
-                self.adopt_held(now);
+                let adopted = self.adopt_held(now);
                 let id = self.ledger.record(
                     now,
                     NewEntry {
@@ -28,6 +28,9 @@ impl OneWindow {
                         ..NewEntry::default()
                     },
                 );
+                for held in adopted {
+                    self.holds.set_run(held, id);
+                }
                 if self.cfg.auto_save
                     && matches!(done.icon.as_str(), "steps" | "delegate")
                     && !said.trim().is_empty()
@@ -92,14 +95,16 @@ impl OneWindow {
         });
     }
 
-    /// Messages a view held on its own get their own line in the ledger.
-    pub(super) fn adopt_held(&mut self, now: Ms) {
+    /// Messages a view held on its own get their own line in the ledger, just before the run that
+    /// sent them. Returns the messages adopted.
+    pub(super) fn adopt_held(&mut self, now: Ms) -> Vec<u64> {
         let orphans: Vec<(u64, String, String)> = self
             .holds
             .live()
             .filter(|h| h.entry.is_none())
             .map(|h| (h.id, h.label.clone(), h.request.clone()))
             .collect();
+        let mut adopted = Vec::with_capacity(orphans.len());
         for (id, label, request) in orphans {
             let entry = self.ledger.record(
                 now,
@@ -113,7 +118,9 @@ impl OneWindow {
                 },
             );
             self.holds.set_entry(id, entry);
+            adopted.push(id);
         }
+        adopted
     }
 
     pub(super) fn unsend(&mut self, now: Ms, ids: &[u64], fx: &mut Vec<Effect>) {

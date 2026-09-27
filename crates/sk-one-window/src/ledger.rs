@@ -170,11 +170,24 @@ impl Ledger {
 
     /// A held message went out: it is now the newest thing that happened.
     pub fn mark_sent(&mut self, id: u64, now: Ms) {
-        if let Some(ix) = self.entries.iter().position(|e| e.id == id) {
-            let mut entry = self.entries.remove(ix);
+        self.sent_as_newest(id, id, now);
+    }
+
+    /// A held message that was one part of `run` went out: the run stays (or becomes again) the
+    /// last thing that happened.
+    pub fn mark_sent_in_run(&mut self, id: u64, run: u64, now: Ms) {
+        let newest = if self.get(run).is_some() { run } else { id };
+        self.sent_as_newest(id, newest, now);
+    }
+
+    fn sent_as_newest(&mut self, id: u64, newest: u64, now: Ms) {
+        if let Some(entry) = self.get_mut(id) {
             entry.state = EntryState::Sent;
             entry.at = now;
             entry.seeded = false;
+        }
+        if let Some(ix) = self.entries.iter().position(|e| e.id == newest) {
+            let entry = self.entries.remove(ix);
             self.entries.push(entry);
         }
     }
@@ -305,6 +318,38 @@ mod tests {
         let last = l.last().unwrap();
         assert_eq!(last.id, m);
         assert_eq!(last.state, EntryState::Sent);
+    }
+
+    #[test]
+    fn a_message_a_run_sent_leaves_the_run_last() {
+        let mut l = Ledger::new();
+        let m = l.record(
+            0,
+            NewEntry {
+                title: "To Sarah".into(),
+                risk: Risk::Hold,
+                held: Some(1),
+                ..NewEntry::default()
+            },
+        );
+        let run = l.record(
+            0,
+            NewEntry {
+                title: "Did 2 steps".into(),
+                risk: Risk::Undo,
+                ..NewEntry::default()
+            },
+        );
+        l.record(
+            100,
+            NewEntry {
+                title: "Open Linear".into(),
+                ..NewEntry::default()
+            },
+        );
+        l.mark_sent_in_run(m, run, 8_000);
+        assert_eq!(l.get(m).unwrap().state, EntryState::Sent);
+        assert_eq!(l.last().unwrap().id, run);
     }
 
     #[test]

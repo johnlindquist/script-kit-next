@@ -32,8 +32,10 @@ impl OneWindow {
         let Some(h) = self.holds.get(id).cloned() else {
             return;
         };
-        if let Some(entry) = h.entry {
-            self.ledger.mark_sent(entry, now);
+        match (h.entry, h.run) {
+            (Some(entry), Some(run)) => self.ledger.mark_sent_in_run(entry, run, now),
+            (Some(entry), None) => self.ledger.mark_sent(entry, now),
+            _ => {}
         }
         fx.push(Effect::Held {
             op: HeldOp::Sent,
