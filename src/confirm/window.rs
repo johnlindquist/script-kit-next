@@ -770,7 +770,7 @@ fn schedule_next_queued_modal(cx: &mut App) {
         cx.background_executor()
             .timer(std::time::Duration::from_millis(QUEUED_MODAL_OPEN_DELAY_MS))
             .await;
-        let _ = cx.update(super::parent_dialog::open_next_queued_modal);
+        cx.update(super::parent_dialog::open_next_queued_modal);
     })
     .detach();
 }

@@ -113,12 +113,15 @@ const STOPWORDS: &[&str] = &[
     "do", "did", "does", "with", "about",
 ];
 
-static POSSESSIVE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"'s\b").expect("possessive pattern compiles"));
+static POSSESSIVE: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"'s\b").ok());
 
 fn content_words(text: &str) -> HashSet<String> {
-    POSSESSIVE
-        .replace_all(&text.to_lowercase(), "")
+    let lower = text.to_lowercase();
+    let stripped = match POSSESSIVE.as_ref() {
+        Some(possessive) => possessive.replace_all(&lower, ""),
+        None => lower.as_str().into(),
+    };
+    stripped
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|word| word.len() > 1 && !STOPWORDS.contains(word))
         .map(str::to_string)
@@ -140,7 +143,7 @@ pub fn memory_matches(ctx: &ScreenContext, request: &str, limit: usize) -> Vec<S
         })
         .filter(|(shared, _)| *shared > 0)
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|entry| std::cmp::Reverse(entry.0));
     scored
         .into_iter()
         .take(limit)

@@ -514,7 +514,7 @@ fn cap_by_relevance(items: Vec<Command>, request: &str) -> Vec<Command> {
         .enumerate()
         .map(|(i, command)| (i, overlap(command)))
         .collect();
-    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1));
     let keep: HashSet<usize> = ranked
         .into_iter()
         .take(MAX_LISTED)
@@ -1014,17 +1014,18 @@ fn quote(text: &str) -> String {
     }
 }
 
-static URL_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"https?://\S+").expect("url pattern compiles"));
+static URL_PATTERN: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"https?://\S+").ok());
 /// Words that name no steps of their own, only the last thing the user did.
-static BACK_REFERENCE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^(do )?(that|this|it|what i (just )?did)( again)?$")
-        .expect("back reference pattern compiles")
-});
+static BACK_REFERENCE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"(?i)^(do )?(that|this|it|what i (just )?did)( again)?$").ok());
 /// An automate reading whose steps come from a second round, one per clause.
 const STEPS_NEXT: &str = "the steps (decomposed next)";
-static POINTS_BACK: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\b(it|that|them)\b").expect("pronoun pattern compiles"));
+static POINTS_BACK: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"(?i)\b(it|that|them)\b").ok());
+
+fn pattern_matches(pattern: &LazyLock<Option<Regex>>, text: &str) -> bool {
+    pattern.as_ref().is_some_and(|regex| regex.is_match(text))
+}
 
 fn nonempty(text: Option<&str>) -> Option<&str> {
     text.filter(|t| !t.is_empty())
@@ -1271,8 +1272,8 @@ pub fn reading_for(
                 .find(|c| c.capture_targets.iter().any(|t| t == target))
                 .cloned();
             let url = body
-                .and_then(|b| URL_PATTERN.find(b))
-                .or_else(|| URL_PATTERN.find(request))
+                .and_then(|b| URL_PATTERN.as_ref()?.find(b))
+                .or_else(|| URL_PATTERN.as_ref()?.find(request))
                 .map(|m| m.as_str().to_string())
                 .or_else(|| {
                     (target == "link")
@@ -1452,8 +1453,8 @@ pub fn reading_for(
             let refers_back = noul_answer(answers, "refers_back").unwrap_or(0.0);
             let script_steps = picked_span(answers, b, "script_steps");
             let points_back = refers_back >= 0.5
-                || BACK_REFERENCE.is_match(body.unwrap_or_default())
-                || BACK_REFERENCE.is_match(script_steps.unwrap_or_default());
+                || pattern_matches(&BACK_REFERENCE, body.unwrap_or_default())
+                || pattern_matches(&BACK_REFERENCE, script_steps.unwrap_or_default());
             if let Some(last) = ctx
                 .last_action
                 .as_ref()
@@ -1583,7 +1584,7 @@ pub fn link_pronouns(clauses: &mut [Plan], ctx: &ScreenContext) {
                 }
             }
         }
-        if !POINTS_BACK.is_match(&clause.request) {
+        if !pattern_matches(&POINTS_BACK, &clause.request) {
             continue;
         }
         let spoken = format!(" {} ", clause.request.to_lowercase());

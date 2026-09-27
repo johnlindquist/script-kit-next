@@ -111,15 +111,17 @@ pub fn span_candidates(request: &str, words: &[Word], limit: usize) -> Vec<Span>
     out
 }
 
-static CLAUSE_BREAK: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\s*,\s*(?:and\s+|then\s+)?|\s+and then\s+|\s+then\s+|\s+and\s+")
-        .expect("clause pattern compiles")
+static CLAUSE_BREAK: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(r"(?i)\s*,\s*(?:and\s+|then\s+)?|\s+and then\s+|\s+then\s+|\s+and\s+").ok()
 });
 
 /// Splits "open gmail, calendar and linear" into steps, lending the first verb to
 /// verbless tails.
 pub fn split_clauses(text: &str) -> Vec<String> {
-    let parts: Vec<&str> = CLAUSE_BREAK
+    let Some(clause_break) = CLAUSE_BREAK.as_ref() else {
+        return vec![text.trim().to_string()];
+    };
+    let parts: Vec<&str> = clause_break
         .split(text)
         .map(str::trim)
         .filter(|part| !part.is_empty())
