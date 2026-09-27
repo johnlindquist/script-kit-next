@@ -215,21 +215,7 @@ pub struct SurfaceElementSnapshot {
     pub quality: SnapshotQuality,
 }
 
-impl SurfaceElementSnapshot {
-    /// Returns semantic fallback warnings relevant to popup capture receipts.
-    ///
-    /// These are the `panel_only_*` warnings that indicate the surface could
-    /// not be fully introspected and only a panel-level element was collected.
-    /// Agents use these to know when semantic receipts are degraded for a
-    /// popup surface.
-    pub fn popup_semantic_warnings(&self) -> Vec<String> {
-        self.warnings
-            .iter()
-            .filter(|w| w.starts_with("panel_only_"))
-            .cloned()
-            .collect()
-    }
-}
+impl SurfaceElementSnapshot {}
 
 fn element(
     semantic_id: &str,

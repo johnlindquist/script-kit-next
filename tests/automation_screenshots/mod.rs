@@ -258,7 +258,7 @@ fn ambiguous_error_message_contains_candidates_and_score() {
 
 // ── Target bounds in screenshot ───────────────────────────────────────
 
-use script_kit_gpui::protocol::{AutomationWindowTarget, InspectBoundsInScreenshot};
+use script_kit_gpui::protocol::AutomationWindowTarget;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static SHOT_COUNTER: AtomicU32 = AtomicU32::new(70_000);
@@ -353,68 +353,4 @@ fn detached_window_bounds_at_origin_in_screenshot() {
     );
 
     shot_cleanup(&p, &["main", "agent_chat"]);
-}
-
-// ── Popup capture receipt contract ────────────────────────────────────
-
-use script_kit_gpui::platform::{PopupCaptureReceipt, PopupCaptureStrategy};
-
-/// Helper to build a popup capture receipt for testing.
-fn make_popup_receipt(
-    strategy: PopupCaptureStrategy,
-    kind: &str,
-    target_bounds: Option<InspectBoundsInScreenshot>,
-    semantic_primary: bool,
-) -> PopupCaptureReceipt {
-    PopupCaptureReceipt {
-        strategy,
-        window_kind: kind.to_string(),
-        target_bounds,
-        semantic_receipts_are_primary: semantic_primary,
-    }
-}
-
-/// Popup capture receipt for detached window has direct strategy and no bounds.
-#[test]
-fn popup_receipt_detached() {
-    let receipt = make_popup_receipt(
-        PopupCaptureStrategy::DirectWindowCapture,
-        "SnapOverlay",
-        None,
-        true,
-    );
-
-    assert_eq!(receipt.strategy, PopupCaptureStrategy::DirectWindowCapture);
-    assert!(receipt.target_bounds.is_none());
-    assert!(receipt.semantic_receipts_are_primary);
-}
-
-/// Popup capture receipt for main window has not-applicable strategy.
-#[test]
-fn popup_receipt_main_not_applicable() {
-    let receipt = make_popup_receipt(PopupCaptureStrategy::NotApplicable, "Main", None, false);
-
-    assert_eq!(receipt.strategy, PopupCaptureStrategy::NotApplicable);
-    assert!(!receipt.semantic_receipts_are_primary);
-}
-
-/// Both strategy variants roundtrip through serde.
-#[test]
-fn popup_capture_strategy_serde_roundtrip() {
-    for (strategy, expected_str) in [
-        (
-            PopupCaptureStrategy::DirectWindowCapture,
-            "\"direct_window_capture\"",
-        ),
-        (PopupCaptureStrategy::NotApplicable, "\"not_applicable\""),
-    ] {
-        let json = serde_json::to_string(&strategy).expect("serialize");
-        assert_eq!(
-            json, expected_str,
-            "strategy {:?} must serialize to {}",
-            strategy, expected_str
-        );
-        let parsed: PopupCaptureStrategy = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(parsed, strategy);
-    }
 }
