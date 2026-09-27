@@ -46,8 +46,8 @@ impl OwnView {
         .find(|view| view.name() == name)
     }
 
-    /// Views that list rows; the others draw their own body.
-    fn lists(self) -> bool {
+    /// Views whose rows the view picks from with the highlight and Enter.
+    fn picks(self) -> bool {
         matches!(
             self,
             OwnView::Automations | OwnView::Microphones | OwnView::DictationHistory
@@ -148,12 +148,14 @@ impl ScriptListApp {
             return Some((talk.header(), talk.rows().into_iter().map(with_p).collect()));
         }
         if let Some(view) = self.one_window_own_view() {
-            return view.lists().then(|| {
-                (
+            return match view {
+                OwnView::Script => self.one_window_script_rows(),
+                OwnView::Shortcut => self.one_window_shortcut_rows(),
+                _ => Some((
                     self.one_window_host.learns.view_head.clone(),
                     self.one_window_own_view_rows(),
-                )
-            });
+                )),
+            };
         }
         if self.one_window.in_view() || !self.one_window.text().trim().is_empty() {
             return None;
@@ -211,7 +213,8 @@ impl ScriptListApp {
     }
 
     /// After a publication, the highlight sits where the voice view's reading is, and the ↵
-    /// button of a list view names the highlighted row.
+    /// button of a list view names the highlighted row. While talking the list stays at its top:
+    /// the readings fill in place and never move.
     pub(crate) fn one_window_follow_own_selection(&mut self, cx: &mut Context<Self>) {
         let wanted = match (self.one_window.talk(), self.one_window_own_view()) {
             (Some(talk), _) => talk.selected(),
@@ -227,7 +230,13 @@ impl ScriptListApp {
                 self.set_selected_index(grouped, "one_window_own", cx);
             }
         }
-        if self.one_window_own_view().is_some_and(OwnView::lists) {
+        if self.one_window.talk().is_some() {
+            self.main_list_state.scroll_to(gpui::ListOffset {
+                item_ix: 0,
+                offset_in_item: gpui::px(0.),
+            });
+        }
+        if self.one_window_own_view().is_some_and(OwnView::picks) {
             if let Some(row) = self.one_window_selected_own_row() {
                 let target = sk_one_window::EnterTarget::new(
                     row.key.clone(),
@@ -262,7 +271,9 @@ impl ScriptListApp {
     ) -> (Vec<Row>, HashMap<String, SearchResult>) {
         self.one_window_load_lessons(cx);
         let mut more = self.one_window.learned_rows(text);
-        let mut names = self.one_window_saved_script_names();
+        let saved = self.one_window_saved_script_names();
+        more.extend(saved_rows(text, &saved));
+        let mut names = saved;
         names.extend(self.scripts.iter().map(|script| script.name.clone()));
         more.extend(super::learns::offered_rows(
             text,
@@ -303,6 +314,10 @@ impl ScriptListApp {
                 self.one_window_open_shortcut_view(rest.to_string(), cx);
                 Some(Ok(()))
             }
+            "saved" => {
+                self.one_window_open_script(rest.to_string(), cx);
+                Some(Ok(()))
+            }
             "talk" if rest == "start" => {
                 self.one_window_talk_from_list(cx);
                 Some(Ok(()))
@@ -311,15 +326,52 @@ impl ScriptListApp {
         }
     }
 
-    /// The body of a view of this module that draws its own instead of rows.
-    pub(crate) fn one_window_view_element(
+    /// The list with what a view shows under its rows: the saved script's source.
+    pub(crate) fn one_window_view_under_list(
         &self,
+        list: gpui::AnyElement,
         colors: crate::list_item::ListItemColors,
-    ) -> Option<gpui::AnyElement> {
-        match self.one_window_own_view()? {
-            OwnView::Script => self.one_window_script_element(colors),
-            OwnView::Shortcut => self.one_window_shortcut_element(colors),
-            OwnView::Automations | OwnView::Microphones | OwnView::DictationHistory => None,
+    ) -> gpui::AnyElement {
+        use gpui::{div, prelude::*, px};
+        let below = match self.one_window_own_view() {
+            Some(OwnView::Script) => self.one_window_script_element(colors),
+            _ => None,
+        };
+        let Some(below) = below else {
+            return list;
+        };
+        let def = self.current_main_menu_theme.def();
+        let list_h = f32::from(crate::main_list_header_overlay_height(def))
+            + crate::list_item::effective_first_section_header_height_for_theme(
+                self.current_main_menu_theme,
+            )
+            + def.list.item_height;
+        div()
+            .relative()
+            .w_full()
+            .h_full()
+            .child(list)
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .top(px(list_h))
+                    .bottom(px(
+                        crate::footer_popup::main_window_footer_reservation_height(),
+                    ))
+                    .flex()
+                    .flex_col()
+                    .child(below),
+            )
+            .into_any_element()
+    }
+
+    /// How much taller than its rows a view wants the window: the saved script's source.
+    pub(crate) fn one_window_view_extra_height(&self) -> f32 {
+        match self.one_window_own_view() {
+            Some(OwnView::Script) => self.one_window_script_height(),
+            _ => 0.,
         }
     }
 
@@ -327,7 +379,7 @@ impl ScriptListApp {
     pub(crate) fn one_window_view_key(&mut self, key: Key, cx: &mut Context<Self>) {
         match self.one_window_own_view() {
             Some(OwnView::Shortcut) => self.one_window_shortcut_key(key, cx),
-            Some(view) if view.lists() && key == Key::Enter => {
+            Some(view) if view.picks() && key == Key::Enter => {
                 if let Some(row) = self.one_window_selected_own_row() {
                     match view {
                         OwnView::Automations => self.one_window_automation_enter(&row, cx),
@@ -357,6 +409,42 @@ pub(crate) fn filter_rows(rows: Vec<Row>, text: &str) -> Vec<Row> {
                 row.sub.as_deref().unwrap_or_default().to_lowercase()
             );
             words.iter().all(|w| hay.contains(w.as_str()))
+        })
+        .collect()
+}
+
+/// Saved runs whose names start with the typed words, word by word, as instant matches.
+pub(crate) fn saved_rows(text: &str, saved: &[String]) -> Vec<Row> {
+    let typed: Vec<String> = text.split_whitespace().map(str::to_lowercase).collect();
+    if typed.is_empty() || text.trim().chars().count() < 3 {
+        return Vec::new();
+    }
+    saved
+        .iter()
+        .filter(|name| {
+            let words: Vec<String> = name
+                .split(|c: char| !c.is_alphanumeric() && c != '#')
+                .filter(|w| !w.is_empty())
+                .map(str::to_lowercase)
+                .collect();
+            typed.len() <= words.len()
+                && typed
+                    .iter()
+                    .zip(&words)
+                    .all(|(typed, word)| word.starts_with(typed.as_str()))
+        })
+        .map(|name| {
+            Row::new(format!("saved:{name}"), name.clone())
+                .with_sub(format!(
+                    "A run you saved · {}",
+                    sk_one_window::contract::SAVED_SCRIPT_FILE_NAME
+                ))
+                .with_icon("script")
+                .with_enter_label(format!(
+                    "Open in {}",
+                    sk_one_window::contract::SAVED_SCRIPT_FILE_NAME
+                ))
+                .with_score(95)
         })
         .collect()
 }
@@ -475,6 +563,15 @@ mod tests {
         assert_eq!(keys("autom"), ["open:automations"]);
         assert_eq!(keys("share my last action"), ["act:share-last"]);
         assert!(keys("sl").is_empty());
+    }
+
+    #[test]
+    fn a_saved_run_matches_its_name_word_by_word() {
+        let saved = ["Tell Sarah + Post in #launcher".to_string()];
+        assert_eq!(saved_rows("tell sa", &saved).len(), 1);
+        assert_eq!(saved_rows("tell sarah post", &saved).len(), 1);
+        assert!(saved_rows("sarah", &saved).is_empty());
+        assert!(saved_rows("te", &saved).is_empty());
     }
 
     #[test]

@@ -9,7 +9,7 @@ use sk_one_window::contract::SAVED_SCRIPT_FILE;
 use sk_one_window::EnterTarget;
 
 use crate::intent::{plan_to_script, ScriptOptions};
-use crate::list_item::{render_section_header, ListItemColors};
+use crate::list_item::ListItemColors;
 use crate::ScriptListApp;
 
 const FILE_HEADER: &str = "// Saved runs. Every sentence that did several things is kept here as \
@@ -243,53 +243,62 @@ impl ScriptListApp {
         self.edit_script(&saved_path());
     }
 
-    /// The script view: the file's path as the header, then the entry in the mono font.
+    /// The script view's list: the file's path as the header, the entry as its one row.
+    pub(crate) fn one_window_script_rows(&self) -> Option<(String, Vec<sk_one_window::Row>)> {
+        let shown = self.one_window_host.learns.script.as_ref()?;
+        let lines = shown.source.lines().count();
+        let row = sk_one_window::Row::new(format!("saved:{}", shown.name), shown.name.clone())
+            .with_sub(format!(
+                "{lines} lines · one of the runs saved in this file"
+            ))
+            .with_icon("script")
+            .with_enter_label("Edit saved.ts");
+        Some((SAVED_SCRIPT_FILE.to_string(), vec![row]))
+    }
+
+    /// The height the saved entry's source takes under its row.
+    pub(crate) fn one_window_script_height(&self) -> f32 {
+        let Some(shown) = self.one_window_host.learns.script.as_ref() else {
+            return 0.;
+        };
+        let size = self.theme.get_fonts().mono_size;
+        let line = match gpui::phi() {
+            gpui::DefiniteLength::Fraction(ratio) => size * ratio,
+            gpui::DefiniteLength::Absolute(_) => size,
+        };
+        shown.source.lines().count() as f32 * line
+    }
+
+    /// The saved entry's source, under the script view's row, in the mono font.
     pub(crate) fn one_window_script_element(&self, colors: ListItemColors) -> Option<AnyElement> {
         let shown = self.one_window_host.learns.script.as_ref()?;
         let fonts = self.theme.get_fonts();
-        let header_h = crate::list_item::effective_first_section_header_height_for_theme(
-            self.current_main_menu_theme,
-        );
         let def = self.current_main_menu_theme.def();
         let inset = def.header_info_bar.context_edge_outset_x
             + def.shell.header_padding_x
             + def.search.text_inset_x;
         Some(
             div()
-                .w_full()
-                .h_full()
-                .flex()
-                .flex_col()
-                .child(
+                .id("one-window-script-source")
+                .debug_selector(|| "one-window-script-source".to_string())
+                .flex_1()
+                .min_h(px(0.))
+                .overflow_y_scroll()
+                .px(px(inset))
+                .font_family(fonts.mono_family.clone())
+                .text_size(px(fonts.mono_size))
+                .text_color(rgb(colors.text_primary))
+                .children(shown.source.lines().map(|line| {
+                    let comment = line.trim_start().starts_with("//");
                     div()
-                        .flex_none()
-                        .debug_selector(|| "oneWindowSectionHeader:0".to_string())
-                        .h(px(header_h))
-                        .child(render_section_header(SAVED_SCRIPT_FILE, None, colors, true)),
-                )
-                .child(
-                    div()
-                        .id("one-window-script-source")
-                        .debug_selector(|| "one-window-script-source".to_string())
-                        .flex_1()
-                        .min_h(px(0.))
-                        .overflow_y_scroll()
-                        .px(px(inset))
-                        .font_family(fonts.mono_family.clone())
-                        .text_size(px(fonts.mono_size))
-                        .text_color(rgb(colors.text_primary))
-                        .children(shown.source.lines().map(|line| {
-                            let comment = line.trim_start().starts_with("//");
-                            div()
-                                .whitespace_nowrap()
-                                .when(comment, |d| d.text_color(rgb(colors.text_muted)))
-                                .child(if line.is_empty() {
-                                    " ".to_string()
-                                } else {
-                                    line.to_string()
-                                })
-                        })),
-                )
+                        .whitespace_nowrap()
+                        .when(comment, |d| d.text_color(rgb(colors.text_muted)))
+                        .child(if line.is_empty() {
+                            " ".to_string()
+                        } else {
+                            line.to_string()
+                        })
+                }))
                 .into_any_element(),
         )
     }

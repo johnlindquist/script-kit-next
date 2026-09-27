@@ -600,7 +600,7 @@ impl ScriptListApp {
                 self.current_main_menu_theme.def(),
             ))
             + crate::footer_popup::main_window_footer_reservation_height();
-        (chrome + list).min(self.one_window_height_ceiling())
+        (chrome + list + self.one_window_view_extra_height()).min(self.one_window_height_ceiling())
     }
 
     // ------------------------------------------------------------------ height

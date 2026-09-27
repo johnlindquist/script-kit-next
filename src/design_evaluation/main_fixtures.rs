@@ -69,6 +69,7 @@ pub(crate) fn mount_main_fixture(
                 }]);
             }
             prepare_launcher_files(app, root)?;
+            app.one_window_seed_owned_fixture();
             AppView::ScriptList
         }
         "main.menu-syntax-trigger" | "main.menu-syntax-object" | "main.menu-syntax-history" => {
@@ -530,9 +531,14 @@ fn prepare_launcher_files(app: &ScriptListApp, root: &std::path::Path) -> anyhow
             if let Some(parent) = script.path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
+            let schedule = match script.name.as_str() {
+                "Omega Report" => "// Schedule: every friday at 4pm\n",
+                "Launch Beta" => "// Cron: 0 9 * * 1-5\n",
+                _ => "",
+            };
             std::fs::write(
                 &script.path,
-                "// Synthetic catalogue source; never executed.\n",
+                format!("{schedule}// Synthetic catalogue source; never executed.\n"),
             )?;
         }
     }

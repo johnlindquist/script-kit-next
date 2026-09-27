@@ -73,6 +73,39 @@ impl ScriptListApp {
         }
     }
 
+    /// The owned evaluator starts with one sentence already learned and one run already saved,
+    /// the state a user reaches after running them once; neither shows until its words are
+    /// typed.
+    pub(crate) fn one_window_seed_owned_fixture(&mut self) {
+        let row = Row::new(
+            "jev:window:Move Google Chrome to Next Display",
+            "Move Google Chrome to Next Display",
+        )
+        .with_icon("window");
+        let lessons = Lessons::new(vec![sk_one_window::Lesson {
+            said: "put the pr on my second screen".to_string(),
+            row,
+            at: 0,
+        }]);
+        let window = std::mem::take(&mut self.one_window);
+        self.one_window = window.with_lessons(lessons);
+        let name = "Tell Sarah + Post in #launcher";
+        let said = "tell sarah the beta slipped and post in #launcher that it ships in two weeks";
+        let body = [
+            "await sendMessage({ to: \"Sarah\", text: \"The beta slipped a week.\" });".to_string(),
+            "await postToSlack({ channel: \"#launcher\", text: \"The beta ships in two weeks.\" });"
+                .to_string(),
+        ];
+        let learns = &mut self.one_window_host.learns;
+        learns.lessons_loaded = true;
+        learns.saved_file = super::saved_scripts::with_entry(
+            "",
+            name,
+            &super::saved_scripts::entry_source(name, said, &body),
+            &[],
+        );
+    }
+
     pub(super) fn one_window_run_learned(
         &mut self,
         row: &Row,

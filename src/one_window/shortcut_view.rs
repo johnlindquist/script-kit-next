@@ -1,12 +1,11 @@
 //! Giving a script a shortcut happens in the main window: a view under the input says "Press
 //! the keys for …", the keys you press show as keycaps, Enter saves them and Esc backs out.
 
-use gpui::{div, prelude::*, px, rgb, AnyElement, Context};
-use sk_one_window::{EnterTarget, Event, Key};
+use gpui::Context;
+use sk_one_window::{EnterTarget, Event, Key, Row};
 
 use super::learns::OwnView;
 use crate::components::shortcut_recorder::RecordedShortcut;
-use crate::list_item::{render_section_header, ListItemColors};
 use crate::ScriptListApp;
 
 /// The keys pressed so far for one command.
@@ -124,7 +123,7 @@ impl ScriptListApp {
                     recording.keys = keys;
                 }
                 self.one_window_handle(Event::ViewEnter(EnterTarget::new(id, label)), cx);
-                cx.notify();
+                self.one_window_republish_own(cx);
             }
         }
         true
@@ -167,60 +166,20 @@ impl ScriptListApp {
         }
     }
 
-    /// The shortcut view: what to press as the header, then the keys pressed so far.
-    pub(crate) fn one_window_shortcut_element(&self, colors: ListItemColors) -> Option<AnyElement> {
+    /// The shortcut view's list: what to press as the header, the keys pressed so far as its
+    /// one row.
+    pub(crate) fn one_window_shortcut_rows(&self) -> Option<(String, Vec<Row>)> {
         let recording = self.one_window_host.learns.shortcut.as_ref()?;
-        let header_h = crate::list_item::effective_first_section_header_height_for_theme(
-            self.current_main_menu_theme,
-        );
-        let def = self.current_main_menu_theme.def();
-        let inset = def.header_info_bar.context_edge_outset_x
-            + def.shell.header_padding_x
-            + def.search.text_inset_x;
         let caps = recording.keys.to_keycaps();
-        let keys: AnyElement = if caps.is_empty() {
-            div()
-                .text_color(rgb(colors.text_muted))
-                .child("Waiting for keys…")
-                .into_any_element()
+        let title = if caps.is_empty() {
+            "Waiting for keys…".to_string()
         } else {
-            crate::components::footer_chrome::render_footer_row_shortcut_keycaps_from_tokens(
-                caps.iter().map(String::as_str),
-                &self.theme,
-                (self.theme.colors.text.primary << 8) | 0xFF,
-            )
-            .into_any_element()
+            caps.concat()
         };
-        Some(
-            div()
-                .w_full()
-                .h_full()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .flex_none()
-                        .debug_selector(|| "oneWindowSectionHeader:0".to_string())
-                        .h(px(header_h))
-                        .child(render_section_header(
-                            &press_the_keys(&recording.name),
-                            None,
-                            colors,
-                            true,
-                        )),
-                )
-                .child(
-                    div()
-                        .debug_selector(|| "one-window-shortcut-keys".to_string())
-                        .flex_none()
-                        .h(px(def.list.item_height))
-                        .px(px(inset))
-                        .flex()
-                        .items_center()
-                        .child(keys),
-                )
-                .into_any_element(),
-        )
+        let row = Row::new("shortcut:keys", title)
+            .with_sub("Enter saves them · Esc backs out")
+            .with_icon("shortcut");
+        Some((press_the_keys(&recording.name), vec![row]))
     }
 }
 
