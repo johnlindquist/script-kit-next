@@ -7,9 +7,9 @@
 #                     the ↵ label never returns to an earlier one while the text only grows
 #   stress-report.py  per run: anchor, first row, header, pump, fidelity, rug, layout shift
 # chapters/<name>.args holds extra one-window-frames.ts options (e.g. --fixture prompt.arg);
-# chapters/<name>.expect.json holds what each step showed when its frames were last reviewed (header, ↵,
-# view): a step that shows something else fails. Every run writes <out>/<name>/shown.json; copy it over the
-# expect file once its frames are reviewed.
+# chapters/<name>.expect.json and stress/<name>.expect.json hold what each step showed when its frames were
+# last reviewed (header, ↵, view): a step that shows something else fails. Every run writes
+# <out>/<name>/shown.json; copy it over the expect file once its frames are reviewed.
 #
 # usage: scripts/agentic/one-window/run.sh [out-dir]    (default .test-output/one-window/<time>)
 #   ARTIFACT=<app.reference.json>  reuse a build instead of building
@@ -77,7 +77,9 @@ done
 for n in ${SUITES-typing fast views}; do
   name="stress-$n"
   capture "$name" "$here/stress/$n.json" ""; fcode=$?
-  python3 "$here/check-frames.py" "$out/$name/frames" --json "$out/$name/check.json" >"$out/$name/check.md" 2>&1; ccode=$?
+  expect=(); [ -f "$here/stress/$n.expect.json" ] && expect=(--expect "$here/stress/$n.expect.json")
+  python3 "$here/check-frames.py" "$out/$name/frames" --json "$out/$name/check.json" --bless "$out/$name/shown.json" \
+    ${expect[@]+"${expect[@]}"} >"$out/$name/check.md" 2>&1; ccode=$?
   python3 "$here/stress-report.py" "$out/$name/frames" --json "$out/$name/stress.json" >"$out/$name/stress.md" 2>&1; scode=$?
   echo "$name capture=$fcode grade=$ccode stress=$scode"
   { echo "## $name — capture $fcode, grade $ccode, stress $scode"; echo; cat "$out/$name/check.md"; echo; cat "$out/$name/stress.md"; echo; } >>"$out/summary.md"

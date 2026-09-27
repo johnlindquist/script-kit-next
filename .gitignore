@@ -123,5 +123,6 @@ scripts/devtools/bin/
 /.fusion-runs/
 tests/__pycache__/
 scripts/agentic/__pycache__/
+scripts/agentic/one-window/__pycache__/
 scripts/agentic/fixtures/flow-ux-project/.mdflow/.cache/
 /target-agent.*-link

@@ -126,16 +126,19 @@ pub enum Event {
     Key(Key),
     /// The user put the highlight on a row (a click or hover), by its place among the rows.
     Select(usize),
-    /// Name matches for the current words (fallback rows marked as such).
+    /// Name matches for the list's words (fallback rows marked as such). While a view that takes
+    /// input is open the input holds the view's words, so names searched for them are ignored.
     Names(Vec<Row>),
     /// Rows the host puts above everything for the current words.
     Pinned(Vec<Row>),
     /// What the empty input lists when nothing else is pinned.
     Suggested(Vec<Row>),
+    /// Jev's readings of `text`; they land only when `text` is the list's words.
     Jev {
         text: String,
         rows: Vec<Row>,
     },
+    /// Jev couldn't read `text`; like [`Event::Jev`], only for the list's words.
     JevDown {
         text: String,
     },
@@ -480,6 +483,16 @@ impl OneWindow {
         self.user_at == Some(now)
     }
 
+    /// What Enter says and the row it would run; the ↵ label can lag the row until typing settles.
+    fn enter_runs(&self, now: Ms) -> (EnterTarget, Option<String>) {
+        let row = if self.in_view() {
+            None
+        } else {
+            self.list.current_row(now).map(|r| r.key)
+        };
+        (self.enter_target(now), row)
+    }
+
     pub fn handle(&mut self, now: Ms, ev: Event) -> Outcome {
         let now = now.max(self.now);
         self.now = now;
@@ -523,6 +536,9 @@ impl OneWindow {
             Event::Key(key) => self.on_key(now, key, fx),
             Event::Select(pos) => self.on_select(pos),
             Event::Names(rows) => {
+                if self.views.top().is_some_and(|top| top.takes_input) {
+                    return false;
+                }
                 self.host_names = rows;
                 self.refresh_rows();
                 self.list.names_came();
@@ -539,7 +555,7 @@ impl OneWindow {
                 true
             }
             Event::Jev { text, rows } => {
-                if text != self.text {
+                if text != self.list.text {
                     return false;
                 }
                 let rows = crate::list::fresh_readings(self.with_needs(rows), &self.list.names);
@@ -562,15 +578,18 @@ impl OneWindow {
                 true
             }
             Event::JevDown { text } => {
-                if text != self.text {
+                if text != self.list.text {
                     return false;
                 }
+                let before = self.enter_runs(now);
                 self.list.jev.down(now, &text);
                 self.list.held = None;
                 self.list.asking = false;
                 self.refresh_rows();
-                let user = self.user_turn(now);
-                self.guard.arm_unless_user(now, user);
+                if self.enter_runs(now) != before {
+                    let user = self.user_turn(now);
+                    self.guard.arm_unless_user(now, user);
+                }
                 true
             }
             Event::View(op) => {

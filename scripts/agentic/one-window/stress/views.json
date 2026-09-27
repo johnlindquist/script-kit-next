@@ -16,6 +16,7 @@
  {"name": "v-talk-typed", "type": "talk", "waitMs": 0},
  {"name": "v-voice", "key": "enter", "waitMs": 0},
  {"name": "v-voice-esc", "key": "escape", "waitMs": 0},
+ {"name": "v-summon", "control": {"family": "oneWindow", "operation": "summon"}, "waitMs": 0},
  {"name": "v-clear", "key": "cmd-a", "waitMs": 0},
  {"name": "v-bs", "key": "backspace", "waitMs": 0},
  {"name": "v-notes-typed", "type": "open notes", "waitMs": 0},

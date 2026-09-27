@@ -24,6 +24,7 @@ fn valid_fixture_controls() -> Vec<Value> {
         json!({"family": "sdkChat", "operation": "fail", "messageId": "turn-7"}),
         json!({"family": "oneWindow", "operation": "talkTo", "destination": "chat"}),
         json!({"family": "oneWindow", "operation": "talkTo", "destination": "note"}),
+        json!({"family": "oneWindow", "operation": "summon"}),
         json!({"family": "fault", "operation": "suppressThemeNotification", "target": {"type": "instance", "id": "main", "generation": 3}}),
     ]
 }
