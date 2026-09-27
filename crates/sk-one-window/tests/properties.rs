@@ -267,6 +267,7 @@ impl Run {
                 }));
                 if !stay {
                     self.guard_until = self.guard_until.max(self.now + ENTER_GUARD_MS);
+                    self.nav_at = Some(self.now);
                 }
             }
             Step::Content(px) => self.send(Event::Content { px: px as f32 }),

@@ -98,6 +98,8 @@ pub enum Event {
     /// The input's words changed because the user typed.
     Text(String),
     Key(Key),
+    /// The user put the highlight on a row (a click or hover), by its place among the rows.
+    Select(usize),
     /// Name matches for the current words (fallback rows marked as such).
     Names(Vec<Row>),
     /// Rows the host puts above everything for the current words.
@@ -154,7 +156,10 @@ pub enum Event {
 
 impl Event {
     fn is_user(&self) -> bool {
-        matches!(self, Event::Text(_) | Event::Key(_) | Event::Summon)
+        matches!(
+            self,
+            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon
+        )
     }
 }
 
@@ -396,6 +401,18 @@ impl OneWindow {
                 true
             }
             Event::Key(key) => self.on_key(now, key, fx),
+            Event::Select(pos) => {
+                if self.in_view() || self.list.visible().is_empty() {
+                    return false;
+                }
+                if pos != self.list.sel {
+                    self.list.held = None;
+                    self.list.asking = false;
+                }
+                self.list.sel = 0;
+                self.list.move_sel(i32::try_from(pos).unwrap_or(i32::MAX));
+                true
+            }
             Event::Names(rows) => {
                 self.host_names = rows;
                 self.refresh_rows();
@@ -784,7 +801,10 @@ impl OneWindow {
             RowAct::AskJevAgain => {
                 self.list.jev.reset();
                 self.list.sel = 0;
-                self.jev_due = Some((now, self.text.clone()));
+                self.jev_due = None;
+                fx.push(Effect::AskJev {
+                    text: self.text.clone(),
+                });
             }
             act => {
                 let Some(entry) = staged_entry.and_then(|id| self.ledger.get(id).cloned()) else {
@@ -1008,6 +1028,7 @@ impl OneWindow {
         let target = spec
             .enter
             .unwrap_or_else(|| EnterTarget::new(spec.name.clone(), ""));
+        self.guard.forget_view();
         self.guard.observe_view(now, &target.id, user);
         if let Some(text) = spec.text {
             if text != self.text {
@@ -1399,4 +1420,76 @@ impl OneWindow {
     pub fn held_state(&self, id: u64) -> Option<HeldState> {
         self.holds.get(id).map(|h| h.state)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn typed(win: &mut OneWindow, text: &str) {
+        win.handle(0, Event::Text(text.into()));
+        win.handle(
+            0,
+            Event::Names(vec![
+                Row::new("name:a", "Alpha"),
+                Row::new("name:b", "Beta"),
+            ]),
+        );
+    }
+
+    #[test]
+    fn selecting_a_row_moves_enter_to_it() {
+        let mut win = OneWindow::default();
+        typed(&mut win, "a");
+        assert_eq!(win.enter_target(0).id, "name:a");
+        assert!(win.handle(10, Event::Select(1)).consumed);
+        assert_eq!(win.enter_target(10).id, "name:b");
+        let out = win.handle(20, Event::Key(Key::Enter));
+        assert!(matches!(
+            out.effects.first(),
+            Some(Effect::Run { row, .. }) if row.key == "name:b"
+        ));
+    }
+
+    #[test]
+    fn selecting_past_the_end_lands_on_the_last_row() {
+        let mut win = OneWindow::default();
+        typed(&mut win, "a");
+        win.handle(10, Event::Select(99));
+        assert_eq!(win.list().current(), Some(Item::Slot(JEV_ROWS_LAST)));
+    }
+
+    #[test]
+    fn selecting_is_the_users_own_change_and_never_arms_enter() {
+        let mut win = OneWindow::default();
+        typed(&mut win, "a");
+        win.handle(10, Event::Select(1));
+        assert!(!win.enter_armed(10));
+    }
+
+    #[test]
+    fn asking_jev_again_asks_at_once() {
+        let mut win = OneWindow::default();
+        win.handle(0, Event::Text("book a table".into()));
+        win.handle(
+            100,
+            Event::JevDown {
+                text: "book a table".into(),
+            },
+        );
+        let out = win.handle(200, Event::Key(Key::CmdDigit(2)));
+        assert!(
+            out.effects.contains(&Effect::AskJev {
+                text: "book a table".into()
+            }),
+            "{:?}",
+            out.effects
+        );
+        assert!(
+            !win.list().jev.settled_for("book a table"),
+            "its rows read again"
+        );
+    }
+
+    const JEV_ROWS_LAST: usize = crate::contract::JEV_ROWS - 1;
 }
