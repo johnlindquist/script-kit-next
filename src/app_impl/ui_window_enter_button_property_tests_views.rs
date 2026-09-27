@@ -193,6 +193,21 @@ fn the_calculator_answers_in_place_with_a_number_enter_copies() {
         let (app, window) = launcher(cx, Jev::Off);
         type_into_launcher(cx, window, &app, "12*7");
         wait(cx, 20);
+        let row_label = app.update(cx, |app, cx| {
+            app.main_window_footer_config_with_cx(Some(cx))
+                .and_then(|footer| {
+                    footer
+                        .buttons
+                        .iter()
+                        .find(|button| button.action == crate::footer_popup::FooterAction::Run)
+                        .map(|button| button.label.to_string())
+                })
+        });
+        assert_eq!(
+            row_label.as_deref(),
+            Some("Show 84"),
+            "↵ on the calculator's row says it opens the answer"
+        );
         let _ = app.update(cx, |app, cx| app.execute_selected(cx));
         let shape = match hosted(&app, cx) {
             Some(HostedView::Answer(answer)) => answer.shape,
