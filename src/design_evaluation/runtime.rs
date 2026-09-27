@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use anyhow::{ensure, Context as _, Result};
 use gpui::{
     point, px, size, AnyWindowHandle, App, AppContext, Bounds, Entity, Pixels,
-    VisualTestAppContext, Window, WindowHandle,
+    VisualTestAppContext, Window,
 };
 use gpui_component::Root;
 use serde_json::{json, Value};

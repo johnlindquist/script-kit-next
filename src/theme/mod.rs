@@ -92,8 +92,7 @@ pub use types::{
 // Re-export helper types for lightweight color extraction
 pub use helpers::{
     accent_color_name, best_readable_text_hex, contrast_ratio, default_line_height_px,
-    hard_readable_text_hex, hover_overlay_bg, modal_overlay_bg, ListItemColors, PromptColors,
-    ACCENT_PALETTE,
+    hard_readable_text_hex, hover_overlay_bg, ListItemColors, PromptColors, ACCENT_PALETTE,
 };
 
 // Re-export color resolver for unified color access

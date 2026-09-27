@@ -129,9 +129,9 @@ pub use types::{
 #[cfg(any(test, feature = "owned-ui-evaluation"))]
 pub use types::{
     DesignCommand, EvaluationLimits, FixtureControl, FixtureDescriptor, FlowFixtureCommand,
-    NativeSafetyProbe, NotesFixtureCommand, ObservedEffect, OneWindowFixtureCommand,
-    OneWindowTalkDestination, OwnedFileSearchPreviewCondition, OwnedFileSearchStreamCondition,
-    OwnedFrameCursor, OwnedResponseEncoding, OwnedRuntimeIdentity, OwnedSearchProviderCondition,
+    NativeSafetyProbe, ObservedEffect, OneWindowFixtureCommand, OneWindowTalkDestination,
+    OwnedFileSearchPreviewCondition, OwnedFileSearchStreamCondition, OwnedFrameCursor,
+    OwnedResponseEncoding, OwnedRuntimeIdentity, OwnedSearchProviderCondition,
     OwnedSearchQueryStamp, ScheduledFrameRequirement, ScopedActionReceipt, SdkChatFixtureCommand,
     SdkCompletionChannel, SdkPromptCommand, SdkPromptFixtureId, SearchFixtureCommand,
     ThemeFaultOperation, ThemeFixtureCommand, OWNED_RESPONSE_CODEC,

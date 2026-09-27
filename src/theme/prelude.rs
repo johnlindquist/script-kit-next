@@ -2,7 +2,7 @@
 
 pub use super::color_resolver::{ColorResolver, SpacingResolver, TypographyResolver};
 pub use super::gpui_integration::sync_gpui_component_theme;
-pub use super::helpers::{hover_overlay_bg, modal_overlay_bg, ListItemColors, PromptColors};
+pub use super::helpers::{hover_overlay_bg, ListItemColors, PromptColors};
 pub use super::types::{
     get_cached_theme, get_theme_snapshot, invalidate_appearance_cache, load_theme, ColorScheme,
     FontConfig, Theme, VibrancyMaterial,
@@ -14,7 +14,6 @@ const _: () = {
     let _ = TypographyResolver::new;
     let _ = sync_gpui_component_theme;
     let _ = hover_overlay_bg;
-    let _ = modal_overlay_bg;
     let _ = core::mem::size_of::<ListItemColors>();
     let _ = core::mem::size_of::<PromptColors>();
     let _ = get_cached_theme;
