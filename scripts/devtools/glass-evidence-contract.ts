@@ -101,13 +101,6 @@ export function validateChildReceipt(
     if (receipt.interference?.receipt == null) {
       errors.push("rapid-toggle interference telemetry missing");
     }
-  } else if (expectedScenario === "notes-fallback") {
-    if (receipt.hostClockTiming?.ordered !== true) {
-      errors.push("notes fallback shared-host-clock timing missing");
-    }
-    if (receipt.interference?.receipt == null) {
-      errors.push("notes fallback interference telemetry missing");
-    }
   } else if (expectedScenario.startsWith("lifecycle")) {
     const required = [
       "main-exit",

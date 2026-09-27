@@ -22,7 +22,6 @@ import { runNativeLifecycleCampaign } from "./native-lifecycle.ts";
 import { fixtureEvidenceIssues, type FixtureBinding } from "./lib/fixture-contract.ts";
 import { runSdkJourney } from "./sdk-journey.ts";
 import { runConversationAcceptance, CONVERSATION_FIXTURE_IDS } from "./conversation-journey.ts";
-import { runNotesAcceptance, NOTES_ACCEPTANCE_FIXTURES } from "./notes-acceptance.ts";
 import { runSearchJourney, type SearchRecipeOptions } from "../agentic/launcher-search-recipes.ts";
 import { retainSearchShardEvidence, searchShardArtifactSpecs } from "../agentic/launcher-search-receipt.ts";
 import { SEARCH_CASES, SEARCH_PROVIDERS, SEARCH_FIXTURE_ID, searchContractSpec, searchScheduleComparisonGroup } from "../agentic/launcher-search-contract.ts";
@@ -55,7 +54,6 @@ export const CORE_FIXTURES: Record<CoreJourneyId, readonly string[]> = {
   "choice-prompt-completion": ["prompt.arg", "prompt.mini", "prompt.select"],
   "editable-prompt-validation": ["prompt.form", "prompt.fields", "prompt.editor", "prompt.template"],
   "actions-popup-activation": ["main.script-list"],
-  "notes-day-roundtrip": [...NOTES_ACCEPTANCE_FIXTURES],
   "conversation-recovery-stop": [...CONVERSATION_FIXTURE_IDS],
   "theme-publication-revert": ["main.script-list", "notes.editor", "main.theme-chooser"],
   "close-reopen-stale": ["main.script-list"],
@@ -479,10 +477,6 @@ export async function runRuntimeJourney(id: CoreJourneyId, reference: ArtifactRe
         if (diagnosis.operation !== "diagnose" || diagnosis.ok !== true) throw new EvaluationContractError("owned_diagnosis_required");
         const windows = new Set(diagnosis.targets.map(value => value.windowId));
         assertStory(receipt, "actions_act_in_place_without_a_window", windows.size === 1);
-        break;
-      }
-      case "notes-day-roundtrip": {
-        await runNotesAcceptance(active, receipt);
         break;
       }
       case "conversation-recovery-stop": {

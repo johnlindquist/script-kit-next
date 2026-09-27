@@ -635,7 +635,6 @@ async function main() {
       (cell: any) => cell.fixture === "saturated-stripes",
     )?.saturatedLifecycle ?? null
     : null;
-  let notesFallback: any = null;
   if (mode === "all" || mode === "green") {
     const rapidPath = join(outputDirectory, "rapid-toggle.json");
     const rapidBinarySha256Before = sha256File(binary);
@@ -659,30 +658,6 @@ async function main() {
         : null,
       stderr: rapidResult.stderr.slice(-4_000),
       binarySha256Before: rapidBinarySha256Before,
-      binarySha256After: sha256File(binary),
-    };
-    const notesFallbackPath = join(outputDirectory, "notes-fallback.json");
-    const notesFallbackBinarySha256Before = sha256File(binary);
-    const notesFallbackResult = await run([
-      "bun",
-      resolve(import.meta.dir, "notes-glass-entry-fallback.ts"),
-      "--binary",
-      binary,
-      "--out",
-      notesFallbackPath,
-    ], {
-      SCRIPT_KIT_TEST_STATUS: process.env.SCRIPT_KIT_TEST_STATUS ?? "1",
-      ...childEnvironment,
-      SCRIPT_KIT_GLASS_SCENARIO: "notes-fallback",
-    });
-    notesFallback = {
-      exitCode: notesFallbackResult.exitCode,
-      receiptPath: notesFallbackPath,
-      receipt: existsSync(notesFallbackPath)
-        ? JSON.parse(readFileSync(notesFallbackPath, "utf8"))
-        : null,
-      stderr: notesFallbackResult.stderr.slice(-4_000),
-      binarySha256Before: notesFallbackBinarySha256Before,
       binarySha256After: sha256File(binary),
     };
     lifecycleFilmstrip = mode === "all"
@@ -806,23 +781,10 @@ async function main() {
       || lifecycleAfter !== identity.binarySha256
     ) setupErrors.push("lifecycle binary changed before or after child");
   }
-  if (notesFallback != null) {
-    setupErrors.push(...validateChildReceipt(
-      notesFallback.receipt,
-      identity,
-      "notes-fallback",
-      notesFallback.exitCode,
-    ));
-    if (
-      notesFallback.binarySha256Before !== identity.binarySha256
-      || notesFallback.binarySha256After !== identity.binarySha256
-    ) setupErrors.push("notes fallback binary changed before or after child");
-  }
   const requiredChildScenarios = [
     "main-window",
     ...(lockedTreatment?.cells ?? []).map((cell: any) => `locked:${cell.fixture}`),
     ...(rapidToggle == null ? [] : ["rapid-toggle"]),
-    ...(notesFallback == null ? [] : ["notes-fallback"]),
     ...(lifecycleFilmstrip == null
       ? []
       : [
@@ -839,7 +801,6 @@ async function main() {
         : null
     ),
     ...(rapidToggle == null ? [] : [rapidToggle.receipt?.scenario]),
-    ...(notesFallback == null ? [] : [notesFallback.receipt?.scenario]),
     ...(lifecycleFilmstrip == null ? [] : [lifecycleFilmstrip.receipt?.scenario]),
   ].filter((item): item is string => typeof item === "string");
   setupErrors.push(...validateUniqueScenarioSet(
@@ -857,7 +818,6 @@ async function main() {
         : null
     ),
     rapidToggle?.receipt,
-    notesFallback?.receipt,
     lifecycleFilmstrip?.receipt,
   ].filter(Boolean);
   const lockedObserverFailed = (lockedTreatment?.cells ?? []).some(
@@ -945,14 +905,12 @@ async function main() {
     },
     lockedTreatment,
     rapidToggle,
-    notesFallback,
     lifecycleFilmstrip,
     evidenceComplete,
     pass: finalDisposition === "EVALUABLE_PASS"
       && evidenceComplete
       && (lockedTreatment == null || lockedTreatment.pass === true)
       && (rapidToggle == null || rapidToggle.receipt?.pass === true)
-      && (notesFallback == null || notesFallback.receipt?.pass === true)
       && (lifecycleFilmstrip == null
         || lifecycleFilmstrip.receipt?.pass === true),
     disposition: finalDisposition,

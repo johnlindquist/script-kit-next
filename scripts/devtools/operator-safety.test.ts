@@ -1303,9 +1303,6 @@ describe("noninteractive DevTools operator safety", () => {
   });
 
   test.each([
-    ["Notes live resize", "notes-live-resize.ts"],
-    ["Notes bottom resize", "notes-bottom-resize.ts"],
-    ["Notes glass fallback", "notes-glass-entry-fallback.ts"],
     ["Actions entry filmstrip", "actions-entry-filmstrip.ts"],
     ["glass lifecycle filmstrip", "glass-lifecycle-filmstrip.ts"],
     ["rapid toggle stress", "rapid-toggle-stress.ts"],
@@ -1404,17 +1401,12 @@ describe("noninteractive DevTools operator safety", () => {
     ["semantic-command", "cons-flow-ux.semantic-command"],
     ["entry-verbs", "cons-flow-ux.entry-verbs"],
     ["dictation-recovery-focus", "cons-flow-ux.dictation-recovery-focus"],
-    ["notes-search", "cons-flow-ux.notes-search"],
     ["dictation-delivery", "cons-flow-ux.dictation-delivery"],
     ["context-preparation", "cons-flow-ux.context-preparation"],
-    ["notes-today", "cons-flow-ux.notes-today"],
     ["dictation-dismiss-targets", "cons-flow-ux.dictation-dismiss-targets"],
     ["flow-history", "cons-flow-ux.flow-history"],
-    ["notes-handoff", "cons-flow-ux.notes-handoff"],
-    ["notes-agent-chat-return", "cons-flow-ux.notes-agent-chat-return"],
     ["context-lifecycle", "cons-flow-ux.context-lifecycle"],
     ["conversation-hosts", "conversation-hosts.private-pasteboard-archive"],
-    ["notes-actions", "notes-actions.private-pasteboard-archive"],
     ["dictation-history", "dictation-history.system-clipboard"],
   ])("consistency workflow %s refuses before runtime receipts, fixtures, or child processes", (name, expectedOwner) => {
     const result = child(`
@@ -1448,15 +1440,14 @@ describe("noninteractive DevTools operator safety", () => {
   });
 
   test.each([
-    ["notes-spine-host-wiring", "notes-spine-host-wiring.workflow-child"],
     ["day-page-context-roundtrip", "day-page-context-roundtrip.workflow-child"],
     ["day-page-agent-chat-handoff-scope", "day-page-agent-chat-handoff-scope.workflow-child"],
     ["day-agent-chat-return", "day-agent-chat-return.workflow-child"],
-  ])("Notes/Today child %s refuses before auth, output, app, or native access", (name, expectedOwner) => {
+  ])("Day page child %s refuses before auth, output, app, or native access", (name, expectedOwner) => {
     const result = child(`
       import * as filesystem from "node:fs";
       import { mock } from "bun:test";
-      const unsafe = (() => { throw new Error("unsafe Notes/Today child side effect reached"); });
+      const unsafe = (() => { throw new Error("unsafe Day page child side effect reached"); });
       mock.module("node:fs", () => ({
         ...filesystem,
         copyFileSync: unsafe,
@@ -1472,7 +1463,7 @@ describe("noninteractive DevTools operator safety", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain(`SCRIPT_KIT_NONINTERACTIVE=1 refused ${expectedOwner}`);
-    expect(result.stdout.toString()).not.toContain("unsafe Notes/Today child side effect reached");
+    expect(result.stdout.toString()).not.toContain("unsafe Day page child side effect reached");
   });
 
   test("SAFE-001 refusal preserves its exact preexisting authoritative runtime receipt", () => {
@@ -1506,7 +1497,6 @@ describe("noninteractive DevTools operator safety", () => {
 
   test.each([
     ["conversation hosts", "conversation-hosts-probe.ts"],
-    ["Notes actions", "notes-actions-probe.ts"],
   ])("%s refuses before archiving every private pasteboard format", (_owner, file) => {
     const result = child(`
       import * as filesystem from "node:fs";

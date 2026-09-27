@@ -132,9 +132,6 @@ require_clean_source_identity() {
     scripts/devtools/dictation.ts
     scripts/devtools/events.ts
     scripts/devtools/main.ts
-    scripts/devtools/notes-live-resize.ts
-    scripts/devtools/notes-bottom-resize.ts
-    scripts/devtools/notes-glass-entry-fallback.ts
     scripts/devtools/actions-entry-filmstrip.ts
     scripts/devtools/glass-lifecycle-filmstrip.ts
     scripts/devtools/rapid-toggle-stress.ts
@@ -195,20 +192,14 @@ require_clean_source_identity() {
     scripts/agentic/flow-composer-multiline-probe.ts
     scripts/agentic/cons-flow-ux/dictation-history-probe.ts
     scripts/agentic/cons-flow-ux/conversation-hosts-probe.ts
-    scripts/agentic/cons-flow-ux/notes-actions-probe.ts
     scripts/agentic/cons-flow-ux/semantic-command-probe.ts
     scripts/agentic/cons-flow-ux/entry-verbs-probe.ts
     scripts/agentic/cons-flow-ux/dictation-recovery-focus-probe.ts
-    scripts/agentic/cons-flow-ux/notes-search-probe.ts
     scripts/agentic/cons-flow-ux/dictation-delivery-probe.ts
     scripts/agentic/cons-flow-ux/context-preparation-probe.ts
-    scripts/agentic/cons-flow-ux/notes-today-probe.ts
     scripts/agentic/cons-flow-ux/dictation-dismiss-targets-probe.ts
     scripts/agentic/cons-flow-ux/flow-history-probe.ts
-    scripts/agentic/cons-flow-ux/notes-handoff-probe.ts
-    scripts/agentic/cons-flow-ux/notes-agent-chat-return-probe.ts
     scripts/agentic/cons-flow-ux/context-lifecycle-probe.ts
-    scripts/agentic/notes-spine-host-wiring-probe.ts
     scripts/agentic/day-page-context-roundtrip-probe.ts
     scripts/agentic/day-page-agent-chat-handoff-scope-probe.ts
     scripts/agentic/day-agent-chat-return-probe.ts

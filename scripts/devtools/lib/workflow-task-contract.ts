@@ -34,9 +34,6 @@ export const WORKFLOW_TASK_PROOF_SPECS = {
   "SAFE-003": task("flow-history-probe", [
     "core-lifecycle-a", "core-lifecycle-b",
   ], ["new-conversation-preserves-history", "delete-requires-explicit-confirmation"]),
-  "SAFE-004": task("notes-actions-probe", [
-    "shortcut-descriptors-executable", "destructive-confirmations-enforced",
-  ], ["unavailable-shortcuts-cannot-activate", "destructive-action-requires-confirmation"]),
   "WF-001": task("context-lifecycle-probe", [
     "pending-context-provenance", "duplicate-context-deduplicated",
   ], ["duplicate-context-never-creates-second-chip", "raw-source-identity-redacted"]),
@@ -70,33 +67,6 @@ export const WORKFLOW_TASK_PROOF_SPECS = {
   "WF-011": task("flow-history-probe", [
     "core-lifecycle-a", "core-lifecycle-b", "desk-ready",
   ], ["runtime-termination-preserves-history", "missing-engine-reports-actionable-state"]),
-  "WF-012": task("notes-search-probe", [
-    "shared-notes-search-results", "host-destinations-disclosed",
-  ], ["failed-refresh-retains-prior-results", "no-match-never-pretends-corpus-empty"]),
-  "WF-013": task("notes-today-probe", [
-    "notes-mention-parity", "today-mention-parity",
-  ], ["partial-reference-never-survives-deletion", "file-discovery-never-silently-disappears"], [
-    "scripts/agentic/notes-spine-host-wiring-probe.ts",
-    "scripts/agentic/day-page-context-roundtrip-probe.ts",
-  ]),
-  "WF-014": task("notes-today-probe", [
-    "notes-agent-chat-return", "today-scope-matrix",
-  ], ["outside-selected-range-never-staged", "context-handoff-never-auto-submits"], [
-    "scripts/agentic/cons-flow-ux/notes-agent-chat-return-probe.ts",
-    "scripts/agentic/day-page-agent-chat-handoff-scope-probe.ts",
-  ]),
-  "WF-015": task("notes-today-probe", [
-    "notes-agent-chat-return", "today-agent-chat-return",
-  ], ["return-never-targets-a-different-host", "unsaved-editor-state-never-discarded"], [
-    "scripts/agentic/cons-flow-ux/notes-agent-chat-return-probe.ts",
-    "scripts/agentic/day-agent-chat-return-probe.ts",
-  ]),
-  "WF-016": task("notes-handoff-probe", [
-    "partial-duplicate-reuse", "primary-failure-atomic", "cart-delete-failure",
-  ], ["primary-failure-never-consumes-cart", "failed-attachment-remains-retryable"]),
-  "WF-017": task("notes-search-probe", [
-    "standalone-open", "portal-attach", "portal-cancel-restores-origin",
-  ], ["portal-attachment-never-auto-submits", "portal-cancellation-restores-draft"]),
   "WF-018": task("dictation-dismiss-targets-probe", [
     "recording-confirm-resume-discard", "processing-hide-reopen",
   ], ["legacy-destination-never-selectable", "disabled-destination-explains-refusal"]),
@@ -122,6 +92,15 @@ export const WORKFLOW_TASK_PROOF_SPECS = {
 } as const satisfies Record<string, WorkflowTaskSpec>;
 
 export type WorkflowTaskProofId = keyof typeof WORKFLOW_TASK_PROOF_SPECS;
+
+/**
+ * The Notes/Today group: their journeys ran in the Notes window, which no longer exists
+ * (notes open under the main input). They stay program tasks but have no producer, so
+ * the cons-flow-ux scope reports them outstanding rather than proven.
+ */
+export const NOTES_WINDOW_RETIRED_TASK_IDS: ReadonlySet<string> = new Set([
+  "SAFE-004", "WF-012", "WF-013", "WF-014", "WF-015", "WF-016", "WF-017",
+]);
 
 export const WORKFLOW_TASK_PRIMITIVE_ID = "devtools.consistency.workflow-task-proof";
 export const WORKFLOW_TASK_PROOF_MODE = "observed-user-journey";

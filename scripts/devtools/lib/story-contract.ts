@@ -16,7 +16,7 @@ export const PRODUCTION_STORIES = [
 ] as const;
 export const CORE_JOURNEYS = [
   "launcher-ranking-provider", "choice-prompt-completion", "editable-prompt-validation", "actions-popup-activation",
-  "notes-day-roundtrip", "conversation-recovery-stop", "theme-publication-revert", "close-reopen-stale",
+  "conversation-recovery-stop", "theme-publication-revert", "close-reopen-stale",
 ] as const;
 export type CoreJourneyId = typeof CORE_JOURNEYS[number];
 export interface LibtestSelection { names: string[]; issues: string[] }

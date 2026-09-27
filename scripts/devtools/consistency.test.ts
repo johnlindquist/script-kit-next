@@ -53,6 +53,7 @@ import {
   taskProofPolicy,
 } from "./lib/task-proof-policy.ts";
 import {
+  NOTES_WINDOW_RETIRED_TASK_IDS,
   WORKFLOW_TASK_PRIMITIVE_ID,
   WORKFLOW_TASK_PROOF_MODE,
   WORKFLOW_TASK_PROOF_SPECS,
@@ -1515,7 +1516,7 @@ describe("verify-scope and verify-all", () => {
 
   // This aggregate validates all 28 direct runtime receipts against source/artifact
   // bytes in scope and program audits; its observed 56s run needs a bounded 120s deadline.
-  test("a complete workflow scope requires all 28 exact, source-current direct runtime receipts", () => {
+  test("every live workflow task passes on exact receipts while the retired Notes-window tasks never do", () => {
     const tree = setup({ receiptTaskIds: CONS_FLOW_UX_IDS });
     const { receipt, exitCode } = verifyScope({
       scope: "cons-flow-ux",
@@ -1527,11 +1528,13 @@ describe("verify-scope and verify-all", () => {
 
     expect(receipt.scope).toBe("cons-flow-ux");
     expect(receipt.scopeTaskCount).toBe(28);
-    expect(receipt.scopePassedTaskCount).toBe(28);
-    expect(receipt.missingScopeTaskIds).toEqual([]);
+    expect(receipt.scopePassedTaskCount).toBe(28 - NOTES_WINDOW_RETIRED_TASK_IDS.size);
+    for (const taskId of NOTES_WINDOW_RETIRED_TASK_IDS) {
+      expect(receipt.taskDispositions[taskId]).not.toBe("EVALUABLE_PASS");
+    }
     expect(receipt.headCommit).toBe(HEAD);
-    expect(receipt.disposition).toBe("EVALUABLE_PASS");
-    expect(exitCode).toBe(0);
+    expect(receipt.disposition).not.toBe("EVALUABLE_PASS");
+    expect(exitCode).not.toBe(0);
     expect(validateReceipt("devtools.consistency.verify-scope", receipt).valid).toBe(true);
 
     const all = tree.runAll();
@@ -1563,9 +1566,9 @@ describe("verify-scope and verify-all", () => {
     expect(exitCode).toBe(3);
   });
 
-  test("one missing exact workflow receipt names its task without weakening the other 27", () => {
+  test("one missing exact workflow receipt names its task without weakening the other live tasks", () => {
     const tree = setup({
-      receiptTaskIds: CONS_FLOW_UX_IDS,
+      receiptTaskIds: [...CONS_FLOW_UX_IDS].filter((taskId) => !NOTES_WINDOW_RETIRED_TASK_IDS.has(taskId)),
       skipReceiptsFor: new Set(["SAFE-001"]),
     });
     const { receipt, exitCode } = verifyScope({
@@ -1576,8 +1579,8 @@ describe("verify-scope and verify-all", () => {
       current: tree.current,
     });
 
-    expect(receipt.scopePassedTaskCount).toBe(27);
-    expect(receipt.missingScopeTaskIds).toEqual(["SAFE-001"]);
+    expect(receipt.scopePassedTaskCount).toBe(27 - NOTES_WINDOW_RETIRED_TASK_IDS.size);
+    expect(receipt.missingScopeTaskIds).toEqual(["SAFE-001", ...NOTES_WINDOW_RETIRED_TASK_IDS].sort());
     expect(receipt.disposition).toBe("BLOCKED_MISSING_PRIMITIVE");
     expect(exitCode).toBe(3);
   });
